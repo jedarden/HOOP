@@ -4,6 +4,8 @@
 //! single long-lived host that holds many repos, many NEEDLE fleets, and
 //! many native-CLI conversations.
 
+mod projects;
+
 use clap::Parser;
 use hoop_daemon::{audit, serve, Config as DaemonConfig};
 use hoop_schema::{ControlRequest, ControlResponse};
@@ -30,6 +32,9 @@ enum Commands {
         #[arg(short, long)]
         addr: Option<SocketAddr>,
     },
+    /// Manage the project registry
+    #[command(subcommand)]
+    Projects(ProjectsCommands),
     /// Register a workspace
     #[command(arg_required_else_help = true)]
     Add {
@@ -81,6 +86,31 @@ enum Commands {
     },
 }
 
+#[derive(clap::Subcommand, Debug)]
+enum ProjectsCommands {
+    /// Add a project to the registry
+    Add {
+        /// Path to the workspace
+        path: String,
+    },
+    /// List registered projects
+    List {
+        /// Output as JSON
+        #[arg(short, long)]
+        json: bool,
+    },
+    /// Remove a project from the registry
+    Remove {
+        /// Project name to remove
+        name: String,
+    },
+    /// Show details for a single project
+    Show {
+        /// Project name
+        name: String,
+    },
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -92,6 +122,12 @@ async fn main() -> anyhow::Result<()> {
                 ..Default::default()
             };
             serve(config).await?
+        }
+        Commands::Projects(cmd) => {
+            if let Err(e) = handle_projects(cmd) {
+                eprintln!("hoop projects: {}", e);
+                std::process::exit(1);
+            }
         }
         Commands::Add { path: _ } => {
             eprintln!("hoop add: not yet implemented");
@@ -151,6 +187,68 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    Ok(())
+}
+
+/// Handle the `hoop projects` subcommands
+fn handle_projects(cmd: ProjectsCommands) -> anyhow::Result<()> {
+    match cmd {
+        ProjectsCommands::Add { path } => {
+            let entry = projects::add_project(&path)?;
+            println!("Added project '{}': {}", entry.name, entry.path.display());
+        }
+        ProjectsCommands::List { json } => {
+            let projects = projects::list_projects()?;
+
+            if json {
+                println!("{}", serde_json::to_string_pretty(&projects)?);
+            } else {
+                if projects.is_empty() {
+                    println!("No projects registered");
+                    println!("\nAdd a project with:");
+                    println!("  hoop projects add <path>");
+                } else {
+                    println!("Registered projects:");
+                    for proj in &projects {
+                        println!("  {} - {}", proj.name, proj.path.display());
+                    }
+                }
+            }
+        }
+        ProjectsCommands::Remove { name } => {
+            let removed = projects::remove_project(&name)?;
+            if removed {
+                println!("Removed project '{}'", name);
+                println!("Workspace data remains intact at its original location");
+            } else {
+                eprintln!("Project '{}' not found", name);
+                std::process::exit(1);
+            }
+        }
+        ProjectsCommands::Show { name } => {
+            if let Some(proj) = projects::show_project(&name)? {
+                println!("Project: {}", proj.name);
+                println!("Path: {}", proj.path.display());
+
+                // Check if .beads exists
+                let beads_path = proj.path.join(".beads");
+                if beads_path.exists() {
+                    println!("Status: Active (.beads/ present)");
+
+                    // Count beads if possible
+                    if let Ok(entries) = std::fs::read_dir(beads_path.join("beads")) {
+                        let count = entries.filter_map(Result::ok).count();
+                        println!("Beads: {}", count);
+                    }
+                } else {
+                    println!("Status: Inactive (.beads/ missing)");
+                }
+            } else {
+                eprintln!("Project '{}' not found", name);
+                std::process::exit(1);
+            }
+        }
+    }
     Ok(())
 }
 
