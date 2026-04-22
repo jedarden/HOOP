@@ -118,7 +118,7 @@ impl ProjectsRegistry {
             path: absolute_path.clone(),
         };
 
-        self.projects.push(entry);
+        self.projects.push(entry.clone());
         Ok(entry)
     }
 
