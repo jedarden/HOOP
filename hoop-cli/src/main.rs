@@ -31,6 +31,9 @@ enum Commands {
         /// Bind address (default: 127.0.0.1:3000)
         #[arg(short, long)]
         addr: Option<SocketAddr>,
+        /// Skip br version compatibility check (dev override)
+        #[arg(long)]
+        allow_br_mismatch: bool,
     },
     /// Manage the project registry
     #[command(subcommand)]
@@ -116,9 +119,10 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Serve { addr } => {
+        Commands::Serve { addr, allow_br_mismatch } => {
             let config = DaemonConfig {
                 bind_addr: addr.unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 3000))),
+                allow_br_mismatch,
                 ..Default::default()
             };
             serve(config).await?
@@ -195,7 +199,11 @@ fn handle_projects(cmd: ProjectsCommands) -> anyhow::Result<()> {
     match cmd {
         ProjectsCommands::Add { path } => {
             let entry = projects::add_project(&path)?;
-            println!("Added project '{}': {}", entry.name, entry.path.display());
+            if let Some(primary) = entry.primary_path() {
+                println!("Added project '{}': {}", entry.name, primary.display());
+            } else {
+                println!("Added project '{}'", entry.name);
+            }
         }
         ProjectsCommands::List { json } => {
             let projects = projects::list_projects()?;
@@ -210,7 +218,14 @@ fn handle_projects(cmd: ProjectsCommands) -> anyhow::Result<()> {
                 } else {
                     println!("Registered projects:");
                     for proj in &projects {
-                        println!("  {} - {}", proj.name, proj.path.display());
+                        if proj.workspaces.len() == 1 {
+                            println!("  {} - {}", proj.name, proj.workspaces[0].path.display());
+                        } else {
+                            println!("  {}", proj.name);
+                            for ws in &proj.workspaces {
+                                println!("    [{}] {}", ws.role, ws.path.display());
+                            }
+                        }
                     }
                 }
             }
@@ -228,14 +243,23 @@ fn handle_projects(cmd: ProjectsCommands) -> anyhow::Result<()> {
         ProjectsCommands::Show { name } => {
             if let Some(proj) = projects::show_project(&name)? {
                 println!("Project: {}", proj.name);
-                println!("Path: {}", proj.path.display());
+                if let Some(label) = &proj.label {
+                    println!("Label: {}", label);
+                }
+                if let Some(color) = &proj.color {
+                    println!("Color: {}", color);
+                }
+                for ws in &proj.workspaces {
+                    println!("Workspace [{}]: {}", ws.role, ws.path.display());
+                }
 
-                // Check if .beads exists
-                let beads_path = proj.path.join(".beads");
+                // Check .beads on the primary workspace
+                let check_path = proj
+                    .primary_path()
+                    .unwrap_or_else(|| proj.workspaces[0].path.as_path());
+                let beads_path = check_path.join(".beads");
                 if beads_path.exists() {
                     println!("Status: Active (.beads/ present)");
-
-                    // Count beads if possible
                     if let Ok(entries) = std::fs::read_dir(beads_path.join("beads")) {
                         let count = entries.filter_map(Result::ok).count();
                         println!("Beads: {}", count);

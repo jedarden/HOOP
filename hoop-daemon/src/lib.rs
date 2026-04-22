@@ -6,10 +6,13 @@
 
 pub mod audit;
 pub mod beads;
+pub mod br_verbs;
 pub mod events;
+pub mod fleet;
 pub mod heartbeats;
 pub mod metrics;
 pub mod sessions;
+pub mod shutdown;
 pub mod ws;
 
 use axum::{
@@ -18,6 +21,7 @@ use axum::{
 };
 use hoop_schema::{Bead, ControlRequest, ControlResponse, HealthResponse, ProjectStatus, StatusResponse};
 use hoop_ui::AssetsHandler;
+use shutdown::{DbCheckpointHandle, ShutdownCoordinator, SocketCleanupHandle};
 use std::sync::Arc;
 use std::{
     fs,
@@ -28,18 +32,19 @@ use std::{
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt},
     net::UnixListener,
-    signal,
     sync::broadcast,
     time::Instant,
 };
 use tower_http::trace::TraceLayer;
-use tracing::{error, info, Level};
+use tracing::{error, info, warn, Level};
 
 /// Daemon configuration
 #[derive(Debug, Clone)]
 pub struct Config {
     pub bind_addr: SocketAddr,
     pub control_socket_path: PathBuf,
+    /// Allow br version mismatch (dev override for --allow-br-mismatch)
+    pub allow_br_mismatch: bool,
 }
 
 impl Default for Config {
@@ -49,6 +54,7 @@ impl Default for Config {
         Self {
             bind_addr: SocketAddr::from(([127, 0, 0, 1], 3000)),
             control_socket_path: home.join("control.sock"),
+            allow_br_mismatch: false,
         }
     }
 }
@@ -61,6 +67,7 @@ pub struct DaemonState {
     pub worker_registry: Arc<ws::WorkerRegistry>,
     pub beads: Arc<std::sync::RwLock<Vec<Bead>>>,
     pub bead_tx: broadcast::Sender<ws::BeadData>,
+    pub shutdown: Arc<ShutdownCoordinator>,
 }
 
 /// Health check endpoint handler
@@ -194,12 +201,21 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
 
     // Run startup audit - refuse to start on critical failures
     info!("Running startup audit...");
-    let audit_config = audit::AuditConfig::default();
+    let mut audit_config = audit::AuditConfig::default();
+    audit_config.allow_br_mismatch = config.allow_br_mismatch;
     if let Err(e) = audit::daemon_startup_check(&audit_config) {
         error!("{}", e);
         return Err(e);
     }
     info!("Startup audit passed");
+
+    // Initialize fleet.db
+    info!("Initializing fleet.db...");
+    if let Err(e) = fleet::init_fleet_db() {
+        error!("Failed to initialize fleet.db: {}", e);
+        return Err(e);
+    }
+    info!("fleet.db initialized");
 
     // Initialize heartbeat monitor
     let mut heartbeat_monitor = heartbeats::HeartbeatMonitor::new(
@@ -341,12 +357,17 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         }
     });
 
+    // Initialize shutdown coordinator
+    let shutdown_coordinator = Arc::new(ShutdownCoordinator::new());
+    let mut shutdown_rx = shutdown_coordinator.subscribe();
+
     let state = DaemonState {
         config: config.clone(),
         started_at: Instant::now(),
         worker_registry,
         beads,
         bead_tx,
+        shutdown: shutdown_coordinator.clone(),
     };
 
     let app = router().with_state(state.clone());
@@ -356,7 +377,23 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(config.bind_addr).await?;
     let tcp_server = axum::serve(listener, app);
 
+    // Spawn a task to broadcast shutdown to the simple broadcast channel
+    // (for compatibility with existing control socket logic)
     let (shutdown_tx, _) = broadcast::channel::<()>(1);
+    let shutdown_tx_for_shutdown = shutdown_tx.clone();
+    let shutdown_coordinator_clone = shutdown_coordinator.clone();
+
+    tokio::spawn(async move {
+        // Wait for any shutdown phase to start the graceful shutdown
+        let mut rx = shutdown_coordinator_clone.subscribe();
+        while let Ok(phase) = rx.recv().await {
+            if matches!(phase, shutdown::ShutdownPhase::Initiated) {
+                warn!("Shutdown initiated, notifying all components");
+                let _ = shutdown_tx_for_shutdown.send(());
+                break;
+            }
+        }
+    });
 
     let control_state = state.clone();
     let control_shutdown = shutdown_tx.subscribe();
@@ -364,6 +401,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         run_control_socket(control_state, control_shutdown).await
     });
 
+    // Set up signal handling
     let ctrl_c = async {
         signal::ctrl_c()
             .await
@@ -379,18 +417,32 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     };
 
     #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
+    let terminate = std::future::pending::<()>;
 
-    let shutdown = async move {
+    // The graceful shutdown future
+    let graceful_shutdown = async {
         tokio::select! {
-            _ = ctrl_c => {},
-            _ = terminate => {},
+            _ = ctrl_c => {
+                info!("Received SIGINT (Ctrl-C), initiating graceful shutdown");
+            }
+            _ = terminate => {
+                info!("Received SIGTERM, initiating graceful shutdown");
+            }
         }
-        let _ = shutdown_tx.send(());
+        shutdown_coordinator.shutdown(None).await;
     };
 
+    // Run the server with graceful shutdown
     let result = tokio::select! {
-        r = tcp_server.with_graceful_shutdown(shutdown) => {
+        r = tcp_server.with_graceful_shutdown(async {
+            // Wait for shutdown to be initiated
+            while let Ok(phase) = shutdown_rx.recv().await {
+                if matches!(phase, shutdown::ShutdownPhase::CloseNewConnections) {
+                    info!("Closing new connections per shutdown phase");
+                    break;
+                }
+            }
+        }) => {
             r.map_err(|e| anyhow::anyhow!(e))
         }
         r = control_socket_task => match r {
@@ -398,7 +450,23 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
             Ok(Err(e)) => Err(e),
             Err(e) => Err(anyhow::anyhow!("Control socket task join failed: {}", e)),
         },
+        _ = graceful_shutdown => Ok::<(), anyhow::Error>(()),
     };
+
+    // Perform final cleanup after all tasks have stopped
+    info!("All tasks stopped, performing final cleanup");
+
+    // Checkpoint fleet.db WAL
+    let db_checkpoint = DbCheckpointHandle::new(fleet::db_path());
+    if let Err(e) = db_checkpoint.checkpoint() {
+        warn!("Failed to checkpoint fleet.db: {}", e);
+    }
+
+    // Clean up control socket
+    let socket_cleanup = SocketCleanupHandle::new(config.control_socket_path.clone());
+    if let Err(e) = socket_cleanup.cleanup() {
+        warn!("Failed to cleanup socket: {}", e);
+    }
 
     result?;
     info!("HOOP daemon shut down gracefully");

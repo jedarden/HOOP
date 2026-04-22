@@ -3,14 +3,12 @@
 //! Validates dependencies, environment, and configuration.
 //! Each failure includes the exact command to fix it.
 
+use hoop_schema::version::BR_MIN_VERSION;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::fs;
 use std::time::Duration;
-
-/// Minimum pinned br version
-const BR_MIN_VERSION: &str = "0.4.0";
 
 /// Minimum disk space required (1GB in bytes)
 const MIN_DISK_SPACE: u64 = 1024 * 1024 * 1024;
@@ -140,6 +138,8 @@ pub struct AuditConfig {
     pub include_optional: bool,
     /// Timeout for external commands
     pub command_timeout: Duration,
+    /// Allow br version mismatch (dev override for --allow-br-mismatch)
+    pub allow_br_mismatch: bool,
 }
 
 impl Default for AuditConfig {
@@ -148,6 +148,7 @@ impl Default for AuditConfig {
             project_paths: Vec::new(),
             include_optional: true,
             command_timeout: Duration::from_secs(5),
+            allow_br_mismatch: false,
         }
     }
 }
@@ -167,7 +168,15 @@ pub fn run_audit(config: &AuditConfig) -> AuditReport {
     let mut checks = Vec::new();
 
     // Critical checks
-    checks.push(check_br_version());
+    if config.allow_br_mismatch {
+        checks.push(AuditCheck::warning(
+            "br_version",
+            format!("br version check skipped (--allow-br-mismatch); requires >={}", BR_MIN_VERSION),
+            format!("Remove --allow-br-mismatch and update br to >={}", BR_MIN_VERSION),
+        ));
+    } else {
+        checks.push(check_br_version());
+    }
     checks.push(check_tmux());
     checks.extend(check_beads_accessibility(&config.project_paths));
     checks.push(check_cli_session_dirs());
