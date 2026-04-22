@@ -398,7 +398,8 @@ impl NdjsonParser {
             Err(e) => {
                 // Check if this is a partial line (ends abruptly)
                 // A common pattern is that the line is incomplete JSON
-                if input.len() < 256 || !input.ends_with('}') && !input.ends_with(']') {
+                // Treat as partial if doesn't end with closing bracket AND is short
+                if !input.ends_with('}') && !input.ends_with(']') && input.len() < 256 {
                     // Treat as partial line - carry over for next read
                     if self.partial.is_empty() {
                         self.partial = input.to_string();
@@ -497,8 +498,9 @@ mod tests {
     fn test_ndjson_parser_malformed_line() {
         let mut parser = NdjsonParser::new();
 
-        // This is clearly malformed (missing closing brace but long enough to not be partial)
-        let malformed = r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-abc123"#;
+        // This is clearly malformed (missing closing brace and long enough to not be partial)
+        // Using a long string to exceed the 256-char threshold for partial line detection
+        let malformed = r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-abc123","very_long_field_that_makes_this_line_exceed_256_characters_threshold_so_it_will_be_treated_as_malformed_instead_of_partial":"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident."#;
         let result = parser.parse_line(malformed, 1).unwrap().unwrap();
 
         // Should return Unknown event

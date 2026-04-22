@@ -5,6 +5,10 @@
 //! Its only write is `br create` for bead creation.
 
 pub mod audit;
+pub mod events;
+pub mod heartbeats;
+pub mod metrics;
+pub mod sessions;
 
 use axum::{
     routing::get,

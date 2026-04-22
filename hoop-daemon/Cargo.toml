@@ -17,3 +17,12 @@ serde_json = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 shellexpand = "3.0"
 dirs = "5.0"
+notify = "6.1"
+nix = { version = "0.27", features = ["signal"] }
+chrono = { version = "0.4", features = ["serde"] }
+regex = "1"
+uuid = { version = "1", features = ["v4"] }
+rayon = "1"
+
+[dev-dependencies]
+tempfile = "3"

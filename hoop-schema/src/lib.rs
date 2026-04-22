@@ -3,6 +3,8 @@
 //! This crate provides the shared data types and schemas used across HOOP.
 //! All records carry `schema_version: 1` for compatibility tracking.
 
+use chrono::DateTime;
+
 pub mod version {
     /// Current schema version following SemVer (X.Y.Z)
     pub const SCHEMA_VERSION: &str = "0.1.0";
@@ -170,6 +172,83 @@ pub struct ParsedEvent {
     pub line_number: usize,
     /// The raw JSON string (for unknown events)
     pub raw: String,
+}
+
+/// Session classification (from plan §1.6)
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum SessionKind {
+    /// Human ↔ agent chat (normal conversation)
+    Operator,
+    /// Voice note with Whisper transcript
+    Dictated,
+    /// NEEDLE worker's CLI session (tagged with `[needle:<worker>:<bead>:<strand>]`)
+    Worker { worker: String, bead: String, strand: Option<String> },
+    /// Direct CLI session without prefix tag
+    AdHoc,
+}
+
+/// Token usage from a single message
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MessageUsage {
+    /// Input tokens (prompt)
+    pub input_tokens: u64,
+    /// Output tokens (completion)
+    pub output_tokens: u64,
+    /// Cache read tokens (prompt cache hits)
+    pub cache_read_tokens: u64,
+    /// Cache write tokens (new cache entries)
+    pub cache_write_tokens: u64,
+}
+
+/// A single message in a session
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SessionMessage {
+    /// Role (user, assistant, system)
+    pub role: String,
+    /// Message content (may be text or structured for tool use)
+    pub content: serde_json::Value,
+    /// Token usage (present on assistant messages)
+    pub usage: Option<MessageUsage>,
+    /// Timestamp if available
+    pub timestamp: Option<String>,
+}
+
+/// Parsed session from CLI adapter
+#[derive(Debug, Clone)]
+pub struct ParsedSession {
+    /// Stable UI ID (UUID assigned by HOOP)
+    pub id: String,
+    /// Provider-native session ID (from CLI)
+    pub session_id: String,
+    /// Provider name (claude, codex, gemini, opencode)
+    pub provider: String,
+    /// Session classification
+    pub kind: SessionKind,
+    /// Working directory when session was created
+    pub cwd: String,
+    /// Session title (from first prompt or derived)
+    pub title: String,
+    /// Messages in the session
+    pub messages: Vec<SessionMessage>,
+    /// Total token usage across all messages
+    pub total_usage: MessageUsage,
+    /// Creation time
+    pub created_at: DateTime<chrono::Utc>,
+    /// Last update time
+    pub updated_at: DateTime<chrono::Utc>,
+    /// Whether the session is complete (process exited)
+    pub complete: bool,
+    /// Path to the session file on disk
+    pub file_path: String,
+}
+
+impl ParsedSession {
+    /// Get total tokens used (input + output + cache write)
+    pub fn total_tokens(&self) -> u64 {
+        self.total_usage.input_tokens
+            + self.total_usage.output_tokens
+            + self.total_usage.cache_write_tokens
+    }
 }
 
 impl NeedleEvent {
