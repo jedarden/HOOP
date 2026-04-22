@@ -1,0 +1,20 @@
+[package]
+name = "hoop"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "hoop"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.4", features = ["derive"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+hoop-daemon = { path = "../hoop-daemon" }
+hoop-schema = { path = "../hoop-schema" }
+tokio = { workspace = true }
+anyhow = "1.0"
+dirs = "5.0"
+serde_yaml = "0.9"
+serde_json = { workspace = true }
