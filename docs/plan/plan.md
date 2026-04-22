@@ -41,25 +41,76 @@ This is a deliberate narrowing of HOOP's original scope. Earlier drafts had HOOP
 
 ---
 
-## 1.6. Stitches — the human-facing unit of work
+## 1.6. The hierarchy: Patterns, Stitches, conversations, beads
 
-**Humans work in Stitches, not beads.** Beads are NEEDLE's internal unit of execution. Stitches are HOOP's user-facing abstraction — a project-scoped, human-titled unit of work that may be backed by one or many beads.
+HOOP's user-facing structure:
 
-When the operator expresses intent through HOOP ("investigate the kalshi-weather evening-window flake"), HOOP decomposes that intent into the beads NEEDLE needs and presents the result as a single **Stitch** the operator can track. Reverse direction: as beads are claimed, closed, fail, or spawn follow-ups, HOOP aggregates those events back into the Stitch's view. The operator sees "the kalshi-weather flake investigation is stuck on step 3"; the beads underneath are a mechanical detail.
+```
+Pattern       (optional, cross-project)   a goal composed of many Stitches
+└── Stitch    (project-scoped)            a single conversation
+    ├── messages / audio / transcripts    what was said
+    ├── linked beads                      work the Stitch produced or discussed
+    ├── touched files                     artifacts referenced or modified
+    └── spawned / references              links to other Stitches
+```
 
-**A Stitch has:**
-- A human title ("Fix Calico IP selection on iad-acb")
-- A status: `Planned | In Progress | Blocked | Awaiting Review | Done | Failed`
-- A list of backing beads (in-flight, closed, planned)
-- Optional child Stitches (multi-step work as a convoy)
-- Aggregated cost, duration, outcome drawn from its beads
-- **Stable identity across bead retries** — a new bead for a retried attempt attaches to the same Stitch
+### Stitch = a single conversation within a project
 
-**Stitch ↔ bead mapping.** Every bead HOOP creates carries a `stitch:<stitch-id>` label. Follow-up beads created by NEEDLE workers inherit the parent bead's stitch label (one-line NEEDLE hook: copy the stitch label when creating a follow-up). Beads created outside HOOP remain orphan beads — visible, usable, unassociated. Optional clustering of orphans into synthetic Stitches (by title similarity and dep-graph connectivity) can come later.
+A **Stitch** is HOOP's unit of discourse — one conversation, scoped to one project. Not a work item per se; the record of discourse around work, which may or may not produce beads.
 
-**UI consequence.** Dashboards show Stitches. The human-interface agent speaks in Stitches. Bead IDs appear only in expert / debug / audit views. Users never need to know what a bead is to operate HOOP — they work with stitches, HOOP handles the decomposition.
+There are four kinds of Stitch, distinguished by how the conversation was initiated:
 
-**Why this matters.** Humans think at the scope of work ("fix the Calico IP selection"), not at the scope of bead IDs (`bd-3hv` + `bd-3hv-review` + `bd-3qvi-fix` + `bd-3qvi-followup`). NEEDLE's bead-level granularity is correct for machine execution and wrong for human cognition. The Stitch abstraction is pure UI / audit; NEEDLE itself keeps using beads internally. HOOP translates in both directions.
+| Kind | Source | Shape |
+|---|---|---|
+| **Operator** | Human ↔ human-interface agent chat | Multi-turn text + multimodal attachments; may draft beads via the agent's `create_stitch` tool (which creates beads under this Stitch) |
+| **Dictated** | Push-to-talk audio (hotkey or phone ADB) | Single-shot audio + Whisper transcript; often one-sided notes |
+| **Worker** | NEEDLE worker's CLI session processing beads | Adapter conversation (Claude Code / Codex / etc.); joined to the project by cwd, to the originating operator Stitch (if any) by the `[needle:<worker>:<bead>:<strand>]` prefix tag |
+| **Ad-hoc** | Operator runs `claude` / `codex` / etc. directly in a project terminal | Same shape as worker but untagged; classified as operator-initiated, not HOOP-managed |
+
+A Stitch carries:
+- Project + kind + title (operator-set, human-interface-agent-synthesized, or derived from first message)
+- Participants (operator, agent, worker name, adapter)
+- Messages / audio / transcripts / attachments
+- Linked beads — beads created within this Stitch, or the bead a worker Stitch is executing
+- Touched files — paths referenced or modified within the Stitch
+- Links to other Stitches:
+  - `spawned: [...]` — worker Stitches that arose from beads this Stitch created
+  - `references: [...]` — operator annotations tying Stitches together
+- Cost, duration (aggregated from turns + any linked bead executions)
+
+### Pattern = a grouping of Stitches toward a goal
+
+A **Pattern** is an optional, user-created grouping of Stitches organized around a goal. Patterns may cross projects — a cluster migration Pattern can include Stitches in `ardenone-cluster`, `declarative-config`, and `apexalgo-iad-secrets` all at once. Patterns are how the operator tracks epics, initiatives, and long-running themes.
+
+A Pattern carries:
+- Title, description, optional deadline, optional owner
+- Status: `Planned | Active | Blocked | Done | Abandoned`
+- Member Stitches (cross-project, explicit list + optional saved-query to auto-include matches)
+- Optional parent Pattern (for epic-in-epic nesting)
+- Aggregated progress (percent of member Stitches closed), cost, duration
+- Notes — free-form Stitches that belong to the Pattern itself, not to any single project
+
+Patterns are optional. Simple work lives as a bare Stitch. Patterns exist only when the operator explicitly creates one, or accepts a human-interface agent suggestion to create one. Most Stitches will never join a Pattern; that's fine.
+
+### How it all fits together
+
+- **Beads** are NEEDLE's execution unit, scoped to a workspace (`.beads/`). They record what a worker claimed, executed, and closed.
+- **Stitches** are HOOP's conversation unit, scoped to a project. Every bead a worker processes produces a worker Stitch. Every chat with the human-interface agent is an operator Stitch. Every voice note is a dictated Stitch.
+- **Patterns** are the operator's optional goal-level organizing layer, aggregating Stitches across projects.
+- **Projects** are the filing cabinet: they contain workspaces (where beads live) and Stitches (where conversations happen).
+
+### Stitch ↔ bead linkage
+
+When an operator Stitch drafts beads, HOOP calls `br create --json <payload>` against the target workspace with a `stitch:<stitch-id>` label on each bead. When a NEEDLE worker claims a labeled bead, its session prompt is prefixed with `[needle:<worker>:<bead>:<strand>]` and a `spawned-by: <operator-stitch-id>` marker. HOOP reads both and establishes the Stitch-to-Stitch link. One small NEEDLE hook preserves the stitch label on any follow-up bead a worker creates.
+
+Beads created outside HOOP (plain `br create` from a terminal) remain orphans — visible in workspace views, unaffiliated with any Stitch. Optional orphan-clustering by title/file similarity comes later.
+
+### Why this shape
+
+- Humans think in **conversations** ("that time I worked through the Calico thing with the agent") and in **goals** ("the cluster migration"). The natural units for those are Stitch and Pattern.
+- NEEDLE thinks in **beads**. HOOP translates; NEEDLE keeps its model.
+- Because a Stitch is a single conversation, even the most trivial interactions — a 30-second voice note — are first-class entities with durable history. Nothing important is ephemeral.
+- Because a Pattern is optional and spans projects, the operator can structure work at whatever granularity they care about without forcing a hierarchy on the system.
 
 ---
 
@@ -98,6 +149,7 @@ What changes in a multi-project host vs single-workspace: session discovery has 
 10. **Read-first defaults.** Even bead creation requires explicit operator confirmation (chat intent → draft → preview → submit). No silent writes.
 11. **Humans speak in Stitches, not beads.** HOOP's UI, human-interface agent, forms, and chat use project-scoped work items. The bead layer is preserved for machine correctness but hidden from normal operator flow. Bead IDs surface only in expert views and audit logs.
 12. **Lazy context, not eager context.** The human-interface agent does not receive project contents in its system prompt. It receives a thin index (project names, recent activity summary, open Stitch titles) and reaches for details through tool calls. File contents, full bead bodies, and conversation transcripts are fetched on demand. This keeps the context window sustainable across long sessions and keeps cost predictable — the agent pays for what it actually asks about, not for what *might* have been relevant.
+13. **Learn from repetition.** When the operator repeats an instruction, correction, or preference across Stitches, HOOP treats it as a signal that a durable rule can be extracted. The human-interface agent proposes entries for a **Reflection Ledger** — a curated, operator-approved store of standing preferences, conventions, and "don't do X" rules. Approved entries are injected into every subsequent agent session (via the lazy-context index) so the operator doesn't have to say the same thing twice. The ledger is visible, editable, and pruneable; nothing is learned silently.
 
 ---
 
@@ -226,29 +278,62 @@ Streaming content lives in a separate reactive map. The committed-vs-streaming s
 
 `hoop-schema/` with JSON Schema source of truth. Rust types via `typify`; TS via `json-schema-to-typescript`. `schema_version: 1` on every record.
 
-### 4.7 Stitch service
+### 4.7 Stitch, Pattern, and Reflection services
 
-HOOP-owned state layer that translates between operator intent (Stitches) and NEEDLE's execution substrate (beads). Tables in `~/.hoop/fleet.db`:
+HOOP-owned state layer. Tables in `~/.hoop/fleet.db`:
 
 ```
-stitches(id, project, title, description, status, created_by, created_at,
-         closed_at, parent_stitch_id, template_id, attachments_path)
+stitches(id, project, kind, title, created_by, created_at, closed_at,
+         participants, attachments_path)
+  -- kind ∈ {operator, dictated, worker, ad-hoc}
 
-stitch_beads(stitch_id, bead_id, relationship)
-  -- relationship ∈ {primary, review, fix, followup, retry-of}
+stitch_messages(id, stitch_id, ts, role, content, attachments, tokens)
+  -- every turn / audio entry / tool-call in the Stitch
 
-stitch_events(ts, stitch_id, event, source, payload)
-  -- event stream mirroring derived from NEEDLE events that touch
-  -- this stitch's beads; used for the stitch timeline
+stitch_beads(stitch_id, bead_id, workspace, relationship)
+  -- relationship ∈ {created-here, executing, referenced}
+
+stitch_links(from_stitch, to_stitch, kind)
+  -- kind ∈ {spawned, references}
+
+patterns(id, title, description, status, owner, deadline, parent_pattern)
+  -- status ∈ {Planned, Active, Blocked, Done, Abandoned}
+
+pattern_members(pattern_id, stitch_id)
+
+pattern_queries(pattern_id, saved_query)
+  -- optional auto-include rules
+
+reflection_ledger(id, scope, rule, reason, source_stitches, status,
+                  created_at, last_applied, applied_count)
+  -- scope ∈ {global, project:<name>, pattern:<id>}
+  -- status ∈ {proposed, approved, rejected, archived}
 ```
 
-The service exposes a read-and-derive API: given a stitch id, compute status from the states of its beads (`Planned` if no beads claimed; `In Progress` if any bead claimed; `Awaiting Review` if implementation beads closed and review beads open; `Done` if all closed with a merged/closed-no-artifact resolution; `Failed` if hard-ceilings exceeded). Aggregate cost and duration from the bead events.
+**Stitch service.** Stores conversations, appends messages/audio/transcripts, links beads and other Stitches. A Stitch's status is derived on read from the state of its linked beads plus its own turn activity (`In Progress` if streaming; `Awaiting Review` if review-type linked beads are open; `Done`/`Failed` on terminal).
 
-**Decomposition.** When the operator submits Stitch intent through form/chat/human-interface agent, HOOP's decomposition service proposes a bead graph (e.g. an investigation Stitch → [one `task` bead with open-ended prompt, one `review` bead depending on it]). The operator confirms; HOOP issues `br create` calls labeled with the stitch id.
+- Operator Stitch creation: UI form or chat intent → row + first turn.
+- Worker Stitch creation: session tailer detects a new CLI session with a `[needle:...]` prefix (auto-linked to the spawning operator Stitch via the `spawned-by` marker).
+- Dictated Stitch creation: hotkey / ADB capture → audio + Whisper transcript → row.
+- Bead creation from within a Stitch: `br create --json <payload>` with `stitch:<id>` label. That label is the only way a bead gets associated with a Stitch; NEEDLE's follow-up-bead hook preserves the label so retries stay linked.
+- No direct bead mutation. Ever. A Stitch needing another attempt drafts a *new* bead with the same stitch label; the old bead stays closed as historical record.
 
-**Aggregation.** When a bead closes, HOOP emits a derived stitch event if the bead carries a stitch label. When a bead spawns a follow-up (via the NEEDLE hook that preserves stitch labels), the new bead auto-attaches. When a bead with no stitch label closes, it shows up as an orphan bead; operator can manually attach it to a Stitch if desired.
+**Pattern service.** Operator-curated groups of Stitches toward a goal. May span projects. Membership explicit (operator adds Stitches) or query-driven (saved-query auto-includes matching new Stitches). Progress / cost / duration aggregate across members.
 
-**No direct bead mutation.** The Stitch service never closes, updates, or releases a bead — it only creates them (via `br create`) and observes them. If a Stitch needs a new attempt, HOOP creates a *new* bead labeled with the same stitch id; the old failed bead stays closed as historical record.
+- Patterns are always optional. A Stitch without a Pattern is normal, not neglected.
+- A Stitch may belong to multiple Patterns.
+- Parent-Pattern nesting supports epic-in-epic structures when the operator needs them.
+
+**Reflection Ledger.** Persistent store of learned rules and preferences. Proposals, not auto-applies.
+
+- Detection runs asynchronously after each closed operator Stitch. The human-interface agent scans recent operator Stitches for: repeated corrections, repeated preferences ("always do X before Y"), repeated negatives ("don't ever touch production config without a review bead"), repeated approvals of a non-obvious choice.
+- Each detected pattern produces a proposal: `{rule, reason, source_stitches[]}`. Proposals surface in a dedicated UI pane.
+- The operator approves, edits, or rejects each proposal. Approved rules enter the ledger with a scope (global, project-scoped, or Pattern-scoped).
+- Approved rules are injected into every new agent session as part of the lazy-context index — one line per rule, with the scope noted.
+- Every injection is auditable: the ledger records `last_applied` and `applied_count` per rule; the session log records which rules were injected.
+- Rules are editable and pruneable. Nothing is learned silently. An entry marked `archived` stops being injected but is kept for history.
+
+**No direct bead mutation** across all three services. HOOP overlays bead state; never modifies it.
 
 ---
 
@@ -376,7 +461,8 @@ Same as before: first message prefix `[needle:<worker>:<bead>:<strand>]` → fle
 
 **Plus five marquee capabilities:**
 
-14. **Stitch abstraction layer** (foundational). UI, forms, human-interface agent, and dashboards render Stitches. Bead-level views exist behind an "Expert" toggle. `stitch_service` as described in §4.7 lands here. Every new bead HOOP creates carries a `stitch:<id>` label. NEEDLE hook: follow-up beads inherit parent stitch label.
+14. **Stitch abstraction layer** (foundational). UI, forms, human-interface agent, and dashboards render Stitches (conversations). Bead-level views exist behind an "Expert" toggle. Every new bead HOOP creates carries a `stitch:<id>` label. NEEDLE hook: follow-up beads inherit parent stitch label. Worker Stitches auto-link to their spawning operator Stitches via session-prefix markers.
+14b. **Pattern layer** (foundational, phased alongside Stitch). Operator-curated groups of Stitches toward a goal. May span projects. Optional — simple work lives as a bare Stitch. Pattern view aggregates progress, cost, and duration across member Stitches. Saved-query Patterns auto-include matching new Stitches as they appear.
 15. **Stitch-Provenance Code Archaeology** — the file preview panel overlays standard git blame with the *Stitch* that introduced each line. Hover → see the Stitch title, status, and conversation; click → jump to the Stitch view. Requires a NEEDLE hook to emit a `Bead-Id:` commit trailer on close (one line); HOOP maintains a bead-id → commit-sha index and joins that with stitch membership.
 16. **Time-Machine UI Scrubber** — a global timeline slider at the top of any view re-renders full system state at the selected moment: Stitches, fleets, costs, capacity, file tree as of that moment. Leverages the event-as-authority invariant — all state is already derivable from event logs. Seek index lives in `fleet.db`; stale-state banner warns the operator they're viewing the past.
 17. **Stitch Net-Diff Viewer** — when a Stitch reaches `Awaiting Review` or `Done`, HOOP computes the aggregate diff across every commit produced by the Stitch's beads (using the commit trailer from #15) and renders it as if it were a single PR: one tree, one narrative (human-interface agent-synthesized), one review surface. Replaces trawling PR history for multi-step convoys.
@@ -552,6 +638,10 @@ Same as before: first message prefix `[needle:<worker>:<bead>:<strand>]` → fle
 
 10. **Cross-Project Stitch Propagation.** The human-interface agent recognizes when a fix pattern applied in one project has structural siblings in other projects (same config shape, same file layout, same dependency, similar recent failure signals). Surfaces: "you just closed `fix Calico IP selection` in `iad-acb`. The same pattern exists in `iad-ci`, `rs-manager`, `ardenone-cluster`. Draft matching Stitches for each?" Always preview; operator accepts per-project or all-at-once. Uniquely HOOP because cross-project visibility is HOOP's core position — no single-project tool can make this connection.
 
+11. **Reflection Ledger** — HOOP learns from repetition. After each closed operator Stitch, the human-interface agent scans recent operator Stitches for repeated corrections, preferences, negatives, and non-obvious approvals. Detected signals become *proposals*: "I notice you've said 'don't edit production config without a review bead' three times this month across two projects. Promote to a rule?" The operator approves (optionally editing) or rejects; approved entries enter the Reflection Ledger with a scope (global / project / Pattern) and are injected into every subsequent agent session as part of the lazy-context index.
+    
+    Nothing is learned silently. Every injection is logged. The ledger is a pane the operator can read, edit, or prune at any time. It's the closest thing to "teaching the system once and having it remembered" — and the mechanism by which a single operator working across many projects stops having to repeat themselves.
+
 **Success criteria:**
 - human-interface agent session survives `systemctl restart hoop` with full context intact.
 - Operator asks "what did we do today across all projects?" and gets a coherent cross-project summary in Stitch language.
@@ -589,10 +679,10 @@ The ten features that earn HOOP its keep, collected in one place with phase assi
 
 | # | Capability | Phase | One-line pitch |
 |---|---|---|---|
-| 1 | Stitch abstraction layer | 2 | Humans work in project-scoped Stitches; beads stay hidden |
+| 1 | Stitch + Pattern layer | 2 | Humans work in project-scoped Stitches and optional cross-project Patterns; beads stay hidden |
 | 2 | Stitch-Provenance Code Archaeology | 2 | git blame with the *Stitch* that introduced each line |
 | 3 | Time-Machine UI Scrubber | 2 | Drag a slider; the whole UI re-renders state at that past moment |
-| 4 | Stitch Net-Diff Viewer | 2 | Multi-bead convoys reviewed as one unified PR-like surface |
+| 4 | Stitch Net-Diff Viewer | 2 | Multi-bead Stitch clusters reviewed as one unified PR-like surface |
 | 5 | Cost-Anomaly with Fix Lineage | 2 | Over-cost Stitches link to past matches and recommended fixes |
 | 6 | Dictated Notes | 3 | Push-to-talk voice notes with audio + transcript in project history |
 | 7 | Voice / Screen Work Capture | 3 | Describe work by voice or screencast; HOOP drafts the Stitch |
@@ -601,6 +691,7 @@ The ten features that earn HOOP its keep, collected in one place with phase assi
 | 10 | Stitch Replay from Failure Point | 4 | Reconstruct a failed Stitch's state and resume from there |
 | 11 | Morning Brief | 5 | The human-interface agent's daily briefing + pre-drafted Stitches + one headline |
 | 12 | Cross-Project Stitch Propagation | 5 | The agent suggests matching fixes for sibling projects |
+| 13 | Reflection Ledger | 5 | Learn from repetition; proposed rules the operator approves once, applied forever |
 
 Common thread: each exploits HOOP's unique position as the *join* across projects × Stitches × conversations × files × cost × time. Every one demos in under a minute. None crosses the no-worker-steering line. Collectively they are the difference between "HOOP is a dashboard" and "HOOP is the operator's primary interface to a long-running agent fleet."
 
