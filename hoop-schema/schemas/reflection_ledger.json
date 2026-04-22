@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/reflection_ledger.json",
+  "title": "ReflectionLedger",
+  "description": "Learned rule or preference from operator behavior",
+  "type": "object",
+  "required": ["id", "scope", "rule", "status", "created_at", "schema_version"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique reflection identifier"
+    },
+    "scope": {
+      "type": "string",
+      "description": "Scope: 'global', 'project:<name>', or 'pattern:<id>'"
+    },
+    "rule": {
+      "type": "string",
+      "description": "The learned rule"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Why this rule was proposed"
+    },
+    "source_stitches": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "description": "Stitches that led to this rule"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["proposed", "approved", "rejected", "archived"],
+      "description": "Rule status"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp"
+    },
+    "last_applied": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Last time this rule was applied"
+    },
+    "applied_count": {
+      "type": "integer",
+      "default": 0,
+      "description": "Number of times this rule was applied"
+    },
+    "approved_by": {
+      "type": ["string", "null"],
+      "description": "Who approved this rule"
+    },
+    "approved_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Approval timestamp"
+    },
+    "archived_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Archive timestamp"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    }
+  },
+  "schema_version": "1.0.0"
+}

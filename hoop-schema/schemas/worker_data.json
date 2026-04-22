@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/worker_data.json",
+  "title": "WorkerData",
+  "description": "Worker data sent to the frontend",
+  "type": "object",
+  "required": ["worker", "state", "liveness", "last_heartbeat", "heartbeat_age_secs"],
+  "properties": {
+    "worker": {
+      "type": "string",
+      "description": "Worker name (NATO phonetic: alpha, bravo, etc.)"
+    },
+    "state": {
+      "$ref": "worker_display_state.json"
+    },
+    "liveness": {
+      "$ref": "worker_liveness.json"
+    },
+    "last_heartbeat": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of last heartbeat"
+    },
+    "heartbeat_age_secs": {
+      "type": "integer",
+      "description": "Age of last heartbeat in seconds"
+    }
+  },
+  "schema_version": "1.0.0"
+}

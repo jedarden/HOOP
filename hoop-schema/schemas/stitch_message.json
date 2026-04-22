@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/stitch_message.json",
+  "title": "StitchMessage",
+  "description": "A single message in a stitch",
+  "type": "object",
+  "required": ["id", "stitch_id", "ts", "role", "content", "schema_version"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique message identifier"
+    },
+    "stitch_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Parent stitch ID"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Message timestamp"
+    },
+    "role": {
+      "type": "string",
+      "enum": ["user", "assistant", "system", "tool"],
+      "description": "Message role"
+    },
+    "content": {
+      "description": "Message content"
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Attachment paths"
+    },
+    "tokens": {
+      "type": ["integer", "null"],
+      "description": "Token count if applicable"
+    },
+    "tool_use": {
+      "type": ["object", "null"],
+      "description": "Tool use details if role is tool"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    }
+  },
+  "schema_version": "1.0.0"
+}

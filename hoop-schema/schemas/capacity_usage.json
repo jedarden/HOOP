@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/capacity_usage.json",
+  "title": "CapacityUsage",
+  "description": "Current capacity usage for an adapter account",
+  "type": "object",
+  "required": ["tokens_5h", "tokens_7d", "requests_today", "spend_usd_today"],
+  "properties": {
+    "tokens_5h": {
+      "type": "integer",
+      "description": "Tokens used in current 5-hour window"
+    },
+    "tokens_7d": {
+      "type": "integer",
+      "description": "Tokens used in current 7-day window"
+    },
+    "requests_today": {
+      "type": "integer",
+      "description": "Requests made today"
+    },
+    "spend_usd_today": {
+      "type": "number",
+      "description": "USD spent today"
+    },
+    "active_requests": {
+      "type": "integer",
+      "description": "Currently active requests"
+    }
+  },
+  "schema_version": "1.0.0"
+}

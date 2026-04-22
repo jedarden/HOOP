@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/stitch_bead.json",
+  "title": "StitchBead",
+  "description": "Link between a stitch and a bead",
+  "type": "object",
+  "required": ["stitch_id", "bead_id", "workspace", "relationship", "schema_version"],
+  "properties": {
+    "stitch_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Stitch ID"
+    },
+    "bead_id": {
+      "type": "string",
+      "description": "Bead ID"
+    },
+    "workspace": {
+      "type": "string",
+      "description": "Workspace path"
+    },
+    "relationship": {
+      "type": "string",
+      "enum": ["created-here", "executing", "referenced"],
+      "description": "Relationship type"
+    },
+    "linked_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the link was created"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    }
+  },
+  "schema_version": "1.0.0"
+}

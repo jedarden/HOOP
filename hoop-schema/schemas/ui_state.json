@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/ui_state.json",
+  "title": "UiState",
+  "description": "UI state persisted across sessions",
+  "type": "object",
+  "required": ["schema_version"],
+  "properties": {
+    "active_project": {
+      "type": ["string", "null"],
+      "description": "Currently active project"
+    },
+    "active_stitch": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Currently active stitch"
+    },
+    "sidebar_width": {
+      "type": "integer",
+      "default": 300,
+      "description": "Sidebar width in pixels"
+    },
+    "panel_layout": {
+      "type": "object",
+      "properties": {
+        "fleet_visible": {
+          "type": "boolean",
+          "default": true
+        },
+        "beads_visible": {
+          "type": "boolean",
+          "default": true
+        },
+        "conversations_visible": {
+          "type": "boolean",
+          "default": true
+        },
+        "patterns_visible": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "filters": {
+      "type": "object",
+      "properties": {
+        "bead_status": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["open", "closed"]
+          }
+        },
+        "stitch_kind": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["operator", "dictated", "worker", "ad-hoc"]
+          }
+        },
+        "show_archived": {
+          "type": "boolean",
+          "default": false
+        }
+      }
+    },
+    "theme": {
+      "type": "string",
+      "enum": ["light", "dark", "auto"],
+      "default": "auto"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    }
+  },
+  "schema_version": "1.0.0"
+}

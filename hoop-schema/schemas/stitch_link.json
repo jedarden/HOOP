@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/stitch_link.json",
+  "title": "StitchLink",
+  "description": "Link between two stitches",
+  "type": "object",
+  "required": ["from_stitch", "to_stitch", "kind", "schema_version"],
+  "properties": {
+    "from_stitch": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Source stitch ID"
+    },
+    "to_stitch": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Target stitch ID"
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["spawned", "references"],
+      "description": "Link kind"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the link was created"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    }
+  },
+  "schema_version": "1.0.0"
+}

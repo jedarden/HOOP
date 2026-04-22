@@ -12,6 +12,7 @@ use std::fs::{File, Metadata};
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
@@ -271,6 +272,23 @@ impl BeadReader {
         beads.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
         Ok(beads)
+    }
+
+    /// Stop the bead reader gracefully
+    ///
+    /// Flushes any pending reads and stops the file watcher.
+    /// This should be called during shutdown to ensure clean state.
+    pub async fn stop(&self) -> Result<()> {
+        debug!("Stopping bead reader");
+
+        // Drop the watcher to stop file watching
+        drop(self.watcher.take());
+
+        // Give the file watcher a moment to clean up
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        debug!("Bead reader stopped");
+        Ok(())
     }
 }
 

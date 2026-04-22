@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/bead_data.json",
+  "title": "BeadData",
+  "description": "Bead data sent to the frontend",
+  "type": "object",
+  "required": ["id", "title", "status", "priority", "issue_type", "created_at", "updated_at", "created_by", "dependencies"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Bead ID (e.g., hoop-ttb.1)"
+    },
+    "title": {
+      "type": "string",
+      "description": "Bead title"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["open", "closed"],
+      "description": "Bead status"
+    },
+    "priority": {
+      "type": "integer",
+      "description": "Priority (0 = highest)"
+    },
+    "issue_type": {
+      "type": "string",
+      "enum": ["task", "bug", "epic"],
+      "description": "Issue type"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp"
+    },
+    "created_by": {
+      "type": "string",
+      "description": "Creator username"
+    },
+    "dependencies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of dependent bead IDs"
+    }
+  },
+  "schema_version": "1.0.0"
+}

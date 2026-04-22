@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/voice_config.json",
+  "title": "VoiceConfig",
+  "description": "Voice/dictation configuration",
+  "type": "object",
+  "properties": {
+    "whisper_model_path": {
+      "type": "string",
+      "description": "Path to Whisper model"
+    },
+    "hotkey": {
+      "type": "string",
+      "default": "Ctrl+Shift+V",
+      "description": "Hotkey binding"
+    },
+    "max_recording_seconds": {
+      "type": "integer",
+      "default": 300
+    }
+  },
+  "schema_version": "1.0.0"
+}

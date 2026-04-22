@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/pattern.json",
+  "title": "Pattern",
+  "description": "A grouping of stitches toward a goal",
+  "type": "object",
+  "required": ["id", "title", "status", "created_at", "schema_version"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique pattern identifier"
+    },
+    "title": {
+      "type": "string",
+      "description": "Pattern title"
+    },
+    "description": {
+      "type": ["string", "null"],
+      "description": "Pattern description"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["planned", "active", "blocked", "done", "abandoned"],
+      "description": "Pattern status"
+    },
+    "owner": {
+      "type": ["string", "null"],
+      "description": "Pattern owner"
+    },
+    "deadline": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Optional deadline"
+    },
+    "parent_pattern": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Parent pattern ID for nesting"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last update timestamp"
+    },
+    "closed_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Closure timestamp"
+    },
+    "progress_percent": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Aggregated progress percentage"
+    },
+    "total_cost_usd": {
+      "type": "number",
+      "description": "Total cost in USD"
+    },
+    "duration_seconds": {
+      "type": ["integer", "null"],
+      "description": "Total duration in seconds"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    }
+  },
+  "schema_version": "1.0.0"
+}

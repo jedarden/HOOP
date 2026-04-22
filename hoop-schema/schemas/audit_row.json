@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/audit_row.json",
+  "title": "AuditRow",
+  "description": "Audit log entry for every write HOOP performs",
+  "type": "object",
+  "required": ["id", "ts", "actor", "kind", "target", "result", "schema_version"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique audit entry ID"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of the action"
+    },
+    "actor": {
+      "type": "string",
+      "description": "Actor identity (e.g., 'user:jedarden', 'hoop:agent:session-id')"
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["bead_created", "stitch_created", "config_changed", "project_added", "project_removed"],
+      "description": "Action kind"
+    },
+    "target": {
+      "type": "string",
+      "description": "Target identifier (bead ID, stitch ID, etc.)"
+    },
+    "args": {
+      "type": "object",
+      "description": "Arguments passed to the action"
+    },
+    "result": {
+      "type": "string",
+      "enum": ["success", "failure", "partial"],
+      "description": "Action result"
+    },
+    "error": {
+      "type": ["string", "null"],
+      "description": "Error message if result is not success"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Schema version at time of action"
+    }
+  },
+  "schema_version": "1.0.0"
+}

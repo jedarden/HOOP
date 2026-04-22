@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/streaming_content.json",
+  "title": "StreamingContent",
+  "description": "Streaming content update",
+  "type": "object",
+  "required": ["conversation_id", "content", "timestamp"],
+  "properties": {
+    "conversation_id": {
+      "type": "string",
+      "description": "Conversation ID"
+    },
+    "content": {
+      "type": "string",
+      "description": "Content fragment"
+    },
+    "timestamp": {
+      "type": "integer",
+      "description": "Unix timestamp in milliseconds"
+    }
+  },
+  "schema_version": "1.0.0"
+}

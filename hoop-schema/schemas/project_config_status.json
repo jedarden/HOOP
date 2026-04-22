@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/project_config_status.json",
+  "title": "ProjectConfigStatus",
+  "description": "Project configuration status for WebSocket events",
+  "type": "object",
+  "required": ["valid"],
+  "properties": {
+    "valid": {
+      "type": "boolean",
+      "description": "True if the configuration is valid, false if there was a parse error"
+    },
+    "error": {
+      "$ref": "config_error.json",
+      "description": "Error details if the configuration is invalid"
+    }
+  },
+  "schema_version": "1.0.0"
+}

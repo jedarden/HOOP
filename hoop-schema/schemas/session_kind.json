@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/session_kind.json",
+  "title": "SessionKind",
+  "description": "Classification of a CLI session based on its prefix tag",
+  "oneOf": [
+    {
+      "type": "object",
+      "title": "Worker",
+      "required": ["worker", "bead"],
+      "properties": {
+        "worker": {
+          "type": "string",
+          "description": "Worker name (NATO identifier)"
+        },
+        "bead": {
+          "type": "string",
+          "description": "Bead ID being processed"
+        },
+        "strand": {
+          "type": ["string", "null"],
+          "description": "Strand name (pluck, explore, mend, etc.)"
+        }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "string",
+      "enum": ["dictated"],
+      "description": "Dictated voice note session"
+    },
+    {
+      "type": "string",
+      "enum": ["ad_hoc"],
+      "description": "Ad-hoc operator CLI session"
+    },
+    {
+      "type": "string",
+      "enum": ["operator"],
+      "description": "Human-interface agent chat session"
+    }
+  ],
+  "schema_version": "1.0.0"
+}

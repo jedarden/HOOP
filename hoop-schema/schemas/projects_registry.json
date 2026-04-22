@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/projects_registry.json",
+  "title": "ProjectsRegistry",
+  "description": "Project registry structure for projects.yaml",
+  "type": "object",
+  "required": ["projects"],
+  "properties": {
+    "projects": {
+      "type": "array",
+      "items": {
+        "$ref": "project_entry.json"
+      }
+    }
+  },
+  "schema_version": "1.0.0"
+}

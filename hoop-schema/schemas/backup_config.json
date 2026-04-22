@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/backup_config.json",
+  "title": "BackupConfig",
+  "description": "Backup configuration",
+  "type": "object",
+  "required": ["endpoint", "bucket", "prefix"],
+  "properties": {
+    "endpoint": {
+      "type": "string",
+      "format": "uri",
+      "description": "S3-compatible endpoint"
+    },
+    "bucket": {
+      "type": "string",
+      "description": "Bucket name"
+    },
+    "prefix": {
+      "type": "string",
+      "description": "Prefix for backups"
+    },
+    "schedule": {
+      "type": "string",
+      "default": "0 4 * * *",
+      "description": "Cron schedule"
+    },
+    "retention_days": {
+      "type": "integer",
+      "default": 30
+    }
+  },
+  "schema_version": "1.0.0"
+}

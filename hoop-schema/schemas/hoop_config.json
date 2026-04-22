@@ -1,0 +1,90 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/hoop_config.json",
+  "title": "HoopConfig",
+  "description": "HOOP daemon configuration from config.yml",
+  "type": "object",
+  "properties": {
+    "agent": {
+      "$ref": "agent_config.json"
+    },
+    "projects_file": {
+      "type": "string",
+      "description": "Path to projects.yaml (default ~/.hoop/projects.yaml)"
+    },
+    "backup": {
+      "$ref": "backup_config.json"
+    },
+    "ui": {
+      "$ref": "ui_config.json"
+    },
+    "voice": {
+      "$ref": "voice_config.json"
+    },
+    "agent_extensions": {
+      "type": "object",
+      "properties": {
+        "skills": {
+          "type": "string",
+          "description": "Path to skills directory"
+        },
+        "scripts": {
+          "type": "string",
+          "description": "Path to scripts directory"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Path to notes directory"
+        },
+        "prompts": {
+          "type": "string",
+          "description": "Path to prompts directory"
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "port": {
+          "type": "integer",
+          "default": 9091
+        }
+      }
+    },
+    "audit": {
+      "type": "object",
+      "properties": {
+        "retention_days": {
+          "type": "integer",
+          "default": 90
+        },
+        "hash_chain": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "reflection": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "detection_threshold": {
+          "type": "number",
+          "default": 0.8
+        },
+        "auto_archive_after_days": {
+          "type": "integer",
+          "default": 30
+        }
+      }
+    }
+  },
+  "schema_version": "1.0.0"
+}

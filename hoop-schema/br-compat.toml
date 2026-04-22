@@ -1,0 +1,9 @@
+# br (beads_rust) compatibility pin for HOOP
+#
+# The daemon refuses to start if `br --version` reports below this minimum.
+# Bump this when HOOP depends on a br feature not present in older releases.
+#
+# To bypass for development: hoop serve --allow-br-mismatch
+
+[compat]
+br_min_version = "0.4.0"

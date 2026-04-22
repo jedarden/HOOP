@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/ws_message.json",
+  "title": "WebSocketEvent",
+  "description": "WebSocket events sent to connected clients",
+  "type": "object",
+  "required": ["type"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["worker_update", "workers_snapshot", "beads_snapshot", "conversations_snapshot", "conversation_update", "streaming_content", "config_status"]
+    },
+    "worker": {
+      "$ref": "worker_data.json"
+    },
+    "workers": {
+      "type": "array",
+      "items": {
+        "$ref": "worker_data.json"
+      }
+    },
+    "beads": {
+      "type": "array",
+      "items": {
+        "$ref": "bead_data.json"
+      }
+    },
+    "conversations": {
+      "type": "array",
+      "items": {
+        "$ref": "conversation_data.json"
+      }
+    },
+    "conversation": {
+      "$ref": "conversation_data.json"
+    },
+    "streaming": {
+      "$ref": "streaming_content.json"
+    },
+    "config_status": {
+      "$ref": "project_config_status.json"
+    }
+  },
+  "schema_version": "1.0.0"
+}

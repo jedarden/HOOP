@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/capacity_limits.json",
+  "title": "CapacityLimits",
+  "description": "Capacity limits for an adapter account",
+  "type": "object",
+  "properties": {
+    "tokens_per_5h": {
+      "type": ["integer", "null"],
+      "description": "Token limit per 5-hour window (Claude-specific)"
+    },
+    "tokens_per_7d": {
+      "type": ["integer", "null"],
+      "description": "Token limit per 7-day window (Claude-specific)"
+    },
+    "requests_per_day": {
+      "type": ["integer", "null"],
+      "description": "Request limit per day"
+    },
+    "spend_usd_per_day": {
+      "type": ["number", "null"],
+      "description": "Spend limit per day in USD"
+    },
+    "concurrent_requests": {
+      "type": ["integer", "null"],
+      "description": "Concurrent request limit"
+    }
+  },
+  "schema_version": "1.0.0"
+}

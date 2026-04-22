@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/message_usage.json",
+  "title": "MessageUsage",
+  "description": "Token usage from a single message",
+  "type": "object",
+  "required": ["input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens"],
+  "properties": {
+    "input_tokens": {
+      "type": "integer",
+      "description": "Input tokens (prompt)"
+    },
+    "output_tokens": {
+      "type": "integer",
+      "description": "Output tokens (completion)"
+    },
+    "cache_read_tokens": {
+      "type": "integer",
+      "description": "Cache read tokens (prompt cache hits)"
+    },
+    "cache_write_tokens": {
+      "type": "integer",
+      "description": "Cache write tokens (new cache entries)"
+    }
+  },
+  "schema_version": "1.0.0"
+}

@@ -3,6 +3,10 @@ name = "hoop-daemon"
 version.workspace = true
 edition.workspace = true
 
+[features]
+default = ["zero-write-v01"]
+zero-write-v01 = []
+
 [dependencies]
 anyhow = "1.0"
 axum = { workspace = true }

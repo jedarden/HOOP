@@ -7,6 +7,10 @@ edition.workspace = true
 name = "hoop"
 path = "src/main.rs"
 
+[features]
+default = ["zero-write-v01"]
+zero-write-v01 = ["hoop-daemon/zero-write-v01"]
+
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }
 tracing = { workspace = true }

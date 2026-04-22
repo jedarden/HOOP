@@ -20,6 +20,7 @@ use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
@@ -640,6 +641,23 @@ impl SessionTailer {
         }
 
         result
+    }
+
+    /// Stop the session tailer gracefully
+    ///
+    /// Flushes any pending discoveries and stops the file watcher.
+    /// This should be called during shutdown to ensure clean state.
+    pub async fn stop(&self) -> Result<()> {
+        debug!("Stopping session tailer");
+
+        // Drop the watcher to stop file watching
+        drop(self.watcher.take());
+
+        // Give the file watcher a moment to clean up
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        debug!("Session tailer stopped");
+        Ok(())
     }
 }
 

@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/parsed_session.json",
+  "title": "ParsedSession",
+  "description": "A parsed CLI session with classification, messages, and metadata",
+  "type": "object",
+  "required": ["id", "session_id", "provider", "kind", "cwd", "title", "messages", "total_usage", "created_at", "updated_at", "complete", "file_path"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Stable ID (UUID)"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Provider-native session ID"
+    },
+    "provider": {
+      "type": "string",
+      "description": "CLI provider name"
+    },
+    "kind": {
+      "$ref": "session_kind.json",
+      "description": "Session classification"
+    },
+    "cwd": {
+      "type": "string",
+      "description": "Working directory when session was created"
+    },
+    "title": {
+      "type": "string",
+      "description": "Session title"
+    },
+    "messages": {
+      "type": "array",
+      "items": {
+        "$ref": "session_message.json"
+      },
+      "description": "Messages in the session"
+    },
+    "total_usage": {
+      "$ref": "message_usage.json",
+      "description": "Aggregate token usage"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Session start time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last activity time"
+    },
+    "complete": {
+      "type": "boolean",
+      "description": "Whether the session is complete"
+    },
+    "file_path": {
+      "type": "string",
+      "description": "Path to the session file on disk"
+    }
+  },
+  "schema_version": "1.0.0"
+}

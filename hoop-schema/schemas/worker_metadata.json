@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/worker_metadata.json",
+  "title": "WorkerMetadata",
+  "description": "Worker metadata for worker sessions",
+  "type": "object",
+  "required": ["worker", "bead"],
+  "properties": {
+    "worker": {
+      "type": "string",
+      "description": "Worker name"
+    },
+    "bead": {
+      "type": "string",
+      "description": "Bead ID"
+    },
+    "strand": {
+      "type": ["string", "null"],
+      "description": "Strand name"
+    }
+  },
+  "schema_version": "1.0.0"
+}

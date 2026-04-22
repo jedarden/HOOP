@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/pattern_query.json",
+  "title": "PatternQuery",
+  "description": "Saved query for auto-including stitches in a pattern",
+  "type": "object",
+  "required": ["pattern_id", "query", "schema_version"],
+  "properties": {
+    "pattern_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Pattern ID"
+    },
+    "query": {
+      "type": "string",
+      "description": "Query string for matching stitches"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When query was created"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    }
+  },
+  "schema_version": "1.0.0"
+}

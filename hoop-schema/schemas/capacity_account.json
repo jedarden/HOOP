@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/capacity_account.json",
+  "title": "CapacityAccount",
+  "description": "Capacity account for tracking adapter usage limits",
+  "type": "object",
+  "required": ["id", "adapter", "account_id", "limits", "usage", "updated_at", "schema_version"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Capacity account ID"
+    },
+    "adapter": {
+      "type": "string",
+      "enum": ["claude", "codex", "opencode", "gemini", "zai"],
+      "description": "Adapter name"
+    },
+    "account_id": {
+      "type": "string",
+      "description": "Provider account identifier"
+    },
+    "limits": {
+      "$ref": "capacity_limits.json"
+    },
+    "usage": {
+      "$ref": "capacity_usage.json"
+    },
+    "window_start": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Current window start time"
+    },
+    "window_end": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Current window end time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last update timestamp"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    }
+  },
+  "schema_version": "1.0.0"
+}

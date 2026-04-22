@@ -50,6 +50,11 @@ pub enum ProjectRuntimeState {
         consecutive_failures: usize,
         next_restart_at: DateTime<Utc>,
     },
+    /// Runtime has a permanent error (will not auto-restart)
+    Error {
+        error: String,
+        errored_at: DateTime<Utc>,
+    },
     /// Runtime has been abandoned (too many failures)
     Abandoned {
         error: String,
@@ -63,10 +68,10 @@ impl ProjectRuntimeState {
         matches!(self, Self::Starting | Self::Healthy)
     }
 
-    /// Returns the error message if in a failed state
+    /// Returns the error message if in a failed or error state
     pub fn error(&self) -> Option<&str> {
         match self {
-            Self::Failed { error, .. } | Self::Abandoned { error, .. } => Some(error),
+            Self::Failed { error, .. } | Self::Abandoned { error, .. } | Self::Error { error, .. } => Some(error),
             _ => None,
         }
     }
@@ -347,8 +352,42 @@ impl ProjectSupervisor {
         }
     }
 
+    /// Check if an error is permanent (should not trigger auto-restart)
+    fn is_permanent_error(error: &str) -> bool {
+        let error_lower = error.to_lowercase();
+        error_lower.contains("workspace path does not exist") ||
+        error_lower.contains(".beads directory not found") ||
+        error_lower.contains("does not exist")
+    }
+
     /// Handle runtime failure with exponential backoff and auto-restart
     async fn handle_failure(&self, project_name: &str, error: &str) {
+        // Check if this is a permanent error (should not auto-restart)
+        if Self::is_permanent_error(error) {
+            let mut runtimes = self.runtimes.write().await;
+            if let Some(runtime) = runtimes.get_mut(project_name) {
+                runtime.state = ProjectRuntimeState::Error {
+                    error: error.to_string(),
+                    errored_at: Utc::now(),
+                };
+                error!(
+                    "Project runtime {}: permanent error - {}",
+                    project_name, error
+                );
+
+                // Send status update
+                let _ = self.status_tx.send(ProjectRuntimeStatus {
+                    project_name: project_name.to_string(),
+                    project_path: runtime.workspaces.first().cloned().unwrap_or_default(),
+                    state: runtime.state.clone(),
+                    workspace_count: runtime.workspaces.len(),
+                    bead_count: 0,
+                });
+            }
+            return;
+        }
+
+        // Handle transient errors with backoff and restart
         let (should_restart, delay_secs) = {
             let mut runtimes = self.runtimes.write().await;
             if let Some(runtime) = runtimes.get_mut(project_name) {
@@ -664,10 +703,23 @@ mod tests {
             next_restart_at: Utc::now(),
         }
         .is_running());
+        assert!(!ProjectRuntimeState::Error {
+            error: "test".to_string(),
+            errored_at: Utc::now(),
+        }
+        .is_running());
         assert!(!ProjectRuntimeState::Abandoned {
             error: "test".to_string(),
             abandoned_at: Utc::now(),
         }
         .is_running());
+    }
+
+    #[test]
+    fn test_is_permanent_error() {
+        assert!(ProjectSupervisor::is_permanent_error("Workspace path does not exist: /path"));
+        assert!(ProjectSupervisor::is_permanent_error(".beads directory not found at: /path"));
+        assert!(!ProjectSupervisor::is_permanent_error("Connection refused"));
+        assert!(!ProjectSupervisor::is_permanent_error("Timeout"));
     }
 }

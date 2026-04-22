@@ -20,13 +20,13 @@
 pub mod version {
     /// Current schema version following SemVer (X.Y.Z)
     pub const SCHEMA_VERSION: &str = "1.0.0";
+
+    // Minimum pinned br version, generated from br-compat.toml by build.rs
+    include!(concat!(env!("OUT_DIR"), "/br_compat.rs"));
 }
 
-// Include generated types
+// Include generated types at crate root
 include!(concat!(env!("OUT_DIR"), "/types.rs"));
-
-// Re-export commonly used types at the crate root
-pub use types::*;
 
 /// Base trait for all schema records
 pub trait SchemaRecord {
@@ -55,7 +55,9 @@ impl HealthResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{DateTime, Utc};
     use serde_json;
+    use uuid::Uuid;
 
     /// Round-trip test: serialize → deserialize → equal
     macro_rules! round_trip_test {
@@ -76,19 +78,28 @@ mod tests {
         };
     }
 
+    fn parse_utc(s: &str) -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339(s)
+            .unwrap()
+            .with_timezone(&Utc)
+    }
+
     // Test round-trip for WorkerData
     round_trip_test!(
         worker_data_round_trip,
         WorkerData,
         WorkerData {
             worker: "alpha".to_string(),
-            state: WorkerDisplayState::Executing {
-                bead: "bd-abc123".to_string(),
-                adapter: "claude".to_string(),
+            state: WorkerDisplayState {
+                state: WorkerDisplayStateState::Executing,
+                bead: Some("bd-abc123".to_string()),
+                adapter: Some("claude".to_string()),
                 model: Some("opus".to_string()),
+                last_strand: None,
+                reason: None,
             },
-            liveness: WorkerLiveness::Alive,
-            last_heartbeat: "2024-01-01T00:00:00Z".to_string(),
+            liveness: WorkerLiveness::Live,
+            last_heartbeat: parse_utc("2024-01-01T00:00:00Z"),
             heartbeat_age_secs: 5,
         }
     );
@@ -100,11 +111,11 @@ mod tests {
         BeadData {
             id: "bd-abc123".to_string(),
             title: "Test bead".to_string(),
-            status: "open".to_string(),
+            status: BeadDataStatus::Open,
             priority: 0,
-            issue_type: "task".to_string(),
-            created_at: "2024-01-01T00:00:00Z".to_string(),
-            updated_at: "2024-01-01T00:00:00Z".to_string(),
+            issue_type: BeadDataIssueType::Task,
+            created_at: parse_utc("2024-01-01T00:00:00Z"),
+            updated_at: parse_utc("2024-01-01T00:00:00Z"),
             created_by: "user".to_string(),
             dependencies: vec![],
         }
@@ -115,17 +126,17 @@ mod tests {
         conversation_data_round_trip,
         ConversationData,
         ConversationData {
-            id: "uuid-123".to_string(),
+            id: Uuid::new_v4(),
             session_id: "session-456".to_string(),
-            provider: "claude".to_string(),
-            kind: "operator".to_string(),
+            provider: ConversationDataProvider::Claude,
+            kind: ConversationDataKind::Operator,
             worker_metadata: None,
             cwd: "/home/coding/project".to_string(),
             title: "Test conversation".to_string(),
             messages: vec![],
             total_tokens: 0,
-            created_at: "2024-01-01T00:00:00Z".to_string(),
-            updated_at: "2024-01-01T00:00:00Z".to_string(),
+            created_at: parse_utc("2024-01-01T00:00:00Z"),
+            updated_at: parse_utc("2024-01-01T00:00:00Z"),
             complete: false,
             file_path: "/path/to/session.jsonl".to_string(),
         }
@@ -136,13 +147,15 @@ mod tests {
         ws_event_round_trip,
         WebSocketEvent,
         WebSocketEvent {
-            r#type: "worker_update".to_string(),
+            type_: "worker_update".to_string(),
             worker: None,
-            workers: None,
-            beads: None,
-            conversations: None,
+            workers: vec![],
+            beads: vec![],
+            conversations: vec![],
             conversation: None,
             streaming: None,
+            projects: vec![],
+            config_status: None,
         }
     );
 
@@ -160,13 +173,13 @@ mod tests {
         audit_row_round_trip,
         AuditRow,
         AuditRow {
-            id: "uuid-audit".to_string(),
-            ts: "2024-01-01T00:00:00Z".to_string(),
+            id: Uuid::new_v4(),
+            ts: parse_utc("2024-01-01T00:00:00Z"),
             actor: "user:test".to_string(),
-            kind: "bead_created".to_string(),
+            kind: AuditRowKind::BeadCreated,
             target: "bd-123".to_string(),
-            args: None,
-            result: "success".to_string(),
+            args: serde_json::Map::new(),
+            result: AuditRowResult::Success,
             error: None,
             schema_version: "1.0.0".to_string(),
         }
@@ -177,12 +190,12 @@ mod tests {
         stitch_round_trip,
         Stitch,
         Stitch {
-            id: "uuid-stitch".to_string(),
+            id: Uuid::new_v4(),
             project: "test-project".to_string(),
-            kind: "operator".to_string(),
+            kind: StitchKind::Operator,
             title: "Test stitch".to_string(),
             created_by: "user".to_string(),
-            created_at: "2024-01-01T00:00:00Z".to_string(),
+            created_at: parse_utc("2024-01-01T00:00:00Z"),
             updated_at: None,
             closed_at: None,
             participants: vec![],
@@ -201,17 +214,17 @@ mod tests {
         pattern_round_trip,
         Pattern,
         Pattern {
-            id: "uuid-pattern".to_string(),
+            id: Uuid::new_v4(),
             title: "Test pattern".to_string(),
             description: Some("Test description".to_string()),
-            status: "active".to_string(),
-            owner: Some("user".to_string()),
+            status: PatternStatus::Active,
+            owner: None,
             deadline: None,
             parent_pattern: None,
-            created_at: "2024-01-01T00:00:00Z".to_string(),
-            updated_at: "2024-01-01T00:00:00Z".to_string(),
+            created_at: parse_utc("2024-01-01T00:00:00Z"),
+            updated_at: None,
             closed_at: None,
-            progress_percent: 50,
+            progress_percent: None,
             total_cost_usd: None,
             duration_seconds: None,
             schema_version: "1.0.0".to_string(),
@@ -223,13 +236,13 @@ mod tests {
         reflection_ledger_round_trip,
         ReflectionLedger,
         ReflectionLedger {
-            id: "uuid-reflection".to_string(),
+            id: Uuid::new_v4(),
             scope: "global".to_string(),
             rule: "Always use snake_case".to_string(),
-            reason: "User repeatedly corrected camelCase".to_string(),
+            reason: Some("User repeatedly corrected camelCase".to_string()),
             source_stitches: vec![],
-            status: "proposed".to_string(),
-            created_at: "2024-01-01T00:00:00Z".to_string(),
+            status: ReflectionLedgerStatus::Proposed,
+            created_at: parse_utc("2024-01-01T00:00:00Z"),
             last_applied: None,
             applied_count: 0,
             approved_by: None,
@@ -245,25 +258,25 @@ mod tests {
         CapacityAccount,
         CapacityAccount {
             id: "account-1".to_string(),
-            adapter: "claude".to_string(),
+            adapter: CapacityAccountAdapter::Claude,
             account_id: "acc-123".to_string(),
-            limits: CapacityLimits {
-                max_requests_per_minute: None,
-                max_tokens_per_minute: None,
-                max_tokens_per_day: Some(1000000),
-                max_cost_usd_per_day: None,
+            limits: CapacityAccountLimits {
+                concurrent_requests: None,
+                requests_per_day: None,
+                spend_usd_per_day: None,
+                tokens_per_5h: None,
+                tokens_per_7d: Some(1000000),
             },
-            usage: CapacityUsage {
-                requests_this_minute: 100,
-                tokens_this_minute: 50000,
-                tokens_today: 500000,
-                cost_usd_today: None,
-                window_start: None,
-                window_end: None,
+            usage: CapacityAccountUsage {
+                active_requests: None,
+                requests_today: 100,
+                spend_usd_today: 50.0,
+                tokens_5h: 50000,
+                tokens_7d: 500000,
             },
             window_start: None,
             window_end: None,
-            updated_at: "2024-01-01T00:00:00Z".to_string(),
+            updated_at: parse_utc("2024-01-01T00:00:00Z"),
             schema_version: "1.0.0".to_string(),
         }
     );
@@ -271,8 +284,7 @@ mod tests {
     // Test schema version format
     #[test]
     fn test_schema_version_format() {
-        assert!(regex::Regex::new(r"^\d+\.\d+\.\d+$")
-            .unwrap()
-            .is_match(version::SCHEMA_VERSION));
+        let re = regex::Regex::new(r"^\d+\.\d+\.\d+$").unwrap();
+        assert!(re.is_match(version::SCHEMA_VERSION));
     }
 }

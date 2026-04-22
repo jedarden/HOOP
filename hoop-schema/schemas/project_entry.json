@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/project_entry.json",
+  "title": "ProjectEntry",
+  "description": "A single project entry in the registry",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["name", "path"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Project name"
+        },
+        "path": {
+          "type": "string",
+          "description": "Absolute path to the workspace (single-workspace shorthand)"
+        },
+        "label": {
+          "type": "string",
+          "description": "Optional label"
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "description": "Optional color hex code"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["name", "workspaces"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Project name"
+        },
+        "label": {
+          "type": "string",
+          "description": "Optional label"
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^#[0-9A-Fa-f]{6}$",
+          "description": "Optional color hex code"
+        },
+        "workspaces": {
+          "type": "array",
+          "items": {
+            "$ref": "workspace_entry.json"
+          }
+        }
+      }
+    }
+  ],
+  "schema_version": "1.0.0"
+}

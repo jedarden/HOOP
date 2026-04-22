@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/stitch.json",
+  "title": "Stitch",
+  "description": "A single conversation within a project",
+  "type": "object",
+  "required": ["id", "project", "kind", "title", "created_by", "created_at", "schema_version"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique stitch identifier"
+    },
+    "project": {
+      "type": "string",
+      "description": "Project name"
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["operator", "dictated", "worker", "ad-hoc"],
+      "description": "Stitch kind"
+    },
+    "title": {
+      "type": "string",
+      "description": "Stitch title"
+    },
+    "created_by": {
+      "type": "string",
+      "description": "Creator identity"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation timestamp"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last update timestamp"
+    },
+    "closed_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Closure timestamp if applicable"
+    },
+    "participants": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Participant identities"
+    },
+    "attachments_path": {
+      "type": ["string", "null"],
+      "description": "Path to attachments directory"
+    },
+    "archived": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the stitch is archived"
+    },
+    "archived_at": {
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "Archive timestamp"
+    },
+    "worker_metadata": {
+      "$ref": "worker_metadata.json",
+      "description": "Worker metadata for worker stitches"
+    },
+    "parent_stitch_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Parent stitch if spawned by another stitch"
+    },
+    "pattern_id": {
+      "type": ["string", "null"],
+      "description": "Pattern ID if this stitch belongs to a pattern"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    }
+  },
+  "schema_version": "1.0.0"
+}

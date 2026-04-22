@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/worker_display_state.json",
+  "title": "WorkerDisplayState",
+  "description": "Worker state for display (combines WorkerState with additional info)",
+  "type": "object",
+  "required": ["state"],
+  "properties": {
+    "state": {
+      "type": "string",
+      "enum": ["executing", "idle", "knot"]
+    },
+    "bead": {
+      "type": "string",
+      "description": "Bead ID (when executing)"
+    },
+    "adapter": {
+      "type": "string",
+      "description": "Adapter name (when executing)"
+    },
+    "model": {
+      "type": "string",
+      "description": "Model name (when executing)"
+    },
+    "last_strand": {
+      "type": ["string", "null"],
+      "description": "Last strand worked on (when idle)"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Reason for knot state (when knotted)"
+    }
+  },
+  "schema_version": "1.0.0"
+}

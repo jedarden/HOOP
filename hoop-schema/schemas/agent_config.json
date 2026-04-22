@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/agent_config.json",
+  "title": "AgentConfig",
+  "description": "Human-interface agent configuration",
+  "type": "object",
+  "properties": {
+    "adapter": {
+      "type": "string",
+      "enum": ["claude", "codex", "opencode", "gemini", "zai"],
+      "description": "Adapter selection"
+    },
+    "model": {
+      "type": "string",
+      "description": "Model name (e.g., opus, sonnet, haiku)"
+    },
+    "rate_limit_requests_per_minute": {
+      "type": "integer",
+      "description": "Optional rate limit"
+    },
+    "cost_cap_per_session_usd": {
+      "type": "number",
+      "description": "Optional cost cap per session"
+    }
+  },
+  "schema_version": "1.0.0"
+}

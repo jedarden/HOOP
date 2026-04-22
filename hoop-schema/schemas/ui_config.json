@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/ui_config.json",
+  "title": "UiConfig",
+  "description": "UI configuration",
+  "type": "object",
+  "properties": {
+    "theme": {
+      "type": "string",
+      "enum": ["light", "dark", "auto"],
+      "default": "auto"
+    },
+    "default_project_sort": {
+      "type": "string",
+      "enum": ["name", "last_activity", "worker_count"],
+      "default": "last_activity"
+    },
+    "archive_after_days": {
+      "type": "integer",
+      "default": 30
+    }
+  },
+  "schema_version": "1.0.0"
+}

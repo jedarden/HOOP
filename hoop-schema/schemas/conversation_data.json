@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/conversation_data.json",
+  "title": "ConversationData",
+  "description": "Conversation/session data sent to the frontend",
+  "type": "object",
+  "required": ["id", "session_id", "provider", "kind", "cwd", "title", "messages", "total_tokens", "created_at", "updated_at", "complete", "file_path"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Stable UI ID (UUID)"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Provider-native session ID"
+    },
+    "provider": {
+      "type": "string",
+      "enum": ["claude", "codex", "gemini", "opencode", "aider"],
+      "description": "Provider name"
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["operator", "dictated", "worker", "ad-hoc"],
+      "description": "Session classification"
+    },
+    "worker_metadata": {
+      "$ref": "worker_metadata.json"
+    },
+    "cwd": {
+      "type": "string",
+      "description": "Working directory when session was created"
+    },
+    "title": {
+      "type": "string",
+      "description": "Session title"
+    },
+    "messages": {
+      "type": "array",
+      "items": {
+        "$ref": "session_message.json"
+      }
+    },
+    "total_tokens": {
+      "type": "integer",
+      "description": "Total tokens used"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "complete": {
+      "type": "boolean",
+      "description": "Whether the session is complete (process exited)"
+    },
+    "file_path": {
+      "type": "string",
+      "description": "Path to the session file on disk"
+    }
+  },
+  "schema_version": "1.0.0"
+}

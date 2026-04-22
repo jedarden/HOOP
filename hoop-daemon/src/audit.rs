@@ -3,6 +3,7 @@
 //! Validates dependencies, environment, and configuration.
 //! Each failure includes the exact command to fix it.
 
+use crate::br_verbs;
 use hoop_schema::version::BR_MIN_VERSION;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -226,8 +227,9 @@ pub fn daemon_startup_check(config: &AuditConfig) -> anyhow::Result<()> {
 
 /// Check if br is in PATH and meets minimum version
 fn check_br_version() -> AuditCheck {
-    let result = Command::new("br")
-        .arg("--version")
+    // Route through br_verbs choke point so all br subprocess calls are
+    // centralized and the zero-write invariant can audit them.
+    let result = br_verbs::invoke_br_read(br_verbs::ReadVerb::Version, &[])
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
 

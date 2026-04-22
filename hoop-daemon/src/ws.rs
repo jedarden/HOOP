@@ -625,6 +625,17 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     });
 
+    // Spawn task to forward config status events to the WebSocket
+    let config_task = tokio::spawn(async move {
+        while let Ok(status) = config_status_rx.recv().await {
+            if let Ok(json) = serde_json::to_string(&WsEvent::config_status(status)) {
+                if sender.send(Message::Text(json)).await.is_err() {
+                    break;
+                }
+            }
+        }
+    });
+
     // Handle incoming messages (just ping/pong for now)
     let recv_task = tokio::spawn(async move {
         while let Some(msg) = receiver.next().await {
@@ -667,6 +678,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         _ = monitor_task => {},
         _ = bead_task => {},
         _ = session_task => {},
+        _ = config_task => {},
         _ = recv_task => {},
     }
 
