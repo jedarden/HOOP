@@ -1,7 +1,11 @@
 # HOOP implementation plan
 
-**Status:** Draft v2 — 2026-04-22
+**Status:** Draft v3 — 2026-04-22
 **Scope:** Control plane for a single long-lived host that holds many repos, many NEEDLE fleets, and many native-CLI conversations. Kubernetes worker deployment is a deferred aspiration, not part of the primary roadmap — sketched at the end so the v1 design isn't warped by it.
+
+**Lineage.** Two explicit influences:
+- **Steve Yegge's Gas Town** — the "city hosts a Mayor who orchestrates polecats working in swarms" mental model. NEEDLE workers are HOOP's polecats; HOOP's central coordinating agent is its Mayor. Gas Town is built on Beads (same `br` substrate NEEDLE uses), which makes the conceptual translation direct.
+- **The prior-art reference ADE ([notes/](../notes/))** — swarm-first design, git-worktree isolation, multi-provider dynamic routing within one swarm, visual debugging of prompts/tool-calls/state, BYO-account cost reduction. HOOP adopts these patterns against the NEEDLE substrate rather than reinventing them.
 
 ---
 
@@ -17,6 +21,25 @@ HOOP is the operator's pane of glass for a server that does real work. On a sing
 HOOP makes sense of all of it. One URL over Tailscale shows every project, every fleet, every conversation, every cost figure, every stuck worker. From the same URL the operator launches fleets, steers them, or reassigns work. HOOP never owns any of the data — bead state stays in `br`, conversation state stays in each CLI's native directory — it joins those sources so the operator doesn't have to.
 
 The unit of growth here is *another project on the same host*, not *another host*. Everything in v1 assumes the host is singular and long-lived.
+
+---
+
+## 1.5. Mental model: the city, the Mayor, the polecats
+
+Borrowed from Steve Yegge's Gas Town vocabulary because the mapping is clean and the terms hold up under load. HOOP is the **city** — the long-lived infrastructure that houses roles, not a role itself:
+
+| Gas Town term | HOOP-over-NEEDLE mapping |
+|---|---|
+| **City** | The HOOP daemon on the EX44. Infrastructure: project registry, event streams, audit log, UI. |
+| **Mayor** | A persistent, long-running Claude Code session (Opus-class) hosted by HOOP with cross-project context and a tool-belt of HOOP operations. The operator's primary conversation partner. Receives notifications, kicks off work, escalates stuck beads, coordinates across projects. |
+| **Polecat** | A single NEEDLE worker claiming and executing one bead. Ephemeral per-bead lifecycle (claim → dispatch → execute → close → repeat). |
+| **Swarm** | A NEEDLE fleet — a named group of polecats working the same workspace under one `fleet.yaml`. |
+| **Convoy** | A coordinated multi-bead work unit (e.g. "refactor the auth module" → implementation bead + review bead + fix beads) expressed through the bead dependency graph. |
+| **Merge Queue** | The review-and-merge path: review-type beads blocking implementation beads, with PR merges driven by closure resolution. |
+
+The Mayor is the operator's handle on the city. The polecats are the city's workforce. The city is what both of them live in. When we talk about HOOP's roadmap, phases 1-2 are **building the city** (infrastructure, observability, multi-project correctness); phases 3-4 are **seating the Mayor and giving them tools** (steering, Mayor persistence, visual debug, cost controls); phase 5 is **letting more than one citizen live there** (multi-operator).
+
+The Mayor is not optional polish. It is the difference between "a dashboard that shows fleets" and "a coordinator you talk to who runs fleets." The second is the actual goal.
 
 ---
 
@@ -322,6 +345,8 @@ Repo created, docs scaffolded, notes seeded with prior-art research, plan publis
     - Rate-limit window overlay for Claude (5h + 7d)
     - Cost-per-closed-bead (the real unit-economics number)
     - Ad-hoc cost separated from fleet cost
+12. **Visual debug panel** (from unleashd's playbook) — per-bead step-through of the polecat's actual work: prompts sent, tool calls issued, state transitions, stderr. Scrubable timeline at the bead level, not just the conversation level. Answers "what did this polecat actually do with my $2.80?" in one view.
+13. **Multi-account awareness.** An adapter config can declare multiple accounts (e.g. two Claude Max plans); HOOP tracks usage per account and surfaces which account is being drained toward a rate-limit window. No routing yet — just visibility.
 
 **Success criteria.**
 - EX44 with `hoop projects scan ~/` registers every workspace with `.beads/` in one command.
@@ -329,37 +354,70 @@ Repo created, docs scaffolded, notes seeded with prior-art research, plan publis
 - DAG renders 500+ beads interactively (<500ms interactions).
 - Collision alert fires within 30s of two active workers touching the same file.
 - Killing one project's runtime (e.g. delete its `.beads/`) shows an error card but leaves other projects unaffected.
+- Visual debug panel reconstructs a full bead cycle from events + session transcript with no gaps.
 
-### Phase 3 — Steering (v0.3)
+### Phase 3 — Direct steering + multi-provider routing (v0.3)
 
-**Goal.** HOOP gains write-side operations. Direct bead ops, tmux controls, chat-driven steering. All scoped by project; all audited.
+**Goal.** HOOP gains write-side operations and the ability to route work across providers within a single swarm. Direct bead ops, tmux controls, per-swarm multi-provider routing, rate-limit-aware scheduling. All scoped by project; all audited. This phase is the **operator's** write-side; the Mayor comes in phase 4.
 
 **Deliverables.**
 
-1. Direct bead-op buttons (scoped per project) wired to `br`:
+1. **Direct bead-op buttons** (scoped per project) wired to `br`:
    - Boost / lower priority
    - Close bead with resolution (`closed-no-artifact`, `merged`, `parked`, `rejected`)
    - Create review bead as dep of target
    - Release stuck claim (only when worker demonstrably dead AND heartbeat stale)
    - Reassign bead to a specific worker or adapter
-2. tmux control actions (SIGSTOP / SIGCONT / SIGTERM). TERM gate: release claim first, always.
-3. Chat steering pane:
-   - Project-scoped by default; "global" mode requires explicit opt-in.
-   - Haiku-tier agent with a tool belt: read-only NEEDLE introspection + write-side `br`/tmux operations.
-   - All mutations emit `actions` audit rows with `actor: hoop:<operator>:chat`.
-   - Ceilings: chat agent refuses to create beads exceeding `max_attempts`, `max_review_rounds`, `cycle_budget` without explicit operator override.
-   - Cross-project steering requires an explicit "target project X" in the chat; no leakage.
-4. URL-scheme bridge for FABRIC: `hoop://<project>/release/bead/<id>`, etc. FABRIC renders action links; HOOP opens a confirmation dialog.
-5. Permission snapshot at worker spawn (env + `settings.json` copy) — no live inheritance.
-6. `yolo: true` at project-level requires a `sandbox:` config stanza.
+2. **tmux control actions** (SIGSTOP / SIGCONT / SIGTERM). TERM gate: release claim first, always.
+3. **Multi-provider dynamic routing within one swarm** (unleashd's pattern). `fleet.yaml` can declare a mixed worker pool — e.g. two Claude Opus planners, three Codex mid-tier executors, one OpenCode executor — and beads are matched to workers by bead-level hints (`difficulty`, `strand`, `needs_review`). Rate-limit-aware: when one account's 5h window is 80% exhausted, new beads route to a different account/adapter rather than stalling.
+4. **BYO-account orchestration.** Adapter configs reference credentials that persist in the CLI's native cache (HOOP never handles secrets); HOOP only tracks *which account is active per worker at spawn time* and rotates workers onto a fresh account when rate-limits approach. Opt-in per workspace.
+5. **URL-scheme bridge for FABRIC:** `hoop://<project>/release/bead/<id>`, etc. FABRIC renders action links; HOOP opens a confirmation dialog.
+6. **Permission snapshot at worker spawn** (env + `settings.json` copy) — no live inheritance.
+7. `yolo: true` at project-level requires a `sandbox:` config stanza.
 
 **Success criteria.**
 - Every mutation has a corresponding audit row with the correct project name.
-- Cross-project leakage impossible without explicit operator action (test: `/chat>close everything` is rejected until a target project is specified).
 - Release-stuck-claim refuses when the PID is still alive OR heartbeat is fresh.
 - FABRIC URL click opens the right project's HOOP dialog.
+- A 10-bead batch distributed across a 5-worker mixed-provider pool completes without rate-limit hits when sufficient headroom exists.
+- Rate-limit-aware routing drops a draining account cleanly and promotes a fresh one within one bead cycle.
 
-### Phase 4 — Operational polish (v0.4)
+### Phase 4 — The Mayor (v0.4)
+
+**Goal.** Seat the Mayor — a persistent, cross-project coordinating agent — and give the operator a proper conversational handle on the city.
+
+This is where HOOP stops being a dashboard and becomes a coordinator. The Mayor is the difference.
+
+**Deliverables.**
+
+1. **Mayor session** — a long-running Claude Code session (Opus by default; configurable) hosted by HOOP as a first-class resource. State persists across HOOP restarts via Claude Code's native session store; HOOP just tracks the session id.
+2. **Mayor context ingestion.** Via MCP server or prompt injection, the Mayor has read access to:
+   - Project registry and per-project status
+   - Current fleet state (who's running, what they're claiming, heartbeat freshness)
+   - Bead queue summaries per project (open / claimed / blocked / recently closed)
+   - Cost roll-ups (per project, per adapter, per day, rate-limit headroom)
+   - Recent audit log entries
+   - Stuck / collision / cost-anomaly alerts
+3. **Mayor tool belt** — every direct-steering operation from phase 3, plus:
+   - `launch_fleet(project)` / `stop_fleet(project)` / `salvage_fleet(project)`
+   - `create_bead(project, title, body, deps[], priority)` — goal-oriented prompts only; no method-dictating
+   - `spawn_polecat(project, adapter, strands[])` — incremental worker add
+   - `escalate(bead, reason)` — attach a HUMAN-blocked note and notify the operator
+   - `summarize_day()` — generate a day-in-review for the operator
+4. **Notification channel.** When a fleet closes a bead (or a convoy completes, or a worker hits a ceiling), the Mayor gets a structured event and decides whether to surface it to the operator. Matches Yegge's "Mayor kicks off most work and receives notifications when convoys finish."
+5. **Operator ↔ Mayor chat pane** — primary UI surface of v0.4. Operator types "pick up the ibkr-mcp backlog, prioritize anything blocking production" and the Mayor decides what to do. Streams in real time. Cross-project by design.
+6. **Hard ceilings still enforced.** The Mayor cannot create beads exceeding `max_attempts`, `max_review_rounds`, `cycle_budget` without explicit operator confirmation via a UI prompt (not via chat).
+7. **Mayor audit trail.** Every Mayor-initiated mutation records `actor: hoop:mayor` in the audit log, with a link back to the prompt turn that produced it. Reviewable after the fact.
+8. **Mayor-off switch.** HOOP runs fine without a Mayor (phases 1-3 use-case stays valid). Turning the Mayor on requires an Anthropic API key and explicit config.
+
+**Success criteria.**
+- Mayor session survives `systemctl restart hoop` with full context intact (via persistent session id).
+- Operator asks "what did we do today?" and gets a coherent cross-project summary.
+- Operator asks "everything on project X looks stuck — fix it" and the Mayor releases dead claims, identifies the blocker, and either unblocks autonomously or escalates with a clear reason.
+- Mayor never exceeds ceilings without explicit operator approval.
+- Mayor audit log lets the operator reconstruct any mutation chain end-to-end.
+
+### Phase 5 — Operational polish (v0.5)
 
 **Goal.** Make HOOP pleasant to run for the long haul on a server the operator doesn't want to babysit.
 
@@ -383,7 +441,7 @@ Repo created, docs scaffolded, notes seeded with prior-art research, plan publis
 - One month of normal operation produces <1GB in log+backup directories.
 - Operator identity visible in audit log for every mutation.
 
-### Phase 5 — Multi-operator (v1.0)
+### Phase 6 — Multi-operator (v1.0)
 
 **Goal.** More than one person uses the same HOOP instance.
 
@@ -437,12 +495,15 @@ Explicitly out of scope. Where HOOP deliberately does not grow.
 ## 9. Open questions
 
 1. **Hot-reload granularity.** Should a `fleet.yaml` edit reload just that project's manifest, or restart the project runtime? Lean toward manifest-only reload with explicit "restart project" command for worker changes. Resolve in phase 2.
-2. **Chat agent: in-process or subprocess?** Leaning subprocess — HOOP remains runnable without an Anthropic API key. Resolve before phase 3.
-3. **Cost caps: per-project vs global?** Probably both, with per-project as primary and global as a safety cap. Resolve during phase 2 cost work.
-4. **Conversation history expiry.** The host accumulates conversations indefinitely; at some point the session tailer's in-memory index becomes expensive. Lean toward LRU eviction with lazy reload on demand. Resolve if/when it becomes a problem.
-5. **Session tailer scaling.** On a host with years of `~/.claude/projects/` accumulation, startup discovery can be slow. May need a cache of file mtimes + parsed-digests in `~/.hoop/session-cache.db`. Resolve if startup exceeds 10s.
-6. **Worker supervisor API surface.** Does `hoop launch` return only after ack, or return immediately with an async status? Lean sync-with-timeout for CLI, async-with-progress-events for WS. Resolve in phase 1.
-7. **Cross-project collision: alert or block?** If two active workers in different projects touch the same file, is that an alert or an auto-pause? Alert for now; auto-pause is phase 5+ after more data.
+2. **Mayor: in-process session or subprocess?** The Mayor is a Claude Code session, not a generic agent; HOOP likely spawns/attaches to a real `claude` process with a known session id and MCP access to HOOP's APIs. This keeps HOOP optional (runnable without a Mayor) and keeps the Mayor's reasoning consistent with how the operator uses Claude elsewhere. Resolve in phase 4.
+3. **Mayor's MCP surface.** Two designs: (a) expose HOOP's APIs via an MCP server the Mayor connects to, or (b) inject context via system prompt + tools via CLI MCP config. Lean (a) — cleaner, survives session restarts. Resolve in phase 4.
+4. **Cost caps: per-project vs global?** Probably both, with per-project as primary and global as a safety cap. Resolve during phase 2 cost work.
+5. **Multi-provider routing policy.** Static (assign adapter X to strand Y in manifest) vs dynamic (HOOP picks at claim time based on rate-limit headroom and bead hints). Lean static-with-dynamic-rate-limit-fallback. Resolve in phase 3.
+6. **Conversation history expiry.** The host accumulates conversations indefinitely; at some point the session tailer's in-memory index becomes expensive. Lean toward LRU eviction with lazy reload on demand. Resolve if/when it becomes a problem.
+7. **Session tailer scaling.** On a host with years of `~/.claude/projects/` accumulation, startup discovery can be slow. May need a cache of file mtimes + parsed-digests in `~/.hoop/session-cache.db`. Resolve if startup exceeds 10s.
+8. **Worker supervisor API surface.** Does `hoop launch` return only after ack, or return immediately with an async status? Lean sync-with-timeout for CLI, async-with-progress-events for WS. Resolve in phase 1.
+9. **Cross-project collision: alert or block?** If two active workers in different projects touch the same file, is that an alert or an auto-pause? Alert for now; auto-pause is phase 6+ after more data.
+10. **Mayor-initiated cross-project operations.** Should the Mayor be allowed to start/stop fleets in projects the operator hasn't explicitly mentioned in the current conversation? Lean no — require an explicit project reference in the turn that triggered the mutation, or require UI confirmation. Resolve in phase 4.
 
 ---
 
@@ -451,12 +512,13 @@ Explicitly out of scope. Where HOOP deliberately does not grow.
 | Version | Target | Definition of done |
 |---|---|---|
 | v0.1 | +4 weeks | Single-project EX44 deployment, read-only, 3-worker fleet launchable from CLI |
-| v0.2 | +10 weeks | Multi-project dashboard, cost aggregation, dependency graph, collision + stuck detection |
-| v0.3 | +14 weeks | Steering: direct ops + tmux control + chat agent + FABRIC URL bridge |
-| v0.4 | +18 weeks | Operational polish: systemd, hot-reload, backups, metrics, Tailscale identity |
-| v1.0 | +22 weeks | Multi-operator with viewer/steerer roles; public README |
+| v0.2 | +10 weeks | Multi-project dashboard, cost aggregation, dependency graph, collision + stuck detection, visual debug panel, multi-account awareness |
+| v0.3 | +14 weeks | Direct steering: bead ops + tmux control + multi-provider routing + BYO-account rotation + FABRIC URL bridge |
+| v0.4 | +20 weeks | The Mayor: persistent cross-project coordinator with tool belt, notifications, operator chat pane |
+| v0.5 | +24 weeks | Operational polish: systemd, hot-reload, backups, metrics, Tailscale identity |
+| v1.0 | +28 weeks | Multi-operator with viewer/steerer roles; public README |
 
-Dates are rough planning fiction; the important property is ordering. **Do not chase breadth before v0.1 is real.** A broken single-project loop doesn't get better by adding more projects to it.
+Dates are rough planning fiction; the important property is ordering. **Do not chase breadth before v0.1 is real.** A broken single-project loop doesn't get better by adding more projects to it. And do not seat the Mayor before direct steering works — the Mayor's tool belt is just the write-side ops with an agent in front of them; if the underlying operations are broken, wrapping an agent around them makes debugging harder, not easier.
 
 ---
 
@@ -520,10 +582,12 @@ Not a phase of this plan. Recorded here so the door isn't closed but the v1 desi
 
 If and when the single host runs out of room — CPU, memory, bandwidth to CLI APIs, or sheer session-management overhead — HOOP can extend to scheduling NEEDLE workers as Kubernetes pods rather than tmux sessions on the EX44. The shape:
 
-- `hoop-agent` sidecar in each worker pod, forwarding events over a Tailscale-authenticated SSE endpoint to central HOOP.
+- `hoop-agent` sidecar in each worker pod, forwarding events over a Tailscale-authenticated SSE endpoint to central HOOP. In Gas Town vocabulary this is still a polecat — the execution site changes, the role doesn't.
 - Per-workspace PVC for the bead queue; pod-local for CLI session files (ephemeral) or a second PVC for persistent-replay use cases.
-- Central HOOP stays on the EX44; clusters are leaf execution sites, not parallel control planes.
+- Central HOOP stays on the EX44; clusters are leaf execution sites, not parallel control planes. The Mayor keeps one session, one cross-project view, and reaches into remote polecats through the same tool belt.
 - Manifests in `jedarden/declarative-config` synced by ArgoCD; images built by Argo Workflows on iad-ci.
 - Worker container is a pure NEEDLE container + adapter CLIs; the agent sidecar is a separate tiny Rust binary. Not headless HOOP.
 
-This requires phase 4's operational maturity and phase 3's steering write-path to exist first. The trigger is "I can't fit another fleet on this host," not "I want K8s on the resume." Design for it if and when the EX44 saturates; do not design the single-host daemon around it now.
+Rackspace-spot-terraform automation was retired 2026-04-22; spot clusters are now manually provisioned. That makes cluster-creation a deliberate, human-in-the-loop step — fine for HOOP's deferred K8s work since cluster churn is no longer a background concern.
+
+This requires phase 5's operational maturity and phase 3's steering write-path and phase 4's Mayor to exist first. The trigger is "I can't fit another fleet on this host," not "I want K8s on the resume." Design for it if and when the EX44 saturates; do not design the single-host daemon around it now.
