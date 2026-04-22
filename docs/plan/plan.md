@@ -1,74 +1,72 @@
 # HOOP implementation plan
 
-**Status:** Draft v3 — 2026-04-22
-**Scope:** Control plane for a single long-lived host that holds many repos, many NEEDLE fleets, and many native-CLI conversations. Kubernetes worker deployment is a deferred aspiration, not part of the primary roadmap — sketched at the end so the v1 design isn't warped by it.
+**Status:** Draft v4 — 2026-04-22
+**Scope:** A review-and-request surface for a single long-lived host that holds many repos, many NEEDLE fleets, and many native-CLI conversations. HOOP reads artifacts to answer operator questions and writes beads when new work needs to happen. **HOOP does not steer NEEDLE workers.** Workers live and die under NEEDLE's authority; HOOP observes them and puts items into their queue.
 
-**Lineage.** Two explicit influences:
-- **Steve Yegge's Gas Town** — the "city hosts a Mayor who orchestrates polecats working in swarms" mental model. NEEDLE workers are HOOP's polecats; HOOP's central coordinating agent is its Mayor. Gas Town is built on Beads (same `br` substrate NEEDLE uses), which makes the conceptual translation direct.
-- **The prior-art reference ADE ([notes/](../notes/))** — swarm-first design, git-worktree isolation, multi-provider dynamic routing within one swarm, visual debugging of prompts/tool-calls/state, BYO-account cost reduction. HOOP adopts these patterns against the NEEDLE substrate rather than reinventing them.
+**Lineage.**
+- **Steve Yegge's Gas Town** — the "city hosts a Mayor who orchestrates work" mental model. The Mayor is HOOP's primary conversational role; polecats are NEEDLE's workers. Where Gas Town's Mayor commands the polecats, HOOP's Mayor talks to the operator and writes into the bead queue — the polecats still pick up work autonomously through NEEDLE.
+- **The prior-art reference ADE ([notes/](../notes/))** — cross-agent conversation aggregation, visual debug of prompts/tool-calls/state transitions, git-worktree isolation as the unit of artifact safety, single unified event union across providers. HOOP adopts these as read-side patterns against the NEEDLE substrate.
 
 ---
 
 ## 1. Vision
 
-HOOP is the operator's pane of glass for a server that does real work. On a single long-lived host like this Hetzner EX44:
+HOOP is the operator's pane of glass and conversational handle. On a single long-lived host like this Hetzner EX44:
 
 - A dozen repos live on disk, each at its own path, each with its own `.beads/` queue.
-- Several NEEDLE fleets run at once, each scoped to a workspace, worker processes living in named tmux sessions.
-- The operator also runs ad-hoc `claude` / `codex` / `opencode` / `gemini` / `aider` sessions in their own terminals, often in the same repos the fleets are working in.
-- kubectl, `br`, ArgoCD read-only calls, ADB to the phone, and a half-dozen other tools run side-by-side.
+- Several NEEDLE fleets run at once, each managing its own workers as tmux sessions — **HOOP does not manage them.** NEEDLE and its workers are an independent system; HOOP is adjacent.
+- The operator runs ad-hoc `claude` / `codex` / `opencode` / `gemini` / `aider` sessions in their own terminals.
+- The operator wants answers: "what did the kalshi-weather fleet do overnight?", "why did bead bd-3qvi fail?", "is the ibkr-mcp review backlog growing?", "draft a bead for fixing the Calico IP selection on iad-acb."
 
-HOOP makes sense of all of it. One URL over Tailscale shows every project, every fleet, every conversation, every cost figure, every stuck worker. From the same URL the operator launches fleets, steers them, or reassigns work. HOOP never owns any of the data — bead state stays in `br`, conversation state stays in each CLI's native directory — it joins those sources so the operator doesn't have to.
+HOOP answers those questions by reading artifacts across every project — bead state, event logs, conversation transcripts, files on disk, diffs, cost data, capacity utilization. When an answer naturally leads to new work, HOOP writes a bead into the target project's `.beads/` via `br create`. That's the only write action HOOP ever takes. The NEEDLE workers already running will claim it when they get to it.
 
-The unit of growth here is *another project on the same host*, not *another host*. Everything in v1 assumes the host is singular and long-lived.
+The unit of growth is *another project on the same host*, not *another host*. Everything in v1 assumes the host is singular and long-lived.
 
 ---
 
 ## 1.5. Mental model: the city, the Mayor, the polecats
 
-Borrowed from Steve Yegge's Gas Town vocabulary because the mapping is clean and the terms hold up under load. HOOP is the **city** — the long-lived infrastructure that houses roles, not a role itself:
+Borrowed from Gas Town vocabulary, adapted to HOOP's narrower responsibility:
 
 | Gas Town term | HOOP-over-NEEDLE mapping |
 |---|---|
-| **City** | The HOOP daemon on the EX44. Infrastructure: project registry, event streams, audit log, UI. |
-| **Mayor** | A persistent, long-running Claude Code session (Opus-class) hosted by HOOP with cross-project context and a tool-belt of HOOP operations. The operator's primary conversation partner. Receives notifications, kicks off work, escalates stuck beads, coordinates across projects. |
-| **Polecat** | A single NEEDLE worker claiming and executing one bead. Ephemeral per-bead lifecycle (claim → dispatch → execute → close → repeat). |
-| **Swarm** | A NEEDLE fleet — a named group of polecats working the same workspace under one `fleet.yaml`. |
-| **Convoy** | A coordinated multi-bead work unit (e.g. "refactor the auth module" → implementation bead + review bead + fix beads) expressed through the bead dependency graph. |
-| **Merge Queue** | The review-and-merge path: review-type beads blocking implementation beads, with PR merges driven by closure resolution. |
+| **City** | The HOOP daemon on the EX44. Infrastructure: project registry, event readers, conversation archive, file browser, bead-creation surface, UI. |
+| **Mayor** | A persistent, long-running Claude Code session (Opus-class) hosted by HOOP with cross-project read access and one write: `br create`. The operator's primary conversation partner. Reviews artifacts. Answers questions. Drafts beads. Never spawns or stops workers. |
+| **Polecat** | A single NEEDLE worker claiming and executing one bead. **HOOP does not control polecats.** They are born, live, and die under NEEDLE's authority, coordinated through the shared bead queue. HOOP only watches. |
+| **Swarm** | A NEEDLE fleet. Same comment — HOOP observes fleets, it does not command them. |
+| **Convoy** | A coordinated multi-bead work unit expressed through the bead dependency graph. The Mayor drafts convoys by creating chains of beads with dependencies; NEEDLE processes them. |
+| **Merge queue** | The review-and-merge path expressed as review-type beads blocking implementation beads. HOOP can draft review beads; it doesn't close them. |
 
-The Mayor is the operator's handle on the city. The polecats are the city's workforce. The city is what both of them live in. When we talk about HOOP's roadmap, phases 1-2 are **building the city** (infrastructure, observability, multi-project correctness); phases 3-4 are **seating the Mayor and giving them tools** (steering, Mayor persistence, visual debug, cost controls); phase 5 is **letting more than one citizen live there** (multi-operator).
+Where Gas Town's Mayor commands polecats to do work, HOOP's Mayor **asks for work** by writing beads. The polecats decide whether and when to claim them based on NEEDLE's own logic. The separation of concerns: NEEDLE owns execution; HOOP owns the interface to it.
 
-The Mayor is not optional polish. It is the difference between "a dashboard that shows fleets" and "a coordinator you talk to who runs fleets." The second is the actual goal.
+This is a deliberate narrowing of HOOP's original scope. Earlier drafts had HOOP steering workers, throttling on capacity, rotating accounts, releasing stuck claims. All of that is out — those concerns belong to NEEDLE (or to a future capacity-aware NEEDLE extension), not HOOP. HOOP becomes simpler and more focused: a reader that occasionally writes a single kind of record.
 
 ---
 
 ## 2. The environment HOOP targets
 
-- **Host:** Hetzner EX44-class (or equivalent). Bare metal, long-lived, rebooted rarely, Tailscale-only. Same shape as this coding environment.
-- **Workspaces:** `~/` holds 5–25 repos. Each has a `.beads/` directory, git worktrees live under `.worktrees/` or similar, and may carry a `fleet.yaml` describing its NEEDLE worker pool.
-- **Tooling:** `br` CLI in PATH. Five CLI adapters installed and credentialed: Claude Code, Codex, OpenCode, Gemini, Aider. Credentials persist in each CLI's native cache; HOOP never handles them.
-- **Process model:** `hoop serve` as a systemd user service, listening on a Tailscale hostname (e.g. `hoop.tail1b1987.ts.net`). tmux available for worker supervision. git 2.5+ for worktrees.
-- **Parallel workloads:** NEEDLE fleets in tmux (HOOP-aware); ad-hoc CLI sessions in separate operator terminals (HOOP-observed but not controlled); kubectl / ArgoCD / backup jobs / everything else (HOOP-ignored).
+- **Host:** Hetzner EX44-class. Bare metal, long-lived, Tailscale-only.
+- **Workspaces:** `~/` holds 5–25 repos. Each has a `.beads/` directory; git worktrees live under `.worktrees/`; some may carry a `fleet.yaml` describing NEEDLE's worker pool (HOOP reads it, doesn't act on it).
+- **Tooling:** `br` CLI in PATH. Five CLI adapters installed and credentialed (operator's cache, not HOOP's). NEEDLE installed and running its own workers through its own supervision. git 2.5+.
+- **Process model:** `hoop serve` as a systemd user service on a Tailscale hostname. No tmux spawning by HOOP.
+- **Parallel workloads:** NEEDLE fleets in tmux (HOOP-observed); ad-hoc CLI sessions in separate terminals (HOOP-observed); everything else (HOOP-ignored).
 
-What changes when you move from "one workspace" to "multi-project on one host" is: **everything**. Session discovery has to be scoped per project or cross-project queries return soup. Cost aggregation has to bucket per project or you can't tell which repo cost what. Steering has to respect project boundaries or a boost-priority command leaks across workspaces. Worker supervision has to isolate failures per project so a crash in one fleet doesn't cascade. This plan treats multi-project correctness as the primary design pressure, not a bolt-on.
+What changes in a multi-project host vs single-workspace: session discovery has to be scoped per project, cost visibility has to bucket per project, bead-creation targets have to be explicit. This plan treats multi-project correctness as the primary design pressure.
 
 ---
 
 ## 3. Principles
 
-Locked in from day one. These come directly from the prior-art problems-and-solutions note and NEEDLE's existing invariants.
-
-1. **Events are authoritative; projections are derived.** HOOP writes event rows and reads projections. No `fleet_status.json` that goes stale.
-2. **Liveness = process, never file.** `kill -0 pid && !stopped_record`.
+1. **Events are authoritative; projections are derived.** HOOP reads event rows and computes projections on demand. Never caches to disk what can be rebuilt.
+2. **Liveness = process, never file.** When displaying worker liveness, compute from `kill -0 pid` + heartbeat freshness. HOOP never writes a `worker_status.json`.
 3. **Server is the epoch.** Client rebuilds state from scratch on every reconnect.
 4. **Dual-identity in schema.** Bead id (stable) + provider session id (derived). Explicit `session_bound` event at first join.
 5. **JSON Schema as cross-repo contract.** Every record has `schema_version: 1`. TS and Rust types codegen off one source.
 6. **Atomic `.tmp` + rename for every write.** Line-buffered NDJSON reader for every read.
 7. **Never silent-drop unknown events.** Log, emit progress, count.
-8. **Never mutate bead state directly.** Use `br` CLI verbs. Every write audited with `actor: hoop:<user>`.
-9. **Workers are independent.** If HOOP dies, workers keep working. If one project runtime dies, others keep running.
-10. **Read-only is the default.** Steering is opt-in per workspace.
+8. **`br create` is HOOP's only write.** No bead mutation, no tmux control, no worker lifecycle, no capacity enforcement. If the operator wants to close, release, or boost a bead, they use `br` directly or another tool.
+9. **If HOOP dies, nothing else notices.** NEEDLE keeps running. FABRIC keeps working. The next time HOOP starts, it rebuilds its read state from disk. HOOP is a convenience, not a dependency.
+10. **Read-first defaults.** Even bead creation requires explicit operator confirmation (chat intent → draft → preview → submit). No silent writes.
 
 ---
 
@@ -79,24 +77,24 @@ Locked in from day one. These come directly from the prior-art problems-and-solu
 One Rust binary. Subcommands:
 
 ```
-hoop serve                    # run the control-plane daemon
+hoop serve                    # run the daemon (web UI + WS + REST)
 hoop projects add <path>      # register a workspace
 hoop projects scan <root>     # auto-register every workspace with .beads/
-hoop projects list            # list registered projects
+hoop projects list
 hoop projects remove <name>
-hoop launch <project>         # spawn the fleet from <project>/fleet.yaml
-hoop stop <project>           # stop workers for a project
-hoop salvage <project>        # resume dead workers whose worktrees are still intact
-hoop status [project]         # CLI view of active fleets
-hoop audit                    # startup binary/permission audit
-hoop steer                    # open an interactive steering chat session
+hoop status [project]         # CLI overview of fleets / beads / cost
+hoop audit                    # startup binary/env audit
+hoop mayor                    # attach to or start the Mayor conversation
+hoop bead new <project>       # CLI shortcut to draft+submit a bead
 ```
 
-`hoop serve` is the long-lived process. Every other subcommand is a client that speaks to it over a local Unix socket (`~/.hoop/control.sock`). CLI clients never touch project state directly.
+Notably absent: `launch`, `stop`, `salvage`, `steer`, anything that touches a worker process. Those verbs belong to NEEDLE.
 
-### 4.2 The project registry
+`hoop serve` is the long-lived process; other subcommands are clients over a Unix socket (`~/.hoop/control.sock`).
 
-One file, `~/.hoop/projects.yaml`, authoritative:
+### 4.2 Project registry
+
+`~/.hoop/projects.yaml`, file-watched:
 
 ```yaml
 projects:
@@ -105,7 +103,6 @@ projects:
     beads: /home/coding/ardenone-cluster/.beads
     label: "Cluster config"
     color: "#8A2BE2"
-    fleet_manifest: fleet.yaml       # resolved relative to path
   - name: miroir
     path: /home/coding/miroir
     beads: /home/coding/miroir/.beads
@@ -115,173 +112,133 @@ projects:
     path: /home/coding/ibkr-mcp
     beads: /home/coding/ibkr-mcp/.beads
     label: "IBKR MCP server"
-    steering: read-only              # defaults: steering permitted
 ```
 
-The daemon watches this file with `notify`. Additions spin up a new per-project runtime within 5s; removals tear one down gracefully. Renames are a remove + add.
+Hot-reloads on change. Each project gets its own per-project runtime.
 
-Explicit naming (`name:` field) is required — it's the stable id used in URLs, logs, and audit rows. Paths can move; names shouldn't.
+### 4.3 Per-project runtime (read-only)
 
-### 4.3 Per-project runtime
-
-One per registered project, running inside the daemon as its own supervised task. Each runtime owns:
+Pure reader — every interaction with the project is observational:
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│ Per-project runtime (example: "ardenone-cluster")             │
-│                                                               │
-│  Inputs (disk)                                                │
-│  ├─ .beads/events.jsonl       ──► event tailer               │
-│  ├─ .beads/heartbeats.jsonl   ──► heartbeat monitor          │
-│  ├─ .beads/beads.db           ──► bead state reader (via br) │
-│  ├─ tmux sessions "needle-<project>-*"  ──► worker supervisor│
-│  └─ CLI session dirs, filtered by cwd-under-path:            │
-│     ~/.claude/projects/<hash-of-path>/                        │
-│     ~/.codex/sessions/**     (filtered)                       │
-│     ~/.gemini/tmp/**         (filtered)                       │
-│     ~/.local/share/opencode/ (filtered)                       │
-│                                                               │
-│  In-memory projections                                        │
-│  ├─ active_beads: Map<bead_id, ActiveBead>                   │
-│  ├─ workers: Map<worker_name, WorkerState>                   │
-│  ├─ conversations: Map<conv_id, Conversation>                │
-│  │   (split: fleet vs ad-hoc, by prefix-tag presence)        │
-│  └─ cost_today: AdapterCostMap                               │
-│                                                               │
-│  Outputs                                                      │
-│  ├─ WS fan-out with topic <project>                           │
-│  ├─ REST endpoints prefixed /api/p/<project>/...              │
-│  └─ Audit rows in fleet.db (global)                          │
-└──────────────────────────────────────────────────────────────┘
+Inputs (disk)                                                  Projections
+├─ .beads/events.jsonl         → event tailer               →  active_beads
+├─ .beads/heartbeats.jsonl     → heartbeat monitor          →  worker_liveness
+├─ .beads/beads.db             → bead state reader (via br) →  backlog_view
+├─ files under <project>/**    → file walker + mime detect  →  file_tree
+├─ git state under <project>   → git reader                 →  branches, worktrees, diffs
+└─ CLI session dirs, filtered by cwd-under-path             →  conversations (fleet vs ad-hoc)
+
+Outputs
+├─ WS fan-out with topic <project>
+├─ REST endpoints /api/p/<project>/...
+└─ One write path: POST /api/p/<project>/beads  →  br create  →  audit row
 ```
 
-Runtimes are fully isolated. A panic in one project's runtime is caught by its supervisor, logged, and the runtime restarts; other projects are unaffected. If a project's `.beads/` is unreachable or malformed, its card in the UI shows the error — other cards stay healthy.
+The bead-creation endpoint is the only mutation. It calls `br create` against the project's workspace, records the mutation in `~/.hoop/fleet.db` audit table, and emits a `bead_created_by_hoop` event for downstream consumers (the Mayor records its own drafts; the UI records operator-initiated drafts).
 
 ### 4.4 Cross-project state
 
-Kept deliberately thin. The daemon's global state is:
+Global state is thin:
 
-- **Project registry** (the `projects.yaml` view)
-- **Runtime status** per project (running, degraded, stopped, error)
-- **Audit log** (actions table in `fleet.db`)
-- **Cost roll-ups** (per project, per adapter, per day)
-- **Collision index** (files touched across all active workers — detects cross-project file overlap, rare but real, e.g. a shared monorepo slice)
+- Project registry view
+- Runtime status per project
+- Audit log (one table in `fleet.db`, records every `br create` HOOP performed with actor, timestamp, project, bead id)
+- Cost roll-ups (observation only)
+- Capacity roll-ups (observation only, per adapter account)
+- Conversation archive index (indexed by project + session id + fleet vs ad-hoc)
 
-No conversation content, no bead content, no transcripts at the global layer. The UI aggregates from per-project topic streams on demand.
+No bead content, no conversation content in the global layer. UI aggregates on demand.
 
 ### 4.5 Web client
 
-React + Vite + TypeScript + Jotai. Served by the daemon itself (embedded static assets). Key surfaces:
+React + Vite + TypeScript + Jotai. Served by the daemon (embedded static assets). Key surfaces:
 
-- **Overview** — fleet-of-fleets dashboard, one card per project, aggregate stats.
-- **Project detail** — fleet map, bead graph, worker timeline, conversation list, cost panel, project-scoped chat pane.
-- **Conversations** — cross-project transcript viewer with project filter.
-- **Search** — cmd-K palette, substring across all projects, 50-result cap, project badges on results.
-- **Audit** — read-only view of the global actions log.
-- **Steering chat** — project-scoped or global, with a tool-belt agent (phase 3).
+- **Overview** — dashboard, one card per project
+- **Project detail** — bead list/graph, worker timeline, conversation list, file browser, cost + capacity panels
+- **File browser** — tree view + preview with syntax highlighting (phase 3)
+- **Conversations** — cross-project transcript viewer, fleet vs ad-hoc filter
+- **Bead draft** — form-based and chat-based; multimodal attachments (phase 3-4)
+- **Mayor chat** — operator ↔ Mayor, with multimodal input (phase 5)
+- **Search** — cmd-K across projects and conversations
+- **Audit** — read-only view of HOOP's own `br create` history
 
-Atoms are keyed by `(project, id)` so switching projects is a filter, not a reload. Streaming content lives in a separate reactive map (never mixed with committed messages) — the in-flight isolation rule.
+Streaming content lives in a separate reactive map. The committed-vs-streaming split is preserved.
 
 ### 4.6 Shared schema crate
 
-- `hoop-schema/` with JSON Schema source of truth.
-- Rust types via `typify`, TS types via `json-schema-to-typescript`.
-- `schema_version: 1` on every record from day one.
+`hoop-schema/` with JSON Schema source of truth. Rust types via `typify`; TS via `json-schema-to-typescript`. `schema_version: 1` on every record.
 
 ---
 
 ## 5. Data flows
 
-### 5.1 Event / session / heartbeat (single project)
+### 5.1 Single-project reader flow
 
 ```
-NEEDLE worker (tmux: needle-ardenone-cluster-alpha)     HOOP daemon
-────────────────────────────────────────────────        ───────────
+NEEDLE-managed worker (tmux)                     HOOP daemon
+────────────────────────────                     ───────────
 br claim bd-abc
    │
-   ├─► .beads/events.jsonl  ◄── tail -F ──► [ardenone-cluster runtime]
-   │     {event: claim, ...}                      │
-   │                                              ├─► /ws fan-out
-   ▼                                              │   (topic: ardenone-cluster)
-dispatch via YAML adapter                         │
-(prompt prefixed with
- [needle:alpha:bd-abc:pluck])                     │
-   │                                              │
-   ▼                                              │
-CLI writes to                                     │
-~/.claude/projects/-home-coding-ardenone-         │
-cluster/<session>.jsonl                           │
-   │                                              │
-   │                                    ◄─ 5s poll ── session tailer
-   │                                              │       │
-   │                                              │       ├─► tag-join
-   │                                              │       │   (tag → bead alias)
-   │                                              │       │
-   │                                              │       └─► /ws conversation
-   ▼
-CLI exits → br close / fail
+   └─► .beads/events.jsonl ─── tail -F ───► event tailer
+                                                  │
+                                                  ├─► /ws fleet
+                                                  │   (topic: <project>)
+                                                  │
+                                                  ▼
+dispatch via NEEDLE's adapter                ─── (observed) ───
+(prompt prefix [needle:alpha:bd-abc:pluck])
    │
-   └─► .beads/events.jsonl ◄── tail -F ──────────►
-         {event: complete, outcome, duration, tokens}
+   └─► ~/.claude/projects/<...>/*.jsonl
                                                   │
-                                                  ├─► cost aggregator
-                                                  └─► /ws fan-out
+                                                  │ 5s poll
+                                                  ▼
+                                              session tailer ──► tag-join ──► /ws conversation
 
-heartbeat every 10s ──► .beads/heartbeats.jsonl ──► heartbeat monitor
-                                                  │
-                                                  └─► liveness projection
+br close (NEEDLE's action)
+   │
+   └─► .beads/events.jsonl ─── tail -F ───► event tailer ──► cost aggregator
+                                                                │
+                                                                └─► /ws fleet
 ```
 
-### 5.2 Multi-project fan-out
+HOOP is never on the write path here. Every arrow going into HOOP is a read.
+
+### 5.2 Bead creation (HOOP's only write)
 
 ```
-                    ┌─ ardenone-cluster runtime ────────┐
-                    │ event tailer / session tailer ...  │─┐
-                    └────────────────────────────────────┘ │
-                                                           │
-                    ┌─ miroir runtime ───────────────────┐ │
-                    │ event tailer / session tailer ...  │─┤
-                    └────────────────────────────────────┘ │
-                                                           │
-                    ┌─ ibkr-mcp runtime ─────────────────┐ │
-                    │ event tailer / session tailer ...  │─┤
-                    └────────────────────────────────────┘ │
-                                                           │
-                                                           ▼
-                                            ┌──────────────────────────┐
-                                            │ Global state + WS server │
-                                            │                          │
-                                            │  - project_status{}      │
-                                            │  - cost_rollup{}         │
-                                            │  - collision_index{}     │
-                                            │  - actions log (SQLite)  │
-                                            └──────────────┬───────────┘
-                                                           │
-                                                        /ws
-                                                           │
-                                                           ▼
-                                                    Web client
-                                                 (subscribes to
-                                                  topics by project
-                                                  or to "global")
+Operator                      HOOP daemon                       NEEDLE workspace
+────────                      ───────────                       ────────────────
+(UI form or Mayor chat)
+       │
+       │ draft bead (title, body, deps, priority, attachments)
+       ▼
+  ┌─────────────┐
+  │ Bead draft  │
+  │ preview     │
+  └─────┬───────┘
+        │ confirm
+        ▼                            execute
+                               ┌──────────────────┐
+                               │ br create ...    │────────► .beads/beads.db (insert)
+                               │ (in project cwd) │         .beads/events.jsonl (append)
+                               └────────┬─────────┘
+                                        │
+                                        ├─► audit row in fleet.db
+                                        │
+                                        └─► event emitted on /ws
+                                                      │
+                                                      ▼
+                                         (NEEDLE workers eventually
+                                          claim the bead — HOOP is
+                                          not involved)
 ```
+
+Attachments (images, audio, video) in a multimodal draft are stored at `<project>/.beads/attachments/<bead-id>/` and referenced from the bead body. `br` doesn't need to know about them — they're just files next to the bead.
 
 ### 5.3 Ad-hoc vs fleet conversations
 
-When the operator runs `claude` directly in `~/ardenone-cluster/` (not via NEEDLE), the CLI writes to `~/.claude/projects/-home-coding-ardenone-cluster/`. The session tailer picks it up like any other file.
-
-Classification:
-
-- **First user message starts with `[needle:<worker>:<bead-id>:<strand>]`** → fleet worker conversation. Joined to bead; counted in fleet analytics; appears under "workers" in the project view.
-- **No such prefix** → ad-hoc operator conversation. Shown under the project (because it was run in that project's cwd) but tagged `actor: operator`; excluded from fleet cost and analytics; not claimable for steering.
-
-Both are viewable; analytics separates them. The operator's ad-hoc work is visible to HOOP, never *owned* by HOOP.
-
-### 5.4 Session tailer filtering
-
-Each CLI's session directory is global on the host (one `~/.claude/projects/` serves all repos). Each project's session tailer must filter by cwd-match against the project's `path`. Claude Code already encodes the working directory in its per-session directory name (path with `/` → `-`), so the filter is a prefix match. Codex/OpenCode/Gemini have their own conventions; each `DiskAdapter` implements project-scoping.
-
-**Important:** sessions from outside any registered project (e.g. operator runs `claude` in `/tmp/scratch/`) are surfaced in an "Unassigned" bucket, not silently dropped. The operator can assign or ignore.
+Same as before: first message prefix `[needle:<worker>:<bead>:<strand>]` → fleet; no prefix → operator ad-hoc. HOOP classifies; doesn't act on either.
 
 ---
 
@@ -289,175 +246,207 @@ Each CLI's session directory is global on the host (one `~/.claude/projects/` se
 
 ### Phase 0 — Foundation (COMPLETE)
 
-Repo created, docs scaffolded, notes seeded with prior-art research, plan published.
+### Phase 1 — Single-host daemon, one workspace, read-only (v0.1)
 
-### Phase 1 — Single-host daemon, one workspace (v0.1)
+**Goal.** HOOP runs on the EX44 as a pure observer of one workspace. Serves a web UI that shows bead state, worker liveness (observed), conversations, and events. No writes at all.
 
-**Goal.** HOOP runs on the EX44, reads one workspace's NEEDLE events, launches and supervises workers locally via tmux, serves a web UI. Read-only. Prove the end-to-end loop works before adding breadth.
+**Deliverables:**
+1. Rust binary with `serve`, `projects add`, `status`, `audit`.
+2. Per-project runtime for one workspace: event tailer, heartbeat monitor, session tailer, tag-join resolver, bead state reader.
+3. Web UI: bead list, worker timeline (liveness derived from events + heartbeats), conversation viewer with fleet/ad-hoc split, audit overlay, search palette.
+4. `~/.hoop/fleet.db` SQLite with only the audit table (empty until phase 4).
+5. NEEDLE hooks documented (prompt tag, events append, heartbeat) — requires NEEDLE cooperation. HOOP is read-only on these files.
+6. Startup audit: `br`, project's `.beads/` accessibility, CLI session directories readable.
+7. Zero-write invariant enforced in code (no code path that calls `br` with anything other than read verbs in phase 1).
 
-**Deliverables.**
+**Non-goals:** Multi-project, any write path, cost, graph views.
 
-1. Rust binary with `serve`, `projects add`, `launch`, `stop`, `status`, `audit`.
-2. Single-project registry entry; multi-project is phase 2.
-3. Per-project runtime covering event tailer, session tailer, heartbeat monitor, worker supervisor.
-4. Tag-join resolver using `[needle:<worker>:<bead-id>:<strand>]`.
-5. Web UI: fleet map, bead list (tabular, no graph yet), worker timeline, conversation viewer with fleet/ad-hoc split, audit overlay, search palette (single project).
-6. `~/.hoop/fleet.db` SQLite for launches, workers, actions audit.
-7. Three NEEDLE hooks landed:
-   - Prompt prefix tag
-   - `events.jsonl` append helper
-   - Heartbeat thread
-8. Worker spawn verification: each worker writes `~/.hoop/workers/<name>.ack` within 10s; missing ack = failed spawn with a diagnostic.
-9. Graceful shutdown: SIGTERM → grace window → SIGKILL. Claim released before any forced kill.
-10. Startup audit: `br`, tmux, CLI binaries, project's `.beads/` accessibility. Blocking overlay on failure.
+**Success criteria:**
+- HOOP runs alongside a NEEDLE fleet without affecting it.
+- Killing HOOP does nothing to the fleet; workers keep claiming and closing beads.
+- Restart HOOP; UI rebuilds state entirely from disk in <5s for 500 beads.
+- Every bead in the fleet visible in the UI; every worker's transcript viewable with its bead id in the header.
 
-**Non-goals.** Multi-project. Steering. Dependency graph. Cost aggregation.
+### Phase 2 — Multi-project observability + cost/capacity visibility + visual debug (v0.2)
 
-**Success criteria.**
-- Spawn a 3-worker fleet from `fleet.yaml`; all three visible on the map within 10s.
-- Kill a tmux session externally; HOOP reports dead within 30s and releases the claim.
-- Restart `hoop serve`; reconnecting UI rebuilds state entirely from disk.
-- Open any worker's transcript; see the bead id in the header (tag-join working).
-- Zero silent drops: every unknown event appears in the UI's diagnostic panel.
+**Goal.** One HOOP serves every project on the host. Cross-project dashboards, cost and capacity visibility (read-only — no enforcement), visual debug of what workers did per bead.
 
-### Phase 2 — Multi-project (v0.2)
+**Deliverables:**
 
-**Goal.** One HOOP serves every project on the host. The primary bet of this plan.
+1. Project registry (`projects.yaml`) with add/remove/scan/hot-reload.
+2. Per-project runtime isolation; failure in one doesn't cascade.
+3. Fleet-of-fleets dashboard: project cards with worker count, active beads, cost today, stuck count, last activity.
+4. Project detail view: fleet map, bead graph (DAG), strand timeline, conversation list.
+5. Cross-project dashboards: total spend today/week, total workers running, longest-running beads.
+6. Ad-hoc vs fleet classification + filter controls.
+7. Unassigned-conversation bucket for sessions outside any project.
+8. Search palette across projects with project badges.
+9. Cost panel (observation only): per-project, per-adapter, per-model, per-strand, per-day; rate-limit window overlay for Claude (5h + 7d); cost-per-closed-bead.
+10. **Capacity visibility** (observation only, no enforcement):
+    - Per-account 5h + 7d utilization meters computed from local JSONL logs (same numbers `/status` shows)
+    - Per-account spend-based caps where applicable (Codex daily, API-key flows)
+    - Burn-rate forecast ("account claude-max-primary full in ~42m at current burn")
+    - Saturation alerts when thresholds cross — shown in UI, surfaced to the Mayor in phase 5
+    - **No actions** — HOOP does not pause, rotate, or throttle anything
+11. **Visual debug panel** — per-bead step-through of what the polecat actually did: prompts sent, tool calls issued, results, stderr, state transitions. Scrubable timeline at the bead level. Reconstructed from events + tagged conversation transcript. Answers "what did this polecat actually do with my $2.80?" in one view.
+12. Collision detector (observation only): alerts when active workers touch overlapping files.
+13. Stuck detector (observation only): heartbeat-transition silence or repeated retries surfaced as alerts.
 
-**Deliverables.**
-
-1. Project registry (`~/.hoop/projects.yaml`) with `add`, `remove`, `scan`, file-watch hot-reload.
-2. Per-project runtime isolation — panic in one runtime doesn't touch others; restart-on-failure.
-3. Fleet-of-fleets dashboard: one card per project, showing worker count, active beads, cost today, stuck count, last activity.
-4. Project detail view: fleet map, bead graph (DAG, colored by state), strand timeline, conversation list, cost breakdown.
-5. Cross-project dashboards:
-   - Total spend today, this week, this month, bucketed by project and by adapter
-   - Total workers running across all projects
-   - Longest-running beads across projects
-   - Most-active adapter today
-6. Ad-hoc vs fleet classification on every conversation, with filter controls in the UI.
-7. Unassigned-conversation bucket for sessions outside any registered project.
-8. Search palette across all projects, results badged by project.
-9. Collision detector: active workers touching the same file paths, across or within projects.
-10. Stuck detector: no heartbeat transition for N minutes, or repeated failure on the same bead.
-11. Cost panel:
-    - Per-project, per-adapter, per-model, per-strand, per-day
-    - Rate-limit window overlay for Claude (5h + 7d)
-    - Cost-per-closed-bead (the real unit-economics number)
-    - Ad-hoc cost separated from fleet cost
-12. **Visual debug panel** (from unleashd's playbook) — per-bead step-through of the polecat's actual work: prompts sent, tool calls issued, state transitions, stderr. Scrubable timeline at the bead level, not just the conversation level. Answers "what did this polecat actually do with my $2.80?" in one view.
-13. **Multi-account awareness.** An adapter config can declare multiple accounts (e.g. two Claude Max plans); HOOP tracks usage per account and surfaces which account is being drained toward a rate-limit window. No routing yet — just visibility.
-
-**Success criteria.**
-- EX44 with `hoop projects scan ~/` registers every workspace with `.beads/` in one command.
+**Success criteria:**
+- `hoop projects scan ~/` registers every workspace with `.beads/` in one command.
 - Cost figures match `br`/provider summaries within ±2%.
-- DAG renders 500+ beads interactively (<500ms interactions).
-- Collision alert fires within 30s of two active workers touching the same file.
-- Killing one project's runtime (e.g. delete its `.beads/`) shows an error card but leaves other projects unaffected.
-- Visual debug panel reconstructs a full bead cycle from events + session transcript with no gaps.
+- Capacity meters match Claude Code's `/status` within ±5% per account.
+- Visual debug reconstructs a full bead cycle with no gaps (prompts + tools + outcome).
+- Killing one project's runtime (delete `.beads/`) shows an error card; other projects unaffected.
 
-### Phase 3 — Direct steering + multi-provider routing (v0.3)
+### Phase 3 — File browser + artifact preview + multimodal (v0.3)
 
-**Goal.** HOOP gains write-side operations and the ability to route work across providers within a single swarm. Direct bead ops, tmux controls, per-swarm multi-provider routing, rate-limit-aware scheduling. All scoped by project; all audited. This phase is the **operator's** write-side; the Mayor comes in phase 4.
+**Goal.** The operator can browse any project's files, preview code/docs/images/media with syntax highlighting, and supply multimodal input for bead drafting and Mayor conversations.
 
-**Deliverables.**
+**Deliverables:**
 
-1. **Direct bead-op buttons** (scoped per project) wired to `br`:
-   - Boost / lower priority
-   - Close bead with resolution (`closed-no-artifact`, `merged`, `parked`, `rejected`)
-   - Create review bead as dep of target
-   - Release stuck claim (only when worker demonstrably dead AND heartbeat stale)
-   - Reassign bead to a specific worker or adapter
-2. **tmux control actions** (SIGSTOP / SIGCONT / SIGTERM). TERM gate: release claim first, always.
-3. **Multi-provider dynamic routing within one swarm** (unleashd's pattern). `fleet.yaml` can declare a mixed worker pool — e.g. two Claude Opus planners, three Codex mid-tier executors, one OpenCode executor — and beads are matched to workers by bead-level hints (`difficulty`, `strand`, `needs_review`). Rate-limit-aware: when one account's 5h window is 80% exhausted, new beads route to a different account/adapter rather than stalling.
-4. **BYO-account orchestration.** Adapter configs reference credentials that persist in the CLI's native cache (HOOP never handles secrets); HOOP only tracks *which account is active per worker at spawn time* and rotates workers onto a fresh account when rate-limits approach. Opt-in per workspace.
-5. **URL-scheme bridge for FABRIC:** `hoop://<project>/release/bead/<id>`, etc. FABRIC renders action links; HOOP opens a confirmation dialog.
-6. **Permission snapshot at worker spawn** (env + `settings.json` copy) — no live inheritance.
-7. `yolo: true` at project-level requires a `sandbox:` config stanza.
+1. **Per-project file browser:**
+   - Tree view with mtime + size + git status
+   - Filterable by extension, by git-modified-since-ref, by contents (grep)
+   - Respects `.gitignore` + configurable HOOP ignore list
+   - Lazy-loaded directory expansion for large trees
+2. **Text preview with syntax highlighting:**
+   - Tree-sitter or `syntect` for highlighting
+   - Language auto-detect with manual override
+   - Line numbers, word wrap toggle, search within file
+   - Side-by-side diff view for git-tracked files (working-tree vs HEAD, or two refs)
+3. **Non-text preview:**
+   - Images (PNG, JPG, WebP, GIF) — inline render with zoom
+   - PDFs — pdf.js embed
+   - Audio — HTML5 audio player
+   - Video — HTML5 video player
+   - Binary files — hex dump with offset navigation
+4. **Artifact-aware links:** bead view shows "files touched" based on events; click opens in the file browser at the right revision (HEAD at the time of the bead's close).
+5. **Multimodal input to bead drafts:**
+   - Text body (markdown with preview)
+   - Image attachment (paste or upload; stored under `<project>/.beads/attachments/<bead-id>/`)
+   - Audio attachment (recording in-browser or upload) — transcribed in-line for searchability
+   - Video attachment (upload) — first-frame thumbnail, in-line playback
+   - All attachments persisted next to the bead; referenced by path in the bead body
+6. **Multimodal input to Mayor conversations:**
+   - Same attachment types as bead drafts
+   - Attachments pass to Claude Code via native multimodal support
+   - Transcripts + metadata indexed for later search
+7. **Streaming upload** for large files with progress + resumability.
+8. **Path-sensitive routing:** drag a file from the tree into a bead draft → the draft picks up the path + current revision + snippet context.
 
-**Success criteria.**
-- Every mutation has a corresponding audit row with the correct project name.
-- Release-stuck-claim refuses when the PID is still alive OR heartbeat is fresh.
-- FABRIC URL click opens the right project's HOOP dialog.
-- A 10-bead batch distributed across a 5-worker mixed-provider pool completes without rate-limit hits when sufficient headroom exists.
-- Rate-limit-aware routing drops a draining account cleanly and promotes a fresh one within one bead cycle.
+**Success criteria:**
+- File browser usable on a 20k-file repo with <1s directory-expand latency.
+- Syntax highlighting for at least: Rust, TS/JS, Python, Go, Clojure, YAML, TOML, Markdown, Shell, SQL, Dockerfile.
+- Image/audio/video preview works in Safari, Chrome, Firefox.
+- Attached 10MB image in a bead draft stored and referenced correctly.
+- Mayor receives attachments in its conversation context.
 
-### Phase 4 — The Mayor (v0.4)
+### Phase 4 — Bead creation interface (v0.4)
 
-**Goal.** Seat the Mayor — a persistent, cross-project coordinating agent — and give the operator a proper conversational handle on the city.
+**Goal.** HOOP gains its single write path: creating beads via UI form and chat-driven drafting. Every `br create` HOOP performs is audited, reversible (by the operator via `br`), and previewed before submit.
 
-This is where HOOP stops being a dashboard and becomes a coordinator. The Mayor is the difference.
+**Deliverables:**
 
-**Deliverables.**
+1. **Form-based bead draft:**
+   - Target project (required)
+   - Title, body (markdown), issue type (default `task`; `genesis`, `review`, `fix` selectable)
+   - Priority (with default inferred from current queue)
+   - Dependencies (pick from existing beads in that project, searchable)
+   - Assignee hint (optional — workers pick their own)
+   - Labels
+   - Attachments (from phase 3)
+   - Preview panel shows rendered markdown + computed dep graph deltas
+2. **Template library:** reusable bead templates stored at `~/.hoop/templates/` (shared across projects) and `<project>/.hoop/templates/` (project-scoped). "Review bead for PR #X", "fix bead from incident Y", etc.
+3. **Submit flow:** draft → preview → `br create --json <payload>` against project cwd → audit row → event emitted → UI redirects to the new bead's view.
+4. **Chat-driven drafting** (precursor to the full Mayor in phase 5):
+   - Lightweight chat pane per project (Haiku-class, not the Mayor)
+   - Takes natural language, produces a draft
+   - Never submits directly — always routes through the preview flow
+5. **Bulk draft:** paste a bullet list or a markdown doc; HOOP splits it into multiple drafts for review + submit.
+6. **Audit trail:** every created bead has `created_by: hoop` + operator identity + source (`form` / `chat` / `bulk` / `template:<name>`) recorded in `fleet.db` actions table.
+7. **Explicit non-actions:** HOOP does not `close`, `update`, `claim`, `release`, `depend`, or any other `br` verb beyond `create`. If the operator needs those, they use `br` directly.
 
-1. **Mayor session** — a long-running Claude Code session (Opus by default; configurable) hosted by HOOP as a first-class resource. State persists across HOOP restarts via Claude Code's native session store; HOOP just tracks the session id.
-2. **Mayor context ingestion.** Via MCP server or prompt injection, the Mayor has read access to:
-   - Project registry and per-project status
-   - Current fleet state (who's running, what they're claiming, heartbeat freshness)
+**Success criteria:**
+- A form-drafted bead appears in NEEDLE's queue and is claimed by a worker without human intervention.
+- An audit row exists for every HOOP-created bead; `br` log shows the same creation.
+- Chat-driven drafting produces a reasonable first draft for common intents ("review the last merge in project X", "investigate the Calico IP issue").
+- Bulk draft correctly splits a 10-item markdown list into 10 previewable drafts.
+
+### Phase 5 — The Mayor (v0.5)
+
+**Goal.** Seat the Mayor — a persistent, cross-project conversation partner who reviews artifacts, answers operator questions, and drafts beads. The Mayor is the operator's main interface to HOOP once it's seated.
+
+**Deliverables:**
+
+1. **Mayor session** — a long-running Claude Code session (Opus by default, configurable) hosted by HOOP as a first-class resource. Persists across HOOP restarts via Claude Code's native session store; HOOP tracks the session id.
+2. **Mayor context (read-only via MCP server):**
+   - Project registry + per-project status
    - Bead queue summaries per project (open / claimed / blocked / recently closed)
-   - Cost roll-ups (per project, per adapter, per day, rate-limit headroom)
-   - Recent audit log entries
-   - Stuck / collision / cost-anomaly alerts
-3. **Mayor tool belt** — every direct-steering operation from phase 3, plus:
-   - `launch_fleet(project)` / `stop_fleet(project)` / `salvage_fleet(project)`
-   - `create_bead(project, title, body, deps[], priority)` — goal-oriented prompts only; no method-dictating
-   - `spawn_polecat(project, adapter, strands[])` — incremental worker add
-   - `escalate(bead, reason)` — attach a HUMAN-blocked note and notify the operator
-   - `summarize_day()` — generate a day-in-review for the operator
-4. **Notification channel.** When a fleet closes a bead (or a convoy completes, or a worker hits a ceiling), the Mayor gets a structured event and decides whether to surface it to the operator. Matches Yegge's "Mayor kicks off most work and receives notifications when convoys finish."
-5. **Operator ↔ Mayor chat pane** — primary UI surface of v0.4. Operator types "pick up the ibkr-mcp backlog, prioritize anything blocking production" and the Mayor decides what to do. Streams in real time. Cross-project by design.
-6. **Hard ceilings still enforced.** The Mayor cannot create beads exceeding `max_attempts`, `max_review_rounds`, `cycle_budget` without explicit operator confirmation via a UI prompt (not via chat).
-7. **Mayor audit trail.** Every Mayor-initiated mutation records `actor: hoop:mayor` in the audit log, with a link back to the prompt turn that produced it. Reviewable after the fact.
-8. **Mayor-off switch.** HOOP runs fine without a Mayor (phases 1-3 use-case stays valid). Turning the Mayor on requires an Anthropic API key and explicit config.
+   - Worker liveness (observed, not controlled)
+   - Conversation archive search
+   - File tree + file read + grep per project
+   - Cost + capacity roll-ups
+   - Visual-debug reconstructions per bead
+   - Recent audit log
+3. **Mayor tool belt — one write, many reads:**
+   - `create_bead(project, title, body, deps[], priority, attachments[])` — the one write
+   - `find_beads(project, filter)`, `read_bead(id)`
+   - `read_file(project, path, revision)`, `grep(project, pattern)`
+   - `search_conversations(query, project?)`
+   - `summarize_project(project)`, `summarize_day()`
+   - `escalate_to_operator(message)` — UI banner; no auto-actions
+   - **No** `launch_fleet`, `stop_fleet`, `release_claim`, `boost_priority`, `close_bead`. If the Mayor concludes work needs stopping or a bead needs closing, it escalates to the operator.
+4. **Notification channel.** When a fleet closes a bead, completes a convoy, hits a capacity threshold, or surfaces a stuck-worker alert, the Mayor receives a structured event. Mayor decides whether to surface it to the operator.
+5. **Operator ↔ Mayor chat pane** — primary UI surface. Cross-project by design. Multimodal input (from phase 3). Streams in real time.
+6. **Bead drafts via Mayor** route through phase 4's preview flow — no direct submits.
+7. **Mayor-off switch.** HOOP remains fully functional without a Mayor. Enabling the Mayor requires an Anthropic API key or a configured Claude Code account and explicit config.
+8. **Mayor audit trail.** Every Mayor-drafted bead carries `actor: hoop:mayor:<session>` in the audit log, with a link to the chat turn that produced it.
 
-**Success criteria.**
-- Mayor session survives `systemctl restart hoop` with full context intact (via persistent session id).
-- Operator asks "what did we do today?" and gets a coherent cross-project summary.
-- Operator asks "everything on project X looks stuck — fix it" and the Mayor releases dead claims, identifies the blocker, and either unblocks autonomously or escalates with a clear reason.
-- Mayor never exceeds ceilings without explicit operator approval.
-- Mayor audit log lets the operator reconstruct any mutation chain end-to-end.
+**Success criteria:**
+- Mayor session survives `systemctl restart hoop` with full context intact.
+- Operator asks "what did we do today across all projects?" and gets a coherent cross-project summary.
+- Operator asks "something feels off on kalshi-weather" and the Mayor reviews recent beads, conversations, and files; responds with a focused answer and (if warranted) a drafted bead for the operator to review.
+- Mayor never performs a worker action (no launch/stop/release/close). Attempts to ask for such actions produce an explanation pointing at `br` or NEEDLE.
+- Mayor audit log lets the operator reconstruct any drafted bead back to the chat turn that produced it.
 
-### Phase 5 — Operational polish (v0.5)
+### Phase 6 — Operational polish (v0.6)
 
-**Goal.** Make HOOP pleasant to run for the long haul on a server the operator doesn't want to babysit.
+Make HOOP pleasant to run for the long haul.
 
-**Deliverables.**
+**Deliverables:**
 
-1. **systemd user service template.** `hoop.service`, `hoop-ui.service`, standard `journalctl -u hoop` flow. Restart-on-failure; rate-limit on restart-loop.
-2. **Config hot-reload.** Changes to `projects.yaml`, per-project `fleet.yaml`, and per-adapter config reload without restart. Schema validates before apply; bad config is rejected with a diff-style error.
-3. **Log rotation.** HOOP's own logs (separate from NEEDLE's) rotate at 100MB or daily, keep 14 days.
-4. **Health endpoints.** `/healthz` (liveness) and `/readyz` (all runtimes started). Exposed on a separate non-WS port for monitors.
-5. **State backup.** `fleet.db` snapshotted daily to `~/.hoop/backups/`. Restore flow documented.
-6. **Upgrade flow.** Drop-in binary replace, systemd restart, state-preserving. `hoop --version`. Breaking schema changes include a migration in-binary.
-7. **Metrics.** Prometheus-compatible `/metrics`: fleet sizes, event rates, cost-per-minute, stuck-worker count, WS connections. Optional — off by default.
-8. **Tailscale-aware auth.** Each WS connection identified by Tailscale identity (via Tailscale's whois). Operators appear in audit rows by email (`jed@...`) not IP.
-9. **Performance budgets.** UI remains responsive with 20 projects × 5 workers each × 300 beads each. Measured on EX44-class hardware.
-10. **Graceful degradation.** If a project's `.beads/` goes missing or its SQLite is corrupt, that project card shows a specific error (not a spinner, not a generic fail). Others keep working.
-11. **Observer-mode second instance.** A second `hoop serve` on the same host can launch in read-only mode, attaching to the primary's event streams via the control socket. For long-tail debugging without disrupting the primary.
+1. systemd user service template
+2. Config hot-reload (projects.yaml, templates, Mayor config)
+3. Log rotation
+4. `/healthz` + `/readyz`
+5. Daily snapshot of `fleet.db`
+6. Drop-in binary upgrade flow
+7. Optional Prometheus `/metrics`
+8. Tailscale-identity-aware auth
+9. Performance budget: 20 projects × 5 workers observed × 300 beads each, UI responsive
+10. Graceful degradation on per-project failures
 
-**Success criteria.**
-- `systemctl --user restart hoop` resumes state in <5s.
-- `projects.yaml` edit with syntax error rejected; old config still running.
-- One month of normal operation produces <1GB in log+backup directories.
-- Operator identity visible in audit log for every mutation.
+**Success criteria:**
+- `systemctl --user restart hoop` resumes full state in <5s
+- A bad `projects.yaml` edit is rejected; old config continues running
+- One month of operation produces <1GB in logs + backups
 
-### Phase 6 — Multi-operator (v1.0)
+### Phase 7 — Multi-operator (v1.0)
 
-**Goal.** More than one person uses the same HOOP instance.
+**Deliverables:**
 
-**Deliverables.**
+1. Roles: viewer (read-only) and drafter (read + create beads). Two levels only.
+2. Tailscale identity-based role assignment (config list).
+3. Audit log carries real operator identity on every bead creation.
+4. Per-operator UI state.
+5. Optional presence indicators.
+6. Public README, examples, user docs.
 
-1. Roles: **viewer** (read-only, sees everything) and **steerer** (read + write). Two levels only.
-2. Role assignment per Tailscale identity (simple list in config).
-3. Audit log carries real operator identity on every mutation.
-4. Per-operator UI state: pinned projects, last-opened conversation, filter preferences.
-5. "Who's looking at what" indicator (optional, privacy-toggleable): small presence dots on project cards.
-6. Public README, user-facing docs, example configs.
-
-**Success criteria.**
-- Two operators on the same HOOP see consistent state at all times.
-- Viewer-role attempts to mutate are refused at the schema boundary with a clear error.
-- README enables a stranger to install HOOP against their own NEEDLE workspace in <30 minutes.
+**Success criteria:**
+- Two operators see consistent state.
+- Viewer role cannot access the bead-creation endpoint at the schema boundary.
+- README enables a stranger to run HOOP against their own NEEDLE workspace in <30 min.
 
 ---
 
@@ -465,45 +454,49 @@ This is where HOOP stops being a dashboard and becomes a coordinator. The Mayor 
 
 | Layer | Choice | Why |
 |---|---|---|
-| Daemon language | Rust | Matches NEEDLE direction; strong async; single-binary distribution; no `node_modules` churn |
-| HTTP / WS server | `axum` | Standard Rust HTTP stack; first-class WS; embedded static assets |
-| File watching | `notify` | Cross-platform, reliable; battle-tested |
-| UI | React + Vite + TypeScript + Jotai | Matches team skill; keyed atoms fit the streaming-vs-committed split |
-| Schema | JSON Schema draft-07 + `typify` (Rust) + `json-schema-to-typescript` (TS) | One source of truth; codegen to both languages |
-| Durable storage (HOOP) | SQLite via `rusqlite` | Fleet.db for launches/workers/actions/cost only; small, portable |
-| Chat agent | Claude Haiku 4.5 (via Anthropic SDK with caching) | Cost-appropriate for tool-belt translation |
-| Service supervisor | systemd (user-scope) | Standard; matches existing environment |
-| Auth | Tailscale identity via whois | Matches environment; no separate auth system needed |
+| Daemon language | Rust | Matches NEEDLE direction; single-binary distribution |
+| HTTP / WS server | `axum` | Standard async stack; embedded static |
+| File watching | `notify` | Cross-platform; reliable |
+| UI | React + Vite + TypeScript + Jotai | Matches team skill; keyed atoms fit streaming split |
+| Syntax highlighting | `syntect` (server) + Shiki (client) | Server-rendered for large files; client for interactive |
+| Schema | JSON Schema draft-07 + `typify` + `json-schema-to-typescript` | One source of truth |
+| Storage (HOOP) | SQLite (audit log + conversation index only) | Small; portable |
+| Event transport (local) | File tail (`notify`) | Cheapest reliable option |
+| Mayor host | Claude Code via persistent session | Matches how operator already uses Claude elsewhere |
+| Mayor context | MCP server exposing HOOP's read APIs + one write (`create_bead`) | Clean auth boundary |
+| Audio transcription | Whisper via local model or Anthropic's transcription endpoint | Multimodal input searchability |
+| Service supervisor | systemd (user-scope) | Standard |
+| Auth | Tailscale identity via whois | Matches environment |
 
 ---
 
 ## 8. Non-goals
 
-Explicitly out of scope. Where HOOP deliberately does not grow.
+Explicit. HOOP deliberately does not grow into these.
 
-1. **Orchestrating work.** NEEDLE does this. HOOP never schedules, prioritizes, or assigns beads outside explicit operator action.
-2. **Storing bead state.** `br` does this. HOOP never writes to bead SQLite directly.
-3. **Replacing FABRIC.** FABRIC is read-only, deployable anywhere; HOOP is write-capable, local to the host. They link via URL bridge.
-4. **Multi-host control.** One HOOP, one host. Growth in v1 is more projects on the same host, not more hosts. Multi-host is a someday concern (and arrives through the K8s sketch, not by federation of HOOPs).
-5. **Cross-host bead queues.** A single bead queue lives with its workspace on one host. Cross-host coordination is out.
-6. **RBAC beyond viewer / steerer.** If a team needs more granularity, run multiple HOOP instances.
-7. **Secrets management.** HOOP reads credentials from each CLI's native cache; it never rotates, stores, or issues secrets.
-8. **Browser-only execution.** HOOP requires a server — it spawns tmux and reads/writes filesystem.
+1. **Orchestrating work.** NEEDLE does this.
+2. **Steering workers.** No launch, stop, kill, pause, signal, SIGSTOP, SIGTERM, release-claim, reassign, or any other action that touches a worker process or bead lifecycle.
+3. **Capacity enforcement.** HOOP shows utilization; it never throttles, rotates, or pauses on thresholds. Enforcement, if needed, belongs in NEEDLE or a dedicated layer.
+4. **Mutating bead state.** Only `br create` is HOOP's write. No close, update, depend, claim, release.
+5. **Storing bead state.** `br` owns it.
+6. **Replacing FABRIC.** FABRIC read-only, deployable anywhere; HOOP local-host with one write. URL bridge links them.
+7. **Multi-host control.** One HOOP, one host. Growth is more projects, not more hosts.
+8. **RBAC beyond viewer/drafter.**
+9. **Secrets management.** Credentials live in each CLI's native cache.
+10. **Browser-only.** HOOP needs a server — it reads filesystem and shells to `br`.
 
 ---
 
 ## 9. Open questions
 
-1. **Hot-reload granularity.** Should a `fleet.yaml` edit reload just that project's manifest, or restart the project runtime? Lean toward manifest-only reload with explicit "restart project" command for worker changes. Resolve in phase 2.
-2. **Mayor: in-process session or subprocess?** The Mayor is a Claude Code session, not a generic agent; HOOP likely spawns/attaches to a real `claude` process with a known session id and MCP access to HOOP's APIs. This keeps HOOP optional (runnable without a Mayor) and keeps the Mayor's reasoning consistent with how the operator uses Claude elsewhere. Resolve in phase 4.
-3. **Mayor's MCP surface.** Two designs: (a) expose HOOP's APIs via an MCP server the Mayor connects to, or (b) inject context via system prompt + tools via CLI MCP config. Lean (a) — cleaner, survives session restarts. Resolve in phase 4.
-4. **Cost caps: per-project vs global?** Probably both, with per-project as primary and global as a safety cap. Resolve during phase 2 cost work.
-5. **Multi-provider routing policy.** Static (assign adapter X to strand Y in manifest) vs dynamic (HOOP picks at claim time based on rate-limit headroom and bead hints). Lean static-with-dynamic-rate-limit-fallback. Resolve in phase 3.
-6. **Conversation history expiry.** The host accumulates conversations indefinitely; at some point the session tailer's in-memory index becomes expensive. Lean toward LRU eviction with lazy reload on demand. Resolve if/when it becomes a problem.
-7. **Session tailer scaling.** On a host with years of `~/.claude/projects/` accumulation, startup discovery can be slow. May need a cache of file mtimes + parsed-digests in `~/.hoop/session-cache.db`. Resolve if startup exceeds 10s.
-8. **Worker supervisor API surface.** Does `hoop launch` return only after ack, or return immediately with an async status? Lean sync-with-timeout for CLI, async-with-progress-events for WS. Resolve in phase 1.
-9. **Cross-project collision: alert or block?** If two active workers in different projects touch the same file, is that an alert or an auto-pause? Alert for now; auto-pause is phase 6+ after more data.
-10. **Mayor-initiated cross-project operations.** Should the Mayor be allowed to start/stop fleets in projects the operator hasn't explicitly mentioned in the current conversation? Lean no — require an explicit project reference in the turn that triggered the mutation, or require UI confirmation. Resolve in phase 4.
+1. **Hot-reload granularity** for `projects.yaml`: partial reload or full project-runtime restart? Lean partial. Resolve in phase 2.
+2. **Mayor: direct Claude Code process or headless session?** Lean direct — spawn a `claude` subprocess HOOP owns, keep its session id, reattach on restart. Resolve in phase 5.
+3. **Mayor MCP server: in-process or separate?** Lean separate binary `hoop-mcp` so HOOP doesn't depend on MCP libraries at all. Resolve in phase 5.
+4. **Audio/video storage** for large attachments: in `.beads/attachments/` (git-tracked risk) or in `~/.hoop/attachments/` (outside the repo)? Lean `.beads/attachments/` with sensible `.gitignore` guidance. Resolve in phase 3.
+5. **Transcription model** for audio: local Whisper (no external dep, slower) or Anthropic transcription (fast, network required)? Lean local default + cloud override. Resolve in phase 3.
+6. **Conversation history expiry.** LRU eviction with lazy reload on demand. Resolve if/when it becomes a problem.
+7. **Session tailer scaling** on a host with years of accumulation: cache parsed-digests in `~/.hoop/session-cache.db`. Resolve if startup exceeds 10s.
+8. **Bulk draft limits.** How many drafts to allow in one bulk submit? Lean hard cap at 50 with explicit override. Resolve in phase 4.
 
 ---
 
@@ -511,14 +504,15 @@ Explicitly out of scope. Where HOOP deliberately does not grow.
 
 | Version | Target | Definition of done |
 |---|---|---|
-| v0.1 | +4 weeks | Single-project EX44 deployment, read-only, 3-worker fleet launchable from CLI |
-| v0.2 | +10 weeks | Multi-project dashboard, cost aggregation, dependency graph, collision + stuck detection, visual debug panel, multi-account awareness |
-| v0.3 | +14 weeks | Direct steering: bead ops + tmux control + multi-provider routing + BYO-account rotation + FABRIC URL bridge |
-| v0.4 | +20 weeks | The Mayor: persistent cross-project coordinator with tool belt, notifications, operator chat pane |
-| v0.5 | +24 weeks | Operational polish: systemd, hot-reload, backups, metrics, Tailscale identity |
-| v1.0 | +28 weeks | Multi-operator with viewer/steerer roles; public README |
+| v0.1 | +4 weeks | Single-project EX44 observer; read-only UI; zero write paths |
+| v0.2 | +10 weeks | Multi-project; cost + capacity visibility; visual debug; collision/stuck detection |
+| v0.3 | +14 weeks | File browser, syntax highlighting, multimodal attachments |
+| v0.4 | +18 weeks | Bead-creation: form + chat + templates + bulk; audit log |
+| v0.5 | +24 weeks | The Mayor: persistent Claude Code session, MCP-backed context, drafts through preview flow |
+| v0.6 | +28 weeks | Operational polish: systemd, hot-reload, backups, metrics, Tailscale identity |
+| v1.0 | +32 weeks | Multi-operator with viewer/drafter roles; public README |
 
-Dates are rough planning fiction; the important property is ordering. **Do not chase breadth before v0.1 is real.** A broken single-project loop doesn't get better by adding more projects to it. And do not seat the Mayor before direct steering works — the Mayor's tool belt is just the write-side ops with an agent in front of them; if the underlying operations are broken, wrapping an agent around them makes debugging harder, not easier.
+Dates are planning fiction; ordering matters. **Do not build bead creation before observability is real.** Drafting beads against a backlog the operator can't inspect is worse than no drafting at all.
 
 ---
 
@@ -532,62 +526,51 @@ Dates are rough planning fiction; the important property is ordering. **Do not c
                 ┌────────────────────────────────┐
                 │       HOOP daemon (EX44)        │
                 │                                 │
-                │  project: ardenone-cluster ─┐   │
-                │  project: miroir ───────────┤   │── URL bridge ──► FABRIC
-                │  project: ibkr-mcp ─────────┤   │
-                │  project: vista ────────────┤   │
-                │  project: spaxel ───────────┘   │
+                │  read: projects / beads /       │
+                │         sessions / files /      │
+                │         events / heartbeats     │
                 │                                 │
-                │  cross-project state            │
-                │  audit log (fleet.db)           │
-                └──┬──────────────────────────────┘
-                   │
-           tmux spawns ("needle-<project>-<worker>")
-                   │
-                   ▼
-     ┌─────────────────────────────────────────────────────┐
-     │ NEEDLE worker pool (per project, tmux-hosted)        │
-     │                                                      │
-     │  needle-ardenone-cluster-alpha   needle-miroir-alpha │
-     │  needle-ardenone-cluster-bravo   needle-miroir-bravo │
-     │  needle-ibkr-mcp-alpha          ...                  │
-     │                                                      │
-     │  each: br claim/close + YAML adapter + CLI child     │
-     │  writes: .beads/events.jsonl  .beads/heartbeats.jsonl│
-     └─────────────────────┬────────────────────────────────┘
-                           │
-                           ▼
-              ┌──────────────────────────┐
-              │ per-project .beads/       │
-              │ (SQLite + JSONL, owned    │
-              │  by `br`)                 │
-              └──────────────────────────┘
-
-    ┌────────────────────────────────────────────────────────┐
-    │ Separately: operator's ad-hoc CLI sessions             │
-    │ (claude, codex, opencode, gemini, aider) writing to    │
-    │ ~/.claude/projects/, ~/.codex/sessions/, etc.          │
-    │ HOOP observes, classifies as "operator" not "worker",  │
-    │ includes in project view, excludes from fleet analytics│
-    └────────────────────────────────────────────────────────┘
+                │  write: br create  (only!)      │
+                │                                 │
+                │  Mayor (phase 5+)               │────── URL bridge ──► FABRIC
+                │    ↳ MCP context (reads)        │                     (passive observer)
+                │    ↳ create_bead (write)        │
+                └──────────────┬─────────────────┘
+                               │
+                               │ reads only
+                               ▼
+              ┌────────────────────────────────────┐
+              │ NEEDLE — independently managed      │
+              │ (tmux fleets, supervised elsewhere) │
+              │                                     │
+              │ - br claim / close / update         │
+              │ - CLI adapters                      │
+              │ - events.jsonl                      │
+              │ - heartbeats.jsonl                  │
+              └──────────────────┬──────────────────┘
+                                 │
+                                 ▼
+                         ┌──────────────┐
+                         │  br / .beads │
+                         │  (SQLite +   │
+                         │   JSONL)     │
+                         └──────────────┘
+                                ▲
+                                │ br create (the one write)
+                                │
+                    ┌───────────┴────────────┐
+                    │      HOOP daemon       │
+                    └────────────────────────┘
 ```
 
-Each project is an island. HOOP stitches the islands into a view without merging them. Workers belong to islands; operators cross between them; the control plane is the ferry.
+HOOP reads everywhere; writes one kind of record to one queue. NEEDLE is a separate system HOOP has no authority over.
 
 ---
 
 ## 12. Appendix — Kubernetes worker deployment (someday, sketched)
 
-Not a phase of this plan. Recorded here so the door isn't closed but the v1 design isn't warped chasing it.
+If the EX44 saturates, NEEDLE can graduate worker execution to Kubernetes pods — this is a NEEDLE concern, not a HOOP concern. HOOP's role when that happens is the same as today: read the bead events (now streamed from cluster sidecars into a shared log or event bus), offer UI, create beads on operator intent. HOOP does not become a cluster controller.
 
-If and when the single host runs out of room — CPU, memory, bandwidth to CLI APIs, or sheer session-management overhead — HOOP can extend to scheduling NEEDLE workers as Kubernetes pods rather than tmux sessions on the EX44. The shape:
+Rackspace-spot-terraform automation was retired 2026-04-22; spot clusters are now manually provisioned — fine for this deferred work since cluster churn is no longer a background concern.
 
-- `hoop-agent` sidecar in each worker pod, forwarding events over a Tailscale-authenticated SSE endpoint to central HOOP. In Gas Town vocabulary this is still a polecat — the execution site changes, the role doesn't.
-- Per-workspace PVC for the bead queue; pod-local for CLI session files (ephemeral) or a second PVC for persistent-replay use cases.
-- Central HOOP stays on the EX44; clusters are leaf execution sites, not parallel control planes. The Mayor keeps one session, one cross-project view, and reaches into remote polecats through the same tool belt.
-- Manifests in `jedarden/declarative-config` synced by ArgoCD; images built by Argo Workflows on iad-ci.
-- Worker container is a pure NEEDLE container + adapter CLIs; the agent sidecar is a separate tiny Rust binary. Not headless HOOP.
-
-Rackspace-spot-terraform automation was retired 2026-04-22; spot clusters are now manually provisioned. That makes cluster-creation a deliberate, human-in-the-loop step — fine for HOOP's deferred K8s work since cluster churn is no longer a background concern.
-
-This requires phase 5's operational maturity and phase 3's steering write-path and phase 4's Mayor to exist first. The trigger is "I can't fit another fleet on this host," not "I want K8s on the resume." Design for it if and when the EX44 saturates; do not design the single-host daemon around it now.
+The trigger for this extension is "NEEDLE's fleet needs to leave the host," not "HOOP wants to be K8s-aware." HOOP's design doesn't change when execution moves.
