@@ -77,6 +77,20 @@ A Stitch carries:
   - `spawned: [...]` — worker Stitches that arose from beads this Stitch created
   - `references: [...]` — operator annotations tying Stitches together
 - Cost, duration (aggregated from turns + any linked bead executions)
+- `last_activity_at` timestamp — the ranking signal, not a lifecycle terminus
+
+### Stitches don't close — they descend into obscurity
+
+A Stitch has no terminal "closed" or "done" state. Like a Reddit post, a Stitch simply accumulates less and less activity over time and drifts down the list. The UI's primary sort is `last_activity_at` descending; stale Stitches are naturally deprioritized but never destroyed.
+
+Optional lightweight indicators on a Stitch card are all **derived**, not stored as lifecycle state:
+- Active (turn or linked bead in-flight right now)
+- Awaiting review (linked review-kind bead open)
+- Quiet N days (no activity for N days; gets dimmer over time)
+
+Operators can *archive* a Stitch (hide from default views — an auto-applied archive filter after N days of inactivity is the default behavior, matching the Reddit mental model). Archiving is a filter change, not a data change; the Stitch, its audio, its linked beads, its ledger entries all remain in place. The human-interface agent can search across archived Stitches via explicit tool call.
+
+This avoids the classic "did I close this bug?" / "is this ticket done?" lifecycle-policing that ruins issue trackers. Work doesn't need to be declared finished; it just stops needing attention.
 
 ### Pattern = a grouping of Stitches toward a goal
 
@@ -464,9 +478,8 @@ Same as before: first message prefix `[needle:<worker>:<bead>:<strand>]` → fle
 14. **Stitch abstraction layer** (foundational). UI, forms, human-interface agent, and dashboards render Stitches (conversations). Bead-level views exist behind an "Expert" toggle. Every new bead HOOP creates carries a `stitch:<id>` label. NEEDLE hook: follow-up beads inherit parent stitch label. Worker Stitches auto-link to their spawning operator Stitches via session-prefix markers.
 14b. **Pattern layer** (foundational, phased alongside Stitch). Operator-curated groups of Stitches toward a goal. May span projects. Optional — simple work lives as a bare Stitch. Pattern view aggregates progress, cost, and duration across member Stitches. Saved-query Patterns auto-include matching new Stitches as they appear.
 15. **Stitch-Provenance Code Archaeology** — the file preview panel overlays standard git blame with the *Stitch* that introduced each line. Hover → see the Stitch title, status, and conversation; click → jump to the Stitch view. Requires a NEEDLE hook to emit a `Bead-Id:` commit trailer on close (one line); HOOP maintains a bead-id → commit-sha index and joins that with stitch membership.
-16. **Time-Machine UI Scrubber** — a global timeline slider at the top of any view re-renders full system state at the selected moment: Stitches, fleets, costs, capacity, file tree as of that moment. Leverages the event-as-authority invariant — all state is already derivable from event logs. Seek index lives in `fleet.db`; stale-state banner warns the operator they're viewing the past.
-17. **Stitch Net-Diff Viewer** — when a Stitch reaches `Awaiting Review` or `Done`, HOOP computes the aggregate diff across every commit produced by the Stitch's beads (using the commit trailer from #15) and renders it as if it were a single PR: one tree, one narrative (human-interface agent-synthesized), one review surface. Replaces trawling PR history for multi-step convoys.
-18. **Cost-Anomaly with Fix Lineage** — continuous detector flags Stitches whose observed cost exceeds the 2σ band for historically similar Stitches (lexical + embedding similarity). The alert is actionable: it surfaces the closest past matches, the Stitches that fixed them, and a pattern name. A curation UI lets operators tag recurring failure modes with recommended fix templates; the library compounds over time.
+16. **Stitch Net-Diff Viewer** — when a Stitch's work produces a coherent set of commits (multi-bead Stitch clusters, Patterns with completed member Stitches), HOOP computes the aggregate diff across every commit produced by the Stitch's beads (using the commit trailer from #15) and renders it as if it were a single PR: one tree, one narrative (agent-synthesized), one review surface. Replaces trawling PR history for multi-step work.
+17. **Cost-Anomaly with Fix Lineage** — continuous detector flags Stitches whose observed cost exceeds the 2σ band for historically similar Stitches (lexical + embedding similarity). The alert is actionable: it surfaces the closest past matches, the Stitches that fixed them, and a pattern name. A curation UI lets operators tag recurring failure modes with recommended fix templates; the library compounds over time.
 
 **Success criteria:**
 - `hoop projects scan ~/` registers every workspace with `.beads/` in one command.
@@ -476,8 +489,7 @@ Same as before: first message prefix `[needle:<worker>:<bead>:<strand>]` → fle
 - Killing one project's runtime (delete `.beads/`) shows an error card; other projects unaffected.
 - Dashboards contain zero bead IDs by default; toggling Expert view reveals them.
 - A hover on any line in the file preview surfaces the Stitch that produced it within 200ms.
-- Time-Machine scrubber moves to any point in the last 30 days and rerenders correctly within 2s.
-- Stitch Net-Diff assembles correctly for a 5-bead, 11-commit convoy.
+- Stitch Net-Diff assembles correctly for a 5-bead, 11-commit cluster.
 - Cost anomaly detector flags a synthetic 3σ test case with the right historical match.
 
 ### Phase 3 — File browser + artifact preview + multimodal (v0.3)
@@ -623,7 +635,7 @@ Same as before: first message prefix `[needle:<worker>:<bead>:<strand>]` → fle
 4. **Notification channel.** When a fleet closes a bead, completes a convoy, hits a capacity threshold, or surfaces a stuck-worker alert, the human-interface agent receives a structured event. human-interface agent decides whether to surface it to the operator.
 5. **Operator ↔ human-interface agent chat pane** — primary UI surface. Cross-project by design. Multimodal input (from phase 3). Streams in real time.
 6. **Bead drafts via human-interface agent** route through phase 4's preview flow — no direct submits.
-7. **human-interface agent-off switch.** HOOP remains fully functional without a human-interface agent. Enabling the human-interface agent requires an Anthropic API key or a configured Claude Code account and explicit config.
+7. **Agent-off switch.** HOOP remains fully functional without the human-interface agent. Enabling it requires explicit adapter config in `~/.hoop/config.yml` — Claude Code account, Anthropic API key, ZAI proxy credentials, or any NEEDLE-compatible adapter. HOOP matches NEEDLE's adapter configuration schema so the operator doesn't learn two systems. Switching adapters mid-stream (e.g. Anthropic outage → failover to ZAI/GLM) is supported; the agent session's continuity is adapter-dependent but HOOP's own Stitch and audit state are not.
 8. **Audit trail.** Every Stitch the human-interface agent drafts carries `actor: hoop:agent:<session>` in the audit log, with a link to the chat turn that produced it.
 
 **Plus two marquee capabilities:**
@@ -681,17 +693,16 @@ The ten features that earn HOOP its keep, collected in one place with phase assi
 |---|---|---|---|
 | 1 | Stitch + Pattern layer | 2 | Humans work in project-scoped Stitches and optional cross-project Patterns; beads stay hidden |
 | 2 | Stitch-Provenance Code Archaeology | 2 | git blame with the *Stitch* that introduced each line |
-| 3 | Time-Machine UI Scrubber | 2 | Drag a slider; the whole UI re-renders state at that past moment |
-| 4 | Stitch Net-Diff Viewer | 2 | Multi-bead Stitch clusters reviewed as one unified PR-like surface |
-| 5 | Cost-Anomaly with Fix Lineage | 2 | Over-cost Stitches link to past matches and recommended fixes |
-| 6 | Dictated Notes | 3 | Push-to-talk voice notes with audio + transcript in project history |
-| 7 | Voice / Screen Work Capture | 3 | Describe work by voice or screencast; HOOP drafts the Stitch |
-| 8 | "What Will This Take?" Preview | 4 | Cost / duration / risk preview before submitting a Stitch |
-| 9 | Already-Started Detection | 4 | Semantic check catches duplicates across projects at draft time |
-| 10 | Stitch Replay from Failure Point | 4 | Reconstruct a failed Stitch's state and resume from there |
-| 11 | Morning Brief | 5 | The human-interface agent's daily briefing + pre-drafted Stitches + one headline |
-| 12 | Cross-Project Stitch Propagation | 5 | The agent suggests matching fixes for sibling projects |
-| 13 | Reflection Ledger | 5 | Learn from repetition; proposed rules the operator approves once, applied forever |
+| 3 | Stitch Net-Diff Viewer | 2 | Multi-bead Stitch clusters reviewed as one unified PR-like surface |
+| 4 | Cost-Anomaly with Fix Lineage | 2 | Over-cost Stitches link to past matches and recommended fixes |
+| 5 | Dictated Notes | 3 | Push-to-talk voice notes with audio + transcript in project history |
+| 6 | Voice / Screen Work Capture | 3 | Describe work by voice or screencast; HOOP drafts the Stitch |
+| 7 | "What Will This Take?" Preview | 4 | Cost / duration / risk preview before submitting a Stitch |
+| 8 | Already-Started Detection | 4 | Semantic check catches duplicates across projects at draft time |
+| 9 | Stitch Replay from Failure Point | 4 | Reconstruct a failed Stitch's state and resume from there |
+| 10 | Morning Brief | 5 | The human-interface agent's daily briefing + pre-drafted Stitches + one headline |
+| 11 | Cross-Project Stitch Propagation | 5 | The agent suggests matching fixes for sibling projects |
+| 12 | Reflection Ledger | 5 | Learn from repetition; proposed rules the operator approves once, applied forever |
 
 Common thread: each exploits HOOP's unique position as the *join* across projects × Stitches × conversations × files × cost × time. Every one demos in under a minute. None crosses the no-worker-steering line. Collectively they are the difference between "HOOP is a dashboard" and "HOOP is the operator's primary interface to a long-running agent fleet."
 
@@ -726,8 +737,9 @@ Common thread: each exploits HOOP's unique position as the *join* across project
 | Schema | JSON Schema draft-07 + `typify` + `json-schema-to-typescript` | One source of truth |
 | Storage (HOOP) | SQLite (audit log + conversation index only) | Small; portable; never holds bead state |
 | Event transport (local) | File tail (`notify`) | Cheapest reliable option |
-| human-interface agent host | Claude Code via persistent session | Matches how operator already uses Claude elsewhere |
-| human-interface agent context | MCP server exposing HOOP's read APIs + one write (`create_bead` → `br create`) | Clean auth boundary |
+| Agent adapter (primary) | Claude Code via persistent session OR Anthropic API | Default option; matches existing operator workflow |
+| Agent adapter (alternate) | ZAI proxy with GLM models, or any NEEDLE-compatible adapter | **HOOP is LLM-agnostic** — the agent is an adapter-configured resource, same shape as NEEDLE worker adapters. Switch by editing `~/.hoop/config.yml`, no code change. Anthropic outage or model deprecation is operator-recoverable, not an incident |
+| Agent context | MCP server exposing HOOP's read APIs + one write (`create_stitch` → `br create`) | Clean auth boundary; adapter-independent |
 | Audio transcription | Whisper via local model or Anthropic's transcription endpoint | Multimodal input searchability |
 | Service supervisor | systemd (user-scope) | Standard |
 | Auth | Tailscale identity via whois | Matches environment |
@@ -750,6 +762,8 @@ Explicit. HOOP deliberately does not grow into these.
 10. **Secrets management.** Credentials live in each CLI's native cache.
 11. **Browser-only.** HOOP needs a server — it reads filesystem and shells to `br`.
 12. **Making operators learn bead semantics.** Humans work in Stitches. Bead IDs are a debugging detail; a normal operator can use HOOP productively without ever seeing one.
+13. **Mapping Stitches to outside artifacts.** No GitHub PR linking, Slack / email notifications, iCal deadlines, Sentry feed ingestion, or similar integrations. HOOP's world is the host's filesystem + its own state. External-artifact coupling brings lifecycle, auth, and privacy concerns that multiply maintenance cost for little gain; operators can bridge to external systems via `scripts/` extensions (see §22) if they want.
+14. **Stitch lifecycle policing.** Stitches don't close. They descend into obscurity by recency of activity, the way a Reddit post does. No tickets-reopened-by-bots, no backlog-grooming rituals, no "is this still relevant?" debates.
 
 ---
 
@@ -905,7 +919,436 @@ Living in the repo itself:
 
 ---
 
-## 13. Appendix — Kubernetes worker deployment (someday, sketched)
+## 13. Security model
+
+**HOOP inherits security from its host environment.** It does not implement its own authentication layer. The design:
+
+- HOOP binds its listener to the Tailscale interface (or `localhost` for SSH-tunnel access). No public ingress, ever.
+- **Whoever can reach the port is authenticated.** If the operator SSHes into the EX44 and port-forwards HOOP's port, they have authenticated themselves via SSH. If they reach HOOP directly over Tailscale, Tailscale ACLs are the auth. The tools the operator already trusts (SSH keys, Tailscale identity, the OS user account) are the trust root.
+- Identity for audit purposes comes from Tailscale whois where available, falling back to the OS user running the HOOP process. Multi-operator role enforcement (phase 7) uses Tailscale identities; no password prompts, no session tokens managed by HOOP.
+- The human-interface agent's MCP server binds to a Unix domain socket with the same user:group, not a TCP port. Only processes under the same OS user can reach it.
+- Agent credentials (Anthropic API keys, ZAI tokens, etc.) live in each adapter's native credential cache — HOOP never stores or proxies them. Agent adapter configuration in `~/.hoop/config.yml` references credentials by adapter-native paths, not by value.
+
+**What HOOP still owns:**
+- **Path-traversal hardening** on every filesystem operation — every path derived from a wire ID must match a canonicalized allowlist (project workspace, `.beads/` path, attachments directory). Regex-validate bead IDs (`^bd-[a-z0-9]+$`), Stitch IDs, Pattern IDs, worker names (`^[a-z]+$`) before any filesystem use.
+- **Attachment sanitization** — SVG stripped of scripts, PDF metadata validated, file extensions verified by content sniffing not by name.
+- **Audit-log append-only** — `fleet.db` actions table never edited; only inserted. A daily hash chain (each row includes a hash of the previous row + its own content) provides tamper evidence for post-hoc review.
+- **Secrets scanning** on captured attachments and transcripts (see §18 Privacy).
+
+**Explicit non-authentication patterns**: HOOP never prompts for a password, never issues a session cookie, never verifies a JWT, never talks to an identity provider. If the operator's SSH and Tailscale ACLs are configured correctly, HOOP's security is correct. If they aren't, no amount of application-layer auth would save the host anyway.
+
+---
+
+## 14. Testing strategy
+
+A system that reads everyone's files, shells out to `br`, spawns Whisper, and drives an LLM has multiple layers to test. Strategy:
+
+### 14.1 Test fixtures — the `testrepo/` dummy project
+
+The plan ships a **dummy test workspace** at `testrepo/` in the HOOP repo. It contains:
+- A realistic file tree (Rust crate + docs + config, ~500 files)
+- A pre-populated `.beads/` with synthetic beads in known states
+- Pre-recorded CLI session JSONL files for each adapter (Claude, Codex, OpenCode, Gemini, Aider) tagged with the `[needle:<worker>:<bead>:<strand>]` prefix convention
+- A canned `events.jsonl` and `heartbeats.jsonl` that drive deterministic runs
+- Example attachments (image, audio, video) for multimodal tests
+
+HOOP's test suite operates against `testrepo/` as the canonical integration environment. No live NEEDLE, no live CLI, no live LLM required.
+
+### 14.2 Test layers
+
+- **Unit tests** (Rust `cargo test`) — pure functions: event parsers, tag extraction, path canonicalization, cost computation, capacity-window arithmetic, Stitch status derivation, schema version negotiation.
+- **Integration tests** — daemon starts, tails fixture files, serves a WS endpoint; a test client drives interactions and asserts the resulting state. `br` shells out to a stub binary checked into `testrepo/` that records calls without requiring a real installation.
+- **End-to-end tests** — full `hoop init` + project registration + Stitch creation + `br create` against a dummy `.beads/`, asserting the audit log, UI state projections, and event stream.
+- **Property tests** (`proptest`) — invariants: (a) event tailer never emits out-of-order events, (b) derived status functions are monotonic in the expected way, (c) replay from disk reproduces live state exactly.
+- **Load tests** — a driver generates 20 projects × 5 workers × 200 beads of synthetic activity; assert UI responsiveness budget, memory ceiling, WS fan-out lag.
+- **UI tests** (Playwright) — headless browser against the production binary serving the embedded client; asserts responsiveness on desktop and mobile viewports.
+
+### 14.3 What to not test, deliberately
+
+- Real `br` integration is tested against a pinned `br` version in CI, not every `br` version ever. Compatibility matrix is pinned via a single minimum-version audit.
+- Real LLM integration is tested via recorded fixtures (a "golden transcripts" directory per adapter). Live agent tests run as a separate opt-in suite for release validation.
+- No effort to test actual Tailscale behavior; HOOP runs against `localhost` in CI.
+
+### 14.4 Test targets per phase
+
+Each phase's success criteria translate directly into automated tests. A phase is not considered "done" until its criteria run green in CI against `testrepo/`.
+
+---
+
+## 15. Backups & disaster recovery
+
+### 15.1 What HOOP owns
+
+Everything in `~/.hoop/`:
+- `config.yml` — non-secret configuration
+- `projects.yaml` — project registry
+- `fleet.db` — audit log, Stitches, Patterns, Reflection Ledger
+- `attachments/` — Note audio, image/video uploads, screen-capture recordings
+- `skills/`, `scripts/`, `notes/`, `prompts/` — operator extensions (see §22)
+- `templates/` — Stitch templates
+
+### 15.2 Backup target
+
+Configurable **S3-compatible endpoint** (B2, AWS S3, MinIO, Garage, or any S3 API). Credentials in env vars; endpoint + bucket in `config.yml`:
+
+```yaml
+backup:
+  endpoint: https://s3.us-west-000.backblazeb2.com
+  bucket: hoop-backups-<operator>
+  prefix: ex44/
+  schedule: "0 4 * * *"         # daily 04:00 local
+  retention_days: 30
+  # credentials via env: HOOP_BACKUP_ACCESS_KEY_ID, HOOP_BACKUP_SECRET_ACCESS_KEY
+```
+
+Defaults to B2 because that matches the existing environment's backup infrastructure (ARMOR encrypted S3 proxy for B2 — see `project_armor_backup_strategy.md` in operator memory). The S3-compatible interface means any endpoint works; operators are not locked to B2.
+
+### 15.3 What gets backed up, how
+
+- `fleet.db` — SQLite `VACUUM INTO` to a temp snapshot, then upload. Daily.
+- Attachments — incremental sync (only new/changed files since last successful backup). Daily.
+- Config files — on every change plus daily.
+- Each backup run writes a `manifest.json` tying together the snapshot's pieces and recording schema version.
+
+All uploads are compressed (zstd) and optionally encrypted (age with a key in env var `HOOP_BACKUP_AGE_KEY`). Encryption recommended when the S3 endpoint is not trusted end-to-end (e.g. egress via public CDN — matches ARMOR's model).
+
+### 15.4 Restore
+
+```bash
+hoop restore --from s3://<bucket>/<prefix>/<snapshot-id>
+```
+
+`hoop restore` fetches the snapshot, verifies the manifest, restores `fleet.db` + attachments + config to `~/.hoop/` (after moving the existing directory aside for rollback), then runs schema migrations to bring the restored state up to the current HOOP version.
+
+Restore is idempotent; a stopped `hoop serve` is the precondition. The restore flow explicitly does not reconstruct NEEDLE or `br` state — those live in their own workspaces and have their own recovery paths.
+
+### 15.5 Disaster scenarios covered
+
+- **Disk death** — restore to a new host from latest S3 snapshot.
+- **`fleet.db` corruption** — restore from the most recent backup; lose at most one day of Stitches and audit.
+- **Accidental deletion** (operator ran `rm -rf ~/.hoop/`) — same recovery path.
+- **Migration to a new host** — fresh HOOP install + restore; same end state.
+
+### 15.6 What's explicitly not backed up
+
+- Bead state (that's `br`'s job, in each workspace's `.beads/`)
+- NEEDLE worker state (separate)
+- CLI session files (each CLI owns these)
+- Git worktree state (git's job)
+
+---
+
+## 16. Self-observability — metrics HOOP exposes about itself
+
+HOOP exposes Prometheus-format metrics on `/metrics` from phase 6 onward. The metric set is chosen so the operator can diagnose HOOP itself without grepping logs.
+
+### 16.1 Operational
+
+- `hoop_uptime_seconds` (counter)
+- `hoop_process_memory_bytes`, `hoop_process_open_fds`, `hoop_process_tasks_total`
+- `hoop_panics_total{subsystem}`, `hoop_errors_total{subsystem,kind}`
+- `hoop_last_restart_reason{reason}` (gauge, discrete)
+
+### 16.2 Event ingestion
+
+- `hoop_event_tailer_lag_seconds{project}` — distance between event disk-write and HOOP broadcast
+- `hoop_session_tailer_lag_seconds{adapter}` — same, per CLI adapter
+- `hoop_heartbeat_freshness_seconds_p50/p95/p99{worker}` — heartbeat age distribution
+- `hoop_unknown_event_total{adapter,event_kind}` — silent-drop-safeguard counter (should always be growing *slowly*; spikes signal CLI version drift)
+- `hoop_event_parse_errors_total{adapter}`
+
+### 16.3 WebSocket & HTTP
+
+- `hoop_ws_clients_connected`
+- `hoop_ws_broadcast_lag_ms_p50/p95/p99`
+- `hoop_http_requests_total{route,status}`
+- `hoop_http_request_duration_ms{route}`
+
+### 16.4 Bead & Stitch operations
+
+- `hoop_br_subprocess_total{verb,result}` — `br create` / `br list` / etc. success/failure
+- `hoop_br_subprocess_duration_ms{verb}`
+- `hoop_stitch_created_total{project,kind}`
+- `hoop_bead_created_by_hoop_total{project}`
+- `hoop_audit_append_rate_per_second`
+- `hoop_orphan_bead_count{project}` (gauge)
+
+### 16.5 Agent & AI
+
+- `hoop_agent_turn_duration_ms{adapter,model,phase}` — `to_first_token`, `to_completion`
+- `hoop_agent_tool_calls_total{tool,result}`
+- `hoop_agent_tokens_total{adapter,model,direction}` (input/output)
+- `hoop_agent_session_cost_usd` (gauge, current session)
+- `hoop_whisper_transcription_duration_ms`
+- `hoop_whisper_transcription_errors_total`
+- `hoop_reflection_proposal_total{source}` — proposals generated
+- `hoop_reflection_approval_rate` — ratio of approved to proposed
+
+### 16.6 Storage
+
+- `hoop_fleet_db_size_bytes`
+- `hoop_fleet_db_wal_size_bytes`
+- `hoop_attachments_size_bytes`
+- `hoop_schema_migration_duration_ms{from,to}`
+- `hoop_backup_last_success_timestamp`
+- `hoop_backup_last_size_bytes`
+
+### 16.7 Business / meaningful-to-operator
+
+- `hoop_cost_per_stitch_usd_p50/p95{adapter}`
+- `hoop_stitches_created_per_day`
+- `hoop_cost_anomaly_alerts_total`
+- `hoop_already_started_dedup_hits_total`
+- `hoop_capacity_meter_exhaustion_warnings_total{account}`
+
+### 16.8 `/debug/state` endpoint
+
+Complementing metrics, a JSON endpoint surfaces runtime structure for incident triage: fleet roster, open Stitches with statuses, agent session IDs, every pid HOOP observes, every WS client, current config hash, backup timestamps. Local-only access by default.
+
+---
+
+## 17. Configuration precedence & hot-reload
+
+### 17.1 Layout
+
+- **`~/.hoop/config.yml`** — non-secret configuration. The single source of truth for almost everything HOOP needs. File-watched; changes hot-reload.
+- **Environment variables** — **secrets only**. Tokens, API keys, S3 credentials, age encryption keys. Never in `config.yml`, never in audit log, never in HOOP's own logs at default verbosity.
+- **CLI flags** — only for `hoop serve`'s bootstrap (config-file path, socket path, log level). Not used for runtime configuration.
+
+### 17.2 Precedence
+
+```
+CLI flags  >  env vars  >  config.yml  >  compiled defaults
+```
+
+Precedence is deterministic and documented; no surprises.
+
+### 17.3 What's in `config.yml`
+
+- `agent:` — adapter selection, model, rate limits, cost cap per session
+- `projects_file:` — path to projects.yaml (default `~/.hoop/projects.yaml`)
+- `backup:` — endpoint, bucket, prefix, schedule, retention
+- `ui:` — theme, default project sort, archive-after-days
+- `voice:` — Whisper model path, hotkey binding, max recording seconds
+- `agent_extensions:` — paths to skills / scripts / notes / prompts directories (§22)
+- `metrics:` — whether `/metrics` is enabled, port binding
+- `audit:` — retention policy, hash-chain on/off
+- `reflection:` — detection thresholds, auto-archive of old proposals
+
+### 17.4 Hot-reload semantics
+
+**Everything reloads without restart**, including:
+- Projects registry — adds/removes/renames take effect within 5s
+- Agent adapter configuration — next new agent session picks up the change; current session unaffected (operator can `/reload` inside the chat to force a switch)
+- Backup schedule — next scheduled run uses new config
+- Logging verbosity — next log line uses new level
+- UI theme and preferences — next client connection sees them
+
+Exceptions (require `systemctl --user restart hoop`):
+- Socket paths and listen addresses
+- `fleet.db` location
+
+### 17.5 Validation
+
+Any `config.yml` edit is schema-validated *before* apply. On invalid YAML or schema violation, HOOP rejects the change loudly (UI banner, metric increment, log entry) and **continues running with the previous valid configuration**. A bad config never takes down the daemon.
+
+---
+
+## 18. Privacy & redaction
+
+Dictation, screen captures, file browsing, and agent conversations inevitably touch sensitive content. HOOP's defenses:
+
+### 18.1 Attachment redaction
+
+On each attachment upload — audio transcript, screen-capture frames, image, video — HOOP runs a **secrets scanner** before storage:
+
+- Common secret patterns (API keys in known formats: `sk-...`, `xoxb-...`, AWS access keys, Anthropic keys, GitHub tokens, JWTs)
+- Environment-variable-like leaks in text (`OPENAI_API_KEY=...`)
+- High-entropy strings above a configurable threshold, with context-aware exclusions (hashes in git commits are fine)
+- Email addresses matching operator-configured PII patterns
+
+Detected items are **flagged, not blocked**. The operator sees a warning banner listing what was found ("looks like a Stripe key on line 42 of the transcript") and can choose to redact-in-place (transcript word replaced with `[REDACTED]`, audio muted at word timestamps), redact-and-rewind (delete the attachment entirely), or proceed anyway. Nothing is silently deleted.
+
+### 18.2 Transcript redaction
+
+Whisper transcripts are scanned same as attachments. Word-level timestamps let HOOP mute specific seconds in the stored audio when the operator redacts a word. The transcript edit and audio mute are atomic; scrubbing past a redacted word shows `[REDACTED]` in the transcript and hears silence in the audio.
+
+### 18.3 Session tailer redaction (read-side)
+
+When HOOP reads CLI session JSONL files, it does **not** mutate them (they belong to each CLI, not to HOOP). But HOOP's own projections, transcripts shown in the UI, and any data forwarded to the human-interface agent go through the redaction filter. A `claude` session with an API key in scrollback does not leak through HOOP's lens.
+
+### 18.4 Log hygiene
+
+HOOP's own logs default to `WARN` verbosity in production. `INFO` and `DEBUG` surface more detail for troubleshooting; both have redaction applied to log lines before write.
+
+### 18.5 Operator control
+
+- **Redaction policy** in `config.yml`: pattern sets, threshold for entropy check, action on detection (`warn` / `redact` / `reject`)
+- **Per-project override** for teams with stricter policies (e.g. customer-data project: `reject` by default)
+- **Audit trail** of every redaction: what was flagged, what the operator did, when
+
+### 18.6 What HOOP cannot prevent
+
+The CLI agents themselves write session JSONL files on the host's disk. If an agent's session contained sensitive content, that's in the CLI's native cache — not HOOP's responsibility to clean up. HOOP's redaction applies to HOOP's surface: its UI, its transcripts, its attachments, its forwarded-to-agent content.
+
+---
+
+## 19. Multi-operator concurrency (phase 7)
+
+HOOP supports multiple simultaneous operators once phase 7 lands. The specifics the plan previously glossed:
+
+### 19.1 Stitch draft concurrency
+
+- Drafts are **server-persisted** from the moment the operator opens a draft form, not just on save. Two operators opening drafts cannot lose work to the other's submit.
+- When two operators draft Stitches in the same project concurrently, the server accepts both. No optimistic-lock conflicts; the Stitches are independent entities.
+- Presence indicators show "operator X is drafting in project Y" on project cards.
+
+### 19.2 Reflection Ledger concurrency
+
+- Proposals are deduplicated on create — if operator A's turn produces a proposal identical (by content hash) to one already in the pending queue, no new row.
+- Approvals are single-operator actions; approved rules list who approved them.
+- An operator may reject a proposal another operator would have approved. Track rejection reason; propose again only after another N signals, not immediately.
+
+### 19.3 Agent session ownership
+
+- Each operator has their own agent session. No shared-agent model (that would lose per-operator context).
+- A view-only operator can read *other* operators' agent session transcripts (after the fact), but not inject into them.
+- The `actions` audit log always attributes to the operator whose agent drafted the Stitch.
+
+### 19.4 Presence
+
+- Optional presence indicators per project and per Stitch ("operator X is viewing this"). Operator-toggleable privacy setting: show me / hide me.
+- Does not block writes; multiple operators can concurrently scroll the same Stitch.
+
+### 19.5 Conflict resolution
+
+Primary conflict class: two operators both drafting a Stitch targeting the same workspace. Not a conflict — both submit, both land. HOOP's Already-Started Detection (marquee #8) alerts each operator that the other is about to submit something similar before they do, and offers to combine drafts if both are still pending.
+
+---
+
+## 20. Schema evolution (SemVer)
+
+HOOP's data schema (event records, Stitch rows, Pattern rows, Reflection Ledger entries, config format, audit log rows) follows **Semantic Versioning**:
+
+- **Major version increment** — breaking changes with **no backwards compatibility**. Restore from backup requires an explicit `--major-upgrade` flag with acknowledgement; schema migration is one-way.
+- **Minor version increment** — additive / backwards-compatible. Old records read correctly; new features may produce records old readers don't fully understand but can safely ignore.
+- **Patch version increment** — bug fixes, no schema shape change.
+
+Every durable record carries `schema_version: "X.Y.Z"` (three parts, not just one integer). Schemas live in the `hoop-schema/` crate; breaking changes are reviewed deliberately and documented in a `CHANGELOG.md`.
+
+### 20.1 Upgrade & migration flow
+
+- Minor / patch upgrades: run on startup, apply transparently, log migration duration to metrics.
+- Major upgrades: HOOP refuses to start with a clear diagnostic: "Your data is schema version 1.x; this binary requires 2.x. Run `hoop migrate --from-1 --confirm` or restore from a pre-upgrade backup."
+- Backups always include the schema version in the manifest; `hoop restore` refuses to restore a newer-than-current snapshot.
+
+### 20.2 Deprecation window
+
+- Minor version deprecations (old field renamed, etc.) remain readable for at least **one full minor version** after introduction.
+- Major version deprecations are one-way; the operator consciously accepts them at the major-upgrade gate.
+
+### 20.3 Version pinning across repos
+
+HOOP pins a minimum compatible `br` major version. A `br` major-version bump triggers a HOOP compatibility audit; HOOP may require its own major bump to follow.
+
+---
+
+## 21. Mobile UX
+
+HOOP's UI is **responsive and mobile-compatible** from day one. The environment's phone-ADB integration (Pixel 6 on Tailscale) makes the phone a first-class input surface, not an afterthought.
+
+### 21.1 Target breakpoints
+
+- Phone portrait (375px wide minimum; Pixel 6 at 412px natively)
+- Phone landscape (~700px wide)
+- Tablet (768px+)
+- Desktop (1280px+ primary target)
+
+### 21.2 Mobile-optimized flows
+
+- **Morning Brief viewing** — card-per-headline layout; swipe to next; one-tap approve or redirect.
+- **Dictation** — large mic button always reachable; push-to-talk with haptic feedback; transcript preview before Stitch draft.
+- **Stitch list** — compact cards showing project, title, last activity, status indicator; tap to expand.
+- **Agent chat** — optimized message composer; attachment picker supports phone camera/photos/audio natively.
+- **File browser** — read-only on phone (mobile editing of code is rarely useful); syntax-highlighted previews with side-scroll for long lines.
+- **Approval dialogs** — oversized buttons, high contrast.
+
+### 21.3 Not-for-phone flows
+
+- Stitch Net-Diff viewer (too much on a phone screen) — graceful message directing to desktop.
+- Time-range multi-project dashboards — compact summary only; full view is desktop-only.
+- Reflection Ledger curation — phone shows proposals list; approve on desktop for the editing surface.
+
+### 21.4 Testing
+
+Mobile UX is part of the v0.1 success criteria. Playwright test suite runs at phone viewport sizes; visual regressions blocked in CI.
+
+---
+
+## 22. Extensibility — skills, scripts, notes, prompts
+
+Modeled on the shape of OpenClaw / Hermes (and Claude Code's own skills/slash-command pattern): HOOP is extensible without code changes via four directory-based plugin types.
+
+### 22.1 Plugin types
+
+| Type | Purpose | Directory |
+|---|---|---|
+| **Skills** | Custom tools the human-interface agent can call | `~/.hoop/skills/<name>/` |
+| **Scripts** | Operator-triggered or event-triggered automation | `~/.hoop/scripts/<name>` |
+| **Notes** | Structured knowledge files the agent can read | `~/.hoop/notes/<name>.md` |
+| **Prompts** | Reusable prompt library referenced by name | `~/.hoop/prompts/<name>.md` |
+
+### 22.2 Skills
+
+A Skill is a directory with:
+- `manifest.yml` — name, description, argument schema, the agent-facing one-line summary
+- `run` — executable (any language) that reads args from stdin as JSON, writes result to stdout as JSON
+- Optional `README.md` — human documentation
+
+HOOP auto-discovers skills on startup and on directory watch. The human-interface agent's tool-belt is augmented with every skill as an available tool; the skill's `manifest.yml` description drives when the agent picks it.
+
+Examples: `lookup-deploy-status`, `fetch-prod-logs-summary`, `check-secret-rotation-age`, `list-open-github-prs`.
+
+### 22.3 Scripts
+
+A Script is a single executable file. Triggered by:
+- Operator-invoked (via UI button or `hoop script run <name>`)
+- Event-triggered via a manifest (e.g. "when a Stitch in project X is archived, run this")
+- Scheduled (cron-style schedule in the manifest)
+
+Scripts have full operator privileges (they run as the HOOP user). The ability to trigger side effects — open a browser, POST to a webhook, send a pushover notification — gives operators the external-integration escape hatch the plan otherwise forbids (per non-goal #13).
+
+### 22.4 Notes
+
+Plain markdown files the agent can read via its `read_note(name)` tool. Use cases:
+- Project glossaries
+- Team conventions ("we always prefer A over B")
+- Reference material the operator wants the agent to have at hand
+- Operator's own running notes on long-term work
+
+Project-scoped notes live at `<project-workspace>/.hoop/notes/`; global notes at `~/.hoop/notes/`.
+
+### 22.5 Prompts
+
+Reusable prompt bodies the operator or agent can reference by name (`@prompt:<name>`). Example: a standardized "fix a linting violation" prompt, or "write a plan.md stub."
+
+Prompts can take parameters: `{{project}}`, `{{file}}`, `{{stitch}}` — substituted at invocation time.
+
+### 22.6 Discovery & hot-reload
+
+All four plugin directories are file-watched. Adding a new skill takes effect within seconds without restart; the agent's next turn sees the new tool. Same for scripts, notes, prompts. Hot-reload matches the Reflection Ledger and `config.yml` patterns.
+
+### 22.7 Sharing
+
+Plugin directories are plain files. Operators can share skills via git (`git clone` into `~/.hoop/skills/`), via tarballs, or via a community registry (not built by HOOP; the flat-file format makes any external sharing mechanism work).
+
+### 22.8 Security
+
+Skills and scripts run with the HOOP user's privileges. HOOP does not sandbox them — the operator owns their extensions and the responsibility for what they do. Audit log records every skill invocation with arguments; scripts log their invocation but not their stdout/stderr (those are the script's responsibility).
+
+---
+
+## 23. Appendix — Kubernetes worker deployment (someday, sketched)
 
 If the EX44 saturates, NEEDLE can graduate worker execution to Kubernetes pods — this is a NEEDLE concern, not a HOOP concern. HOOP's role when that happens is the same as today: read the bead events (now streamed from cluster sidecars into a shared log or event bus), offer UI, create beads on operator intent. HOOP does not become a cluster controller.
 
