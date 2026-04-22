@@ -581,8 +581,9 @@ impl SessionTailer {
             return SessionKind::Dictated;
         }
 
-        // Default to operator (normal conversation)
-        SessionKind::Operator
+        // Default to ad-hoc (direct CLI session without prefix)
+        // Note: "operator" kind is reserved for human ↔ agent chats through the web UI
+        SessionKind::AdHoc
     }
 
     /// Hash content for bootstrap matching
@@ -720,10 +721,10 @@ mod tests {
     }
 
     #[test]
-    fn test_classify_session_operator() {
+    fn test_classify_session_ad_hoc() {
         let title = "Fix the login bug";
         let kind = SessionTailer::classify_session(title, "/home/coding/project");
-        assert_eq!(kind, SessionKind::Operator);
+        assert_eq!(kind, SessionKind::AdHoc);
     }
 
     #[test]
