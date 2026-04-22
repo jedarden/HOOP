@@ -90,15 +90,15 @@ mod tests {
         WorkerData,
         WorkerData {
             worker: "alpha".to_string(),
-            state: WorkerDisplayState {
-                state: WorkerDisplayStateState::Executing,
+            state: WorkerDataState {
+                state: WorkerDataStateState::Executing,
                 bead: Some("bd-abc123".to_string()),
                 adapter: Some("claude".to_string()),
                 model: Some("opus".to_string()),
                 last_strand: None,
                 reason: None,
             },
-            liveness: WorkerLiveness::Live,
+            liveness: WorkerDataLiveness::Live,
             last_heartbeat: parse_utc("2024-01-01T00:00:00Z"),
             heartbeat_age_secs: 5,
         }
@@ -126,7 +126,7 @@ mod tests {
         conversation_data_round_trip,
         ConversationData,
         ConversationData {
-            id: Uuid::new_v4(),
+            id: "conv-123".to_string(),
             session_id: "session-456".to_string(),
             provider: ConversationDataProvider::Claude,
             kind: ConversationDataKind::Operator,
@@ -147,14 +147,13 @@ mod tests {
         ws_event_round_trip,
         WebSocketEvent,
         WebSocketEvent {
-            type_: "worker_update".to_string(),
+            type_: WebSocketEventType::WorkerUpdate,
             worker: None,
             workers: vec![],
             beads: vec![],
             conversations: vec![],
             conversation: None,
             streaming: None,
-            projects: vec![],
             config_status: None,
         }
     );
@@ -181,7 +180,7 @@ mod tests {
             args: serde_json::Map::new(),
             result: AuditRowResult::Success,
             error: None,
-            schema_version: "1.0.0".to_string(),
+            schema_version: AuditRowSchemaVersion("1.0.0".to_string()),
         }
     );
 
@@ -205,7 +204,7 @@ mod tests {
             worker_metadata: None,
             parent_stitch_id: None,
             pattern_id: None,
-            schema_version: "1.0.0".to_string(),
+            schema_version: StitchSchemaVersion("1.0.0".to_string()),
         }
     );
 
@@ -227,7 +226,7 @@ mod tests {
             progress_percent: None,
             total_cost_usd: None,
             duration_seconds: None,
-            schema_version: "1.0.0".to_string(),
+            schema_version: PatternSchemaVersion("1.0.0".to_string()),
         }
     );
 
@@ -248,7 +247,7 @@ mod tests {
             approved_by: None,
             approved_at: None,
             archived_at: None,
-            schema_version: "1.0.0".to_string(),
+            schema_version: ReflectionLedgerSchemaVersion("1.0.0".to_string()),
         }
     );
 
@@ -277,7 +276,7 @@ mod tests {
             window_start: None,
             window_end: None,
             updated_at: parse_utc("2024-01-01T00:00:00Z"),
-            schema_version: "1.0.0".to_string(),
+            schema_version: CapacityAccountSchemaVersion("1.0.0".to_string()),
         }
     );
 

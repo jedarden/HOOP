@@ -19,6 +19,7 @@ hoop-schema = { path = "../hoop-schema" }
 hoop-ui = { path = "../hoop-ui" }
 serde_json = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
 shellexpand = "3.0"
 dirs = "5.0"
 notify = "6.1"
@@ -27,6 +28,10 @@ chrono = { version = "0.4", features = ["serde"] }
 regex = "1"
 uuid = { version = "1", features = ["v4"] }
 rayon = "1"
+rusqlite = { version = "0.30", features = ["bundled"] }
+sha2 = "0.10"
+futures-util = "0.3"
+async-trait = "0.1"
 
 [dev-dependencies]
 tempfile = "3"

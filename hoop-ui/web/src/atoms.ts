@@ -100,15 +100,29 @@ export interface BeadData {
   dependencies: string[];
 }
 
+// Config error details
+export interface ConfigError {
+  message: string;
+  line: number;
+  col: number;
+}
+
+// Config status from backend
+export interface ConfigStatus {
+  valid: boolean;
+  error?: ConfigError;
+}
+
 // WebSocket event from backend
 export interface WsEvent {
-  type: 'worker_update' | 'workers_snapshot' | 'beads_snapshot' | 'conversations_snapshot' | 'conversation_update' | 'streaming_content';
+  type: 'worker_update' | 'workers_snapshot' | 'beads_snapshot' | 'conversations_snapshot' | 'conversation_update' | 'streaming_content' | 'config_status';
   worker?: WorkerData;
   workers?: WorkerData[];
   beads?: BeadData[];
   conversations?: Conversation[];
   conversation?: Conversation;
   streaming?: { conversation_id: string; content: string; timestamp: number };
+  config_status?: ConfigStatus;
 }
 
 // Atoms for state management
@@ -120,6 +134,7 @@ export const stitchesAtom = atom<Stitch[]>([]);
 export const workersAtom = atom<WorkerData[]>([]);
 export const beadsAtom = atom<BeadData[]>([]);
 export const wsConnectedAtom = atom<boolean>(false);
+export const configStatusAtom = atom<ConfigStatus>({ valid: true });
 
 // Format content for display (handles string and object content)
 export function formatContent(content: string | { [key: string]: any } | null): string {

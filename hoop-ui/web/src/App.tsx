@@ -1,6 +1,6 @@
 import { useAtom, useSetAtom } from 'jotai';
 import { useState, useEffect } from 'react';
-import { wsConnectedAtom, projectsAtom, Project } from './atoms';
+import { wsConnectedAtom, projectsAtom, configStatusAtom, Project } from './atoms';
 import { useWebSocket } from './useWebSocket';
 import ProjectDetail from './ProjectDetail';
 import FleetMap from './FleetMap';
@@ -17,6 +17,7 @@ const DEMO_PROJECTS: Project[] = [
 export default function App() {
   const [wsConnected] = useAtom(wsConnectedAtom);
   const [projects] = useAtom(projectsAtom);
+  const [configStatus] = useAtom(configStatusAtom);
   const setProjects = useSetAtom(projectsAtom);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 
@@ -54,6 +55,15 @@ export default function App() {
   if (selectedProject) {
     return (
       <div className="app app-project-detail">
+        {configStatus.error && (
+          <div className="config-error-banner">
+            <div className="banner-content">
+              <strong>Configuration Error</strong>
+              <span className="banner-message">{configStatus.error.message}</span>
+              <span className="banner-location">Line {configStatus.error.line}, Column {configStatus.error.col}</span>
+            </div>
+          </div>
+        )}
         <header className="app-header-mini">
           <div className="header-top">
             <a href="#/" className="back-link" onClick={(e) => { e.preventDefault(); window.location.hash = ''; }}>
@@ -76,6 +86,15 @@ export default function App() {
   // Overview page - show all projects
   return (
     <div className="app">
+      {configStatus.error && (
+        <div className="config-error-banner">
+          <div className="banner-content">
+            <strong>Configuration Error</strong>
+            <span className="banner-message">{configStatus.error.message}</span>
+            <span className="banner-location">Line {configStatus.error.line}, Column {configStatus.error.col}</span>
+          </div>
+        </div>
+      )}
       <header>
         <div className="header-top">
           <h1>HOOP</h1>

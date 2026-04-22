@@ -480,6 +480,17 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     }
 
+    // Send initial config status (valid by default since daemon started successfully)
+    let initial_config_status = ConfigStatusData {
+        valid: true,
+        error: None,
+    };
+    if let Ok(json) = serde_json::to_string(&WsEvent::config_status(initial_config_status)) {
+        if sender.send(Message::Text(json)).await.is_err() {
+            return;
+        }
+    }
+
     // Spawn task to forward monitor events to the WebSocket
     let registry_tx = registry.clone();
     let monitor_task = tokio::spawn(async move {

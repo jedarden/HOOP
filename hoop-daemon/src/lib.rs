@@ -17,11 +17,94 @@ pub mod shutdown;
 pub mod supervisor;
 pub mod ws;
 
+/// Worker execution state from heartbeats
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum WorkerState {
+    /// Worker is executing a bead
+    Executing {
+        bead: String,
+        pid: u32,
+        adapter: String,
+    },
+    /// Worker is idle
+    Idle {
+        last_strand: Option<String>,
+    },
+    /// Worker is in a knot state
+    Knot {
+        reason: String,
+    },
+}
+
+/// Bead representation
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Bead {
+    pub id: String,
+    pub title: String,
+    pub status: BeadStatus,
+    pub priority: i64,
+    pub issue_type: BeadType,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+    pub created_by: String,
+    pub dependencies: Vec<String>,
+}
+
+/// Bead status
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub enum BeadStatus {
+    Open,
+    Closed,
+}
+
+/// Bead type/issue type
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub enum BeadType {
+    Task,
+    Bug,
+    Epic,
+    Genesis,
+    Review,
+    Fix,
+}
+
+/// Control request over Unix socket
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum ControlRequest {
+    Status { project: Option<String> },
+}
+
+/// Control response over Unix socket
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub enum ControlResponse {
+    Status(StatusResponse),
+    Error { message: String },
+}
+
+/// Project status for CLI display
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ProjectStatus {
+    pub name: String,
+    pub path: String,
+    pub active_beads: usize,
+    pub workers: usize,
+    pub runtime_state: Option<String>,
+    pub runtime_error: Option<String>,
+}
+
+/// Status response for CLI
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StatusResponse {
+    pub daemon_running: bool,
+    pub uptime_secs: u64,
+    pub projects: Vec<ProjectStatus>,
+}
+
 use axum::{
     routing::get,
     Json, Router,
 };
-use hoop_schema::{Bead, ControlRequest, ControlResponse, HealthResponse, ProjectStatus, StatusResponse};
+use hoop_schema::HealthResponse;
 use hoop_ui::AssetsHandler;
 use shutdown::{DbCheckpointHandle, ShutdownCoordinator, SocketCleanupHandle};
 use std::sync::Arc;
@@ -34,6 +117,7 @@ use std::{
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt},
     net::UnixListener,
+    signal,
     sync::broadcast,
     time::Instant,
 };
