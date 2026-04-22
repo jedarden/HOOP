@@ -11,8 +11,10 @@ pub mod events;
 pub mod fleet;
 pub mod heartbeats;
 pub mod metrics;
+pub mod projects;
 pub mod sessions;
 pub mod shutdown;
+pub mod supervisor;
 pub mod ws;
 
 use axum::{
@@ -68,6 +70,9 @@ pub struct DaemonState {
     pub beads: Arc<std::sync::RwLock<Vec<Bead>>>,
     pub bead_tx: broadcast::Sender<ws::BeadData>,
     pub shutdown: Arc<ShutdownCoordinator>,
+    pub supervisor: Arc<supervisor::ProjectSupervisor>,
+    pub projects: Arc<std::sync::RwLock<Vec<ws::ProjectCardData>>>,
+    pub config_status_tx: broadcast::Sender<ws::ConfigStatusData>,
 }
 
 /// Health check endpoint handler
@@ -110,19 +115,37 @@ async fn handle_control_socket(
 
         let response = match serde_json::from_str::<ControlRequest>(&line.trim()) {
             Ok(ControlRequest::Status { project }) => {
+                let runtimes = state.supervisor.snapshot().await;
+                let projects = if let Some(proj) = project {
+                    runtimes
+                        .into_iter()
+                        .filter(|r| r.project_name == proj)
+                        .map(|r| ProjectStatus {
+                            name: r.project_name,
+                            path: r.project_path.display().to_string(),
+                            active_beads: r.bead_count,
+                            workers: 0, // TODO: track workers per project
+                            runtime_state: Some(format!("{:?}", r.state)),
+                            runtime_error: r.state.error().map(|e| e.to_string()),
+                        })
+                        .collect()
+                } else {
+                    runtimes
+                        .into_iter()
+                        .map(|r| ProjectStatus {
+                            name: r.project_name,
+                            path: r.project_path.display().to_string(),
+                            active_beads: r.bead_count,
+                            workers: 0,
+                            runtime_state: Some(format!("{:?}", r.state)),
+                            runtime_error: r.state.error().map(|e| e.to_string()),
+                        })
+                        .collect()
+                };
                 let status = StatusResponse {
                     daemon_running: true,
                     uptime_secs: state.started_at.elapsed().as_secs(),
-                    projects: if let Some(proj) = project {
-                        vec![ProjectStatus {
-                            name: proj.clone(),
-                            path: format!("/home/coding/{}", proj),
-                            active_beads: 0,
-                            workers: 0,
-                        }]
-                    } else {
-                        vec![]
-                    },
+                    projects,
                 };
                 ControlResponse::Status(status)
             }
@@ -209,6 +232,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     }
     info!("Startup audit passed");
 
+    // Validate zero-write invariant at startup
+    br_verbs::validate_zero_write_invariant();
+
     // Initialize fleet.db
     info!("Initializing fleet.db...");
     if let Err(e) = fleet::init_fleet_db() {
@@ -233,19 +259,81 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     // Initialize bead event broadcast channel
     let (bead_tx, _) = broadcast::channel::<ws::BeadData>(256);
 
-    // Initialize session tailer for current workspace
-    let mut session_tailer = sessions::SessionTailer::new(sessions::SessionTailerConfig {
-        claude_projects_dir: dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(".claude")
-            .join("projects"),
-        project_path: Some(PathBuf::from(".")), // Current workspace
-        discovery_concurrency: 16,
-        poll_interval_secs: 5,
-    })?;
-    session_tailer.start()?;
+    // Initialize config status broadcast channel
+    let (config_status_tx, _) = broadcast::channel::<ws::ConfigStatusData>(64);
 
-    // Spawn task to forward session events to the worker registry
+    // Initialize shared beads store
+    let beads: Arc<std::sync::RwLock<Vec<Bead>>> = Arc::new(std::sync::RwLock::new(Vec::new()));
+
+    // Initialize shutdown coordinator (needed for supervisor)
+    let shutdown_coordinator = Arc::new(ShutdownCoordinator::new());
+    let mut shutdown_rx = shutdown_coordinator.subscribe();
+
+    // Initialize project supervisor
+    info!("Initializing project supervisor...");
+    let supervisor = Arc::new(supervisor::ProjectSupervisor::new(
+        broadcast::channel(256).0, // bead events (internal)
+        session_tx.clone(),
+        worker_registry.clone(),
+        beads.clone(),
+        shutdown_coordinator.clone(),
+    ));
+
+    // Start projects watcher
+    let mut projects_watcher = projects::ProjectsWatcher::new()?;
+    projects_watcher.start()?;
+
+    // Initial reconcile with current projects config
+    let initial_config = projects_watcher.config().await;
+    if let Err(e) = supervisor.reconcile(&initial_config).await {
+        warn!("Initial project reconcile failed: {}", e);
+    }
+
+    // Spawn task to handle projects config changes
+    let supervisor_for_reconcile = supervisor.clone();
+    let config_tx_for_reload = config_status_tx.clone();
+    tokio::spawn(async move {
+        let mut rx = projects_watcher.subscribe();
+        while let Ok(event) = rx.recv().await {
+            match event {
+                projects::ProjectsEvent::ConfigReloaded { config } => {
+                    info!("Projects configuration reloaded, reconciling runtimes");
+                    if let Err(e) = supervisor_for_reconcile.reconcile(&config).await {
+                        error!("Failed to reconcile runtimes: {}", e);
+                    }
+                    // Broadcast valid config status
+                    let _ = config_tx_for_reload.send(ws::ConfigStatusData {
+                        valid: true,
+                        error: None,
+                    });
+                }
+                projects::ProjectsEvent::ConfigError { error } => {
+                    warn!("Projects configuration error: {}", error.message);
+                    // Broadcast config error
+                    let _ = config_tx_for_reload.send(ws::ConfigStatusData {
+                        valid: false,
+                        error: Some(ws::ConfigErrorData {
+                            message: error.message.clone(),
+                            line: error.line,
+                            col: error.col,
+                        }),
+                    });
+                }
+            }
+        }
+    });
+
+    // Forward bead events from supervisor to WebSocket broadcast
+    let bead_tx_clone = bead_tx.clone();
+    tokio::spawn(async move {
+        let mut rx = supervisor.subscribe_status();
+        while let Ok(status) = rx.recv().await {
+            // Runtime status updates - could be used for UI project cards
+            debug!("Project runtime status update: {} - {:?}", status.project_name, status.state);
+        }
+    });
+
+    // Forward session events from supervisor to worker registry
     let registry_for_sessions = worker_registry.clone();
     tokio::spawn(async move {
         let mut rx = session_tx.subscribe();
@@ -259,45 +347,6 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                 }
                 sessions::SessionEvent::Error(e) => {
                     error!("Session tailer error: {}", e);
-                }
-            }
-        }
-    });
-
-    // Initialize bead reader for current workspace
-    let mut bead_reader = beads::BeadReader::new(beads::BeadReaderConfig {
-        workspace_path: PathBuf::from("."),
-    })?;
-    bead_reader.start()?;
-    let beads: Arc<std::sync::RwLock<Vec<Bead>>> = Arc::new(std::sync::RwLock::new(Vec::new()));
-
-    // Spawn task to handle bead events
-    let beads_clone = beads.clone();
-    let bead_tx_clone = bead_tx.clone();
-    tokio::spawn(async move {
-        let mut rx = bead_reader.subscribe();
-        while let Ok(event) = rx.recv().await {
-            match event {
-                beads::BeadEvent::BeadsUpdated { beads: new_beads } => {
-                    *beads_clone.write().unwrap() = new_beads.clone();
-                    // Broadcast bead updates
-                    for bead in &new_beads {
-                        let bead_data = ws::BeadData {
-                            id: bead.id.clone(),
-                            title: bead.title.clone(),
-                            status: format!("{:?}", bead.status).to_lowercase(),
-                            priority: bead.priority,
-                            issue_type: format!("{:?}", bead.issue_type).to_lowercase(),
-                            created_at: bead.created_at.to_rfc3339(),
-                            updated_at: bead.updated_at.to_rfc3339(),
-                            created_by: bead.created_by.clone(),
-                            dependencies: bead.dependencies.clone(),
-                        };
-                        let _ = bead_tx_clone.send(bead_data);
-                    }
-                }
-                beads::BeadEvent::Error(e) => {
-                    error!("Bead reader error: {}", e);
                 }
             }
         }
@@ -357,10 +406,6 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         }
     });
 
-    // Initialize shutdown coordinator
-    let shutdown_coordinator = Arc::new(ShutdownCoordinator::new());
-    let mut shutdown_rx = shutdown_coordinator.subscribe();
-
     let state = DaemonState {
         config: config.clone(),
         started_at: Instant::now(),
@@ -368,6 +413,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         beads,
         bead_tx,
         shutdown: shutdown_coordinator.clone(),
+        supervisor,
+        projects: Arc::new(std::sync::RwLock::new(Vec::new())),
+        config_status_tx,
     };
 
     let app = router().with_state(state.clone());

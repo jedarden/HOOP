@@ -154,6 +154,37 @@ pub struct StreamingContentData {
     pub timestamp: u64,
 }
 
+/// Project card data sent to the frontend overview page
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectCardData {
+    pub name: String,
+    pub label: String,
+    pub color: String,
+    pub path: String,
+    pub degraded: bool,
+}
+
+/// Configuration error details
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfigErrorData {
+    /// Human-readable error message
+    pub message: String,
+    /// Line number where the error occurred (1-indexed)
+    pub line: usize,
+    /// Column number where the error occurred (1-indexed)
+    pub col: usize,
+}
+
+/// Configuration status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfigStatusData {
+    /// True if the configuration is valid
+    pub valid: bool,
+    /// Error details if invalid
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<ConfigErrorData>,
+}
+
 /// Worker state for display (combines WorkerState with additional info)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
@@ -187,6 +218,10 @@ pub struct WsEvent {
     pub conversation: Option<ConversationData>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub streaming: Option<StreamingContentData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub projects: Option<Vec<ProjectCardData>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config_status: Option<ConfigStatusData>,
 }
 
 impl WsEvent {
@@ -199,6 +234,8 @@ impl WsEvent {
             conversations: None,
             conversation: None,
             streaming: None,
+            projects: None,
+            config_status: None,
         }
     }
 
@@ -211,6 +248,8 @@ impl WsEvent {
             conversations: None,
             conversation: None,
             streaming: None,
+            projects: None,
+            config_status: None,
         }
     }
 
@@ -223,6 +262,8 @@ impl WsEvent {
             conversations: None,
             conversation: None,
             streaming: None,
+            projects: None,
+            config_status: None,
         }
     }
 
@@ -235,6 +276,8 @@ impl WsEvent {
             conversations: Some(conversations),
             conversation: None,
             streaming: None,
+            projects: None,
+            config_status: None,
         }
     }
 
@@ -247,6 +290,8 @@ impl WsEvent {
             conversations: None,
             conversation: Some(conversation),
             streaming: None,
+            projects: None,
+            config_status: None,
         }
     }
 
@@ -259,6 +304,36 @@ impl WsEvent {
             conversations: None,
             conversation: None,
             streaming: Some(data),
+            projects: None,
+            config_status: None,
+        }
+    }
+
+    /// Create a projects snapshot event
+    pub fn projects_snapshot(projects: Vec<ProjectCardData>) -> Self {
+        Self {
+            worker: None,
+            workers: None,
+            beads: None,
+            conversations: None,
+            conversation: None,
+            streaming: None,
+            projects: Some(projects),
+            config_status: None,
+        }
+    }
+
+    /// Create a config status event
+    pub fn config_status(status: ConfigStatusData) -> Self {
+        Self {
+            worker: None,
+            workers: None,
+            beads: None,
+            conversations: None,
+            conversation: None,
+            streaming: None,
+            projects: None,
+            config_status: Some(status),
         }
     }
 }
@@ -355,11 +430,16 @@ pub async fn ws_handler(
 
 /// Handle a WebSocket connection
 async fn handle_socket(socket: WebSocket, state: DaemonState) {
+    // Register this connection with the shutdown coordinator for tracking
+    let _conn_token = state.shutdown.register_connection();
+
     let (mut sender, mut receiver) = socket.split();
     let registry = state.worker_registry.clone();
     let mut monitor_rx = registry.subscribe();
     let mut bead_rx = state.bead_tx.subscribe();
     let mut session_rx = registry.subscribe_sessions();
+    let mut config_status_rx = state.config_status_tx.subscribe();
+    let mut shutdown_rx = state.shutdown.subscribe();
 
     // Send initial snapshots
     let worker_snapshot = registry.snapshot().await;
@@ -384,6 +464,18 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         if let Ok(json) = serde_json::to_string(&WsEvent::conversations_snapshot(convos)) {
             if sender.send(Message::Text(json)).await.is_err() {
                 return;
+            }
+        }
+    }
+
+    // Send projects snapshot
+    {
+        let projects = state.projects.read().unwrap().clone();
+        if !projects.is_empty() {
+            if let Ok(json) = serde_json::to_string(&WsEvent::projects_snapshot(projects)) {
+                if sender.send(Message::Text(json)).await.is_err() {
+                    return;
+                }
             }
         }
     }
@@ -550,6 +642,22 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
                     break;
                 }
                 _ => {}
+            }
+        }
+    });
+
+    // Handle shutdown: send close frame when NotifyClients phase is received
+    let shutdown_task = tokio::spawn(async move {
+        use crate::shutdown::ShutdownPhase;
+        while let Ok(phase) = shutdown_rx.recv().await {
+            if phase == ShutdownPhase::NotifyClients {
+                debug!("Shutdown: sending close frame to WebSocket client");
+                // Send a close frame with normal closure (1000)
+                let _ = sender.send(Message::Close(Some(axum::extract::ws::CloseFrame {
+                    code: axum::extract::ws::close_code::NORMAL,
+                    reason: "Server shutting down".into(),
+                }))).await;
+                break;
             }
         }
     });
