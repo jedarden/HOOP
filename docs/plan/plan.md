@@ -47,9 +47,18 @@ This is a deliberate narrowing of HOOP's original scope. Earlier drafts had HOOP
 
 - **Host:** Hetzner EX44-class. Bare metal, long-lived, Tailscale-only.
 - **Workspaces:** `~/` holds 5–25 repos. Each has a `.beads/` directory; git worktrees live under `.worktrees/`; some may carry a `fleet.yaml` describing NEEDLE's worker pool (HOOP reads it, doesn't act on it).
-- **Tooling:** `br` CLI in PATH. Five CLI adapters installed and credentialed (operator's cache, not HOOP's). NEEDLE installed and running its own workers through its own supervision. git 2.5+.
+- **The `br` binary** — **beads_rust** by [Jeffrey Emanuel (dicklesworthstone)](https://github.com/dicklesworthstone/beads_rust), installed at `~/.local/bin/br`. HOOP treats `br` as its sole bead API. Every bead read goes through `br` read verbs (e.g. `br list --json`, `br get <id> --json`); every bead write HOOP performs is `br create --json <payload>`. HOOP never opens `.beads/beads.db` directly, never writes to `.beads/beads.jsonl` directly, and never links against bead library code. Shelling out is deliberate — it pins HOOP to the `br` surface area, lets `br` evolve independently, and keeps HOOP honest about the "one write path" invariant.
+- **Other tooling:** Five CLI adapters installed and credentialed (operator's cache, not HOOP's). NEEDLE installed and running its own workers through its own supervision. git 2.5+.
 - **Process model:** `hoop serve` as a systemd user service on a Tailscale hostname. No tmux spawning by HOOP.
 - **Parallel workloads:** NEEDLE fleets in tmux (HOOP-observed); ad-hoc CLI sessions in separate terminals (HOOP-observed); everything else (HOOP-ignored).
+
+### 2.1. On the `br` dependency
+
+`br` is upstream-authoritative for bead semantics. HOOP tracks compatibility by pinning a *minimum* `br` version in config; on startup audit, HOOP runs `br --version`, compares against the pinned minimum, and refuses to start (or starts with the bead-creation surface disabled) if the binary is missing or too old. Version strings get logged so regressions are visible.
+
+This environment currently runs a local fork of beads_rust with a rusqlite compatibility shim (replacing the upstream FrankenSQLite backend that had recurring index corruption — upstream issue `dicklesworthstone/beads_rust#171`). HOOP is agnostic to this: whatever `br` binary is in PATH, that's what HOOP shells out to. If and when the upstream fork stabilizes and the shim is dropped, HOOP needs no changes.
+
+HOOP does not bundle or vendor `br`. Installing HOOP does not install `br`; the startup audit tells the operator to install it if missing. This keeps the release pipelines for the two projects fully independent.
 
 What changes in a multi-project host vs single-workspace: session discovery has to be scoped per project, cost visibility has to bucket per project, bead-creation targets have to be explicit. This plan treats multi-project correctness as the primary design pressure.
 
@@ -258,6 +267,7 @@ Same as before: first message prefix `[needle:<worker>:<bead>:<strand>]` → fle
 5. NEEDLE hooks documented (prompt tag, events append, heartbeat) — requires NEEDLE cooperation. HOOP is read-only on these files.
 6. Startup audit: `br`, project's `.beads/` accessibility, CLI session directories readable.
 7. Zero-write invariant enforced in code (no code path that calls `br` with anything other than read verbs in phase 1).
+8. `br` dependency audit: `br --version` run on startup, pinned minimum version checked, friendly diagnostic on mismatch or missing binary.
 
 **Non-goals:** Multi-project, any write path, cost, graph views.
 
@@ -358,7 +368,7 @@ Same as before: first message prefix `[needle:<worker>:<bead>:<strand>]` → fle
    - Attachments (from phase 3)
    - Preview panel shows rendered markdown + computed dep graph deltas
 2. **Template library:** reusable bead templates stored at `~/.hoop/templates/` (shared across projects) and `<project>/.hoop/templates/` (project-scoped). "Review bead for PR #X", "fix bead from incident Y", etc.
-3. **Submit flow:** draft → preview → `br create --json <payload>` against project cwd → audit row → event emitted → UI redirects to the new bead's view.
+3. **Submit flow:** draft → preview → `br create --json <payload>` (via subprocess in the project's cwd) → audit row → event emitted → UI redirects to the new bead's view. HOOP never opens the bead database directly; the authoritative write is always `br`'s own atomic insert into the project's `.beads/beads.db` + JSONL append.
 4. **Chat-driven drafting** (precursor to the full Mayor in phase 5):
    - Lightweight chat pane per project (Haiku-class, not the Mayor)
    - Takes natural language, produces a draft
@@ -455,15 +465,16 @@ Make HOOP pleasant to run for the long haul.
 | Layer | Choice | Why |
 |---|---|---|
 | Daemon language | Rust | Matches NEEDLE direction; single-binary distribution |
+| **Bead API** | **`br` (beads_rust) by Jeffrey Emanuel — shell-out subprocess** | Upstream-authoritative for bead semantics; HOOP never touches `.beads/` storage directly; version-pinned at startup |
 | HTTP / WS server | `axum` | Standard async stack; embedded static |
 | File watching | `notify` | Cross-platform; reliable |
 | UI | React + Vite + TypeScript + Jotai | Matches team skill; keyed atoms fit streaming split |
 | Syntax highlighting | `syntect` (server) + Shiki (client) | Server-rendered for large files; client for interactive |
 | Schema | JSON Schema draft-07 + `typify` + `json-schema-to-typescript` | One source of truth |
-| Storage (HOOP) | SQLite (audit log + conversation index only) | Small; portable |
+| Storage (HOOP) | SQLite (audit log + conversation index only) | Small; portable; never holds bead state |
 | Event transport (local) | File tail (`notify`) | Cheapest reliable option |
 | Mayor host | Claude Code via persistent session | Matches how operator already uses Claude elsewhere |
-| Mayor context | MCP server exposing HOOP's read APIs + one write (`create_bead`) | Clean auth boundary |
+| Mayor context | MCP server exposing HOOP's read APIs + one write (`create_bead` → `br create`) | Clean auth boundary |
 | Audio transcription | Whisper via local model or Anthropic's transcription endpoint | Multimodal input searchability |
 | Service supervisor | systemd (user-scope) | Standard |
 | Auth | Tailscale identity via whois | Matches environment |
