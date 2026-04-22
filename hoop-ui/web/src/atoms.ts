@@ -25,7 +25,7 @@ export interface MessageUsage {
 // A single message in a session
 export interface SessionMessage {
   role: 'user' | 'assistant' | 'system';
-  content: string;
+  content: string | { [key: string]: any } | null;
   usage?: MessageUsage;
   timestamp?: string;
 }
@@ -121,27 +121,11 @@ export const workersAtom = atom<WorkerData[]>([]);
 export const beadsAtom = atom<BeadData[]>([]);
 export const wsConnectedAtom = atom<boolean>(false);
 
-// Parse [needle:...] prefix to extract worker metadata
-export function parseNeedlePrefix(content: string): { kind: SessionKind; worker_metadata?: WorkerMetadata; cleanContent: string } {
-  const needlePrefix = content.match(/^\[needle:([^\]]+)\]/);
-  if (!needlePrefix) {
-    return { kind: 'ad-hoc', cleanContent: content };
-  }
-
-  const parts = needlePrefix[1].split(':');
-  if (parts.length < 2) {
-    return { kind: 'ad-hoc', cleanContent: content };
-  }
-
-  const worker = parts[0];
-  const bead = parts[1];
-  const strand = parts[2] || null;
-
-  return {
-    kind: 'worker',
-    worker_metadata: { worker, bead, strand },
-    cleanContent: content.slice(needlePrefix[0].length).trim()
-  };
+// Format content for display (handles string and object content)
+export function formatContent(content: string | { [key: string]: any } | null): string {
+  if (content === null) return '';
+  if (typeof content === 'string') return content;
+  return JSON.stringify(content, null, 2);
 }
 
 // Get badge display for session kind

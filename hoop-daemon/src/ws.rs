@@ -4,6 +4,7 @@
 //! to connected web UI clients.
 
 use crate::heartbeats::{MonitorEvent, WorkerHeartbeat, WorkerLiveness};
+use crate::sessions::{SessionEvent, SessionTailer};
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
@@ -13,7 +14,7 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use futures_util::{stream::StreamExt, SinkExt};
-use hoop_schema::{Bead, WorkerState};
+use hoop_schema::{Bead, MessageUsage, ParsedSession, SessionKind, SessionMessage, WorkerState};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
@@ -45,6 +46,114 @@ pub struct BeadData {
     pub dependencies: Vec<String>,
 }
 
+/// Message usage sent to the frontend
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MessageUsageData {
+    pub input_tokens: u64,
+    pub output_tokens: u64,
+    pub cache_read_tokens: u64,
+    pub cache_write_tokens: u64,
+}
+
+impl From<MessageUsage> for MessageUsageData {
+    fn from(u: MessageUsage) -> Self {
+        Self {
+            input_tokens: u.input_tokens,
+            output_tokens: u.output_tokens,
+            cache_read_tokens: u.cache_read_tokens,
+            cache_write_tokens: u.cache_write_tokens,
+        }
+    }
+}
+
+/// Session message sent to the frontend
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionMessageData {
+    pub role: String,
+    pub content: serde_json::Value,
+    pub usage: Option<MessageUsageData>,
+    pub timestamp: Option<String>,
+}
+
+impl From<SessionMessage> for SessionMessageData {
+    fn from(m: SessionMessage) -> Self {
+        Self {
+            role: m.role,
+            content: m.content,
+            usage: m.usage.map(MessageUsageData::from),
+            timestamp: m.timestamp,
+        }
+    }
+}
+
+/// Worker metadata for worker sessions
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkerMetadataData {
+    pub worker: String,
+    pub bead: String,
+    pub strand: Option<String>,
+}
+
+/// Conversation data sent to the frontend
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationData {
+    pub id: String,
+    pub session_id: String,
+    pub provider: String,
+    pub kind: String,
+    pub worker_metadata: Option<WorkerMetadataData>,
+    pub cwd: String,
+    pub title: String,
+    pub messages: Vec<SessionMessageData>,
+    pub total_tokens: u64,
+    pub created_at: String,
+    pub updated_at: String,
+    pub complete: bool,
+    pub file_path: String,
+}
+
+impl From<ParsedSession> for ConversationData {
+    fn from(s: ParsedSession) -> Self {
+        let (worker_metadata, kind_str) = match &s.kind {
+            SessionKind::Operator => (None, "operator".to_string()),
+            SessionKind::Dictated => (None, "dictated".to_string()),
+            SessionKind::Worker { worker, bead, strand } => (
+                Some(WorkerMetadataData {
+                    worker: worker.clone(),
+                    bead: bead.clone(),
+                    strand: strand.clone(),
+                }),
+                "worker".to_string(),
+            ),
+            SessionKind::AdHoc => (None, "ad-hoc".to_string()),
+        };
+
+        Self {
+            id: s.id,
+            session_id: s.session_id,
+            provider: s.provider,
+            kind: kind_str,
+            worker_metadata,
+            cwd: s.cwd,
+            title: s.title,
+            messages: s.messages.into_iter().map(SessionMessageData::from).collect(),
+            total_tokens: s.total_tokens(),
+            created_at: s.created_at.to_rfc3339(),
+            updated_at: s.updated_at.to_rfc3339(),
+            complete: s.complete,
+            file_path: s.file_path,
+        }
+    }
+}
+
+/// Streaming content update
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamingContentData {
+    pub conversation_id: String,
+    pub content: String,
+    pub timestamp: u64,
+}
+
 /// Worker state for display (combines WorkerState with additional info)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "state", rename_all = "snake_case")]
@@ -72,6 +181,12 @@ pub struct WsEvent {
     pub workers: Option<Vec<WorkerData>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub beads: Option<Vec<BeadData>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conversations: Option<Vec<ConversationData>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conversation: Option<ConversationData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub streaming: Option<StreamingContentData>,
 }
 
 impl WsEvent {
@@ -81,6 +196,9 @@ impl WsEvent {
             worker: Some(worker),
             workers: None,
             beads: None,
+            conversations: None,
+            conversation: None,
+            streaming: None,
         }
     }
 
@@ -90,6 +208,9 @@ impl WsEvent {
             worker: None,
             workers: Some(workers),
             beads: None,
+            conversations: None,
+            conversation: None,
+            streaming: None,
         }
     }
 
@@ -99,6 +220,45 @@ impl WsEvent {
             worker: None,
             workers: None,
             beads: Some(beads),
+            conversations: None,
+            conversation: None,
+            streaming: None,
+        }
+    }
+
+    /// Create a conversations snapshot event
+    fn conversations_snapshot(conversations: Vec<ConversationData>) -> Self {
+        Self {
+            worker: None,
+            workers: None,
+            beads: None,
+            conversations: Some(conversations),
+            conversation: None,
+            streaming: None,
+        }
+    }
+
+    /// Create a conversation update event
+    fn conversation_update(conversation: ConversationData) -> Self {
+        Self {
+            worker: None,
+            workers: None,
+            beads: None,
+            conversations: None,
+            conversation: Some(conversation),
+            streaming: None,
+        }
+    }
+
+    /// Create a streaming content event
+    fn streaming_content(data: StreamingContentData) -> Self {
+        Self {
+            worker: None,
+            workers: None,
+            beads: None,
+            conversations: None,
+            conversation: None,
+            streaming: Some(data),
         }
     }
 }
@@ -107,14 +267,18 @@ impl WsEvent {
 #[derive(Debug, Clone)]
 pub struct WorkerRegistry {
     workers: Arc<RwLock<Vec<WorkerData>>>,
+    conversations: Arc<RwLock<Vec<ConversationData>>>,
     monitor: broadcast::Sender<MonitorEvent>,
+    sessions: broadcast::Sender<SessionEvent>,
 }
 
 impl WorkerRegistry {
-    pub fn new(monitor: broadcast::Sender<MonitorEvent>) -> Self {
+    pub fn new(monitor: broadcast::Sender<MonitorEvent>, sessions: broadcast::Sender<SessionEvent>) -> Self {
         Self {
             workers: Arc::new(RwLock::new(Vec::new())),
+            conversations: Arc::new(RwLock::new(Vec::new())),
             monitor,
+            sessions,
         }
     }
 
@@ -123,51 +287,46 @@ impl WorkerRegistry {
         self.workers.read().await.clone()
     }
 
-    /// Update a single worker's data
-    pub async fn update_worker(&self, heartbeat: WorkerHeartbeat, liveness: WorkerLiveness) {
-        let mut workers = self.workers.write().await;
-        let now = Utc::now();
-        let heartbeat_age = now.signed_duration_since(heartbeat.ts).num_seconds();
+    /// Get current snapshot of all conversations
+    pub async fn conversations_snapshot(&self) -> Vec<ConversationData> {
+        self.conversations.read().await.clone()
+    }
 
-        let display_state = match &heartbeat.state {
-            WorkerState::Executing { bead, adapter, .. } => WorkerDisplayState::Executing {
-                bead: bead.clone(),
-                adapter: adapter.clone(),
-                model: None, // TODO: extract from dispatch events
-            },
-            WorkerState::Idle { last_strand } => WorkerDisplayState::Idle {
-                last_strand: last_strand.clone(),
-            },
-            WorkerState::Knot { reason } => WorkerDisplayState::Knot {
-                reason: reason.clone(),
-            },
-        };
+    /// Update conversations with new batch
+    pub async fn update_conversations(&self, sessions: Vec<ParsedSession>) {
+        let mut convos = self.conversations.write().await;
+        let new_data: Vec<ConversationData> = sessions.into_iter().map(ConversationData::from).collect();
 
-        let worker_data = WorkerData {
-            worker: heartbeat.worker.clone(),
-            state: display_state,
-            liveness,
-            last_heartbeat: heartbeat.ts,
-            heartbeat_age_secs: heartbeat_age,
-        };
-
-        // Update or insert
-        if let Some(existing) = workers.iter_mut().find(|w| w.worker == heartbeat.worker) {
-            *existing = worker_data;
-        } else {
-            workers.push(worker_data);
+        // Merge with existing: update existing, add new
+        for new_convo in &new_data {
+            if let Some(existing) = convos.iter_mut().find(|c| c.id == new_convo.id) {
+                *existing = new_convo.clone();
+            } else {
+                convos.push(new_convo.clone());
+            }
         }
     }
 
-    /// Remove a worker (when it's been dead for a while)
-    pub async fn remove_worker(&self, worker_name: &str) {
-        let mut workers = self.workers.write().await;
-        workers.retain(|w| w.worker != worker_name);
+    /// Update a single conversation
+    pub async fn update_conversation(&self, session: ParsedSession) {
+        let mut convos = self.conversations.write().await;
+        let data = ConversationData::from(session);
+
+        if let Some(existing) = convos.iter_mut().find(|c| c.id == data.id) {
+            *existing = data;
+        } else {
+            convos.push(data);
+        }
     }
 
     /// Subscribe to monitor events
     pub fn subscribe(&self) -> broadcast::Receiver<MonitorEvent> {
         self.monitor.subscribe()
+    }
+
+    /// Subscribe to session events
+    pub fn subscribe_sessions(&self) -> broadcast::Receiver<SessionEvent> {
+        self.sessions.subscribe()
     }
 }
 
@@ -200,6 +359,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
     let registry = state.worker_registry.clone();
     let mut monitor_rx = registry.subscribe();
     let mut bead_rx = state.bead_tx.subscribe();
+    let mut session_rx = registry.subscribe_sessions();
 
     // Send initial snapshots
     let worker_snapshot = registry.snapshot().await;
@@ -215,6 +375,16 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
     if let Ok(json) = serde_json::to_string(&WsEvent::beads_snapshot(bead_data)) {
         if sender.send(Message::Text(json)).await.is_err() {
             return;
+        }
+    }
+
+    // Send conversations snapshot
+    let convos = registry.conversations_snapshot().await;
+    if !convos.is_empty() {
+        if let Ok(json) = serde_json::to_string(&WsEvent::conversations_snapshot(convos)) {
+            if sender.send(Message::Text(json)).await.is_err() {
+                return;
+            }
         }
     }
 
@@ -330,6 +500,39 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     });
 
+    // Spawn task to forward session events to the WebSocket
+    let registry_for_sessions = registry.clone();
+    let session_task = tokio::spawn(async move {
+        while let Ok(event) = session_rx.recv().await {
+            match event {
+                SessionEvent::ConversationsUpdated { sessions } => {
+                    // Update registry and send snapshot
+                    registry_for_sessions.update_conversations(sessions.clone()).await;
+                    let data: Vec<ConversationData> = sessions.into_iter().map(ConversationData::from).collect();
+                    if let Ok(json) = serde_json::to_string(&WsEvent::conversations_snapshot(data)) {
+                        if sender.send(Message::Text(json)).await.is_err() {
+                            break;
+                        }
+                    }
+                }
+                SessionEvent::SessionBound { id, file_path: _ } => {
+                    // Send update for the bound session
+                    let convos = registry_for_sessions.conversations_snapshot().await;
+                    if let Some(convo) = convos.iter().find(|c| c.id == id) {
+                        if let Ok(json) = serde_json::to_string(&WsEvent::conversation_update(convo.clone())) {
+                            if sender.send(Message::Text(json)).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                }
+                SessionEvent::Error(e) => {
+                    warn!("Session error: {}", e);
+                }
+            }
+        }
+    });
+
     // Handle incoming messages (just ping/pong for now)
     let recv_task = tokio::spawn(async move {
         while let Some(msg) = receiver.next().await {
@@ -355,6 +558,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
     tokio::select! {
         _ = monitor_task => {},
         _ = bead_task => {},
+        _ = session_task => {},
         _ = recv_task => {},
     }
 

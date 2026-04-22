@@ -22,6 +22,8 @@
   --worker-dead-border: #ea4335;
   --worker-knot-bg: #fce8e6;
   --worker-knot-border: #ea4335;
+  --worker-live-bg: #e6f4ea;
+  --worker-live-border: #34a853;
 }
 
 * {

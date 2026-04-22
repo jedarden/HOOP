@@ -208,11 +208,45 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     heartbeat_monitor.start()?;
     let heartbeat_tx = heartbeat_monitor.subscribe();
 
+    // Initialize session event broadcast channel
+    let (session_tx, _) = broadcast::channel::<sessions::SessionEvent>(256);
+
     // Initialize worker registry
-    let worker_registry = Arc::new(ws::WorkerRegistry::new(heartbeat_tx));
+    let worker_registry = Arc::new(ws::WorkerRegistry::new(heartbeat_tx, session_tx.clone()));
 
     // Initialize bead event broadcast channel
     let (bead_tx, _) = broadcast::channel::<ws::BeadData>(256);
+
+    // Initialize session tailer for current workspace
+    let mut session_tailer = sessions::SessionTailer::new(sessions::SessionTailerConfig {
+        claude_projects_dir: dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(".claude")
+            .join("projects"),
+        project_path: Some(PathBuf::from(".")), // Current workspace
+        discovery_concurrency: 16,
+        poll_interval_secs: 5,
+    })?;
+    session_tailer.start()?;
+
+    // Spawn task to forward session events to the worker registry
+    let registry_for_sessions = worker_registry.clone();
+    tokio::spawn(async move {
+        let mut rx = session_tx.subscribe();
+        while let Ok(event) = rx.recv().await {
+            match event {
+                sessions::SessionEvent::ConversationsUpdated { sessions } => {
+                    registry_for_sessions.update_conversations(sessions).await;
+                }
+                sessions::SessionEvent::SessionBound { .. } => {
+                    // Registry will handle this via the WebSocket
+                }
+                sessions::SessionEvent::Error(e) => {
+                    error!("Session tailer error: {}", e);
+                }
+            }
+        }
+    });
 
     // Initialize bead reader for current workspace
     let mut bead_reader = beads::BeadReader::new(beads::BeadReaderConfig {

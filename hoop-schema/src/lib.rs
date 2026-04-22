@@ -1,18 +1,36 @@
 //! HOOP schema definitions
 //!
 //! This crate provides the shared data types and schemas used across HOOP.
-//! All records carry `schema_version: 1` for compatibility tracking.
-
-use chrono::DateTime;
+//! All types are generated from JSON Schema files in the `schemas/` directory
+//! using typify. Every record carries `schema_version: "1.0.0"` for compatibility tracking.
+//!
+//! ## Schema files
+//!
+//! The source of truth is the JSON Schema files in `schemas/`. To add a new type:
+//!
+//! 1. Create a JSON Schema file following draft-07
+//! 2. Include a `schema_version` property with pattern `^\d+\.\d+\.\d+$`
+//! 3. Run `cargo build` to regenerate types
+//!
+//! ## Code generation
+//!
+//! - **Rust**: Generated via typify in build.rs → `OUT_DIR/types.rs`
+//! - **TypeScript**: Generated via json-schema-to-typescript → `hoop-ui/web/src/types.gen.ts`
 
 pub mod version {
     /// Current schema version following SemVer (X.Y.Z)
-    pub const SCHEMA_VERSION: &str = "0.1.0";
+    pub const SCHEMA_VERSION: &str = "1.0.0";
 }
+
+// Include generated types
+include!(concat!(env!("OUT_DIR"), "/types.rs"));
+
+// Re-export commonly used types at the crate root
+pub use types::*;
 
 /// Base trait for all schema records
 pub trait SchemaRecord {
-    /// Returns the schema version for this record type
+    /// Returns the schema version for this record
     fn schema_version(&self) -> &'static str {
         version::SCHEMA_VERSION
     }
@@ -34,327 +52,227 @@ impl HealthResponse {
     }
 }
 
-/// Control socket request type
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "type", content = "data")]
-pub enum ControlRequest {
-    /// Get daemon status
-    Status { project: Option<String> },
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json;
 
-/// Control socket response type
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "type", content = "data")]
-pub enum ControlResponse {
-    /// Status response
-    Status(StatusResponse),
-    /// Error response
-    Error { message: String },
-}
-
-/// Status response data
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct StatusResponse {
-    pub daemon_running: bool,
-    pub uptime_secs: u64,
-    pub projects: Vec<ProjectStatus>,
-}
-
-/// Status of a single project
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct ProjectStatus {
-    pub name: String,
-    pub path: String,
-    pub active_beads: usize,
-    pub workers: usize,
-}
-
-/// NEEDLE event types written to .beads/events.jsonl
-///
-/// Events are append-only and authoritative. HOOP reads them to derive
-/// worker liveness, bead state, and cost/capacity projections.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "event", rename_all = "snake_case")]
-pub enum NeedleEvent {
-    /// Worker claimed a bead
-    Claim {
-        ts: String,
-        worker: String,
-        bead: String,
-        strand: Option<String>,
-    },
-    /// Worker dispatched a bead to an adapter
-    Dispatch {
-        ts: String,
-        worker: String,
-        bead: String,
-        strand: Option<String>,
-        adapter: String,
-        model: String,
-    },
-    /// Worker completed a bead
-    Complete {
-        ts: String,
-        worker: String,
-        bead: String,
-        strand: Option<String>,
-        outcome: String,
-        duration_ms: Option<u64>,
-        exit_code: Option<i32>,
-    },
-    /// Worker failed a bead
-    Fail {
-        ts: String,
-        worker: String,
-        bead: String,
-        strand: Option<String>,
-        reason: String,
-    },
-    /// Worker released a bead claim
-    Release {
-        ts: String,
-        worker: String,
-        bead: String,
-        reason: Option<String>,
-    },
-    /// Worker heartbeat
-    Heartbeat {
-        ts: String,
-        worker: String,
-        #[serde(flatten)]
-        state: WorkerState,
-    },
-    /// Worker timed out on a bead
-    Timeout {
-        ts: String,
-        worker: String,
-        bead: String,
-        duration_ms: u64,
-    },
-    /// Worker crashed
-    Crash {
-        ts: String,
-        worker: String,
-        bead: Option<String>,
-        signal: Option<i32>,
-    },
-    /// Unknown event type (preserves raw data)
-    #[serde(other)]
-    Unknown,
-}
-
-/// Worker state as reported in heartbeat events
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "state", rename_all = "snake_case")]
-pub enum WorkerState {
-    /// Worker is actively executing a bead
-    Executing {
-        bead: String,
-        pid: u32,
-        adapter: String,
-    },
-    /// Worker is idle, waiting for work
-    Idle {
-        last_strand: Option<String>,
-    },
-    /// Worker is in a terminal knot state
-    Knot {
-        reason: String,
-    },
-}
-
-/// Parsed event with metadata
-#[derive(Debug, Clone)]
-pub struct ParsedEvent {
-    /// The raw event data
-    pub event: NeedleEvent,
-    /// The line number in the events.jsonl file
-    pub line_number: usize,
-    /// The raw JSON string (for unknown events)
-    pub raw: String,
-}
-
-/// Session classification (from plan §1.6)
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum SessionKind {
-    /// Human ↔ agent chat (normal conversation)
-    Operator,
-    /// Voice note with Whisper transcript
-    Dictated,
-    /// NEEDLE worker's CLI session (tagged with `[needle:<worker>:<bead>:<strand>]`)
-    Worker { worker: String, bead: String, strand: Option<String> },
-    /// Direct CLI session without prefix tag
-    AdHoc,
-}
-
-/// Token usage from a single message
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct MessageUsage {
-    /// Input tokens (prompt)
-    pub input_tokens: u64,
-    /// Output tokens (completion)
-    pub output_tokens: u64,
-    /// Cache read tokens (prompt cache hits)
-    pub cache_read_tokens: u64,
-    /// Cache write tokens (new cache entries)
-    pub cache_write_tokens: u64,
-}
-
-/// A single message in a session
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct SessionMessage {
-    /// Role (user, assistant, system)
-    pub role: String,
-    /// Message content (may be text or structured for tool use)
-    pub content: serde_json::Value,
-    /// Token usage (present on assistant messages)
-    pub usage: Option<MessageUsage>,
-    /// Timestamp if available
-    pub timestamp: Option<String>,
-}
-
-/// Parsed session from CLI adapter
-#[derive(Debug, Clone)]
-pub struct ParsedSession {
-    /// Stable UI ID (UUID assigned by HOOP)
-    pub id: String,
-    /// Provider-native session ID (from CLI)
-    pub session_id: String,
-    /// Provider name (claude, codex, gemini, opencode)
-    pub provider: String,
-    /// Session classification
-    pub kind: SessionKind,
-    /// Working directory when session was created
-    pub cwd: String,
-    /// Session title (from first prompt or derived)
-    pub title: String,
-    /// Messages in the session
-    pub messages: Vec<SessionMessage>,
-    /// Total token usage across all messages
-    pub total_usage: MessageUsage,
-    /// Creation time
-    pub created_at: DateTime<chrono::Utc>,
-    /// Last update time
-    pub updated_at: DateTime<chrono::Utc>,
-    /// Whether the session is complete (process exited)
-    pub complete: bool,
-    /// Path to the session file on disk
-    pub file_path: String,
-}
-
-impl ParsedSession {
-    /// Get total tokens used (input + output + cache write)
-    pub fn total_tokens(&self) -> u64 {
-        self.total_usage.input_tokens
-            + self.total_usage.output_tokens
-            + self.total_usage.cache_write_tokens
-    }
-}
-
-/// Bead status from issues.jsonl
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum BeadStatus {
-    Open,
-    Closed,
-}
-
-/// Bead issue type from issues.jsonl
-#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum BeadType {
-    #[default]
-    Task,
-    Bug,
-    Epic,
-    #[serde(other)]
-    Unknown,
-}
-
-/// A bead from issues.jsonl (for frontend display)
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct Bead {
-    /// Bead ID (e.g., "hoop-ttb.1")
-    pub id: String,
-    /// Title
-    pub title: String,
-    /// Description (markdown content)
-    #[serde(default)]
-    pub description: String,
-    /// Status
-    pub status: BeadStatus,
-    /// Priority (0 = highest)
-    #[serde(default)]
-    pub priority: i64,
-    /// Issue type
-    #[serde(default)]
-    pub issue_type: BeadType,
-    /// Created timestamp
-    pub created_at: DateTime<chrono::Utc>,
-    /// Created by
-    #[serde(default)]
-    pub created_by: String,
-    /// Updated timestamp
-    pub updated_at: DateTime<chrono::Utc>,
-    /// Closed timestamp (if closed)
-    pub closed_at: Option<DateTime<chrono::Utc>>,
-    /// Close reason (if closed)
-    pub close_reason: Option<String>,
-    /// Source repo
-    #[serde(default = "default_source_repo")]
-    pub source_repo: String,
-    /// Dependencies
-    #[serde(default)]
-    pub dependencies: Vec<String>,
-}
-
-fn default_source_repo() -> String {
-    ".".to_string()
-}
-
-impl NeedleEvent {
-    /// Get the event timestamp
-    pub fn timestamp(&self) -> Option<&str> {
-        match self {
-            NeedleEvent::Claim { ts, .. } => Some(ts),
-            NeedleEvent::Dispatch { ts, .. } => Some(ts),
-            NeedleEvent::Complete { ts, .. } => Some(ts),
-            NeedleEvent::Fail { ts, .. } => Some(ts),
-            NeedleEvent::Release { ts, .. } => Some(ts),
-            NeedleEvent::Heartbeat { ts, .. } => Some(ts),
-            NeedleEvent::Timeout { ts, .. } => Some(ts),
-            NeedleEvent::Crash { ts, .. } => Some(ts),
-            NeedleEvent::Unknown => None,
-        }
+    /// Round-trip test: serialize → deserialize → equal
+    macro_rules! round_trip_test {
+        ($name:ident, $type:ty, $value:expr) => {
+            #[test]
+            fn $name() {
+                let original = $value;
+                let serialized =
+                    serde_json::to_string(&original).expect("Failed to serialize");
+                let deserialized: $type =
+                    serde_json::from_str(&serialized).expect("Failed to deserialize");
+                assert_eq!(
+                    original, deserialized,
+                    "Round-trip failed for {}",
+                    stringify!($type)
+                );
+            }
+        };
     }
 
-    /// Get the worker name for this event
-    pub fn worker(&self) -> Option<&str> {
-        match self {
-            NeedleEvent::Claim { worker, .. } => Some(worker),
-            NeedleEvent::Dispatch { worker, .. } => Some(worker),
-            NeedleEvent::Complete { worker, .. } => Some(worker),
-            NeedleEvent::Fail { worker, .. } => Some(worker),
-            NeedleEvent::Release { worker, .. } => Some(worker),
-            NeedleEvent::Heartbeat { worker, .. } => Some(worker),
-            NeedleEvent::Timeout { worker, .. } => Some(worker),
-            NeedleEvent::Crash { worker, .. } => Some(worker),
-            NeedleEvent::Unknown => None,
+    // Test round-trip for WorkerData
+    round_trip_test!(
+        worker_data_round_trip,
+        WorkerData,
+        WorkerData {
+            worker: "alpha".to_string(),
+            state: WorkerDisplayState::Executing {
+                bead: "bd-abc123".to_string(),
+                adapter: "claude".to_string(),
+                model: Some("opus".to_string()),
+            },
+            liveness: WorkerLiveness::Alive,
+            last_heartbeat: "2024-01-01T00:00:00Z".to_string(),
+            heartbeat_age_secs: 5,
         }
-    }
+    );
 
-    /// Get the bead ID for this event (if applicable)
-    pub fn bead(&self) -> Option<&str> {
-        match self {
-            NeedleEvent::Claim { bead, .. } => Some(bead),
-            NeedleEvent::Dispatch { bead, .. } => Some(bead),
-            NeedleEvent::Complete { bead, .. } => Some(bead),
-            NeedleEvent::Fail { bead, .. } => Some(bead),
-            NeedleEvent::Release { bead, .. } => Some(bead),
-            NeedleEvent::Heartbeat { .. } => None,
-            NeedleEvent::Timeout { bead, .. } => Some(bead),
-            NeedleEvent::Crash { bead, .. } => bead.as_deref(),
-            NeedleEvent::Unknown => None,
+    // Test round-trip for BeadData
+    round_trip_test!(
+        bead_data_round_trip,
+        BeadData,
+        BeadData {
+            id: "bd-abc123".to_string(),
+            title: "Test bead".to_string(),
+            status: "open".to_string(),
+            priority: 0,
+            issue_type: "task".to_string(),
+            created_at: "2024-01-01T00:00:00Z".to_string(),
+            updated_at: "2024-01-01T00:00:00Z".to_string(),
+            created_by: "user".to_string(),
+            dependencies: vec![],
         }
+    );
+
+    // Test round-trip for ConversationData
+    round_trip_test!(
+        conversation_data_round_trip,
+        ConversationData,
+        ConversationData {
+            id: "uuid-123".to_string(),
+            session_id: "session-456".to_string(),
+            provider: "claude".to_string(),
+            kind: "operator".to_string(),
+            worker_metadata: None,
+            cwd: "/home/coding/project".to_string(),
+            title: "Test conversation".to_string(),
+            messages: vec![],
+            total_tokens: 0,
+            created_at: "2024-01-01T00:00:00Z".to_string(),
+            updated_at: "2024-01-01T00:00:00Z".to_string(),
+            complete: false,
+            file_path: "/path/to/session.jsonl".to_string(),
+        }
+    );
+
+    // Test round-trip for WebSocketEvent
+    round_trip_test!(
+        ws_event_round_trip,
+        WebSocketEvent,
+        WebSocketEvent {
+            r#type: "worker_update".to_string(),
+            worker: None,
+            workers: None,
+            beads: None,
+            conversations: None,
+            conversation: None,
+            streaming: None,
+        }
+    );
+
+    // Test round-trip for ProjectsRegistry
+    round_trip_test!(
+        projects_registry_round_trip,
+        ProjectsRegistry,
+        ProjectsRegistry {
+            projects: vec![],
+        }
+    );
+
+    // Test round-trip for AuditRow
+    round_trip_test!(
+        audit_row_round_trip,
+        AuditRow,
+        AuditRow {
+            id: "uuid-audit".to_string(),
+            ts: "2024-01-01T00:00:00Z".to_string(),
+            actor: "user:test".to_string(),
+            kind: "bead_created".to_string(),
+            target: "bd-123".to_string(),
+            args: None,
+            result: "success".to_string(),
+            error: None,
+            schema_version: "1.0.0".to_string(),
+        }
+    );
+
+    // Test round-trip for Stitch
+    round_trip_test!(
+        stitch_round_trip,
+        Stitch,
+        Stitch {
+            id: "uuid-stitch".to_string(),
+            project: "test-project".to_string(),
+            kind: "operator".to_string(),
+            title: "Test stitch".to_string(),
+            created_by: "user".to_string(),
+            created_at: "2024-01-01T00:00:00Z".to_string(),
+            updated_at: None,
+            closed_at: None,
+            participants: vec![],
+            attachments_path: None,
+            archived: false,
+            archived_at: None,
+            worker_metadata: None,
+            parent_stitch_id: None,
+            pattern_id: None,
+            schema_version: "1.0.0".to_string(),
+        }
+    );
+
+    // Test round-trip for Pattern
+    round_trip_test!(
+        pattern_round_trip,
+        Pattern,
+        Pattern {
+            id: "uuid-pattern".to_string(),
+            title: "Test pattern".to_string(),
+            description: Some("Test description".to_string()),
+            status: "active".to_string(),
+            owner: Some("user".to_string()),
+            deadline: None,
+            parent_pattern: None,
+            created_at: "2024-01-01T00:00:00Z".to_string(),
+            updated_at: "2024-01-01T00:00:00Z".to_string(),
+            closed_at: None,
+            progress_percent: 50,
+            total_cost_usd: None,
+            duration_seconds: None,
+            schema_version: "1.0.0".to_string(),
+        }
+    );
+
+    // Test round-trip for ReflectionLedger
+    round_trip_test!(
+        reflection_ledger_round_trip,
+        ReflectionLedger,
+        ReflectionLedger {
+            id: "uuid-reflection".to_string(),
+            scope: "global".to_string(),
+            rule: "Always use snake_case".to_string(),
+            reason: "User repeatedly corrected camelCase".to_string(),
+            source_stitches: vec![],
+            status: "proposed".to_string(),
+            created_at: "2024-01-01T00:00:00Z".to_string(),
+            last_applied: None,
+            applied_count: 0,
+            approved_by: None,
+            approved_at: None,
+            archived_at: None,
+            schema_version: "1.0.0".to_string(),
+        }
+    );
+
+    // Test round-trip for CapacityAccount
+    round_trip_test!(
+        capacity_account_round_trip,
+        CapacityAccount,
+        CapacityAccount {
+            id: "account-1".to_string(),
+            adapter: "claude".to_string(),
+            account_id: "acc-123".to_string(),
+            limits: CapacityLimits {
+                max_requests_per_minute: None,
+                max_tokens_per_minute: None,
+                max_tokens_per_day: Some(1000000),
+                max_cost_usd_per_day: None,
+            },
+            usage: CapacityUsage {
+                requests_this_minute: 100,
+                tokens_this_minute: 50000,
+                tokens_today: 500000,
+                cost_usd_today: None,
+                window_start: None,
+                window_end: None,
+            },
+            window_start: None,
+            window_end: None,
+            updated_at: "2024-01-01T00:00:00Z".to_string(),
+            schema_version: "1.0.0".to_string(),
+        }
+    );
+
+    // Test schema version format
+    #[test]
+    fn test_schema_version_format() {
+        assert!(regex::Regex::new(r"^\d+\.\d+\.\d+$")
+            .unwrap()
+            .is_match(version::SCHEMA_VERSION));
     }
 }
