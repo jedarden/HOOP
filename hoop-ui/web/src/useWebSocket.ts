@@ -1,11 +1,14 @@
 import { useEffect, useRef } from 'react';
 import { useSetAtom } from 'jotai';
-import { workersAtom, wsConnectedAtom, WsEvent } from './atoms';
+import { workersAtom, beadsAtom, conversationsAtom, streamingContentAtom, wsConnectedAtom, WsEvent } from './atoms';
 
 const WS_URL = `ws://${window.location.host}/ws`;
 
 export function useWebSocket() {
   const setWorkers = useSetAtom(workersAtom);
+  const setBeads = useSetAtom(beadsAtom);
+  const setConversations = useSetAtom(conversationsAtom);
+  const setStreamingContent = useSetAtom(streamingContentAtom);
   const setConnected = useSetAtom(wsConnectedAtom);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -49,6 +52,30 @@ export function useWebSocket() {
               }
               return [...prev, data.worker!];
             });
+          } else if (data.type === 'beads_snapshot' && data.beads) {
+            setBeads(data.beads);
+          } else if (data.type === 'conversations_snapshot' && data.conversations) {
+            setConversations(data.conversations);
+          } else if (data.type === 'conversation_update' && data.conversation) {
+            setConversations((prev) => {
+              const idx = prev.findIndex((c) => c.id === data.conversation!.id);
+              if (idx >= 0) {
+                const updated = [...prev];
+                updated[idx] = data.conversation!;
+                return updated;
+              }
+              return [...prev, data.conversation!];
+            });
+          } else if (data.type === 'streaming_content' && data.streaming) {
+            setStreamingContent((prev) => {
+              const next = new Map(prev);
+              next.set(data.streaming!.conversation_id, {
+                conversation_id: data.streaming!.conversation_id,
+                content: data.streaming!.content,
+                timestamp: data.streaming!.timestamp,
+              });
+              return next;
+            });
           }
         } catch (e) {
           console.error('Failed to parse WebSocket message:', e);
@@ -80,5 +107,5 @@ export function useWebSocket() {
       }
       wsRef.current?.close();
     };
-  }, [setWorkers, setConnected]);
+  }, [setWorkers, setBeads, setConversations, setStreamingContent, setConnected]);
 }

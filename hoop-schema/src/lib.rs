@@ -251,6 +251,67 @@ impl ParsedSession {
     }
 }
 
+/// Bead status from issues.jsonl
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BeadStatus {
+    Open,
+    Closed,
+}
+
+/// Bead issue type from issues.jsonl
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BeadType {
+    #[default]
+    Task,
+    Bug,
+    Epic,
+    #[serde(other)]
+    Unknown,
+}
+
+/// A bead from issues.jsonl (for frontend display)
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Bead {
+    /// Bead ID (e.g., "hoop-ttb.1")
+    pub id: String,
+    /// Title
+    pub title: String,
+    /// Description (markdown content)
+    #[serde(default)]
+    pub description: String,
+    /// Status
+    pub status: BeadStatus,
+    /// Priority (0 = highest)
+    #[serde(default)]
+    pub priority: i64,
+    /// Issue type
+    #[serde(default)]
+    pub issue_type: BeadType,
+    /// Created timestamp
+    pub created_at: DateTime<chrono::Utc>,
+    /// Created by
+    #[serde(default)]
+    pub created_by: String,
+    /// Updated timestamp
+    pub updated_at: DateTime<chrono::Utc>,
+    /// Closed timestamp (if closed)
+    pub closed_at: Option<DateTime<chrono::Utc>>,
+    /// Close reason (if closed)
+    pub close_reason: Option<String>,
+    /// Source repo
+    #[serde(default = "default_source_repo")]
+    pub source_repo: String,
+    /// Dependencies
+    #[serde(default)]
+    pub dependencies: Vec<String>,
+}
+
+fn default_source_repo() -> String {
+    ".".to_string()
+}
+
 impl NeedleEvent {
     /// Get the event timestamp
     pub fn timestamp(&self) -> Option<&str> {

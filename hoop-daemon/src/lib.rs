@@ -5,17 +5,20 @@
 //! Its only write is `br create` for bead creation.
 
 pub mod audit;
+pub mod beads;
 pub mod events;
 pub mod heartbeats;
 pub mod metrics;
 pub mod sessions;
+pub mod ws;
 
 use axum::{
     routing::get,
-    Router,
+    Json, Router,
 };
-use hoop_schema::{ControlRequest, ControlResponse, HealthResponse, ProjectStatus, StatusResponse};
+use hoop_schema::{Bead, ControlRequest, ControlResponse, HealthResponse, ProjectStatus, StatusResponse};
 use hoop_ui::AssetsHandler;
+use std::sync::Arc;
 use std::{
     fs,
     net::SocketAddr,
@@ -55,6 +58,9 @@ impl Default for Config {
 pub struct DaemonState {
     pub config: Config,
     pub started_at: Instant,
+    pub worker_registry: Arc<ws::WorkerRegistry>,
+    pub beads: Arc<std::sync::RwLock<Vec<Bead>>>,
+    pub bead_tx: broadcast::Sender<ws::BeadData>,
 }
 
 /// Health check endpoint handler
@@ -62,10 +68,18 @@ async fn healthz() -> axum::Json<HealthResponse> {
     axum::Json(HealthResponse::ok())
 }
 
+/// Get all beads endpoint handler
+async fn get_beads(state: axum::extract::State<DaemonState>) -> Json<Vec<Bead>> {
+    let beads = state.beads.read().unwrap();
+    Json(beads.clone())
+}
+
 /// Build the daemon router with all endpoints
 pub fn router() -> Router<DaemonState> {
     Router::new()
         .route("/healthz", get(healthz))
+        .route("/api/beads", get(get_beads))
+        .route("/ws", get(ws::ws_handler))
         .nest_service("/assets", AssetsHandler::router())
         .fallback_service(AssetsHandler::router())
         .layer(TraceLayer::new_for_http())
@@ -187,9 +201,118 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     }
     info!("Startup audit passed");
 
+    // Initialize heartbeat monitor
+    let mut heartbeat_monitor = heartbeats::HeartbeatMonitor::new(
+        heartbeats::HeartbeatMonitorConfig::default()
+    )?;
+    heartbeat_monitor.start()?;
+    let heartbeat_tx = heartbeat_monitor.subscribe();
+
+    // Initialize worker registry
+    let worker_registry = Arc::new(ws::WorkerRegistry::new(heartbeat_tx));
+
+    // Initialize bead event broadcast channel
+    let (bead_tx, _) = broadcast::channel::<ws::BeadData>(256);
+
+    // Initialize bead reader for current workspace
+    let mut bead_reader = beads::BeadReader::new(beads::BeadReaderConfig {
+        workspace_path: PathBuf::from("."),
+    })?;
+    bead_reader.start()?;
+    let beads: Arc<std::sync::RwLock<Vec<Bead>>> = Arc::new(std::sync::RwLock::new(Vec::new()));
+
+    // Spawn task to handle bead events
+    let beads_clone = beads.clone();
+    let bead_tx_clone = bead_tx.clone();
+    tokio::spawn(async move {
+        let mut rx = bead_reader.subscribe();
+        while let Ok(event) = rx.recv().await {
+            match event {
+                beads::BeadEvent::BeadsUpdated { beads: new_beads } => {
+                    *beads_clone.write().unwrap() = new_beads.clone();
+                    // Broadcast bead updates
+                    for bead in &new_beads {
+                        let bead_data = ws::BeadData {
+                            id: bead.id.clone(),
+                            title: bead.title.clone(),
+                            status: format!("{:?}", bead.status).to_lowercase(),
+                            priority: bead.priority,
+                            issue_type: format!("{:?}", bead.issue_type).to_lowercase(),
+                            created_at: bead.created_at.to_rfc3339(),
+                            updated_at: bead.updated_at.to_rfc3339(),
+                            created_by: bead.created_by.clone(),
+                            dependencies: bead.dependencies.clone(),
+                        };
+                        let _ = bead_tx_clone.send(bead_data);
+                    }
+                }
+                beads::BeadEvent::Error(e) => {
+                    error!("Bead reader error: {}", e);
+                }
+            }
+        }
+    });
+
+    // Spawn task to process heartbeat events and update registry
+    let registry_clone = worker_registry.clone();
+    tokio::spawn(async move {
+        use heartbeats::MonitorEvent;
+        let mut rx = registry_clone.subscribe();
+        while let Ok(event) = rx.recv().await {
+            match event {
+                MonitorEvent::Heartbeat(hb) => {
+                    let liveness = registry_clone
+                        .snapshot()
+                        .await
+                        .iter()
+                        .find(|w| w.worker == hb.worker)
+                        .map(|w| w.liveness)
+                        .unwrap_or(heartbeats::WorkerLiveness::Dead);
+                    registry_clone.update_worker(hb, liveness).await;
+                }
+                MonitorEvent::LivenessChange(t) => {
+                    // Update worker liveness
+                    let snapshot = registry_clone.snapshot().await;
+                    if let Some(w) = snapshot.iter().find(|w| w.worker == t.worker) {
+                        registry_clone.update_worker(
+                            heartbeats::WorkerHeartbeat {
+                                ts: w.last_heartbeat,
+                                worker: w.worker.clone(),
+                                state: match &w.state {
+                                    ws::WorkerDisplayState::Executing { bead, adapter, .. } => {
+                                        hoop_schema::WorkerState::Executing {
+                                            bead: bead.clone(),
+                                            pid: 0,
+                                            adapter: adapter.clone(),
+                                        }
+                                    }
+                                    ws::WorkerDisplayState::Idle { last_strand } => {
+                                        hoop_schema::WorkerState::Idle {
+                                            last_strand: last_strand.clone(),
+                                        }
+                                    }
+                                    ws::WorkerDisplayState::Knot { reason } => {
+                                        hoop_schema::WorkerState::Knot {
+                                            reason: reason.clone(),
+                                        }
+                                    }
+                                },
+                            },
+                            t.new_state,
+                        ).await;
+                    }
+                }
+                _ => {}
+            }
+        }
+    });
+
     let state = DaemonState {
         config: config.clone(),
         started_at: Instant::now(),
+        worker_registry,
+        beads,
+        bead_tx,
     };
 
     let app = router().with_state(state.clone());

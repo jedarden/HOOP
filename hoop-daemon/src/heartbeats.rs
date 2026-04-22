@@ -193,6 +193,11 @@ impl HeartbeatMonitor {
         self.event_tx.subscribe()
     }
 
+    /// Get the sender for this monitor's event channel
+    pub fn sender(&self) -> broadcast::Sender<MonitorEvent> {
+        self.event_tx.clone()
+    }
+
     /// Get current liveness for all workers
     pub fn get_all_liveness(&self) -> HashMap<String, WorkerLiveness> {
         self.workers

@@ -16,5 +16,6 @@ hoop-schema = { path = "../hoop-schema" }
 tokio = { workspace = true }
 anyhow = "1.0"
 dirs = "5.0"
+serde = { workspace = true }
 serde_yaml = "0.9"
 serde_json = { workspace = true }
