@@ -11,7 +11,10 @@
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use hoop_schema::{MessageUsage, ParsedSession, SessionKind, SessionMessage};
+use hoop_schema::{
+    ParsedSession, ParsedSessionKind, ParsedSessionKindVariant1, ParsedSessionKindVariant2,
+    ParsedSessionMessagesItem, ParsedSessionMessagesItemUsage, ParsedSessionTotalUsage,
+};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use rayon::prelude::*;
 use serde::Deserialize;
@@ -64,13 +67,24 @@ struct ClaudeUsage {
     pub cache_creation_tokens: Option<u64>,
 }
 
-impl From<ClaudeUsage> for MessageUsage {
+impl From<ClaudeUsage> for ParsedSessionMessagesItemUsage {
     fn from(u: ClaudeUsage) -> Self {
         Self {
-            input_tokens: u.input_tokens.unwrap_or(0),
-            output_tokens: u.output_tokens.unwrap_or(0),
-            cache_read_tokens: u.cache_read_tokens.unwrap_or(0),
-            cache_write_tokens: u.cache_creation_tokens.unwrap_or(0),
+            input_tokens: u.input_tokens.unwrap_or(0) as i64,
+            output_tokens: u.output_tokens.unwrap_or(0) as i64,
+            cache_read_tokens: u.cache_read_tokens.unwrap_or(0) as i64,
+            cache_write_tokens: u.cache_creation_tokens.unwrap_or(0) as i64,
+        }
+    }
+}
+
+impl From<ClaudeUsage> for ParsedSessionTotalUsage {
+    fn from(u: ClaudeUsage) -> Self {
+        Self {
+            input_tokens: u.input_tokens.unwrap_or(0) as i64,
+            output_tokens: u.output_tokens.unwrap_or(0) as i64,
+            cache_read_tokens: u.cache_read_tokens.unwrap_or(0) as i64,
+            cache_write_tokens: u.cache_creation_tokens.unwrap_or(0) as i64,
         }
     }
 }
@@ -447,7 +461,7 @@ impl SessionTailer {
         let mut title = String::new();
         let mut start_time: Option<DateTime<Utc>> = None;
         let mut end_time: Option<DateTime<Utc>> = None;
-        let mut total_usage = MessageUsage {
+        let mut total_usage = ParsedSessionTotalUsage {
             input_tokens: 0,
             output_tokens: 0,
             cache_read_tokens: 0,
@@ -462,7 +476,7 @@ impl SessionTailer {
                     ClaudeEntry::Message(msg) => {
                         // Track usage
                         if let Some(usage) = &msg.usage {
-                            let usage: MessageUsage = usage.clone().into();
+                            let usage: ParsedSessionMessagesItemUsage = usage.clone().into();
                             total_usage.input_tokens += usage.input_tokens;
                             total_usage.output_tokens += usage.output_tokens;
                             total_usage.cache_read_tokens += usage.cache_read_tokens;
@@ -476,11 +490,12 @@ impl SessionTailer {
                             }
                         }
 
-                        messages.push(SessionMessage {
+                        let timestamp = msg.timestamp.and_then(|s| s.parse().ok());
+                        messages.push(ParsedSessionMessagesItem {
                             role: msg.role,
                             content: msg.content.unwrap_or(serde_json::Value::Null),
                             usage: msg.usage.map(|u| u.into()),
-                            timestamp: msg.timestamp,
+                            timestamp,
                         });
                     }
                     ClaudeEntry::Metadata(meta) => {
@@ -564,13 +579,13 @@ impl SessionTailer {
     }
 
     /// Classify a session based on title prefix tag
-    fn classify_session(title: &str, _cwd: &str) -> SessionKind {
+    fn classify_session(title: &str, _cwd: &str) -> ParsedSessionKind {
         // Check for NEEDLE worker tag: [needle:<worker>:<bead>:<strand>]
         if let Some(captures) = regex::Regex::new(r"^\[needle:([^:]+):([^:]+):([^:]*)\]")
             .ok()
             .and_then(|re| re.captures(title))
         {
-            return SessionKind::Worker {
+            return ParsedSessionKind::Variant0 {
                 worker: captures.get(1).map(|m| m.as_str().to_string()).unwrap_or_default(),
                 bead: captures.get(2).map(|m| m.as_str().to_string()).unwrap_or_default(),
                 strand: captures.get(3).map(|m| m.as_str().to_string()).filter(|s| !s.is_empty()),
@@ -579,12 +594,12 @@ impl SessionTailer {
 
         // Check for dictated prefix
         if title.starts_with("[dictated]") {
-            return SessionKind::Dictated;
+            return ParsedSessionKind::Variant1(ParsedSessionKindVariant1::Dictated);
         }
 
         // Default to ad-hoc (direct CLI session without prefix)
         // Note: "operator" kind is reserved for human ↔ agent chats through the web UI
-        SessionKind::AdHoc
+        ParsedSessionKind::Variant2(ParsedSessionKindVariant2::AdHoc)
     }
 
     /// Hash content for bootstrap matching
@@ -726,13 +741,27 @@ mod tests {
 
     #[test]
     fn test_classify_session_worker() {
-        let title = "[needle:alpha:bd-abc123:main] Implement feature X";
+        let title = "[needle:alpha:bd-abc123:pluck] Implement feature X";
         let kind = SessionTailer::classify_session(title, "/home/coding/project");
         match kind {
-            SessionKind::Worker { worker, bead, strand } => {
+            ParsedSessionKind::Variant0 { worker, bead, strand } => {
                 assert_eq!(worker, "alpha");
                 assert_eq!(bead, "bd-abc123");
-                assert_eq!(strand.as_deref(), Some("main"));
+                assert_eq!(strand.as_deref(), Some("pluck"));
+            }
+            _ => panic!("Expected Worker kind"),
+        }
+    }
+
+    #[test]
+    fn test_classify_session_worker_no_strand() {
+        let title = "[needle:bravo:bd-def456:] Some task";
+        let kind = SessionTailer::classify_session(title, "/home/coding/project");
+        match kind {
+            ParsedSessionKind::Variant0 { worker, bead, strand } => {
+                assert_eq!(worker, "bravo");
+                assert_eq!(bead, "bd-def456");
+                assert!(strand.is_none());
             }
             _ => panic!("Expected Worker kind"),
         }
@@ -742,14 +771,14 @@ mod tests {
     fn test_classify_session_ad_hoc() {
         let title = "Fix the login bug";
         let kind = SessionTailer::classify_session(title, "/home/coding/project");
-        assert_eq!(kind, SessionKind::AdHoc);
+        assert_eq!(kind, ParsedSessionKind::Variant2(ParsedSessionKindVariant2::AdHoc));
     }
 
     #[test]
     fn test_classify_session_dictated() {
         let title = "[dictated] Voice note transcript";
         let kind = SessionTailer::classify_session(title, "/home/coding/project");
-        assert_eq!(kind, SessionKind::Dictated);
+        assert_eq!(kind, ParsedSessionKind::Variant1(ParsedSessionKindVariant1::Dictated));
     }
 
     #[test]
@@ -760,7 +789,7 @@ mod tests {
             cache_read_tokens: Some(10),
             cache_creation_tokens: Some(5),
         };
-        let usage: MessageUsage = claude.into();
+        let usage: ParsedSessionMessagesItemUsage = claude.into();
         assert_eq!(usage.input_tokens, 100);
         assert_eq!(usage.output_tokens, 50);
         assert_eq!(usage.cache_read_tokens, 10);

@@ -157,6 +157,7 @@ pub struct DaemonState {
     pub supervisor: Arc<supervisor::ProjectSupervisor>,
     pub projects: Arc<std::sync::RwLock<Vec<ws::ProjectCardData>>>,
     pub config_status_tx: broadcast::Sender<ws::ConfigStatusData>,
+    pub project_status_tx: broadcast::Sender<ws::ProjectCardData>,
 }
 
 /// Health check endpoint handler
@@ -346,6 +347,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     // Initialize config status broadcast channel
     let (config_status_tx, _) = broadcast::channel::<ws::ConfigStatusData>(64);
 
+    // Initialize project status broadcast channel
+    let (project_status_tx, _) = broadcast::channel::<ws::ProjectCardData>(64);
+
     // Initialize shared beads store
     let beads: Arc<std::sync::RwLock<Vec<Bead>>> = Arc::new(std::sync::RwLock::new(Vec::new()));
 
@@ -500,6 +504,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         supervisor,
         projects: Arc::new(std::sync::RwLock::new(Vec::new())),
         config_status_tx,
+        project_status_tx,
     };
 
     let app = router().with_state(state.clone());

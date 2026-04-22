@@ -13,7 +13,6 @@
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use hoop_schema::WorkerState;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -24,6 +23,8 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
+
+use crate::WorkerState;
 
 /// Default heartbeat interval in seconds (from NEEDLE)
 const HEARTBEAT_INTERVAL_SECS: u64 = 10;

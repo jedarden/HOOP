@@ -14,7 +14,7 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use futures_util::{stream::StreamExt, SinkExt};
-use hoop_schema::{Bead, MessageUsage, ParsedSession, SessionKind, SessionMessage, WorkerState};
+use hoop_schema::{ParsedSession, ParsedSessionKind, ParsedSessionKindVariant1, ParsedSessionKindVariant2, ParsedSessionKindVariant3};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
@@ -115,9 +115,9 @@ pub struct ConversationData {
 impl From<ParsedSession> for ConversationData {
     fn from(s: ParsedSession) -> Self {
         let (worker_metadata, kind_str) = match &s.kind {
-            SessionKind::Operator => (None, "operator".to_string()),
-            SessionKind::Dictated => (None, "dictated".to_string()),
-            SessionKind::Worker { worker, bead, strand } => (
+            ParsedSessionKind::Variant3(ParsedSessionKindVariant3::Operator) => (None, "operator".to_string()),
+            ParsedSessionKind::Variant1(ParsedSessionKindVariant1::Dictated) => (None, "dictated".to_string()),
+            ParsedSessionKind::Variant0 { worker, bead, strand } => (
                 Some(WorkerMetadataData {
                     worker: worker.clone(),
                     bead: bead.clone(),
@@ -125,7 +125,7 @@ impl From<ParsedSession> for ConversationData {
                 }),
                 "worker".to_string(),
             ),
-            SessionKind::AdHoc => (None, "ad-hoc".to_string()),
+            ParsedSessionKind::Variant2(ParsedSessionKindVariant2::AdHoc) => (None, "ad-hoc".to_string()),
         };
 
         Self {
@@ -162,6 +162,14 @@ pub struct ProjectCardData {
     pub color: String,
     pub path: String,
     pub degraded: bool,
+    /// Runtime state (e.g., "healthy", "failed", "error", "starting")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_state: Option<String>,
+    /// Error message if runtime is in an error state
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_error: Option<String>,
+    /// Number of active beads in this project
+    pub bead_count: usize,
 }
 
 /// Configuration error details
