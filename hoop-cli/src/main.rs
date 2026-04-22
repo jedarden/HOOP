@@ -9,11 +9,7 @@ mod projects;
 use clap::Parser;
 use hoop_daemon::{audit, serve, Config as DaemonConfig};
 use hoop_schema::{ControlRequest, ControlResponse};
-use std::{
-    fs,
-    net::SocketAddr,
-    path::PathBuf,
-};
+use std::{fs, net::SocketAddr, path::PathBuf};
 use tokio::io::AsyncBufReadExt;
 
 #[derive(Parser, Debug)]
@@ -49,6 +45,9 @@ enum Commands {
     Scan {
         /// Root path to scan
         root: String,
+        /// Auto-register all discoveries without prompting
+        #[arg(short, long)]
+        yes: bool,
     },
     /// List registered projects
     List,
@@ -96,6 +95,14 @@ enum ProjectsCommands {
         /// Path to the workspace
         path: String,
     },
+    /// Auto-register every directory with .beads/ under a root path
+    Scan {
+        /// Root path to scan
+        root: String,
+        /// Auto-register all discoveries without prompting
+        #[arg(short, long)]
+        yes: bool,
+    },
     /// List registered projects
     List {
         /// Output as JSON
@@ -119,7 +126,10 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Serve { addr, allow_br_mismatch } => {
+        Commands::Serve {
+            addr,
+            allow_br_mismatch,
+        } => {
             let config = DaemonConfig {
                 bind_addr: addr.unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 3000))),
                 allow_br_mismatch,
@@ -137,9 +147,11 @@ async fn main() -> anyhow::Result<()> {
             eprintln!("hoop add: not yet implemented");
             std::process::exit(1);
         }
-        Commands::Scan { root: _ } => {
-            eprintln!("hoop scan: not yet implemented");
-            std::process::exit(1);
+        Commands::Scan { root, yes } => {
+            if let Err(e) = projects::scan_projects(&root, yes) {
+                eprintln!("hoop scan: {}", e);
+                std::process::exit(1);
+            }
         }
         Commands::List => {
             eprintln!("hoop list: not yet implemented");
@@ -199,11 +211,10 @@ fn handle_projects(cmd: ProjectsCommands) -> anyhow::Result<()> {
     match cmd {
         ProjectsCommands::Add { path } => {
             let entry = projects::add_project(&path)?;
-            if let Some(primary) = entry.primary_path() {
-                println!("Added project '{}': {}", entry.name, primary.display());
-            } else {
-                println!("Added project '{}'", entry.name);
-            }
+            println!("Added project '{}': {}", entry.name, entry.path.display());
+        }
+        ProjectsCommands::Scan { root, yes } => {
+            projects::scan_projects(&root, yes)?;
         }
         ProjectsCommands::List { json } => {
             let projects = projects::list_projects()?;
@@ -218,14 +229,7 @@ fn handle_projects(cmd: ProjectsCommands) -> anyhow::Result<()> {
                 } else {
                     println!("Registered projects:");
                     for proj in &projects {
-                        if proj.workspaces.len() == 1 {
-                            println!("  {} - {}", proj.name, proj.workspaces[0].path.display());
-                        } else {
-                            println!("  {}", proj.name);
-                            for ws in &proj.workspaces {
-                                println!("    [{}] {}", ws.role, ws.path.display());
-                            }
-                        }
+                        println!("  {} - {}", proj.name, proj.path.display());
                     }
                 }
             }
@@ -243,21 +247,9 @@ fn handle_projects(cmd: ProjectsCommands) -> anyhow::Result<()> {
         ProjectsCommands::Show { name } => {
             if let Some(proj) = projects::show_project(&name)? {
                 println!("Project: {}", proj.name);
-                if let Some(label) = &proj.label {
-                    println!("Label: {}", label);
-                }
-                if let Some(color) = &proj.color {
-                    println!("Color: {}", color);
-                }
-                for ws in &proj.workspaces {
-                    println!("Workspace [{}]: {}", ws.role, ws.path.display());
-                }
+                println!("Path: {}", proj.path.display());
 
-                // Check .beads on the primary workspace
-                let check_path = proj
-                    .primary_path()
-                    .unwrap_or_else(|| proj.workspaces[0].path.as_path());
-                let beads_path = check_path.join(".beads");
+                let beads_path = proj.path.join(".beads");
                 if beads_path.exists() {
                     println!("Status: Active (.beads/ present)");
                     if let Ok(entries) = std::fs::read_dir(beads_path.join("beads")) {
@@ -283,16 +275,21 @@ async fn handle_status(project: Option<String>) -> anyhow::Result<()> {
     let socket_path = home.join("control.sock");
 
     if !socket_path.exists() {
-        anyhow::bail!("Daemon not running (control socket not found at {})", socket_path.display());
+        anyhow::bail!(
+            "Daemon not running (control socket not found at {})",
+            socket_path.display()
+        );
     }
 
-    let mut socket = tokio::net::UnixStream::connect(&socket_path).await
+    let mut socket = tokio::net::UnixStream::connect(&socket_path)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to connect to control socket: {}", e))?;
 
     let request = ControlRequest::Status { project };
     let request_json = serde_json::to_string(&request)?;
 
-    tokio::io::AsyncWriteExt::write_all(&mut socket, format!("{}\n", request_json).as_bytes()).await?;
+    tokio::io::AsyncWriteExt::write_all(&mut socket, format!("{}\n", request_json).as_bytes())
+        .await?;
 
     let mut reader = tokio::io::BufReader::new(&mut socket);
     let mut response_line = String::new();
@@ -392,9 +389,9 @@ fn print_report(report: &audit::AuditReport) {
             "\u{2705}" // ✅
         } else {
             match check.severity {
-                Severity::Critical => "\u{274C}", // ❌
+                Severity::Critical => "\u{274C}",        // ❌
                 Severity::Warning => "\u{26A0}\u{FE0F}", // ⚠️
-                Severity::Info => "\u{2139}", // ℹ️
+                Severity::Info => "\u{2139}",            // ℹ️
             }
         };
 
@@ -435,7 +432,9 @@ fn print_report(report: &audit::AuditReport) {
         println!("\n\u{001b}[31m\u{001b}[1mCritical failures detected. Fix these before starting the daemon.\u{001b}[0m");
         std::process::exit(1);
     } else if warnings > 0 {
-        println!("\n\u{001b}[33mWarnings detected. Daemon will start with degraded features.\u{001b}[0m");
+        println!(
+            "\n\u{001b}[33mWarnings detected. Daemon will start with degraded features.\u{001b}[0m"
+        );
     } else {
         println!("\n\u{001b}[32m\u{001b}[1mAll checks passed!\u{001b}[0m");
     }
