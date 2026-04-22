@@ -833,7 +833,79 @@ HOOP reads everywhere; writes one kind of record to one queue. NEEDLE is a separ
 
 ---
 
-## 12. Appendix — Kubernetes worker deployment (someday, sketched)
+## 12. Onboarding & documentation
+
+Onboarding is not a phase — it is a cross-cutting concern that delivers alongside each new surface. Consolidating the approach here so it doesn't get lost between phases.
+
+### Three onboarding surfaces
+
+**1. `hoop init` — interactive CLI wizard.** First-time setup:
+
+- Dependency check: `br` (with version pin), tmux, each configured CLI adapter, Tailscale membership, port availability, disk room, systemd user-scope enablement. Any failure reports the exact command to fix it.
+- First project registration: offer `scan <root>` with a preview; operator approves per project.
+- Agent setup (optional): Anthropic credentials or Claude Code account, model choice, a quick "hello" turn to verify. Skippable — HOOP is fully functional in read-only mode without the agent.
+- systemd install + enable.
+- Health check, then print the Tailscale URL.
+
+Target: under 5 minutes if tools are already installed.
+
+**2. In-UI first-run experience.** When the operator opens the web UI the first time:
+
+- Welcome overlay: two paragraphs explaining Stitches, Patterns, and the agent briefly. Bead terminology introduced only once and flagged as "internal — you won't usually see these."
+- Guided tour: soft highlights on project switcher, Stitch list, agent chat, file browser, audit log.
+- Three starter prompts: "dictate a first note," "register another project," "ask the agent something."
+- Dismissable; re-openable from settings.
+
+**3. Progressive capability introduction.** Onboarding isn't a single event. As capabilities come online or go unused:
+
+- Upgrade to a version that adds a feature → "What's new" card.
+- Reflection Ledger empty after 30 days of use → "You've worked a while; want me to start proposing rules?"
+- 10+ Stitches share a theme but no Pattern → suggest creating one.
+- Agent never been used → inline prompt on the chat pane.
+- Mic never been used → prompt near the hotkey icon.
+
+### Specific onboarding aids
+
+- **Explain-this hover** — every non-obvious UI element has a one-sentence "what this is / when to use it" on hover. Implemented as a shared `ExplainThis` component reading from a central glossary.
+- **Dry-run mode for first Stitch drafts** — preview what would happen without creating beads. Operator gets comfortable before committing.
+- **Sample Stitches** — an optional "tour" project HOOP can spin up against a sandbox workspace, populated with example Stitches demonstrating typical patterns. Removable in one click.
+- **Agent pre-priming** — on first chat, the agent opens with the operator's own data ("I see 4 projects with 12 open Stitches across them; what's on your mind?") rather than a generic greeting.
+
+### Repository documentation
+
+Living in the repo itself:
+
+- **`README.md`** — install + run + core concepts. Under-30-min path for a stranger.
+- **`AGENTS.md`** — LLM-facing guide at repo root. Summarizes scope, non-goals, terminology, conventions. Points at the plan as authoritative. Keeps LLMs from re-introducing removed vocabulary (Mayor, polecat, Gas Town) or proposing disallowed features (worker steering, capacity enforcement).
+- **`docs/quickstart.md`** — 15-minute human-facing quickstart walking through install, first-run, concepts, first Stitch, daily rhythm, troubleshooting.
+- **`docs/concepts/`** — one-page-per-concept docs for Stitch, Pattern, Project, Workspace, Agent, Reflection Ledger, Bead (as an internal detail).
+- **`docs/operations.md`** — systemd, backups, upgrades, schema migrations, Tailscale routing.
+- **`docs/troubleshooting.md`** — common failures with recovery steps, mapped to `hoop audit` output.
+
+`AGENTS.md` and `docs/quickstart.md` are created alongside the plan so the repo is immediately useful to a visitor — LLM or human — even before any binary exists. They evolve with each phase.
+
+### Phase-by-phase onboarding deliverables
+
+| Phase | Onboarding additions |
+|---|---|
+| 1 | `hoop audit` + `hoop init` wizard (minimum viable); README + quickstart scaffolding |
+| 2 | UI first-run tour; project-scan guidance; capacity-widget explanations |
+| 3 | File browser quick-start tooltip; first-dictation prompt near the mic hotkey |
+| 4 | Stitch-draft form with inline field hints; sample templates library; dry-run preview |
+| 5 | Agent setup wizard; Morning Brief self-introduction on first run; Reflection Ledger first-proposal tutorial |
+| 7 | Invite flow for additional operators; role explanation for new viewers vs drafters; per-role cheat sheet |
+
+### Onboarding principles
+
+- **Progressive, never front-loaded.** Don't teach every concept on day one. Introduce each only when it becomes relevant.
+- **Viewable opt-out, invisible opt-in.** All onboarding aids are dismissable; none of them gate functionality.
+- **Operator-specific, not generic.** "Welcome to HOOP" greetings include the operator's actual data. The agent's first message references their actual projects. Personalized from second zero.
+- **Re-playable.** Every tour, tutorial, and introduction can be re-opened from settings. Operators who came back after a month shouldn't be locked out of the first-run context.
+- **LLM-first documentation path matters.** A repo with no code but good `AGENTS.md` is immediately useful to a contributor LLM starting fresh. A repo with code and no `AGENTS.md` is a hazard.
+
+---
+
+## 13. Appendix — Kubernetes worker deployment (someday, sketched)
 
 If the EX44 saturates, NEEDLE can graduate worker execution to Kubernetes pods — this is a NEEDLE concern, not a HOOP concern. HOOP's role when that happens is the same as today: read the bead events (now streamed from cluster sidecars into a shared log or event bus), offer UI, create beads on operator intent. HOOP does not become a cluster controller.
 
