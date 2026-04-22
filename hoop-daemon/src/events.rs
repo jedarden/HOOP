@@ -9,9 +9,10 @@
 use anyhow::{Context, Result};
 use hoop_schema::{NeedleEvent, ParsedEvent};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::fs::{File, Metadata};
+use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
@@ -50,12 +51,71 @@ impl Default for EventTailerConfig {
     }
 }
 
+/// File position tracking for efficient incremental reads
+#[derive(Debug)]
+struct FilePosition {
+    /// The byte offset we've read up to
+    offset: u64,
+    /// The file size when we last read it
+    last_size: u64,
+    /// The file modification time when we last read it
+    last_modified: Option<std::time::SystemTime>,
+}
+
+impl FilePosition {
+    fn new() -> Self {
+        Self {
+            offset: 0,
+            last_size: 0,
+            last_modified: None,
+        }
+    }
+
+    /// Reset position (called after log rotation)
+    fn reset(&mut self) {
+        self.offset = 0;
+        self.last_size = 0;
+        self.last_modified = None;
+    }
+
+    /// Check if the file has been rotated or recreated
+    fn is_rotated(&self, metadata: &Metadata) -> bool {
+        // File is considered rotated if:
+        // 1. The new size is smaller than our offset (file was truncated/recreated)
+        // 2. The modification time is older than our last read (unlikely, but indicates rotation)
+        if let Some(last_mod) = self.last_modified {
+            if let Ok(new_mod) = metadata.modified() {
+                // If size decreased or modification time went backwards, likely rotated
+                if metadata.len() < self.offset || new_mod < last_mod {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Update position after reading
+    fn update(&mut self, new_offset: u64, metadata: &Metadata) {
+        self.offset = new_offset;
+        self.last_size = metadata.len();
+        self.last_modified = metadata.modified().ok();
+    }
+}
+
+impl Default for FilePosition {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Event tailer that watches and parses events.jsonl
 pub struct EventTailer {
     config: EventTailerConfig,
     event_tx: broadcast::Sender<TailerEvent>,
     watcher: Option<RecommendedWatcher>,
     _shutdown_tx: mpsc::Sender<()>,
+    /// File position tracking for efficient incremental reads
+    position: Arc<Mutex<FilePosition>>,
 }
 
 impl EventTailer {
@@ -69,6 +129,7 @@ impl EventTailer {
             event_tx,
             watcher: None,
             _shutdown_tx: shutdown_tx,
+            position: Arc::new(Mutex::new(FilePosition::new())),
         })
     }
 
@@ -82,10 +143,11 @@ impl EventTailer {
         let events_path = self.config.events_path.clone();
         let events_path_for_watch = events_path.clone();
         let event_tx = self.event_tx.clone();
+        let position = self.position.clone();
 
         // Create the watcher
         let mut watcher = notify::recommended_watcher(move |res| {
-            if let Err(e) = Self::handle_watch_event(res, &events_path_for_watch, &event_tx) {
+            if let Err(e) = Self::handle_watch_event(res, &events_path_for_watch, &event_tx, position.clone()) {
                 warn!("Error handling watch event: {}", e);
             }
         })
@@ -131,12 +193,21 @@ impl EventTailer {
         let file = File::open(events_path)
             .context("Failed to open events file for replay")?;
 
+        let metadata = file.metadata()
+            .context("Failed to get events file metadata")?;
+
         let reader = BufReader::new(file);
         let mut parser = NdjsonParser::new();
+        let mut line_number = 0;
+        let mut offset = 0u64;
 
         for line in reader.lines() {
+            line_number += 1;
             let line = line.context("Failed to read line from events file")?;
-            if let Some(parsed) = parser.parse_line(&line, 0)? {
+            // Update offset (line bytes + newline)
+            offset += line.len() as u64 + 1;
+
+            if let Some(parsed) = parser.parse_line(&line, line_number)? {
                 let _ = self.event_tx.send(TailerEvent::Event(parsed));
             }
         }
@@ -151,6 +222,10 @@ impl EventTailer {
             }
         }
 
+        // Update position tracking after replay
+        let mut pos = self.position.lock().unwrap();
+        pos.update(offset, &metadata);
+
         Ok(())
     }
 
@@ -159,6 +234,7 @@ impl EventTailer {
         res: Result<notify::Event, notify::Error>,
         events_path: &Path,
         event_tx: &broadcast::Sender<TailerEvent>,
+        position: Arc<Mutex<FilePosition>>,
     ) -> Result<()> {
         let event = res?;
 
@@ -175,13 +251,15 @@ impl EventTailer {
         match event.kind {
             // File created or modified - read new lines
             Access(_) | Create(_) | Modify(_) => {
-                if let Err(e) = Self::read_new_events(events_path, event_tx) {
+                if let Err(e) = Self::read_new_events(events_path, event_tx, position.clone()) {
                     warn!("Error reading new events: {}", e);
                 }
             }
             // File removed - this is likely log rotation
             Remove(_) => {
                 debug!("Events file removed (likely log rotation)");
+                // Reset position tracking for when the file is recreated
+                position.lock().unwrap().reset();
                 let _ = event_tx.send(TailerEvent::Rotated);
             }
             _ => {}
@@ -194,13 +272,45 @@ impl EventTailer {
     fn read_new_events(
         events_path: &Path,
         event_tx: &broadcast::Sender<TailerEvent>,
+        position: Arc<Mutex<FilePosition>>,
     ) -> Result<()> {
         let file = File::open(events_path)
             .with_context(|| format!("Failed to open events file {}", events_path.display()))?;
 
+        let metadata = file.metadata()
+            .with_context(|| format!("Failed to get metadata for {}", events_path.display()))?;
+
+        // Check for log rotation
+        {
+            let pos = position.lock().unwrap();
+            if pos.is_rotated(&metadata) {
+                debug!("Log rotation detected, resetting position");
+                drop(pos);
+                position.lock().unwrap().reset();
+                let _ = event_tx.send(TailerEvent::Rotated);
+            }
+        }
+
+        // Get current position
+        let (offset, needs_reset) = {
+            let pos = position.lock().unwrap();
+            (pos.offset, pos.offset == 0)
+        };
+
+        // If file hasn't grown since last read, nothing to do
+        if metadata.len() <= offset && !needs_reset {
+            return Ok(());
+        }
+
+        // Seek to our last position
+        let mut file = file;
+        file.seek(SeekFrom::Start(offset))
+            .with_context(|| format!("Failed to seek to offset {} in {}", offset, events_path.display()))?;
+
         let reader = BufReader::new(file);
         let mut parser = NdjsonParser::new();
         let mut line_number = 0;
+        let mut current_offset = offset;
 
         for line in reader.lines() {
             line_number += 1;
@@ -211,6 +321,9 @@ impl EventTailer {
                     events_path.display()
                 )
             })?;
+
+            // Update offset (line bytes + newline)
+            current_offset += line.len() as u64 + 1;
 
             if let Some(parsed) = parser.parse_line(&line, line_number)? {
                 let _ = event_tx.send(TailerEvent::Event(parsed));
@@ -226,6 +339,9 @@ impl EventTailer {
                 );
             }
         }
+
+        // Update position tracking
+        position.lock().unwrap().update(current_offset, &metadata);
 
         Ok(())
     }
@@ -267,6 +383,12 @@ impl NdjsonParser {
                 // Successfully parsed - clear the partial buffer
                 let raw = input.to_string();
                 self.partial.clear();
+
+                // Increment unknown event metric if this is an unknown event type
+                if matches!(event, NeedleEvent::Unknown) {
+                    metrics::metrics().hoop_unknown_event_total.inc();
+                }
+
                 Ok(Some(ParsedEvent {
                     event,
                     line_number,

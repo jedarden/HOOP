@@ -196,10 +196,7 @@ impl NeedleEvent {
             NeedleEvent::Complete { worker, .. } => Some(worker),
             NeedleEvent::Fail { worker, .. } => Some(worker),
             NeedleEvent::Release { worker, .. } => Some(worker),
-            NeedleEvent::Heartbeat { ts: _, worker: _, state: _ } => {
-                // Worker name is at the top level for heartbeats
-                None // Handled by wrapper
-            }
+            NeedleEvent::Heartbeat { worker, .. } => Some(worker),
             NeedleEvent::Timeout { worker, .. } => Some(worker),
             NeedleEvent::Crash { worker, .. } => Some(worker),
             NeedleEvent::Unknown => None,
