@@ -41,6 +41,30 @@ Where Gas Town's Mayor commands polecats to do work, HOOP's Mayor **asks for wor
 
 This is a deliberate narrowing of HOOP's original scope. Earlier drafts had HOOP steering workers, throttling on capacity, rotating accounts, releasing stuck claims. All of that is out — those concerns belong to NEEDLE (or to a future capacity-aware NEEDLE extension), not HOOP. HOOP becomes simpler and more focused: a reader that occasionally writes a single kind of record.
 
+**Note on strands.** A NEEDLE worker's strand set (Pluck, Explore, Mend, Weave, Unravel, Pulse, Knot) is determined by the combination of *model* and *harness* at worker launch — not by beads, not by work items, not by any runtime decision. Strands are effectively worker-immutable once the worker is running. HOOP observes and displays which strand a worker is executing; HOOP never attempts to route work by strand, and never assumes a per-bead strand preference.
+
+---
+
+## 1.6. Stitches — the human-facing unit of work
+
+**Humans work in Stitches, not beads.** Beads are NEEDLE's internal unit of execution. Stitches are HOOP's user-facing abstraction — a project-scoped, human-titled unit of work that may be backed by one or many beads.
+
+When the operator expresses intent through HOOP ("investigate the kalshi-weather evening-window flake"), HOOP decomposes that intent into the beads NEEDLE needs and presents the result as a single **Stitch** the operator can track. Reverse direction: as beads are claimed, closed, fail, or spawn follow-ups, HOOP aggregates those events back into the Stitch's view. The operator sees "the kalshi-weather flake investigation is stuck on step 3"; the beads underneath are a mechanical detail.
+
+**A Stitch has:**
+- A human title ("Fix Calico IP selection on iad-acb")
+- A status: `Planned | In Progress | Blocked | Awaiting Review | Done | Failed`
+- A list of backing beads (in-flight, closed, planned)
+- Optional child Stitches (multi-step work as a convoy)
+- Aggregated cost, duration, outcome drawn from its beads
+- **Stable identity across bead retries** — a new bead for a retried attempt attaches to the same Stitch
+
+**Stitch ↔ bead mapping.** Every bead HOOP creates carries a `stitch:<stitch-id>` label. Follow-up beads created by NEEDLE workers inherit the parent bead's stitch label (one-line NEEDLE hook: copy the stitch label when creating a follow-up). Beads created outside HOOP remain orphan beads — visible, usable, unassociated. Optional clustering of orphans into synthetic Stitches (by title similarity and dep-graph connectivity) can come later.
+
+**UI consequence.** Dashboards show Stitches. The Mayor speaks in Stitches. Bead IDs appear only in expert / debug / audit views. Users never need to know what a bead is to operate HOOP — they work with stitches, HOOP handles the decomposition.
+
+**Why this matters.** Humans think at the scope of work ("fix the Calico IP selection"), not at the scope of bead IDs (`bd-3hv` + `bd-3hv-review` + `bd-3qvi-fix` + `bd-3qvi-followup`). NEEDLE's bead-level granularity is correct for machine execution and wrong for human cognition. The Stitch abstraction is pure UI / audit; NEEDLE itself keeps using beads internally. HOOP translates in both directions.
+
 ---
 
 ## 2. The environment HOOP targets
@@ -76,6 +100,7 @@ What changes in a multi-project host vs single-workspace: session discovery has 
 8. **`br create` is HOOP's only write.** No bead mutation, no tmux control, no worker lifecycle, no capacity enforcement. If the operator wants to close, release, or boost a bead, they use `br` directly or another tool.
 9. **If HOOP dies, nothing else notices.** NEEDLE keeps running. FABRIC keeps working. The next time HOOP starts, it rebuilds its read state from disk. HOOP is a convenience, not a dependency.
 10. **Read-first defaults.** Even bead creation requires explicit operator confirmation (chat intent → draft → preview → submit). No silent writes.
+11. **Humans speak in Stitches, not beads.** HOOP's UI, Mayor, forms, and chat use project-scoped work items. The bead layer is preserved for machine correctness but hidden from normal operator flow. Bead IDs surface only in expert views and audit logs.
 
 ---
 
@@ -94,7 +119,8 @@ hoop projects remove <name>
 hoop status [project]         # CLI overview of fleets / beads / cost
 hoop audit                    # startup binary/env audit
 hoop mayor                    # attach to or start the Mayor conversation
-hoop bead new <project>       # CLI shortcut to draft+submit a bead
+hoop new <project>            # CLI shortcut to draft+submit a Stitch (decomposed into beads)
+hoop stitch list [project]    # list open Stitches; use --beads for the underlying bead view
 ```
 
 Notably absent: `launch`, `stop`, `salvage`, `steer`, anything that touches a worker process. Those verbs belong to NEEDLE.
@@ -177,6 +203,30 @@ Streaming content lives in a separate reactive map. The committed-vs-streaming s
 ### 4.6 Shared schema crate
 
 `hoop-schema/` with JSON Schema source of truth. Rust types via `typify`; TS via `json-schema-to-typescript`. `schema_version: 1` on every record.
+
+### 4.7 Stitch service
+
+HOOP-owned state layer that translates between operator intent (Stitches) and NEEDLE's execution substrate (beads). Tables in `~/.hoop/fleet.db`:
+
+```
+stitches(id, project, title, description, status, created_by, created_at,
+         closed_at, parent_stitch_id, template_id, attachments_path)
+
+stitch_beads(stitch_id, bead_id, relationship)
+  -- relationship ∈ {primary, review, fix, followup, retry-of}
+
+stitch_events(ts, stitch_id, event, source, payload)
+  -- event stream mirroring derived from NEEDLE events that touch
+  -- this stitch's beads; used for the stitch timeline
+```
+
+The service exposes a read-and-derive API: given a stitch id, compute status from the states of its beads (`Planned` if no beads claimed; `In Progress` if any bead claimed; `Awaiting Review` if implementation beads closed and review beads open; `Done` if all closed with a merged/closed-no-artifact resolution; `Failed` if hard-ceilings exceeded). Aggregate cost and duration from the bead events.
+
+**Decomposition.** When the operator submits Stitch intent through form/chat/Mayor, HOOP's decomposition service proposes a bead graph (e.g. an investigation Stitch → [one `task` bead with open-ended prompt, one `review` bead depending on it]). The operator confirms; HOOP issues `br create` calls labeled with the stitch id.
+
+**Aggregation.** When a bead closes, HOOP emits a derived stitch event if the bead carries a stitch label. When a bead spawns a follow-up (via the NEEDLE hook that preserves stitch labels), the new bead auto-attaches. When a bead with no stitch label closes, it shows up as an orphan bead; operator can manually attach it to a Stitch if desired.
+
+**No direct bead mutation.** The Stitch service never closes, updates, or releases a bead — it only creates them (via `br create`) and observes them. If a Stitch needs a new attempt, HOOP creates a *new* bead labeled with the same stitch id; the old failed bead stays closed as historical record.
 
 ---
 
@@ -302,12 +352,25 @@ Same as before: first message prefix `[needle:<worker>:<bead>:<strand>]` → fle
 12. Collision detector (observation only): alerts when active workers touch overlapping files.
 13. Stuck detector (observation only): heartbeat-transition silence or repeated retries surfaced as alerts.
 
+**Plus five marquee capabilities:**
+
+14. **Stitch abstraction layer** (foundational). UI, forms, Mayor, and dashboards render Stitches. Bead-level views exist behind an "Expert" toggle. `stitch_service` as described in §4.7 lands here. Every new bead HOOP creates carries a `stitch:<id>` label. NEEDLE hook: follow-up beads inherit parent stitch label.
+15. **Stitch-Provenance Code Archaeology** — the file preview panel overlays standard git blame with the *Stitch* that introduced each line. Hover → see the Stitch title, status, and conversation; click → jump to the Stitch view. Requires a NEEDLE hook to emit a `Bead-Id:` commit trailer on close (one line); HOOP maintains a bead-id → commit-sha index and joins that with stitch membership.
+16. **Time-Machine UI Scrubber** — a global timeline slider at the top of any view re-renders full system state at the selected moment: Stitches, fleets, costs, capacity, file tree as of that moment. Leverages the event-as-authority invariant — all state is already derivable from event logs. Seek index lives in `fleet.db`; stale-state banner warns the operator they're viewing the past.
+17. **Stitch Net-Diff Viewer** — when a Stitch reaches `Awaiting Review` or `Done`, HOOP computes the aggregate diff across every commit produced by the Stitch's beads (using the commit trailer from #15) and renders it as if it were a single PR: one tree, one narrative (Mayor-synthesized), one review surface. Replaces trawling PR history for multi-step convoys.
+18. **Cost-Anomaly with Fix Lineage** — continuous detector flags Stitches whose observed cost exceeds the 2σ band for historically similar Stitches (lexical + embedding similarity). The alert is actionable: it surfaces the closest past matches, the Stitches that fixed them, and a pattern name. A curation UI lets operators tag recurring failure modes with recommended fix templates; the library compounds over time.
+
 **Success criteria:**
 - `hoop projects scan ~/` registers every workspace with `.beads/` in one command.
 - Cost figures match `br`/provider summaries within ±2%.
 - Capacity meters match Claude Code's `/status` within ±5% per account.
 - Visual debug reconstructs a full bead cycle with no gaps (prompts + tools + outcome).
 - Killing one project's runtime (delete `.beads/`) shows an error card; other projects unaffected.
+- Dashboards contain zero bead IDs by default; toggling Expert view reveals them.
+- A hover on any line in the file preview surfaces the Stitch that produced it within 200ms.
+- Time-Machine scrubber moves to any point in the last 30 days and rerenders correctly within 2s.
+- Stitch Net-Diff assembles correctly for a 5-bead, 11-commit convoy.
+- Cost anomaly detector flags a synthetic 3σ test case with the right historical match.
 
 ### Phase 3 — File browser + artifact preview + multimodal (v0.3)
 
@@ -345,12 +408,20 @@ Same as before: first message prefix `[needle:<worker>:<bead>:<strand>]` → fle
 7. **Streaming upload** for large files with progress + resumability.
 8. **Path-sensitive routing:** drag a file from the tree into a bead draft → the draft picks up the path + current revision + snippet context.
 
+**Plus one marquee capability:**
+
+9. **Voice / Screen Work Capture.** Hotkey or phone-ADB trigger starts a capture session:
+   - **Voice flow.** Push-to-talk on the Pixel 6 (ADB already present in this environment) or a browser hotkey records audio. Local Whisper transcribes to text + timestamps. The Mayor drafts a Stitch with the transcript as description and the audio attached. Operator walks back to keyboard, reviews the draft, confirms.
+   - **Screen walkthrough.** Browser `MediaRecorder` captures screen + audio while the operator narrates a bug or explains context. Frame-sample + full audio + transcript all attach to a Stitch draft; Mayor synthesizes a title and body from the transcript.
+   - Two minutes of walking-around thinking becomes a preview-ready Stitch sitting in the queue.
+
 **Success criteria:**
 - File browser usable on a 20k-file repo with <1s directory-expand latency.
 - Syntax highlighting for at least: Rust, TS/JS, Python, Go, Clojure, YAML, TOML, Markdown, Shell, SQL, Dockerfile.
 - Image/audio/video preview works in Safari, Chrome, Firefox.
-- Attached 10MB image in a bead draft stored and referenced correctly.
+- Attached 10MB image in a Stitch draft stored and referenced correctly.
 - Mayor receives attachments in its conversation context.
+- End-to-end voice capture on the Pixel 6 produces a transcribed Stitch draft in under 60s.
 
 ### Phase 4 — Bead creation interface (v0.4)
 
@@ -377,11 +448,33 @@ Same as before: first message prefix `[needle:<worker>:<bead>:<strand>]` → fle
 6. **Audit trail:** every created bead has `created_by: hoop` + operator identity + source (`form` / `chat` / `bulk` / `template:<name>`) recorded in `fleet.db` actions table.
 7. **Explicit non-actions:** HOOP does not `close`, `update`, `claim`, `release`, `depend`, or any other `br` verb beyond `create`. If the operator needs those, they use `br` directly.
 
+**Plus three marquee capabilities:**
+
+8. **"What Will This Take?" Preview** — before submit, HOOP simulates the Stitch:
+   - Which worker (by adapter + model) in the fleet would most likely claim the first bead (from historical adapter-work-type fit; **not** strand-based — strands are worker-immutable and HOOP never predicts by strand)
+   - Expected cost p50 / p90 from percentile bands of closed Stitches with similar title tokens, body length, labels, attachments
+   - Estimated duration p50 / p90 from the same source
+   - Closest matching failure pattern from the fix-lineage library (#18 in phase 2)
+   - Whether any currently-claimed bead might conflict (file-overlap prediction)
+   
+   Preview card: "likely picked up by `codex-mid-charlie`; p50 $1.80 / p90 $4.20; ETA 12–40 min; risk: `large_codegen_stack_overflow` pattern matched — consider narrowing scope." Operator can edit and re-preview before committing.
+   
+9. **Already-Started Detection.** At draft time, HOOP embeds the title + description and searches all open Stitches across projects. If similarity crosses a threshold, the draft UI interrupts: "this looks like `kalshi-weather / evening-flake-investigation`, which is In Progress. Continue that one, add this as a child, or proceed as new?" Prevents the most common fleet-productivity leak: accidental duplicate work.
+
+10. **Stitch Replay from Failure Point.** When a Stitch fails, HOOP reconstructs the full state at the moment of failure: the rendered prompt sequence, every tool call and result up to the crash, the partial worktree git state, the last assistant turn. Presents two options:
+    - **Resume as a new Stitch attempt** — HOOP creates a new bead labeled with the same stitch id, pre-populated with a "pick up from step N" prompt and the failure context; NEEDLE workers claim it normally.
+    - **Continue in Mayor** — the Mayor inherits the reconstructed state in its conversation and can continue the work interactively with the operator.
+    
+    Only HOOP has the joined view (NEEDLE events + CLI session JSONL + worktree git state) needed to reconstruct the moment cleanly.
+
 **Success criteria:**
-- A form-drafted bead appears in NEEDLE's queue and is claimed by a worker without human intervention.
+- A form-drafted Stitch appears in NEEDLE's queue (as the underlying beads) and is claimed by a worker without human intervention.
 - An audit row exists for every HOOP-created bead; `br` log shows the same creation.
-- Chat-driven drafting produces a reasonable first draft for common intents ("review the last merge in project X", "investigate the Calico IP issue").
-- Bulk draft correctly splits a 10-item markdown list into 10 previewable drafts.
+- Chat-driven drafting produces a reasonable first Stitch draft for common intents ("review the last merge in project X", "investigate the Calico IP issue").
+- Bulk draft correctly splits a 10-item markdown list into 10 previewable Stitch drafts.
+- "What Will This Take?" estimates land within the p50 / p90 bands for 80% of closed Stitches after 30 days of operation.
+- Already-Started Detection catches a synthetic duplicate across two projects with >95% recall at threshold.
+- Stitch Replay reconstructs the failure moment and successfully resumes a bead that completes.
 
 ### Phase 5 — The Mayor (v0.5)
 
@@ -400,25 +493,40 @@ Same as before: first message prefix `[needle:<worker>:<bead>:<strand>]` → fle
    - Visual-debug reconstructions per bead
    - Recent audit log
 3. **Mayor tool belt — one write, many reads:**
-   - `create_bead(project, title, body, deps[], priority, attachments[])` — the one write
-   - `find_beads(project, filter)`, `read_bead(id)`
+   - `create_stitch(project, title, description, kind, attachments[])` — the one write. Internally decomposes to one or more `br create` calls; the Mayor speaks in Stitches, not beads.
+   - `find_stitches(project, filter)`, `read_stitch(id)` (returns the aggregated view)
+   - `find_beads(project, filter)`, `read_bead(id)` — expert-only, available but rarely needed
    - `read_file(project, path, revision)`, `grep(project, pattern)`
    - `search_conversations(query, project?)`
    - `summarize_project(project)`, `summarize_day()`
    - `escalate_to_operator(message)` — UI banner; no auto-actions
-   - **No** `launch_fleet`, `stop_fleet`, `release_claim`, `boost_priority`, `close_bead`. If the Mayor concludes work needs stopping or a bead needs closing, it escalates to the operator.
+   - **No** `launch_fleet`, `stop_fleet`, `release_claim`, `boost_priority`, `close_stitch`, `close_bead`. If the Mayor concludes work needs stopping or a Stitch needs closing, it escalates to the operator.
 4. **Notification channel.** When a fleet closes a bead, completes a convoy, hits a capacity threshold, or surfaces a stuck-worker alert, the Mayor receives a structured event. Mayor decides whether to surface it to the operator.
 5. **Operator ↔ Mayor chat pane** — primary UI surface. Cross-project by design. Multimodal input (from phase 3). Streams in real time.
 6. **Bead drafts via Mayor** route through phase 4's preview flow — no direct submits.
 7. **Mayor-off switch.** HOOP remains fully functional without a Mayor. Enabling the Mayor requires an Anthropic API key or a configured Claude Code account and explicit config.
 8. **Mayor audit trail.** Every Mayor-drafted bead carries `actor: hoop:mayor:<session>` in the audit log, with a link to the chat turn that produced it.
 
+**Plus two marquee capabilities:**
+
+9. **Morning Brief** — at operator login (or a configured time), the Mayor autonomously reviews overnight activity across every project and produces a structured briefing:
+   - What closed successfully, what failed (with cost impact), what's stuck, what's anomalous (via #18 cost lineage), what's blocked on human input
+   - Pre-drafted Stitches (always unsubmitted, always preview flow) for follow-ups the Mayor thinks are important
+   - Cross-project propagation suggestions (see #10)
+   - **One headline** — the single thing the Mayor thinks should take priority today, with evidence
+   
+   Turns the "what happened overnight?" question from a 20-minute trawl into a two-minute read. Realizes Gas Town's "Mayor kicks off most work" within HOOP's read-and-draft scope.
+
+10. **Cross-Project Stitch Propagation.** The Mayor recognizes when a fix pattern applied in one project has structural siblings in other projects (same config shape, same file layout, same dependency, similar recent failure signals). Surfaces: "you just closed `fix Calico IP selection` in `iad-acb`. The same pattern exists in `iad-ci`, `rs-manager`, `ardenone-cluster`. Draft matching Stitches for each?" Always preview; operator accepts per-project or all-at-once. Uniquely HOOP because cross-project visibility is HOOP's core position — no single-project tool can make this connection.
+
 **Success criteria:**
 - Mayor session survives `systemctl restart hoop` with full context intact.
-- Operator asks "what did we do today across all projects?" and gets a coherent cross-project summary.
-- Operator asks "something feels off on kalshi-weather" and the Mayor reviews recent beads, conversations, and files; responds with a focused answer and (if warranted) a drafted bead for the operator to review.
+- Operator asks "what did we do today across all projects?" and gets a coherent cross-project summary in Stitch language.
+- Operator asks "something feels off on kalshi-weather" and the Mayor reviews recent Stitches, conversations, and files; responds with a focused answer and (if warranted) a drafted Stitch for the operator to review.
 - Mayor never performs a worker action (no launch/stop/release/close). Attempts to ask for such actions produce an explanation pointing at `br` or NEEDLE.
-- Mayor audit log lets the operator reconstruct any drafted bead back to the chat turn that produced it.
+- Morning Brief produces a useful daily summary and at least one correctly-scoped pre-drafted Stitch per typical overnight run.
+- Cross-Project Propagation catches a real fix-sibling across 3+ projects with operator-rated useful accuracy (tracked manually over first 30 days).
+- Mayor audit log lets the operator reconstruct any drafted Stitch back to the chat turn that produced it.
 
 ### Phase 6 — Operational polish (v0.6)
 
@@ -441,6 +549,26 @@ Make HOOP pleasant to run for the long haul.
 - `systemctl --user restart hoop` resumes full state in <5s
 - A bad `projects.yaml` edit is rejected; old config continues running
 - One month of operation produces <1GB in logs + backups
+
+### Phase 6.5 — Marquee capabilities summary
+
+The ten features that earn HOOP its keep, collected in one place with phase assignments:
+
+| # | Capability | Phase | One-line pitch |
+|---|---|---|---|
+| 1 | Stitch abstraction layer | 2 | Humans work in project-scoped Stitches; beads stay hidden |
+| 2 | Stitch-Provenance Code Archaeology | 2 | git blame with the *Stitch* that introduced each line |
+| 3 | Time-Machine UI Scrubber | 2 | Drag a slider; the whole UI re-renders state at that past moment |
+| 4 | Stitch Net-Diff Viewer | 2 | Multi-bead convoys reviewed as one unified PR-like surface |
+| 5 | Cost-Anomaly with Fix Lineage | 2 | Over-cost Stitches link to past matches and recommended fixes |
+| 6 | Voice / Screen Work Capture | 3 | Describe work by voice or screencast; HOOP drafts the Stitch |
+| 7 | "What Will This Take?" Preview | 4 | Cost / duration / risk preview before submitting a Stitch |
+| 8 | Already-Started Detection | 4 | Semantic check catches duplicates across projects at draft time |
+| 9 | Stitch Replay from Failure Point | 4 | Reconstruct a failed Stitch's state and resume from there |
+| 10 | Morning Brief | 5 | The Mayor's daily briefing + pre-drafted Stitches + one headline |
+| (10+) | Cross-Project Stitch Propagation | 5 | Mayor suggests matching fixes for sibling projects |
+
+Common thread: each exploits HOOP's unique position as the *join* across projects × Stitches × conversations × files × cost × time. Every one demos in under a minute. None crosses the no-worker-steering line. Collectively they are the difference between "HOOP is a dashboard" and "HOOP is the operator's primary interface to a long-running agent fleet."
 
 ### Phase 7 — Multi-operator (v1.0)
 
@@ -488,13 +616,15 @@ Explicit. HOOP deliberately does not grow into these.
 1. **Orchestrating work.** NEEDLE does this.
 2. **Steering workers.** No launch, stop, kill, pause, signal, SIGSTOP, SIGTERM, release-claim, reassign, or any other action that touches a worker process or bead lifecycle.
 3. **Capacity enforcement.** HOOP shows utilization; it never throttles, rotates, or pauses on thresholds. Enforcement, if needed, belongs in NEEDLE or a dedicated layer.
-4. **Mutating bead state.** Only `br create` is HOOP's write. No close, update, depend, claim, release.
-5. **Storing bead state.** `br` owns it.
-6. **Replacing FABRIC.** FABRIC read-only, deployable anywhere; HOOP local-host with one write. URL bridge links them.
-7. **Multi-host control.** One HOOP, one host. Growth is more projects, not more hosts.
-8. **RBAC beyond viewer/drafter.**
-9. **Secrets management.** Credentials live in each CLI's native cache.
-10. **Browser-only.** HOOP needs a server — it reads filesystem and shells to `br`.
+4. **Routing by strand.** Strands are set at worker launch from the (model, harness) pair and are worker-immutable. HOOP displays which strand a worker is on; HOOP never tries to predict, match, or route work by strand.
+5. **Mutating bead state.** Only `br create` is HOOP's write. No close, update, depend, claim, release.
+6. **Storing bead state.** `br` owns it. HOOP owns Stitch state (a derived overlay) in `fleet.db`, not bead state.
+7. **Replacing FABRIC.** FABRIC read-only, deployable anywhere; HOOP local-host with one write. URL bridge links them.
+8. **Multi-host control.** One HOOP, one host. Growth is more projects, not more hosts.
+9. **RBAC beyond viewer/drafter.**
+10. **Secrets management.** Credentials live in each CLI's native cache.
+11. **Browser-only.** HOOP needs a server — it reads filesystem and shells to `br`.
+12. **Making operators learn bead semantics.** Humans work in Stitches. Bead IDs are a debugging detail; a normal operator can use HOOP productively without ever seeing one.
 
 ---
 
@@ -516,14 +646,14 @@ Explicit. HOOP deliberately does not grow into these.
 | Version | Target | Definition of done |
 |---|---|---|
 | v0.1 | +4 weeks | Single-project EX44 observer; read-only UI; zero write paths |
-| v0.2 | +10 weeks | Multi-project; cost + capacity visibility; visual debug; collision/stuck detection |
-| v0.3 | +14 weeks | File browser, syntax highlighting, multimodal attachments |
-| v0.4 | +18 weeks | Bead-creation: form + chat + templates + bulk; audit log |
-| v0.5 | +24 weeks | The Mayor: persistent Claude Code session, MCP-backed context, drafts through preview flow |
-| v0.6 | +28 weeks | Operational polish: systemd, hot-reload, backups, metrics, Tailscale identity |
-| v1.0 | +32 weeks | Multi-operator with viewer/drafter roles; public README |
+| v0.2 | +12 weeks | Multi-project + Stitch layer + cost/capacity viz + visual debug + 5 marquee features (stitch-blame, time-machine, net-diff, cost-anomaly) |
+| v0.3 | +16 weeks | File browser + syntax highlighting + multimodal attachments + voice/screen capture |
+| v0.4 | +22 weeks | Stitch creation: form + chat + templates + bulk + what-will-this-take + already-started detection + replay |
+| v0.5 | +28 weeks | The Mayor: persistent Claude Code session + MCP tool belt + morning brief + cross-project propagation |
+| v0.6 | +32 weeks | Operational polish: systemd, hot-reload, backups, metrics, Tailscale identity |
+| v1.0 | +36 weeks | Multi-operator with viewer/drafter roles; public README |
 
-Dates are planning fiction; ordering matters. **Do not build bead creation before observability is real.** Drafting beads against a backlog the operator can't inspect is worse than no drafting at all.
+Dates are planning fiction; ordering matters. **Do not build Stitch creation before observability is real.** Drafting work against a backlog the operator can't inspect is worse than no drafting at all. **Do not seat the Mayor before direct Stitch creation and the marquee observability features exist** — the Mayor is a productivity multiplier on top of those surfaces; without them it's a chatbot without tools.
 
 ---
 
