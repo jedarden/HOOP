@@ -875,20 +875,20 @@ Target: under 5 minutes if tools are already installed.
 
 Living in the repo itself:
 
-- **`README.md`** — install + run + core concepts. Under-30-min path for a stranger.
-- **`AGENTS.md`** — LLM-facing guide at repo root. Summarizes scope, non-goals, terminology, conventions. Points at the plan as authoritative. Keeps LLMs from re-introducing removed vocabulary (Mayor, polecat, Gas Town) or proposing disallowed features (worker steering, capacity enforcement).
-- **`docs/quickstart.md`** — 15-minute human-facing quickstart walking through install, first-run, concepts, first Stitch, daily rhythm, troubleshooting.
+- **`README.md`** at repo root — combined install + run + concepts + quickstart. Under-30-min path for a human visitor. The first thing anyone reads.
+- **`AGENTS.md`** at repo root — LLM-facing guide. Summarizes scope, non-goals, terminology, conventions. Points at the plan as authoritative. Keeps LLMs from re-introducing removed vocabulary (Mayor, polecat, Gas Town) or proposing disallowed features (worker steering, capacity enforcement).
+- **`docs/plan/plan.md`** — this document. The canonical, detailed implementation plan. What the README links to for depth.
 - **`docs/concepts/`** — one-page-per-concept docs for Stitch, Pattern, Project, Workspace, Agent, Reflection Ledger, Bead (as an internal detail).
 - **`docs/operations.md`** — systemd, backups, upgrades, schema migrations, Tailscale routing.
 - **`docs/troubleshooting.md`** — common failures with recovery steps, mapped to `hoop audit` output.
 
-`AGENTS.md` and `docs/quickstart.md` are created alongside the plan so the repo is immediately useful to a visitor — LLM or human — even before any binary exists. They evolve with each phase.
+`README.md` and `AGENTS.md` at repo root are created alongside the plan so the repo is immediately useful to a visitor — LLM or human — even before any binary exists. They evolve with each phase.
 
 ### Phase-by-phase onboarding deliverables
 
 | Phase | Onboarding additions |
 |---|---|
-| 1 | `hoop audit` + `hoop init` wizard (minimum viable); README + quickstart scaffolding |
+| 1 | `hoop audit` + `hoop init` wizard (minimum viable); README at repo root with install + quickstart flow |
 | 2 | UI first-run tour; project-scan guidance; capacity-widget explanations |
 | 3 | File browser quick-start tooltip; first-dictation prompt near the mic hotkey |
 | 4 | Stitch-draft form with inline field hints; sample templates library; dry-run preview |

@@ -17,7 +17,7 @@ HOOP does **not** steer NEEDLE workers (no launch / stop / kill / signal / relea
   - `interop-with-needle.md`
   - `orchestrator-problems-and-solutions.md`
 - `docs/research/` — reserved for future research material.
-- `docs/quickstart.md` — human-facing quickstart (may reference future-state install steps).
+- `README.md` at repo root — human-facing quickstart (install + concepts + first-run; may reference future-state install steps).
 - `AGENTS.md` — this file.
 
 There is **no source code yet**. Any Rust crate skeleton, web client scaffolding, or binary artifacts should be created following the plan's phased roadmap, not ad-hoc.
@@ -91,5 +91,5 @@ If asked a question about HOOP, answer from the plan — do not invent semantics
 - Writing tests → match the Success Criteria for the feature's phase.
 - Adding configuration → `~/.hoop/*.yaml`, file-watched, hot-reload, schema-validated, rejected loudly on invalid edits.
 - Adding a UI surface → follow the in-flight-isolation rule (streaming content in a separate reactive atom).
-- Adding documentation for users → `docs/quickstart.md` or a new `docs/concepts/*.md` file.
+- Adding documentation for users → `README.md` at repo root (quickstart) or a new `docs/concepts/*.md` file for deep-dives.
 - Adding documentation for LLMs → this file.
