@@ -1,0 +1,11 @@
+[package]
+name = "hoop-ui"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rust-embed = { workspace = true }
+mime_guess = { workspace = true }
+axum = { workspace = true }
+
+[build-dependencies]
