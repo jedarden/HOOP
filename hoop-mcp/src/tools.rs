@@ -11,6 +11,37 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
+/// Worker-steering verbs that MUST NOT be exposed via MCP.
+///
+/// These represent actions that belong to NEEDLE, not HOOP. HOOP observes
+/// workers and fleets; it does not control them. When an agent attempts to
+/// invoke these tools, return a clear error explaining the non-goal.
+pub const FORBIDDEN_WORKER_STEERING_VERBS: &[&str] = &[
+    "launch_fleet",
+    "stop_fleet",
+    "release_claim",
+    "boost_priority",
+    "close_stitch",
+    "close_bead",
+    "signal_worker",
+    "kill_worker",
+    "pause_worker",
+];
+
+/// Check if a tool name is a forbidden worker-steering verb.
+pub fn is_forbidden_worker_steering_verb(tool_name: &str) -> bool {
+    FORBIDDEN_WORKER_STEERING_VERBS.contains(&tool_name)
+}
+
+/// Error message for forbidden worker-steering actions.
+pub fn forbidden_worker_steering_error(tool_name: &str) -> String {
+    format!(
+        "HOOP cannot perform worker-steering actions: '{}' is not available. \
+        To close a bead, use `br close` directly. To stop a worker, use NEEDLE's tooling.",
+        tool_name
+    )
+}
+
 /// MCP server state
 pub struct McpServerState {
     pub audit_log: AuditLog,
@@ -165,6 +196,11 @@ impl McpServerState {
 
     /// Handle a tool call
     pub fn call_tool(&self, name: &str, args: &Map<String, Value>) -> Result<ToolCallResult, String> {
+        // Runtime guard: reject worker-steering verbs (these are NOT exposed via MCP)
+        if is_forbidden_worker_steering_verb(name) {
+            return Err(forbidden_worker_steering_error(name));
+        }
+
         let result = match name {
             // Read tools
             "find_stitches" => self.find_stitches(args),
@@ -473,20 +509,48 @@ impl McpServerState {
     // Internal helpers
     // -----------------------------------------------------------------------
 
-    fn query_stitches_from_db(&self, project: &str, _args: &Map<String, Value>) -> Result<Vec<Value>, String> {
-        use rusqlite::Connection;
+    fn open_fleet_db(&self) -> Result<rusqlite::Connection, String> {
+        if !self.fleet_db_path.exists() {
+            return Err("fleet.db not found — daemon may not have been started yet".to_string());
+        }
+        rusqlite::Connection::open(&self.fleet_db_path)
+            .map_err(|e| format!("Failed to open fleet.db: {}", e))
+    }
 
-        let conn = Connection::open(&self.fleet_db_path)
-            .map_err(|e| format!("Failed to open fleet.db: {}", e))?;
+    fn query_stitches_from_db(&self, project: &str, args: &Map<String, Value>) -> Result<Vec<Value>, String> {
+        let conn = self.open_fleet_db()?;
 
-        let mut stmt = conn.prepare(
-            "SELECT id, project, kind, title, created_by, created_at, last_activity_at
-             FROM stitches
-             WHERE project = ?1
-             ORDER BY last_activity_at DESC"
-        ).map_err(|e| format!("Failed to prepare query: {}", e))?;
+        let kind_filter = args.get("kind").and_then(|v| v.as_str());
+        let limit = args.get("limit")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(50) as i64;
 
-        let rows = stmt.query_map([project], |row| {
+        let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(kind) = kind_filter {
+            (
+                "SELECT id, project, kind, title, created_by, created_at, last_activity_at, participants
+                 FROM stitches
+                 WHERE project = ?1 AND kind = ?2
+                 ORDER BY last_activity_at DESC
+                 LIMIT ?3".to_string(),
+                vec![Box::new(project.to_string()), Box::new(kind.to_string()), Box::new(limit)],
+            )
+        } else {
+            (
+                "SELECT id, project, kind, title, created_by, created_at, last_activity_at, participants
+                 FROM stitches
+                 WHERE project = ?1
+                 ORDER BY last_activity_at DESC
+                 LIMIT ?2".to_string(),
+                vec![Box::new(project.to_string()), Box::new(limit)],
+            )
+        };
+
+        let mut stmt = conn.prepare(&sql)
+            .map_err(|e| format!("Failed to prepare query: {}", e))?;
+
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let rows = stmt.query_map(param_refs.as_slice(), |row| {
+            let participants: String = row.get(7).unwrap_or_default();
             Ok(json!({
                 "id": row.get::<_, String>(0)?,
                 "project": row.get::<_, String>(1)?,
@@ -495,6 +559,7 @@ impl McpServerState {
                 "created_by": row.get::<_, String>(4)?,
                 "created_at": row.get::<_, String>(5)?,
                 "last_activity_at": row.get::<_, String>(6)?,
+                "participants": participants,
             }))
         }).map_err(|e| format!("Failed to execute query: {}", e))?;
 
@@ -507,10 +572,7 @@ impl McpServerState {
     }
 
     fn query_stitch_detail_from_db(&self, stitch_id: &str) -> Result<Value, String> {
-        use rusqlite::Connection;
-
-        let conn = Connection::open(&self.fleet_db_path)
-            .map_err(|e| format!("Failed to open fleet.db: {}", e))?;
+        let conn = self.open_fleet_db()?;
 
         // Get stitch info
         let stitch = conn.query_row(
@@ -692,10 +754,7 @@ impl McpServerState {
     }
 
     fn search_conversations_in_db(&self, query: &str, project: Option<&str>) -> Result<Vec<Value>, String> {
-        use rusqlite::Connection;
-
-        let conn = Connection::open(&self.fleet_db_path)
-            .map_err(|e| format!("Failed to open fleet.db: {}", e))?;
+        let conn = self.open_fleet_db()?;
 
         let pattern = format!("%{}%", query);
 
@@ -747,10 +806,7 @@ impl McpServerState {
     }
 
     fn generate_project_summary(&self, project: &str) -> Result<Value, String> {
-        use rusqlite::Connection;
-
-        let conn = Connection::open(&self.fleet_db_path)
-            .map_err(|e| format!("Failed to open fleet.db: {}", e))?;
+        let conn = self.open_fleet_db()?;
 
         // Get stitch counts
         let stitch_count: i64 = conn.query_row(
@@ -759,12 +815,18 @@ impl McpServerState {
             |row| row.get(0),
         ).unwrap_or(0);
 
-        // Get recent activity from audit log
+        // Get recent activity — try with project column first, fall back to count all
         let recent_actions: i64 = conn.query_row(
             "SELECT COUNT(*) FROM actions WHERE project = ?1 AND ts > datetime('now', '-24 hours')",
             [project],
             |row| row.get(0),
-        ).unwrap_or(0);
+        ).unwrap_or_else(|_| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM actions WHERE ts > datetime('now', '-24 hours')",
+                [],
+                |row| row.get(0),
+            ).unwrap_or(0)
+        });
 
         Ok(json!({
             "project": project,
@@ -775,10 +837,7 @@ impl McpServerState {
     }
 
     fn generate_day_summary(&self) -> Result<Value, String> {
-        use rusqlite::Connection;
-
-        let conn = Connection::open(&self.fleet_db_path)
-            .map_err(|e| format!("Failed to open fleet.db: {}", e))?;
+        let conn = self.open_fleet_db()?;
 
         // Get today's action count
         let today_actions: i64 = conn.query_row(
