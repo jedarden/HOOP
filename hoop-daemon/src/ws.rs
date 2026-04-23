@@ -325,6 +325,18 @@ pub struct BeadEventData {
     pub raw: String,
 }
 
+/// Stitch created event data sent after a bead is created via the submit flow
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StitchCreatedData {
+    pub bead_id: String,
+    pub title: String,
+    pub project: String,
+    pub stitch_id: Option<String>,
+    pub source: String,
+    pub actor: String,
+    pub created_at: String,
+}
+
 /// WebSocket event sent to clients
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -353,6 +365,8 @@ pub struct WsEvent {
     pub bead_event: Option<BeadEventData>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bead_events: Option<Vec<BeadEventData>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stitch_created: Option<StitchCreatedData>,
 }
 
 impl WsEvent {
@@ -371,6 +385,7 @@ impl WsEvent {
             capacity: None,
             bead_event: None,
             bead_events: None,
+            stitch_created: None,
         }
     }
 
@@ -389,6 +404,7 @@ impl WsEvent {
             capacity: None,
             bead_event: None,
             bead_events: None,
+            stitch_created: None,
         }
     }
 
@@ -407,6 +423,7 @@ impl WsEvent {
             capacity: None,
             bead_event: None,
             bead_events: None,
+            stitch_created: None,
         }
     }
 
@@ -425,6 +442,7 @@ impl WsEvent {
             capacity: None,
             bead_event: None,
             bead_events: None,
+            stitch_created: None,
         }
     }
 
@@ -443,6 +461,7 @@ impl WsEvent {
             capacity: None,
             bead_event: None,
             bead_events: None,
+            stitch_created: None,
         }
     }
 
@@ -461,6 +480,7 @@ impl WsEvent {
             capacity: None,
             bead_event: None,
             bead_events: None,
+            stitch_created: None,
         }
     }
 
@@ -479,6 +499,7 @@ impl WsEvent {
             capacity: None,
             bead_event: None,
             bead_events: None,
+            stitch_created: None,
         }
     }
 
@@ -497,6 +518,7 @@ impl WsEvent {
             capacity: None,
             bead_event: None,
             bead_events: None,
+            stitch_created: None,
         }
     }
 
@@ -515,6 +537,7 @@ impl WsEvent {
             capacity: Some(capacity),
             bead_event: None,
             bead_events: None,
+            stitch_created: None,
         }
     }
 
@@ -533,6 +556,7 @@ impl WsEvent {
             capacity: None,
             bead_event: Some(event),
             bead_events: None,
+            stitch_created: None,
         }
     }
 
@@ -551,6 +575,26 @@ impl WsEvent {
             capacity: None,
             bead_event: None,
             bead_events: Some(events),
+            stitch_created: None,
+        }
+    }
+
+    /// Create a stitch_created event emitted after successful bead creation
+    pub fn stitch_created(data: StitchCreatedData) -> Self {
+        Self {
+            event_type: "stitch_created".to_string(),
+            worker: None,
+            workers: None,
+            beads: None,
+            conversations: None,
+            conversation: None,
+            streaming: None,
+            projects: None,
+            config_status: None,
+            capacity: None,
+            bead_event: None,
+            bead_events: None,
+            stitch_created: Some(data),
         }
     }
 }

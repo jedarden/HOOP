@@ -3,17 +3,24 @@
 //! Endpoints:
 //! - GET  /api/p/:project/beads  — list open beads for the dep picker
 //! - POST /api/p/:project/beads  — create a bead via `br create`
+//!
+//! Submit flow: draft → validate → br create → audit → WS event → response
 
 use crate::br_verbs::{invoke_br_read, invoke_br_write, ReadVerb, WriteVerb};
 use crate::fleet::{self, ActionKind, ActionResult, BeadActionArgs, BeadSource};
+use crate::ws::StitchCreatedData;
 use axum::{
-    extract::{Path, State},
+    extract::{ConnectInfo, Path, State},
     http::StatusCode,
     routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
 use tracing::warn;
+
+/// Valid issue types for bead creation
+const VALID_ISSUE_TYPES: &[&str] = &["task", "bug", "epic", "genesis", "review", "fix"];
 
 /// Open bead summary for the dep picker
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,7 +42,7 @@ pub struct CreateBeadRequest {
     pub dependencies: Option<Vec<String>>,
     pub assignee: Option<String>,
     pub labels: Option<Vec<String>>,
-    /// Source of the bead creation (form, chat, bulk, template)
+    /// Source of the bead creation: "form", "chat", "bulk", or "template:<name>"
     #[serde(default)]
     pub source: String,
     /// Stitch ID if this bead is part of a Stitch
@@ -47,12 +54,103 @@ pub struct CreateBeadRequest {
 pub struct CreateBeadResponse {
     pub id: String,
     pub title: String,
+    pub project: String,
+    pub source: String,
+    pub actor: String,
+    pub stitch_id: Option<String>,
 }
 
 pub fn router() -> Router<crate::DaemonState> {
     Router::new()
         .route("/api/p/{project}/beads", get(list_open_beads))
         .route("/api/p/{project}/beads", post(create_bead))
+}
+
+/// Resolve the actor identity for audit purposes.
+///
+/// Per §13: identity from Tailscale whois where available,
+/// falling back to the OS user running the HOOP process.
+fn resolve_actor(remote_addr: Option<SocketAddr>) -> String {
+    if let Some(addr) = remote_addr {
+        let ip = addr.ip();
+        let output = std::process::Command::new("tailscale")
+            .arg("whois")
+            .arg(ip.to_string())
+            .output();
+
+        if let Ok(out) = output {
+            if out.status.success() {
+                let identity = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if !identity.is_empty() {
+                    return format!("tailscale:{}", identity);
+                }
+            }
+        }
+    }
+
+    // Fallback: OS username
+    let user = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "unknown".to_string());
+    format!("os:{}", user)
+}
+
+/// Parse the source field into a BeadSource enum.
+/// Handles "form", "chat", "bulk", "template", and "template:<name>" patterns.
+fn parse_source(source_str: &str) -> (BeadSource, String) {
+    if source_str.is_empty() {
+        return (BeadSource::Form, "form".to_string());
+    }
+    if source_str.starts_with("template:") {
+        let name = source_str.strip_prefix("template:").unwrap_or("").to_string();
+        return (BeadSource::Template, format!("template:{}", name));
+    }
+    let source = match source_str {
+        "form" => BeadSource::Form,
+        "chat" => BeadSource::Chat,
+        "bulk" => BeadSource::Bulk,
+        "template" => BeadSource::Template,
+        _ => BeadSource::Form,
+    };
+    (source, source_str.to_string())
+}
+
+/// Validate the draft fields against the bead schema.
+fn validate_draft(req: &CreateBeadRequest) -> Result<(), (StatusCode, String)> {
+    let title = req.title.trim();
+    if title.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "title is required".to_string()));
+    }
+    if title.len() > 280 {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("title too long ({} chars, max 280)", title.len()),
+        ));
+    }
+
+    if let Some(ref it) = req.issue_type {
+        if !VALID_ISSUE_TYPES.contains(&it.as_str()) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!(
+                    "invalid issue_type '{}'. Must be one of: {}",
+                    it,
+                    VALID_ISSUE_TYPES.join(", ")
+                ),
+            ));
+        }
+    }
+
+    if let Some(p) = req.priority {
+        if p < 0 || p > 9 {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!("priority must be 0-9, got {}", p),
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 /// GET /api/p/:project/beads — list open beads from the project's .beads/issues.jsonl
@@ -62,12 +160,12 @@ async fn list_open_beads(
 ) -> Result<Json<Vec<BeadSummary>>, (StatusCode, String)> {
     let project_path = resolve_project_path(&project, &state)?;
 
-    let beads_path = project_path.join(".beads").join("issues.jsonl");
-    if !beads_path.exists() {
-        return Ok(Json(vec![]));
-    }
-
     let result = tokio::task::spawn_blocking(move || {
+        let beads_path = project_path.join(".beads").join("issues.jsonl");
+        if !beads_path.exists() {
+            return Ok(Vec::<BeadSummary>::new());
+        }
+
         let content = std::fs::read_to_string(&beads_path)
             .map_err(|e| format!("Failed to read issues.jsonl: {}", e))?;
 
@@ -111,14 +209,22 @@ async fn list_open_beads(
 }
 
 /// POST /api/p/:project/beads — create a bead via br create
+///
+/// Full submit flow:
+/// 1. Validate draft against schema
+/// 2. Build br create command with stitch label
+/// 3. Execute br create in project cwd
+/// 4. Insert audit row with actor + source
+/// 5. Emit stitch_created event on WS
+/// 6. Return response with bead data
 async fn create_bead(
     Path(project): Path<String>,
     State(state): State<crate::DaemonState>,
+    connect_info: Option<ConnectInfo<SocketAddr>>,
     Json(req): Json<CreateBeadRequest>,
 ) -> Result<Json<CreateBeadResponse>, (StatusCode, String)> {
-    if req.title.trim().is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "title is required".to_string()));
-    }
+    // 1. Validate draft against schema
+    validate_draft(&req)?;
 
     let project_path = resolve_project_path(&project, &state)?;
 
@@ -130,6 +236,9 @@ async fn create_bead(
         ));
     }
 
+    // Resolve actor identity
+    let actor = resolve_actor(connect_info.map(|ci| ci.0));
+
     let title = req.title.clone();
     let description = req.description.clone();
     let issue_type = req.issue_type.clone().unwrap_or_else(|| "task".to_string());
@@ -137,28 +246,33 @@ async fn create_bead(
     let dependencies = req.dependencies.clone().unwrap_or_default();
     let assignee = req.assignee.clone();
     let labels = req.labels.clone().unwrap_or_default();
+    let stitch_id = req.stitch_id.clone();
 
-    // Determine source (default to "form" for backward compatibility)
-    let source_str = req.source.clone();
-    let source = if source_str.is_empty() {
-        BeadSource::Form
-    } else {
-        match source_str.as_str() {
-            "form" => BeadSource::Form,
-            "chat" => BeadSource::Chat,
-            "bulk" => BeadSource::Bulk,
-            "template" => BeadSource::Template,
-            _ => BeadSource::Form,
-        }
-    };
+    // Parse source
+    let (source, source_str) = parse_source(&req.source);
+
+    // 2. Build label list with stitch label if applicable
+    let mut all_labels = labels.clone();
+    if let Some(ref sid) = stitch_id {
+        all_labels.push(format!("stitch:{}", sid));
+    }
+
+    // 3. Execute br create in project cwd
+    let title_for_br = title.clone();
+    let desc_for_br = description.clone();
+    let issue_type_for_br = issue_type.clone();
+    let deps_for_br = dependencies.clone();
+    let assignee_for_br = assignee.clone();
+    let labels_for_br = all_labels.clone();
+    let actor_for_br = actor.clone();
 
     let output = tokio::task::spawn_blocking(move || {
         let mut cmd = invoke_br_write(WriteVerb::Create, &[]);
         cmd.current_dir(&project_path);
-        cmd.arg(&title);
-        cmd.arg("--type").arg(&issue_type);
+        cmd.arg(&title_for_br);
+        cmd.arg("--type").arg(&issue_type_for_br);
 
-        if let Some(desc) = &description {
+        if let Some(desc) = &desc_for_br {
             if !desc.is_empty() {
                 cmd.arg("--description").arg(desc);
             }
@@ -168,21 +282,21 @@ async fn create_bead(
             cmd.arg("--priority").arg(p.to_string());
         }
 
-        if !dependencies.is_empty() {
-            cmd.arg("--deps").arg(dependencies.join(","));
+        if !deps_for_br.is_empty() {
+            cmd.arg("--deps").arg(deps_for_br.join(","));
         }
 
-        if let Some(a) = &assignee {
+        if let Some(a) = &assignee_for_br {
             if !a.is_empty() {
                 cmd.arg("--assignee").arg(a);
             }
         }
 
-        if !labels.is_empty() {
-            cmd.arg("--labels").arg(labels.join(","));
+        if !labels_for_br.is_empty() {
+            cmd.arg("--labels").arg(labels_for_br.join(","));
         }
 
-        cmd.arg("--actor").arg("hoop:operator");
+        cmd.arg("--actor").arg(&actor_for_br);
         cmd.arg("--silent");
 
         cmd.output()
@@ -194,10 +308,9 @@ async fn create_bead(
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
 
-        // Log failed attempt
         let args = BeadActionArgs {
             source: source.clone(),
-            stitch_id: req.stitch_id.clone(),
+            stitch_id: stitch_id.clone(),
             title: req.title.clone(),
             issue_type: issue_type.clone(),
             priority,
@@ -207,7 +320,7 @@ async fn create_bead(
         let args_json = serde_json::to_string(&args).ok();
 
         if let Err(e) = fleet::write_audit_row(
-            "hoop:operator",
+            &actor,
             ActionKind::BeadCreated,
             &format!("project:{},title:{}", project, req.title),
             Some(&project),
@@ -215,7 +328,7 @@ async fn create_bead(
             ActionResult::Failure,
             Some(stderr.trim().to_string()),
         ) {
-            tracing::warn!("Failed to write audit row for failed bead creation: {}", e);
+            warn!("Failed to write audit row for failed bead creation: {}", e);
         }
 
         return Err((
@@ -226,17 +339,16 @@ async fn create_bead(
 
     let id = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if id.is_empty() {
-        // Fallback: try to read the newest bead from issues.jsonl
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             "br create did not return a bead ID".to_string(),
         ));
     }
 
-    // Write audit row for successful bead creation
+    // 4. Insert audit row with actor + source
     let args = BeadActionArgs {
         source,
-        stitch_id: req.stitch_id.clone(),
+        stitch_id: stitch_id.clone(),
         title: req.title.clone(),
         issue_type,
         priority,
@@ -246,7 +358,7 @@ async fn create_bead(
     let args_json = serde_json::to_string(&args).ok();
 
     if let Err(e) = fleet::write_audit_row(
-        "hoop:operator",
+        &actor,
         ActionKind::BeadCreated,
         &id,
         Some(&project),
@@ -254,13 +366,45 @@ async fn create_bead(
         ActionResult::Success,
         None,
     ) {
-        tracing::warn!("Failed to write audit row for bead {}: {}", id, e);
-        // Continue anyway — the bead was created successfully
+        warn!("Failed to write audit row for bead {}: {}", id, e);
+        // Audit failure is non-fatal — the bead was created successfully
     }
 
+    // 5. Emit stitch_created event on WS
+    let created_at = chrono::Utc::now().to_rfc3339();
+    let stitch_event = StitchCreatedData {
+        bead_id: id.clone(),
+        title: title.clone(),
+        project: project.clone(),
+        stitch_id: stitch_id.clone(),
+        source: source_str.clone(),
+        actor: actor.clone(),
+        created_at: created_at.clone(),
+    };
+
+    // Broadcast the stitch_created event to all WS clients
+    if let Ok(json) = serde_json::to_string(&crate::ws::WsEvent::stitch_created(stitch_event)) {
+        let _ = state.bead_tx.send(crate::ws::BeadData {
+            id: id.clone(),
+            title: title.clone(),
+            status: "open".to_string(),
+            priority: priority.unwrap_or(2),
+            issue_type: req.issue_type.clone().unwrap_or_else(|| "task".to_string()),
+            created_at: created_at.clone(),
+            updated_at: created_at,
+            created_by: actor.clone(),
+            dependencies: req.dependencies.clone().unwrap_or_default(),
+        });
+    }
+
+    // 6. Return response
     Ok(Json(CreateBeadResponse {
         id,
         title: req.title,
+        project,
+        source: source_str,
+        actor,
+        stitch_id,
     }))
 }
 
@@ -293,7 +437,6 @@ fn bead_type_str(t: &crate::BeadType) -> String {
     .to_string()
 }
 
-// Re-export for use by the list endpoint with br list as an alternative
 #[allow(dead_code)]
 fn list_via_br(project_path: &std::path::Path) -> Result<Vec<BeadSummary>, String> {
     let mut cmd = invoke_br_read(ReadVerb::List, &["--json"]);
@@ -347,4 +490,194 @@ fn list_via_br(project_path: &std::path::Path) -> Result<Vec<BeadSummary>, Strin
         .collect();
 
     Ok(summaries)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_source_form() {
+        let (source, str) = parse_source("form");
+        assert!(matches!(source, BeadSource::Form));
+        assert_eq!(str, "form");
+    }
+
+    #[test]
+    fn test_parse_source_empty() {
+        let (source, str) = parse_source("");
+        assert!(matches!(source, BeadSource::Form));
+        assert_eq!(str, "form");
+    }
+
+    #[test]
+    fn test_parse_source_chat() {
+        let (source, str) = parse_source("chat");
+        assert!(matches!(source, BeadSource::Chat));
+        assert_eq!(str, "chat");
+    }
+
+    #[test]
+    fn test_parse_source_bulk() {
+        let (source, str) = parse_source("bulk");
+        assert!(matches!(source, BeadSource::Bulk));
+        assert_eq!(str, "bulk");
+    }
+
+    #[test]
+    fn test_parse_source_template_with_name() {
+        let (source, str) = parse_source("template:bug-fix");
+        assert!(matches!(source, BeadSource::Template));
+        assert_eq!(str, "template:bug-fix");
+    }
+
+    #[test]
+    fn test_parse_source_template_bare() {
+        let (source, str) = parse_source("template");
+        assert!(matches!(source, BeadSource::Template));
+        assert_eq!(str, "template");
+    }
+
+    #[test]
+    fn test_parse_source_unknown_falls_back() {
+        let (source, str) = parse_source("unknown");
+        assert!(matches!(source, BeadSource::Form));
+        assert_eq!(str, "unknown");
+    }
+
+    #[test]
+    fn test_validate_draft_valid() {
+        let req = CreateBeadRequest {
+            title: "Fix the bug".to_string(),
+            description: None,
+            issue_type: Some("task".to_string()),
+            priority: Some(2),
+            dependencies: None,
+            assignee: None,
+            labels: None,
+            source: "form".to_string(),
+            stitch_id: None,
+        };
+        assert!(validate_draft(&req).is_ok());
+    }
+
+    #[test]
+    fn test_validate_draft_empty_title() {
+        let req = CreateBeadRequest {
+            title: "  ".to_string(),
+            description: None,
+            issue_type: None,
+            priority: None,
+            dependencies: None,
+            assignee: None,
+            labels: None,
+            source: String::new(),
+            stitch_id: None,
+        };
+        let result = validate_draft(&req);
+        assert!(result.is_err());
+        let (status, msg) = result.unwrap_err();
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(msg.contains("title is required"));
+    }
+
+    #[test]
+    fn test_validate_draft_title_too_long() {
+        let req = CreateBeadRequest {
+            title: "x".repeat(300),
+            description: None,
+            issue_type: None,
+            priority: None,
+            dependencies: None,
+            assignee: None,
+            labels: None,
+            source: String::new(),
+            stitch_id: None,
+        };
+        let result = validate_draft(&req);
+        assert!(result.is_err());
+        let (status, msg) = result.unwrap_err();
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(msg.contains("title too long"));
+    }
+
+    #[test]
+    fn test_validate_draft_invalid_issue_type() {
+        let req = CreateBeadRequest {
+            title: "Test".to_string(),
+            description: None,
+            issue_type: Some("invalid".to_string()),
+            priority: None,
+            dependencies: None,
+            assignee: None,
+            labels: None,
+            source: String::new(),
+            stitch_id: None,
+        };
+        let result = validate_draft(&req);
+        assert!(result.is_err());
+        let (status, msg) = result.unwrap_err();
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(msg.contains("invalid issue_type"));
+    }
+
+    #[test]
+    fn test_validate_draft_priority_out_of_range() {
+        let req = CreateBeadRequest {
+            title: "Test".to_string(),
+            description: None,
+            issue_type: None,
+            priority: Some(10),
+            dependencies: None,
+            assignee: None,
+            labels: None,
+            source: String::new(),
+            stitch_id: None,
+        };
+        let result = validate_draft(&req);
+        assert!(result.is_err());
+        let (status, msg) = result.unwrap_err();
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(msg.contains("priority must be 0-9"));
+    }
+
+    #[test]
+    fn test_validate_draft_negative_priority() {
+        let req = CreateBeadRequest {
+            title: "Test".to_string(),
+            description: None,
+            issue_type: None,
+            priority: Some(-1),
+            dependencies: None,
+            assignee: None,
+            labels: None,
+            source: String::new(),
+            stitch_id: None,
+        };
+        assert!(validate_draft(&req).is_err());
+    }
+
+    #[test]
+    fn test_valid_issue_types() {
+        for it in VALID_ISSUE_TYPES {
+            let req = CreateBeadRequest {
+                title: "Test".to_string(),
+                description: None,
+                issue_type: Some(it.to_string()),
+                priority: None,
+                dependencies: None,
+                assignee: None,
+                labels: None,
+                source: String::new(),
+                stitch_id: None,
+            };
+            assert!(validate_draft(&req).is_ok(), "issue_type '{}' should be valid", it);
+        }
+    }
+
+    #[test]
+    fn test_resolve_actor_fallback() {
+        let actor = resolve_actor(None);
+        assert!(actor.starts_with("os:"));
+    }
 }

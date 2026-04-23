@@ -456,7 +456,7 @@ function reconstructTimeline(
 
     // Tool role (tool result message)
     if (msg.role === 'tool') {
-      const attachments = extractAttachments(msg.content, msg.tool_name);
+      const attachments = extractAttachments(msg.content, (msg.content as any)?.tool_name);
       steps.push({
         id: `step-${stepIndex++}`,
         index: stepIndex,
@@ -551,7 +551,7 @@ function reconstructTimeline(
       worker: event.worker,
       eventType: event.event_type,
       content: description,
-      lineNumber: event.lineNumber,
+      lineNumber: event.line_number,
       rawEvent: event.raw,
       fromState,
       toState,
@@ -1466,10 +1466,10 @@ function StepDetail({ step, stepNumber, totalSteps }: { step: TimelineStep; step
         <div className="debug-step-attachments">
           <h4>Attachments ({step.attachments.length})</h4>
           <div className="attachments-list">
-            {step.attachments.map((path, i) => (
+            {step.attachments.map((att, i) => (
               <div key={i} className="attachment-item">
                 <span className="attachment-icon">📎</span>
-                <code className="attachment-path">{path}</code>
+                <code className="attachment-path">{att.path}</code>
               </div>
             ))}
           </div>

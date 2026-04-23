@@ -866,7 +866,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         });
     }
 
-    let app = router().with_state(state.clone());
+    let app = router()
+        .with_state(state.clone())
+        .into_make_service_with_connect_info::<std::net::SocketAddr>();
 
     info!("HOOP daemon listening on {}", config.bind_addr);
 

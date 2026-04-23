@@ -194,7 +194,7 @@ pub fn query_audit_rows(
 
     let mut stmt = conn.prepare(&query)?;
 
-    let rows = stmt.query_map(params.as_slice(), |row| {
+    let rows = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
         let kind_str: String = row.get(3)?;
         let result_str: String = row.get(7)?;
         let kind: ActionKind = serde_json::from_str(&kind_str)
