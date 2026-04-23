@@ -5,6 +5,7 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::fmt;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -25,20 +26,220 @@ fn ensure_hoop_dir() -> Result<PathBuf> {
     Ok(home)
 }
 
+/// Workspace role within a project.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WorkspaceRole {
+    Primary,
+    Manifests,
+    Source,
+    Secrets,
+    Docs,
+}
+
+impl Default for WorkspaceRole {
+    fn default() -> Self {
+        Self::Primary
+    }
+}
+
+impl fmt::Display for WorkspaceRole {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Primary => write!(f, "primary"),
+            Self::Manifests => write!(f, "manifests"),
+            Self::Source => write!(f, "source"),
+            Self::Secrets => write!(f, "secrets"),
+            Self::Docs => write!(f, "docs"),
+        }
+    }
+}
+
+/// A single workspace within a project.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WorkspaceEntry {
+    /// Absolute path to the workspace
+    pub path: PathBuf,
+    /// Workspace role
+    pub role: WorkspaceRole,
+}
+
 /// Project registry structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProjectsRegistry {
     pub projects: Vec<ProjectEntry>,
 }
 
-/// A single project entry in the registry
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A single project entry in the registry.
+///
+/// Supports two on-disk formats:
+/// - **v0.1 shorthand** (single workspace, role defaults to `primary`):
+///   ```yaml
+///   - name: my-project
+///     path: /home/coding/my-project
+///   ```
+/// - **v0.2 multi-workspace**:
+///   ```yaml
+///   - name: my-project
+///     workspaces:
+///       - path: /home/coding/my-project
+///         role: primary
+///       - path: /home/coding/my-project-manifests
+///         role: manifests
+///   ```
+///
+/// Both forms round-trip correctly. The shorthand serializes back as shorthand
+/// when there is exactly one workspace with role `primary` and no label/color.
+#[derive(Debug, Clone)]
 pub struct ProjectEntry {
     /// Project name (derived from directory name or operator-specified)
     pub name: String,
-    /// Absolute path to the workspace
-    pub path: PathBuf,
+    /// Optional label
+    pub label: Option<String>,
+    /// Optional color hex code (e.g. `#8A2BE2`)
+    pub color: Option<String>,
+    /// Workspaces — always at least one entry
+    pub workspaces: Vec<WorkspaceEntry>,
 }
+
+impl ProjectEntry {
+    /// Returns the primary workspace path (first workspace with role `Primary`,
+    /// or the first workspace if none have that role).
+    pub fn primary_path(&self) -> Option<&Path> {
+        self.workspaces
+            .iter()
+            .find(|w| w.role == WorkspaceRole::Primary)
+            .or_else(|| self.workspaces.first())
+            .map(|w| w.path.as_path())
+    }
+
+    /// Iterate over all workspace paths.
+    pub fn all_paths(&self) -> impl Iterator<Item = &Path> {
+        self.workspaces.iter().map(|w| w.path.as_path())
+    }
+
+    /// Validate workspace invariants. Returns a list of warnings (non-fatal).
+    /// Returns `Err` if the workspaces array is empty (hard error).
+    pub fn validate_workspaces(&self) -> Result<Vec<String>> {
+        if self.workspaces.is_empty() {
+            anyhow::bail!(
+                "Project '{}': workspaces array cannot be empty",
+                self.name
+            );
+        }
+
+        let mut warnings = Vec::new();
+        let mut seen: std::collections::HashMap<&WorkspaceRole, usize> =
+            std::collections::HashMap::new();
+        for (i, ws) in self.workspaces.iter().enumerate() {
+            if let Some(&prev) = seen.get(&ws.role) {
+                warnings.push(format!(
+                    "Project '{}': duplicate role '{}' at workspace indices {} and {}",
+                    self.name, ws.role, prev, i
+                ));
+            } else {
+                seen.insert(&ws.role, i);
+            }
+        }
+        Ok(warnings)
+    }
+}
+
+// ── Serde implementations ───────────────────────────────────────────────────
+
+impl Serialize for ProjectEntry {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+
+        // Shorthand: single primary workspace with no label/color
+        if self.workspaces.len() == 1
+            && self.workspaces[0].role == WorkspaceRole::Primary
+            && self.label.is_none()
+            && self.color.is_none()
+        {
+            let mut map = serializer.serialize_map(Some(2))?;
+            map.serialize_entry("name", &self.name)?;
+            map.serialize_entry("path", &self.workspaces[0].path)?;
+            return map.end();
+        }
+
+        // Multi-workspace form
+        let n = 1 // name
+            + usize::from(self.label.is_some())
+            + usize::from(self.color.is_some())
+            + 1; // workspaces
+        let mut map = serializer.serialize_map(Some(n))?;
+        map.serialize_entry("name", &self.name)?;
+        if let Some(label) = &self.label {
+            map.serialize_entry("label", label)?;
+        }
+        if let Some(color) = &self.color {
+            map.serialize_entry("color", color)?;
+        }
+        map.serialize_entry("workspaces", &self.workspaces)?;
+        map.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for ProjectEntry {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct Raw {
+            name: String,
+            #[serde(default)]
+            label: Option<String>,
+            #[serde(default)]
+            color: Option<String>,
+            /// v0.1 shorthand — single workspace, role defaults to primary
+            #[serde(default)]
+            path: Option<PathBuf>,
+            /// v0.2 multi-workspace
+            #[serde(default)]
+            workspaces: Option<Vec<WorkspaceEntry>>,
+        }
+
+        let raw = Raw::deserialize(deserializer)?;
+
+        let workspaces = match (raw.path, raw.workspaces) {
+            (Some(path), None) => vec![WorkspaceEntry {
+                path,
+                role: WorkspaceRole::Primary,
+            }],
+            (None, Some(ws)) => {
+                if ws.is_empty() {
+                    return Err(serde::de::Error::custom(
+                        "workspaces array cannot be empty; omit the field or provide at least one entry",
+                    ));
+                }
+                ws
+            }
+            (Some(_), Some(_)) => {
+                return Err(serde::de::Error::custom(
+                    "project entry cannot have both 'path' and 'workspaces' fields",
+                ));
+            }
+            (None, None) => {
+                return Err(serde::de::Error::custom(
+                    "project entry must have either 'path' (shorthand) or 'workspaces' field",
+                ));
+            }
+        };
+
+        Ok(ProjectEntry {
+            name: raw.name,
+            label: raw.label,
+            color: raw.color,
+            workspaces,
+        })
+    }
+}
+
+// ── Registry operations ─────────────────────────────────────────────────────
 
 impl Default for ProjectsRegistry {
     fn default() -> Self {
@@ -76,9 +277,9 @@ impl ProjectsRegistry {
         Ok(())
     }
 
-    /// Add a new project to the registry.
+    /// Add a new single-workspace project to the registry.
     ///
-    /// If `name_override` is provided, it is used as the project name;
+    /// If `name_override` is provided it is used as the project name;
     /// otherwise the name is derived from the directory basename.
     pub fn add(&mut self, path: PathBuf, name_override: Option<&str>) -> Result<ProjectEntry> {
         let absolute_path = fs::canonicalize(&path)
@@ -104,13 +305,22 @@ impl ProjectsRegistry {
             anyhow::bail!("Project '{}' already exists in registry", name);
         }
 
-        if let Some(existing) = self.projects.iter().find(|p| p.path == absolute_path) {
+        if let Some(existing) = self
+            .projects
+            .iter()
+            .find(|p| p.all_paths().any(|wp| wp == absolute_path))
+        {
             anyhow::bail!("Path already registered as project '{}'", existing.name);
         }
 
         let entry = ProjectEntry {
-            name: name.clone(),
-            path: absolute_path.clone(),
+            name,
+            label: None,
+            color: None,
+            workspaces: vec![WorkspaceEntry {
+                path: absolute_path,
+                role: WorkspaceRole::Primary,
+            }],
         };
 
         self.projects.push(entry.clone());
@@ -129,11 +339,16 @@ impl ProjectsRegistry {
         self.projects.iter().find(|p| p.name == name)
     }
 
-    /// Returns the set of canonical paths already registered
+    /// Returns the set of all workspace paths already registered (across all projects)
     fn registered_paths(&self) -> HashSet<PathBuf> {
-        self.projects.iter().map(|p| p.path.clone()).collect()
+        self.projects
+            .iter()
+            .flat_map(|p| p.all_paths().map(|p| p.to_path_buf()))
+            .collect()
     }
 }
+
+// ── Public helpers ──────────────────────────────────────────────────────────
 
 /// Validate that a path exists and contains a .beads directory
 pub fn validate_workspace(path: &Path) -> Result<PathBuf> {
@@ -318,12 +533,7 @@ pub fn scan_projects(root: &str, auto_yes: bool) -> Result<()> {
 
             match registry.add(path.clone(), name_opt) {
                 Ok(entry) => {
-                    let effective = &entry.name;
-                    if name_opt.is_some() {
-                        println!("    Registered '{}' -> {}", effective, path.display());
-                    } else {
-                        println!("    Registered '{}' -> {}", effective, path.display());
-                    }
+                    println!("    Registered '{}' -> {}", entry.name, path.display());
                     new_count += 1;
                 }
                 Err(e) => {
@@ -358,34 +568,183 @@ pub fn scan_projects(root: &str, auto_yes: bool) -> Result<()> {
     Ok(())
 }
 
+// ── Tests ───────────────────────────────────────────────────────────────────
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn make_entry(name: &str, path: PathBuf) -> ProjectEntry {
+        ProjectEntry {
+            name: name.to_string(),
+            label: None,
+            color: None,
+            workspaces: vec![WorkspaceEntry {
+                path,
+                role: WorkspaceRole::Primary,
+            }],
+        }
+    }
+
+    fn make_entry_multi(name: &str, workspaces: Vec<WorkspaceEntry>) -> ProjectEntry {
+        ProjectEntry {
+            name: name.to_string(),
+            label: None,
+            color: None,
+            workspaces,
+        }
+    }
+
     #[test]
     fn registry_load_empty() {
-        let tmp = tempfile::tempdir().expect("tempdir");
-        let yaml_path = tmp.path().join("projects.yaml");
-        // Empty file should parse as empty registry
-        fs::write(&yaml_path, "projects: []\n").expect("write");
-        // Can't easily test load() since it reads from ~/.hoop, but we can
-        // test parse round-trips
         let registry: ProjectsRegistry =
             serde_yaml::from_str("projects: []\n").expect("parse empty");
         assert!(registry.projects.is_empty());
     }
 
+    // ── Shorthand round-trip ─────────────────────────────────────────────
+
     #[test]
-    fn entry_round_trip() {
+    fn shorthand_round_trip() {
+        let yaml = "name: test-project\npath: /home/coding/test-project\n";
+        let parsed: ProjectEntry = serde_yaml::from_str(yaml).expect("deserialize shorthand");
+        assert_eq!(parsed.name, "test-project");
+        assert_eq!(parsed.workspaces.len(), 1);
+        assert_eq!(parsed.workspaces[0].role, WorkspaceRole::Primary);
+        assert_eq!(
+            parsed.workspaces[0].path,
+            PathBuf::from("/home/coding/test-project")
+        );
+
+        let reserialized = serde_yaml::to_string(&parsed).expect("serialize");
+        assert!(reserialized.contains("path:"), "should re-serialize as shorthand");
+        assert!(!reserialized.contains("workspaces:"), "should not emit workspaces key");
+    }
+
+    #[test]
+    fn multi_workspace_round_trip() {
+        let yaml = r#"
+name: my-project
+workspaces:
+  - path: /home/coding/repo
+    role: primary
+  - path: /home/coding/manifests
+    role: manifests
+"#;
+        let parsed: ProjectEntry = serde_yaml::from_str(yaml).expect("deserialize multi");
+        assert_eq!(parsed.name, "my-project");
+        assert_eq!(parsed.workspaces.len(), 2);
+        assert_eq!(parsed.workspaces[0].role, WorkspaceRole::Primary);
+        assert_eq!(parsed.workspaces[1].role, WorkspaceRole::Manifests);
+
+        let reserialized = serde_yaml::to_string(&parsed).expect("serialize");
+        assert!(reserialized.contains("workspaces:"), "should emit workspaces key");
+        assert!(!reserialized.contains("\npath:"), "should not use shorthand form");
+    }
+
+    #[test]
+    fn label_color_forces_multi_form() {
         let entry = ProjectEntry {
-            name: "test-project".to_string(),
-            path: PathBuf::from("/home/coding/test-project"),
+            name: "colored".to_string(),
+            label: Some("My label".to_string()),
+            color: Some("#FF0000".to_string()),
+            workspaces: vec![WorkspaceEntry {
+                path: PathBuf::from("/tmp/colored"),
+                role: WorkspaceRole::Primary,
+            }],
         };
         let yaml = serde_yaml::to_string(&entry).expect("serialize");
+        assert!(yaml.contains("workspaces:"), "label/color forces multi-workspace form");
+        assert!(yaml.contains("label:"));
+        assert!(yaml.contains("color:"));
+
         let parsed: ProjectEntry = serde_yaml::from_str(&yaml).expect("deserialize");
-        assert_eq!(entry.name, parsed.name);
-        assert_eq!(entry.path, parsed.path);
+        assert_eq!(parsed.label, Some("My label".to_string()));
+        assert_eq!(parsed.color, Some("#FF0000".to_string()));
     }
+
+    // ── Validation ───────────────────────────────────────────────────────
+
+    #[test]
+    fn empty_workspaces_rejected_at_deserialize() {
+        let yaml = "name: bad\nworkspaces: []\n";
+        let result: Result<ProjectEntry, _> = serde_yaml::from_str(yaml);
+        assert!(result.is_err(), "empty workspaces array must be rejected");
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("empty"), "error should mention 'empty': {}", msg);
+    }
+
+    #[test]
+    fn both_path_and_workspaces_rejected() {
+        let yaml = r#"
+name: bad
+path: /tmp/bad
+workspaces:
+  - path: /tmp/bad
+    role: primary
+"#;
+        let result: Result<ProjectEntry, _> = serde_yaml::from_str(yaml);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn neither_path_nor_workspaces_rejected() {
+        let yaml = "name: bad\n";
+        let result: Result<ProjectEntry, _> = serde_yaml::from_str(yaml);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn validate_workspaces_duplicate_roles_warns() {
+        let entry = make_entry_multi(
+            "dup-roles",
+            vec![
+                WorkspaceEntry {
+                    path: PathBuf::from("/tmp/a"),
+                    role: WorkspaceRole::Primary,
+                },
+                WorkspaceEntry {
+                    path: PathBuf::from("/tmp/b"),
+                    role: WorkspaceRole::Primary,
+                },
+            ],
+        );
+        let warnings = entry.validate_workspaces().expect("should not error");
+        assert_eq!(warnings.len(), 1, "one duplicate role warning expected");
+        assert!(warnings[0].contains("duplicate role"));
+    }
+
+    #[test]
+    fn validate_workspaces_no_duplicates_ok() {
+        let entry = make_entry_multi(
+            "ok",
+            vec![
+                WorkspaceEntry {
+                    path: PathBuf::from("/tmp/a"),
+                    role: WorkspaceRole::Primary,
+                },
+                WorkspaceEntry {
+                    path: PathBuf::from("/tmp/b"),
+                    role: WorkspaceRole::Manifests,
+                },
+            ],
+        );
+        let warnings = entry.validate_workspaces().expect("should not error");
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn validate_workspaces_empty_hard_error() {
+        let entry = ProjectEntry {
+            name: "empty".to_string(),
+            label: None,
+            color: None,
+            workspaces: vec![],
+        };
+        assert!(entry.validate_workspaces().is_err());
+    }
+
+    // ── Registry operations ──────────────────────────────────────────────
 
     #[test]
     fn add_with_default_name() {
@@ -397,7 +756,9 @@ mod tests {
         let entry = registry.add(repo, None).expect("add");
 
         assert_eq!(entry.name, "my-repo");
-        assert!(entry.path.is_absolute());
+        assert_eq!(entry.workspaces.len(), 1);
+        assert_eq!(entry.workspaces[0].role, WorkspaceRole::Primary);
+        assert!(entry.workspaces[0].path.is_absolute());
         assert_eq!(registry.projects.len(), 1);
     }
 
@@ -462,10 +823,7 @@ mod tests {
     #[test]
     fn remove_existing_project() {
         let mut registry = ProjectsRegistry::default();
-        registry.projects.push(ProjectEntry {
-            name: "to-remove".to_string(),
-            path: PathBuf::from("/tmp/to-remove"),
-        });
+        registry.projects.push(make_entry("to-remove", PathBuf::from("/tmp/to-remove")));
 
         assert!(registry.remove("to-remove").expect("remove"));
         assert!(registry.projects.is_empty());
@@ -476,6 +834,38 @@ mod tests {
         let mut registry = ProjectsRegistry::default();
         assert!(!registry.remove("nope").expect("remove"));
     }
+
+    // ── registered_paths covers multi-workspace ──────────────────────────
+
+    #[test]
+    fn registered_paths_covers_all_workspaces() {
+        let registry = ProjectsRegistry {
+            projects: vec![
+                make_entry("a", PathBuf::from("/tmp/a")),
+                make_entry_multi(
+                    "b",
+                    vec![
+                        WorkspaceEntry {
+                            path: PathBuf::from("/tmp/b1"),
+                            role: WorkspaceRole::Primary,
+                        },
+                        WorkspaceEntry {
+                            path: PathBuf::from("/tmp/b2"),
+                            role: WorkspaceRole::Manifests,
+                        },
+                    ],
+                ),
+            ],
+        };
+
+        let paths = registry.registered_paths();
+        assert_eq!(paths.len(), 3);
+        assert!(paths.contains(&PathBuf::from("/tmp/a")));
+        assert!(paths.contains(&PathBuf::from("/tmp/b1")));
+        assert!(paths.contains(&PathBuf::from("/tmp/b2")));
+    }
+
+    // ── Discovery ────────────────────────────────────────────────────────
 
     #[test]
     fn discover_finds_beads_workspaces() {
@@ -542,10 +932,7 @@ mod tests {
         let canonical = fs::canonicalize(&repo).expect("canonicalize");
 
         let registry = ProjectsRegistry {
-            projects: vec![ProjectEntry {
-                name: "already-here".to_string(),
-                path: canonical,
-            }],
+            projects: vec![make_entry("already-here", canonical)],
         };
 
         let registered = registry.registered_paths();
@@ -573,24 +960,35 @@ mod tests {
         assert_eq!(registry.projects.len(), 2);
     }
 
+    // ── primary_path ─────────────────────────────────────────────────────
+
     #[test]
-    fn registered_paths_returns_all() {
-        let registry = ProjectsRegistry {
-            projects: vec![
-                ProjectEntry {
-                    name: "a".to_string(),
-                    path: PathBuf::from("/tmp/a"),
+    fn primary_path_returns_primary_workspace() {
+        let entry = make_entry_multi(
+            "p",
+            vec![
+                WorkspaceEntry {
+                    path: PathBuf::from("/tmp/manifests"),
+                    role: WorkspaceRole::Manifests,
                 },
-                ProjectEntry {
-                    name: "b".to_string(),
-                    path: PathBuf::from("/tmp/b"),
+                WorkspaceEntry {
+                    path: PathBuf::from("/tmp/primary"),
+                    role: WorkspaceRole::Primary,
                 },
             ],
-        };
+        );
+        assert_eq!(entry.primary_path(), Some(Path::new("/tmp/primary")));
+    }
 
-        let paths = registry.registered_paths();
-        assert_eq!(paths.len(), 2);
-        assert!(paths.contains(&PathBuf::from("/tmp/a")));
-        assert!(paths.contains(&PathBuf::from("/tmp/b")));
+    #[test]
+    fn primary_path_falls_back_to_first() {
+        let entry = make_entry_multi(
+            "p",
+            vec![WorkspaceEntry {
+                path: PathBuf::from("/tmp/manifests"),
+                role: WorkspaceRole::Manifests,
+            }],
+        );
+        assert_eq!(entry.primary_path(), Some(Path::new("/tmp/manifests")));
     }
 }

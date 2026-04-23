@@ -28,6 +28,83 @@ pub mod version {
 // Include generated types at crate root
 include!(concat!(env!("OUT_DIR"), "/types.rs"));
 
+/// A unified view of a workspace, abstracting over both `ProjectEntry` variants.
+#[derive(Debug, Clone)]
+pub struct WorkspaceView {
+    pub path: std::path::PathBuf,
+    pub role: WorkspaceViewRole,
+}
+
+/// Workspace role, mirroring the JSON schema enum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkspaceViewRole {
+    Primary,
+    Manifests,
+    Source,
+    Secrets,
+    Docs,
+}
+
+impl std::fmt::Display for WorkspaceViewRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Primary => write!(f, "primary"),
+            Self::Manifests => write!(f, "manifests"),
+            Self::Source => write!(f, "source"),
+            Self::Secrets => write!(f, "secrets"),
+            Self::Docs => write!(f, "docs"),
+        }
+    }
+}
+
+impl ProjectEntry {
+    /// Returns the project name regardless of which variant this is.
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Variant0 { name, .. } => name,
+            Self::Variant1 { name, .. } => name,
+        }
+    }
+
+    /// Returns a unified workspace view for all workspaces in this project.
+    ///
+    /// For the shorthand variant (`path` field), returns a single workspace with role `Primary`.
+    pub fn workspace_views(&self) -> Vec<WorkspaceView> {
+        match self {
+            Self::Variant0 { path, .. } => vec![WorkspaceView {
+                path: std::path::PathBuf::from(path),
+                role: WorkspaceViewRole::Primary,
+            }],
+            Self::Variant1 { workspaces, .. } => workspaces
+                .iter()
+                .map(|w| WorkspaceView {
+                    path: std::path::PathBuf::from(&w.path),
+                    role: match w.role {
+                        ProjectEntryVariant1WorkspacesItemRole::Primary => {
+                            WorkspaceViewRole::Primary
+                        }
+                        ProjectEntryVariant1WorkspacesItemRole::Manifests => {
+                            WorkspaceViewRole::Manifests
+                        }
+                        ProjectEntryVariant1WorkspacesItemRole::Source => {
+                            WorkspaceViewRole::Source
+                        }
+                        ProjectEntryVariant1WorkspacesItemRole::Secrets => {
+                            WorkspaceViewRole::Secrets
+                        }
+                        ProjectEntryVariant1WorkspacesItemRole::Docs => WorkspaceViewRole::Docs,
+                    },
+                })
+                .collect(),
+        }
+    }
+
+    /// Returns an iterator over all workspace paths in this project.
+    pub fn all_paths(&self) -> impl Iterator<Item = std::path::PathBuf> + '_ {
+        self.workspace_views().into_iter().map(|w| w.path)
+    }
+}
+
 /// Base trait for all schema records
 pub trait SchemaRecord {
     /// Returns the schema version for this record

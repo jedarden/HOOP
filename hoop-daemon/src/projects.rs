@@ -54,9 +54,10 @@ impl ProjectsConfig {
 
     /// Get all workspace paths from all projects
     pub fn all_workspace_paths(&self) -> Vec<PathBuf> {
-        self.registry.projects
+        self.registry
+            .projects
             .iter()
-            .flat_map(|p| p.all_paths().map(|p| p.to_path_buf()))
+            .flat_map(|p| p.all_paths())
             .collect()
     }
 
@@ -65,11 +66,11 @@ impl ProjectsConfig {
         let mut errors = Vec::new();
 
         for project in &self.registry.projects {
-            for workspace in &project.workspaces {
+            for workspace in project.workspace_views() {
                 if !workspace.path.exists() {
                     errors.push(format!(
                         "Project '{}': workspace path does not exist: {}",
-                        project.name,
+                        project.name(),
                         workspace.path.display()
                     ));
                     continue;
@@ -79,7 +80,7 @@ impl ProjectsConfig {
                 if !beads_path.exists() || !beads_path.is_dir() {
                     errors.push(format!(
                         "Project '{}': .beads directory not found at: {}",
-                        project.name,
+                        project.name(),
                         workspace.path.display()
                     ));
                 }
