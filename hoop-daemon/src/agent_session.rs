@@ -9,7 +9,7 @@ use crate::agent_adapter::{
     self, AdapterKind, AgentAdapter, AgentEvent, AgentSession, Attachment, EventStream,
     SpawnConfig, SessionId,
 };
-use crate::agent_context::{self, ContextBudget};
+use crate::agent_context;
 use crate::fleet;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
