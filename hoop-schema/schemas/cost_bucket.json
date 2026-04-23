@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/cost_bucket.json",
+  "title": "CostBucket",
+  "description": "Aggregated cost bucket for a single day",
+  "type": "object",
+  "required": ["date", "project", "adapter", "model", "strand", "usage", "cost_usd"],
+  "properties": {
+    "date": {
+      "type": "string",
+      "description": "Bucket date (YYYY-MM-DD)"
+    },
+    "project": {
+      "type": "string",
+      "description": "Project name"
+    },
+    "adapter": {
+      "type": "string",
+      "description": "Adapter name (claude, codex, etc.)"
+    },
+    "model": {
+      "type": "string",
+      "description": "Model name (opus, sonnet, haiku, etc.)"
+    },
+    "strand": {
+      "type": ["string", "null"],
+      "description": "Strand name (pluck, explore, etc.), null if not applicable"
+    },
+    "usage": {
+      "$ref": "message_usage.json",
+      "description": "Aggregate token usage"
+    },
+    "request_count": {
+      "type": "integer",
+      "description": "Number of requests"
+    },
+    "cost_usd": {
+      "type": "number",
+      "description": "Total cost in USD"
+    }
+  },
+  "schema_version": "1.0.0"
+}

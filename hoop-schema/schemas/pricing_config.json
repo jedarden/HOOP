@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/pricing_config.json",
+  "title": "PricingConfig",
+  "description": "Provider pricing configuration for cost calculation",
+  "type": "object",
+  "properties": {
+    "adapters": {
+      "type": "object",
+      "description": "Pricing per adapter",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "models": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "input_per_million": {
+                  "type": "number",
+                  "description": "Input price per million tokens (USD)"
+                },
+                "output_per_million": {
+                  "type": "number",
+                  "description": "Output price per million tokens (USD)"
+                },
+                "cache_read_per_million": {
+                  "type": "number",
+                  "description": "Cache read price per million tokens (USD)"
+                },
+                "cache_write_per_million": {
+                  "type": "number",
+                  "description": "Cache write price per million tokens (USD)"
+                }
+              },
+              "required": ["input_per_million", "output_per_million"]
+            }
+          },
+          "default_model": {
+            "type": "string",
+            "description": "Default model if not specified"
+          }
+        }
+      }
+    }
+  },
+  "schema_version": "1.0.0"
+}

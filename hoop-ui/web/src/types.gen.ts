@@ -109,6 +109,30 @@ export interface WorkerData {
 
 
 /**
+ * Token usage from a single message
+ */
+export interface MessageUsage {
+  /**
+   * Input tokens (prompt)
+   */
+  input_tokens: number;
+  /**
+   * Output tokens (completion)
+   */
+  output_tokens: number;
+  /**
+   * Cache read tokens (prompt cache hits)
+   */
+  cache_read_tokens: number;
+  /**
+   * Cache write tokens (new cache entries)
+   */
+  cache_write_tokens: number;
+  [k: string]: unknown;
+}
+
+
+/**
  * Bead data sent to the frontend
  */
 export interface BeadData {
@@ -153,6 +177,55 @@ export interface BeadData {
 
 
 /**
+ * A tracking bead (issue/task) in the beads system
+ */
+export interface Bead {
+  /**
+   * Bead ID (e.g., hoop-ttb.1)
+   */
+  id: string;
+  /**
+   * Bead title
+   */
+  title: string;
+  /**
+   * Bead description
+   */
+  description?: string | null;
+  /**
+   * Bead status
+   */
+  status: "open" | "closed";
+  /**
+   * Priority (0 = highest)
+   */
+  priority: number;
+  /**
+   * Issue type
+   */
+  issue_type: "task" | "bug" | "epic" | "genesis" | "review" | "fix";
+  /**
+   * Creation timestamp
+   */
+  created_at: string;
+  /**
+   * Last update timestamp
+   */
+  updated_at: string;
+  /**
+   * Creator username
+   */
+  created_by: string;
+  /**
+   * List of dependent bead IDs
+   */
+  dependencies: string[];
+  schema_version: string;
+  [k: string]: unknown;
+}
+
+
+/**
  * Classification of a CLI session based on its prefix tag
  */
 export type SessionKind = Worker | "dictated" | "ad_hoc" | "operator";
@@ -170,30 +243,6 @@ export interface Worker {
    * Strand name (pluck, explore, mend, etc.)
    */
   strand?: string | null;
-}
-
-
-/**
- * Token usage from a single message
- */
-export interface MessageUsage {
-  /**
-   * Input tokens (prompt)
-   */
-  input_tokens: number;
-  /**
-   * Output tokens (completion)
-   */
-  output_tokens: number;
-  /**
-   * Cache read tokens (prompt cache hits)
-   */
-  cache_read_tokens: number;
-  /**
-   * Cache write tokens (new cache entries)
-   */
-  cache_write_tokens: number;
-  [k: string]: unknown;
 }
 
 
@@ -1061,6 +1110,105 @@ export interface VoiceConfig {
 
 
 /**
+ * Provider pricing configuration for cost calculation
+ */
+export interface PricingConfig {
+  /**
+   * Pricing per adapter
+   */
+  adapters?: {
+    [k: string]: {
+      models?: {
+        [k: string]: {
+          /**
+           * Input price per million tokens (USD)
+           */
+          input_per_million: number;
+          /**
+           * Output price per million tokens (USD)
+           */
+          output_per_million: number;
+          /**
+           * Cache read price per million tokens (USD)
+           */
+          cache_read_per_million?: number;
+          /**
+           * Cache write price per million tokens (USD)
+           */
+          cache_write_per_million?: number;
+          [k: string]: unknown;
+        };
+      };
+      /**
+       * Default model if not specified
+       */
+      default_model?: string;
+      [k: string]: unknown;
+    };
+  };
+  [k: string]: unknown;
+}
+
+
+/**
+ * Aggregated cost bucket for a single day
+ */
+export interface CostBucket {
+  /**
+   * Bucket date (YYYY-MM-DD)
+   */
+  date: string;
+  /**
+   * Project name
+   */
+  project: string;
+  /**
+   * Adapter name (claude, codex, etc.)
+   */
+  adapter: string;
+  /**
+   * Model name (opus, sonnet, haiku, etc.)
+   */
+  model: string;
+  /**
+   * Strand name (pluck, explore, etc.), null if not applicable
+   */
+  strand: string | null;
+  /**
+   * Aggregate token usage
+   */
+  usage: {
+    /**
+     * Input tokens (prompt)
+     */
+    input_tokens: number;
+    /**
+     * Output tokens (completion)
+     */
+    output_tokens: number;
+    /**
+     * Cache read tokens (prompt cache hits)
+     */
+    cache_read_tokens: number;
+    /**
+     * Cache write tokens (new cache entries)
+     */
+    cache_write_tokens: number;
+    [k: string]: unknown;
+  };
+  /**
+   * Number of requests
+   */
+  request_count?: number;
+  /**
+   * Total cost in USD
+   */
+  cost_usd: number;
+  [k: string]: unknown;
+}
+
+
+/**
  * HOOP daemon configuration from config.yml
  */
 export interface HoopConfig {
@@ -1158,6 +1306,42 @@ export interface HoopConfig {
     enabled?: boolean;
     detection_threshold?: number;
     auto_archive_after_days?: number;
+    [k: string]: unknown;
+  };
+  pricing?: {
+    /**
+     * Pricing per adapter
+     */
+    adapters?: {
+      [k: string]: {
+        models?: {
+          [k: string]: {
+            /**
+             * Input price per million tokens (USD)
+             */
+            input_per_million: number;
+            /**
+             * Output price per million tokens (USD)
+             */
+            output_per_million: number;
+            /**
+             * Cache read price per million tokens (USD)
+             */
+            cache_read_per_million?: number;
+            /**
+             * Cache write price per million tokens (USD)
+             */
+            cache_write_per_million?: number;
+            [k: string]: unknown;
+          };
+        };
+        /**
+         * Default model if not specified
+         */
+        default_model?: string;
+        [k: string]: unknown;
+      };
+    };
     [k: string]: unknown;
   };
   [k: string]: unknown;
