@@ -74,9 +74,13 @@ fn main() {
     // Add PartialEq derives to all structs for round-trip tests
     let with_derives = add_partial_eq_derives(&formatted);
 
+    // Add #[allow(clippy::clone_on_copy)] before each From<&T> impl — typify
+    // generates `value.clone()` for Copy types, which triggers the lint.
+    let with_allows = add_clippy_allows(&with_derives);
+
     // Write to the output file
     let output_path = out_path.join("types.rs");
-    fs::write(&output_path, with_derives)
+    fs::write(&output_path, with_allows)
         .unwrap_or_else(|_| panic!("Failed to write {:?}", output_path));
 
     // Parse br-compat.toml and emit the pinned minimum br version
@@ -155,7 +159,7 @@ fn resolve_ref(
     // Extract just the filename from the ref path
     // Refs can be like "worker_data.json" or "#/definitions/foo" or a full URL
     let filename = if ref_path.contains('/') {
-        ref_path.split('/').last().unwrap_or(ref_path)
+        ref_path.split('/').next_back().unwrap_or(ref_path)
     } else {
         ref_path
     };
@@ -180,6 +184,22 @@ fn resolve_ref(
             panic!("Could not resolve $ref: {}", ref_path);
         }
     }
+}
+
+/// Insert `#[allow(clippy::clone_on_copy)]` before every `impl From<&…>` block.
+///
+/// typify generates `value.clone()` inside these impls even for Copy types;
+/// the allow suppresses the resulting lint in generated code.
+fn add_clippy_allows(code: &str) -> String {
+    let mut result = String::with_capacity(code.len() + 1024);
+    for line in code.lines() {
+        if line.trim().starts_with("impl From<&") {
+            result.push_str("#[allow(clippy::clone_on_copy)]\n");
+        }
+        result.push_str(line);
+        result.push('\n');
+    }
+    result
 }
 
 /// Add #[derive(PartialEq)] to struct definitions that don't already have it.

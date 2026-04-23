@@ -6,6 +6,7 @@
 
 pub mod api_attachments;
 pub mod api_dictated_notes;
+pub mod api_transcription;
 pub mod api_uploads;
 pub mod attachments;
 pub mod audit;
@@ -28,7 +29,6 @@ pub mod tag_join;
 pub mod transcription;
 pub mod uploads;
 pub mod ws;
-pub use transcription::api_transcription;
 
 /// Worker execution state from heartbeats
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -300,7 +300,7 @@ pub fn router() -> Router<DaemonState> {
         .route("/ws", get(ws::ws_handler))
         .nest("/api/uploads", api_uploads::router())
         .merge(api_dictated_notes::router())
-        .merge(transcription::api_transcription::router())
+        .merge(api_transcription::router())
         .nest_service("/assets", AssetsHandler::router())
         .fallback_service(AssetsHandler::router())
         .layer(TraceLayer::new_for_http())

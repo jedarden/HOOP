@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use tracing::info;
 
 /// Current schema version
-const SCHEMA_VERSION: &str = "1.2.0";
+const SCHEMA_VERSION: &str = "1.5.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -223,18 +223,37 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v01_to_v11(conn)?;
             // Fall through to 1.2.0
             migrate_v11_to_v12(conn)?;
-            update_schema_version(conn, "1.2.0")?;
+            // Fall through to 1.3.0
+            migrate_v12_to_v13(conn)?;
+            // Fall through to 1.4.0
+            migrate_v13_to_v14(conn)?;
+            // Fall through to 1.5.0
+            migrate_v14_to_v15(conn)?;
         }
         "1.1.0" => {
             migrate_v11_to_v12(conn)?;
-            update_schema_version(conn, "1.2.0")?;
+            migrate_v12_to_v13(conn)?;
+            migrate_v13_to_v14(conn)?;
+            migrate_v14_to_v15(conn)?;
         }
         "1.2.0" => {
-            info!("Already at schema version 1.2.0, no migrations needed");
+            migrate_v12_to_v13(conn)?;
+            migrate_v13_to_v14(conn)?;
+            migrate_v14_to_v15(conn)?;
+        }
+        "1.3.0" => {
+            migrate_v13_to_v14(conn)?;
+            migrate_v14_to_v15(conn)?;
+        }
+        "1.4.0" => {
+            migrate_v14_to_v15(conn)?;
+        }
+        "1.5.0" => {
+            info!("Already at schema version 1.5.0, no migrations needed");
         }
         _ => {
             return Err(anyhow::anyhow!(
-                "Unsupported schema version: {}. Expected 0.1.0, 1.1.0, or 1.2.0",
+                "Unsupported schema version: {}. Expected 0.1.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0, or 1.5.0",
                 from_version
             ));
         }
@@ -516,6 +535,103 @@ fn migrate_v11_to_v12(conn: &mut Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migration 1.2.0 → 1.3.0: Add dictated_notes metadata table
+///
+/// Dictated notes are Stitches with `kind='dictated'`. This table stores
+/// note-specific metadata (audio filename, transcript, timestamps) that
+/// doesn't belong on the generic stitch row.
+fn migrate_v12_to_v13(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.2.0 → 1.3.0: Adding dictated_notes table");
+
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS dictated_notes (
+            stitch_id TEXT PRIMARY KEY NOT NULL REFERENCES stitches(id) ON DELETE CASCADE,
+            recorded_at TEXT NOT NULL,
+            transcribed_at TEXT NOT NULL,
+            audio_filename TEXT NOT NULL,
+            transcript TEXT NOT NULL,
+            duration_secs REAL,
+            language TEXT,
+            tags TEXT DEFAULT '[]'
+        )
+        "#,
+        [],
+    )?;
+
+    conn.execute(
+        r#"
+        CREATE INDEX IF NOT EXISTS idx_dictated_notes_recorded_at
+        ON dictated_notes(recorded_at DESC)
+        "#,
+        [],
+    )?;
+
+    info!("dictated_notes table created successfully");
+    Ok(())
+}
+
+/// Migration 1.3.0 → 1.4.0: Add word-level timestamps to dictated_notes
+///
+/// Adds transcript_words column for storing Whisper word-level timestamps
+/// to enable audio player with transcript sync functionality.
+fn migrate_v13_to_v14(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.3.0 → 1.4.0: Adding transcript_words column");
+
+    // Add transcript_words column (JSON array of word timestamps)
+    conn.execute(
+        "ALTER TABLE dictated_notes ADD COLUMN transcript_words TEXT",
+        [],
+    )?;
+
+    info!("transcript_words column added successfully");
+    Ok(())
+}
+
+/// Migration 1.4.0 → 1.5.0: Add transcription_jobs table
+///
+/// Creates the transcription_jobs table for async job queue management.
+/// Tracks transcription job status, retry attempts, and error messages.
+fn migrate_v14_to_v15(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.4.0 → 1.5.0: Adding transcription_jobs table");
+
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS transcription_jobs (
+            id TEXT PRIMARY KEY NOT NULL,
+            stitch_id TEXT NOT NULL,
+            audio_path TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            attempts INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            started_at TEXT,
+            completed_at TEXT,
+            error_message TEXT
+        )
+        "#,
+        [],
+    )?;
+
+    conn.execute(
+        r#"
+        CREATE INDEX IF NOT EXISTS idx_transcription_jobs_stitch_id
+        ON transcription_jobs(stitch_id)
+        "#,
+        [],
+    )?;
+
+    conn.execute(
+        r#"
+        CREATE INDEX IF NOT EXISTS idx_transcription_jobs_status
+        ON transcription_jobs(status)
+        "#,
+        [],
+    )?;
+
+    info!("transcription_jobs table created successfully");
+    Ok(())
+}
+
 /// Update the schema version in the metadata table
 fn update_schema_version(conn: &mut Connection, version: &str) -> Result<()> {
     conn.execute(
@@ -609,7 +725,7 @@ mod tests {
 
         // Verify new version
         let version = get_schema_version(&conn)?;
-        assert_eq!(version, "1.2.0");
+        assert_eq!(version, "1.3.0");
 
         // Verify all Stitch tables exist
         let tables = [
@@ -617,6 +733,7 @@ mod tests {
             "stitch_messages",
             "stitch_beads",
             "stitch_links",
+            "dictated_notes",
         ];
         for table in tables {
             let count: i64 = conn.query_row(
@@ -651,6 +768,7 @@ mod tests {
             "idx_pattern_members_pattern",
             "idx_pattern_members_stitch",
             "idx_pattern_queries_pattern",
+            "idx_dictated_notes_recorded_at",
         ];
         for idx in indexes {
             let count: i64 = conn.query_row(
@@ -672,7 +790,7 @@ mod tests {
         // Create schema and migrate to 1.1.0
         create_schema(&mut conn)?;
         run_migrations(&mut conn, "0.1.0")?;
-        assert_eq!(get_schema_version(&conn)?, "1.2.0");
+        assert_eq!(get_schema_version(&conn)?, "1.3.0");
 
         // Pattern tables should now exist
         for table in ["patterns", "pattern_members", "pattern_queries"] {
@@ -953,11 +1071,11 @@ mod tests {
         create_schema(&mut conn)?;
         run_migrations(&mut conn, "0.1.0")?;
 
-        // Running migration again on 1.2.0 should be a no-op
-        run_migrations(&mut conn, "1.2.0")?;
+        // Running migration again on 1.3.0 should be a no-op
+        run_migrations(&mut conn, "1.3.0")?;
 
         let version = get_schema_version(&conn)?;
-        assert_eq!(version, "1.2.0");
+        assert_eq!(version, "1.3.0");
 
         Ok(())
     }

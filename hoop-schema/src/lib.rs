@@ -57,6 +57,7 @@ impl std::fmt::Display for WorkspaceViewRole {
     }
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for ProjectsRegistry {
     fn default() -> Self {
         Self { projects: vec![] }
@@ -154,7 +155,6 @@ impl HealthResponse {
 mod tests {
     use super::*;
     use chrono::{DateTime, Utc};
-    use serde_json;
     use uuid::Uuid;
 
     /// Round-trip test: serialize → deserialize → equal

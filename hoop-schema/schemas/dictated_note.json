@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/dictated_note.json",
+  "title": "DictatedNote",
+  "description": "Metadata for a dictated note stitch — audio + transcript stored as a first-class project entity",
+  "type": "object",
+  "required": ["stitch_id", "recorded_at", "transcribed_at", "audio_filename", "transcript", "schema_version"],
+  "properties": {
+    "stitch_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "FK to the parent stitch (kind=dictated)"
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the audio was captured"
+    },
+    "transcribed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When Whisper transcription completed"
+    },
+    "audio_filename": {
+      "type": "string",
+      "description": "Filename of the audio attachment in ~/.hoop/attachments/<stitch_id>/"
+    },
+    "transcript": {
+      "type": "string",
+      "description": "Full text transcript of the audio"
+    },
+    "transcript_words": {
+      "type": "array",
+      "description": "Word-level timestamps from Whisper for transcript sync",
+      "items": {
+        "type": "object",
+        "properties": {
+          "word": {
+            "type": "string",
+            "description": "The word text"
+          },
+          "start": {
+            "type": "number",
+            "description": "Start time in seconds"
+          },
+          "end": {
+            "type": "number",
+            "description": "End time in seconds"
+          }
+        },
+        "required": ["word", "start", "end"]
+      }
+    },
+    "duration_secs": {
+      "type": ["number", "null"],
+      "description": "Audio duration in seconds"
+    },
+    "language": {
+      "type": ["string", "null"],
+      "description": "Detected language code (e.g. en, de)"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Optional tags for categorization"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    }
+  },
+  "schema_version": "1.0.0"
+}
