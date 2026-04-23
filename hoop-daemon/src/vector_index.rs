@@ -7,7 +7,7 @@
 
 use std::sync::RwLock;
 
-use crate::embedding::{cosine_similarity, DedupMatch, Embedding, Embedder, IndexedItem, NgramEmbedder, EMBEDDING_DIM};
+use crate::embedding::{cosine_similarity, DedupMatch, Embedding, Embedder, IndexedItem, NgramEmbedder};
 
 /// Configuration for the dedup check
 #[derive(Debug, Clone)]
@@ -20,8 +20,12 @@ pub struct DedupConfig {
 
 impl Default for DedupConfig {
     fn default() -> Self {
+        let threshold = std::env::var("HOOP_DEDUP_THRESHOLD")
+            .ok()
+            .and_then(|s| s.parse::<f64>().ok())
+            .unwrap_or(0.82);
         Self {
-            threshold: 0.82,
+            threshold,
             max_results: 3,
         }
     }
@@ -81,7 +85,10 @@ impl VectorIndex {
         self.entries = items
             .into_iter()
             .map(|item| {
-                let text = item.title.clone();
+                let text = match &item.description {
+                    Some(desc) if !desc.is_empty() => format!("{} {}", item.title, desc),
+                    _ => item.title.clone(),
+                };
                 let embedding = self.embedder.embed(&text);
                 IndexEntry { item, embedding }
             })
@@ -90,7 +97,10 @@ impl VectorIndex {
 
     /// Add a single item to the index
     pub fn add(&mut self, item: IndexedItem) {
-        let text = item.title.clone();
+        let text = match &item.description {
+            Some(desc) if !desc.is_empty() => format!("{} {}", item.title, desc),
+            _ => item.title.clone(),
+        };
         let embedding = self.embedder.embed(&text);
         self.entries.push(IndexEntry { item, embedding });
     }
@@ -198,6 +208,7 @@ pub fn build_index_from_state(
                 project: String::new(), // beads don't carry project in the struct
                 title: bead.title.clone(),
                 kind: format!("{:?}", bead.issue_type).to_lowercase(),
+                description: bead.description.clone(),
             });
         }
     }
@@ -249,6 +260,7 @@ fn load_open_stitches(projects: &[crate::ws::ProjectCardData]) -> Result<Vec<Ind
                 project,
                 title,
                 kind,
+                description: None,
             })
         })
         .map_err(|e| format!("Failed to query stitches: {}", e))?
@@ -271,12 +283,14 @@ mod tests {
                 project: "hoop".to_string(),
                 title: "Fix authentication race condition".to_string(),
                 kind: "fix".to_string(),
+                description: None,
             },
             IndexedItem {
                 id: "bd-2".to_string(),
                 project: "spaxel".to_string(),
                 title: "Add dark mode toggle".to_string(),
                 kind: "task".to_string(),
+                description: None,
             },
         ]);
 
@@ -295,12 +309,14 @@ mod tests {
                 project: "project-a".to_string(),
                 title: "Implement OAuth2 authentication flow".to_string(),
                 kind: "feature".to_string(),
+                description: None,
             },
             IndexedItem {
                 id: "st-2".to_string(),
                 project: "project-b".to_string(),
                 title: "Add dark mode".to_string(),
                 kind: "task".to_string(),
+                description: None,
             },
         ]);
 
@@ -323,6 +339,7 @@ mod tests {
                 project: "hoop".to_string(),
                 title: "Fix authentication race condition".to_string(),
                 kind: "fix".to_string(),
+                description: None,
             },
         ]);
 
@@ -339,6 +356,7 @@ mod tests {
             project: "hoop".to_string(),
             title: "Test item".to_string(),
             kind: "task".to_string(),
+            description: None,
         });
         assert_eq!(index.len(), 1);
 
@@ -355,6 +373,7 @@ mod tests {
                 project: "hoop".to_string(),
                 title: "Fix auth bug".to_string(),
                 kind: "fix".to_string(),
+                description: None,
             },
         ]);
 
@@ -372,22 +391,35 @@ mod tests {
 
     #[test]
     fn test_synthetic_cross_project_recall() {
-        // Create 20 pairs of similar titles across different projects
+        // 20 pairs of semantically similar titles across projects.
+        // Pairs are designed to test: reordering, abbreviation expansion,
+        // synonym matching, and paraphrase detection.
         let pairs = vec![
-            ("Fix race condition in DB connection pool", "Fix DB connection pool race condition"),
-            ("Implement user authentication with OAuth2", "Add OAuth2 user authentication"),
-            ("Add rate limiting to API endpoints", "Implement API rate limiting"),
+            ("Fix race condition in DB connection pool", "Fix database connection pool race condition"),
+            ("Implement user authentication with OAuth2", "Add OAuth2 user auth"),
+            ("Add rate limiting to API endpoints", "Implement application programming interface rate limiting"),
             ("Refactor database query builder", "Rewrite DB query builder"),
             ("Fix memory leak in worker process", "Repair worker memory leak"),
             ("Add pagination to list endpoints", "Implement list endpoint pagination"),
-            ("Set up CI/CD pipeline for deploys", "Configure CI/CD deployment pipeline"),
+            ("Set up CI/CD pipeline for deploys", "Configure CI CD deployment pipeline"),
             ("Implement caching layer with Redis", "Add Redis caching layer"),
             ("Fix timezone handling in scheduler", "Repair scheduler timezone bug"),
             ("Add WebSocket support for live updates", "Implement WebSocket live updates"),
+            ("Fix auth race condition bug", "Fix authentication race condition defect"),
+            ("Setup config for production deploy", "Configure configuration production deployment"),
+            ("Add CRUD operations for user model", "Implement create read update delete user model"),
+            ("Refactor ORM mapping layer", "Restructure object relational mapper mapping"),
+            ("Fix SSL certificate validation error", "Repair secure sockets layer certificate validation"),
+            ("Implement DNS resolution caching", "Add domain name system resolution caching"),
+            ("Add VPN tunnel support", "Implement virtual private network tunnel"),
+            ("Fix async task queue deadlock", "Repair asynchronous task queue deadlock"),
+            ("Implement RPC error handling", "Add remote procedure call error handling"),
+            ("Add HTML sanitizer for user input", "Implement hypertext markup language sanitizer"),
         ];
 
+        // Use the default 0.82 threshold
         let mut index = VectorIndex::with_config(DedupConfig {
-            threshold: 0.65,
+            threshold: 0.82,
             max_results: 3,
         });
 
@@ -399,6 +431,7 @@ mod tests {
                 project: format!("project-{}", i),
                 title: title.to_string(),
                 kind: "task".to_string(),
+                description: None,
             })
             .collect();
 
@@ -417,10 +450,40 @@ mod tests {
         let recall = caught as f64 / total as f64;
         assert!(
             recall >= 0.95,
-            "synthetic cross-project recall should be >=95%, got {:.0}% ({}/{})",
+            "synthetic cross-project recall should be >=95% at default threshold 0.82, got {:.0}% ({}/{})",
             recall * 100.0,
             caught,
             total
         );
+    }
+
+    #[test]
+    fn test_description_enhances_matching() {
+        let mut index = VectorIndex::with_config(DedupConfig {
+            threshold: 0.75,
+            max_results: 3,
+        });
+        index.rebuild(vec![
+            IndexedItem {
+                id: "bd-1".to_string(),
+                project: "hoop".to_string(),
+                title: "Fix connection issue".to_string(),
+                kind: "fix".to_string(),
+                description: Some("The database connection pool is exhausting under high concurrency".to_string()),
+            },
+            IndexedItem {
+                id: "bd-2".to_string(),
+                project: "hoop".to_string(),
+                title: "Fix connection issue".to_string(),
+                kind: "fix".to_string(),
+                description: None,
+            },
+        ]);
+
+        // Query with database-specific context should match the one with description
+        let matches = index.check_duplicate("Fix DB connection pool exhaustion", None);
+        assert!(!matches.is_empty());
+        // The item with the richer description should match better
+        assert_eq!(matches[0].item.id, "bd-1");
     }
 }

@@ -1,9 +1,17 @@
-//! Local text embedding via n-gram hashing (CPU-bound, no external API)
+//! Local text embedding via semantic n-gram hashing (CPU-bound, no external API)
 //!
 //! Produces fixed-dimension vectors from text using character and word n-gram
-//! hashing. This approach is used in production systems (fastText, Vowpal Wabbit)
-//! and provides robust semantic similarity for short text like titles and
-//! descriptions without requiring model downloads or GPU inference.
+//! hashing enhanced with synonym expansion and stop-word filtering. This captures
+//! both lexical and semantic similarity for short text like titles and descriptions
+//! without requiring model downloads or GPU inference.
+//!
+//! The approach combines three techniques:
+//! 1. **Abbreviation/synonym expansion**: "auth" → "authentication", "db" → "database", etc.
+//! 2. **Stop-word filtering**: Removes noise words ("the", "a", "in", etc.) that
+//!    dilute the semantic signal in short text
+//! 3. **Weighted n-gram hashing**: Character n-grams (3-5 chars) capture morphological
+//!    similarity while word n-grams (1-2) capture lexical similarity. Word-level
+//!    features get higher weight to prioritize semantic content words.
 
 /// Dimension of the embedding vectors
 pub const EMBEDDING_DIM: usize = 256;
@@ -17,7 +25,8 @@ pub struct IndexedItem {
     pub id: String,
     pub project: String,
     pub title: String,
-    pub kind: String, // "bead" or "stitch"
+    pub kind: String,
+    pub description: Option<String>,
 }
 
 /// Result of a dedup check
@@ -29,21 +38,43 @@ pub struct DedupMatch {
 
 /// Trait for embedding text into fixed-dimension vectors.
 ///
-/// The production implementation uses n-gram hashing. A future implementation
+/// The production implementation uses semantic n-gram hashing. A future implementation
 /// could swap in a transformer model (gte-small, all-MiniLM-L6-v2) via candle/ort.
 pub trait Embedder: Send + Sync {
     fn embed(&self, text: &str) -> Embedding;
 }
 
-/// N-gram hashing embedder — CPU-bound, no external dependencies.
+/// Synonym groups for semantic matching. Each group maps related words to a
+/// shared canonical token so "auth" and "authentication" hash identically.
+/// This preserves dimensionality (no vector bloat) while capturing semantic equivalence.
+const SYNONYM_GROUPS: &[&[&str]] = &[
+    &["auth", "authentication", "authorization"],
+    &["db", "database"],
+    &["api", "endpoint"],
+    &["fix", "repair", "resolve", "patch"],
+    &["bug", "defect", "issue"],
+    &["add", "implement", "create", "introduce"],
+    &["remove", "delete", "eliminate"],
+    &["update", "modify", "change", "alter"],
+    &["setup", "configure", "install"],
+    &["refactor", "restructure", "reorganize", "rewrite"],
+    &["config", "configuration", "settings"],
+    &["perf", "performance", "optimization"],
+    &["async", "asynchronous"],
+    &["sync", "synchronize", "synchronous"],
+];
+
+/// N-gram hashing embedder with semantic enhancements — CPU-bound, no external dependencies.
 ///
 /// How it works:
 /// 1. Tokenize text into lowercase words
-/// 2. Generate character n-grams (3, 4, 5 chars) per word (captures morphological similarity)
-/// 3. Generate word unigrams and bigrams (captures lexical similarity)
-/// 4. Hash each n-gram to two dimensions (double hashing reduces collision noise)
-/// 5. Add +1 to one dimension and -1 to the other (sign hashing)
-/// 6. L2-normalize the vector for cosine similarity
+/// 2. Expand abbreviations and synonyms (auth → authentication)
+/// 3. Filter stop words to amplify semantic content
+/// 4. Generate character n-grams (3, 4, 5 chars) per content word
+/// 5. Generate word unigrams and bigrams from content words
+/// 6. Hash each n-gram to two dimensions with sign hashing
+/// 7. Word-level features get 2x weight to prioritize semantic content
+/// 8. L2-normalize the vector for cosine similarity
 pub struct NgramEmbedder {
     dims: usize,
 }
@@ -95,6 +126,28 @@ impl NgramEmbedder {
         }
         hash
     }
+
+    /// Second hash with a different seed for double hashing
+    fn hash_ngram_alt(ngram: &str) -> u64 {
+        let mut hash: u64 = 0x9e3779b97f4a7c15;
+        for byte in ngram.bytes() {
+            hash ^= byte as u64;
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+        hash
+    }
+
+    /// Canonicalize a token: if it belongs to a synonym group, return the
+    /// group's canonical (first) member. Otherwise return the original.
+    /// This makes "auth" and "authentication" hash to identical dimensions.
+    fn canonicalize(token: &str) -> &str {
+        for group in SYNONYM_GROUPS {
+            if group.iter().any(|syn| *syn == token) {
+                return group[0];
+            }
+        }
+        token
+    }
 }
 
 impl Default for NgramEmbedder {
@@ -103,12 +156,22 @@ impl Default for NgramEmbedder {
     }
 }
 
+/// Common stop words that dilute semantic signal in short text
+const STOP_WORDS: &[&str] = &[
+    "the", "a", "an", "in", "on", "at", "to", "for", "of", "with", "and",
+    "or", "is", "are", "was", "were", "be", "been", "being", "have", "has",
+    "had", "do", "does", "did", "will", "would", "could", "should", "may",
+    "might", "can", "shall", "this", "that", "these", "those", "it", "its",
+    "from", "by", "as", "but", "not", "no", "nor", "so", "if", "then",
+    "than", "too", "very", "just", "about",
+];
+
 impl Embedder for NgramEmbedder {
     fn embed(&self, text: &str) -> Embedding {
         let mut vec = vec![0.0f32; self.dims];
 
-        // Tokenize
-        let tokens: Vec<String> = text
+        // Tokenize into lowercase words, stripped of punctuation
+        let raw_tokens: Vec<String> = text
             .to_lowercase()
             .split_whitespace()
             .map(|s| {
@@ -118,41 +181,46 @@ impl Embedder for NgramEmbedder {
             .filter(|s| !s.is_empty())
             .collect();
 
-        if tokens.is_empty() {
-            let mut emb = [0.0f32; EMBEDDING_DIM];
-            return emb;
+        if raw_tokens.is_empty() {
+            return [0.0f32; EMBEDDING_DIM];
         }
 
-        // Collect all n-grams
-        let mut all_ngrams: Vec<String> = Vec::new();
-
-        // Character n-grams from each word (3, 4, 5 chars)
-        for token in &tokens {
-            all_ngrams.extend(Self::char_ngrams(token, 3, 5));
-        }
-
-        // Word unigrams and bigrams
-        all_ngrams.extend(Self::word_ngrams(&tokens, 2));
-
-        // Hash each n-gram into the vector using double hashing
         let dims = self.dims;
-        for ngram in &all_ngrams {
-            let h1 = Self::hash_ngram(ngram);
-            let h2 = {
-                // Second hash from a different seed
-                let mut hash: u64 = 0x9e3779b97f4a7c15;
-                for byte in ngram.bytes() {
-                    hash ^= byte as u64;
-                    hash = hash.wrapping_mul(0x100000001b3);
-                }
-                hash
-            };
 
+        // Canonicalize: replace each token with its synonym group's canonical form.
+        // This makes "auth" and "authentication" produce identical n-gram profiles.
+        let tokens: Vec<String> = raw_tokens
+            .iter()
+            .map(|t| Self::canonicalize(t).to_string())
+            .filter(|t| !STOP_WORDS.contains(&t.as_str()))
+            .collect();
+
+        if tokens.is_empty() {
+            return [0.0f32; EMBEDDING_DIM];
+        }
+
+        // Character n-grams from canonical tokens (captures morphological similarity)
+        for token in &tokens {
+            let char_ngs = Self::char_ngrams(token, 3, 5);
+            for ngram in &char_ngs {
+                let h1 = Self::hash_ngram(ngram);
+                let h2 = Self::hash_ngram_alt(ngram);
+                let idx1 = (h1 % dims as u64) as usize;
+                let idx2 = (h2 % dims as u64) as usize;
+                vec[idx1] += 1.0;
+                vec[idx2] -= 1.0;
+            }
+        }
+
+        // Word unigrams and bigrams from canonical tokens (captures lexical similarity)
+        let word_ngs = Self::word_ngrams(&tokens, 2);
+        for ngram in &word_ngs {
+            let h1 = Self::hash_ngram(ngram);
+            let h2 = Self::hash_ngram_alt(ngram);
             let idx1 = (h1 % dims as u64) as usize;
             let idx2 = (h2 % dims as u64) as usize;
-
-            vec[idx1] += 1.0;
-            vec[idx2] -= 1.0;
+            vec[idx1] += 2.0;
+            vec[idx2] -= 2.0;
         }
 
         // L2-normalize
@@ -203,7 +271,26 @@ mod tests {
         let a = embedder.embed("Fix authentication bug in login flow");
         let b = embedder.embed("Fix auth bug in the login process");
         let sim = cosine_similarity(&a, &b);
-        assert!(sim > 0.7, "similar texts should have sim > 0.7, got {}", sim);
+        assert!(sim > 0.75, "similar texts with abbreviation expansion should have sim > 0.75, got {}", sim);
+    }
+
+    #[test]
+    fn test_synonym_canonicalization_boosts_similarity() {
+        let embedder = NgramEmbedder::new();
+        // "auth" canonicalizes to same form as "authentication"
+        let a = embedder.embed("Fix auth bug");
+        let b = embedder.embed("Fix authentication bug");
+        let sim = cosine_similarity(&a, &b);
+        assert!(sim > 0.85, "synonym canonicalization should boost similarity > 0.85, got {}", sim);
+    }
+
+    #[test]
+    fn test_db_synonym() {
+        let embedder = NgramEmbedder::new();
+        let a = embedder.embed("Fix DB connection pool");
+        let b = embedder.embed("Fix database connection pool");
+        let sim = cosine_similarity(&a, &b);
+        assert!(sim > 0.85, "db→database synonym should boost similarity > 0.85, got {}", sim);
     }
 
     #[test]
@@ -235,9 +322,6 @@ mod tests {
 
     #[test]
     fn test_cross_project_duplicate_detection() {
-        // Simulates a duplicate across projects:
-        // Project A has "Implement user auth with OAuth2"
-        // Project B drafts "Implement OAuth2 user authentication"
         let embedder = NgramEmbedder::new();
         let existing = embedder.embed("Implement user auth with OAuth2 provider");
         let draft = embedder.embed("Implement OAuth2 user authentication provider");
@@ -246,8 +330,27 @@ mod tests {
     }
 
     #[test]
+    fn test_synonym_recall() {
+        let embedder = NgramEmbedder::new();
+        // These use different wording but same intent — synonym canonicalization should help
+        let pairs = vec![
+            ("Fix DB connection pool", "Repair database connection pool"),
+            ("Add rate limiting", "Implement rate limiting"),
+            ("Refactor query builder", "Restructure query builder"),
+            ("Remove deprecated API", "Delete deprecated API"),
+            ("Update config", "Modify configuration"),
+        ];
+
+        for (a, b) in &pairs {
+            let emb_a = embedder.embed(a);
+            let emb_b = embedder.embed(b);
+            let sim = cosine_similarity(&emb_a, &emb_b);
+            assert!(sim > 0.75, "synonym pair '{}' vs '{}' should have sim > 0.75, got {}", a, b, sim);
+        }
+    }
+
+    #[test]
     fn test_semdup_recall_synthetic() {
-        // Synthetic test: 10 paraphrases of the same intent should all match
         let embedder = NgramEmbedder::new();
         let originals = vec![
             "Fix the race condition in session handler",
@@ -309,5 +412,20 @@ mod tests {
         let emb = embedder.embed("some text for normalization test");
         let norm: f32 = emb.iter().map(|v| v * v).sum::<f32>().sqrt();
         assert!((norm - 1.0).abs() < 0.001, "embedding should be L2-normalized, got norm {}", norm);
+    }
+
+    #[test]
+    fn test_canonicalize() {
+        assert_eq!(NgramEmbedder::canonicalize("auth"), "auth");
+        assert_eq!(NgramEmbedder::canonicalize("authentication"), "auth");
+        assert_eq!(NgramEmbedder::canonicalize("authorization"), "auth");
+        assert_eq!(NgramEmbedder::canonicalize("db"), "db");
+        assert_eq!(NgramEmbedder::canonicalize("database"), "db");
+        assert_eq!(NgramEmbedder::canonicalize("fix"), "fix");
+        assert_eq!(NgramEmbedder::canonicalize("repair"), "fix");
+        assert_eq!(NgramEmbedder::canonicalize("resolve"), "fix");
+        // Non-synonym passes through unchanged
+        assert_eq!(NgramEmbedder::canonicalize("race"), "race");
+        assert_eq!(NgramEmbedder::canonicalize("condition"), "condition");
     }
 }

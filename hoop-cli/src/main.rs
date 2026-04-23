@@ -8,9 +8,7 @@ mod projects;
 
 use clap::Parser;
 use hoop_daemon::{audit, serve, Config as DaemonConfig};
-use hoop_schema::{ControlRequest, ControlResponse};
 use std::{fs, net::SocketAddr, path::PathBuf};
-use tokio::io::AsyncBufReadExt;
 
 #[derive(Parser, Debug)]
 #[command(name = "hoop")]
@@ -161,11 +159,9 @@ async fn main() -> anyhow::Result<()> {
             eprintln!("hoop remove: not yet implemented");
             std::process::exit(1);
         }
-        Commands::Status { project } => {
-            if let Err(e) = handle_status(project).await {
-                eprintln!("hoop status: {}", e);
-                std::process::exit(1);
-            }
+        Commands::Status { project: _ } => {
+            eprintln!("hoop status: not yet implemented");
+            std::process::exit(1);
         }
         Commands::Audit { json, strict } => {
             // Load project paths from config if available
@@ -211,7 +207,8 @@ fn handle_projects(cmd: ProjectsCommands) -> anyhow::Result<()> {
     match cmd {
         ProjectsCommands::Add { path } => {
             let entry = projects::add_project(&path)?;
-            println!("Added project '{}': {}", entry.name, entry.path.display());
+            let ws_path = entry.primary_path().unwrap_or_else(|| std::path::Path::new("?"));
+            println!("Added project '{}': {}", entry.name, ws_path.display());
         }
         ProjectsCommands::Scan { root, yes } => {
             projects::scan_projects(&root, yes)?;
@@ -229,7 +226,8 @@ fn handle_projects(cmd: ProjectsCommands) -> anyhow::Result<()> {
                 } else {
                     println!("Registered projects:");
                     for proj in &projects {
-                        println!("  {} - {}", proj.name, proj.path.display());
+                        let ws_path = proj.primary_path().unwrap_or_else(|| std::path::Path::new("?"));
+                        println!("  {} - {}", proj.name, ws_path.display());
                     }
                 }
             }
@@ -247,17 +245,24 @@ fn handle_projects(cmd: ProjectsCommands) -> anyhow::Result<()> {
         ProjectsCommands::Show { name } => {
             if let Some(proj) = projects::show_project(&name)? {
                 println!("Project: {}", proj.name);
-                println!("Path: {}", proj.path.display());
-
-                let beads_path = proj.path.join(".beads");
-                if beads_path.exists() {
-                    println!("Status: Active (.beads/ present)");
-                    if let Ok(entries) = std::fs::read_dir(beads_path.join("beads")) {
-                        let count = entries.filter_map(Result::ok).count();
-                        println!("Beads: {}", count);
+                if let Some(ws_path) = proj.primary_path() {
+                    println!("Path: {}", ws_path.display());
+                    let beads_path = ws_path.join(".beads");
+                    if beads_path.exists() {
+                        println!("Status: Active (.beads/ present)");
+                        if let Ok(entries) = std::fs::read_dir(beads_path.join("beads")) {
+                            let count = entries.filter_map(Result::ok).count();
+                            println!("Beads: {}", count);
+                        }
+                    } else {
+                        println!("Status: Inactive (.beads/ missing)");
                     }
-                } else {
-                    println!("Status: Inactive (.beads/ missing)");
+                }
+                if proj.workspaces.len() > 1 {
+                    println!("Workspaces:");
+                    for ws in &proj.workspaces {
+                        println!("  {} ({})", ws.path.display(), ws.role);
+                    }
                 }
             } else {
                 eprintln!("Project '{}' not found", name);
@@ -266,79 +271,6 @@ fn handle_projects(cmd: ProjectsCommands) -> anyhow::Result<()> {
         }
     }
     Ok(())
-}
-
-/// Handle the `hoop status` command by connecting to the control socket
-async fn handle_status(project: Option<String>) -> anyhow::Result<()> {
-    let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    home.push(".hoop");
-    let socket_path = home.join("control.sock");
-
-    if !socket_path.exists() {
-        anyhow::bail!(
-            "Daemon not running (control socket not found at {})",
-            socket_path.display()
-        );
-    }
-
-    let mut socket = tokio::net::UnixStream::connect(&socket_path)
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to connect to control socket: {}", e))?;
-
-    let request = ControlRequest::Status { project };
-    let request_json = serde_json::to_string(&request)?;
-
-    tokio::io::AsyncWriteExt::write_all(&mut socket, format!("{}\n", request_json).as_bytes())
-        .await?;
-
-    let mut reader = tokio::io::BufReader::new(&mut socket);
-    let mut response_line = String::new();
-    reader.read_line(&mut response_line).await?;
-
-    if response_line.is_empty() {
-        anyhow::bail!("No response from daemon");
-    }
-
-    let response: ControlResponse = serde_json::from_str(&response_line.trim())?;
-
-    match response {
-        ControlResponse::Status(status) => {
-            print_status(&status);
-            Ok(())
-        }
-        ControlResponse::Error { message } => {
-            anyhow::bail!("Daemon error: {}", message);
-        }
-    }
-}
-
-/// Print status response in human-readable format
-fn print_status(status: &hoop_schema::StatusResponse) {
-    if !status.daemon_running {
-        println!("Daemon: Not running");
-        return;
-    }
-
-    let uptime = status.uptime_secs;
-    let hours = uptime / 3600;
-    let minutes = (uptime % 3600) / 60;
-    let seconds = uptime % 60;
-
-    println!("HOOP Daemon Status");
-    println!("==================");
-    println!("Running: Yes");
-    println!("Uptime: {}h {}m {}s", hours, minutes, seconds);
-
-    if !status.projects.is_empty() {
-        println!("\nProjects:");
-        for proj in &status.projects {
-            println!("  - {} ({})", proj.name, proj.path);
-            println!("    Active beads: {}", proj.active_beads);
-            println!("    Workers: {}", proj.workers);
-        }
-    } else {
-        println!("\nNo projects registered");
-    }
 }
 
 /// Load project paths from ~/.hoop/projects.yaml if it exists

@@ -9,6 +9,7 @@ use crate::agent_adapter::{
     self, AdapterKind, AgentAdapter, AgentEvent, AgentSession, Attachment, EventStream,
     SpawnConfig, SessionId,
 };
+use crate::agent_context::{self, ContextBudget};
 use crate::fleet;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -24,6 +25,7 @@ use tracing::{info, warn};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentSessionStatus {
     pub active: bool,
+    pub enabled: bool,
     pub session_id: Option<String>,
     pub adapter: Option<String>,
     pub model: Option<String>,
@@ -171,40 +173,56 @@ pub struct AgentSessionManager {
 impl AgentSessionManager {
     /// Create a new manager. Attempts to reattach to an existing active
     /// session from fleet.db; if none, the manager starts idle (no session).
+    /// Reads persisted enabled state from metadata so agent-off survives restart.
     pub async fn new(config: AgentAdapterConfig) -> Result<Self> {
         let adapter_config: agent_adapter::AgentAdapterConfig = (&config).into();
         let adapter_kind = AdapterKind::from_config(&config.adapter)
             .ok_or_else(|| anyhow::anyhow!("unknown agent adapter: {}", config.adapter))?;
         let adapter = agent_adapter::build_adapter(&adapter_config)?;
 
+        // Read persisted enabled state (defaults to true if never set).
+        let persisted_enabled = fleet::is_agent_enabled().unwrap_or(true);
+        let event_tx = broadcast::channel::<AgentSessionEvent>(256).0;
+        let enabled = std::sync::atomic::AtomicBool::new(persisted_enabled);
+
         // Try to reattach to an existing active session from fleet.db.
         let mut db_row_id = None;
         let mut session = None;
 
-        if let Some(row) = fleet::load_active_agent_session()? {
-            info!(
-                "Found active agent session {} (adapter={}, model={}), reattaching",
-                row.adapter_session_id, row.adapter, row.model
-            );
-            let sid = SessionId(row.adapter_session_id.clone());
-            match adapter.resume_session(&sid).await {
-                Ok(s) => {
-                    session = Some(s);
-                    db_row_id = Some(row.id.clone());
-                    info!("Reattached to agent session {}", row.adapter_session_id);
-                }
-                Err(e) => {
-                    warn!(
-                        "Failed to reattach session {}: {}. Archiving.",
-                        row.adapter_session_id, e
-                    );
-                    let _ = fleet::archive_agent_session(&row.id, "reattach_failed");
+        if persisted_enabled {
+            if let Some(row) = fleet::load_active_agent_session()? {
+                info!(
+                    "Found active agent session {} (adapter={}, model={}), reattaching",
+                    row.adapter_session_id, row.adapter, row.model
+                );
+                let sid = SessionId(row.adapter_session_id.clone());
+                let adapter_str = row.adapter.clone();
+                let model = row.model.clone();
+                match adapter.resume_session(&sid).await {
+                    Ok(s) => {
+                        let reattach_sid = row.adapter_session_id.clone();
+                        session = Some(s);
+                        db_row_id = Some(row.id.clone());
+                        info!("Reattached to agent session {}", reattach_sid);
+                        // Broadcast reattach so WS clients know.
+                        let _ = event_tx.send(AgentSessionEvent::SessionReattached {
+                            session_id: reattach_sid,
+                            adapter: adapter_str,
+                            model,
+                        });
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Failed to reattach session {}: {}. Archiving.",
+                            row.adapter_session_id, e
+                        );
+                        let _ = fleet::archive_agent_session(&row.id, "reattach_failed");
+                    }
                 }
             }
+        } else {
+            info!("Agent is disabled (persisted state), skipping reattach");
         }
-
-        let event_tx = broadcast::channel::<AgentSessionEvent>(256).0;
-        let enabled = std::sync::atomic::AtomicBool::new(true);
 
         Ok(Self {
             inner: Arc::new(Mutex::new(Inner {
@@ -227,6 +245,7 @@ impl AgentSessionManager {
     /// Current status snapshot (for WS initial snapshot / REST status).
     pub async fn status(&self) -> AgentSessionStatus {
         let inner = self.inner.lock().await;
+        let enabled = self.enabled.load(std::sync::atomic::Ordering::Relaxed);
         match (&inner.session, &inner.db_row_id) {
             (Some(s), Some(db_id)) => {
                 let row = fleet::load_active_agent_session()
@@ -255,6 +274,7 @@ impl AgentSessionManager {
                 });
                 AgentSessionStatus {
                     active: true,
+                    enabled,
                     session_id: Some(s.id.0.clone()),
                     adapter: Some(inner.adapter_kind.as_str().to_string()),
                     model: Some(s.model.clone()),
@@ -270,6 +290,7 @@ impl AgentSessionManager {
             }
             _ => AgentSessionStatus {
                 active: false,
+                enabled,
                 session_id: None,
                 adapter: None,
                 model: None,
@@ -298,9 +319,29 @@ impl AgentSessionManager {
             });
         }
 
+        // Build thin context index for system prompt (lazy-fetch per §3.12)
+        let system_prompt = match agent_context::load_projects_config()
+            .and_then(|config| agent_context::build_context_index(&config))
+        {
+            Ok(index) => {
+                let token_count = index.estimate_token_count();
+                info!("Context index built: {} projects, {} recent stitches, {} open stitches, ~{} tokens",
+                    index.projects.len(),
+                    index.recent_activity.closed_stitches.len(),
+                    index.open_stitches.len(),
+                    token_count
+                );
+                Some(index.to_system_prompt())
+            }
+            Err(e) => {
+                warn!("Failed to build context index, using empty system prompt: {}", e);
+                None
+            }
+        };
+
         let spawn_config = SpawnConfig {
             model: inner.config.model.clone(),
-            system_prompt: None,
+            system_prompt,
             max_tokens: None,
             rate_limit_rpm: inner.config.rate_limit_rpm,
             cost_cap_usd: inner.config.cost_cap_usd,
@@ -336,6 +377,7 @@ impl AgentSessionManager {
         inner.session = Some(session);
         inner.db_row_id = Some(db_id.clone());
         self.enabled.store(true, std::sync::atomic::Ordering::Relaxed);
+        let _ = fleet::set_agent_enabled(true);
 
         info!("Spawned new agent session {} (adapter={})", session_id, adapter_str);
         let _ = self.event_tx.send(AgentSessionEvent::SessionSpawned {
@@ -445,13 +487,38 @@ impl AgentSessionManager {
         }
     }
 
-    /// Switch adapter: archive old session, build new adapter, spawn fresh session.
-    /// The old transcript is archived as a Stitch (if one was associated).
+    /// Switch adapter: archive old session as a Stitch, build new adapter, spawn
+    /// fresh session with Reflection Ledger + recent-activity context carried forward.
     pub async fn switch_adapter(&self, new_config: AgentAdapterConfig) -> Result<String> {
         let mut inner = self.inner.lock().await;
 
-        // Archive old session.
-        if let (Some(ref _session), Some(ref db_id)) = (&inner.session, &inner.db_row_id) {
+        // Archive old session and persist its transcript as a Stitch.
+        if let (Some(ref old_session), Some(ref db_id)) = (&inner.session, &inner.db_row_id) {
+            // Load session row for Stitch archival.
+            let session_row = fleet::load_active_agent_session().ok().flatten();
+
+            // Extract in-memory history (only API adapters have it).
+            let history_guard = old_session.history.lock().await;
+            let history: Vec<(String, String)> = history_guard
+                .iter()
+                .map(|m| (m.role.clone(), m.content.clone()))
+                .collect();
+            drop(history_guard);
+
+            if let Some(ref row) = session_row {
+                match fleet::archive_session_as_stitch(row, &history) {
+                    Ok(stitch_id) => {
+                        info!(
+                            "Archived old agent session {} as stitch {}",
+                            row.adapter_session_id, stitch_id
+                        );
+                    }
+                    Err(e) => {
+                        warn!("Failed to archive session as stitch: {}", e);
+                    }
+                }
+            }
+
             let _ = fleet::archive_agent_session(db_id, "switched");
             let _ = self.event_tx.send(AgentSessionEvent::SessionArchived {
                 session_id: db_id.clone(),
@@ -464,9 +531,12 @@ impl AgentSessionManager {
         let adapter_config: agent_adapter::AgentAdapterConfig = (&new_config).into();
         let adapter = agent_adapter::build_adapter(&adapter_config)?;
 
+        // Build handoff context from Reflection Ledger + recent activity.
+        let system_prompt = build_handoff_context();
+
         let spawn_config = SpawnConfig {
             model: new_config.model.clone(),
-            system_prompt: None,
+            system_prompt: Some(system_prompt),
             max_tokens: None,
             rate_limit_rpm: new_config.rate_limit_rpm,
             cost_cap_usd: new_config.cost_cap_usd,
@@ -515,9 +585,11 @@ impl AgentSessionManager {
     }
 
     /// Disable the agent cleanly (agent-off). Archives session without leaving orphans.
+    /// Persists disabled state so it survives daemon restart.
     pub async fn disable(&self) -> Result<()> {
         let mut inner = self.inner.lock().await;
         self.enabled.store(false, std::sync::atomic::Ordering::Relaxed);
+        let _ = fleet::set_agent_enabled(false);
 
         if let (Some(ref session), Some(ref db_id)) = (&inner.session, &inner.db_row_id) {
             let _ = inner.adapter.close_session(session).await;
@@ -542,6 +614,51 @@ impl AgentSessionManager {
     /// Get the event sender (for wiring into the WS forwarder).
     pub fn event_sender(&self) -> broadcast::Sender<AgentSessionEvent> {
         self.event_tx.clone()
+    }
+}
+
+/// Build a handoff context string from the Reflection Ledger and recent Stitches.
+/// Injected as the system prompt when switching adapters so the new session has
+/// continuity with the old one.
+fn build_handoff_context() -> String {
+    let mut parts = Vec::new();
+
+    // Approved reflection ledger entries (global + all scopes).
+    if let Ok(entries) = fleet::list_approved_reflection_entries(None) {
+        if !entries.is_empty() {
+            let mut rules = String::from("## Operator Preferences (Reflection Ledger)\n");
+            for entry in &entries {
+                rules.push_str(&format!("- [{}] {}\n", entry.scope, entry.rule));
+            }
+            parts.push(rules);
+        }
+    }
+
+    // Recent Stitches for situational awareness.
+    if let Ok(stitches) = fleet::load_recent_stitches(10) {
+        if !stitches.is_empty() {
+            let mut recent = String::from("## Recent Activity\n");
+            for (id, project, title, last_at) in &stitches {
+                let short_id = if id.len() > 8 { &id[..8] } else { id };
+                let short_ts = if last_at.len() > 19 { &last_at[..19] } else { last_at };
+                recent.push_str(&format!("- [{}] {} — {} ({})\n", short_id, project, title, short_ts));
+            }
+            parts.push(recent);
+        }
+    }
+
+    if parts.is_empty() {
+        "You are the HOOP human-interface agent, continuing after an adapter switch.".to_string()
+    } else {
+        let mut ctx = String::from(
+            "You are the HOOP human-interface agent, continuing after an adapter switch. \
+             The following context was carried forward from your previous session.\n\n",
+        );
+        for part in parts {
+            ctx.push_str(&part);
+            ctx.push('\n');
+        }
+        ctx
     }
 }
 
@@ -623,5 +740,41 @@ mod tests {
         let config = AgentAdapterConfig::default();
         let adapter_config: agent_adapter::AgentAdapterConfig = (&config).into();
         assert_eq!(adapter_config.adapter, "claude");
+    }
+
+    #[test]
+    fn agent_session_status_includes_enabled() {
+        let status = AgentSessionStatus {
+            active: false,
+            enabled: true,
+            session_id: None,
+            adapter: None,
+            model: None,
+            stitch_id: None,
+            cost_usd: 0.0,
+            input_tokens: 0,
+            output_tokens: 0,
+            turn_count: 0,
+            created_at: None,
+            last_activity_at: None,
+            age_secs: None,
+        };
+        let json = serde_json::to_string(&status).unwrap();
+        assert!(json.contains("\"enabled\":true"));
+        assert!(json.contains("\"active\":false"));
+    }
+
+    #[test]
+    fn agent_session_event_reattached_serializes() {
+        let event = AgentSessionEvent::SessionReattached {
+            session_id: "sess-123".to_string(),
+            adapter: "claude".to_string(),
+            model: "claude-opus-4-7".to_string(),
+        };
+        let json = serde_json::to_string(&event).unwrap();
+        assert!(json.contains("\"type\":\"session_reattached\""));
+        assert!(json.contains("\"session_id\":\"sess-123\""));
+        let parsed: AgentSessionEvent = serde_json::from_str(&json).unwrap();
+        assert!(matches!(parsed, AgentSessionEvent::SessionReattached { .. }));
     }
 }

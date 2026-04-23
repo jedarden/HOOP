@@ -40,6 +40,16 @@ interface DecomposeResponse {
   graph: BeadGraph;
   rule_name: string;
   bead_count: number;
+  dedup_matches?: DedupMatchRef[];
+  preview?: StitchPreviewData;
+}
+
+interface DedupMatchRef {
+  id: string;
+  project: string;
+  title: string;
+  kind: string;
+  similarity: number;
 }
 
 interface SubmitResponse {
@@ -63,6 +73,63 @@ interface BeadSummary {
   issue_type: string;
   priority: number;
   dependencies: string[];
+}
+
+// Preview types — "What Will This Take?" prediction data
+interface StitchPreviewData {
+  schema_version?: string;
+  prediction: PredictionData | null;
+  risk_patterns: RiskPatternMatch[];
+  file_conflicts: FileConflict[];
+  similar_stitches: SimilarStitchRef[];
+}
+
+interface PredictionData {
+  cost: PercentileEstimate;
+  duration: PercentileEstimate;
+  likely_adapter_model: string | null;
+  similar_count: number;
+  data_range: DateRange;
+}
+
+interface PercentileEstimate {
+  p50: number;
+  p90: number;
+  count: number;
+}
+
+interface DateRange {
+  start: string;
+  end: string;
+}
+
+interface RiskPatternMatch {
+  pattern: RiskPatternInfo;
+  confidence: number;
+  matched_keywords: string[];
+  matched_labels: string[];
+}
+
+interface RiskPatternInfo {
+  id: string;
+  name: string;
+  description: string;
+  fix_recommendation: string;
+  severity: string;
+  category: string;
+}
+
+interface FileConflict {
+  bead_id: string;
+  title: string;
+  project: string;
+  overlapping_files: string[];
+}
+
+interface SimilarStitchRef {
+  id: string;
+  title: string;
+  similarity: number;
 }
 
 interface FormState {
@@ -442,6 +509,150 @@ function StitchGraphPreview({ graph }: { graph: BeadGraph }) {
   );
 }
 
+// ── Preview card showing "What Will This Take?" data ──────────────────────
+
+function PreviewCard({
+  preview,
+  loading,
+  error,
+}: {
+  preview: StitchPreviewData | null;
+  loading: boolean;
+  error: string | null;
+}) {
+  if (loading) {
+    return (
+      <div className="bdf-preview-card">
+        <div className="bdf-preview-header">
+          <span className="bdf-preview-title">What Will This Take?</span>
+          <span className="bdf-preview-loading">Loading…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bdf-preview-card">
+        <div className="bdf-preview-header">
+          <span className="bdf-preview-title">What Will This Take?</span>
+        </div>
+        <div className="bdf-preview-error">{error}</div>
+      </div>
+    );
+  }
+
+  if (!preview) return null;
+
+  const formatCurrency = (val: number) => `$${val.toFixed(2)}`;
+  const formatDuration = (seconds: number) => {
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+    return `${(seconds / 3600).toFixed(1)}h`;
+  };
+
+  return (
+    <div className="bdf-preview-card">
+      <div className="bdf-preview-header">
+        <span className="bdf-preview-title">What Will This Take?</span>
+        {preview.prediction && (
+          <span className="bdf-preview-meta">
+            Based on {preview.prediction.similar_count} similar stitch{preview.prediction.similar_count !== 1 ? 'es' : ''}
+          </span>
+        )}
+      </div>
+
+      {preview.prediction ? (
+        <div className="bdf-preview-section">
+          <div className="bdf-preview-subheader">Estimated Cost & Duration</div>
+          <div className="bdf-preview-metrics">
+            <div className="bdf-metric">
+              <span className="bdf-metric-label">Cost</span>
+              <span className="bdf-metric-value">
+                {formatCurrency(preview.prediction.cost.p50)}
+                <span className="bdf-metric-p90"> (p90: {formatCurrency(preview.prediction.cost.p90)})</span>
+              </span>
+            </div>
+            <div className="bdf-metric">
+              <span className="bdf-metric-label">Duration</span>
+              <span className="bdf-metric-value">
+                {formatDuration(preview.prediction.duration.p50)}
+                <span className="bdf-metric-p90"> (p90: {formatDuration(preview.prediction.duration.p90)})</span>
+              </span>
+            </div>
+          </div>
+          {preview.prediction.likely_adapter_model && (
+            <div className="bdf-preview-claimer">
+              <span className="bdf-claimer-label">Likely claimer:</span>
+              <span className="bdf-claimer-value">{preview.prediction.likely_adapter_model}</span>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="bdf-preview-section">
+          <div className="bdf-preview-empty">No similar stitches found in the last 90 days</div>
+        </div>
+      )}
+
+      {preview.risk_patterns.length > 0 && (
+        <div className="bdf-preview-section">
+          <div className="bdf-preview-subheader">Risk Patterns</div>
+          <div className="bdf-risk-patterns">
+            {preview.risk_patterns.map((match) => (
+              <div
+                key={match.pattern.id}
+                className={`bdf-risk-pattern bdf-risk-severity-${match.pattern.severity}`}
+              >
+                <div className="bdf-risk-header">
+                  <span className="bdf-risk-name">{match.pattern.name}</span>
+                  <span className="bdf-risk-confidence">{Math.round(match.confidence * 100)}%</span>
+                </div>
+                <div className="bdf-risk-description">{match.pattern.description}</div>
+                <div className="bdf-risk-fix">
+                  <strong>Fix:</strong> {match.pattern.fix_recommendation}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {preview.file_conflicts.length > 0 && (
+        <div className="bdf-preview-section">
+          <div className="bdf-preview-subheader">File Overlap Conflicts</div>
+          <div className="bdf-file-conflicts">
+            {preview.file_conflicts.map((conflict) => (
+              <div key={conflict.bead_id} className="bdf-file-conflict">
+                <span className="bdf-conflict-bead">
+                  {conflict.bead_id}: {conflict.title}
+                </span>
+                <span className="bdf-conflict-files">
+                  {conflict.overlapping_files.length} file{conflict.overlapping_files.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {preview.similar_stitches.length > 0 && (
+        <div className="bdf-preview-section">
+          <div className="bdf-preview-subheader">Similar Stitches</div>
+          <div className="bdf-similar-stitches">
+            {preview.similar_stitches.map((stitch) => (
+              <div key={stitch.id} className="bdf-similar-stitch">
+                <span className="bdf-similar-id">{stitch.id}</span>
+                <span className="bdf-similar-title">{stitch.title}</span>
+                <span className="bdf-similar-similarity">{Math.round(stitch.similarity * 100)}%</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main form ─────────────────────────────────────────────────────────────
 
 export default function StitchDraftForm({ projectName, onClose, onCreated }: StitchDraftFormProps) {
@@ -470,6 +681,13 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
   const [decomposeGraph, setDecomposeGraph] = useState<BeadGraph | null>(null);
   const [decomposeLoading, setDecomposeLoading] = useState(false);
   const [decomposeError, setDecomposeError] = useState<string | null>(null);
+  const [dedupMatches, setDedupMatches] = useState<DedupMatchRef[]>([]);
+  const [forceCreate, setForceCreate] = useState(false);
+
+  // "What Will This Take?" preview state
+  const [stitchPreview, setStitchPreview] = useState<StitchPreviewData | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   // Projects that have a valid path (workspaces exist)
   const validProjects = useMemo(
@@ -511,12 +729,15 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
       if (!form.title.trim() || !selectedProject || !isDecomposable(form.kind)) {
         setDecomposeGraph(null);
         setDecomposeError(null);
+        // Don't clear dedup matches here — non-decomposable dedup runs separately
+        setStitchPreview(null);
         return;
       }
 
       const apiKind = decomposeKind(form.kind)!;
       setDecomposeLoading(true);
       setDecomposeError(null);
+      setPreviewLoading(true);
 
       fetch(`/api/p/${encodeURIComponent(selectedProject)}/stitch/decompose`, {
         method: 'POST',
@@ -539,17 +760,115 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
         })
         .then((data) => {
           setDecomposeGraph(data.graph);
+          setDedupMatches(data.dedup_matches || []);
+          setStitchPreview(data.preview || null);
         })
         .catch((err) => {
           console.error('Decompose preview error:', err);
           setDecomposeError(err.message || 'Failed to preview decomposition');
           setDecomposeGraph(null);
+          setDedupMatches([]);
+          setStitchPreview(null);
         })
-        .finally(() => setDecomposeLoading(false));
+        .finally(() => {
+          setDecomposeLoading(false);
+          setPreviewLoading(false);
+        });
     }, 600);
 
     return () => clearTimeout(timeoutId);
   }, [form.title, form.description, form.kind, form.hasAcceptanceCriteria, form.priority, form.labels, selectedProject, inferredPriority]);
+
+  // Debounced "What Will This Take?" preview fetch
+  // Only runs for non-decomposable kinds (genesis, review) since decomposable kinds
+  // get preview data from the decomposition response
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      // Skip for decomposable kinds - they get preview from decompose endpoint
+      if (isDecomposable(form.kind)) {
+        setStitchPreview(null);
+        setPreviewError(null);
+        return;
+      }
+
+      if (!form.title.trim() || !selectedProject) {
+        setStitchPreview(null);
+        setPreviewError(null);
+        return;
+      }
+
+      setPreviewLoading(true);
+      setPreviewError(null);
+
+      const params = new URLSearchParams({
+        title: form.title.trim(),
+        ...(form.description.trim() && { description: form.description.trim() }),
+        ...(form.labels.length > 0 && { labels: form.labels.join(',') }),
+      });
+
+      fetch(`/api/p/${encodeURIComponent(selectedProject)}/beads/preview?${params}`)
+        .then(async (res) => {
+          if (!res.ok) {
+            const text = await res.text();
+            throw new Error(text || `Preview failed: ${res.status}`);
+          }
+          return res.json() as Promise<StitchPreviewData>;
+        })
+        .then((data) => {
+          setStitchPreview(data);
+        })
+        .catch((err) => {
+          console.error('Preview fetch error:', err);
+          setPreviewError(err.message || 'Failed to load preview');
+        })
+        .finally(() => {
+          setPreviewLoading(false);
+        });
+    }, 800); // 800ms debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [form.title, form.description, form.labels, selectedProject, form.kind]);
+
+  // Debounced dedup check for non-decomposable kinds (genesis, review)
+  // Decomposable kinds get dedup from the decomposition preview response
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (isDecomposable(form.kind)) {
+        return; // dedup comes from decompose endpoint
+      }
+      if (!form.title.trim() || !selectedProject) {
+        setDedupMatches([]);
+        return;
+      }
+
+      fetch(`/api/p/${encodeURIComponent(selectedProject)}/beads/dedup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: form.title.trim(),
+          description: form.description.trim() || null,
+        }),
+      })
+        .then(async (res) => {
+          if (!res.ok) throw new Error(`Dedup check failed: ${res.status}`);
+          return res.json() as Promise<{ matches: DedupMatchRef[]; threshold: number; message: string | null }>;
+        })
+        .then((data) => {
+          setDedupMatches(data.matches || []);
+        })
+        .catch(() => {
+          setDedupMatches([]);
+        });
+    }, 600);
+
+    return () => clearTimeout(timeoutId);
+  }, [form.title, form.description, form.kind, selectedProject]);
+
+  // Reset dedup state when kind changes between decomposable and non-decomposable
+  useEffect(() => {
+    setDedupMatches([]);
+    setForceCreate(false);
+  }, [form.kind]);
 
   const titleValid = form.title.trim().length > 0;
   const projectValid = projectHasWorkspace;
@@ -615,11 +934,25 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
             priority,
             labels: form.labels.length > 0 ? form.labels : null,
             source: 'form',
+            force_create: forceCreate,
           }),
         });
 
         if (!res.ok) {
           const text = await res.text();
+          // Check if this is a dedup conflict response
+          if (res.status === 409) {
+            try {
+              const errorData = JSON.parse(text);
+              if (errorData.dedup_matches && Array.isArray(errorData.dedup_matches)) {
+                setDedupMatches(errorData.dedup_matches);
+                setSubmitError(errorData.message || 'Potential duplicate found. Confirm to proceed anyway.');
+                return;
+              }
+            } catch {
+              // Not JSON, fall through to normal error handling
+            }
+          }
           setSubmitError(text || `Server error ${res.status}`);
           return;
         }
@@ -654,11 +987,25 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
             assignee: form.assignee.trim() || null,
             labels: form.labels.length > 0 ? form.labels : null,
             source: 'form',
+            force_create: forceCreate,
           }),
         });
 
         if (!res.ok) {
           const text = await res.text();
+          // Check if this is a dedup conflict response
+          if (res.status === 409) {
+            try {
+              const errorData = JSON.parse(text);
+              if (errorData.dedup_matches && Array.isArray(errorData.dedup_matches)) {
+                setDedupMatches(errorData.dedup_matches);
+                setSubmitError(errorData.message || 'Potential duplicate found. Confirm to proceed anyway.');
+                return;
+              }
+            } catch {
+              // Not JSON, fall through to normal error handling
+            }
+          }
           setSubmitError(text || `Server error ${res.status}`);
           return;
         }
@@ -840,6 +1187,52 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
             </div>
           )}
 
+          {/* Dedup warning */}
+          {dedupMatches.length > 0 && (
+            <div className="bdf-field">
+              <div className="sdf-dedup-warning">
+                <strong>⚠️ Potential duplicate{dedupMatches.length > 1 ? 's' : ''} found</strong>
+                <p className="sdf-dedup-message">
+                  This looks like similar work that may already be in progress:
+                </p>
+                <ul className="sdf-dedup-list">
+                  {dedupMatches.map(m => (
+                    <li key={m.id} className="sdf-dedup-item">
+                      <span className="sdf-dedup-project">{m.project}</span>
+                      <span className="sdf-dedup-title">{m.title}</span>
+                      <span className="sdf-dedup-similarity">{Math.round(m.similarity * 100)}% match</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="sdf-dedup-actions">
+                  <button
+                    type="button"
+                    className="bdf-btn-secondary"
+                    onClick={() => {
+                      // Report false positive to the backend for stats tracking
+                      if (selectedProject) {
+                        fetch(`/api/p/${encodeURIComponent(selectedProject)}/beads/dedup-dismiss`, {
+                          method: 'POST',
+                        }).catch(() => { /* non-critical */ });
+                      }
+                      setDedupMatches([]);
+                    }}
+                  >
+                    Dismiss and create new
+                  </button>
+                  <label className="sdf-force-create-label">
+                    <input
+                      type="checkbox"
+                      checked={forceCreate}
+                      onChange={e => setForceCreate(e.target.checked)}
+                    />
+                    Don't ask again for this draft
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Non-decomposable info */}
           {!isDecomposable(form.kind) && form.title.trim() && (
             <div className="bdf-field">
@@ -851,6 +1244,15 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
                 </p>
               </div>
             </div>
+          )}
+
+          {/* "What Will This Take?" preview card */}
+          {form.title.trim() && selectedProject && (
+            <PreviewCard
+              preview={stitchPreview}
+              loading={previewLoading}
+              error={previewError}
+            />
           )}
 
           {/* Dependencies */}

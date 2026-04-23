@@ -10,7 +10,7 @@ import StitchesTab from './StitchesTab';
 import FilesTab from './FilesTab';
 import DebugPanel from './DebugPanel';
 
-type TabId = 'stitches' | 'fleet' | 'graph' | 'conversations' | 'cost' | 'capacity' | 'files' | 'debug';
+export type TabId = 'stitches' | 'fleet' | 'graph' | 'conversations' | 'cost' | 'capacity' | 'files' | 'debug';
 
 interface Tab {
   id: TabId;
@@ -208,6 +208,7 @@ export default function ProjectDetail({ projectName, projectPath }: ProjectDetai
               projectName={projectName}
               projectPath={projectPath}
               conversations={projectConversations}
+              onSwitchTab={setActiveTab}
             />
           )}
           {activeTab === 'fleet' && (

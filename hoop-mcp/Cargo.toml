@@ -1,0 +1,34 @@
+[package]
+name = "hoop-mcp"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "hoop-mcp"
+path = "src/main.rs"
+
+[features]
+default = []
+zero-write-v01 = []
+create-only-write = []
+
+[dependencies]
+anyhow = "1.0"
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde_json = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+dirs = "5.0"
+rusqlite = { version = "0.30", features = ["bundled"] }
+sha2 = "0.10"
+hex = "0.4"
+regex = "1"
+ignore = "0.4"
+clap = { version = "4.5", features = ["derive"] }
+
+[dev-dependencies]
+tempfile = "3"

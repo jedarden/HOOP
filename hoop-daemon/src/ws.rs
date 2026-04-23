@@ -367,6 +367,8 @@ pub struct WsEvent {
     pub bead_events: Option<Vec<BeadEventData>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stitch_created: Option<StitchCreatedData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_session: Option<crate::agent_session::AgentSessionEvent>,
 }
 
 impl WsEvent {
@@ -386,6 +388,7 @@ impl WsEvent {
             bead_event: None,
             bead_events: None,
             stitch_created: None,
+            agent_session: None,
         }
     }
 
@@ -405,6 +408,7 @@ impl WsEvent {
             bead_event: None,
             bead_events: None,
             stitch_created: None,
+            agent_session: None,
         }
     }
 
@@ -424,6 +428,7 @@ impl WsEvent {
             bead_event: None,
             bead_events: None,
             stitch_created: None,
+            agent_session: None,
         }
     }
 
@@ -443,6 +448,7 @@ impl WsEvent {
             bead_event: None,
             bead_events: None,
             stitch_created: None,
+            agent_session: None,
         }
     }
 
@@ -462,6 +468,7 @@ impl WsEvent {
             bead_event: None,
             bead_events: None,
             stitch_created: None,
+            agent_session: None,
         }
     }
 
@@ -481,6 +488,7 @@ impl WsEvent {
             bead_event: None,
             bead_events: None,
             stitch_created: None,
+            agent_session: None,
         }
     }
 
@@ -500,6 +508,7 @@ impl WsEvent {
             bead_event: None,
             bead_events: None,
             stitch_created: None,
+            agent_session: None,
         }
     }
 
@@ -519,6 +528,7 @@ impl WsEvent {
             bead_event: None,
             bead_events: None,
             stitch_created: None,
+            agent_session: None,
         }
     }
 
@@ -538,6 +548,7 @@ impl WsEvent {
             bead_event: None,
             bead_events: None,
             stitch_created: None,
+            agent_session: None,
         }
     }
 
@@ -557,6 +568,7 @@ impl WsEvent {
             bead_event: Some(event),
             bead_events: None,
             stitch_created: None,
+            agent_session: None,
         }
     }
 
@@ -576,6 +588,7 @@ impl WsEvent {
             bead_event: None,
             bead_events: Some(events),
             stitch_created: None,
+            agent_session: None,
         }
     }
 
@@ -595,6 +608,27 @@ impl WsEvent {
             bead_event: None,
             bead_events: None,
             stitch_created: Some(data),
+            agent_session: None,
+        }
+    }
+
+    /// Create an agent session event
+    pub fn agent_session(event: crate::agent_session::AgentSessionEvent) -> Self {
+        Self {
+            event_type: "agent_session".to_string(),
+            worker: None,
+            workers: None,
+            beads: None,
+            conversations: None,
+            conversation: None,
+            streaming: None,
+            projects: None,
+            config_status: None,
+            capacity: None,
+            bead_event: None,
+            bead_events: None,
+            stitch_created: None,
+            agent_session: Some(event),
         }
     }
 }
@@ -819,6 +853,24 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     }
 
+    // Send initial agent session status if active
+    if let Some(ref mgr) = state.agent_session_manager {
+        let status = mgr.status().await;
+        if status.active {
+            if let Ok(json) = serde_json::to_string(&WsEvent::agent_session(
+                crate::agent_session::AgentSessionEvent::SessionReattached {
+                    session_id: status.session_id.unwrap_or_default(),
+                    adapter: status.adapter.unwrap_or_default(),
+                    model: status.model.unwrap_or_default(),
+                },
+            )) {
+                if sender.send(Message::Text(json)).await.is_err() {
+                    return;
+                }
+            }
+        }
+    }
+
     // Forwarder task: drains ws_rx mpsc → WebSocket sender
     let forwarder_task = tokio::spawn(async move {
         while let Some(json) = ws_rx.recv().await {
@@ -997,6 +1049,27 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     });
 
+    // Spawn task to forward agent session events to the WebSocket
+    let ws_tx_agent = ws_tx.clone();
+    let agent_session_manager = state.agent_session_manager.clone();
+    let agent_task = tokio::spawn(async move {
+        let Some(mgr) = agent_session_manager else { return };
+        let mut agent_rx = mgr.subscribe();
+        loop {
+            match agent_rx.recv().await {
+                Ok(event) => {
+                    if let Ok(json) = serde_json::to_string(&WsEvent::agent_session(event)) {
+                        let _ = ws_tx_agent.send(json).await;
+                    }
+                }
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    debug!("Agent session broadcast lagged by {}, continuing", n);
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+
     // Handle incoming messages (just ping/pong for now)
     let recv_task = tokio::spawn(async move {
         while let Some(msg) = receiver.next().await {
@@ -1042,6 +1115,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         _ = config_task => {},
         _ = project_task => {},
         _ = capacity_task => {},
+        _ = agent_task => {},
         _ = recv_task => {},
         _ = shutdown_task => {},
     }

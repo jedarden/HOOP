@@ -181,7 +181,7 @@ export interface AccountCapacity {
 
 // WebSocket event from backend
 export interface WsEvent {
-  type: 'worker_update' | 'workers_snapshot' | 'beads_snapshot' | 'conversations_snapshot' | 'conversation_update' | 'streaming_content' | 'config_status' | 'projects_snapshot' | 'capacity_snapshot';
+  type: 'worker_update' | 'workers_snapshot' | 'beads_snapshot' | 'conversations_snapshot' | 'conversation_update' | 'streaming_content' | 'config_status' | 'projects_snapshot' | 'capacity_snapshot' | 'stitch_created';
   worker?: WorkerData;
   workers?: WorkerData[];
   beads?: BeadData[];
@@ -191,6 +191,7 @@ export interface WsEvent {
   projects?: ProjectCardData[];
   config_status?: ConfigStatus;
   capacity?: AccountCapacity[];
+  stitch_created?: StitchCreatedData;
 }
 
 // Cost bucket from backend aggregation
@@ -203,6 +204,17 @@ export interface CostBucket {
   usage: MessageUsage;
   request_count: number;
   cost_usd: number;
+}
+
+// Stitch created event from backend WS
+export interface StitchCreatedData {
+  bead_id: string;
+  title: string;
+  project: string;
+  stitch_id: string | null;
+  source: string;
+  actor: string;
+  created_at: string;
 }
 
 // Bead event from events.jsonl for debug panel
@@ -250,6 +262,7 @@ export const configStatusAtom = atom<ConfigStatus>({ valid: true });
 export const capacityAtom = atom<AccountCapacity[]>([]);
 export const costBucketsAtom = atom<CostBucket[]>([]);
 export const dictatedNotesAtom = atom<Map<string, NoteSummary[]>>(new Map()); // project -> notes
+export const stitchCreatedAtom = atom<StitchCreatedData[]>([]);
 
 // Format content for display (handles string and object content)
 export function formatContent(content: string | { [key: string]: any } | null): string {

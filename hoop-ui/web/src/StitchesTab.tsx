@@ -5,6 +5,7 @@ import AudioPlayer from './components/AudioPlayer';
 import { scanForSecrets, getSecretSeverity, truncateSecret } from './components/secretsScanner';
 import BeadDraftForm from './BeadDraftForm';
 import StitchDraftForm from './StitchDraftForm';
+import { TabId } from './ProjectDetail';
 
 const PAGE_SIZE = 50;
 
@@ -332,9 +333,10 @@ interface StitchesTabProps {
   projectName: string;
   projectPath: string;
   conversations?: Conversation[];
+  onSwitchTab?: (tab: TabId) => void;
 }
 
-export default function StitchesTab({ projectName, projectPath: _projectPath, conversations: conversationsProp }: StitchesTabProps) {
+export default function StitchesTab({ projectName, projectPath: _projectPath, conversations: conversationsProp, onSwitchTab }: StitchesTabProps) {
   const globalConversations = useAtomValue(conversationsAtom);
   const conversations = conversationsProp ?? globalConversations;
   const streamingContent = useAtomValue(streamingContentAtom);
@@ -383,6 +385,7 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
   const [showStitchForm, setShowStitchForm] = useState(false);
   const [lastCreatedId, setLastCreatedId] = useState<string | null>(null);
   const [lastStitchIds, setLastStitchIds] = useState<string[] | null>(null);
+  const [lastStitchId, setLastStitchId] = useState<string | null>(null);
 
   // Merge conversations + dictated notes into unified stitch items
   const stitchItems = useMemo(() => {
@@ -499,8 +502,9 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
     setSelectedId(beadId);
   }, []);
 
-  const handleStitchCreated = useCallback((beadIds: string[]) => {
+  const handleStitchCreated = useCallback((beadIds: string[], stitchId?: string) => {
     setLastStitchIds(beadIds);
+    setLastStitchId(stitchId ?? null);
     setShowStitchForm(false);
     if (beadIds.length > 0) setSelectedId(beadIds[0]);
   }, []);
@@ -532,8 +536,19 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
 
       {lastStitchIds && lastStitchIds.length > 0 && (
         <div className="bead-created-banner" role="status">
-          Stitch created {lastStitchIds.length} bead{lastStitchIds.length !== 1 ? 's' : ''}: <strong>{lastStitchIds.join(', ')}</strong>{' '}
-          <button className="bead-created-dismiss" onClick={() => setLastStitchIds(null)}>Dismiss</button>
+          {lastStitchId && (
+            <>Stitch <strong>{lastStitchId}</strong>: </>
+          )}
+          {!lastStitchId && (
+            <>Stitch created </>
+          )}
+          {lastStitchIds.length} bead{lastStitchIds.length !== 1 ? 's' : ''}: <strong>{lastStitchIds.join(', ')}</strong>{' '}
+          {onSwitchTab && (
+            <button className="bead-created-redirect" onClick={() => onSwitchTab('graph')}>
+              View in Bead Graph
+            </button>
+          )}
+          <button className="bead-created-dismiss" onClick={() => { setLastStitchIds(null); setLastStitchId(null); }}>Dismiss</button>
         </div>
       )}
 

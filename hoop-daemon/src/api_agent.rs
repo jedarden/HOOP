@@ -36,6 +36,7 @@ async fn get_status(
         Some(mgr) => Json(mgr.status().await),
         None => Json(crate::agent_session::AgentSessionStatus {
             active: false,
+            enabled: false,
             session_id: None,
             adapter: None,
             model: None,

@@ -83,11 +83,11 @@ struct RiskPatternInfo {
 }
 
 #[derive(Debug, Serialize)]
-struct FileConflict {
-    bead_id: String,
-    title: String,
-    project: String,
-    overlapping_files: Vec<String>,
+pub struct FileConflict {
+    pub bead_id: String,
+    pub title: String,
+    pub project: String,
+    pub overlapping_files: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -196,7 +196,7 @@ async fn preview_bead(
 ///
 /// Derives cost from token usage, duration from timestamps, adapter/model
 /// from participants JSON, and body/labels from messages and audit log.
-fn load_historical_stitches(project: &str) -> Result<Vec<HistoricalStitch>, String> {
+pub fn load_historical_stitches(project: &str) -> Result<Vec<HistoricalStitch>, String> {
     use rusqlite::Connection;
 
     let db_path = fleet_db_path()?;
@@ -321,7 +321,7 @@ fn load_labels_for_stitch(stitch_id: &str, conn: &rusqlite::Connection) -> Vec<S
 }
 
 /// Load risk pattern library from ~/.hoop/risk_patterns.json or use defaults
-fn load_risk_library() -> Result<FixLineageLibrary, String> {
+pub fn load_risk_library() -> Result<FixLineageLibrary, String> {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     let risk_patterns_path = home.join(".hoop").join("risk_patterns.json");
 
@@ -337,7 +337,7 @@ fn load_risk_library() -> Result<FixLineageLibrary, String> {
 ///
 /// Looks at workers in the Executing state and extracts file paths from
 /// their bead event history to detect potential overlaps.
-async fn check_file_conflicts(state: &crate::DaemonState) -> Vec<FileConflict> {
+pub async fn check_file_conflicts(state: &crate::DaemonState) -> Vec<FileConflict> {
     let workers = state.worker_registry.snapshot().await;
 
     let executing_beads: Vec<_> = workers

@@ -21,7 +21,7 @@ use tracing::info;
 use uuid::Uuid;
 
 /// Current schema version
-const SCHEMA_VERSION: &str = "1.7.0";
+const SCHEMA_VERSION: &str = "1.9.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -300,6 +300,56 @@ pub fn verify_hash_chain() -> Result<()> {
     Ok(())
 }
 
+/// Create a row in the `stitches` table and link beads via `stitch_beads`.
+///
+/// The `kind` must be one of the CHECK-constrained values: operator, dictated, worker, ad-hoc.
+/// For stitch submit from the form, `kind` is always `"operator"`.
+pub fn create_stitch(
+    stitch_id: &str,
+    project: &str,
+    kind: &str,
+    title: &str,
+    created_by: &str,
+    bead_ids: &[(&str, &str)], // (bead_id, workspace)
+) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let now = Utc::now().to_rfc3339();
+
+    conn.execute(
+        r#"
+        INSERT INTO stitches (id, project, kind, title, created_by, created_at, last_activity_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        "#,
+        params![stitch_id, project, kind, title, created_by, now, now],
+    )?;
+
+    for (bead_id, workspace) in bead_ids {
+        conn.execute(
+            r#"
+            INSERT INTO stitch_beads (stitch_id, bead_id, workspace, relationship)
+            VALUES (?, ?, ?, 'created-here')
+            "#,
+            params![stitch_id, bead_id, workspace],
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Delete a stitch row and its linked bead rows from fleet.db.
+///
+/// Used during rollback when partial bead creation failure occurs after
+/// the stitch row has been inserted. Explicitly removes stitch_beads
+/// entries before the stitch row since FK enforcement may not be active.
+pub fn delete_stitch(stitch_id: &str) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    conn.execute("DELETE FROM stitch_beads WHERE stitch_id = ?", params![stitch_id])?;
+    conn.execute("DELETE FROM stitches WHERE id = ?", params![stitch_id])?;
+    Ok(())
+}
+
 /// Database path: `~/.hoop/fleet.db`
 pub fn db_path() -> PathBuf {
     let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
@@ -513,6 +563,10 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v15_to_v16(conn)?;
             // Fall through to 1.7.0
             migrate_v16_to_v17(conn)?;
+            // Fall through to 1.8.0
+            migrate_v17_to_v18(conn)?;
+            // Fall through to 1.9.0
+            migrate_v18_to_v19(conn)?;
         }
         "1.1.0" => {
             migrate_v11_to_v12(conn)?;
@@ -521,6 +575,8 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v14_to_v15(conn)?;
             migrate_v15_to_v16(conn)?;
             migrate_v16_to_v17(conn)?;
+            migrate_v17_to_v18(conn)?;
+            migrate_v18_to_v19(conn)?;
         }
         "1.2.0" => {
             migrate_v12_to_v13(conn)?;
@@ -528,31 +584,48 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v14_to_v15(conn)?;
             migrate_v15_to_v16(conn)?;
             migrate_v16_to_v17(conn)?;
+            migrate_v17_to_v18(conn)?;
+            migrate_v18_to_v19(conn)?;
         }
         "1.3.0" => {
             migrate_v13_to_v14(conn)?;
             migrate_v14_to_v15(conn)?;
             migrate_v15_to_v16(conn)?;
             migrate_v16_to_v17(conn)?;
+            migrate_v17_to_v18(conn)?;
+            migrate_v18_to_v19(conn)?;
         }
         "1.4.0" => {
             migrate_v14_to_v15(conn)?;
             migrate_v15_to_v16(conn)?;
             migrate_v16_to_v17(conn)?;
+            migrate_v17_to_v18(conn)?;
+            migrate_v18_to_v19(conn)?;
         }
         "1.5.0" => {
             migrate_v15_to_v16(conn)?;
             migrate_v16_to_v17(conn)?;
+            migrate_v17_to_v18(conn)?;
+            migrate_v18_to_v19(conn)?;
         }
         "1.6.0" => {
             migrate_v16_to_v17(conn)?;
+            migrate_v17_to_v18(conn)?;
+            migrate_v18_to_v19(conn)?;
         }
         "1.7.0" => {
-            info!("Already at schema version 1.7.0, no migrations needed");
+            migrate_v17_to_v18(conn)?;
+            migrate_v18_to_v19(conn)?;
+        }
+        "1.8.0" => {
+            migrate_v18_to_v19(conn)?;
+        }
+        "1.9.0" => {
+            info!("Already at schema version 1.9.0, no migrations needed");
         }
         _ => {
             return Err(anyhow::anyhow!(
-                "Unsupported schema version: {}. Expected 0.1.0–1.7.0",
+                "Unsupported schema version: {}. Expected 0.1.0–1.8.0",
                 from_version
             ));
         }
@@ -975,6 +1048,99 @@ fn migrate_v16_to_v17(conn: &mut Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migration 1.7.0 → 1.8.0: Add agent_sessions table
+///
+/// Tracks persistent agent sessions across daemon restarts. Each row records
+/// the adapter-native session ID, which adapter created it, the model in use,
+/// cost and token accumulators, and the timestamps needed to compute session
+/// age. On daemon restart HOOP reads the most recent active row and reattaches
+/// via the adapter's native resume mechanism.
+fn migrate_v17_to_v18(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.7.0 → 1.8.0: Adding agent_sessions table");
+
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS agent_sessions (
+            id TEXT PRIMARY KEY NOT NULL,
+            adapter_session_id TEXT NOT NULL,
+            adapter TEXT NOT NULL,
+            model TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active'
+                CHECK(status IN ('active', 'archived', 'switched', 'disabled')),
+            stitch_id TEXT,
+            cost_usd REAL NOT NULL DEFAULT 0.0,
+            input_tokens INTEGER NOT NULL DEFAULT 0,
+            output_tokens INTEGER NOT NULL DEFAULT 0,
+            turn_count INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            last_activity_at TEXT NOT NULL,
+            archived_at TEXT,
+            archived_reason TEXT
+        )
+        "#,
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_agent_sessions_status ON agent_sessions(status)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_agent_sessions_adapter ON agent_sessions(adapter)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_agent_sessions_created_at ON agent_sessions(created_at DESC)",
+        [],
+    )?;
+
+    update_schema_version(conn, "1.8.0")?;
+    Ok(())
+}
+
+/// Migration 1.8.0 → 1.9.0: Add reflection_ledger table
+///
+/// The Reflection Ledger stores operator-approved rules extracted from repeated
+/// patterns in operator Stitches. Entries are scoped (global / project / pattern),
+/// carry a status lifecycle (proposed → approved → archived), and track how often
+/// they are injected into agent sessions.
+fn migrate_v18_to_v19(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.8.0 → 1.9.0: Adding reflection_ledger table");
+
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS reflection_ledger (
+            id TEXT PRIMARY KEY NOT NULL,
+            scope TEXT NOT NULL,
+            rule TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            source_stitches TEXT NOT NULL DEFAULT '[]',
+            status TEXT NOT NULL DEFAULT 'proposed'
+                CHECK(status IN ('proposed', 'approved', 'rejected', 'archived')),
+            created_at TEXT NOT NULL,
+            last_applied TEXT,
+            applied_count INTEGER NOT NULL DEFAULT 0
+        )
+        "#,
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_reflection_ledger_status ON reflection_ledger(status)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_reflection_ledger_scope ON reflection_ledger(scope)",
+        [],
+    )?;
+
+    update_schema_version(conn, "1.9.0")?;
+    Ok(())
+}
+
 /// Update the schema version in the metadata table
 fn update_schema_version(conn: &mut Connection, version: &str) -> Result<()> {
     conn.execute(
@@ -982,6 +1148,333 @@ fn update_schema_version(conn: &mut Connection, version: &str) -> Result<()> {
         [version],
     )?;
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// agent_sessions CRUD
+// ---------------------------------------------------------------------------
+
+/// A row from the `agent_sessions` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentSessionRow {
+    pub id: String,
+    pub adapter_session_id: String,
+    pub adapter: String,
+    pub model: String,
+    pub status: String,
+    pub stitch_id: Option<String>,
+    pub cost_usd: f64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub turn_count: i64,
+    pub created_at: String,
+    pub last_activity_at: String,
+    pub archived_at: Option<String>,
+    pub archived_reason: Option<String>,
+}
+
+/// Insert a new agent session row.
+pub fn insert_agent_session(row: &AgentSessionRow) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    conn.execute(
+        r#"INSERT INTO agent_sessions
+           (id, adapter_session_id, adapter, model, status, stitch_id,
+            cost_usd, input_tokens, output_tokens, turn_count,
+            created_at, last_activity_at, archived_at, archived_reason)
+           VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)"#,
+        params![
+            row.id,
+            row.adapter_session_id,
+            row.adapter,
+            row.model,
+            row.status,
+            row.stitch_id,
+            row.cost_usd,
+            row.input_tokens,
+            row.output_tokens,
+            row.turn_count,
+            row.created_at,
+            row.last_activity_at,
+            row.archived_at,
+            row.archived_reason,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Load the most recent active agent session (for reattach on restart).
+pub fn load_active_agent_session() -> Result<Option<AgentSessionRow>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let mut stmt = conn.prepare(
+        "SELECT id, adapter_session_id, adapter, model, status, stitch_id,
+                cost_usd, input_tokens, output_tokens, turn_count,
+                created_at, last_activity_at, archived_at, archived_reason
+         FROM agent_sessions
+         WHERE status = 'active'
+         ORDER BY created_at DESC LIMIT 1",
+    )?;
+    let row = stmt.query_row([], |row| {
+        Ok(AgentSessionRow {
+            id: row.get(0)?,
+            adapter_session_id: row.get(1)?,
+            adapter: row.get(2)?,
+            model: row.get(3)?,
+            status: row.get(4)?,
+            stitch_id: row.get(5)?,
+            cost_usd: row.get(6)?,
+            input_tokens: row.get(7)?,
+            output_tokens: row.get(8)?,
+            turn_count: row.get(9)?,
+            created_at: row.get(10)?,
+            last_activity_at: row.get(11)?,
+            archived_at: row.get(12)?,
+            archived_reason: row.get(13)?,
+        })
+    });
+    match row {
+        Ok(r) => Ok(Some(r)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(anyhow::anyhow!("Failed to load active agent session: {}", e)),
+    }
+}
+
+/// Accumulate cost and tokens after a completed turn.
+pub fn update_agent_session_usage(
+    session_id: &str,
+    input_tokens: i64,
+    output_tokens: i64,
+    cost_delta_usd: f64,
+) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let now = Utc::now().to_rfc3339();
+    conn.execute(
+        r#"UPDATE agent_sessions
+           SET input_tokens = input_tokens + ?1,
+               output_tokens = output_tokens + ?2,
+               cost_usd = cost_usd + ?3,
+               turn_count = turn_count + 1,
+               last_activity_at = ?4
+           WHERE id = ?5"#,
+        params![input_tokens, output_tokens, cost_delta_usd, now, session_id],
+    )?;
+    Ok(())
+}
+
+/// Archive a session (mark as archived/switched/disabled).
+pub fn archive_agent_session(session_id: &str, reason: &str) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let now = Utc::now().to_rfc3339();
+    let status = match reason {
+        "switched" => "switched",
+        "disabled" => "disabled",
+        _ => "archived",
+    };
+    conn.execute(
+        r#"UPDATE agent_sessions
+           SET status = ?1, archived_at = ?2, archived_reason = ?3
+           WHERE id = ?4"#,
+        params![status, now, reason, session_id],
+    )?;
+    Ok(())
+}
+
+/// List recent agent sessions (for the status endpoint).
+pub fn list_agent_sessions(limit: usize) -> Result<Vec<AgentSessionRow>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let mut stmt = conn.prepare(
+        "SELECT id, adapter_session_id, adapter, model, status, stitch_id,
+                cost_usd, input_tokens, output_tokens, turn_count,
+                created_at, last_activity_at, archived_at, archived_reason
+         FROM agent_sessions
+         ORDER BY created_at DESC LIMIT ?1",
+    )?;
+    let rows = stmt.query_map(params![limit], |row| {
+        Ok(AgentSessionRow {
+            id: row.get(0)?,
+            adapter_session_id: row.get(1)?,
+            adapter: row.get(2)?,
+            model: row.get(3)?,
+            status: row.get(4)?,
+            stitch_id: row.get(5)?,
+            cost_usd: row.get(6)?,
+            input_tokens: row.get(7)?,
+            output_tokens: row.get(8)?,
+            turn_count: row.get(9)?,
+            created_at: row.get(10)?,
+            last_activity_at: row.get(11)?,
+            archived_at: row.get(12)?,
+            archived_reason: row.get(13)?,
+        })
+    })?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row?);
+    }
+    Ok(result)
+}
+
+// ---------------------------------------------------------------------------
+// Agent enabled persistence (metadata table)
+// ---------------------------------------------------------------------------
+
+/// Check whether the agent is enabled. Defaults to true if never set.
+pub fn is_agent_enabled() -> Result<bool> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let val: String = conn
+        .query_row(
+            "SELECT value FROM metadata WHERE key = 'agent_enabled'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or_else(|_| "true".to_string());
+    Ok(val == "true")
+}
+
+/// Persist the agent enabled/disabled state.
+pub fn set_agent_enabled(enabled: bool) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    conn.execute(
+        "INSERT OR REPLACE INTO metadata (key, value) VALUES ('agent_enabled', ?)",
+        params![if enabled { "true" } else { "false" }],
+    )?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Reflection Ledger CRUD
+// ---------------------------------------------------------------------------
+
+/// A row from the `reflection_ledger` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReflectionLedgerEntry {
+    pub id: String,
+    pub scope: String,
+    pub rule: String,
+    pub reason: String,
+    pub source_stitches: String, // JSON array
+    pub status: String,
+    pub created_at: String,
+    pub last_applied: Option<String>,
+    pub applied_count: i64,
+}
+
+/// List approved reflection ledger entries, optionally filtered by scope.
+pub fn list_approved_reflection_entries(scope_prefix: Option<&str>) -> Result<Vec<ReflectionLedgerEntry>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let mut sql = String::from(
+        "SELECT id, scope, rule, reason, source_stitches, status, created_at, last_applied, applied_count
+         FROM reflection_ledger WHERE status = 'approved'",
+    );
+    let mut p: Vec<String> = Vec::new();
+    if let Some(prefix) = scope_prefix {
+        sql.push_str(&format!(" AND (scope = 'global' OR scope LIKE ?{} || '%')", p.len() + 1));
+        p.push(prefix.to_string());
+    }
+    sql.push_str(" ORDER BY created_at ASC");
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(rusqlite::params_from_iter(p.iter()), |row| {
+        Ok(ReflectionLedgerEntry {
+            id: row.get(0)?,
+            scope: row.get(1)?,
+            rule: row.get(2)?,
+            reason: row.get(3)?,
+            source_stitches: row.get(4)?,
+            status: row.get(5)?,
+            created_at: row.get(6)?,
+            last_applied: row.get(7)?,
+            applied_count: row.get(8)?,
+        })
+    })?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row?);
+    }
+    Ok(result)
+}
+
+// ---------------------------------------------------------------------------
+// Agent session → Stitch archival
+// ---------------------------------------------------------------------------
+
+/// Archive an agent session's transcript as a Stitch.
+///
+/// Creates a Stitch row of kind "operator" in the "hoop-agent" project,
+/// stores in-memory history as stitch_messages, and links the Stitch to
+/// the agent_sessions row via the stitch_id column.
+pub fn archive_session_as_stitch(
+    session_row: &AgentSessionRow,
+    history: &[(String, String)], // (role, content) pairs
+) -> Result<String> {
+    let stitch_id = Uuid::new_v4().to_string();
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let now = Utc::now().to_rfc3339();
+
+    let title = format!(
+        "Agent session {} ({})",
+        session_row.adapter,
+        &session_row.created_at[..19].replace('T', " "),
+    );
+
+    conn.execute(
+        r#"INSERT INTO stitches (id, project, kind, title, created_by, created_at, last_activity_at)
+           VALUES (?1, 'hoop-agent', 'operator', ?2, 'hoop:agent', ?3, ?4)"#,
+        params![stitch_id, title, session_row.created_at, now],
+    )?;
+
+    // Store in-memory history as stitch_messages.
+    for (i, (role, content)) in history.iter().enumerate() {
+        let msg_id = Uuid::new_v4().to_string();
+        let ts = if i == 0 {
+            session_row.created_at.clone()
+        } else {
+            now.clone()
+        };
+        conn.execute(
+            r#"INSERT INTO stitch_messages (id, stitch_id, ts, role, content)
+               VALUES (?1, ?2, ?3, ?4, ?5)"#,
+            params![msg_id, stitch_id, ts, role, content],
+        )?;
+    }
+
+    // Link stitch_id on the agent_sessions row.
+    conn.execute(
+        "UPDATE agent_sessions SET stitch_id = ?1 WHERE id = ?2",
+        params![stitch_id, session_row.id],
+    )?;
+
+    Ok(stitch_id)
+}
+
+/// Load recent Stitches for context carry-forward (last N, any project).
+pub fn load_recent_stitches(limit: usize) -> Result<Vec<(String, String, String, String)>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let mut stmt = conn.prepare(
+        "SELECT id, project, title, last_activity_at FROM stitches
+         ORDER BY last_activity_at DESC LIMIT ?1",
+    )?;
+    let rows = stmt.query_map(params![limit], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, String>(3)?,
+        ))
+    })?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row?);
+    }
+    Ok(result)
 }
 
 #[cfg(test)]
@@ -1133,7 +1626,7 @@ mod tests {
         // Create schema and migrate to 1.1.0
         create_schema(&mut conn)?;
         run_migrations(&mut conn, "0.1.0")?;
-        assert_eq!(get_schema_version(&conn)?, "1.3.0");
+        assert_eq!(get_schema_version(&conn)?, SCHEMA_VERSION);
 
         // Pattern tables should now exist
         for table in ["patterns", "pattern_members", "pattern_queries"] {
@@ -1414,11 +1907,11 @@ mod tests {
         create_schema(&mut conn)?;
         run_migrations(&mut conn, "0.1.0")?;
 
-        // Running migration again on 1.3.0 should be a no-op
-        run_migrations(&mut conn, "1.3.0")?;
+        // Running migration again on 1.8.0 should be a no-op
+        run_migrations(&mut conn, "1.8.0")?;
 
         let version = get_schema_version(&conn)?;
-        assert_eq!(version, "1.3.0");
+        assert_eq!(version, "1.8.0");
 
         Ok(())
     }
@@ -1766,6 +2259,290 @@ mod tests {
             |row| Ok((row.get(0)?,)),
         )?;
         assert_eq!(child_parent, None, "Child's parent should be NULL after parent deletion");
+
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Agent session persistence tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_migration_v18_to_v19() -> Result<()> {
+        let temp_file = NamedTempFile::new()?;
+        let mut conn = Connection::open(temp_file.path())?;
+
+        create_schema(&mut conn)?;
+        run_migrations(&mut conn, "0.1.0")?;
+        assert_eq!(get_schema_version(&conn)?, SCHEMA_VERSION);
+
+        // reflection_ledger table should exist
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = 'reflection_ledger'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(count, 1, "reflection_ledger table should exist after migration");
+
+        // Check status CHECK constraint
+        use uuid::Uuid;
+        for status in ["proposed", "approved", "rejected", "archived"] {
+            conn.execute(
+                "INSERT INTO reflection_ledger (id, scope, rule, reason, status, created_at) VALUES (?, 'global', ?, ?, ?, datetime('now'))",
+                params![Uuid::new_v4().to_string(), format!("rule {}", status), format!("reason {}", status), status],
+            )?;
+        }
+
+        let result = conn.execute(
+            "INSERT INTO reflection_ledger (id, scope, rule, reason, status, created_at) VALUES (?, 'global', 'r', 're', 'invalid', datetime('now'))",
+            [Uuid::new_v4().to_string()],
+        );
+        assert!(result.is_err(), "CHECK constraint should reject invalid reflection status");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_agent_enabled_persistence() -> Result<()> {
+        let temp_file = NamedTempFile::new()?;
+        let mut conn = Connection::open(temp_file.path())?;
+
+        create_schema(&mut conn)?;
+        run_migrations(&mut conn, "0.1.0")?;
+
+        // Default should be true (metadata row doesn't exist yet)
+        let default_val: String = conn
+            .query_row(
+                "SELECT value FROM metadata WHERE key = 'agent_enabled'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or_else(|_| "true".to_string());
+        assert_eq!(default_val, "true");
+
+        // Set to false
+        conn.execute(
+            "INSERT OR REPLACE INTO metadata (key, value) VALUES ('agent_enabled', 'false')",
+            [],
+        )?;
+
+        let val: String = conn.query_row(
+            "SELECT value FROM metadata WHERE key = 'agent_enabled'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(val, "false");
+
+        // Set back to true
+        conn.execute(
+            "INSERT OR REPLACE INTO metadata (key, value) VALUES ('agent_enabled', 'true')",
+            [],
+        )?;
+        let val: String = conn.query_row(
+            "SELECT value FROM metadata WHERE key = 'agent_enabled'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(val, "true");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_reflection_ledger_approved_query() -> Result<()> {
+        let temp_file = NamedTempFile::new()?;
+        let mut conn = Connection::open(temp_file.path())?;
+
+        create_schema(&mut conn)?;
+        run_migrations(&mut conn, "0.1.0")?;
+
+        use uuid::Uuid;
+
+        // Insert entries in various statuses
+        let approved_id = Uuid::new_v4().to_string();
+        let proposed_id = Uuid::new_v4().to_string();
+        let rejected_id = Uuid::new_v4().to_string();
+
+        conn.execute(
+            "INSERT INTO reflection_ledger (id, scope, rule, reason, status, created_at) VALUES (?, 'global', 'approved rule', 'reason', 'approved', datetime('now'))",
+            params![approved_id],
+        )?;
+        conn.execute(
+            "INSERT INTO reflection_ledger (id, scope, rule, reason, status, created_at) VALUES (?, 'global', 'proposed rule', 'reason', 'proposed', datetime('now'))",
+            params![proposed_id],
+        )?;
+        conn.execute(
+            "INSERT INTO reflection_ledger (id, scope, rule, reason, status, created_at) VALUES (?, 'global', 'rejected rule', 'reason', 'rejected', datetime('now'))",
+            params![rejected_id],
+        )?;
+
+        // Only approved should be returned
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM reflection_ledger WHERE status = 'approved'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(count, 1);
+
+        let rule: String = conn.query_row(
+            "SELECT rule FROM reflection_ledger WHERE status = 'approved'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(rule, "approved rule");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_archive_session_as_stitch() -> Result<()> {
+        let temp_file = NamedTempFile::new()?;
+        let mut conn = Connection::open(temp_file.path())?;
+
+        create_schema(&mut conn)?;
+        run_migrations(&mut conn, "0.1.0")?;
+
+        use uuid::Uuid;
+
+        // Create an agent session
+        let session_id = Uuid::new_v4().to_string();
+        let now = Utc::now().to_rfc3339();
+        conn.execute(
+            r#"INSERT INTO agent_sessions
+               (id, adapter_session_id, adapter, model, status, cost_usd, input_tokens, output_tokens,
+                turn_count, created_at, last_activity_at)
+               VALUES (?1,?2,'claude','claude-opus-4-7','active',0.05,1000,500,3,?3,?3)"#,
+            params![session_id, "adapter-sess-123", now],
+        )?;
+
+        // Archive as stitch with history
+        let history = vec![
+            ("user".to_string(), "What did we do today?".to_string()),
+            ("assistant".to_string(), "Here's a summary...".to_string()),
+            ("user".to_string(), "Draft a bead for fixing Calico".to_string()),
+        ];
+
+        let stitch_id = Uuid::new_v4().to_string();
+        let title = format!("Agent session claude ({})", &now[..19].replace('T', " "));
+        conn.execute(
+            r#"INSERT INTO stitches (id, project, kind, title, created_by, created_at, last_activity_at)
+               VALUES (?1, 'hoop-agent', 'operator', ?2, 'hoop:agent', ?3, ?4)"#,
+            params![stitch_id, title, now, now],
+        )?;
+
+        // Store history as messages
+        for (role, content) in &history {
+            let msg_id = Uuid::new_v4().to_string();
+            conn.execute(
+                r#"INSERT INTO stitch_messages (id, stitch_id, ts, role, content)
+                   VALUES (?1, ?2, ?3, ?4, ?5)"#,
+                params![msg_id, stitch_id, now, role, content],
+            )?;
+        }
+
+        // Link stitch_id on agent_sessions
+        conn.execute(
+            "UPDATE agent_sessions SET stitch_id = ?1 WHERE id = ?2",
+            params![stitch_id, session_id],
+        )?;
+
+        // Verify stitch was created
+        let stitch_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM stitches WHERE id = ?",
+            params![stitch_id],
+            |row| row.get(0),
+        )?;
+        assert_eq!(stitch_count, 1);
+
+        // Verify messages were stored
+        let msg_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM stitch_messages WHERE stitch_id = ?",
+            params![stitch_id],
+            |row| row.get(0),
+        )?;
+        assert_eq!(msg_count, 3);
+
+        // Verify link on agent_sessions
+        let linked_stitch: Option<String> = conn.query_row(
+            "SELECT stitch_id FROM agent_sessions WHERE id = ?",
+            params![session_id],
+            |row| row.get(0),
+        )?;
+        assert_eq!(linked_stitch, Some(stitch_id.clone()));
+
+        // Verify stitch project is hoop-agent
+        let project: String = conn.query_row(
+            "SELECT project FROM stitches WHERE id = ?",
+            params![stitch_id],
+            |row| row.get(0),
+        )?;
+        assert_eq!(project, "hoop-agent");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_agent_sessions_crud() -> Result<()> {
+        let temp_file = NamedTempFile::new()?;
+        let mut conn = Connection::open(temp_file.path())?;
+
+        create_schema(&mut conn)?;
+        run_migrations(&mut conn, "0.1.0")?;
+
+        use uuid::Uuid;
+
+        let id = Uuid::new_v4().to_string();
+        let now = Utc::now().to_rfc3339();
+
+        // Insert
+        conn.execute(
+            r#"INSERT INTO agent_sessions
+               (id, adapter_session_id, adapter, model, status, cost_usd, input_tokens,
+                output_tokens, turn_count, created_at, last_activity_at)
+               VALUES (?1,?2,'claude','claude-opus-4-7','active',0.0,0,0,0,?3,?3)"#,
+            params![id, "adapter-sess-1", now],
+        )?;
+
+        // Query active
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM agent_sessions WHERE status = 'active'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(count, 1);
+
+        // Update usage
+        conn.execute(
+            r#"UPDATE agent_sessions
+               SET input_tokens = input_tokens + 100,
+                   output_tokens = output_tokens + 50,
+                   cost_usd = cost_usd + 0.015,
+                   turn_count = turn_count + 1
+               WHERE id = ?"#,
+            params![id],
+        )?;
+
+        let (input, output, cost, turns): (i64, i64, f64, i64) = conn.query_row(
+            "SELECT input_tokens, output_tokens, cost_usd, turn_count FROM agent_sessions WHERE id = ?",
+            params![id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        )?;
+        assert_eq!(input, 100);
+        assert_eq!(output, 50);
+        assert!((cost - 0.015).abs() < 0.001);
+        assert_eq!(turns, 1);
+
+        // Archive
+        conn.execute(
+            "UPDATE agent_sessions SET status = 'archived', archived_at = datetime('now'), archived_reason = 'test' WHERE id = ?",
+            params![id],
+        )?;
+        let active_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM agent_sessions WHERE status = 'active'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(active_count, 0);
 
         Ok(())
     }

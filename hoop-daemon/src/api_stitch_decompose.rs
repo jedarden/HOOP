@@ -7,10 +7,12 @@
 //! Submit flow: draft → validate → decompose → br create → audit → WS event → redirect
 //! On partial failure, previously created beads are closed and audit rows are voided.
 
+use crate::api_preview::FileConflict;
+#[cfg(not(feature = "zero-write-v01"))]
 use crate::br_verbs::invoke_br_create;
 use crate::fleet::{self, ActionKind, ActionResult, BeadActionArgs};
-use crate::predictor::{predict_stitch, HistoricalStitch};
-use crate::risk_patterns::{FixLineageLibrary, default_risk_patterns};
+use crate::predictor::{predict_stitch, PercentileEstimate, DateRange};
+
 use crate::stitch_decompose::{
     self, apply_override, decompose, BeadGraph, GraphOverride, StitchIntent,
 };
@@ -57,6 +59,8 @@ pub struct DecomposePreviewResponse {
 /// "What Will This Take?" preview data for a Stitch
 #[derive(Debug, Serialize)]
 pub struct StitchPreviewData {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schema_version: Option<String>,
     pub prediction: Option<PredictionData>,
     pub risk_patterns: Vec<RiskPatternMatch>,
     pub file_conflicts: Vec<FileConflict>,
@@ -71,19 +75,6 @@ pub struct PredictionData {
     pub likely_adapter_model: Option<String>,
     pub similar_count: usize,
     pub data_range: DateRange,
-}
-
-#[derive(Debug, Serialize)]
-pub struct PercentileEstimate {
-    pub p50: f64,
-    pub p90: f64,
-    pub count: usize,
-}
-
-#[derive(Debug, Serialize)]
-pub struct DateRange {
-    pub start: String,
-    pub end: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -102,14 +93,6 @@ pub struct RiskPatternInfo {
     pub fix_recommendation: String,
     pub severity: String,
     pub category: String,
-}
-
-#[derive(Debug, Serialize)]
-pub struct FileConflict {
-    pub bead_id: String,
-    pub title: String,
-    pub project: String,
-    pub overlapping_files: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -195,39 +178,46 @@ async fn preview_decompose(
     validate_stitch_kind(&req.kind, req.has_acceptance_criteria.unwrap_or(false))?;
 
     let config = stitch_decompose::load_config_from_file();
+    let labels = req.labels.clone().unwrap_or_default();
     let intent = StitchIntent {
         kind: req.kind,
         title: req.title.clone(),
         description: req.description.clone(),
         has_acceptance_criteria: req.has_acceptance_criteria.unwrap_or(false),
-        project,
+        project: project.clone(),
         priority: req.priority,
-        labels: req.labels.unwrap_or_default(),
+        labels: labels.clone(),
     };
 
     let graph = decompose(&config.rules, &intent)
         .ok_or_else(|| (StatusCode::BAD_REQUEST, format!("No decomposition rule matches kind '{}'", intent.kind)))?;
 
     // Check for potential duplicates across all projects
-    let index = state.vector_index.read().unwrap();
-    let dedup_matches = index.check_duplicate(&req.title, req.description.as_deref());
-    let dedup_refs = if dedup_matches.is_empty() {
-        None
-    } else {
-        Some(dedup_matches.into_iter().map(|m| DedupMatchRef {
-            id: m.item.id,
-            project: m.item.project,
-            title: m.item.title,
-            kind: m.item.kind,
-            similarity: m.similarity,
-        }).collect())
+    let dedup_refs = {
+        let index = state.vector_index.read().unwrap();
+        let dedup_matches = index.check_duplicate(&req.title, req.description.as_deref());
+        if dedup_matches.is_empty() {
+            None
+        } else {
+            Some(dedup_matches.into_iter().map(|m| DedupMatchRef {
+                id: m.item.id,
+                project: m.item.project,
+                title: m.item.title,
+                kind: m.item.kind,
+                similarity: m.similarity,
+            }).collect())
+        }
     };
+
+    // Fetch "What Will This Take?" preview data
+    let preview = fetch_stitch_preview(&project, &req.title, req.description.as_deref(), &labels, &state).await;
 
     Ok(Json(DecomposePreviewResponse {
         rule_name: graph.rule_name.clone(),
         bead_count: graph.beads.len(),
         graph,
         dedup_matches: dedup_refs,
+        preview,
     }))
 }
 
@@ -438,7 +428,7 @@ async fn submit_stitch(
         });
     }
 
-    // Roll back on partial failure: close created beads and void audit rows
+    // Roll back on partial failure: close created beads, delete stitch row, void audit rows
     if had_failure && !created_beads.is_empty() {
         warn!(
             "Stitch submit partial failure: rolling back {} created beads for stitch {}",
@@ -482,6 +472,25 @@ async fn submit_stitch(
             );
         }
 
+        // Delete the stitch row so no orphaned Stitch remains
+        if let Err(e) = fleet::delete_stitch(&stitch_id) {
+            warn!("Failed to delete orphaned stitch row {}: {}", stitch_id, e);
+        }
+
+        // Write StitchCreated Failure audit row for the rolled-back stitch
+        let _ = fleet::write_audit_row(
+            &actor,
+            ActionKind::StitchCreated,
+            &stitch_id,
+            Some(&project),
+            None,
+            ActionResult::Failure,
+            Some(format!("Rolled back: {} bead(s) created then closed due to partial failure", created_beads.len())),
+            Some(&source_str),
+            Some(&stitch_id),
+            None,
+        );
+
         let rollback_msg = if cfg!(feature = "create-only-write") {
             format!(
                 "Stitch submit failed after creating {} bead(s). Beads could not be closed (create-only mode). Errors: {}",
@@ -499,7 +508,55 @@ async fn submit_stitch(
         return Err((StatusCode::INTERNAL_SERVER_ERROR, rollback_msg));
     }
 
-    // 5. Emit stitch_created event on WS for each created bead
+    // Also handle the case where all beads failed (no created_beads to roll back)
+    if had_failure && created_beads.is_empty() {
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Stitch submit failed: {}", errors.join("; ")),
+        ));
+    }
+
+    // 5. Persist stitch row in fleet.db and link beads
+    let bead_links: Vec<(&str, &str)> = created_beads
+        .iter()
+        .map(|b| (b.id.as_str(), project.as_str()))
+        .collect();
+    if let Err(e) = fleet::create_stitch(
+        &stitch_id,
+        &project,
+        "operator",
+        &req.title,
+        &actor,
+        &bead_links,
+    ) {
+        warn!("Failed to persist stitch row for {}: {}", stitch_id, e);
+        // Non-fatal: the beads were created, but we couldn't record the stitch.
+        // The stitch_created WS event still carries the data.
+    }
+
+    // 6. Write StitchCreated audit row
+    if let Err(e) = fleet::write_audit_row(
+        &actor,
+        ActionKind::StitchCreated,
+        &stitch_id,
+        Some(&project),
+        Some(serde_json::json!({
+            "source": source_str,
+            "kind": req.kind,
+            "title": req.title,
+            "bead_count": created_beads.len(),
+            "bead_ids": created_beads.iter().map(|b| &b.id).collect::<Vec<_>>(),
+        }).to_string()),
+        ActionResult::Success,
+        None,
+        Some(&source_str),
+        Some(&stitch_id),
+        None,
+    ) {
+        warn!("Failed to write StitchCreated audit row for {}: {}", stitch_id, e);
+    }
+
+    // 7. Emit stitch_created event on WS for each created bead
     for created in &created_beads {
         let created_at = chrono::Utc::now().to_rfc3339();
         let stitch_event = StitchCreatedData {
@@ -526,7 +583,7 @@ async fn submit_stitch(
         });
     }
 
-    // 6. Return response
+    // 8. Return response
     Ok(Json(StitchSubmitResponse {
         stitch_id,
         graph,
@@ -534,6 +591,82 @@ async fn submit_stitch(
         errors,
         rolled_back: false,
     }))
+}
+
+// ---------------------------------------------------------------------------
+// Preview data helpers
+// ---------------------------------------------------------------------------
+
+/// Fetch "What Will This Take?" preview data for a Stitch draft
+async fn fetch_stitch_preview(
+    project: &str,
+    title: &str,
+    description: Option<&str>,
+    labels: &[String],
+    state: &crate::DaemonState,
+) -> Option<StitchPreviewData> {
+    use crate::api_preview::{load_historical_stitches, load_risk_library, check_file_conflicts};
+    use crate::similarity::find_similar_stitches;
+
+    // Load historical Stitches from fleet.db
+    let historical_stitches = load_historical_stitches(project).ok()?;
+
+    // Get prediction (cost p50/p90, duration p50/p90, likely adapter+model)
+    let prediction = predict_stitch(title, description, labels, historical_stitches, 90);
+
+    // Match risk patterns from Fix Lineage library
+    let risk_library = load_risk_library().ok()?;
+    let risk_matches = risk_library.match_draft(title, description, labels);
+
+    // Check for file conflicts with currently-executing beads
+    let file_conflicts = check_file_conflicts(state).await;
+
+    // Find similar Stitches for reference
+    let similar_stitches_refs = {
+        let beads = state.beads.read().unwrap();
+        let historical: Vec<_> = beads
+            .iter()
+            .map(|b| (b.id.clone(), b.title.clone(), None as Option<String>, vec![]))
+            .collect();
+        let similar = find_similar_stitches(title, description, labels, historical, 0.3, 5);
+        similar
+            .into_iter()
+            .map(|s| SimilarStitchRef {
+                id: s.id,
+                title: s.title,
+                similarity: s.similarity.score,
+            })
+            .collect()
+    };
+
+    Some(StitchPreviewData {
+        schema_version: Some("1.0.0".to_string()),
+        prediction: prediction.map(|p| PredictionData {
+            cost: p.cost,
+            duration: p.duration,
+            likely_adapter_model: p.likely_adapter_model,
+            similar_count: p.similar_count,
+            data_range: p.data_range,
+        }),
+        risk_patterns: risk_matches
+            .into_iter()
+            .map(|m| RiskPatternMatch {
+                pattern: RiskPatternInfo {
+                    id: m.pattern.id,
+                    name: m.pattern.name,
+                    description: m.pattern.description,
+                    fix_recommendation: m.pattern.fix_recommendation,
+                    severity: format!("{:?}", m.pattern.severity).to_lowercase(),
+                    category: format!("{:?}", m.pattern.category),
+                },
+                confidence: m.confidence,
+                matched_keywords: m.matched_keywords,
+                matched_labels: m.matched_labels,
+            })
+            .collect(),
+        file_conflicts,
+        similar_stitches: similar_stitches_refs,
+    })
 }
 
 // ---------------------------------------------------------------------------

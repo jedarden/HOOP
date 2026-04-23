@@ -144,8 +144,20 @@ pub fn validate_br_subprocess_args(cmd: &std::process::Command) {
         .unwrap_or_default();
 
     if ZERO_WRITE_ACTIVE {
+        if verb.is_empty() {
+            panic!(
+                "HOOP zero-write invariant violated: br invoked with no verb. \
+                 Phase 1 is strictly read-only. This is a bug — please report it."
+            );
+        }
         assert_read_only(&verb);
     } else if CREATE_ONLY_ACTIVE {
+        if verb.is_empty() {
+            panic!(
+                "HOOP create-only invariant violated: br invoked with no verb. \
+                 Only `br create` is allowed in phase 4+. This is a bug — please report it."
+            );
+        }
         assert_create_only(&verb);
     }
     // Unrestricted mode: no validation needed

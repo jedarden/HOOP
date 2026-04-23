@@ -50,6 +50,9 @@ pub struct CreateBeadRequest {
     pub source: String,
     /// Stitch ID if this bead is part of a Stitch
     pub stitch_id: Option<String>,
+    /// If true, bypass the dedup check and create anyway
+    #[serde(default)]
+    pub force_create: bool,
 }
 
 /// Response after creating a bead
@@ -69,6 +72,7 @@ pub fn router() -> Router<crate::DaemonState> {
         .route("/api/p/{project}/beads", post(create_bead))
         .route("/api/p/{project}/beads/dedup", post(check_dedup))
         .route("/api/p/{project}/beads/dedup-dismiss", post(dismiss_dedup))
+        .route("/api/dedup/stats", get(dedup_stats))
 }
 
 /// Request body for dedup check
@@ -150,6 +154,23 @@ async fn dismiss_dedup(
     let _ = resolve_project_path(&project, &state)?;
     state.vector_index.read().unwrap().report_false_positive();
     Ok(Json(serde_json::json!({"status": "ok"})))
+}
+
+/// GET /api/dedup/stats — return dedup statistics including false positive rate
+async fn dedup_stats(
+    State(state): State<crate::DaemonState>,
+) -> Json<serde_json::Value> {
+    let index = state.vector_index.read().unwrap();
+    let stats = index.stats();
+    let fpr = index.false_positive_rate();
+    Json(serde_json::json!({
+        "total_checks": stats.total_checks,
+        "duplicates_found": stats.duplicates_found,
+        "false_positives_reported": stats.false_positives_reported,
+        "false_positive_rate": fpr,
+        "threshold": index.threshold(),
+        "index_size": index.len(),
+    }))
 }
 
 /// Resolve the actor identity for audit purposes.
@@ -311,6 +332,34 @@ async fn create_bead(
 ) -> Result<Json<CreateBeadResponse>, (StatusCode, String)> {
     // 1. Validate draft against schema
     validate_draft(&req)?;
+
+    // 2. Check for potential duplicates (unless force_create is true)
+    if !req.force_create {
+        let index = state.vector_index.read().unwrap();
+        let dedup_matches = index.check_duplicate(&req.title, req.description.as_deref());
+        if !dedup_matches.is_empty() {
+            let best = &dedup_matches[0];
+            let message = format!(
+                "This looks like `{}/{}` ({}), which is in progress. Continue that, add this as a child, or proceed as new?",
+                best.item.project,
+                best.item.id,
+                best.item.title
+            );
+            let matches_json = serde_json::to_value(&dedup_matches.iter().map(|m| DedupMatchRef {
+                id: m.item.id.clone(),
+                project: m.item.project.clone(),
+                title: m.item.title.clone(),
+                kind: m.item.kind.clone(),
+                similarity: m.similarity,
+            }).collect::<Vec<_>>()).unwrap_or(serde_json::Value::Null);
+            let error_json = serde_json::json!({
+                "message": message,
+                "dedup_matches": matches_json,
+                "threshold": index.threshold(),
+            });
+            return Err((StatusCode::CONFLICT, error_json.to_string()));
+        }
+    }
 
     let project_path = resolve_project_path(&project, &state)?;
 
@@ -650,6 +699,7 @@ mod tests {
             labels: None,
             source: "form".to_string(),
             stitch_id: None,
+            force_create: false,
         };
         assert!(validate_draft(&req).is_ok());
     }
@@ -666,6 +716,7 @@ mod tests {
             labels: None,
             source: String::new(),
             stitch_id: None,
+            force_create: false,
         };
         let result = validate_draft(&req);
         assert!(result.is_err());
@@ -686,6 +737,7 @@ mod tests {
             labels: None,
             source: String::new(),
             stitch_id: None,
+            force_create: false,
         };
         let result = validate_draft(&req);
         assert!(result.is_err());
@@ -706,6 +758,7 @@ mod tests {
             labels: None,
             source: String::new(),
             stitch_id: None,
+            force_create: false,
         };
         let result = validate_draft(&req);
         assert!(result.is_err());
@@ -726,6 +779,7 @@ mod tests {
             labels: None,
             source: String::new(),
             stitch_id: None,
+            force_create: false,
         };
         let result = validate_draft(&req);
         assert!(result.is_err());
@@ -746,6 +800,7 @@ mod tests {
             labels: None,
             source: String::new(),
             stitch_id: None,
+            force_create: false,
         };
         assert!(validate_draft(&req).is_err());
     }
@@ -763,6 +818,7 @@ mod tests {
                 labels: None,
                 source: String::new(),
                 stitch_id: None,
+                force_create: false,
             };
             assert!(validate_draft(&req).is_ok(), "issue_type '{}' should be valid", it);
         }

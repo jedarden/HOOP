@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["hoop-cli", "hoop-daemon", "hoop-schema", "hoop-ui"]
+members = ["hoop-cli", "hoop-daemon", "hoop-schema", "hoop-ui", "hoop-mcp"]
 
 [workspace.package]
 version = "0.1.0"

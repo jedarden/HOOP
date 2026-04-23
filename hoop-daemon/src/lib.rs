@@ -6,6 +6,9 @@
 
 pub mod adb_dictate;
 pub mod agent_adapter;
+pub mod agent_context;
+pub mod agent_session;
+pub mod api_agent;
 pub mod api_attachments;
 pub mod api_audit;
 pub mod api_beads;
@@ -66,6 +69,8 @@ pub enum WorkerState {
 pub struct Bead {
     pub id: String,
     pub title: String,
+    #[serde(default)]
+    pub description: Option<String>,
     pub status: BeadStatus,
     pub priority: i64,
     pub issue_type: BeadType,
@@ -203,6 +208,9 @@ pub struct DaemonState {
     pub active_project: Arc<std::sync::RwLock<Option<String>>>,
     /// Vector index for semantic pre-dedup at draft time
     pub vector_index: Arc<std::sync::RwLock<vector_index::VectorIndex>>,
+    /// Agent session manager — wraps the config-driven agent adapter with
+    /// lifecycle persistence (fleet.db), WS event broadcasting, and cost tracking.
+    pub agent_session_manager: Option<Arc<agent_session::AgentSessionManager>>,
 }
 
 /// Health check endpoint handler
@@ -326,6 +334,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_beads::router())
         .merge(api_preview::router())
         .merge(api_stitch_decompose::router())
+        .merge(api_agent::router())
         .nest_service("/assets", AssetsHandler::router())
         .fallback_service(AssetsHandler::router())
         .layer(TraceLayer::new_for_http())
@@ -771,6 +780,28 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     }
     info!("Vector index initialized for semantic pre-dedup");
 
+    // Initialize agent session manager from config.yml agent section
+    let adapter_config = agent_adapter::load_adapter_config();
+    let session_config = agent_session::AgentAdapterConfig {
+        adapter: adapter_config.adapter.clone(),
+        model: adapter_config.model.clone(),
+        anthropic_api_key: adapter_config.anthropic_api_key.clone(),
+        zai_base_url: adapter_config.zai_base_url.clone(),
+        zai_api_key: adapter_config.zai_api_key.clone(),
+        rate_limit_rpm: adapter_config.rate_limit_rpm,
+        cost_cap_usd: adapter_config.cost_cap_usd,
+    };
+    let agent_session_manager = match agent_session::AgentSessionManager::new(session_config).await {
+        Ok(mgr) => {
+            info!("Agent session manager initialized (adapter={})", adapter_config.adapter);
+            Some(Arc::new(mgr))
+        }
+        Err(e) => {
+            warn!("Failed to initialize agent session manager: {}. Agent features disabled.", e);
+            None
+        }
+    };
+
     let state = DaemonState {
         config: config.clone(),
         started_at: Instant::now(),
@@ -790,6 +821,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         upload_registry,
         active_project: Arc::new(std::sync::RwLock::new(None)),
         vector_index,
+        agent_session_manager,
     };
 
     // Forward project runtime status updates to shared store and broadcast
