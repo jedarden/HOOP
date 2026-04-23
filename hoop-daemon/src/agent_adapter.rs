@@ -15,6 +15,8 @@ use async_trait::async_trait;
 use futures_util::Stream;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 // ---------------------------------------------------------------------------
 // Unified event types — identical shape regardless of adapter
@@ -30,6 +32,19 @@ pub struct AgentSession {
     pub id: SessionId,
     pub adapter: AdapterKind,
     pub model: String,
+    /// System prompt to prepend to every turn.
+    pub system_prompt: Option<String>,
+    /// Working directory for tool execution (Claude Code adapter).
+    pub working_dir: Option<String>,
+    /// In-memory conversation history for API-based adapters.
+    pub history: Arc<Mutex<Vec<HistoryMessage>>>,
+}
+
+/// A single message in the conversation history.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HistoryMessage {
+    pub role: String,
+    pub content: String,
 }
 
 /// File or URL attachment sent with a turn.
@@ -114,6 +129,25 @@ impl AdapterKind {
             "zai" => Some(Self::Zai),
             _ => None,
         }
+    }
+}
+
+/// Wrapper providing `Debug` for a dyn `AgentAdapter`.
+#[derive(Clone)]
+pub struct AdapterRef(pub Arc<dyn AgentAdapter>);
+
+impl std::fmt::Debug for AdapterRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AdapterRef")
+            .field("kind", &self.0.kind())
+            .finish()
+    }
+}
+
+impl std::ops::Deref for AdapterRef {
+    type Target = dyn AgentAdapter;
+    fn deref(&self) -> &Self::Target {
+        &*self.0
     }
 }
 
@@ -215,6 +249,53 @@ pub fn build_adapter(config: &AgentAdapterConfig) -> Result<Box<dyn AgentAdapter
     Ok(adapter)
 }
 
+/// Load agent adapter config from `~/.hoop/config.yml`.
+///
+/// Reads the `agent` section. Falls back to defaults if the section or file
+/// is missing, so the daemon always starts with a valid adapter.
+pub fn load_adapter_config() -> AgentAdapterConfig {
+    let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+    let config_path = home.join(".hoop").join("config.yml");
+
+    if !config_path.exists() {
+        return AgentAdapterConfig::default();
+    }
+
+    match std::fs::read_to_string(&config_path) {
+        Ok(contents) => {
+            match serde_yaml::from_str::<serde_yaml::Value>(&contents) {
+                Ok(root) => {
+                    if let Some(agent) = root.get("agent") {
+                        match serde_json::from_value::<AgentAdapterConfig>(
+                            serde_json::to_value(agent).unwrap_or_default(),
+                        ) {
+                            Ok(config) => {
+                                tracing::info!(
+                                    "Loaded agent adapter config: adapter={}, model={}",
+                                    config.adapter,
+                                    config.model
+                                );
+                                return config;
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to parse agent config: {}, using defaults", e);
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to parse config.yml: {}, using defaults", e);
+                }
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Failed to read config.yml: {}, using defaults", e);
+        }
+    }
+
+    AgentAdapterConfig::default()
+}
+
 // ---------------------------------------------------------------------------
 // ClaudeCodeAdapter — shells out to the `claude` CLI
 // ---------------------------------------------------------------------------
@@ -235,13 +316,13 @@ impl AgentAdapter for ClaudeCodeAdapter {
 
     async fn spawn_session(&self, config: SpawnConfig) -> Result<AgentSession> {
         let id = uuid::Uuid::new_v4().to_string();
-        // Spawn via `claude --session-id <id>` subprocess.
-        // The actual subprocess launch is deferred to send_turn so that
-        // spawn_session is lightweight — just records the session metadata.
         Ok(AgentSession {
             id: SessionId(id),
             adapter: AdapterKind::Claude,
             model: config.model,
+            system_prompt: config.system_prompt.clone(),
+            working_dir: config.working_dir.clone(),
+            history: Arc::new(Mutex::new(Vec::new())),
         })
     }
 
@@ -250,6 +331,9 @@ impl AgentAdapter for ClaudeCodeAdapter {
             id: id.clone(),
             adapter: AdapterKind::Claude,
             model: self.default_model.clone(),
+            system_prompt: None,
+            working_dir: None,
+            history: Arc::new(Mutex::new(Vec::new())),
         })
     }
 
@@ -259,7 +343,6 @@ impl AgentAdapter for ClaudeCodeAdapter {
         prompt: &str,
         attachments: Vec<Attachment>,
     ) -> Result<EventStream> {
-        // Build the command: claude --resume <id> --output-format stream-json
         let mut args = vec![
             "--resume".to_string(),
             session.id.0.clone(),
@@ -275,34 +358,47 @@ impl AgentAdapter for ClaudeCodeAdapter {
                     args.push("--attach".to_string());
                     args.push(path.clone());
                 }
-                _ => {} // URLs and inline attachments handled differently
+                _ => {}
             }
         }
 
-        let child = tokio::process::Command::new("claude")
-            .args(&args)
+        let mut cmd = tokio::process::Command::new("claude");
+        cmd.args(&args)
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .spawn()?;
+            .stderr(std::process::Stdio::piped());
 
-        let stdout = child.stdout.expect("stdout piped");
+        if let Some(ref dir) = session.working_dir {
+            cmd.current_dir(dir);
+        }
+
+        let mut child = cmd.spawn()?;
+        let stdout = child.stdout.take().expect("stdout piped");
         let reader = tokio::io::BufReader::new(stdout);
 
-        // Parse NDJSON lines into AgentEvent
+        // Keep child alive for the duration of the stream by moving it into the unfold closure.
+        let child_handle = Arc::new(Mutex::new(Some(child)));
+
         use tokio::io::AsyncBufReadExt;
 
-        let stream = futures_util::stream::unfold(reader, |mut reader| async move {
-            let mut line = String::new();
-            match reader.read_line(&mut line).await {
-                Ok(0) => None, // EOF
-                Ok(_) => {
-                    let line = line.trim().to_string();
-                    let event = parse_claude_stream_line(&line);
-                    Some((event, reader))
+        let stream = futures_util::stream::unfold(
+            (reader, child_handle),
+            |(mut reader, child_handle)| async move {
+                let mut line = String::new();
+                match reader.read_line(&mut line).await {
+                    Ok(0) => {
+                        // EOF — reap the child process.
+                        let _child = child_handle.lock().await.take();
+                        None
+                    }
+                    Ok(_) => {
+                        let line = line.trim().to_string();
+                        let event = parse_claude_stream_line(&line);
+                        Some((event, (reader, child_handle)))
+                    }
+                    Err(e) => Some((Err(anyhow::anyhow!("read error: {}", e)), (reader, child_handle))),
                 }
-                Err(e) => Some((Err(anyhow::anyhow!("read error: {}", e)), reader)),
-            }
-        });
+            },
+        );
 
         Ok(Box::pin(stream))
     }
@@ -392,6 +488,9 @@ impl AgentAdapter for AnthropicApiAdapter {
             id: SessionId(id),
             adapter: AdapterKind::Anthropic,
             model: config.model,
+            system_prompt: config.system_prompt.clone(),
+            working_dir: config.working_dir.clone(),
+            history: Arc::new(Mutex::new(Vec::new())),
         })
     }
 
@@ -400,6 +499,9 @@ impl AgentAdapter for AnthropicApiAdapter {
             id: id.clone(),
             adapter: AdapterKind::Anthropic,
             model: self.default_model.clone(),
+            system_prompt: None,
+            working_dir: None,
+            history: Arc::new(Mutex::new(Vec::new())),
         })
     }
 
@@ -409,16 +511,43 @@ impl AgentAdapter for AnthropicApiAdapter {
         prompt: &str,
         _attachments: Vec<Attachment>,
     ) -> Result<EventStream> {
-        // Build the Messages API request.
         let model = &session.model;
         let api_key = &self.api_key;
 
-        let body = serde_json::json!({
+        // Append user message to history.
+        {
+            let mut history = session.history.lock().await;
+            history.push(HistoryMessage {
+                role: "user".into(),
+                content: prompt.into(),
+            });
+        }
+
+        let mut body = serde_json::json!({
             "model": model,
             "max_tokens": 4096,
             "stream": true,
-            "messages": [{"role": "user", "content": prompt}],
         });
+
+        // Set system prompt if present.
+        if let Some(ref sp) = session.system_prompt {
+            body["system"] = serde_json::json!(sp);
+        }
+
+        // Replay full conversation history.
+        {
+            let history = session.history.lock().await;
+            let messages: Vec<serde_json::Value> = history
+                .iter()
+                .map(|m| {
+                    serde_json::json!({
+                        "role": m.role,
+                        "content": m.content,
+                    })
+                })
+                .collect();
+            body["messages"] = serde_json::json!(messages);
+        }
 
         let client = reqwest_like_client();
         let response = client
@@ -436,9 +565,11 @@ impl AgentAdapter for AnthropicApiAdapter {
             return Err(anyhow::anyhow!("Anthropic API error {}: {}", status, text));
         }
 
-        // Parse SSE stream into AgentEvents
-        let stream = parse_sse_response(response);
-        Ok(Box::pin(stream))
+        // Wrap the stream to track assistant responses
+        let session_history = session.history.clone();
+        let tracked_stream = track_assistant_response(parse_sse_response(response), session_history).await;
+
+        Ok(Box::pin(tracked_stream))
     }
 
     async fn close_session(&self, _session: &AgentSession) -> Result<()> {
@@ -473,6 +604,9 @@ impl AgentAdapter for ZaiGlmAdapter {
             id: SessionId(id),
             adapter: AdapterKind::Zai,
             model: config.model,
+            system_prompt: config.system_prompt.clone(),
+            working_dir: config.working_dir.clone(),
+            history: Arc::new(Mutex::new(Vec::new())),
         })
     }
 
@@ -481,6 +615,9 @@ impl AgentAdapter for ZaiGlmAdapter {
             id: id.clone(),
             adapter: AdapterKind::Zai,
             model: self.default_model.clone(),
+            system_prompt: None,
+            working_dir: None,
+            history: Arc::new(Mutex::new(Vec::new())),
         })
     }
 
@@ -494,12 +631,43 @@ impl AgentAdapter for ZaiGlmAdapter {
         let api_key = &self.api_key;
         let url = format!("{}/v1/chat/completions", self.base_url.trim_end_matches('/'));
 
-        let body = serde_json::json!({
+        // Append user message to history.
+        {
+            let mut history = session.history.lock().await;
+            history.push(HistoryMessage {
+                role: "user".into(),
+                content: prompt.into(),
+            });
+        }
+
+        let mut body = serde_json::json!({
             "model": model,
             "max_tokens": 4096,
             "stream": true,
-            "messages": [{"role": "user", "content": prompt}],
         });
+
+        // Set system prompt if present.
+        if let Some(ref sp) = session.system_prompt {
+            body["messages"] = serde_json::json!([
+                {"role": "system", "content": sp},
+            ]);
+        }
+
+        // Replay full conversation history.
+        {
+            let history = session.history.lock().await;
+            let mut messages = Vec::new();
+            if let Some(msgs) = body.get("messages").and_then(|m| m.as_array()) {
+                messages = msgs.clone();
+            }
+            for m in history.iter() {
+                messages.push(serde_json::json!({
+                    "role": m.role,
+                    "content": m.content,
+                }));
+            }
+            body["messages"] = serde_json::json!(messages);
+        }
 
         let client = reqwest_like_client();
         let response = client
@@ -517,8 +685,10 @@ impl AgentAdapter for ZaiGlmAdapter {
         }
 
         // Parse SSE stream into AgentEvents (OpenAI-compatible format)
-        let stream = parse_openai_sse_response(response);
-        Ok(Box::pin(stream))
+        let session_history = session.history.clone();
+        let tracked_stream = track_assistant_response(parse_openai_sse_response(response), session_history).await;
+
+        Ok(Box::pin(tracked_stream))
     }
 
     async fn close_session(&self, _session: &AgentSession) -> Result<()> {
@@ -560,6 +730,58 @@ fn parse_sse_response(response: reqwest::Response) -> impl Stream<Item = Result<
             .collect();
 
         futures_util::stream::iter(events)
+    })
+}
+
+/// Track assistant responses and append to conversation history.
+/// This enables multi-turn conversations by accumulating the full assistant
+/// response as it streams in.
+async fn track_assistant_response(
+    stream: impl Stream<Item = Result<AgentEvent>> + Send + 'static,
+    history: Arc<Mutex<Vec<HistoryMessage>>>,
+) -> impl Stream<Item = Result<AgentEvent>> + Send + 'static {
+    use futures_util::StreamExt;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    let accumulating = Arc::new(AtomicBool::new(false));
+    let buffer = Arc::new(Mutex::new(String::new()));
+
+    stream.then(move |result| {
+        let accumulating = accumulating.clone();
+        let buffer = buffer.clone();
+        let history = history.clone();
+
+        async move {
+            match result {
+                Ok(event) => {
+                    match &event {
+                        AgentEvent::TextDelta { text } => {
+                            if !text.is_empty() {
+                                accumulating.store(true, Ordering::Relaxed);
+                                buffer.lock().await.push_str(text);
+                            }
+                        }
+                        AgentEvent::TurnComplete { .. } | AgentEvent::SessionEnded { .. } => {
+                            if accumulating.load(Ordering::Relaxed) {
+                                let full_text = buffer.lock().await.clone();
+                                if !full_text.is_empty() {
+                                    history.lock().await.push(HistoryMessage {
+                                        role: "assistant".into(),
+                                        content: full_text,
+                                    });
+                                }
+                                buffer.lock().await.clear();
+                                accumulating.store(false, Ordering::Relaxed);
+                            }
+                        }
+                        _ => {}
+                    }
+                    Ok(event)
+                }
+                Err(e) => Err(e),
+            }
+        }
     })
 }
 
@@ -626,7 +848,7 @@ fn anthropic_sse_to_event(val: &serde_json::Value) -> Result<AgentEvent> {
             Ok(AgentEvent::TurnComplete { usage })
         }
         "message_start" => {
-            let session_id = val
+            let _session_id = val
                 .get("message")
                 .and_then(|m| m.get("id"))
                 .and_then(|v| v.as_str())
