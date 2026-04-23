@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [features]
-default = ["zero-write-v01"]
+default = []
 zero-write-v01 = []
 
 [dependencies]

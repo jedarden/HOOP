@@ -12,10 +12,13 @@
 //! any modification breaks all subsequent hashes.
 
 use anyhow::Result;
+use chrono::Utc;
 use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use tracing::info;
+use uuid::Uuid;
 
 /// Current schema version
 const SCHEMA_VERSION: &str = "1.6.0";
@@ -25,6 +28,262 @@ const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
 
 /// Genesis hash - all chains start here
 const GENESIS_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
+
+/// Action kind for audit log
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ActionKind {
+    BeadCreated,
+    StitchCreated,
+    ConfigChanged,
+    ProjectAdded,
+    ProjectRemoved,
+}
+
+/// Action result for audit log
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ActionResult {
+    Success,
+    Failure,
+    Partial,
+}
+
+/// Source of a bead creation action
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BeadSource {
+    Form,
+    Chat,
+    Bulk,
+    Template,
+}
+
+/// Arguments for a bead creation action
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BeadActionArgs {
+    pub source: BeadSource,
+    pub stitch_id: Option<String>,
+    pub title: String,
+    pub issue_type: String,
+    pub priority: Option<i64>,
+    pub dependencies: Vec<String>,
+    pub labels: Vec<String>,
+}
+
+impl BeadActionArgs {
+    /// Compute hash of args for integrity verification
+    pub fn args_hash(&self) -> String {
+        let json = serde_json::to_string(self).unwrap_or_default();
+        hex_encode(sha256(json.as_bytes()))
+    }
+}
+
+/// Audit row for the actions table
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditRow {
+    pub id: String,
+    pub ts: String,
+    pub actor: String,
+    pub kind: ActionKind,
+    pub target: String,
+    pub project: Option<String>,
+    pub args_json: Option<String>,
+    pub result: ActionResult,
+    pub error: Option<String>,
+    pub hash_prev: String,
+    pub hash_self: String,
+}
+
+/// Write an audit row to the actions table
+///
+/// This function maintains the hash chain by:
+/// 1. Fetching the most recent row's hash_self as hash_prev
+/// 2. Computing hash_self from the row content
+/// 3. Inserting the new row
+pub fn write_audit_row(
+    actor: &str,
+    kind: ActionKind,
+    target: &str,
+    project: Option<&str>,
+    args_json: Option<String>,
+    result: ActionResult,
+    error: Option<String>,
+) -> Result<AuditRow> {
+    let id = Uuid::new_v4().to_string();
+    let ts = Utc::now().to_rfc3339();
+    let kind_str = serde_json::to_string(&kind)?;
+    let result_str = serde_json::to_string(&result)?;
+
+    // Get the previous hash (hash of the last row in the chain)
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+
+    let hash_prev: String = conn.query_row(
+        "SELECT hash_self FROM actions ORDER BY rowid DESC LIMIT 1",
+        [],
+        |row| row.get(0),
+    ).unwrap_or_else(|_| GENESIS_HASH.to_string());
+
+    // Compute hash of this row's content
+    let hash_input = format!(
+        "{}{}{}{}{}{:?}{}",
+        id, ts, actor, kind_str, target, project, args_json.as_deref().unwrap_or_default()
+    );
+    let hash_self = hex_encode(sha256(hash_input.as_bytes()));
+
+    // Insert the audit row
+    conn.execute(
+        r#"
+        INSERT INTO actions (id, ts, actor, kind, target, project, args_json, result, hash_prev, hash_self)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        "#,
+        params![
+            id, ts, actor, kind_str, target, project, args_json, result_str, hash_prev, hash_self
+        ],
+    )?;
+
+    Ok(AuditRow {
+        id,
+        ts,
+        actor: actor.to_string(),
+        kind,
+        target: target.to_string(),
+        project: project.map(|s| s.to_string()),
+        args_json,
+        result,
+        error,
+        hash_prev,
+        hash_self,
+    })
+}
+
+/// Query audit rows with optional filters
+pub fn query_audit_rows(
+    limit: Option<usize>,
+    offset: Option<usize>,
+    project_filter: Option<&str>,
+    kind_filter: Option<ActionKind>,
+) -> Result<Vec<AuditRow>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+
+    let mut query = String::from("SELECT id, ts, actor, kind, target, project, args_json, result, hash_prev, hash_self FROM actions WHERE 1=1");
+    let mut params: Vec<String> = vec![];
+
+    if let Some(project) = project_filter {
+        query.push_str(&format!(" AND project = ?{}", params.len() + 1));
+        params.push(project.to_string());
+    }
+
+    if let Some(kind) = kind_filter {
+        let kind_str = serde_json::to_string(&kind)?;
+        query.push_str(&format!(" AND kind = ?{}", params.len() + 1));
+        params.push(kind_str);
+    }
+
+    query.push_str(" ORDER BY ts DESC");
+
+    if let Some(limit) = limit {
+        query.push_str(&format!(" LIMIT {}", limit));
+    }
+
+    if let Some(offset) = offset {
+        query.push_str(&format!(" OFFSET {}", offset));
+    }
+
+    let mut stmt = conn.prepare(&query)?;
+
+    let rows = stmt.query_map(params.as_slice(), |row| {
+        let kind_str: String = row.get(3)?;
+        let result_str: String = row.get(7)?;
+        let kind: ActionKind = serde_json::from_str(&kind_str)
+            .unwrap_or(ActionKind::BeadCreated);
+        let result: ActionResult = serde_json::from_str(&result_str)
+            .unwrap_or(ActionResult::Success);
+
+        Ok(AuditRow {
+            id: row.get(0)?,
+            ts: row.get(1)?,
+            actor: row.get(2)?,
+            kind,
+            target: row.get(4)?,
+            project: row.get(5)?,
+            args_json: row.get(6)?,
+            result,
+            error: None, // Error not stored separately in current schema
+            hash_prev: row.get(8)?,
+            hash_self: row.get(9)?,
+        })
+    })?;
+
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row?);
+    }
+
+    Ok(result)
+}
+
+/// Verify hash chain integrity from genesis to the latest row
+///
+/// Returns Ok(()) if the chain is valid, Err with details of the first break.
+pub fn verify_hash_chain() -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, ts, actor, kind, target, project, args_json, result, hash_prev, hash_self
+         FROM actions ORDER BY rowid ASC"
+    )?;
+
+    let mut expected_hash = GENESIS_HASH.to_string();
+
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?, // id
+            row.get::<_, String>(1)?, // ts
+            row.get::<_, String>(2)?, // actor
+            row.get::<_, String>(3)?, // kind
+            row.get::<_, String>(4)?, // target
+            row.get::<_, Option<String>>(5)?, // project
+            row.get::<_, Option<String>>(6)?, // args_json
+            row.get::<_, String>(7)?, // result
+            row.get::<_, String>(8)?, // hash_prev
+            row.get::<_, String>(9)?, // hash_self
+        ))
+    })?;
+
+    for row in rows {
+        let (id, ts, actor, kind, target, project, args_json, _result, hash_prev, hash_self) = row?;
+
+        // Verify hash_prev matches expected
+        if hash_prev != expected_hash {
+            return Err(anyhow::anyhow!(
+                "Hash chain broken at row {}: expected hash_prev={}, got={}",
+                id, expected_hash, hash_prev
+            ));
+        }
+
+        // Verify hash_self is correct
+        let hash_input = format!(
+            "{}{}{}{}{}{:?}{}",
+            id, ts, actor, kind, target, project, args_json.as_deref().unwrap_or_default()
+        );
+        let computed_hash = hex_encode(sha256(hash_input.as_bytes()));
+
+        if hash_self != computed_hash {
+            return Err(anyhow::anyhow!(
+                "Hash self mismatch at row {}: expected={}, got={}",
+                id, computed_hash, hash_self
+            ));
+        }
+
+        expected_hash = hash_self;
+    }
+
+    Ok(())
+}
 
 /// Database path: `~/.hoop/fleet.db`
 pub fn db_path() -> PathBuf {

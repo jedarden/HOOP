@@ -3,6 +3,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { conversationsAtom, streamingContentAtom, selectedConversationIdAtom, Conversation, dictatedNotesAtom, NoteSummary, DictatedNote } from './atoms';
 import AudioPlayer from './components/AudioPlayer';
 import { scanForSecrets, getSecretSeverity, truncateSecret } from './components/secretsScanner';
+import BeadDraftForm from './BeadDraftForm';
 
 const PAGE_SIZE = 50;
 
@@ -377,6 +378,8 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
   });
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [showDraftForm, setShowDraftForm] = useState(false);
+  const [lastCreatedId, setLastCreatedId] = useState<string | null>(null);
 
   // Merge conversations + dictated notes into unified stitch items
   const stitchItems = useMemo(() => {
@@ -487,8 +490,28 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
     return () => observer.disconnect();
   }, [hasMore]);
 
+  const handleBeadCreated = useCallback((beadId: string) => {
+    setLastCreatedId(beadId);
+    setShowDraftForm(false);
+  }, []);
+
   return (
     <div className="stitches-tab">
+      {showDraftForm && (
+        <BeadDraftForm
+          projectName={projectName}
+          onClose={() => setShowDraftForm(false)}
+          onCreated={handleBeadCreated}
+        />
+      )}
+
+      {lastCreatedId && (
+        <div className="bead-created-banner" role="status">
+          Bead <strong>{lastCreatedId}</strong> created.{' '}
+          <button className="bead-created-dismiss" onClick={() => setLastCreatedId(null)}>Dismiss</button>
+        </div>
+      )}
+
       <div className="stitches-header">
         <div className="stitches-stats">
           <div className="stitch-stat">
@@ -512,6 +535,14 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
         </div>
 
         <div className="stitches-filters">
+          <button
+            className="new-bead-btn"
+            onClick={() => setShowDraftForm(true)}
+            title="Draft a new bead in this project"
+          >
+            + New Bead
+          </button>
+
           <input
             type="text"
             placeholder="Search stitches..."

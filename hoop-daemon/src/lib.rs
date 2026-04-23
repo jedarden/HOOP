@@ -6,6 +6,8 @@
 
 pub mod adb_dictate;
 pub mod api_attachments;
+pub mod api_audit;
+pub mod api_beads;
 pub mod api_dictated_notes;
 pub mod api_transcription;
 pub mod api_uploads;
@@ -307,6 +309,8 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_dictated_notes::router())
         .merge(api_transcription::router())
         .merge(adb_dictate::router())
+        .merge(api_audit::router())
+        .merge(api_beads::router())
         .nest_service("/assets", AssetsHandler::router())
         .fallback_service(AssetsHandler::router())
         .layer(TraceLayer::new_for_http())
