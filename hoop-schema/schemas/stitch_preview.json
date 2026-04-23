@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/stitch_preview.json",
+  "title": "StitchPreview",
+  "description": "Preview data for 'What Will This Take?' before submitting a Stitch",
+  "type": "object",
+  "required": ["schema_version"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "prediction": {
+      "type": ["object", "null"],
+      "description": "Cost and duration prediction from similar historical Stitches",
+      "properties": {
+        "cost": {
+          "type": "object",
+          "properties": {
+            "p50": { "type": "number", "description": "Median cost in USD" },
+            "p90": { "type": "number", "description": "90th percentile cost in USD" },
+            "count": { "type": "integer", "description": "Number of data points" }
+          }
+        },
+        "duration": {
+          "type": "object",
+          "properties": {
+            "p50": { "type": "number", "description": "Median duration in seconds" },
+            "p90": { "type": "number", "description": "90th percentile duration in seconds" },
+            "count": { "type": "integer", "description": "Number of data points" }
+          }
+        },
+        "likely_adapter_model": {
+          "type": ["string", "null"],
+          "description": "Most likely adapter + model (e.g., 'claude:opus'). NOTE: based on adapter + model, NOT strand."
+        },
+        "similar_count": { "type": "integer", "description": "Number of similar Stitches used" },
+        "data_range": {
+          "type": "object",
+          "properties": {
+            "start": { "type": "string", "format": "date-time" },
+            "end": { "type": "string", "format": "date-time" }
+          }
+        }
+      }
+    },
+    "risk_patterns": {
+      "type": "array",
+      "description": "Matched risk patterns from the Fix Lineage library",
+      "items": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "fix_recommendation": { "type": "string" },
+              "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+              "category": { "type": "string", "enum": ["performance", "correctness", "security", "integration", "code_quality", "infrastructure"] }
+            }
+          },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "matched_keywords": { "type": "array", "items": { "type": "string" } },
+          "matched_labels": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "file_conflicts": {
+      "type": "array",
+      "description": "Currently-claimed beads that may have file overlap conflicts",
+      "items": {
+        "type": "object",
+        "properties": {
+          "bead_id": { "type": "string" },
+          "title": { "type": "string" },
+          "project": { "type": "string" },
+          "overlapping_files": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "similar_stitches": {
+      "type": "array",
+      "description": "Similar historical Stitches for reference",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "similarity": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    }
+  },
+  "schema_version": "1.0.0"
+}

@@ -4,6 +4,7 @@ import { conversationsAtom, streamingContentAtom, selectedConversationIdAtom, Co
 import AudioPlayer from './components/AudioPlayer';
 import { scanForSecrets, getSecretSeverity, truncateSecret } from './components/secretsScanner';
 import BeadDraftForm from './BeadDraftForm';
+import StitchDraftForm from './StitchDraftForm';
 
 const PAGE_SIZE = 50;
 
@@ -379,7 +380,9 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showDraftForm, setShowDraftForm] = useState(false);
+  const [showStitchForm, setShowStitchForm] = useState(false);
   const [lastCreatedId, setLastCreatedId] = useState<string | null>(null);
+  const [lastStitchIds, setLastStitchIds] = useState<string[] | null>(null);
 
   // Merge conversations + dictated notes into unified stitch items
   const stitchItems = useMemo(() => {
@@ -493,6 +496,13 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
   const handleBeadCreated = useCallback((beadId: string) => {
     setLastCreatedId(beadId);
     setShowDraftForm(false);
+    setSelectedId(beadId);
+  }, []);
+
+  const handleStitchCreated = useCallback((beadIds: string[]) => {
+    setLastStitchIds(beadIds);
+    setShowStitchForm(false);
+    if (beadIds.length > 0) setSelectedId(beadIds[0]);
   }, []);
 
   return (
@@ -505,10 +515,25 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
         />
       )}
 
+      {showStitchForm && (
+        <StitchDraftForm
+          projectName={projectName}
+          onClose={() => setShowStitchForm(false)}
+          onCreated={handleStitchCreated}
+        />
+      )}
+
       {lastCreatedId && (
         <div className="bead-created-banner" role="status">
           Bead <strong>{lastCreatedId}</strong> created.{' '}
           <button className="bead-created-dismiss" onClick={() => setLastCreatedId(null)}>Dismiss</button>
+        </div>
+      )}
+
+      {lastStitchIds && lastStitchIds.length > 0 && (
+        <div className="bead-created-banner" role="status">
+          Stitch created {lastStitchIds.length} bead{lastStitchIds.length !== 1 ? 's' : ''}: <strong>{lastStitchIds.join(', ')}</strong>{' '}
+          <button className="bead-created-dismiss" onClick={() => setLastStitchIds(null)}>Dismiss</button>
         </div>
       )}
 
@@ -541,6 +566,14 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
             title="Draft a new bead in this project"
           >
             + New Bead
+          </button>
+
+          <button
+            className="new-bead-btn new-stitch-btn"
+            onClick={() => setShowStitchForm(true)}
+            title="Create a new stitch with decomposition"
+          >
+            + New Stitch
           </button>
 
           <input

@@ -4801,6 +4801,107 @@ pre {
   background: transparent;
 }
 
+/* Attachment picker */
+.bdf-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.bdf-attachment-input {
+  display: none;
+}
+
+.bdf-attachment-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px dashed #bbb;
+  border-radius: 6px;
+  background: #fafafa;
+  color: #666;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  width: fit-content;
+}
+.bdf-attachment-btn:hover {
+  border-color: #1976d2;
+  color: #1976d2;
+  background: #f5f9ff;
+}
+
+.bdf-attachment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.bdf-attachment-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 0.78rem;
+}
+
+.bdf-attachment-pending { border-left: 3px solid #bbb; }
+.bdf-attachment-uploading { border-left: 3px solid #1976d2; }
+.bdf-attachment-complete { border-left: 3px solid #4caf50; }
+.bdf-attachment-error { border-left: 3px solid #d32f2f; }
+
+.bdf-attachment-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #333;
+}
+
+.bdf-attachment-size {
+  color: #999;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+
+.bdf-attachment-progress {
+  width: 60px;
+  height: 4px;
+  background: #e0e0e0;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.bdf-attachment-progress-fill {
+  height: 100%;
+  background: #1976d2;
+  border-radius: 2px;
+  transition: width 0.2s;
+}
+
+.bdf-attachment-error {
+  color: #d32f2f;
+  font-size: 0.7rem;
+}
+
+.bdf-attachment-remove {
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.9rem;
+  line-height: 1;
+}
+.bdf-attachment-remove:hover { color: #d32f2f; }
+
 /* Graph delta preview */
 .bdf-graph-preview {
   display: flex;
@@ -4907,6 +5008,430 @@ pre {
   white-space: nowrap;
 }
 .new-bead-btn:hover { background: #1565c0; }
+
+/* Preview Card - What Will This Take? */
+.bdf-preview-card {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.bdf-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.bdf-preview-title {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.85rem;
+}
+
+.bdf-preview-meta {
+  font-size: 0.72rem;
+  color: #888;
+}
+
+.bdf-preview-loading {
+  font-size: 0.75rem;
+  color: #999;
+  font-style: italic;
+}
+
+.bdf-preview-error {
+  font-size: 0.75rem;
+  color: #d32f2f;
+}
+
+.bdf-preview-section {
+  margin-bottom: 0.75rem;
+}
+
+.bdf-preview-section:last-child {
+  margin-bottom: 0;
+}
+
+.bdf-preview-subheader {
+  font-weight: 500;
+  color: #666;
+  font-size: 0.75rem;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.bdf-preview-metrics {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.35rem;
+}
+
+.bdf-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.bdf-metric-label {
+  font-size: 0.7rem;
+  color: #888;
+  text-transform: uppercase;
+}
+
+.bdf-metric-value {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.85rem;
+}
+
+.bdf-metric-p90 {
+  font-weight: 400;
+  color: #888;
+  font-size: 0.75rem;
+}
+
+.bdf-preview-claimer {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.5rem;
+  background: #e8f0fe;
+  border-radius: 4px;
+  font-size: 0.75rem;
+}
+
+.bdf-claimer-label {
+  font-weight: 500;
+  color: #1565c0;
+}
+
+.bdf-claimer-value {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-weight: 600;
+  color: #1565c0;
+}
+
+.bdf-preview-empty {
+  font-size: 0.75rem;
+  color: #999;
+  font-style: italic;
+  padding: 0.25rem 0;
+}
+
+/* Risk Patterns */
+.bdf-risk-patterns {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.bdf-risk-pattern {
+  padding: 0.5rem 0.6rem;
+  border-radius: 4px;
+  border-left: 3px solid;
+  background: #fff;
+}
+
+.bdf-risk-severity-low {
+  border-left-color: #34a853;
+  background: #f6fff6;
+}
+
+.bdf-risk-severity-medium {
+  border-left-color: #f9ab00;
+  background: #fffdf5;
+}
+
+.bdf-risk-severity-high {
+  border-left-color: #fbbc04;
+  background: #fff8e1;
+}
+
+.bdf-risk-severity-critical {
+  border-left-color: #ea4335;
+  background: #fff5f5;
+}
+
+.bdf-risk-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.2rem;
+}
+
+.bdf-risk-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.75rem;
+}
+
+.bdf-risk-confidence {
+  font-size: 0.65rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.08);
+  color: #666;
+  font-weight: 500;
+}
+
+.bdf-risk-description {
+  font-size: 0.72rem;
+  color: #666;
+  margin-bottom: 0.2rem;
+}
+
+.bdf-risk-fix {
+  font-size: 0.7rem;
+  color: #555;
+}
+
+.bdf-risk-fix strong {
+  color: #333;
+}
+
+/* File Conflicts */
+.bdf-file-conflicts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.bdf-file-conflict {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.3rem 0.5rem;
+  background: #fff5f5;
+  border: 1px solid #f5c6c0;
+  border-radius: 4px;
+  font-size: 0.72rem;
+}
+
+.bdf-conflict-bead {
+  font-weight: 500;
+  color: #c62828;
+}
+
+.bdf-conflict-files {
+  color: #888;
+  font-size: 0.7rem;
+}
+
+/* Similar Stitches */
+.bdf-similar-stitches {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.bdf-similar-stitch {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 0.72rem;
+}
+
+.bdf-similar-id {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  color: #1565c0;
+  font-weight: 500;
+}
+
+.bdf-similar-title {
+  flex: 1;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bdf-similar-similarity {
+  font-weight: 600;
+  color: #888;
+  font-size: 0.7rem;
+}
+
+/* ========================================
+   Stitch Draft Form — additional styles
+   ======================================== */
+
+.stitch-draft-panel {
+  width: 640px;
+}
+
+/* Kind badge showing decomposition */
+.sdf-kind-badge {
+  display: inline-block;
+  font-size: 0.6rem;
+  font-weight: 500;
+  color: #7b1fa2;
+  background: #f3e5f5;
+  padding: 0.1rem 0.4rem;
+  border-radius: 8px;
+  margin-left: 0.3rem;
+  vertical-align: middle;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Acceptance criteria checkbox */
+.sdf-acceptance-row {
+  background: #f5f5f5;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+}
+
+.sdf-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  color: #333;
+  cursor: pointer;
+}
+
+.sdf-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #1976d2;
+  cursor: pointer;
+}
+
+/* Graph preview container */
+.sdf-graph-container {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: #fafafa;
+  overflow-x: auto;
+}
+
+.sdf-graph-container svg {
+  display: block;
+  margin: 0 auto;
+}
+
+.sdf-graph-info {
+  text-align: center;
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.sdf-graph-info strong {
+  color: #333;
+}
+
+.sdf-graph-loading {
+  font-size: 0.72rem;
+  color: #999;
+  font-style: italic;
+}
+
+.sdf-decompose-error {
+  padding: 0.5rem 0.75rem;
+  background: #fce4ec;
+  color: #c62828;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  margin-top: 0.3rem;
+}
+
+/* Single-bead hint for non-decomposable kinds */
+.sdf-single-bead-hint {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 0.75rem;
+  background: #fafafa;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sdf-type-indicator {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.sdf-type-task {
+  background: #e3f2fd;
+  color: #1565c0;
+  border: 1px solid #90caf9;
+}
+
+.sdf-type-genesis {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+}
+
+.sdf-type-review {
+  background: #f3e5f5;
+  color: #7b1fa2;
+  border: 1px solid #ce93d8;
+}
+
+.sdf-type-fix {
+  background: #fce4ec;
+  color: #c2185b;
+  border: 1px solid #f48fb1;
+}
+
+.sdf-type-investigation {
+  background: #fff3e0;
+  color: #e65100;
+  border: 1px solid #ffcc80;
+}
+
+/* Submit button variant for stitch */
+.sdf-btn-stitch {
+  background: #7b1fa2;
+}
+
+.sdf-btn-stitch:hover:not(:disabled) {
+  background: #6a1b9a;
+}
+
+/* New Stitch button */
+.new-stitch-btn {
+  background: #7b1fa2;
+  color: #fff;
+  border-color: #7b1fa2;
+}
+
+.new-stitch-btn:hover {
+  background: #6a1b9a;
+  border-color: #6a1b9a;
+}
+
+/* Stitch graph preview node styling */
+.stitch-graph-preview text {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+}
+
+/* Live markdown preview below textarea */
+.bdf-live-preview {
+  margin-top: 0.4rem;
+  max-height: 180px;
+  overflow-y: auto;
+  border-top: 1px solid #e0e0e0;
+}
 
 /* Mobile responsive adjustments for audio player */
 @media (max-width: 768px) {
