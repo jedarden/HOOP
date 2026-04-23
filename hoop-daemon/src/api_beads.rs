@@ -1,12 +1,13 @@
-//! REST API endpoints for bead creation and listing
+//! REST API endpoints for bead creation, listing, and dedup checking
 //!
 //! Endpoints:
-//! - GET  /api/p/:project/beads  — list open beads for the dep picker
-//! - POST /api/p/:project/beads  — create a bead via `br create`
+//! - GET  /api/p/:project/beads           — list open beads for the dep picker
+//! - POST /api/p/:project/beads           — create a bead via `br create`
+//! - POST /api/p/:project/beads/dedup     — check for similar existing work
 //!
-//! Submit flow: draft → validate → br create → audit → WS event → response
+//! Submit flow: draft → validate → dedup check → br create → audit → WS event → response
 
-use crate::br_verbs::{invoke_br_read, invoke_br_write, ReadVerb, WriteVerb};
+use crate::br_verbs::{invoke_br_create, invoke_br_read, ReadVerb};
 use crate::fleet::{self, ActionKind, ActionResult, BeadActionArgs, BeadSource};
 use crate::ws::StitchCreatedData;
 use axum::{
@@ -64,6 +65,89 @@ pub fn router() -> Router<crate::DaemonState> {
     Router::new()
         .route("/api/p/{project}/beads", get(list_open_beads))
         .route("/api/p/{project}/beads", post(create_bead))
+        .route("/api/p/{project}/beads/dedup", post(check_dedup))
+        .route("/api/p/{project}/beads/dedup-dismiss", post(dismiss_dedup))
+}
+
+/// Request body for dedup check
+#[derive(Debug, Deserialize)]
+pub struct DedupCheckRequest {
+    pub title: String,
+    pub description: Option<String>,
+}
+
+/// A match found during dedup check
+#[derive(Debug, Serialize)]
+pub struct DedupMatchRef {
+    pub id: String,
+    pub project: String,
+    pub title: String,
+    pub kind: String,
+    pub similarity: f64,
+}
+
+/// Response from dedup check
+#[derive(Debug, Serialize)]
+pub struct DedupCheckResponse {
+    pub matches: Vec<DedupMatchRef>,
+    pub threshold: f64,
+    pub message: Option<String>,
+}
+
+/// POST /api/p/:project/beads/dedup — check for similar existing work
+///
+/// Returns potential duplicates across all projects above the configured threshold.
+async fn check_dedup(
+    Path(project): Path<String>,
+    State(state): State<crate::DaemonState>,
+    Json(req): Json<DedupCheckRequest>,
+) -> Result<Json<DedupCheckResponse>, (StatusCode, String)> {
+    let _ = resolve_project_path(&project, &state)?;
+
+    let title = req.title.trim().to_string();
+    if title.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "title is required".to_string()));
+    }
+
+    let index = state.vector_index.read().unwrap();
+    let matches = index.check_duplicate(&title, req.description.as_deref());
+
+    let message = if !matches.is_empty() {
+        let best = &matches[0];
+        Some(format!(
+            "This looks like `{}/{}` ({}), which is in progress. Continue that, add this as a child, or proceed as new?",
+            best.item.project,
+            best.item.id,
+            best.item.title
+        ))
+    } else {
+        None
+    };
+
+    Ok(Json(DedupCheckResponse {
+        matches: matches
+            .into_iter()
+            .map(|m| DedupMatchRef {
+                id: m.item.id,
+                project: m.item.project,
+                title: m.item.title,
+                kind: m.item.kind,
+                similarity: m.similarity,
+            })
+            .collect(),
+        threshold: index.threshold(),
+        message,
+    }))
+}
+
+/// POST /api/p/:project/beads/dedup-dismiss — report a false positive
+async fn dismiss_dedup(
+    Path(project): Path<String>,
+    State(state): State<crate::DaemonState>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let _ = resolve_project_path(&project, &state)?;
+    state.vector_index.read().unwrap().report_false_positive();
+    Ok(Json(serde_json::json!({"status": "ok"})))
 }
 
 /// Resolve the actor identity for audit purposes.
@@ -97,7 +181,7 @@ fn resolve_actor(remote_addr: Option<SocketAddr>) -> String {
 
 /// Parse the source field into a BeadSource enum.
 /// Handles "form", "chat", "bulk", "template", and "template:<name>" patterns.
-fn parse_source(source_str: &str) -> (BeadSource, String) {
+pub(crate) fn parse_source(source_str: &str) -> (BeadSource, String) {
     if source_str.is_empty() {
         return (BeadSource::Form, "form".to_string());
     }
@@ -267,7 +351,7 @@ async fn create_bead(
     let actor_for_br = actor.clone();
 
     let output = tokio::task::spawn_blocking(move || {
-        let mut cmd = invoke_br_write(WriteVerb::Create, &[]);
+        let mut cmd = invoke_br_create(&[]);
         cmd.current_dir(&project_path);
         cmd.arg(&title_for_br);
         cmd.arg("--type").arg(&issue_type_for_br);
@@ -318,6 +402,7 @@ async fn create_bead(
             labels: labels.clone(),
         };
         let args_json = serde_json::to_string(&args).ok();
+        let args_hash_value = args.args_hash();
 
         if let Err(e) = fleet::write_audit_row(
             &actor,
@@ -327,6 +412,9 @@ async fn create_bead(
             args_json,
             ActionResult::Failure,
             Some(stderr.trim().to_string()),
+            Some(&source_str),
+            stitch_id.as_deref(),
+            Some(&args_hash_value),
         ) {
             warn!("Failed to write audit row for failed bead creation: {}", e);
         }
@@ -347,15 +435,16 @@ async fn create_bead(
 
     // 4. Insert audit row with actor + source
     let args = BeadActionArgs {
-        source,
+        source: source.clone(),
         stitch_id: stitch_id.clone(),
         title: req.title.clone(),
-        issue_type,
+        issue_type: issue_type.clone(),
         priority,
-        dependencies,
-        labels,
+        dependencies: dependencies.clone(),
+        labels: labels.clone(),
     };
     let args_json = serde_json::to_string(&args).ok();
+    let args_hash_value = args.args_hash();
 
     if let Err(e) = fleet::write_audit_row(
         &actor,
@@ -365,6 +454,9 @@ async fn create_bead(
         args_json,
         ActionResult::Success,
         None,
+        Some(&source_str),
+        stitch_id.as_deref(),
+        Some(&args_hash_value),
     ) {
         warn!("Failed to write audit row for bead {}: {}", id, e);
         // Audit failure is non-fatal — the bead was created successfully
@@ -383,19 +475,18 @@ async fn create_bead(
     };
 
     // Broadcast the stitch_created event to all WS clients
-    if let Ok(json) = serde_json::to_string(&crate::ws::WsEvent::stitch_created(stitch_event)) {
-        let _ = state.bead_tx.send(crate::ws::BeadData {
-            id: id.clone(),
-            title: title.clone(),
-            status: "open".to_string(),
-            priority: priority.unwrap_or(2),
-            issue_type: req.issue_type.clone().unwrap_or_else(|| "task".to_string()),
-            created_at: created_at.clone(),
-            updated_at: created_at,
-            created_by: actor.clone(),
-            dependencies: req.dependencies.clone().unwrap_or_default(),
-        });
-    }
+    let _ = state.stitch_tx.send(stitch_event);
+    let _ = state.bead_tx.send(crate::ws::BeadData {
+        id: id.clone(),
+        title: title.clone(),
+        status: "open".to_string(),
+        priority: priority.unwrap_or(2),
+        issue_type: req.issue_type.clone().unwrap_or_else(|| "task".to_string()),
+        created_at: created_at.clone(),
+        updated_at: created_at,
+        created_by: actor.clone(),
+        dependencies: req.dependencies.clone().unwrap_or_default(),
+    });
 
     // 6. Return response
     Ok(Json(CreateBeadResponse {
