@@ -20,6 +20,9 @@ use tracing::info;
 /// Current schema version
 const SCHEMA_VERSION: &str = "1.1.0";
 
+/// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
+const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
+
 /// Genesis hash - all chains start here
 const GENESIS_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -59,7 +62,11 @@ pub fn init_fleet_db() -> Result<()> {
         // Fresh database: create schema and insert genesis row
         create_schema(&mut conn)?;
         insert_genesis_row(&mut conn)?;
-        info!("fleet.db created with schema {}", SCHEMA_VERSION);
+        info!("fleet.db created with initial schema {}, running migrations to {}", INITIAL_SCHEMA_VERSION, SCHEMA_VERSION);
+
+        // Run migrations to bring fresh database to current version
+        run_migrations(&mut conn, INITIAL_SCHEMA_VERSION)?;
+        info!("Migrations complete, schema version {}", SCHEMA_VERSION);
     } else {
         // Existing database: verify schema version and run migrations
         let version = get_schema_version(&conn)?;
@@ -132,10 +139,10 @@ fn create_schema(conn: &mut Connection) -> Result<()> {
         [],
     )?;
 
-    // Store schema version
+    // Store initial schema version (will be migrated to SCHEMA_VERSION)
     conn.execute(
         "INSERT INTO metadata (key, value) VALUES (?, ?)",
-        ["schema_version", SCHEMA_VERSION],
+        ["schema_version", INITIAL_SCHEMA_VERSION],
     )?;
 
     Ok(())

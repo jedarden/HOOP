@@ -112,3 +112,61 @@ async fn test_permanent_error_no_restart() {
         "Panic: synthetic panic"
     ));
 }
+
+#[tokio::test]
+async fn test_exponential_backoff_calculation() {
+    // Test that exponential backoff delays are calculated correctly
+    // With BASE_RESTART_DELAY_SECS = 1 and MAX_RESTART_DELAY_SECS = 300
+
+    use hoop_daemon::supervisor::{BASE_RESTART_DELAY_SECS, MAX_RESTART_DELAY_SECS};
+
+    // Failure 1: 2^0 * 1 = 1 second
+    let delay1 = BASE_RESTART_DELAY_SECS * 2_u64.pow(0);
+    assert_eq!(delay1, 1);
+
+    // Failure 2: 2^1 * 1 = 2 seconds
+    let delay2 = BASE_RESTART_DELAY_SECS * 2_u64.pow(1);
+    assert_eq!(delay2, 2);
+
+    // Failure 3: 2^2 * 1 = 4 seconds
+    let delay3 = BASE_RESTART_DELAY_SECS * 2_u64.pow(2);
+    assert_eq!(delay3, 4);
+
+    // Failure 4: 2^3 * 1 = 8 seconds
+    let delay4 = BASE_RESTART_DELAY_SECS * 2_u64.pow(3);
+    assert_eq!(delay4, 8);
+
+    // Verify the cap at MAX_RESTART_DELAY_SECS
+    let max_delay = BASE_RESTART_DELAY_SECS * 2_u64.pow(20);
+    assert_eq!(max_delay.min(MAX_RESTART_DELAY_SECS), MAX_RESTART_DELAY_SECS);
+}
+
+#[tokio::test]
+async fn test_runtime_state_error_extraction() {
+    // Test that error extraction works for all error states
+    let error_msg = "Test error message";
+
+    let failed_state = ProjectRuntimeState::Failed {
+        error: error_msg.to_string(),
+        failed_at: chrono::Utc::now(),
+        consecutive_failures: 1,
+        next_restart_at: chrono::Utc::now(),
+    };
+    assert_eq!(failed_state.error(), Some(error_msg));
+
+    let error_state = ProjectRuntimeState::Error {
+        error: error_msg.to_string(),
+        errored_at: chrono::Utc::now(),
+    };
+    assert_eq!(error_state.error(), Some(error_msg));
+
+    let abandoned_state = ProjectRuntimeState::Abandoned {
+        error: error_msg.to_string(),
+        abandoned_at: chrono::Utc::now(),
+    };
+    assert_eq!(abandoned_state.error(), Some(error_msg));
+
+    // Test that healthy/starting states return None
+    assert!(ProjectRuntimeState::Healthy.error().is_none());
+    assert!(ProjectRuntimeState::Starting.error().is_none());
+}

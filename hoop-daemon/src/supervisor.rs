@@ -25,16 +25,16 @@ use crate::beads::{BeadEvent, BeadReader, BeadReaderConfig};
 use crate::projects::ProjectsConfig;
 use crate::sessions::{SessionEvent, SessionTailer, SessionTailerConfig};
 use crate::shutdown::ShutdownPhase;
-use hoop_schema::Bead;
+use crate::Bead;
 
 /// Maximum consecutive failures before giving up
-const MAX_CONSECUTIVE_FAILURES: usize = 5;
+pub const MAX_CONSECUTIVE_FAILURES: usize = 5;
 
 /// Base restart delay in seconds
-const BASE_RESTART_DELAY_SECS: u64 = 1;
+pub const BASE_RESTART_DELAY_SECS: u64 = 1;
 
 /// Maximum restart delay in seconds
-const MAX_RESTART_DELAY_SECS: u64 = 300;
+pub const MAX_RESTART_DELAY_SECS: u64 = 300;
 
 /// Project runtime state
 #[derive(Debug, Clone)]
@@ -109,6 +109,10 @@ struct ProjectRuntime {
     /// Shared reference to session tailer (for graceful shutdown)
     /// Stored in Arc<Mutex<>> so both the runtime task and supervisor can access it
     session_tailer: Arc<std::sync::Mutex<Option<SessionTailer>>>,
+    /// Shared reference to bead readers (for graceful shutdown and error monitoring)
+    bead_readers: Arc<std::sync::Mutex<Vec<BeadReader>>>,
+    /// Bead count for this project (open beads)
+    bead_count: usize,
 }
 
 /// Supervisor for all project runtimes
@@ -160,14 +164,18 @@ impl ProjectSupervisor {
     /// Get current status of all runtimes
     pub async fn snapshot(&self) -> Vec<ProjectRuntimeStatus> {
         let runtimes = self.runtimes.read().await;
+        let beads = self.beads.read().unwrap();
         runtimes
             .values()
-            .map(|r| ProjectRuntimeStatus {
-                project_name: r.name.clone(),
-                project_path: r.workspaces.first().cloned().unwrap_or_default(),
-                state: r.state.clone(),
-                workspace_count: r.workspaces.len(),
-                bead_count: 0, // TODO: track bead count per project
+            .map(|r| {
+                let bead_count = count_open_beads_for_workspaces(&beads, &r.workspaces);
+                ProjectRuntimeStatus {
+                    project_name: r.name.clone(),
+                    project_path: r.workspaces.first().cloned().unwrap_or_default(),
+                    state: r.state.clone(),
+                    workspace_count: r.workspaces.len(),
+                    bead_count,
+                }
             })
             .collect()
     }
@@ -221,6 +229,8 @@ impl ProjectSupervisor {
                     task_handle: None,
                     shutdown_tx: None,
                     session_tailer: Arc::new(std::sync::Mutex::new(None)),
+                    bead_readers: Arc::new(std::sync::Mutex::new(Vec::new())),
+                    bead_count: 0,
                 };
                 self.start_runtime(&mut runtime).await?;
                 runtimes.insert(name, runtime);
@@ -235,6 +245,14 @@ impl ProjectSupervisor {
         // Send shutdown signal first
         if let Some(tx) = &runtime.shutdown_tx {
             let _ = tx.send(()).await;
+        }
+
+        // Stop all bead readers
+        let bead_readers = runtime.bead_readers.lock().unwrap().drain(..).collect::<Vec<_>>();
+        for bead_reader in bead_readers {
+            if let Err(e) = bead_reader.stop().await {
+                warn!("Error stopping bead reader for {}: {}", runtime.name, e);
+            }
         }
 
         // Flush session tailer state via the shared reference
@@ -257,6 +275,7 @@ impl ProjectSupervisor {
 
         runtime.shutdown_tx = None;
         runtime.state = ProjectRuntimeState::Starting;
+        runtime.bead_count = 0;
     }
 
     /// Start a project runtime with supervision
@@ -271,68 +290,86 @@ impl ProjectSupervisor {
         let status_tx = self.status_tx.clone();
         let shutdown = self.shutdown.clone();
         let session_tailer = runtime.session_tailer.clone();
+        let bead_readers = runtime.bead_readers.clone();
         let supervisor = self.clone();
 
         // Create shutdown channel for this runtime
         let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
         runtime.shutdown_tx = Some(shutdown_tx);
 
+        // Create error channel for propagating errors from spawned tasks
+        let (error_tx, mut error_rx) = mpsc::channel::<anyhow::Error>(1);
+
         // Spawn the supervised task
+        // tokio::spawn catches panics and returns JoinError on .await
+        let project_name_clone = project_name.clone();
+        let supervisor_clone = supervisor.clone();
+
         let task_handle = tokio::spawn(async move {
-            info!("Project runtime started: {}", project_name);
+            info!("Project runtime started: {}", project_name_clone);
 
-            // Set initial state to healthy
-            {
-                let mut runtimes = runtimes.write().await;
-                if let Some(rt) = runtimes.get_mut(&project_name) {
-                    rt.state = ProjectRuntimeState::Healthy;
-                    rt.consecutive_failures = 0;
-                    let _ = status_tx.send(ProjectRuntimeStatus {
-                        project_name: project_name.clone(),
-                        project_path: workspaces.first().cloned().unwrap_or_default(),
-                        state: rt.state.clone(),
-                        workspace_count: workspaces.len(),
-                        bead_count: 0,
-                    });
-                }
-            }
+            // Run the project runtime
+            let result = Self::run_project_runtime(
+                project_name_clone.clone(),
+                workspaces.clone(),
+                bead_tx,
+                session_tx,
+                worker_registry,
+                beads.clone(),
+                shutdown,
+                session_tailer,
+                bead_readers,
+                error_tx,
+            ).await;
 
-            // Run with panic catching
-            let result = catch_unwind(AssertUnwindSafe(async {
-                Self::run_project_runtime(
-                    project_name.clone(),
-                    workspaces.clone(),
-                    bead_tx,
-                    session_tx,
-                    worker_registry,
-                    beads,
-                    shutdown,
-                    session_tailer,
-                )
-                .await
-            }))
-            .await;
-
-            // Handle failure or shutdown
             match result {
-                Ok(Ok(())) => {
-                    info!("Project runtime shut down gracefully: {}", project_name);
+                Ok(()) => {
+                    info!("Project runtime shut down gracefully: {}", project_name_clone);
                 }
-                Ok(Err(e)) => {
-                    error!("Project runtime failed: {} - error: {}", project_name, e);
-                    supervisor.handle_failure(&project_name, &e.to_string()).await;
-                }
-                Err(panic_info) => {
-                    let panic_msg = panic_payload_to_string(&*panic_info);
-                    error!(
-                        "Project runtime panicked: {} - panic: {}",
-                        project_name, panic_msg
-                    );
-                    supervisor.handle_failure(&project_name, &format!("Panic: {}", panic_msg)).await;
+                Err(e) => {
+                    error!("Project runtime failed: {} - error: {}", project_name_clone, e);
+                    supervisor_clone.handle_failure(&project_name_clone, &e.to_string()).await;
                 }
             }
         });
 
+        // Spawn a monitor task to detect panics and unexpected termination
+        let project_name_monitor = project_name.clone();
+        let supervisor_monitor = supervisor.clone();
+        tokio::spawn(async move {
+            match task_handle.await {
+                Ok(()) => {
+                    // Graceful shutdown - already handled above
+                    debug!("Project runtime {} task completed gracefully", project_name_monitor);
+                }
+                Err(e) => {
+                    // JoinError indicates a panic or task cancellation
+                    let error_msg = if e.is_panic() {
+                        let panic_msg = e.into_panic();
+                        format!("Runtime panic: {}", panic_payload_to_string(&panic_msg))
+                    } else if e.is_cancelled() {
+                        "Runtime task cancelled".to_string()
+                    } else {
+                        format!("Runtime task aborted: {}", e)
+                    };
+                    error!("Project runtime {} task failed: {}", project_name_monitor, error_msg);
+                    supervisor_monitor.handle_failure(&project_name_monitor, &error_msg).await;
+                }
+            }
+        });
+
+        // Spawn a task to forward errors from spawned tasks to the main runtime
+        let project_name_for_error = project_name.clone();
+        let supervisor_for_error = supervisor.clone();
+        tokio::spawn(async move {
+            while let Some(error) = error_rx.recv().await {
+                error!("Project runtime {} child task error: {}", project_name_for_error, error);
+                // Forward to supervisor to trigger restart
+                supervisor_for_error.handle_failure(&project_name_for_error, &error.to_string()).await;
+            }
+        });
+
+        // Store the task handle for later access
         runtime.task_handle = Some(task_handle);
         Ok(())
     }
@@ -473,6 +510,8 @@ impl ProjectSupervisor {
         beads: Arc<std::sync::RwLock<Vec<Bead>>>,
         shutdown: Arc<crate::shutdown::ShutdownCoordinator>,
         session_tailer_clone: Arc<std::sync::Mutex<Option<SessionTailer>>>,
+        bead_readers_clone: Arc<std::sync::Mutex<Vec<BeadReader>>>,
+        error_tx: mpsc::Sender<anyhow::Error>,
     ) -> Result<()> {
         // Subscribe to shutdown phases
         let mut shutdown_rx = shutdown.subscribe();
@@ -496,7 +535,7 @@ impl ProjectSupervisor {
         }
 
         // Initialize bead readers for each workspace
-        let mut bead_readers = Vec::new();
+        let mut local_bead_readers = Vec::new();
         for workspace in &workspaces {
             let bead_reader_config = BeadReaderConfig {
                 workspace_path: workspace.to_path_buf(),
@@ -521,6 +560,7 @@ impl ProjectSupervisor {
             let beads_clone = beads.clone();
             let bead_tx_clone = bead_tx.clone();
             let project_name_clone = project_name.clone();
+            let error_tx_clone = error_tx.clone();
 
             tokio::spawn(async move {
                 while let Ok(event) = rx.recv().await {
@@ -549,15 +589,20 @@ impl ProjectSupervisor {
                         }
                         BeadEvent::Error(e) => {
                             error!("Bead reader error for {}: {}", workspace_clone.display(), e);
-                            // Return error to trigger supervisor restart
-                            return Err::<(), anyhow::Error>(anyhow::anyhow!("Bead reader error: {}", e));
+                            // Send error to runtime via channel
+                            let _ = error_tx_clone.send(anyhow::anyhow!("Bead reader error for {}: {}", workspace_clone.display(), e));
                         }
                     }
                 }
-                Ok::<(), anyhow::Error>(())
             });
 
-            bead_readers.push(bead_reader);
+            local_bead_readers.push(bead_reader);
+        }
+
+        // Store bead readers in shared reference for external access and graceful shutdown
+        {
+            let mut bead_readers_ref = bead_readers_clone.lock().unwrap();
+            *bead_readers_ref = local_bead_readers;
         }
 
         // Initialize session tailer for this project
@@ -580,6 +625,7 @@ impl ProjectSupervisor {
         // Subscribe to session events
         let mut session_rx = session_tailer.subscribe();
         let worker_registry_clone = worker_registry.clone();
+        let error_tx_clone = error_tx.clone();
 
         tokio::spawn(async move {
             while let Ok(event) = session_rx.recv().await {
@@ -592,12 +638,11 @@ impl ProjectSupervisor {
                     }
                     SessionEvent::Error(e) => {
                         error!("Session tailer error for project {}: {}", project_name, e);
-                        // Return error to trigger supervisor restart
-                        return Err::<(), anyhow::Error>(anyhow::anyhow!("Session tailer error: {}", e));
+                        // Send error to runtime via channel
+                        let _ = error_tx_clone.send(anyhow::anyhow!("Session tailer error for {}: {}", project_name, e));
                     }
                 }
             }
-            Ok::<(), anyhow::Error>(())
         });
 
         session_tailer.start()
@@ -668,6 +713,16 @@ fn panic_payload_to_string(payload: &dyn std::any::Any) -> String {
     } else {
         "(unknown panic type)".to_string()
     }
+}
+
+/// Count open beads for a given set of workspace paths
+/// Note: Currently beads don't have workspace association, so we count all open beads
+/// TODO: Add workspace/path association to beads for proper filtering
+fn count_open_beads_for_workspaces(beads: &[Bead], _workspaces: &[PathBuf]) -> usize {
+    beads
+        .iter()
+        .filter(|b| matches!(b.status, crate::BeadStatus::Open))
+        .count()
 }
 
 #[cfg(test)]
