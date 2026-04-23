@@ -6,6 +6,7 @@ import ProjectDetail from './ProjectDetail';
 import FleetMap from './FleetMap';
 import BeadList from './BeadList';
 import ConversationPane from './ConversationPane';
+import CapacityPanel from './CapacityPanel';
 
 function formatRelativeTime(iso?: string): string {
   if (!iso) return '--';
@@ -27,24 +28,33 @@ function formatCost(usd: number): string {
 function ProjectCard({ card, onClick }: { card: ProjectCardData; onClick: () => void }) {
   const runtimeState = card.runtime_state ?? 'unknown';
   const isDegraded = card.degraded;
+  const hasError = isDegraded || runtimeState === 'failed' || runtimeState === 'error';
 
   return (
     <button
-      className={`project-card-fleet ${isDegraded ? 'project-card-degraded' : ''}`}
+      className={`project-card-fleet ${hasError ? 'project-card-degraded' : ''}`}
       onClick={onClick}
+      aria-label={`${card.label || card.name} — ${card.worker_count} workers, ${card.active_stitch_count} stitches, ${formatCost(card.cost_today)} today`}
       style={card.color ? { '--project-accent': card.color } as React.CSSProperties : undefined}
     >
       <div className="pcf-header">
         <div className="pcf-title-row">
           {card.color && <span className="pcf-color-dot" style={{ background: card.color }} />}
           <span className="pcf-label">{card.label || card.name}</span>
-          {isDegraded && <span className="pcf-error-badge" title={card.runtime_error}>!</span>}
+          {hasError && (
+            <span className="pcf-error-badge" title={card.runtime_error || `Runtime ${runtimeState}`}>
+              !
+            </span>
+          )}
         </div>
         <span className="pcf-arrow">&rarr;</span>
       </div>
 
-      {isDegraded && card.runtime_error && (
-        <div className="pcf-error-message">{card.runtime_error}</div>
+      {hasError && card.runtime_error && (
+        <div className="pcf-error-message" role="alert">{card.runtime_error}</div>
+      )}
+      {hasError && !card.runtime_error && (
+        <div className="pcf-error-message" role="alert">Runtime {runtimeState}</div>
       )}
 
       <div className="pcf-stats">
@@ -225,6 +235,7 @@ export default function App() {
           )}
         </section>
 
+        <CapacityPanel projectName="" />
         <FleetMap />
         <BeadList />
         <ConversationPane />
