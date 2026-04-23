@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 
 interface FilesTabProps {
   projectPath: string;
@@ -74,7 +74,7 @@ export default function FilesTab({ projectPath }: FilesTabProps) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
-  function renderFileNode(node: FileNode, depth: number = 0): JSX.Element {
+  function renderFileNode(node: FileNode, depth: number = 0): React.ReactElement {
     const isExpanded = expandedDirs.has(node.path);
     const isSelected = selectedPath === node.path;
 

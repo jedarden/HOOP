@@ -1,6 +1,6 @@
 import { useAtomValue } from 'jotai';
 import { useMemo } from 'react';
-import { conversationsAtom, beadsAtom } from './atoms';
+import { conversationsAtom } from './atoms';
 
 interface CostPanelProps {
   projectName: string;
@@ -46,9 +46,8 @@ const PRICING: Record<string, { input: number; output: number }> = {
   'gpt-3.5-turbo': { input: 0.5 / 1000000, output: 1.5 / 1000000 },
 };
 
-export default function CostPanel({ projectName }: CostPanelProps) {
+export default function CostPanel({ projectName: _projectName }: CostPanelProps) {
   const conversations = useAtomValue(conversationsAtom);
-  const beads = useAtomValue(beadsAtom);
 
   // Calculate cost breakdown by adapter/model
   const costByAdapter = useMemo(() => {
