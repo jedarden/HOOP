@@ -1,6 +1,22 @@
 import { useEffect, useRef } from 'react';
 import { useSetAtom } from 'jotai';
-import { workersAtom, beadsAtom, conversationsAtom, streamingContentAtom, wsConnectedAtom, configStatusAtom, projectCardsAtom, capacityAtom, stitchCreatedAtom, WsEvent } from './atoms';
+import {
+  workersAtom,
+  beadsAtom,
+  conversationsAtom,
+  streamingContentAtom,
+  wsConnectedAtom,
+  configStatusAtom,
+  projectCardsAtom,
+  capacityAtom,
+  stitchCreatedAtom,
+  agentSessionStatusAtom,
+  agentInflightAtom,
+  agentChatMessagesAtom,
+  WsEvent,
+  AgentChatMessage,
+  AgentToolCallInProgress,
+} from './atoms';
 
 const WS_URL = `ws://${window.location.host}/ws`;
 
@@ -14,8 +30,21 @@ export function useWebSocket() {
   const setProjectCards = useSetAtom(projectCardsAtom);
   const setCapacity = useSetAtom(capacityAtom);
   const setStitchCreated = useSetAtom(stitchCreatedAtom);
+  const setAgentSessionStatus = useSetAtom(agentSessionStatusAtom);
+  const setAgentInflight = useSetAtom(agentInflightAtom);
+  const setAgentChatMessages = useSetAtom(agentChatMessagesAtom);
+
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // Track in-flight text and tool calls via ref so turn_complete can finalize without
+  // needing to read the atom (which requires an extra subscription).
+  const inflightRef = useRef<{
+    session_id: string;
+    text: string;
+    tool_calls: AgentToolCallInProgress[];
+    started_at: number;
+  } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -32,7 +61,6 @@ export function useWebSocket() {
         if (!mounted) return;
         console.log('WebSocket connected');
         setConnected(true);
-        // Clear any pending reconnect
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
           reconnectTimeoutRef.current = undefined;
@@ -88,6 +116,115 @@ export function useWebSocket() {
             setCapacity(data.capacity);
           } else if (data.type === 'stitch_created' && data.stitch_created) {
             setStitchCreated((prev) => [...prev.slice(-49), data.stitch_created!]);
+          } else if (data.type === 'agent_session' && data.agent_session) {
+            const evt = data.agent_session;
+
+            if (evt.type === 'session_spawned' || evt.type === 'session_reattached') {
+              setAgentSessionStatus((prev) => ({
+                active: true,
+                enabled: true,
+                session_id: evt.session_id,
+                adapter: evt.adapter,
+                model: evt.model,
+                stitch_id: prev?.stitch_id ?? null,
+                cost_usd: prev?.cost_usd ?? 0,
+                input_tokens: prev?.input_tokens ?? 0,
+                output_tokens: prev?.output_tokens ?? 0,
+                turn_count: prev?.turn_count ?? 0,
+                created_at: prev?.created_at ?? null,
+                last_activity_at: new Date().toISOString(),
+                age_secs: null,
+              }));
+              // Reset inflight on new session
+              inflightRef.current = null;
+              setAgentInflight(null);
+
+            } else if (evt.type === 'text_delta') {
+              const prev = inflightRef.current;
+              const isCurrentSession = prev?.session_id === evt.session_id;
+              inflightRef.current = {
+                session_id: evt.session_id,
+                text: (isCurrentSession ? prev!.text : '') + evt.text,
+                tool_calls: isCurrentSession ? prev!.tool_calls : [],
+                started_at: isCurrentSession ? prev!.started_at : Date.now(),
+              };
+              setAgentInflight({ ...inflightRef.current });
+
+            } else if (evt.type === 'tool_use') {
+              const prev = inflightRef.current;
+              const newTool: AgentToolCallInProgress = {
+                id: evt.id,
+                name: evt.name,
+                input: evt.input,
+                status: 'pending',
+              };
+              inflightRef.current = {
+                session_id: evt.session_id,
+                text: prev?.session_id === evt.session_id ? prev!.text : '',
+                tool_calls: [
+                  ...(prev?.session_id === evt.session_id ? prev!.tool_calls : []),
+                  newTool,
+                ],
+                started_at: prev?.started_at ?? Date.now(),
+              };
+              setAgentInflight({ ...inflightRef.current });
+
+            } else if (evt.type === 'tool_result') {
+              if (inflightRef.current?.session_id === evt.session_id) {
+                const updatedTools = inflightRef.current.tool_calls.map((tc) =>
+                  tc.id === evt.id
+                    ? { ...tc, output: evt.output, is_error: evt.is_error, status: 'complete' as const }
+                    : tc
+                );
+                inflightRef.current = { ...inflightRef.current, tool_calls: updatedTools };
+                setAgentInflight({ ...inflightRef.current });
+              }
+
+            } else if (evt.type === 'turn_complete') {
+              // Finalize the in-flight response as a completed assistant message
+              if (inflightRef.current && (
+                inflightRef.current.text.length > 0 ||
+                inflightRef.current.tool_calls.length > 0
+              )) {
+                const finalMsg: AgentChatMessage = {
+                  id: crypto.randomUUID(),
+                  role: 'assistant',
+                  content: inflightRef.current.text,
+                  tool_calls: inflightRef.current.tool_calls.length > 0
+                    ? inflightRef.current.tool_calls
+                    : undefined,
+                  timestamp: Date.now(),
+                  session_id: inflightRef.current.session_id,
+                };
+                setAgentChatMessages((prev) => [...prev, finalMsg]);
+              }
+              inflightRef.current = null;
+              setAgentInflight(null);
+
+              // Update session cost/token counters
+              setAgentSessionStatus((prev) => prev ? {
+                ...prev,
+                cost_usd: prev.cost_usd + evt.cost_usd,
+                input_tokens: prev.input_tokens + evt.input_tokens,
+                output_tokens: prev.output_tokens + evt.output_tokens,
+                turn_count: prev.turn_count + 1,
+                last_activity_at: new Date().toISOString(),
+              } : null);
+
+            } else if (evt.type === 'session_archived') {
+              setAgentSessionStatus((prev) => prev ? {
+                ...prev,
+                active: false,
+                session_id: null,
+              } : null);
+              inflightRef.current = null;
+              setAgentInflight(null);
+
+            } else if (evt.type === 'error') {
+              console.error('Agent session error:', evt.message);
+              inflightRef.current = null;
+              setAgentInflight(null);
+            }
           }
         } catch (e) {
           console.error('Failed to parse WebSocket message:', e);
@@ -99,7 +236,6 @@ export function useWebSocket() {
         console.log('WebSocket disconnected, reconnecting...');
         setConnected(false);
         wsRef.current = null;
-        // Reconnect after 2 seconds
         reconnectTimeoutRef.current = setTimeout(() => {
           if (mounted) connect();
         }, 2000);
@@ -119,5 +255,5 @@ export function useWebSocket() {
       }
       wsRef.current?.close();
     };
-  }, [setWorkers, setBeads, setConversations, setStreamingContent, setConnected, setConfigStatus, setProjectCards, setCapacity, setStitchCreated]);
+  }, [setWorkers, setBeads, setConversations, setStreamingContent, setConnected, setConfigStatus, setProjectCards, setCapacity, setStitchCreated, setAgentSessionStatus, setAgentInflight, setAgentChatMessages]);
 }

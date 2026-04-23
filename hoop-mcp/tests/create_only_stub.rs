@@ -198,6 +198,7 @@ fn test_runtime_guard_allows_create() {
     hoop_mcp::br_verbs::assert_create_only("create");
 }
 
+#[cfg(any(feature = "create-only-write", feature = "zero-write-v01"))]
 #[test]
 fn test_subprocess_arg_validation_rejects_forbidden_commands() {
     for verb in hoop_mcp::br_verbs::FORBIDDEN_WRITE_VERBS {

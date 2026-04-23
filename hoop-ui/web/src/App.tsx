@@ -7,6 +7,7 @@ import FleetMap from './FleetMap';
 import BeadList from './BeadList';
 import ConversationPane from './ConversationPane';
 import CapacityPanel from './CapacityPanel';
+import AgentChatPane from './AgentChatPane';
 
 function formatRelativeTime(iso?: string): string {
   if (!iso) return '--';
@@ -245,6 +246,7 @@ export default function App() {
           )}
         </section>
 
+        <AgentChatPane />
         <CapacityPanel projectName="" />
         <FleetMap />
         <BeadList />

@@ -1023,47 +1023,71 @@ export default function BeadDraftForm({ projectName, onClose, onCreated }: BeadD
             />
           )}
 
-          {/* Dedup warning */}
+          {/* Dedup warning — semantic pre-dedup at draft time */}
           {dedupMatches.length > 0 && (
             <div className="bdf-field">
               <div className="sdf-dedup-warning">
-                <strong>Potential duplicate{dedupMatches.length > 1 ? 's' : ''} found</strong>
+                <strong>Similar work already in progress</strong>
                 <p className="sdf-dedup-message">
-                  This looks like similar work that may already be in progress:
+                  This looks like <span className="sdf-dedup-ref">{dedupMatches[0].project}/{dedupMatches[0].id}</span> ({dedupMatches[0].title}), which is in progress.
                 </p>
-                <ul className="sdf-dedup-list">
-                  {dedupMatches.map(m => (
-                    <li key={m.id} className="sdf-dedup-item">
-                      <span className="sdf-dedup-project">{m.project}</span>
-                      <span className="sdf-dedup-title">{m.title}</span>
-                      <span className="sdf-dedup-similarity">{Math.round(m.similarity * 100)}% match</span>
-                    </li>
-                  ))}
-                </ul>
+                {dedupMatches.length > 1 && (
+                  <ul className="sdf-dedup-list">
+                    {dedupMatches.slice(1).map(m => (
+                      <li key={m.id} className="sdf-dedup-item">
+                        <span className="sdf-dedup-project">{m.project}</span>
+                        <span className="sdf-dedup-title">{m.title}</span>
+                        <span className="sdf-dedup-similarity">{Math.round(m.similarity * 100)}%</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 <div className="sdf-dedup-actions">
                   <button
                     type="button"
-                    className="bdf-btn-secondary"
+                    className="bdf-btn-dedup bdf-btn-dedup-continue"
+                    onClick={onClose}
+                  >
+                    Continue that
+                  </button>
+                  <button
+                    type="button"
+                    className="bdf-btn-dedup bdf-btn-dedup-child"
                     onClick={() => {
-                      // Report false positive to the backend for stats tracking
+                      const bestId = dedupMatches[0].id;
+                      if (!form.dependencies.some(d => d.id === bestId)) {
+                        setForm(f => ({
+                          ...f,
+                          dependencies: [...f.dependencies, {
+                            id: bestId,
+                            title: dedupMatches[0].title,
+                            issue_type: dedupMatches[0].kind,
+                            priority: 2,
+                            dependencies: [],
+                          }],
+                        }));
+                      }
+                      setForceCreate(true);
+                      setDedupMatches([]);
+                    }}
+                  >
+                    Add as child
+                  </button>
+                  <button
+                    type="button"
+                    className="bdf-btn-dedup bdf-btn-dedup-new"
+                    onClick={() => {
                       if (selectedProject) {
                         fetch(`/api/p/${encodeURIComponent(selectedProject)}/beads/dedup-dismiss`, {
                           method: 'POST',
                         }).catch(() => { /* non-critical */ });
                       }
+                      setForceCreate(true);
                       setDedupMatches([]);
                     }}
                   >
-                    Dismiss and create new
+                    Proceed as new
                   </button>
-                  <label className="sdf-force-create-label">
-                    <input
-                      type="checkbox"
-                      checked={forceCreate}
-                      onChange={e => setForceCreate(e.target.checked)}
-                    />
-                    Don't ask again for this draft
-                  </label>
                 </div>
               </div>
             </div>

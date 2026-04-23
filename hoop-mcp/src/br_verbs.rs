@@ -318,6 +318,7 @@ mod tests {
         }
     }
 
+    #[cfg(any(feature = "create-only-write", feature = "zero-write-v01"))]
     #[test]
     #[should_panic(expected = "invariant violated")]
     fn test_validate_br_subprocess_args_rejects_raw_close_command() {
@@ -326,11 +327,22 @@ mod tests {
         validate_br_subprocess_args(&cmd);
     }
 
+    #[cfg(any(feature = "create-only-write", feature = "zero-write-v01"))]
     #[test]
     #[should_panic(expected = "invariant violated")]
     fn test_validate_br_subprocess_args_rejects_raw_update_command() {
         let mut cmd = std::process::Command::new("br");
         cmd.arg("update").arg("bd-abc123");
         validate_br_subprocess_args(&cmd);
+    }
+
+    #[cfg(not(any(feature = "create-only-write", feature = "zero-write-v01")))]
+    #[test]
+    fn test_validate_br_subprocess_args_allows_all_without_feature_flag() {
+        for verb in WRITE_VERB_NAMES {
+            let mut cmd = std::process::Command::new("br");
+            cmd.arg(verb);
+            validate_br_subprocess_args(&cmd);
+        }
     }
 }

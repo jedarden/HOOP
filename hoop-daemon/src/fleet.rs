@@ -21,7 +21,7 @@ use tracing::info;
 use uuid::Uuid;
 
 /// Current schema version
-const SCHEMA_VERSION: &str = "1.9.0";
+const SCHEMA_VERSION: &str = "1.10.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -38,6 +38,10 @@ pub enum ActionKind {
     ConfigChanged,
     ProjectAdded,
     ProjectRemoved,
+    DraftCreated,
+    DraftApproved,
+    DraftEdited,
+    DraftRejected,
 }
 
 /// Action result for audit log
@@ -1034,10 +1038,10 @@ fn migrate_v15_to_v16(conn: &mut Connection) -> Result<()> {
 fn migrate_v16_to_v17(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.6.0 → 1.7.0: Adding audit trail columns to actions");
 
-    conn.execute("ALTER TABLE actions ADD COLUMN error TEXT", [],)?;
-    conn.execute("ALTER TABLE actions ADD COLUMN source TEXT", [],)?;
-    conn.execute("ALTER TABLE actions ADD COLUMN stitch_id TEXT", [],)?;
-    conn.execute("ALTER TABLE actions ADD COLUMN args_hash TEXT", [],)?;
+    add_column_if_not_exists(conn, "actions", "error", "TEXT")?;
+    add_column_if_not_exists(conn, "actions", "source", "TEXT")?;
+    add_column_if_not_exists(conn, "actions", "stitch_id", "TEXT")?;
+    add_column_if_not_exists(conn, "actions", "args_hash", "TEXT")?;
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_actions_source ON actions(source)",
@@ -1045,6 +1049,19 @@ fn migrate_v16_to_v17(conn: &mut Connection) -> Result<()> {
     )?;
 
     update_schema_version(conn, "1.7.0")?;
+    Ok(())
+}
+
+/// Add a column to a table only if it doesn't already exist.
+fn add_column_if_not_exists(conn: &mut Connection, table: &str, column: &str, col_type: &str) -> Result<()> {
+    let exists: bool = conn.query_row(
+        &format!("SELECT COUNT(*) > 0 FROM pragma_table_info('{}') WHERE name = '{}'", table, column),
+        [],
+        |row| row.get(0),
+    )?;
+    if !exists {
+        conn.execute(&format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, col_type), [])?;
+    }
     Ok(())
 }
 
@@ -1903,15 +1920,15 @@ mod tests {
         let temp_file = NamedTempFile::new()?;
         let mut conn = Connection::open(temp_file.path())?;
 
-        // Create and migrate
+        // Create and migrate to current version
         create_schema(&mut conn)?;
         run_migrations(&mut conn, "0.1.0")?;
 
-        // Running migration again on 1.8.0 should be a no-op
-        run_migrations(&mut conn, "1.8.0")?;
+        // Running migration again on current version should be a no-op
+        run_migrations(&mut conn, SCHEMA_VERSION)?;
 
         let version = get_schema_version(&conn)?;
-        assert_eq!(version, "1.8.0");
+        assert_eq!(version, SCHEMA_VERSION);
 
         Ok(())
     }

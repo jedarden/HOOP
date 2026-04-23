@@ -179,9 +179,71 @@ export interface AccountCapacity {
   computed_at: string;
 }
 
+// Agent session event (mirrors backend AgentSessionEvent enum, serde tag = "type")
+export type AgentSessionEventData =
+  | { type: 'session_spawned'; session_id: string; adapter: string; model: string }
+  | { type: 'session_reattached'; session_id: string; adapter: string; model: string }
+  | { type: 'text_delta'; session_id: string; text: string }
+  | { type: 'tool_use'; session_id: string; id: string; name: string; input: unknown }
+  | { type: 'tool_result'; session_id: string; id: string; output: unknown; is_error: boolean }
+  | { type: 'turn_complete'; session_id: string; cost_usd: number; input_tokens: number; output_tokens: number }
+  | { type: 'session_archived'; session_id: string; reason: string }
+  | { type: 'error'; session_id: string; message: string };
+
+// Agent session status snapshot from backend
+export interface AgentSessionStatus {
+  active: boolean;
+  enabled: boolean;
+  session_id: string | null;
+  adapter: string | null;
+  model: string | null;
+  stitch_id: string | null;
+  cost_usd: number;
+  input_tokens: number;
+  output_tokens: number;
+  turn_count: number;
+  created_at: string | null;
+  last_activity_at: string | null;
+  age_secs: number | null;
+}
+
+// Tool call state during a live turn
+export interface AgentToolCallInProgress {
+  id: string;
+  name: string;
+  input: unknown;
+  output?: unknown;
+  is_error?: boolean;
+  status: 'pending' | 'complete';
+}
+
+// In-flight agent response — separate reactive atom for isolation (acceptance: in-flight isolation)
+export interface AgentInflight {
+  session_id: string;
+  text: string;
+  tool_calls: AgentToolCallInProgress[];
+  started_at: number;
+}
+
+// A finalized message in the operator↔agent chat pane
+export interface AgentChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  tool_calls?: AgentToolCallInProgress[];
+  timestamp: number;
+  session_id: string;
+  attachments?: string[];
+}
+
+// Agent chat scope — which project(s) are in context (empty = cross-project / all)
+export interface AgentChatScope {
+  projects: string[];
+}
+
 // WebSocket event from backend
 export interface WsEvent {
-  type: 'worker_update' | 'workers_snapshot' | 'beads_snapshot' | 'conversations_snapshot' | 'conversation_update' | 'streaming_content' | 'config_status' | 'projects_snapshot' | 'capacity_snapshot' | 'stitch_created';
+  type: 'worker_update' | 'workers_snapshot' | 'beads_snapshot' | 'conversations_snapshot' | 'conversation_update' | 'streaming_content' | 'config_status' | 'projects_snapshot' | 'capacity_snapshot' | 'stitch_created' | 'agent_session';
   worker?: WorkerData;
   workers?: WorkerData[];
   beads?: BeadData[];
@@ -192,6 +254,7 @@ export interface WsEvent {
   config_status?: ConfigStatus;
   capacity?: AccountCapacity[];
   stitch_created?: StitchCreatedData;
+  agent_session?: AgentSessionEventData;
 }
 
 // Cost bucket from backend aggregation
@@ -263,6 +326,12 @@ export const capacityAtom = atom<AccountCapacity[]>([]);
 export const costBucketsAtom = atom<CostBucket[]>([]);
 export const dictatedNotesAtom = atom<Map<string, NoteSummary[]>>(new Map()); // project -> notes
 export const stitchCreatedAtom = atom<StitchCreatedData[]>([]);
+
+// Agent chat atoms
+export const agentSessionStatusAtom = atom<AgentSessionStatus | null>(null);
+export const agentInflightAtom = atom<AgentInflight | null>(null);
+export const agentChatMessagesAtom = atom<AgentChatMessage[]>([]);
+export const agentChatScopeAtom = atom<AgentChatScope>({ projects: [] });
 
 // Format content for display (handles string and object content)
 export function formatContent(content: string | { [key: string]: any } | null): string {
