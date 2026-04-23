@@ -21,7 +21,7 @@ use tracing::info;
 use uuid::Uuid;
 
 /// Current schema version
-const SCHEMA_VERSION: &str = "1.6.0";
+const SCHEMA_VERSION: &str = "1.7.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -91,6 +91,9 @@ pub struct AuditRow {
     pub args_json: Option<String>,
     pub result: ActionResult,
     pub error: Option<String>,
+    pub source: Option<String>,
+    pub stitch_id: Option<String>,
+    pub args_hash: Option<String>,
     pub hash_prev: String,
     pub hash_self: String,
 }
@@ -109,6 +112,9 @@ pub fn write_audit_row(
     args_json: Option<String>,
     result: ActionResult,
     error: Option<String>,
+    source: Option<&str>,
+    stitch_id: Option<&str>,
+    args_hash: Option<&str>,
 ) -> Result<AuditRow> {
     let id = Uuid::new_v4().to_string();
     let ts = Utc::now().to_rfc3339();
@@ -135,11 +141,12 @@ pub fn write_audit_row(
     // Insert the audit row
     conn.execute(
         r#"
-        INSERT INTO actions (id, ts, actor, kind, target, project, args_json, result, hash_prev, hash_self)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO actions (id, ts, actor, kind, target, project, args_json, result, error, source, stitch_id, args_hash, hash_prev, hash_self)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
         params![
-            id, ts, actor, kind_str, target, project, args_json, result_str, hash_prev, hash_self
+            id, ts, actor, kind_str, target, project, args_json, result_str,
+            error, source, stitch_id, args_hash, hash_prev, hash_self
         ],
     )?;
 
@@ -153,6 +160,9 @@ pub fn write_audit_row(
         args_json,
         result,
         error,
+        source: source.map(|s| s.to_string()),
+        stitch_id: stitch_id.map(|s| s.to_string()),
+        args_hash: args_hash.map(|s| s.to_string()),
         hash_prev,
         hash_self,
     })
@@ -168,7 +178,9 @@ pub fn query_audit_rows(
     let path = db_path();
     let conn = Connection::open(&path)?;
 
-    let mut query = String::from("SELECT id, ts, actor, kind, target, project, args_json, result, hash_prev, hash_self FROM actions WHERE 1=1");
+    let mut query = String::from(
+        "SELECT id, ts, actor, kind, target, project, args_json, result, error, source, stitch_id, args_hash, hash_prev, hash_self FROM actions WHERE 1=1"
+    );
     let mut params: Vec<String> = vec![];
 
     if let Some(project) = project_filter {
@@ -211,9 +223,12 @@ pub fn query_audit_rows(
             project: row.get(5)?,
             args_json: row.get(6)?,
             result,
-            error: None, // Error not stored separately in current schema
-            hash_prev: row.get(8)?,
-            hash_self: row.get(9)?,
+            error: row.get(8)?,
+            source: row.get(9)?,
+            stitch_id: row.get(10)?,
+            args_hash: row.get(11)?,
+            hash_prev: row.get(12)?,
+            hash_self: row.get(13)?,
         })
     })?;
 
@@ -358,6 +373,10 @@ fn create_schema(conn: &mut Connection) -> Result<()> {
             project TEXT,
             args_json TEXT,
             result TEXT,
+            error TEXT,
+            source TEXT,
+            stitch_id TEXT,
+            args_hash TEXT,
             hash_prev TEXT NOT NULL,
             hash_self TEXT NOT NULL
         )
@@ -426,18 +445,20 @@ fn insert_genesis_row(conn: &mut Connection) -> Result<()> {
 
     // Compute hash of this row's content
     let hash_input = format!(
-        "{}{}{}{}{}{:?}{}{}",
-        id, ts, actor, kind, target, project, args_json.as_deref().unwrap_or_default(), result
+        "{}{}{}{}{}{:?}{}",
+        id, ts, actor, kind, target, project, args_json.as_deref().unwrap_or_default()
     );
     let hash_self = hex_encode(sha256(hash_input.as_bytes()));
 
     conn.execute(
         r#"
-        INSERT INTO actions (id, ts, actor, kind, target, project, args_json, result, hash_prev, hash_self)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO actions (id, ts, actor, kind, target, project, args_json, result, error, source, stitch_id, args_hash, hash_prev, hash_self)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
         params![
-            id, ts, actor, kind, target, project, args_json, result, hash_prev, hash_self
+            id, ts, actor, kind, target, project, args_json, result,
+            None::<String>, None::<String>, None::<String>, None::<String>,
+            hash_prev, hash_self
         ],
     )?;
 
@@ -490,6 +511,8 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v14_to_v15(conn)?;
             // Fall through to 1.6.0
             migrate_v15_to_v16(conn)?;
+            // Fall through to 1.7.0
+            migrate_v16_to_v17(conn)?;
         }
         "1.1.0" => {
             migrate_v11_to_v12(conn)?;
@@ -497,31 +520,39 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v13_to_v14(conn)?;
             migrate_v14_to_v15(conn)?;
             migrate_v15_to_v16(conn)?;
+            migrate_v16_to_v17(conn)?;
         }
         "1.2.0" => {
             migrate_v12_to_v13(conn)?;
             migrate_v13_to_v14(conn)?;
             migrate_v14_to_v15(conn)?;
             migrate_v15_to_v16(conn)?;
+            migrate_v16_to_v17(conn)?;
         }
         "1.3.0" => {
             migrate_v13_to_v14(conn)?;
             migrate_v14_to_v15(conn)?;
             migrate_v15_to_v16(conn)?;
+            migrate_v16_to_v17(conn)?;
         }
         "1.4.0" => {
             migrate_v14_to_v15(conn)?;
             migrate_v15_to_v16(conn)?;
+            migrate_v16_to_v17(conn)?;
         }
         "1.5.0" => {
             migrate_v15_to_v16(conn)?;
+            migrate_v16_to_v17(conn)?;
         }
         "1.6.0" => {
-            info!("Already at schema version 1.6.0, no migrations needed");
+            migrate_v16_to_v17(conn)?;
+        }
+        "1.7.0" => {
+            info!("Already at schema version 1.7.0, no migrations needed");
         }
         _ => {
             return Err(anyhow::anyhow!(
-                "Unsupported schema version: {}. Expected 0.1.0–1.6.0",
+                "Unsupported schema version: {}. Expected 0.1.0–1.7.0",
                 from_version
             ));
         }
@@ -659,6 +690,7 @@ fn migrate_v01_to_v11(conn: &mut Connection) -> Result<()> {
     )?;
 
     info!("Stitch service tables created successfully");
+    update_schema_version(conn, "1.1.0")?;
     Ok(())
 }
 
@@ -800,6 +832,7 @@ fn migrate_v11_to_v12(conn: &mut Connection) -> Result<()> {
     )?;
 
     info!("Pattern service tables created successfully");
+    update_schema_version(conn, "1.2.0")?;
     Ok(())
 }
 
@@ -836,6 +869,7 @@ fn migrate_v12_to_v13(conn: &mut Connection) -> Result<()> {
     )?;
 
     info!("dictated_notes table created successfully");
+    update_schema_version(conn, "1.3.0")?;
     Ok(())
 }
 
@@ -853,6 +887,7 @@ fn migrate_v13_to_v14(conn: &mut Connection) -> Result<()> {
     )?;
 
     info!("transcript_words column added successfully");
+    update_schema_version(conn, "1.4.0")?;
     Ok(())
 }
 
@@ -897,6 +932,7 @@ fn migrate_v14_to_v15(conn: &mut Connection) -> Result<()> {
     )?;
 
     info!("transcription_jobs table created successfully");
+    update_schema_version(conn, "1.5.0")?;
     Ok(())
 }
 
@@ -912,7 +948,30 @@ fn migrate_v15_to_v16(conn: &mut Connection) -> Result<()> {
         [],
     )?;
 
-    info!("transcription_status column added successfully");
+    update_schema_version(conn, "1.6.0")?;
+    Ok(())
+}
+
+/// Migration 1.6.0 → 1.7.0: Add audit trail columns to actions table
+///
+/// Adds error, source, stitch_id, and args_hash columns for queryable audit
+/// trail per §5.2 / §13. The source field tracks form/chat/bulk/template,
+/// stitch_id links to the originating Stitch, and args_hash provides a
+/// quick integrity checksum of the serialized args.
+fn migrate_v16_to_v17(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.6.0 → 1.7.0: Adding audit trail columns to actions");
+
+    conn.execute("ALTER TABLE actions ADD COLUMN error TEXT", [],)?;
+    conn.execute("ALTER TABLE actions ADD COLUMN source TEXT", [],)?;
+    conn.execute("ALTER TABLE actions ADD COLUMN stitch_id TEXT", [],)?;
+    conn.execute("ALTER TABLE actions ADD COLUMN args_hash TEXT", [],)?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_actions_source ON actions(source)",
+        [],
+    )?;
+
+    update_schema_version(conn, "1.7.0")?;
     Ok(())
 }
 
@@ -960,9 +1019,9 @@ mod tests {
         )?;
         assert_eq!(table_count, 2);
 
-        // Verify schema version
+        // Verify schema version (create_schema stores the initial version)
         let version = get_schema_version(&conn)?;
-        assert_eq!(version, SCHEMA_VERSION);
+        assert_eq!(version, INITIAL_SCHEMA_VERSION);
 
         Ok(())
     }
@@ -1009,7 +1068,7 @@ mod tests {
 
         // Verify new version
         let version = get_schema_version(&conn)?;
-        assert_eq!(version, "1.3.0");
+        assert_eq!(version, SCHEMA_VERSION);
 
         // Verify all Stitch tables exist
         let tables = [

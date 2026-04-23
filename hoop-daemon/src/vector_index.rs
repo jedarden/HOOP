@@ -81,7 +81,7 @@ impl VectorIndex {
         self.entries = items
             .into_iter()
             .map(|item| {
-                let text = format!("{} {}", item.title, item.kind);
+                let text = item.title.clone();
                 let embedding = self.embedder.embed(&text);
                 IndexEntry { item, embedding }
             })
@@ -90,7 +90,7 @@ impl VectorIndex {
 
     /// Add a single item to the index
     pub fn add(&mut self, item: IndexedItem) {
-        let text = format!("{} {}", item.title, item.kind);
+        let text = item.title.clone();
         let embedding = self.embedder.embed(&text);
         self.entries.push(IndexEntry { item, embedding });
     }

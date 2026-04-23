@@ -758,6 +758,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
     let registry = state.worker_registry.clone();
     let mut monitor_rx = registry.subscribe();
     let mut bead_rx = state.bead_tx.subscribe();
+    let mut stitch_rx = state.stitch_tx.subscribe();
     let _session_rx = registry.subscribe_sessions();
     let mut config_status_rx = state.config_status_tx.subscribe();
     let mut project_status_rx = state.project_status_tx.subscribe();
@@ -932,6 +933,16 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     });
 
+    // Spawn task to forward stitch_created events to the WebSocket
+    let ws_tx_stitch = ws_tx.clone();
+    let stitch_task = tokio::spawn(async move {
+        while let Ok(stitch_data) = stitch_rx.recv().await {
+            if let Ok(json) = serde_json::to_string(&WsEvent::stitch_created(stitch_data)) {
+                let _ = ws_tx_stitch.send(json).await;
+            }
+        }
+    });
+
     // Spawn task to forward session events to the WebSocket
     let _registry_for_sessions = registry.clone();
     let session_task = tokio::spawn(async move {
@@ -1026,6 +1037,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         _ = forwarder_task => {},
         _ = monitor_task => {},
         _ = bead_task => {},
+        _ = stitch_task => {},
         _ = session_task => {},
         _ = config_task => {},
         _ = project_task => {},

@@ -33,6 +33,14 @@ pub struct AuditResponse {
     pub total_count: usize,
 }
 
+/// Response for hash chain verification
+#[derive(Debug, Serialize)]
+pub struct HashChainVerifyResponse {
+    pub valid: bool,
+    pub message: String,
+    pub row_count: usize,
+}
+
 /// Audit row for API responses (matches frontend types)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditRow {
@@ -83,7 +91,9 @@ impl From<FleetAuditRow> for AuditRow {
 }
 
 pub fn router() -> axum::Router<crate::DaemonState> {
-    axum::Router::new().route("/api/audit", get(query_audit))
+    axum::Router::new()
+        .route("/api/audit", get(query_audit))
+        .route("/api/audit/verify", get(verify_hash_chain))
 }
 
 /// GET /api/audit — query audit log
@@ -138,4 +148,37 @@ async fn query_audit(
         audit_rows,
         total_count: total_rows,
     }))
+}
+
+/// GET /api/audit/verify — verify hash chain integrity
+async fn verify_hash_chain() -> Result<Json<HashChainVerifyResponse>, (StatusCode, String)> {
+    match fleet::verify_hash_chain() {
+        Ok(()) => {
+            // Get row count
+            let rows = fleet::query_audit_rows(None, None, None, None).map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to query audit rows: {}", e),
+                )
+            })?;
+
+            Ok(Json(HashChainVerifyResponse {
+                valid: true,
+                message: "Hash chain is valid".to_string(),
+                row_count: rows.len(),
+            }))
+        }
+        Err(e) => {
+            // Get row count even if verification failed
+            let row_count = fleet::query_audit_rows(None, None, None, None)
+                .map(|r| r.len())
+                .unwrap_or(0);
+
+            Ok(Json(HashChainVerifyResponse {
+                valid: false,
+                message: format!("Hash chain verification failed: {}", e),
+                row_count,
+            }))
+        }
+    }
 }

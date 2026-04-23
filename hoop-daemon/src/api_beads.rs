@@ -7,7 +7,9 @@
 //!
 //! Submit flow: draft → validate → dedup check → br create → audit → WS event → response
 
-use crate::br_verbs::{invoke_br_create, invoke_br_read, ReadVerb};
+use crate::br_verbs::{invoke_br_read, ReadVerb};
+#[cfg(not(feature = "zero-write-v01"))]
+use crate::br_verbs::invoke_br_create;
 use crate::fleet::{self, ActionKind, ActionResult, BeadActionArgs, BeadSource};
 use crate::ws::StitchCreatedData;
 use axum::{

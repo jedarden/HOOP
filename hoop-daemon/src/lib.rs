@@ -5,10 +5,13 @@
 //! Its only write is `br create` for bead creation.
 
 pub mod adb_dictate;
+pub mod agent_adapter;
 pub mod api_attachments;
 pub mod api_audit;
 pub mod api_beads;
 pub mod api_dictated_notes;
+pub mod api_preview;
+pub mod api_stitch_decompose;
 pub mod api_transcription;
 pub mod api_uploads;
 pub mod attachments;
@@ -27,11 +30,17 @@ pub mod projects;
 pub mod sessions;
 pub mod shutdown;
 pub mod stitch_status;
+pub mod stitch_decompose;
 pub mod supervisor;
 pub mod tag_join;
 pub mod transcription;
 pub mod uploads;
 pub mod ws;
+pub mod similarity;
+pub mod predictor;
+pub mod risk_patterns;
+pub mod embedding;
+pub mod vector_index;
 
 /// Worker execution state from heartbeats
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -177,6 +186,8 @@ pub struct DaemonState {
     pub worker_registry: Arc<ws::WorkerRegistry>,
     pub beads: Arc<std::sync::RwLock<Vec<Bead>>>,
     pub bead_tx: broadcast::Sender<ws::BeadData>,
+    /// Broadcast channel for stitch_created events sent to WS clients
+    pub stitch_tx: broadcast::Sender<ws::StitchCreatedData>,
     pub shutdown: Arc<ShutdownCoordinator>,
     pub supervisor: Arc<supervisor::ProjectSupervisor>,
     pub projects: Arc<std::sync::RwLock<Vec<ws::ProjectCardData>>>,
@@ -190,6 +201,8 @@ pub struct DaemonState {
     /// The project currently focused in the UI, used by the ADB dictation endpoint
     /// to associate notes without requiring an explicit ?project= query parameter.
     pub active_project: Arc<std::sync::RwLock<Option<String>>>,
+    /// Vector index for semantic pre-dedup at draft time
+    pub vector_index: Arc<std::sync::RwLock<vector_index::VectorIndex>>,
 }
 
 /// Health check endpoint handler
@@ -311,6 +324,8 @@ pub fn router() -> Router<DaemonState> {
         .merge(adb_dictate::router())
         .merge(api_audit::router())
         .merge(api_beads::router())
+        .merge(api_preview::router())
+        .merge(api_stitch_decompose::router())
         .nest_service("/assets", AssetsHandler::router())
         .fallback_service(AssetsHandler::router())
         .layer(TraceLayer::new_for_http())
@@ -477,6 +492,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
 
     // Initialize bead event broadcast channel
     let (bead_tx, _) = broadcast::channel::<ws::BeadData>(256);
+
+    // Initialize stitch_created event broadcast channel
+    let (stitch_tx, _) = broadcast::channel::<ws::StitchCreatedData>(256);
 
     // Initialize config status broadcast channel
     let (config_status_tx, _) = broadcast::channel::<ws::ConfigStatusData>(64);
@@ -743,12 +761,23 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         })
         .collect();
 
+    // Initialize vector index for semantic pre-dedup
+    let vector_index = Arc::new(std::sync::RwLock::new(vector_index::VectorIndex::new()));
+    {
+        let beads_guard = beads.read().unwrap();
+        let projects_guard = initial_projects.clone();
+        let items = vector_index::build_index_from_state(&beads_guard, &projects_guard);
+        vector_index.write().unwrap().rebuild(items);
+    }
+    info!("Vector index initialized for semantic pre-dedup");
+
     let state = DaemonState {
         config: config.clone(),
         started_at: Instant::now(),
         worker_registry,
         beads,
         bead_tx,
+        stitch_tx,
         shutdown: shutdown_coordinator.clone(),
         supervisor,
         projects: Arc::new(std::sync::RwLock::new(initial_projects)),
@@ -760,6 +789,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         transcription_service: Some(transcription_service),
         upload_registry,
         active_project: Arc::new(std::sync::RwLock::new(None)),
+        vector_index,
     };
 
     // Forward project runtime status updates to shared store and broadcast
@@ -821,8 +851,10 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         let meta_ref = project_metadata.clone();
         let projects_ref = state.projects.clone();
         let status_ref = state.project_status_tx.clone();
+        let vindex_ref = state.vector_index.clone();
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(5));
+            let mut vindex_counter: u32 = 0;
             loop {
                 interval.tick().await;
                 let runtime_statuses = supervisor_ref.snapshot().await;
@@ -857,6 +889,14 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         }
                     })
                     .collect();
+
+                // Rebuild vector index every 30s (6th tick of the 5s interval)
+                vindex_counter += 1;
+                if vindex_counter >= 6 {
+                    vindex_counter = 0;
+                    let items = vector_index::build_index_from_state(&all_beads, &new_cards);
+                    vindex_ref.write().unwrap().rebuild(items);
+                }
 
                 *projects_ref.write().unwrap() = new_cards.clone();
                 for card in new_cards {

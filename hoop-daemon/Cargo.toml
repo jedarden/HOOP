@@ -6,6 +6,7 @@ edition.workspace = true
 [features]
 default = []
 zero-write-v01 = []
+create-only-write = []
 
 [dependencies]
 anyhow = "1.0"
@@ -36,6 +37,7 @@ hex = "0.4"
 ignore = "0.4"
 base64 = "0.22"
 infer = "0.15"
+reqwest = { version = "0.12", default-features = false, features = ["stream", "rustls-tls"] }
 
 [dev-dependencies]
 tempfile = "3"

@@ -9,6 +9,8 @@
 
 use crate::br_verbs::invoke_br_create;
 use crate::fleet::{self, ActionKind, ActionResult, BeadActionArgs};
+use crate::predictor::{predict_stitch, HistoricalStitch};
+use crate::risk_patterns::{FixLineageLibrary, default_risk_patterns};
 use crate::stitch_decompose::{
     self, apply_override, decompose, BeadGraph, GraphOverride, StitchIntent,
 };
@@ -44,6 +46,87 @@ pub struct DecomposePreviewResponse {
     pub graph: BeadGraph,
     pub rule_name: String,
     pub bead_count: usize,
+    /// Potential duplicates found during dedup check
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dedup_matches: Option<Vec<DedupMatchRef>>,
+    /// "What Will This Take?" preview data (cost, duration, risks, etc.)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preview: Option<StitchPreviewData>,
+}
+
+/// "What Will This Take?" preview data for a Stitch
+#[derive(Debug, Serialize)]
+pub struct StitchPreviewData {
+    pub prediction: Option<PredictionData>,
+    pub risk_patterns: Vec<RiskPatternMatch>,
+    pub file_conflicts: Vec<FileConflict>,
+    pub similar_stitches: Vec<SimilarStitchRef>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PredictionData {
+    pub cost: PercentileEstimate,
+    pub duration: PercentileEstimate,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub likely_adapter_model: Option<String>,
+    pub similar_count: usize,
+    pub data_range: DateRange,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PercentileEstimate {
+    pub p50: f64,
+    pub p90: f64,
+    pub count: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DateRange {
+    pub start: String,
+    pub end: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RiskPatternMatch {
+    pub pattern: RiskPatternInfo,
+    pub confidence: f64,
+    pub matched_keywords: Vec<String>,
+    pub matched_labels: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RiskPatternInfo {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub fix_recommendation: String,
+    pub severity: String,
+    pub category: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FileConflict {
+    pub bead_id: String,
+    pub title: String,
+    pub project: String,
+    pub overlapping_files: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SimilarStitchRef {
+    pub id: String,
+    pub title: String,
+    pub similarity: f64,
+}
+
+/// A dedup match found during stitch preview/submit
+#[derive(Debug, Serialize, Clone)]
+pub struct DedupMatchRef {
+    pub id: String,
+    pub project: String,
+    pub title: String,
+    pub kind: String,
+    pub similarity: f64,
 }
 
 /// Request to submit a decomposed Stitch (possibly with overrides)
@@ -62,6 +145,9 @@ pub struct StitchSubmitRequest {
     pub source: String,
     /// Stitch ID to associate beads with (auto-generated if not provided)
     pub stitch_id: Option<String>,
+    /// If true, bypass the dedup check and create anyway
+    #[serde(default)]
+    pub force_create: bool,
 }
 
 /// Response after submitting a decomposed Stitch
@@ -111,8 +197,8 @@ async fn preview_decompose(
     let config = stitch_decompose::load_config_from_file();
     let intent = StitchIntent {
         kind: req.kind,
-        title: req.title,
-        description: req.description,
+        title: req.title.clone(),
+        description: req.description.clone(),
         has_acceptance_criteria: req.has_acceptance_criteria.unwrap_or(false),
         project,
         priority: req.priority,
@@ -122,10 +208,26 @@ async fn preview_decompose(
     let graph = decompose(&config.rules, &intent)
         .ok_or_else(|| (StatusCode::BAD_REQUEST, format!("No decomposition rule matches kind '{}'", intent.kind)))?;
 
+    // Check for potential duplicates across all projects
+    let index = state.vector_index.read().unwrap();
+    let dedup_matches = index.check_duplicate(&req.title, req.description.as_deref());
+    let dedup_refs = if dedup_matches.is_empty() {
+        None
+    } else {
+        Some(dedup_matches.into_iter().map(|m| DedupMatchRef {
+            id: m.item.id,
+            project: m.item.project,
+            title: m.item.title,
+            kind: m.item.kind,
+            similarity: m.similarity,
+        }).collect())
+    };
+
     Ok(Json(DecomposePreviewResponse {
         rule_name: graph.rule_name.clone(),
         bead_count: graph.beads.len(),
         graph,
+        dedup_matches: dedup_refs,
     }))
 }
 
@@ -133,11 +235,12 @@ async fn preview_decompose(
 ///
 /// Full submit flow:
 /// 1. Validate draft against schema
-/// 2. Decompose into bead payloads via Stitch decomposition service
-/// 3. Execute `br create` with `stitch:<stitch-id>` label for each bead
-/// 4. Insert audit row with actor + source
-/// 5. Emit `stitch_created` event on WS
-/// 6. Return response with created bead IDs
+/// 2. Check for potential duplicates (unless force_create is true)
+/// 3. Decompose into bead payloads via Stitch decomposition service
+/// 4. Execute `br create` with `stitch:<stitch-id>` label for each bead
+/// 5. Insert audit row with actor + source
+/// 6. Emit `stitch_created` event on WS
+/// 7. Return response with created bead IDs
 ///
 /// On partial failure, previously created beads are closed and audit rows are voided.
 async fn submit_stitch(
@@ -148,6 +251,35 @@ async fn submit_stitch(
 ) -> Result<Json<StitchSubmitResponse>, (StatusCode, String)> {
     // 1. Validate draft against schema
     validate_stitch_draft(&req)?;
+
+    // 2. Check for potential duplicates (unless force_create is true)
+    if !req.force_create {
+        let index = state.vector_index.read().unwrap();
+        let dedup_matches = index.check_duplicate(&req.title, req.description.as_deref());
+        if !dedup_matches.is_empty() {
+            let best = &dedup_matches[0];
+            let message = format!(
+                "This looks like `{}/{}` ({}), which is in progress. Continue that, add this as a child, or proceed as new?",
+                best.item.project,
+                best.item.id,
+                best.item.title
+            );
+            // Return the matches as JSON with a 409 Conflict status
+            let matches_json = serde_json::to_value(&dedup_matches.iter().map(|m| DedupMatchRef {
+                id: m.item.id.clone(),
+                project: m.item.project.clone(),
+                title: m.item.title.clone(),
+                kind: m.item.kind.clone(),
+                similarity: m.similarity,
+            }).collect::<Vec<_>>()).unwrap_or(serde_json::Value::Null);
+            let error_json = serde_json::json!({
+                "message": message,
+                "dedup_matches": matches_json,
+                "threshold": index.threshold(),
+            });
+            return Err((StatusCode::CONFLICT, error_json.to_string()));
+        }
+    }
 
     let project_path = resolve_project_path(&project, &state)?;
 
@@ -540,6 +672,7 @@ mod tests {
             override_: None,
             source: "form".to_string(),
             stitch_id: None,
+            force_create: false,
         };
         assert!(validate_stitch_draft(&req).is_ok());
     }
@@ -556,6 +689,7 @@ mod tests {
             override_: None,
             source: String::new(),
             stitch_id: None,
+            force_create: false,
         };
         let result = validate_stitch_draft(&req);
         assert!(result.is_err());
@@ -576,6 +710,7 @@ mod tests {
             override_: None,
             source: String::new(),
             stitch_id: None,
+            force_create: false,
         };
         let result = validate_stitch_draft(&req);
         assert!(result.is_err());
@@ -596,6 +731,7 @@ mod tests {
             override_: None,
             source: String::new(),
             stitch_id: None,
+            force_create: false,
         };
         let result = validate_stitch_draft(&req);
         assert!(result.is_err());
@@ -615,6 +751,7 @@ mod tests {
             override_: None,
             source: "invalid".to_string(),
             stitch_id: None,
+            force_create: false,
         };
         let result = validate_stitch_draft(&req);
         assert!(result.is_err());
@@ -634,6 +771,7 @@ mod tests {
             override_: None,
             source: "template:bug-fix".to_string(),
             stitch_id: None,
+            force_create: false,
         };
         assert!(validate_stitch_draft(&req).is_ok());
     }
