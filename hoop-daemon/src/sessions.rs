@@ -1,6 +1,6 @@
 //! Session tailer for CLI sessions
 //!
-//! Discovers and parses `.jsonl` session files from CLI providers (Claude Code, Codex, etc.).
+//! Discovers and parses `.jsonl` session files from CLI providers (Claude Code, Codex, OpenCode, Gemini, Aider).
 //! Two-phase discovery: stat everything + sort by mtime, then parse in parallel.
 //! 5-second background poll detects external edits.
 //! Bootstrap interceptor aliases newly-found files back to existing session IDs.
@@ -8,6 +8,9 @@
 //!
 //! Per-project runtime (plan §4.3): each project gets its own session tailer
 //! scoped to sessions whose cwd is under the project path.
+//!
+//! Multi-adapter support: each adapter implements SessionAdapter trait for
+//! discovery and parsing of its session file format.
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
@@ -133,6 +136,203 @@ struct DiscoveredFile {
     size: u64,
 }
 
+/// Adapter name for session discovery
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AdapterName {
+    Claude,
+    Codex,
+    OpenCode,
+    Gemini,
+    Aider,
+}
+
+impl AdapterName {
+    /// Get the adapter name as a static string
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Claude => "claude",
+            Self::Codex => "codex",
+            Self::OpenCode => "opencode",
+            Self::Gemini => "gemini",
+            Self::Aider => "aider",
+        }
+    }
+
+    /// Parse from string
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "claude" => Some(Self::Claude),
+            "codex" => Some(Self::Codex),
+            "opencode" => Some(Self::OpenCode),
+            "gemini" => Some(Self::Gemini),
+            "aider" => Some(Self::Aider),
+            _ => None,
+        }
+    }
+}
+
+/// Result of parsing a session file
+#[derive(Debug)]
+struct ParsedSessionFile {
+    /// Path to the session file
+    path: PathBuf,
+    /// Parsed session data (if successful)
+    session: Option<ParsedSession>,
+    /// Error message (if parsing failed)
+    error: Option<String>,
+}
+
+/// Trait for adapter-specific session discovery and parsing
+trait SessionAdapter: Send + Sync {
+    /// Get the adapter name
+    fn name(&self) -> AdapterName;
+
+    /// Get the default session directory for this adapter
+    fn default_session_dir(&self) -> PathBuf;
+
+    /// Discover session files for this adapter
+    fn discover_sessions(&self, project_path: Option<&Path>) -> Vec<DiscoveredFile>;
+
+    /// Parse a single session file
+    fn parse_session_file(&self, path: &Path, project_path: Option<&Path>) -> Result<Option<ParsedSession>>;
+}
+
+/// Claude Code adapter - parses ~/.claude/projects/**/*.jsonl
+struct ClaudeAdapter;
+
+impl SessionAdapter for ClaudeAdapter {
+    fn name(&self) -> AdapterName {
+        AdapterName::Claude
+    }
+
+    fn default_session_dir(&self) -> PathBuf {
+        let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        home.push(".claude");
+        home.push("projects");
+        home
+    }
+
+    fn discover_sessions(&self, _project_path: Option<&Path>) -> Vec<DiscoveredFile> {
+        let mut discovered = Vec::new();
+        let dir = self.default_session_dir();
+        let _ = SessionTailer::scan_directory_recursive(&dir, &mut discovered);
+        discovered
+    }
+
+    fn parse_session_file(&self, path: &Path, project_path: Option<&Path>) -> Result<Option<ParsedSession>> {
+        SessionTailer::parse_claude_session_file(path, project_path)
+    }
+}
+
+/// Codex adapter - parses OpenAI Codex sessions with token_count events
+struct CodexAdapter;
+
+impl SessionAdapter for CodexAdapter {
+    fn name(&self) -> AdapterName {
+        AdapterName::Codex
+    }
+
+    fn default_session_dir(&self) -> PathBuf {
+        let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        home.push(".codex");
+        home.push("sessions");
+        home
+    }
+
+    fn discover_sessions(&self, _project_path: Option<&Path>) -> Vec<DiscoveredFile> {
+        let mut discovered = Vec::new();
+        let dir = self.default_session_dir();
+        let _ = SessionTailer::scan_directory_recursive(&dir, &mut discovered);
+        discovered
+    }
+
+    fn parse_session_file(&self, path: &Path, project_path: Option<&Path>) -> Result<Option<ParsedSession>> {
+        SessionTailer::parse_codex_session_file(path, project_path)
+    }
+}
+
+/// OpenCode adapter - parses OpenCode sessions with per-message tokens and cost
+struct OpenCodeAdapter;
+
+impl SessionAdapter for OpenCodeAdapter {
+    fn name(&self) -> AdapterName {
+        AdapterName::OpenCode
+    }
+
+    fn default_session_dir(&self) -> PathBuf {
+        let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        home.push(".opencode");
+        home.push("sessions");
+        home
+    }
+
+    fn discover_sessions(&self, _project_path: Option<&Path>) -> Vec<DiscoveredFile> {
+        let mut discovered = Vec::new();
+        let dir = self.default_session_dir();
+        let _ = SessionTailer::scan_directory_recursive(&dir, &mut discovered);
+        discovered
+    }
+
+    fn parse_session_file(&self, path: &Path, project_path: Option<&Path>) -> Result<Option<ParsedSession>> {
+        SessionTailer::parse_opencode_session_file(path, project_path)
+    }
+}
+
+/// Gemini adapter - parses Google Gemini CLI sessions with native usage fields
+struct GeminiAdapter;
+
+impl SessionAdapter for GeminiAdapter {
+    fn name(&self) -> AdapterName {
+        AdapterName::Gemini
+    }
+
+    fn default_session_dir(&self) -> PathBuf {
+        let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        home.push(".gemini");
+        home.push("sessions");
+        home
+    }
+
+    fn discover_sessions(&self, _project_path: Option<&Path>) -> Vec<DiscoveredFile> {
+        let mut discovered = Vec::new();
+        let dir = self.default_session_dir();
+        let _ = SessionTailer::scan_directory_recursive(&dir, &mut discovered);
+        discovered
+    }
+
+    fn parse_session_file(&self, path: &Path, project_path: Option<&Path>) -> Result<Option<ParsedSession>> {
+        SessionTailer::parse_gemini_session_file(path, project_path)
+    }
+}
+
+/// Aider adapter - parses Aider sessions (similar format to Claude)
+struct AiderAdapter;
+
+impl SessionAdapter for AiderAdapter {
+    fn name(&self) -> AdapterName {
+        AdapterName::Aider
+    }
+
+    fn default_session_dir(&self) -> PathBuf {
+        let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        home.push(".aider");
+        home.push("sessions");
+        home
+    }
+
+    fn discover_sessions(&self, _project_path: Option<&Path>) -> Vec<DiscoveredFile> {
+        let mut discovered = Vec::new();
+        let dir = self.default_session_dir();
+        let _ = SessionTailer::scan_directory_recursive(&dir, &mut discovered);
+        discovered
+    }
+
+    fn parse_session_file(&self, path: &Path, project_path: Option<&Path>) -> Result<Option<ParsedSession>> {
+        // Aider uses similar format to Claude, can use Claude parser
+        SessionTailer::parse_aider_session_file(path, project_path)
+    }
+}
+
 /// Session tailer configuration
 #[derive(Debug, Clone)]
 pub struct SessionTailerConfig {
@@ -144,6 +344,8 @@ pub struct SessionTailerConfig {
     pub discovery_concurrency: usize,
     /// Background poll interval (seconds)
     pub poll_interval_secs: u64,
+    /// Enabled adapters (if empty, all adapters are enabled)
+    pub enabled_adapters: Vec<AdapterName>,
 }
 
 impl Default for SessionTailerConfig {
@@ -156,6 +358,13 @@ impl Default for SessionTailerConfig {
             project_path: None,
             discovery_concurrency: 16,
             poll_interval_secs: 5,
+            enabled_adapters: vec![
+                AdapterName::Claude,
+                AdapterName::Codex,
+                AdapterName::OpenCode,
+                AdapterName::Gemini,
+                AdapterName::Aider,
+            ],
         }
     }
 }
@@ -171,6 +380,8 @@ struct SessionTailerState {
     bootstrap_matches: HashMap<(String, String), String>,
     /// Last discovery timestamp
     last_discovery: Option<DateTime<Utc>>,
+    /// Available session adapters
+    adapters: Vec<Box<dyn SessionAdapter>>,
 }
 
 impl Default for SessionTailerState {
@@ -180,6 +391,13 @@ impl Default for SessionTailerState {
             path_to_id: HashMap::new(),
             bootstrap_matches: HashMap::new(),
             last_discovery: None,
+            adapters: vec![
+                Box::new(ClaudeAdapter),
+                Box::new(CodexAdapter),
+                Box::new(OpenCodeAdapter),
+                Box::new(GeminiAdapter),
+                Box::new(AiderAdapter),
+            ],
         }
     }
 }
@@ -199,12 +417,35 @@ impl SessionTailer {
         let (event_tx, _) = broadcast::channel(256);
         let (shutdown_tx, _) = mpsc::channel(1);
 
+        // Build adapter list based on enabled_adapters config
+        let all_adapters: Vec<Box<dyn SessionAdapter>> = vec![
+            Box::new(ClaudeAdapter),
+            Box::new(CodexAdapter),
+            Box::new(OpenCodeAdapter),
+            Box::new(GeminiAdapter),
+            Box::new(AiderAdapter),
+        ];
+
+        let adapters = if config.enabled_adapters.is_empty() {
+            all_adapters
+        } else {
+            let enabled_set: std::collections::HashSet<_> =
+                config.enabled_adapters.iter().collect();
+            all_adapters
+                .into_iter()
+                .filter(|a| enabled_set.contains(&a.name()))
+                .collect()
+        };
+
+        let mut state = SessionTailerState::default();
+        state.adapters = adapters;
+
         Ok(Self {
             config,
             event_tx,
             watcher: None,
             _shutdown_tx: shutdown_tx,
-            state: Arc::new(Mutex::new(SessionTailerState::default())),
+            state: Arc::new(Mutex::new(state)),
         })
     }
 

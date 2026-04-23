@@ -251,7 +251,7 @@ impl ProjectSupervisor {
         let mut desired: HashMap<String, Vec<PathBuf>> = HashMap::new();
         for project in &config.registry.projects {
             let paths: Vec<PathBuf> = project.all_paths().map(|p| p.to_path_buf()).collect();
-            desired.insert(project.name.clone(), paths);
+            desired.insert(project.name().to_string(), paths);
         }
 
         // Remove runtimes that are no longer in config
@@ -276,7 +276,7 @@ impl ProjectSupervisor {
                     info!("Restarting runtime for project {} (workspaces changed)", name);
                     self.stop_runtime(runtime).await;
                     runtime.workspaces = paths.clone();
-                    self.start_runtime(runtime).await?;
+                    self.start_runtime(runtime)?;
                 }
             } else {
                 // Create new runtime
@@ -292,7 +292,7 @@ impl ProjectSupervisor {
                     bead_readers: Arc::new(std::sync::Mutex::new(Vec::new())),
                     bead_count: 0,
                 };
-                self.start_runtime(&mut runtime).await?;
+                self.start_runtime(&mut runtime)?;
                 runtimes.insert(name, runtime);
             }
         }
@@ -390,42 +390,6 @@ impl ProjectSupervisor {
                     error!("Project runtime failed: {} - error: {}", project_name_clone, e);
                     supervisor_clone.handle_failure(&project_name_clone, &e.to_string()).await;
                 }
-            }
-        });
-
-        // Spawn a monitor task to detect panics and unexpected termination
-        let project_name_monitor = project_name.clone();
-        let supervisor_monitor = supervisor.clone();
-        tokio::spawn(async move {
-            match task_handle.await {
-                Ok(()) => {
-                    // Graceful shutdown - already handled above
-                    debug!("Project runtime {} task completed gracefully", project_name_monitor);
-                }
-                Err(e) => {
-                    // JoinError indicates a panic or task cancellation
-                    let error_msg = if e.is_panic() {
-                        let panic_msg = e.into_panic();
-                        format!("Runtime panic: {}", panic_payload_to_string(&panic_msg))
-                    } else if e.is_cancelled() {
-                        "Runtime task cancelled".to_string()
-                    } else {
-                        format!("Runtime task aborted: {}", e)
-                    };
-                    error!("Project runtime {} task failed: {}", project_name_monitor, error_msg);
-                    supervisor_monitor.handle_failure(&project_name_monitor, &error_msg).await;
-                }
-            }
-        });
-
-        // Spawn a task to forward errors from spawned tasks to the main runtime
-        let project_name_for_error = project_name.clone();
-        let supervisor_for_error = supervisor.clone();
-        tokio::spawn(async move {
-            while let Some(error) = error_rx.recv().await {
-                error!("Project runtime {} child task error: {}", project_name_for_error, error);
-                // Forward to supervisor to trigger restart
-                supervisor_for_error.handle_failure(&project_name_for_error, &error.to_string()).await;
             }
         });
 

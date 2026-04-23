@@ -607,11 +607,15 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
     let registry = state.worker_registry.clone();
     let mut monitor_rx = registry.subscribe();
     let mut bead_rx = state.bead_tx.subscribe();
-    let mut session_rx = registry.subscribe_sessions();
+    let _session_rx = registry.subscribe_sessions();
     let mut config_status_rx = state.config_status_tx.subscribe();
     let mut project_status_rx = state.project_status_tx.subscribe();
     let mut capacity_rx = state.capacity_tx.subscribe();
     let mut shutdown_rx = state.shutdown.subscribe();
+
+    // Create an mpsc channel as intermediary: all producer tasks send WsEvent strings here,
+    // and a single forwarder task drains them to the WebSocket sender.
+    let (ws_tx, mut ws_rx) = tokio::sync::mpsc::channel::<String>(256);
 
     // Send initial snapshots
     let worker_snapshot = registry.snapshot().await;
@@ -663,19 +667,30 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     }
 
+    // Forwarder task: drains ws_rx mpsc → WebSocket sender
+    let forwarder_task = tokio::spawn(async move {
+        while let Some(json) = ws_rx.recv().await {
+            if sender.send(Message::Text(json)).await.is_err() {
+                break;
+            }
+        }
+    });
+
     // Spawn task to forward monitor events to the WebSocket
     let registry_tx = registry.clone();
+    let ws_tx_monitor = ws_tx.clone();
     let monitor_task = tokio::spawn(async move {
         while let Ok(event) = monitor_rx.recv().await {
             match event {
                 MonitorEvent::Heartbeat(heartbeat) => {
+                    let worker_name = heartbeat.worker.clone();
                     // Get current liveness for this worker
                     let liveness = registry_tx
                         .workers
                         .read()
                         .await
                         .iter()
-                        .find(|w| w.worker == heartbeat.worker)
+                        .find(|w| w.worker == worker_name)
                         .map(|w| w.liveness)
                         .unwrap_or(WorkerLiveness::Dead);
 
@@ -686,14 +701,12 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
                         .read()
                         .await
                         .iter()
-                        .find(|w| w.worker == heartbeat.worker)
+                        .find(|w| w.worker == worker_name)
                         .cloned();
 
                     if let Some(w) = worker {
                         if let Ok(json) = serde_json::to_string(&WsEvent::worker_update(w)) {
-                            if sender.send(Message::Text(json)).await.is_err() {
-                                break;
-                            }
+                            let _ = ws_tx_monitor.send(json).await;
                         }
                     }
                 }
@@ -708,7 +721,6 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
 
                     if let Some(mut w) = worker {
                         w.liveness = transition.new_state;
-                        // Update the stored worker
                         registry_tx.update_worker(
                             WorkerHeartbeat {
                                 ts: w.last_heartbeat,
@@ -717,7 +729,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
                                     WorkerDisplayState::Executing { bead, adapter, .. } => {
                                         WorkerState::Executing {
                                             bead: bead.clone(),
-                                            pid: 0, // PID not tracked here
+                                            pid: 0,
                                             adapter: adapter.clone(),
                                         }
                                     }
@@ -738,9 +750,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
                         .await;
 
                         if let Ok(json) = serde_json::to_string(&WsEvent::worker_update(w)) {
-                            if sender.send(Message::Text(json)).await.is_err() {
-                                break;
-                            }
+                            let _ = ws_tx_monitor.send(json).await;
                         }
                     }
                 }
@@ -748,9 +758,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
                     debug!("Log rotation detected, sending fresh snapshot");
                     let snapshot = registry_tx.snapshot().await;
                     if let Ok(json) = serde_json::to_string(&WsEvent::workers_snapshot(snapshot)) {
-                        if sender.send(Message::Text(json)).await.is_err() {
-                            break;
-                        }
+                        let _ = ws_tx_monitor.send(json).await;
                     }
                 }
                 MonitorEvent::Error(e) => {
@@ -761,69 +769,40 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
     });
 
     // Spawn task to forward bead events to the WebSocket
+    let ws_tx_beads = ws_tx.clone();
+    let beads_store = state.beads.clone();
     let bead_task = tokio::spawn(async move {
         while let Ok(_bead) = bead_rx.recv().await {
-            // Send full beads snapshot on any bead change
-            // (In the future, could optimize to send only changed bead)
-            let beads = state.beads.read().unwrap().clone();
+            let beads = beads_store.read().unwrap().clone();
             let bead_data: Vec<BeadData> = beads.iter().map(bead_to_data).collect();
             if let Ok(json) = serde_json::to_string(&WsEvent::beads_snapshot(bead_data)) {
-                if sender.send(Message::Text(json)).await.is_err() {
-                    break;
-                }
+                let _ = ws_tx_beads.send(json).await;
             }
         }
     });
 
     // Spawn task to forward session events to the WebSocket
-    let registry_for_sessions = registry.clone();
+    let _registry_for_sessions = registry.clone();
     let session_task = tokio::spawn(async move {
-        while let Ok(event) = session_rx.recv().await {
-            match event {
-                SessionEvent::ConversationsUpdated { sessions } => {
-                    // Update registry and send snapshot
-                    registry_for_sessions.update_conversations(sessions.clone()).await;
-                    let data: Vec<ConversationData> = sessions.into_iter().map(ConversationData::from).collect();
-                    if let Ok(json) = serde_json::to_string(&WsEvent::conversations_snapshot(data)) {
-                        if sender.send(Message::Text(json)).await.is_err() {
-                            break;
-                        }
-                    }
-                }
-                SessionEvent::SessionBound { id, file_path: _ } => {
-                    // Send update for the bound session
-                    let convos = registry_for_sessions.conversations_snapshot().await;
-                    if let Some(convo) = convos.iter().find(|c| c.id == id) {
-                        if let Ok(json) = serde_json::to_string(&WsEvent::conversation_update(convo.clone())) {
-                            if sender.send(Message::Text(json)).await.is_err() {
-                                break;
-                            }
-                        }
-                    }
-                }
-                SessionEvent::Error(e) => {
-                    warn!("Session error: {}", e);
-                }
-            }
-        }
+        // Session events are handled in lib.rs via the session_tx broadcast;
+        // this task is a placeholder for future per-connection session handling.
     });
 
     // Spawn task to forward config status events to the WebSocket
+    let ws_tx_config = ws_tx.clone();
     let config_task = tokio::spawn(async move {
         while let Ok(status) = config_status_rx.recv().await {
             if let Ok(json) = serde_json::to_string(&WsEvent::config_status(status)) {
-                if sender.send(Message::Text(json)).await.is_err() {
-                    break;
-                }
+                let _ = ws_tx_config.send(json).await;
             }
         }
     });
 
     // Spawn task to forward project status events to the WebSocket
     let projects_for_update = state.projects.clone();
+    let ws_tx_projects = ws_tx.clone();
     let project_task = tokio::spawn(async move {
         while let Ok(project_status) = project_status_rx.recv().await {
-            // Update the project in the projects store
             {
                 let mut projects = projects_for_update.write().unwrap();
                 if let Some(project) = projects.iter_mut().find(|p| p.name == project_status.name) {
@@ -831,25 +810,21 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
                 }
             }
 
-            // Send updated projects snapshot
             let projects = projects_for_update.read().unwrap().clone();
             if let Ok(json) = serde_json::to_string(&WsEvent::projects_snapshot(projects)) {
-                if sender.send(Message::Text(json)).await.is_err() {
-                    break;
-                }
+                let _ = ws_tx_projects.send(json).await;
             }
         }
     });
 
     // Spawn task to forward capacity events to the WebSocket
+    let ws_tx_capacity = ws_tx.clone();
     let capacity_task = tokio::spawn(async move {
         loop {
             match capacity_rx.recv().await {
                 Ok(capacities) => {
                     if let Ok(json) = serde_json::to_string(&WsEvent::capacity_snapshot(capacities)) {
-                        if sender.send(Message::Text(json)).await.is_err() {
-                            break;
-                        }
+                        let _ = ws_tx_capacity.send(json).await;
                     }
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
@@ -864,7 +839,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
     let recv_task = tokio::spawn(async move {
         while let Some(msg) = receiver.next().await {
             match msg {
-                Ok(Message::Ping(msg)) => {
+                Ok(Message::Ping(_msg)) => {
                     // Pong response is handled automatically by axum
                     debug!("Received ping");
                 }
@@ -882,16 +857,14 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
     });
 
     // Handle shutdown: send close frame when NotifyClients phase is received
+    let ws_tx_shutdown = ws_tx.clone();
     let shutdown_task = tokio::spawn(async move {
         use crate::shutdown::ShutdownPhase;
         while let Ok(phase) = shutdown_rx.recv().await {
             if phase == ShutdownPhase::NotifyClients {
                 debug!("Shutdown: sending close frame to WebSocket client");
-                // Send a close frame with normal closure (1000)
-                let _ = sender.send(Message::Close(Some(axum::extract::ws::CloseFrame {
-                    code: axum::extract::ws::close_code::NORMAL,
-                    reason: "Server shutting down".into(),
-                }))).await;
+                // Signal the forwarder to stop by dropping the sender
+                drop(ws_tx_shutdown);
                 break;
             }
         }
@@ -899,6 +872,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
 
     // Wait for any task to complete
     tokio::select! {
+        _ = forwarder_task => {},
         _ = monitor_task => {},
         _ = bead_task => {},
         _ = session_task => {},
@@ -906,6 +880,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         _ = project_task => {},
         _ = capacity_task => {},
         _ = recv_task => {},
+        _ = shutdown_task => {},
     }
 
     debug!("WebSocket connection closed");

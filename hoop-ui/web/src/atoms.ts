@@ -180,6 +180,16 @@ export interface WsEvent {
   capacity?: AccountCapacity[];
 }
 
+// Bead event from events.jsonl for debug panel
+export interface BeadEventFromEvents {
+  timestamp: string;
+  event_type: string;
+  bead_id: string;
+  worker: string;
+  line_number?: number;
+  raw: string;
+}
+
 // Atoms for state management
 export const conversationsAtom = atom<Conversation[]>([]);
 export const streamingContentAtom = atom<Map<string, StreamingContent>>(new Map());
@@ -189,6 +199,7 @@ export const projectCardsAtom = atom<ProjectCardData[]>([]);
 export const stitchesAtom = atom<Stitch[]>([]);
 export const workersAtom = atom<WorkerData[]>([]);
 export const beadsAtom = atom<BeadData[]>([]);
+export const beadEventsAtom = atom<Map<string, BeadEventFromEvents[]>>(new Map()); // bead_id -> events
 export const wsConnectedAtom = atom<boolean>(false);
 export const configStatusAtom = atom<ConfigStatus>({ valid: true });
 export const capacityAtom = atom<AccountCapacity[]>([]);
