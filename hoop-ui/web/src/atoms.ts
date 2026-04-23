@@ -44,6 +44,7 @@ export interface DictatedNote {
   duration_secs?: number | null;
   language?: string | null;
   recorded_at: string;
+  transcription_status: 'Pending' | 'Completed' | 'Failed';
 }
 
 // A single message in a session
@@ -226,9 +227,12 @@ export interface NoteSummary {
   language: string | null;
   tags: string[];
   transcript_preview: string;
+  /** Full transcript text for search indexing */
+  transcript: string;
   last_activity_at: string;
   created_at: string;
   audio_filename: string;
+  transcription_status: 'Pending' | 'Completed' | 'Failed';
 }
 
 // Atoms for state management

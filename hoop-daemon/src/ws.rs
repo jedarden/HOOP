@@ -4,8 +4,8 @@
 //! to connected web UI clients.
 
 use crate::heartbeats::{MonitorEvent, WorkerHeartbeat, WorkerLiveness};
-use crate::sessions::{SessionEvent, SessionTailer};
-use crate::{Bead, BeadStatus as DaemonBeadStatus, BeadType as DaemonBeadType, DaemonState, WorkerState};
+use crate::sessions::SessionEvent;
+use crate::{Bead, DaemonState, WorkerState};
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
@@ -41,6 +41,7 @@ pub struct DictatedNoteData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
     pub recorded_at: String,
+    pub transcription_status: String,
 }
 
 /// Worker data sent to the frontend
@@ -135,59 +136,62 @@ pub struct ConversationData {
     pub dictated_note: Option<DictatedNoteData>,
 }
 
-/// Load a DictatedNote JSON from ~/.hoop/attachments/<stitch_id>/dictated_note.json
+/// Load dictated note data from fleet.db for a stitch
 fn load_dictated_note(stitch_id: &str) -> Option<DictatedNoteData> {
-    let home = dirs::home_dir()?;
-    let note_path = home
-        .join(".hoop")
-        .join("attachments")
-        .join(stitch_id)
-        .join("dictated_note.json");
+    let db_path = crate::fleet::db_path();
+    let conn = rusqlite::Connection::open(&db_path).ok()?;
+    conn.pragma_update(None, "journal_mode", "WAL").ok()?;
 
-    let content = std::fs::read_to_string(&note_path).ok()?;
-    let json: serde_json::Value = serde_json::from_str(&content).ok()?;
-
-    let note_stitch_id = json.get("stitch_id")?.as_str()?.to_string();
-    let audio_filename = json.get("audio_filename")?.as_str()?.to_string();
-    let transcript = json.get("transcript")?.as_str()?.to_string();
-    let recorded_at = json.get("recorded_at")?.as_str()?.to_string();
-    let duration_secs = json.get("duration_secs").and_then(|v| v.as_f64());
-    let language = json
-        .get("language")
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string());
-
-    let transcript_words = json
-        .get("transcript_words")
-        .and_then(|v| v.as_array())
-        .map(|words| {
-            words
-                .iter()
-                .filter_map(|w| {
-                    Some(TranscriptWordData {
-                        word: w.get("word")?.as_str()?.to_string(),
-                        start: w.get("start")?.as_f64()?,
-                        end: w.get("end")?.as_f64()?,
-                    })
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let audio_url = format!(
-        "/api/attachments/stitch/{}/{}",
-        note_stitch_id, audio_filename
+    let result = conn.query_row(
+        r#"
+        SELECT dn.audio_filename, dn.transcript, dn.transcript_words,
+               dn.duration_secs, dn.language, dn.recorded_at,
+               COALESCE(dn.transcription_status, '"Pending"')
+        FROM dictated_notes dn
+        WHERE dn.stitch_id = ?1
+        "#,
+        rusqlite::params![stitch_id],
+        |row| {
+            let audio_filename: String = row.get(0)?;
+            let transcript: String = row.get(1)?;
+            let words_json: Option<String> = row.get(2)?;
+            let duration_secs: Option<f64> = row.get(3)?;
+            let language: Option<String> = row.get(4)?;
+            let recorded_at: String = row.get(5)?;
+            let status_str: String = row.get(6)?;
+            Ok((audio_filename, transcript, words_json, duration_secs, language, recorded_at, status_str))
+        },
     );
 
-    Some(DictatedNoteData {
-        stitch_id: note_stitch_id,
-        audio_url,
-        transcript,
-        transcript_words,
-        duration_secs,
-        language,
-        recorded_at,
-    })
+    match result {
+        Ok((audio_filename, transcript, words_json, duration_secs, language, recorded_at, status_str)) => {
+            let transcript_words: Vec<TranscriptWordData> = words_json
+                .and_then(|j| serde_json::from_str::<Vec<crate::dictated_notes::TranscriptWord>>(&j).ok())
+                .unwrap_or_default()
+                .into_iter()
+                .map(|w| TranscriptWordData { word: w.word, start: w.start, end: w.end })
+                .collect();
+
+            let audio_url = format!("/api/dictated-notes/{}/audio", stitch_id);
+            let transcription_status = match status_str.trim_matches('"') {
+                "Completed" => "Completed".to_string(),
+                "Failed" => "Failed".to_string(),
+                _ => "Pending".to_string(),
+            };
+
+            Some(DictatedNoteData {
+                stitch_id: stitch_id.to_string(),
+                audio_url,
+                transcript,
+                transcript_words,
+                duration_secs,
+                language,
+                recorded_at,
+                transcription_status,
+            })
+        }
+        Err(_) => None,
+    }
 }
 
 impl From<ParsedSession> for ConversationData {

@@ -369,8 +369,8 @@ impl ProjectSupervisor {
         let session_tx = self.session_tx.clone();
         let worker_registry = self.worker_registry.clone();
         let beads = self.beads.clone();
-        let runtimes = self.runtimes.clone();
-        let status_tx = self.status_tx.clone();
+        let _runtimes = self.runtimes.clone();
+        let _status_tx = self.status_tx.clone();
         let shutdown = self.shutdown.clone();
         let session_tailer = runtime.session_tailer.clone();
         let bead_readers = runtime.bead_readers.clone();
@@ -378,11 +378,11 @@ impl ProjectSupervisor {
         let supervisor = self.clone();
 
         // Create shutdown channel for this runtime
-        let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
+        let (shutdown_tx, _shutdown_rx) = mpsc::channel::<()>(1);
         runtime.shutdown_tx = Some(shutdown_tx);
 
         // Create error channel for propagating errors from spawned tasks
-        let (error_tx, mut error_rx) = mpsc::channel::<anyhow::Error>(1);
+        let (error_tx, _error_rx) = mpsc::channel::<anyhow::Error>(1);
 
         // Spawn the supervised task
         // tokio::spawn catches panics and returns JoinError on .await
@@ -723,7 +723,7 @@ impl ProjectSupervisor {
                             info!("Project runtime {}: flushing in-flight state", project_name);
                             // Flush session tailer to ensure all pending data is written
                             let tailer_opt = session_tailer_clone.lock().unwrap().take();
-                            if let Some(tailer) = tailer_opt {
+                            if let Some(mut tailer) = tailer_opt {
                                 if let Err(e) = tailer.stop().await {
                                     warn!("Error flushing session tailer for {}: {}", project_name, e);
                                 }

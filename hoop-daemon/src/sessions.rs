@@ -15,7 +15,7 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use hoop_schema::{
-    ParsedSession, ParsedSessionKind, ParsedSessionKindVariant1, ParsedSessionKindVariant2,
+    ParsedSession, ParsedSessionKind,
     ParsedSessionMessagesItem, ParsedSessionMessagesItemUsage, ParsedSessionTotalUsage,
 };
 use crate::tag_join;
@@ -1651,6 +1651,7 @@ impl Default for NdjsonParser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hoop_schema::{ParsedSessionKindVariant1, ParsedSessionKindVariant2};
 
     #[test]
     fn test_tag_join_worker_via_resolve() {

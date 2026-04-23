@@ -6,18 +6,28 @@
 //!
 //! Flow:
 //! 1. Audio captured (hotkey / ADB / upload)
-//! 2. Whisper transcribes → transcript + word-level timestamps
-//! 3. Stitch row created (kind='dictated', title from first line of transcript)
-//! 4. dictated_notes row created with metadata
-//! 5. Audio file persisted to `~/.hoop/attachments/<stitch-id>/<filename>`
+//! 2. Note created with `transcription_status: Pending`
+//! 3. Whisper job submitted to async queue
+//! 4. On success: transcript + word timestamps stored, status → Completed
+//! 5. On failure: partial transcript saved with error, status → Failed (UI shows warning card)
 //! 6. Appears in project stitch list by `last_activity_at`
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
-use uuid::Uuid;
+use std::path::PathBuf;
+
+/// Transcription status for a dictated note
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum TranscriptionStatus {
+    /// Waiting in queue or currently transcribing
+    Pending,
+    /// Transcription completed successfully
+    Completed,
+    /// Transcription failed; partial transcript may be available
+    Failed,
+}
 
 /// A dictated note with all metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,6 +50,8 @@ pub struct DictatedNote {
     pub language: Option<String>,
     /// Optional tags
     pub tags: Vec<String>,
+    /// Whether transcription is pending, completed, or failed
+    pub transcription_status: TranscriptionStatus,
 }
 
 /// A single word with timing from Whisper
@@ -81,6 +93,7 @@ pub struct CreateNoteResponse {
     pub title: String,
     pub recorded_at: DateTime<Utc>,
     pub transcribed_at: DateTime<Utc>,
+    pub transcription_status: TranscriptionStatus,
 }
 
 /// Summary of a dictated note for list views
@@ -96,9 +109,12 @@ pub struct NoteSummary {
     pub language: Option<String>,
     pub tags: Vec<String>,
     pub transcript_preview: String,
+    /// Full transcript text for search indexing
+    pub transcript: String,
     pub last_activity_at: DateTime<Utc>,
     pub created_at: DateTime<Utc>,
     pub audio_filename: String,
+    pub transcription_status: TranscriptionStatus,
 }
 
 /// Derive a title from a transcript (first meaningful line, truncated)
@@ -120,7 +136,6 @@ pub fn transcript_preview(transcript: &str, max_len: usize) -> String {
     if transcript.len() <= max_len {
         transcript.to_string()
     } else {
-        // Find a word boundary near max_len
         let end = transcript[..max_len]
             .rfind(' ')
             .unwrap_or(max_len);
@@ -160,7 +175,6 @@ pub fn stitch_attachment_dir(stitch_id: &str) -> Result<PathBuf> {
 
 /// Get the full path to an audio file for a stitch
 pub fn audio_path(stitch_id: &str, audio_filename: &str) -> Result<PathBuf> {
-    // Validate filename doesn't traverse paths
     if audio_filename.contains('/') || audio_filename.contains('\\') || audio_filename.contains("..") {
         anyhow::bail!("Invalid audio filename: {}", audio_filename);
     }
@@ -173,12 +187,15 @@ pub fn insert_note(conn: &Connection, note: &DictatedNote) -> Result<()> {
         .context("Failed to serialize transcript_words")?;
     let tags_json = serde_json::to_string(&note.tags)
         .context("Failed to serialize tags")?;
+    let status_str = serde_json::to_string(&note.transcription_status)
+        .context("Failed to serialize transcription_status")?;
 
     conn.execute(
         r#"
         INSERT INTO dictated_notes (stitch_id, recorded_at, transcribed_at, audio_filename,
-                                     transcript, transcript_words, duration_secs, language, tags)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                                     transcript, transcript_words, duration_secs, language, tags,
+                                     transcription_status)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
         "#,
         params![
             note.stitch_id,
@@ -190,6 +207,7 @@ pub fn insert_note(conn: &Connection, note: &DictatedNote) -> Result<()> {
             note.duration_secs,
             note.language,
             tags_json,
+            status_str,
         ],
     )
     .context("Failed to insert dictated_note")?;
@@ -226,12 +244,22 @@ pub fn insert_stitch(
     Ok(())
 }
 
+/// Parse transcription status from DB string
+fn parse_transcription_status(s: &str) -> TranscriptionStatus {
+    match s.trim_matches('"') {
+        "Completed" => TranscriptionStatus::Completed,
+        "Failed" => TranscriptionStatus::Failed,
+        _ => TranscriptionStatus::Pending,
+    }
+}
+
 /// Get a single dictated note by stitch_id
 pub fn get_note(conn: &Connection, stitch_id: &str) -> Result<Option<DictatedNote>> {
     let mut stmt = conn.prepare(
         r#"
         SELECT stitch_id, recorded_at, transcribed_at, audio_filename,
-               transcript, transcript_words, duration_secs, language, tags
+               transcript, transcript_words, duration_secs, language, tags,
+               COALESCE(transcription_status, '"Pending"')
         FROM dictated_notes
         WHERE stitch_id = ?1
         "#,
@@ -246,6 +274,7 @@ pub fn get_note(conn: &Connection, stitch_id: &str) -> Result<Option<DictatedNot
         let duration_secs: Option<f64> = row.get(6)?;
         let language: Option<String> = row.get(7)?;
         let tags_json: String = row.get(8)?;
+        let status_str: String = row.get(9)?;
 
         let recorded_at = DateTime::parse_from_rfc3339(&recorded_at_str)
             .map(|dt| dt.with_timezone(&Utc))
@@ -258,6 +287,7 @@ pub fn get_note(conn: &Connection, stitch_id: &str) -> Result<Option<DictatedNot
             .and_then(|j| serde_json::from_str(&j).ok())
             .unwrap_or_default();
         let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
+        let transcription_status = parse_transcription_status(&status_str);
 
         Ok(DictatedNote {
             stitch_id: stitch_id.to_string(),
@@ -269,6 +299,7 @@ pub fn get_note(conn: &Connection, stitch_id: &str) -> Result<Option<DictatedNot
             duration_secs,
             language,
             tags,
+            transcription_status,
         })
     });
 
@@ -285,7 +316,8 @@ pub fn list_notes_for_project(conn: &Connection, project: &str) -> Result<Vec<No
         r#"
         SELECT dn.stitch_id, s.project, s.title, dn.recorded_at, dn.transcribed_at,
                dn.duration_secs, dn.language, dn.tags, dn.transcript, s.last_activity_at,
-               s.created_at, dn.audio_filename
+               s.created_at, dn.audio_filename,
+               COALESCE(dn.transcription_status, '"Pending"')
         FROM dictated_notes dn
         JOIN stitches s ON dn.stitch_id = s.id
         WHERE s.project = ?1
@@ -307,6 +339,7 @@ pub fn list_notes_for_project(conn: &Connection, project: &str) -> Result<Vec<No
             let last_activity_at_str: String = row.get(9)?;
             let created_at_str: String = row.get(10)?;
             let audio_filename: String = row.get(11)?;
+            let status_str: String = row.get(12)?;
 
             let recorded_at = DateTime::parse_from_rfc3339(&recorded_at_str)
                 .map(|dt| dt.with_timezone(&Utc))
@@ -323,6 +356,7 @@ pub fn list_notes_for_project(conn: &Connection, project: &str) -> Result<Vec<No
 
             let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
             let preview = transcript_preview(&transcript, 120);
+            let transcription_status = parse_transcription_status(&status_str);
 
             Ok(NoteSummary {
                 stitch_id,
@@ -335,9 +369,11 @@ pub fn list_notes_for_project(conn: &Connection, project: &str) -> Result<Vec<No
                 language,
                 tags,
                 transcript_preview: preview,
+                transcript,
                 last_activity_at,
                 created_at,
                 audio_filename,
+                transcription_status,
             })
         })?
         .filter_map(|r| r.ok())
@@ -346,13 +382,52 @@ pub fn list_notes_for_project(conn: &Connection, project: &str) -> Result<Vec<No
     Ok(notes)
 }
 
+/// Update a dictated note's transcript and/or tags
+pub fn update_note(conn: &Connection, note: &DictatedNote) -> Result<()> {
+    let words_json = serde_json::to_string(&note.transcript_words)
+        .context("Failed to serialize transcript_words")?;
+    let tags_json = serde_json::to_string(&note.tags)
+        .context("Failed to serialize tags")?;
+    let status_str = serde_json::to_string(&note.transcription_status)
+        .context("Failed to serialize transcription_status")?;
+
+    conn.execute(
+        r#"
+        UPDATE dictated_notes
+        SET transcript = ?1, transcript_words = ?2, tags = ?3, transcription_status = ?4
+        WHERE stitch_id = ?5
+        "#,
+        params![
+            note.transcript,
+            words_json,
+            tags_json,
+            status_str,
+            note.stitch_id,
+        ],
+    )
+    .context("Failed to update dictated_note")?;
+
+    Ok(())
+}
+
+/// Update the title on a dictated note's stitch row
+pub fn update_stitch_title(conn: &Connection, stitch_id: &str, title: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE stitches SET title = ?1 WHERE id = ?2",
+        params![title, stitch_id],
+    )
+    .context("Failed to update stitch title")?;
+    Ok(())
+}
+
 /// List all dictated notes across all projects, ordered by last_activity_at DESC
 pub fn list_all_notes(conn: &Connection) -> Result<Vec<NoteSummary>> {
     let mut stmt = conn.prepare(
         r#"
         SELECT dn.stitch_id, s.project, s.title, dn.recorded_at, dn.transcribed_at,
                dn.duration_secs, dn.language, dn.tags, dn.transcript, s.last_activity_at,
-               s.created_at, dn.audio_filename
+               s.created_at, dn.audio_filename,
+               COALESCE(dn.transcription_status, '"Pending"')
         FROM dictated_notes dn
         JOIN stitches s ON dn.stitch_id = s.id
         ORDER BY s.last_activity_at DESC
@@ -373,6 +448,7 @@ pub fn list_all_notes(conn: &Connection) -> Result<Vec<NoteSummary>> {
             let last_activity_at_str: String = row.get(9)?;
             let created_at_str: String = row.get(10)?;
             let audio_filename: String = row.get(11)?;
+            let status_str: String = row.get(12)?;
 
             let recorded_at = DateTime::parse_from_rfc3339(&recorded_at_str)
                 .map(|dt| dt.with_timezone(&Utc))
@@ -389,6 +465,7 @@ pub fn list_all_notes(conn: &Connection) -> Result<Vec<NoteSummary>> {
 
             let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
             let preview = transcript_preview(&transcript, 120);
+            let transcription_status = parse_transcription_status(&status_str);
 
             Ok(NoteSummary {
                 stitch_id,
@@ -401,30 +478,17 @@ pub fn list_all_notes(conn: &Connection) -> Result<Vec<NoteSummary>> {
                 language,
                 tags,
                 transcript_preview: preview,
+                transcript,
                 last_activity_at,
                 created_at,
                 audio_filename,
+                transcription_status,
             })
         })?
         .filter_map(|r| r.ok())
         .collect();
 
     Ok(notes)
-}
-
-/// Transcribe audio using local Whisper (stub — actual Whisper integration in phase 5)
-///
-/// In the current phase, this returns a placeholder transcript.
-/// The real implementation will shell out to a local Whisper model or
-/// call Anthropic's transcription endpoint.
-pub fn transcribe_audio(_audio_path: &Path) -> Result<TranscriptionResult> {
-    // Stub: in production this calls Whisper CLI or API
-    Ok(TranscriptionResult {
-        transcript: "Transcription pending — Whisper integration not yet connected.".to_string(),
-        words: vec![],
-        duration_secs: None,
-        language: None,
-    })
 }
 
 /// Result from Whisper transcription
@@ -450,7 +514,7 @@ mod tests {
     fn test_derive_title_long() {
         let long_line = "This is a very long line that exceeds the eighty character limit and should be truncated with an ellipsis at the end";
         let title = derive_title(long_line);
-        assert!(title.len() <= 81); // 80 chars + "…"
+        assert!(title.len() <= 81);
         assert!(title.ends_with('…'));
     }
 
@@ -503,6 +567,7 @@ mod tests {
             duration_secs: Some(3.0),
             language: Some("en".to_string()),
             tags: vec!["test".to_string()],
+            transcription_status: TranscriptionStatus::Completed,
         };
 
         insert_note(&conn, &note).unwrap();
@@ -515,6 +580,7 @@ mod tests {
         assert_eq!(fetched.tags, vec!["test"]);
         assert_eq!(fetched.duration_secs, Some(3.0));
         assert_eq!(fetched.language, Some("en".to_string()));
+        assert_eq!(fetched.transcription_status, TranscriptionStatus::Completed);
     }
 
     #[test]
@@ -527,7 +593,6 @@ mod tests {
     fn test_list_notes_for_project() {
         let conn = init_test_db();
 
-        // Create two notes in project A, one in project B
         for (id, project, title) in [
             ("st-001", "project-a", "Note one"),
             ("st-002", "project-a", "Note two"),
@@ -546,6 +611,7 @@ mod tests {
                     duration_secs: None,
                     language: None,
                     tags: vec![],
+                    transcription_status: TranscriptionStatus::Pending,
                 },
             )
             .unwrap();
@@ -554,6 +620,7 @@ mod tests {
         let project_a = list_notes_for_project(&conn, "project-a").unwrap();
         assert_eq!(project_a.len(), 2);
         assert!(project_a.iter().all(|n| n.project == "project-a"));
+        assert!(project_a.iter().all(|n| n.transcription_status == TranscriptionStatus::Pending));
 
         let project_b = list_notes_for_project(&conn, "project-b").unwrap();
         assert_eq!(project_b.len(), 1);
@@ -593,7 +660,8 @@ mod tests {
                 duration_secs REAL,
                 language TEXT,
                 tags TEXT DEFAULT '[]',
-                transcript_words TEXT
+                transcript_words TEXT,
+                transcription_status TEXT NOT NULL DEFAULT '"Pending"'
             )
             "#,
             [],

@@ -113,11 +113,11 @@ impl From<YamlError> for ConfigError {
 }
 
 fn line(loc: &serde_yaml::Location) -> usize {
-    loc.line().map(|l| l as usize).unwrap_or(0)
+    loc.line()
 }
 
 fn column(loc: &serde_yaml::Location) -> usize {
-    loc.column().map(|c| c as usize).unwrap_or(0)
+    loc.column()
 }
 
 /// Events emitted by the projects watcher
@@ -136,7 +136,7 @@ pub enum ProjectsEvent {
 /// multiple events for rapid successive edits.
 pub struct ProjectsWatcher {
     config: Arc<Mutex<ProjectsConfig>>,
-    event_tx: mpsc::Sender<ProjectsEvent>,
+    event_tx: tokio::sync::broadcast::Sender<ProjectsEvent>,
     watcher: Option<RecommendedWatcher>,
     _shutdown_tx: mpsc::Sender<()>,
     debouncer: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
@@ -145,7 +145,7 @@ pub struct ProjectsWatcher {
 impl ProjectsWatcher {
     /// Create a new projects watcher
     pub fn new() -> Result<Self> {
-        let (event_tx, _) = mpsc::channel(64);
+        let (event_tx, _) = tokio::sync::broadcast::channel(64);
         let (shutdown_tx, _) = mpsc::channel(1);
 
         let config = ProjectsConfig::load()
@@ -161,8 +161,8 @@ impl ProjectsWatcher {
     }
 
     /// Subscribe to projects events
-    pub fn subscribe(&self) -> mpsc::Receiver<ProjectsEvent> {
-        self.event_tx.clone()
+    pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<ProjectsEvent> {
+        self.event_tx.subscribe()
     }
 
     /// Get the current configuration
@@ -233,7 +233,7 @@ impl ProjectsWatcher {
     fn handle_watch_event(
         res: Result<notify::Event, notify::Error>,
         watch_path: &Path,
-        event_tx: &mpsc::Sender<ProjectsEvent>,
+        event_tx: &tokio::sync::broadcast::Sender<ProjectsEvent>,
         config: Arc<Mutex<ProjectsConfig>>,
         debouncer: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     ) -> Result<()> {
@@ -272,7 +272,7 @@ impl ProjectsWatcher {
 
     async fn reload_config(
         path: &Path,
-        event_tx: mpsc::Sender<ProjectsEvent>,
+        event_tx: tokio::sync::broadcast::Sender<ProjectsEvent>,
         config: Arc<Mutex<ProjectsConfig>>,
     ) {
         debug!("Reloading projects configuration from {}", path.display());
@@ -289,12 +289,12 @@ impl ProjectsWatcher {
 
                 let _ = event_tx.send(ProjectsEvent::ConfigReloaded {
                     config: new_config,
-                }).await;
+                });
                 info!("Projects configuration reloaded successfully");
             }
             Err(error) => {
                 let msg = error.message.clone();
-                let _ = event_tx.send(ProjectsEvent::ConfigError { error }).await;
+                let _ = event_tx.send(ProjectsEvent::ConfigError { error });
                 warn!("Projects configuration failed to load: {}", msg);
             }
         }

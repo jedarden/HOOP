@@ -7,11 +7,13 @@ import {
   workersAtom,
   beadsAtom,
   Conversation,
+  DictatedNote,
   getSessionKindBadge,
   getAdapterAndModel,
   SessionMessage,
   formatContent,
 } from './atoms';
+import AudioPlayer from './components/AudioPlayer';
 
 function formatTimestamp(timestamp: string): string {
   const date = new Date(timestamp);
@@ -29,6 +31,27 @@ function formatTimestamp(timestamp: string): string {
 function formatTokens(tokens: number): string {
   if (tokens < 1000) return tokens.toString();
   return `${(tokens / 1000).toFixed(1)}k`;
+}
+
+function DictatedNotePlayer({ note }: { note: DictatedNote }) {
+  const transcript = note.transcript_words.length > 0
+    ? { text: note.transcript, words: note.transcript_words }
+    : undefined;
+
+  return (
+    <div className="dictated-note-player">
+      <div className="dictated-note-meta">
+        <span className="dictated-note-label">Voice Note</span>
+        {note.language && (
+          <span className="dictated-note-lang">{note.language}</span>
+        )}
+        <span className="dictated-note-date">
+          {new Date(note.recorded_at).toLocaleString()}
+        </span>
+      </div>
+      <AudioPlayer audioUrl={note.audio_url} transcript={transcript} />
+    </div>
+  );
 }
 
 function MessageBubble({ message }: { message: SessionMessage }) {
@@ -68,7 +91,6 @@ function ConversationView({ conversation }: { conversation: Conversation }) {
     ? getAdapterAndModel(workers, conversation.worker_metadata.worker)
     : { adapter: conversation.provider, model: null };
 
-  // Find bead title if this is a worker session
   const bead = beads.find(b => b.id === conversation.worker_metadata?.bead);
 
   return (
@@ -112,6 +134,9 @@ function ConversationView({ conversation }: { conversation: Conversation }) {
       </div>
 
       <div className="conversation-messages">
+        {conversation.kind === 'dictated' && conversation.dictated_note && (
+          <DictatedNotePlayer note={conversation.dictated_note} />
+        )}
         {conversation.messages.map((message, index) => (
           <MessageBubble
             key={index}
@@ -170,10 +195,15 @@ function ConversationListItem({
   );
 }
 
-export default function ConversationPane() {
-  const [conversations] = useAtom(conversationsAtom);
+interface ConversationPaneProps {
+  conversations?: Conversation[];
+}
+
+export default function ConversationPane({ conversations: conversationsProp }: ConversationPaneProps) {
+  const [globalConversations] = useAtom(conversationsAtom);
+  const conversations = conversationsProp ?? globalConversations;
   const [selectedConversationId, setSelectedConversationId] = useAtom(selectedConversationIdAtom);
-  const [filter, setFilter] = useState<'all' | 'fleet' | 'operator' | 'ad-hoc'>('all');
+  const [filter, setFilter] = useState<'all' | 'fleet' | 'operator' | 'ad-hoc' | 'dictated'>('all');
 
   const filteredConversations = useMemo(() => {
     if (filter === 'all') return conversations;
@@ -181,6 +211,7 @@ export default function ConversationPane() {
       if (filter === 'fleet') return c.kind === 'worker';
       if (filter === 'operator') return c.kind === 'operator';
       if (filter === 'ad-hoc') return c.kind === 'ad-hoc';
+      if (filter === 'dictated') return c.kind === 'dictated';
       return true;
     });
   }, [conversations, filter]);
@@ -217,6 +248,12 @@ export default function ConversationPane() {
                 onClick={() => setFilter('ad-hoc')}
               >
                 Ad-hoc
+              </button>
+              <button
+                className={`filter-tab ${filter === 'dictated' ? 'active' : ''}`}
+                onClick={() => setFilter('dictated')}
+              >
+                Dictated
               </button>
             </div>
           </div>

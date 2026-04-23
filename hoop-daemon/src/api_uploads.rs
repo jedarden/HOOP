@@ -1,21 +1,14 @@
 //! HTTP handlers for resumable upload API
 
-use crate::uploads::{UploadConfig, UploadRegistry};
+use crate::DaemonState;
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Json, Response},
-    routing::{get, post},
+    routing::{get, patch, post, delete},
     Router,
 };
 use serde::Deserialize;
-use std::sync::Arc;
-
-/// Upload state shared across handlers
-#[derive(Clone)]
-pub struct UploadState {
-    pub registry: Arc<UploadRegistry>,
-}
 
 /// Request body for upload initiation
 #[derive(Debug, Deserialize)]
@@ -42,10 +35,10 @@ struct InitUploadRequest {
 /// }
 /// ```
 async fn init_upload(
-    State(state): State<UploadState>,
+    State(state): State<DaemonState>,
     Json(req): Json<InitUploadRequest>,
 ) -> Result<Json<crate::uploads::InitUploadResponse>, StatusCode> {
-    state.registry
+    state.upload_registry
         .initiate_upload(
             req.filename,
             req.total_size,
@@ -70,7 +63,7 @@ async fn init_upload(
 ///
 /// Body: raw chunk bytes
 async fn upload_chunk(
-    State(state): State<UploadState>,
+    State(state): State<DaemonState>,
     Path(upload_id): Path<String>,
     headers: HeaderMap,
     body: axum::body::Bytes,
@@ -83,7 +76,7 @@ async fn upload_chunk(
         .ok_or(StatusCode::BAD_REQUEST)?;
 
     state
-        .registry
+        .upload_registry
         .append_chunk(&upload_id, offset, &body)
         .map(Json)
         .map_err(|e| {
@@ -100,11 +93,11 @@ async fn upload_chunk(
 /// - Upload-Offset: current byte offset
 /// - Upload-Length: total file size
 async fn get_progress(
-    State(state): State<UploadState>,
+    State(state): State<DaemonState>,
     Path(upload_id): Path<String>,
 ) -> Result<Response, StatusCode> {
     let progress = state
-        .registry
+        .upload_registry
         .get_progress(&upload_id)
         .map_err(|e| {
             tracing::debug!("Upload not found: {}", e);
@@ -126,11 +119,11 @@ async fn get_progress(
 ///
 /// POST /api/uploads/{upload_id}/complete
 async fn complete_upload(
-    State(state): State<UploadState>,
+    State(state): State<DaemonState>,
     Path(upload_id): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
     state
-        .registry
+        .upload_registry
         .complete_upload(&upload_id)
         .map(|_| StatusCode::NO_CONTENT)
         .map_err(|e| {
@@ -143,11 +136,11 @@ async fn complete_upload(
 ///
 /// DELETE /api/uploads/{upload_id}
 async fn cancel_upload(
-    State(state): State<UploadState>,
+    State(state): State<DaemonState>,
     Path(upload_id): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
     state
-        .registry
+        .upload_registry
         .cancel_upload(&upload_id)
         .map(|_| StatusCode::NO_CONTENT)
         .map_err(|e| {
@@ -157,16 +150,11 @@ async fn cancel_upload(
 }
 
 /// Build the uploads router
-pub fn router() -> Router<UploadState> {
-    let config = UploadConfig::default();
-    let registry = Arc::new(UploadRegistry::new(config).unwrap());
-    let state = UploadState { registry };
-
+pub fn router() -> Router<DaemonState> {
     Router::new()
         .route("/", post(init_upload))
-        .route("/:upload_id", axum::routing::patch(upload_chunk))
+        .route("/:upload_id", patch(upload_chunk))
         .route("/:upload_id", get(get_progress))
         .route("/:upload_id/complete", post(complete_upload))
-        .route("/:upload_id", axum::routing::delete(cancel_upload))
-        .with_state(state)
+        .route("/:upload_id", delete(cancel_upload))
 }

@@ -18,7 +18,7 @@ use std::path::PathBuf;
 use tracing::info;
 
 /// Current schema version
-const SCHEMA_VERSION: &str = "1.5.0";
+const SCHEMA_VERSION: &str = "1.6.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -229,31 +229,40 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v13_to_v14(conn)?;
             // Fall through to 1.5.0
             migrate_v14_to_v15(conn)?;
+            // Fall through to 1.6.0
+            migrate_v15_to_v16(conn)?;
         }
         "1.1.0" => {
             migrate_v11_to_v12(conn)?;
             migrate_v12_to_v13(conn)?;
             migrate_v13_to_v14(conn)?;
             migrate_v14_to_v15(conn)?;
+            migrate_v15_to_v16(conn)?;
         }
         "1.2.0" => {
             migrate_v12_to_v13(conn)?;
             migrate_v13_to_v14(conn)?;
             migrate_v14_to_v15(conn)?;
+            migrate_v15_to_v16(conn)?;
         }
         "1.3.0" => {
             migrate_v13_to_v14(conn)?;
             migrate_v14_to_v15(conn)?;
+            migrate_v15_to_v16(conn)?;
         }
         "1.4.0" => {
             migrate_v14_to_v15(conn)?;
+            migrate_v15_to_v16(conn)?;
         }
         "1.5.0" => {
-            info!("Already at schema version 1.5.0, no migrations needed");
+            migrate_v15_to_v16(conn)?;
+        }
+        "1.6.0" => {
+            info!("Already at schema version 1.6.0, no migrations needed");
         }
         _ => {
             return Err(anyhow::anyhow!(
-                "Unsupported schema version: {}. Expected 0.1.0, 1.1.0, 1.2.0, 1.3.0, 1.4.0, or 1.5.0",
+                "Unsupported schema version: {}. Expected 0.1.0–1.6.0",
                 from_version
             ));
         }
@@ -629,6 +638,22 @@ fn migrate_v14_to_v15(conn: &mut Connection) -> Result<()> {
     )?;
 
     info!("transcription_jobs table created successfully");
+    Ok(())
+}
+
+/// Migration 1.5.0 → 1.6.0: Add transcription_status to dictated_notes
+///
+/// Tracks whether transcription is pending, completed, or failed so the UI
+/// can render warning cards for partial/failed transcriptions.
+fn migrate_v15_to_v16(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.5.0 → 1.6.0: Adding transcription_status column");
+
+    conn.execute(
+        "ALTER TABLE dictated_notes ADD COLUMN transcription_status TEXT NOT NULL DEFAULT 'pending'",
+        [],
+    )?;
+
+    info!("transcription_status column added successfully");
     Ok(())
 }
 

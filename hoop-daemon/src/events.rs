@@ -125,6 +125,7 @@ impl Default for EventTailerConfig {
         Self {
             events_path: home,
             replay_on_startup: true,
+            bead_event_tx: None,
         }
     }
 }
@@ -224,8 +225,9 @@ impl EventTailer {
         let position = self.position.clone();
 
         // Create the watcher
+        let bead_event_tx_for_watch = self.config.bead_event_tx.clone();
         let mut watcher = notify::recommended_watcher(move |res| {
-            if let Err(e) = Self::handle_watch_event(res, &events_path_for_watch, &event_tx, position.clone()) {
+            if let Err(e) = Self::handle_watch_event(res, &events_path_for_watch, &event_tx, position.clone(), bead_event_tx_for_watch.clone()) {
                 warn!("Error handling watch event: {}", e);
             }
         })

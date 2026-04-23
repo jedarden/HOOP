@@ -1,9 +1,10 @@
 import { useAtomValue } from 'jotai';
-import { useMemo } from 'react';
-import { conversationsAtom } from './atoms';
+import { useState, useMemo, useEffect } from 'react';
+import { conversationsAtom, Conversation } from './atoms';
 
 interface CostPanelProps {
   projectName: string;
+  conversations?: Conversation[];
 }
 
 interface CostBreakdown {
@@ -12,6 +13,8 @@ interface CostBreakdown {
   totalTokens: number;
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
   totalCost: number;
   requestCount: number;
 }
@@ -20,6 +23,22 @@ interface TimeRangeCost {
   label: string;
   tokens: number;
   cost: number;
+}
+
+interface CostBucket {
+  date: string;
+  project: string;
+  adapter: string;
+  model: string;
+  strand: string | null;
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_tokens: number;
+    cache_write_tokens: number;
+  };
+  request_count: number;
+  cost_usd: number;
 }
 
 function formatCurrency(amount: number): string {
@@ -37,8 +56,8 @@ function formatNumber(num: number): string {
   return num.toString();
 }
 
-// Approximate pricing (will be updated with real rates)
-const PRICING: Record<string, { input: number; output: number }> = {
+// Fallback pricing for client-side estimation when API data is unavailable
+const FALLBACK_PRICING: Record<string, { input: number; output: number }> = {
   'claude-opus': { input: 15 / 1000000, output: 75 / 1000000 },
   'claude-sonnet': { input: 3 / 1000000, output: 15 / 1000000 },
   'claude-haiku': { input: 0.25 / 1000000, output: 1.25 / 1000000 },
@@ -46,21 +65,75 @@ const PRICING: Record<string, { input: number; output: number }> = {
   'gpt-3.5-turbo': { input: 0.5 / 1000000, output: 1.5 / 1000000 },
 };
 
-export default function CostPanel({ projectName: _projectName }: CostPanelProps) {
-  const conversations = useAtomValue(conversationsAtom);
+export default function CostPanel({ projectName, conversations: conversationsProp }: CostPanelProps) {
+  const globalConversations = useAtomValue(conversationsAtom);
+  const conversations = conversationsProp ?? globalConversations;
+  const [apiBuckets, setApiBuckets] = useState<CostBucket[] | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Calculate cost breakdown by adapter/model
-  const costByAdapter = useMemo(() => {
+  // Fetch real cost data from backend
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    fetch(`/api/cost/buckets/${encodeURIComponent(projectName)}`)
+      .then(res => res.ok ? res.json() : Promise.reject(new Error(`${res.status}`)))
+      .then((data: CostBucket[]) => {
+        if (!cancelled) setApiBuckets(data);
+      })
+      .catch(() => {
+        // Fall back to client-side estimation
+        if (!cancelled) setApiBuckets(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [projectName]);
+
+  // Cost breakdown by adapter/model
+  const costByAdapter = useMemo((): CostBreakdown[] => {
+    if (apiBuckets && apiBuckets.length > 0) {
+      // Use backend data
+      const breakdown = new Map<string, CostBreakdown>();
+      for (const bucket of apiBuckets) {
+        const key = `${bucket.adapter}:${bucket.model}`;
+        const existing = breakdown.get(key) || {
+          adapter: bucket.adapter,
+          model: bucket.model || null,
+          totalTokens: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          totalCost: 0,
+          requestCount: 0,
+        };
+        existing.totalTokens += bucket.usage.input_tokens + bucket.usage.output_tokens;
+        existing.inputTokens += bucket.usage.input_tokens;
+        existing.outputTokens += bucket.usage.output_tokens;
+        existing.cacheReadTokens += bucket.usage.cache_read_tokens;
+        existing.cacheWriteTokens += bucket.usage.cache_write_tokens;
+        existing.totalCost += bucket.cost_usd;
+        existing.requestCount += bucket.request_count;
+        breakdown.set(key, existing);
+      }
+      return Array.from(breakdown.values()).sort((a, b) => b.totalCost - a.totalCost);
+    }
+
+    // Client-side fallback
     const breakdown = new Map<string, CostBreakdown>();
-
     conversations.forEach(conv => {
-      const key = `${conv.provider}${conv.worker_metadata?.worker ? `-${conv.worker_metadata.worker}` : ''}`;
+      const key = `${conv.provider}:${conv.worker_metadata?.worker || 'default'}`;
       const existing = breakdown.get(key) || {
         adapter: conv.provider,
         model: conv.worker_metadata?.worker || null,
         totalTokens: 0,
         inputTokens: 0,
         outputTokens: 0,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
         totalCost: 0,
         requestCount: 0,
       };
@@ -68,24 +141,21 @@ export default function CostPanel({ projectName: _projectName }: CostPanelProps)
       existing.totalTokens += conv.total_tokens;
       existing.requestCount += 1;
 
-      // Estimate input/output split (rough approximation)
       const inputSplit = 0.7;
       existing.inputTokens += Math.floor(conv.total_tokens * inputSplit);
       existing.outputTokens += Math.ceil(conv.total_tokens * (1 - inputSplit));
 
-      // Calculate cost using approximate pricing
       const pricingKey = conv.provider.toLowerCase();
-      const pricing = PRICING[pricingKey] || PRICING['gpt-3.5-turbo'];
+      const pricing = FALLBACK_PRICING[pricingKey] || FALLBACK_PRICING['gpt-3.5-turbo'];
       existing.totalCost += (existing.inputTokens * pricing.input) + (existing.outputTokens * pricing.output);
 
       breakdown.set(key, existing);
     });
-
     return Array.from(breakdown.values()).sort((a, b) => b.totalCost - a.totalCost);
-  }, [conversations]);
+  }, [apiBuckets, conversations]);
 
-  // Calculate time range costs
-  const timeRangeCosts = useMemo(() => {
+  // Time range costs
+  const timeRangeCosts = useMemo((): TimeRangeCost[] => {
     const now = new Date();
     const ranges: TimeRangeCost[] = [
       { label: 'Today', tokens: 0, cost: 0 },
@@ -93,43 +163,65 @@ export default function CostPanel({ projectName: _projectName }: CostPanelProps)
       { label: 'This Month', tokens: 0, cost: 0 },
     ];
 
+    if (apiBuckets && apiBuckets.length > 0) {
+      for (const bucket of apiBuckets) {
+        const bucketDate = new Date(bucket.date);
+        const tokens = bucket.usage.input_tokens + bucket.usage.output_tokens;
+        const cost = bucket.cost_usd;
+
+        if (bucketDate.toDateString() === now.toDateString()) {
+          ranges[0].tokens += tokens;
+          ranges[0].cost += cost;
+        }
+
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        if (bucketDate > weekAgo) {
+          ranges[1].tokens += tokens;
+          ranges[1].cost += cost;
+        }
+
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        if (bucketDate >= monthStart) {
+          ranges[2].tokens += tokens;
+          ranges[2].cost += cost;
+        }
+      }
+      return ranges;
+    }
+
+    // Client-side fallback
     conversations.forEach(conv => {
       const convDate = new Date(conv.created_at);
       const tokens = conv.total_tokens;
-
-      // Estimate cost
       const pricingKey = conv.provider.toLowerCase();
-      const pricing = PRICING[pricingKey] || PRICING['gpt-3.5-turbo'];
+      const pricing = FALLBACK_PRICING[pricingKey] || FALLBACK_PRICING['gpt-3.5-turbo'];
       const inputTokens = Math.floor(tokens * 0.7);
       const outputTokens = Math.ceil(tokens * 0.3);
       const cost = (inputTokens * pricing.input) + (outputTokens * pricing.output);
 
-      // Today
       if (convDate.toDateString() === now.toDateString()) {
         ranges[0].tokens += tokens;
         ranges[0].cost += cost;
       }
 
-      // This week
       const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       if (convDate > weekAgo) {
         ranges[1].tokens += tokens;
         ranges[1].cost += cost;
       }
 
-      // This month
-      const monthAgo = new Date(now.getFullYear(), now.getMonth(), 1);
-      if (convDate > monthAgo) {
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      if (convDate > monthStart) {
         ranges[2].tokens += tokens;
         ranges[2].cost += cost;
       }
     });
-
     return ranges;
-  }, [conversations]);
+  }, [apiBuckets, conversations]);
 
   const totalCost = costByAdapter.reduce((sum, b) => sum + b.totalCost, 0);
   const totalTokens = costByAdapter.reduce((sum, b) => sum + b.totalTokens, 0);
+  const dataSource = apiBuckets ? 'server' : 'estimated';
 
   return (
     <div className="cost-panel">
@@ -167,14 +259,16 @@ export default function CostPanel({ projectName: _projectName }: CostPanelProps)
         {/* Adapter Breakdown */}
         <section className="cost-section">
           <h4>Cost by Adapter</h4>
-          {costByAdapter.length === 0 ? (
+          {loading ? (
+            <div className="cost-loading">Loading cost data...</div>
+          ) : costByAdapter.length === 0 ? (
             <p className="cost-empty">No cost data available yet</p>
           ) : (
             <div className="cost-breakdown">
               {costByAdapter.map(breakdown => {
                 const percentage = totalCost > 0 ? (breakdown.totalCost / totalCost) * 100 : 0;
                 return (
-                  <div key={breakdown.adapter} className="cost-breakdown-item">
+                  <div key={`${breakdown.adapter}-${breakdown.model}`} className="cost-breakdown-item">
                     <div className="cost-breakdown-header">
                       <span className="adapter-name">
                         {breakdown.adapter}
@@ -202,14 +296,20 @@ export default function CostPanel({ projectName: _projectName }: CostPanelProps)
           )}
         </section>
 
-        {/* Cost per Bead */}
+        {/* Notes */}
         <section className="cost-section">
           <h4>Cost Analysis Notes</h4>
           <div className="cost-notes">
-            <p className="cost-note">
-              <strong>Note:</strong> Cost figures are estimates based on token counts and standard pricing.
-              Actual costs may vary based on provider-specific pricing, caching, and promotional credits.
-            </p>
+            {dataSource === 'estimated' ? (
+              <p className="cost-note">
+                <strong>Note:</strong> Cost figures are estimates based on token counts and standard pricing.
+                Actual costs may vary based on provider-specific pricing, caching, and promotional credits.
+              </p>
+            ) : (
+              <p className="cost-note">
+                <strong>Source:</strong> Server-side cost data from backend pricing configuration.
+              </p>
+            )}
             <p className="cost-note">
               Rate limit windows (5h/7d for Claude) are shown in the Capacity panel.
             </p>

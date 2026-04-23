@@ -5,9 +5,8 @@
 //! Survives log rotation and handles partial lines.
 
 use anyhow::{Context, Result};
-use crate::{Bead, BeadStatus, BeadType};
+use crate::Bead;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use serde::Deserialize;
 use std::fs::{File, Metadata};
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -295,6 +294,7 @@ impl BeadReader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{BeadStatus, BeadType};
 
     #[test]
     fn test_parse_bead() {

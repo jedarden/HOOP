@@ -186,15 +186,18 @@ fn resolve_ref(
     }
 }
 
-/// Insert `#[allow(clippy::clone_on_copy)]` before every `impl From<&…>` block.
+/// Insert clippy allows before generated impl blocks that trigger lints.
 ///
-/// typify generates `value.clone()` inside these impls even for Copy types;
-/// the allow suppresses the resulting lint in generated code.
+/// - `impl From<&…>`: typify generates `value.clone()` for Copy types → clone_on_copy
+/// - `impl Default for <Enum>`: typify emits manual impls → derivable_impls
 fn add_clippy_allows(code: &str) -> String {
     let mut result = String::with_capacity(code.len() + 1024);
     for line in code.lines() {
-        if line.trim().starts_with("impl From<&") {
+        let trimmed = line.trim();
+        if trimmed.starts_with("impl From<&") {
             result.push_str("#[allow(clippy::clone_on_copy)]\n");
+        } else if trimmed.starts_with("impl Default for ") {
+            result.push_str("#[allow(clippy::derivable_impls)]\n");
         }
         result.push_str(line);
         result.push('\n');

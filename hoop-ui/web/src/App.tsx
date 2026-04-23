@@ -120,6 +120,16 @@ export default function App() {
     window.location.hash = card.name;
   };
 
+  // Notify daemon of active project so ADB dictation knows where to file notes
+  useEffect(() => {
+    const project = selectedProject?.name ?? '';
+    fetch('/api/ui/active-project', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project }),
+    }).catch(() => { /* best-effort */ });
+  }, [selectedProject]);
+
   const fleetSummary = useMemo(() => {
     const totalWorkers = projectCards.reduce((s, c) => s + c.worker_count, 0);
     const totalStitches = projectCards.reduce((s, c) => s + c.active_stitch_count, 0);

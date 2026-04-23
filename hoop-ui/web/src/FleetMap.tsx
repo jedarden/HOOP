@@ -10,7 +10,6 @@ function formatTimeAgo(seconds: number): string {
 function getStateLabel(state: WorkerDisplayState): string {
   switch (state.state) {
     case 'executing':
-      // Handle zero/empty bead IDs (humans work in Stitches)
       if (!state.bead || state.bead === '0' || state.bead === '') {
         return 'Working';
       }
@@ -34,11 +33,8 @@ function getStateDetails(state: WorkerDisplayState): string {
 }
 
 function getWorkerStateColor(state: WorkerDisplayState, liveness: WorkerLiveness): string {
-  // Dead workers always show as dead
   if (liveness === 'Dead') return 'worker-dead';
-  // Hung workers show as hung (unless dead)
   if (liveness === 'Hung') return 'worker-hung';
-  // Live workers: color based on activity state
   switch (state.state) {
     case 'executing':
       return 'worker-executing';
@@ -50,11 +46,8 @@ function getWorkerStateColor(state: WorkerDisplayState, liveness: WorkerLiveness
 }
 
 function getWorkerStateLabel(state: WorkerDisplayState, liveness: WorkerLiveness): string {
-  // Dead workers always show as dead
   if (liveness === 'Dead') return 'dead';
-  // Hung workers show as hung
   if (liveness === 'Hung') return 'hung';
-  // Live workers: label based on activity state
   switch (state.state) {
     case 'executing':
       return 'executing';
@@ -94,7 +87,6 @@ function WorkerCard({ worker }: { worker: WorkerData }) {
         className="worker-link"
         onClick={(e) => {
           e.preventDefault();
-          // Navigate to transcript view (will be handled by router when implemented)
           window.location.hash = `transcript/${worker.worker}`;
           console.log('Navigate to transcript:', worker.worker);
         }}
@@ -105,8 +97,13 @@ function WorkerCard({ worker }: { worker: WorkerData }) {
   );
 }
 
-export default function FleetMap() {
-  const workers = useAtomValue(workersAtom);
+interface FleetMapProps {
+  workers?: WorkerData[];
+}
+
+export default function FleetMap({ workers: workersProp }: FleetMapProps) {
+  const globalWorkers = useAtomValue(workersAtom);
+  const workers = workersProp ?? globalWorkers;
 
   if (workers.length === 0) {
     return (

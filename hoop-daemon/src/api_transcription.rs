@@ -4,15 +4,15 @@
 //! - GET /api/transcription-jobs/:job_id       — get a single job status
 //! - GET /api/transcription-jobs               — list jobs with optional filters
 
-use crate::transcription::{JobStatus, TranscriptionJob, TranscriptionService};
+use crate::transcription::{JobStatus, TranscriptionJob};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
+    routing::get,
     Json, Router,
 };
 use serde::Deserialize;
-use uuid::Uuid;
 
 /// Query parameters for listing transcription jobs
 #[derive(Debug, Deserialize)]

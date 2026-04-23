@@ -10,10 +10,10 @@
 //! Calculates costs using pricing from config.
 
 use anyhow::{Context, Result};
-use chrono::{Datelike, NaiveDate, Utc};
+use chrono::{NaiveDate, Utc};
 use hoop_schema::{ParsedSession, ParsedSessionKind, ParsedSessionTotalUsage, MessageUsage};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};

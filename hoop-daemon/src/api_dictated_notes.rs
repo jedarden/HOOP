@@ -5,18 +5,22 @@
 //! - GET    /api/p/:project/dictated-notes       — list notes for a project
 //! - GET    /api/dictated-notes/:stitch_id       — get a single note
 //! - GET    /api/dictated-notes/:stitch_id/audio — serve the audio file
+//!
+//! On creation, if no pre-computed transcript is provided, the audio is
+//! submitted to the Whisper transcription queue for async processing.
 
 use crate::dictated_notes::{
-    self, CreateNoteRequest, CreateNoteResponse, DictatedNote,
+    self, CreateNoteRequest, CreateNoteResponse, DictatedNote, TranscriptionStatus,
 };
 use crate::fleet;
 use axum::{
     extract::{Path, State},
     http::{header, StatusCode},
     response::IntoResponse,
-    routing::{get, post},
+    routing::{get, patch, post},
     Json, Router,
 };
+use serde::Deserialize;
 use base64::Engine;
 use uuid::Uuid;
 
@@ -26,10 +30,15 @@ pub fn router() -> Router<crate::DaemonState> {
         .route("/api/p/{project}/dictated-notes", post(create_note))
         .route("/api/p/{project}/dictated-notes", get(list_notes))
         .route("/api/dictated-notes/{stitch_id}", get(get_note))
+        .route("/api/dictated-notes/{stitch_id}", patch(update_note))
         .route("/api/dictated-notes/{stitch_id}/audio", get(get_audio))
 }
 
 /// POST /api/p/:project/dictated-notes — create a new dictated note
+///
+/// If `transcript` is provided in the request, the note is created with
+/// `transcription_status: Completed`. Otherwise, the note is created with
+/// status `Pending` and a Whisper transcription job is enqueued.
 async fn create_note(
     Path(project): Path<String>,
     State(state): State<crate::DaemonState>,
@@ -51,19 +60,27 @@ async fn create_note(
     let stitch_id = Uuid::new_v4().to_string();
     let now = chrono::Utc::now();
 
-    // Get transcript (from request or stub)
-    let transcript = req.transcript.unwrap_or_else(|| {
-        format!("Voice note recorded at {}", now.to_rfc3339())
-    });
-    let title = dictated_notes::derive_title(&transcript);
+    // Determine initial state: pre-transcribed or pending
+    let has_transcript = req.transcript.is_some();
+    let (transcript, transcription_status) = if let Some(t) = &req.transcript {
+        (t.clone(), TranscriptionStatus::Completed)
+    } else {
+        ("Transcription pending...".to_string(), TranscriptionStatus::Pending)
+    };
+
+    let title = if has_transcript {
+        dictated_notes::derive_title(&transcript)
+    } else {
+        format!("Voice note {}", now.format("%Y-%m-%d %H:%M"))
+    };
 
     // Store audio file
-    dictated_notes::store_audio(&stitch_id, &req.audio_filename, &audio_data)
+    let audio_path = dictated_notes::store_audio(&stitch_id, &req.audio_filename, &audio_data)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to store audio: {}", e)))?;
 
     // Insert into fleet.db
     let db_path = fleet::db_path();
-    let mut conn = rusqlite::Connection::open(&db_path)
+    let conn = rusqlite::Connection::open(&db_path)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB open error: {}", e)))?;
     conn.pragma_update(None, "journal_mode", "WAL")
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB WAL error: {}", e)))?;
@@ -78,19 +95,46 @@ async fn create_note(
         recorded_at: now,
         transcribed_at: now,
         audio_filename: req.audio_filename.clone(),
-        transcript: transcript.clone(),
+        transcript,
         transcript_words: req.transcript_words.unwrap_or_default(),
         duration_secs: req.duration_secs,
         language: req.language,
         tags: req.tags.unwrap_or_default(),
+        transcription_status: transcription_status.clone(),
     };
     dictated_notes::insert_note(&conn, &note)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to insert note: {}", e)))?;
 
+    // Submit transcription job if no pre-computed transcript
+    if !has_transcript {
+        if let Some(ref svc) = state.transcription_service {
+            match svc.submit_job(stitch_id.clone(), audio_path).await {
+                Ok(job_id) => {
+                    tracing::info!(
+                        "Submitted transcription job {} for dictated note {}",
+                        job_id, stitch_id
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to submit transcription job for {}: {}. Note will remain in Pending state.",
+                        stitch_id, e
+                    );
+                }
+            }
+        } else {
+            tracing::warn!(
+                "No transcription service available for dictated note {}. Note will remain in Pending state.",
+                stitch_id
+            );
+        }
+    }
+
     tracing::info!(
-        "Created dictated note {} in project {}",
+        "Created dictated note {} in project {} (status: {:?})",
         stitch_id,
-        project
+        project,
+        transcription_status
     );
 
     let response = CreateNoteResponse {
@@ -99,6 +143,7 @@ async fn create_note(
         title,
         recorded_at: note.recorded_at,
         transcribed_at: note.transcribed_at,
+        transcription_status,
     };
 
     Ok((StatusCode::CREATED, Json(response)))
@@ -160,6 +205,49 @@ async fn get_audio(
     let mime_type = infer_audio_mime(&note.audio_filename);
 
     Ok(([(header::CONTENT_TYPE, mime_type)], contents).into_response())
+}
+
+/// PATCH request body for updating a dictated note
+#[derive(Debug, Deserialize)]
+struct UpdateNoteRequest {
+    title: Option<String>,
+    transcript: Option<String>,
+    tags: Option<Vec<String>>,
+}
+
+/// PATCH /api/dictated-notes/:stitch_id — update a note's transcript or tags
+async fn update_note(
+    Path(stitch_id): Path<String>,
+    Json(req): Json<UpdateNoteRequest>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let db_path = fleet::db_path();
+    let conn = rusqlite::Connection::open(&db_path)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e)))?;
+
+    let note = dictated_notes::get_note(&conn, &stitch_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Query error: {}", e)))?;
+
+    let mut note = match note {
+        Some(n) => n,
+        None => return Err((StatusCode::NOT_FOUND, "Note not found".to_string())),
+    };
+
+    if let Some(title) = req.title {
+        dictated_notes::update_stitch_title(&conn, &stitch_id, &title)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Title update error: {}", e)))?;
+    }
+    if let Some(transcript) = req.transcript {
+        note.transcript = transcript;
+        note.transcription_status = TranscriptionStatus::Completed;
+    }
+    if let Some(tags) = req.tags {
+        note.tags = tags;
+    }
+
+    dictated_notes::update_note(&conn, &note)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Update error: {}", e)))?;
+
+    Ok(Json(note))
 }
 
 fn infer_audio_mime(filename: &str) -> String {

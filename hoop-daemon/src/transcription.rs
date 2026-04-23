@@ -22,10 +22,61 @@ use tokio::sync::{mpsc, RwLock};
 use tokio::task::JoinSet;
 use tracing::{debug, error, info, warn};
 
-use crate::dictated_notes::{TranscriptWord, TranscriptionResult};
+use crate::dictated_notes::{TranscriptWord, TranscriptionResult, TranscriptionStatus};
 
 /// Supported audio formats for input
 pub const SUPPORTED_AUDIO_FORMATS: &[&str] = &["wav", "mp3", "m4a", "ogg", "flac", "webm", "opus"];
+
+/// Voice/transcription config loaded from ~/.hoop/voice.yml
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct VoiceConfigFile {
+    pub whisper_model_path: Option<String>,
+    pub whisper_cli_path: Option<String>,
+    pub max_concurrent: Option<usize>,
+    pub max_retries: Option<u32>,
+}
+
+/// Load voice config from ~/.hoop/voice.yml (returns defaults if file missing)
+pub fn load_voice_config() -> VoiceConfigFile {
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    let path = home.join(".hoop").join("voice.yml");
+
+    if path.exists() {
+        match std::fs::read_to_string(&path) {
+            Ok(content) => match serde_yaml::from_str(&content) {
+                Ok(config) => {
+                    info!("Loaded voice config from {}", path.display());
+                    return config;
+                }
+                Err(e) => warn!("Failed to parse {}: {}, using defaults", path.display(), e),
+            },
+            Err(e) => warn!("Failed to read {}: {}, using defaults", path.display(), e),
+        }
+    }
+    VoiceConfigFile {
+        whisper_model_path: None,
+        whisper_cli_path: None,
+        max_concurrent: None,
+        max_retries: None,
+    }
+}
+
+/// Build TranscriptionConfig from voice config file + defaults
+pub fn build_transcription_config(voice_config: &VoiceConfigFile) -> TranscriptionConfig {
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    let default_model_path = home.join(".hoop").join("models").join("ggml-base.en.bin");
+
+    TranscriptionConfig {
+        whisper_cli_path: voice_config.whisper_cli_path.as_ref()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("whisper")),
+        whisper_model_path: voice_config.whisper_model_path.as_ref()
+            .map(PathBuf::from)
+            .unwrap_or(default_model_path),
+        max_concurrent: voice_config.max_concurrent.unwrap_or(MAX_CONCURRENT_JOBS),
+        max_retries: voice_config.max_retries.unwrap_or(MAX_RETRIES),
+    }
+}
 
 /// Maximum concurrent transcription jobs
 const MAX_CONCURRENT_JOBS: usize = 2;
@@ -88,7 +139,7 @@ impl Default for TranscriptionConfig {
 }
 
 /// Transcription service - manages async job queue
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct TranscriptionService {
     config: TranscriptionConfig,
     jobs: Arc<RwLock<Vec<TranscriptionJob>>>,
@@ -254,6 +305,266 @@ impl TranscriptionService {
     }
 }
 
+/// Check if an audio file needs conversion to WAV
+fn needs_conversion(path: &Path) -> bool {
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        !ext.eq_ignore_ascii_case("wav")
+    } else {
+        true
+    }
+}
+
+/// Convert audio file to WAV format using ffmpeg
+///
+/// Returns the path to the converted WAV file (in temp directory)
+fn convert_to_wav(audio_path: &Path) -> Result<PathBuf> {
+    let temp_wav = std::env::temp_dir()
+        .join(format!("hoop_convert_{}.wav", uuid::Uuid::new_v4()));
+
+    let output = Command::new("ffmpeg")
+        .arg("-i")
+        .arg(audio_path)
+        .arg("-ar")
+        .arg("16000")  // Whisper prefers 16kHz
+        .arg("-ac")
+        .arg("1")      // Mono
+        .arg("-acodec")
+        .arg("pcm_s16le")  // 16-bit PCM
+        .arg("-y")      // Overwrite output file
+        .arg(&temp_wav)
+        .output()
+        .context("Failed to execute ffmpeg for audio conversion")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("ffmpeg conversion failed: {}", stderr);
+    }
+
+    Ok(temp_wav)
+}
+
+/// Transcribe with fallback to segment-level timestamps
+///
+/// If word-level timestamps fail or are empty, falls back to segment-level timestamps.
+async fn transcribe_with_fallback(
+    audio_path: &Path,
+    config: &TranscriptionConfig,
+) -> TranscriptionResult {
+    // First attempt: full word-level transcription
+    match transcribe_with_whisper_internal(audio_path, config).await {
+        Ok(result) => {
+            // Check if we got word-level timestamps
+            if result.words.is_empty() && !result.transcript.is_empty() {
+                debug!("Word-level timestamps empty, will use segment-level fallback");
+                // Fall back to segment-level timestamps
+                if let Ok(segment_result) = transcribe_segment_level_internal(audio_path, config).await {
+                    info!("Using segment-level timestamps for {}", audio_path.display());
+                    return segment_result;
+                }
+            }
+            result
+        }
+        Err(e) => {
+            warn!("Full transcription failed: {}, trying segment-level fallback", e);
+            // Fallback to segment-level transcription
+            match transcribe_segment_level_internal(audio_path, config).await {
+                Ok(result) => result,
+                Err(e2) => {
+                    // Last resort: return a minimal result with error info
+                    error!("Both word-level and segment-level transcription failed");
+                    TranscriptionResult {
+                        transcript: String::new(),
+                        words: vec![],
+                        duration_secs: None,
+                        language: None,
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Internal function to transcribe with word-level timestamps
+async fn transcribe_with_whisper_internal(
+    audio_path: &Path,
+    config: &TranscriptionConfig,
+) -> Result<TranscriptionResult> {
+    let audio_path = audio_path.to_path_buf();
+    let whisper_cli = config.whisper_cli_path.clone();
+    let model_path = config.whisper_model_path.clone();
+
+    tokio::task::spawn_blocking(move || {
+        if !model_path.exists() {
+            return Err(anyhow::anyhow!("Whisper model not found at {}", model_path.display()));
+        }
+
+        if !audio_path.exists() {
+            return Err(anyhow::anyhow!("Audio file not found: {}", audio_path.display()));
+        }
+
+        let working_audio_path = if needs_conversion(&audio_path) {
+            debug!("Converting audio file {} to WAV format", audio_path.display());
+            convert_to_wav(&audio_path)?
+        } else {
+            audio_path.clone()
+        };
+
+        let temp_output = std::env::temp_dir().join(format!("whisper_{}", uuid::Uuid::new_v4()));
+
+        let output = Command::new(&whisper_cli)
+            .arg("-m")
+            .arg(&model_path)
+            .arg("-f")
+            .arg(&working_audio_path)
+            .arg("-oj")
+            .arg("--output-file")
+            .arg(&temp_output)
+            .output()
+            .context("Failed to execute whisper.cpp")?;
+
+        if working_audio_path != audio_path {
+            let _ = std::fs::remove_file(&working_audio_path);
+        }
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(anyhow::anyhow!("whisper.cpp failed: {}", stderr));
+        }
+
+        let json_path = temp_output.with_extension("json");
+        let json_str = std::fs::read_to_string(&json_path)?;
+        let _ = std::fs::remove_file(&json_path);
+        let _ = std::fs::remove_file(temp_output.with_extension("txt"));
+
+        let whisper_output: WhisperOutput = serde_json::from_str(&json_str)?;
+
+        let mut words = Vec::new();
+        for segment in &whisper_output.segments {
+            for word_data in &segment.words {
+                if let Some(word) = &word_data.word {
+                    words.push(TranscriptWord {
+                        word: word.trim().to_string(),
+                        start: word_data.start,
+                        end: word_data.end,
+                    });
+                }
+            }
+        }
+
+        let transcript = whisper_output.segments
+            .iter()
+            .map(|s| s.text.trim().to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        let duration_secs = whisper_output.segments
+            .last()
+            .map(|s| s.end)
+            .or_else(|| whisper_output.segments.iter().map(|s| s.end).reduce(f64::max))
+            .or(Some(0.0));
+
+        Ok(TranscriptionResult {
+            transcript,
+            words,
+            duration_secs,
+            language: whisper_output.language,
+        })
+    }).await?
+}
+
+/// Internal function to transcribe with segment-level timestamps (fallback)
+async fn transcribe_segment_level_internal(
+    audio_path: &Path,
+    config: &TranscriptionConfig,
+) -> Result<TranscriptionResult> {
+    let audio_path = audio_path.to_path_buf();
+    let whisper_cli = config.whisper_cli_path.clone();
+    let model_path = config.whisper_model_path.clone();
+
+    tokio::task::spawn_blocking(move || {
+        if !model_path.exists() {
+            return Err(anyhow::anyhow!("Whisper model not found at {}", model_path.display()));
+        }
+
+        let working_audio_path = if needs_conversion(&audio_path) {
+            convert_to_wav(&audio_path)?
+        } else {
+            audio_path.clone()
+        };
+
+        let temp_output = std::env::temp_dir().join(format!("whisper_{}", uuid::Uuid::new_v4()));
+
+        let output = Command::new(&whisper_cli)
+            .arg("-m")
+            .arg(&model_path)
+            .arg("-f")
+            .arg(&working_audio_path)
+            .arg("-oj")  // Still request JSON output
+            .arg("--output-file")
+            .arg(&temp_output)
+            .output()?;
+
+        if working_audio_path != audio_path {
+            let _ = std::fs::remove_file(&working_audio_path);
+        }
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(anyhow::anyhow!("whisper.cpp failed: {}", stderr));
+        }
+
+        let json_path = temp_output.with_extension("json");
+        let json_str = std::fs::read_to_string(&json_path)?;
+        let _ = std::fs::remove_file(&json_path);
+        let _ = std::fs::remove_file(temp_output.with_extension("txt"));
+
+        let whisper_output: WhisperOutput = serde_json::from_str(&json_str)?;
+
+        // Build word-level timestamps from segments
+        let mut words = Vec::new();
+        for segment in &whisper_output.segments {
+            // Split segment text into words
+            let segment_words: Vec<&str> = segment.text
+                .split_whitespace()
+                .collect();
+
+            if segment_words.is_empty() {
+                continue;
+            }
+
+            let segment_duration = segment.end - segment.start;
+            let word_duration = segment_duration / segment_words.len() as f64;
+
+            for (i, word) in segment_words.iter().enumerate() {
+                words.push(TranscriptWord {
+                    word: word.to_string(),
+                    start: segment.start + (i as f64 * word_duration),
+                    end: segment.start + ((i + 1) as f64 * word_duration),
+                });
+            }
+        }
+
+        let transcript = whisper_output.segments
+            .iter()
+            .map(|s| s.text.trim().to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        let duration_secs = whisper_output.segments
+            .last()
+            .map(|s| s.end)
+            .or_else(|| whisper_output.segments.iter().map(|s| s.end).reduce(f64::max))
+            .or(Some(0.0));
+
+        Ok(TranscriptionResult {
+            transcript,
+            words,
+            duration_secs,
+            language: whisper_output.language,
+        })
+    }).await?
+}
+
 /// Job processor - runs transcription jobs in a limited pool
 struct TranscriptionJobProcessor {
     config: TranscriptionConfig,
@@ -281,11 +592,7 @@ impl TranscriptionJobProcessor {
                 Some(job_id) = job_rx.recv() => {
                     // Wait for capacity
                     while join_set.len() >= self.config.max_concurrent {
-                        if let Some(result) = join_set.join_next().await {
-                            if let Ok(Err(e)) = result {
-                                error!("Job task failed: {}", e);
-                            }
-                        } else {
+                        if join_set.join_next().await.is_none() {
                             break;
                         }
                     }
@@ -300,11 +607,7 @@ impl TranscriptionJobProcessor {
                     });
                 }
                 // Clean up completed jobs
-                Some(result) = join_set.join_next() => {
-                    if let Ok(Err(e)) = result {
-                        error!("Job task failed: {}", e);
-                    }
-                }
+                Some(_) = join_set.join_next() => {}
                 else => {
                     break;
                 }
@@ -313,7 +616,7 @@ impl TranscriptionJobProcessor {
 
         // Wait for remaining jobs
         while let Some(result) = join_set.join_next().await {
-            if let Ok(Err(e)) = result {
+            if let Err(e) = result {
                 error!("Job task failed: {}", e);
             }
         }
@@ -352,7 +655,9 @@ impl TranscriptionJobProcessor {
         }
 
         // Run transcription with retries
-        let mut result: Result<TranscriptionResult> = Err(anyhow::anyhow!("Not attempted"));
+        let mut result: Option<TranscriptionResult> = None;
+        let mut last_error: Option<String> = None;
+
         for attempt in 1..=config.max_retries {
             debug!("Transcription attempt {} for job {}", attempt, job_id);
 
@@ -364,27 +669,27 @@ impl TranscriptionJobProcessor {
                 }
             }
 
-            result = Self::transcribe_with_whisper(&audio_path, &config).await;
+            let transcription = transcribe_with_fallback(&audio_path, &config).await;
+            if !transcription.transcript.is_empty() {
+                info!("Transcription succeeded for job {} on attempt {}", job_id, attempt);
+                result = Some(transcription);
+                break;
+            } else {
+                warn!("Transcription attempt {} produced empty transcript for job {}", attempt, job_id);
+                last_error = Some("Empty transcript produced".to_string());
+            }
 
-            match &result {
-                Ok(_) => {
-                    info!("Transcription succeeded for job {} on attempt {}", job_id, attempt);
-                    break;
-                }
-                Err(e) => {
-                    warn!("Transcription attempt {} failed for job {}: {}", attempt, job_id, e);
-                    if attempt < config.max_retries {
-                        tokio::time::sleep(Duration::from_secs(5 * attempt as u64)).await;
-                    }
-                }
+            if attempt < config.max_retries {
+                tokio::time::sleep(Duration::from_secs(5 * attempt as u64)).await;
             }
         }
 
         // Update job with result
         match result {
-            Ok(transcription) => {
-                // Store the result in the dictated_notes table
-                if let Err(e) = Self::store_transcription_result(&stitch_id, &transcription).await {
+            Some(transcription) => {
+                if let Err(e) = Self::store_transcription_result(
+                    &stitch_id, &transcription, TranscriptionStatus::Completed
+                ).await {
                     error!("Failed to store transcription result: {}", e);
                     let _ = service.update_job_status(
                         &job_id,
@@ -395,12 +700,28 @@ impl TranscriptionJobProcessor {
                     let _ = service.update_job_status(&job_id, JobStatus::Completed, None).await;
                 }
             }
-            Err(e) => {
-                error!("Transcription failed for job {} after {} attempts: {}", job_id, config.max_retries, e);
+            None => {
+                // All retries failed - store partial transcript if available
+                let error_msg = last_error.unwrap_or_else(|| "Unknown error".to_string());
+                error!("Transcription failed for job {} after {} attempts: {}", job_id, config.max_retries, error_msg);
+
+                let partial_result = TranscriptionResult {
+                    transcript: format!("[Transcription failed: {}]", error_msg),
+                    words: vec![],
+                    duration_secs: None,
+                    language: None,
+                };
+
+                if let Err(e) = Self::store_transcription_result(
+                    &stitch_id, &partial_result, TranscriptionStatus::Failed
+                ).await {
+                    error!("Failed to store partial transcription result: {}", e);
+                }
+
                 let _ = service.update_job_status(
                     &job_id,
                     JobStatus::Failed,
-                    Some(format!("Failed after {} attempts: {}", config.max_retries, e))
+                    Some(format!("Failed after {} attempts: {}", config.max_retries, error_msg))
                 ).await;
             }
         }
@@ -430,6 +751,15 @@ impl TranscriptionJobProcessor {
                 return Err(anyhow::anyhow!("Audio file not found: {}", audio_path.display()));
             }
 
+            // Convert audio to WAV if necessary (whisper.cpp prefers WAV)
+            let working_audio_path = if needs_conversion(&audio_path) {
+                debug!("Converting audio file {} to WAV format", audio_path.display());
+                convert_to_wav(&audio_path)
+                    .context("Failed to convert audio to WAV")?
+            } else {
+                audio_path.clone()
+            };
+
             // Build whisper.cpp command
             // -m: model path
             // -f: input file
@@ -442,12 +772,17 @@ impl TranscriptionJobProcessor {
                 .arg("-m")
                 .arg(&model_path)
                 .arg("-f")
-                .arg(&audio_path)
+                .arg(&working_audio_path)
                 .arg("-oj")  // Output JSON with word timestamps
                 .arg("--output-file")
                 .arg(&temp_output)
                 .output()
                 .context("Failed to execute whisper.cpp")?;
+
+            // Clean up converted file if we created one
+            if working_audio_path != audio_path {
+                let _ = std::fs::remove_file(&working_audio_path);
+            }
 
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
@@ -492,7 +827,7 @@ impl TranscriptionJobProcessor {
             let duration_secs = whisper_output.segments
                 .last()
                 .map(|s| s.end)
-                .or_else(|| whisper_output.segments.iter().map(|s| s.end).max())
+                .or_else(|| whisper_output.segments.iter().map(|s| s.end).reduce(f64::max))
                 .or(Some(0.0));
 
             // Detect language from output
@@ -511,6 +846,7 @@ impl TranscriptionJobProcessor {
     async fn store_transcription_result(
         stitch_id: &str,
         result: &TranscriptionResult,
+        status: TranscriptionStatus,
     ) -> Result<()> {
         let stitch_id = stitch_id.to_string();
         let transcript = result.transcript.clone();
@@ -518,6 +854,7 @@ impl TranscriptionJobProcessor {
         let duration_secs = result.duration_secs;
         let language = result.language.clone();
         let transcribed_at = Utc::now().to_rfc3339();
+        let status_json = serde_json::to_string(&status)?;
 
         tokio::task::spawn_blocking(move || {
             let db_path = crate::fleet::db_path();
@@ -527,10 +864,12 @@ impl TranscriptionJobProcessor {
             conn.execute(
                 r#"
                 UPDATE dictated_notes
-                SET transcript = ?1, transcript_words = ?2, transcribed_at = ?3
-                WHERE stitch_id = ?4
+                SET transcript = ?1, transcript_words = ?2, transcribed_at = ?3,
+                    duration_secs = ?4, language = ?5, transcription_status = ?6
+                WHERE stitch_id = ?7
                 "#,
-                params![transcript, words_json, transcribed_at, stitch_id],
+                params![transcript, words_json, transcribed_at,
+                        duration_secs, language, status_json, stitch_id],
             )?;
 
             Ok::<(), anyhow::Error>(())
