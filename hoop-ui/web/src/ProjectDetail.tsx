@@ -108,16 +108,35 @@ export default function ProjectDetail({ projectName, projectPath }: ProjectDetai
       if (tabIndex < TABS.length) {
         setActiveTab(TABS[tabIndex].id);
       }
+      return;
     }
 
-    // Arrow keys for tab navigation
-    if (event.altKey) {
-      const currentIndex = TABS.findIndex(t => t.id === activeTab);
-      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+    // Arrow keys: within tablist (no modifier) or Alt+arrow anywhere
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      const inTablist = target.role === 'tab' || target.closest('[role="tablist"]');
+      if (inTablist || event.altKey) {
         event.preventDefault();
+        const currentIndex = TABS.findIndex(t => t.id === activeTab);
         const direction = event.key === 'ArrowRight' ? 1 : -1;
         const newIndex = (currentIndex + direction + TABS.length) % TABS.length;
         setActiveTab(TABS[newIndex].id);
+
+        // Focus the new tab button for in-tablist navigation
+        if (inTablist && tabsRef.current) {
+          const btn = tabsRef.current.children[newIndex] as HTMLElement;
+          btn?.focus();
+        }
+      }
+    }
+
+    // Home/End to jump to first/last tab when in tablist
+    if ((event.key === 'Home' || event.key === 'End') && (target.role === 'tab' || target.closest('[role="tablist"]'))) {
+      event.preventDefault();
+      const newIndex = event.key === 'Home' ? 0 : TABS.length - 1;
+      setActiveTab(TABS[newIndex].id);
+      if (tabsRef.current) {
+        const btn = tabsRef.current.children[newIndex] as HTMLElement;
+        btn?.focus();
       }
     }
   }, [activeTab]);

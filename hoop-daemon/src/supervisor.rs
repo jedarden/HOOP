@@ -13,15 +13,14 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
-use std::panic::{self, AssertUnwindSafe};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{broadcast, mpsc, RwLock};
-use tokio::task::JoinError;
 use tracing::{debug, error, info, warn};
 
 use crate::beads::{BeadEvent, BeadReader, BeadReaderConfig};
+use crate::cost::CostAggregator;
 use crate::events::{BeadEventData, EventTailer, EventTailerConfig, TailerEvent};
 use crate::projects::ProjectsConfig;
 use crate::sessions::{SessionEvent, SessionTailer, SessionTailerConfig};
@@ -74,6 +73,17 @@ impl ProjectRuntimeState {
         match self {
             Self::Failed { error, .. } | Self::Abandoned { error, .. } | Self::Error { error, .. } => Some(error),
             _ => None,
+        }
+    }
+
+    /// Returns a clean lowercase state name for frontend display
+    pub fn to_display_string(&self) -> &'static str {
+        match self {
+            Self::Starting => "starting",
+            Self::Healthy => "healthy",
+            Self::Failed { .. } => "failed",
+            Self::Error { .. } => "error",
+            Self::Abandoned { .. } => "abandoned",
         }
     }
 }
@@ -135,6 +145,16 @@ pub struct ProjectSupervisor {
     shutdown: Arc<crate::shutdown::ShutdownCoordinator>,
     /// Event tailer for global events.jsonl (bead claim/close/release/update events)
     event_tailer: Arc<std::sync::Mutex<Option<EventTailer>>>,
+    /// Cost aggregator for session usage
+    cost_aggregator: Arc<std::sync::RwLock<CostAggregator>>,
+}
+
+impl std::fmt::Debug for ProjectSupervisor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProjectSupervisor")
+            .field("runtimes", &"<RwLock>")
+            .finish()
+    }
 }
 
 impl ProjectSupervisor {
@@ -145,6 +165,7 @@ impl ProjectSupervisor {
         worker_registry: Arc<crate::ws::WorkerRegistry>,
         beads: Arc<std::sync::RwLock<Vec<Bead>>>,
         shutdown: Arc<crate::shutdown::ShutdownCoordinator>,
+        cost_aggregator: Arc<std::sync::RwLock<CostAggregator>>,
     ) -> Self {
         let (status_tx, _) = broadcast::channel(64);
 
@@ -157,6 +178,7 @@ impl ProjectSupervisor {
             status_tx,
             shutdown,
             event_tailer: Arc::new(std::sync::Mutex::new(None)),
+            cost_aggregator,
         }
     }
 
@@ -178,7 +200,7 @@ impl ProjectSupervisor {
                 match event {
                     TailerEvent::Event(parsed) => {
                         // Convert to BeadEventData and add to registry
-                        if let Some(bead_event) = BeadEventData::from(&parsed.event) {
+                        if let Some(bead_event) = BeadEventData::from_event(&parsed.event) {
                             let ws_event = crate::ws::BeadEventData {
                                 timestamp: bead_event.timestamp.clone(),
                                 event_type: bead_event.event_type.clone(),
@@ -309,7 +331,7 @@ impl ProjectSupervisor {
 
         // Stop all bead readers
         let bead_readers = runtime.bead_readers.lock().unwrap().drain(..).collect::<Vec<_>>();
-        for bead_reader in bead_readers {
+        for mut bead_reader in bead_readers {
             if let Err(e) = bead_reader.stop().await {
                 warn!("Error stopping bead reader for {}: {}", runtime.name, e);
             }
@@ -317,20 +339,21 @@ impl ProjectSupervisor {
 
         // Flush session tailer state via the shared reference
         let tailer_opt = runtime.session_tailer.lock().unwrap().take();
-        if let Some(session_tailer) = tailer_opt {
+        if let Some(mut session_tailer) = tailer_opt {
             if let Err(e) = session_tailer.stop().await {
                 warn!("Error stopping session tailer for {}: {}", runtime.name, e);
             }
         }
 
-        // Give the task time to shut down gracefully (max 2s)
-        if let Some(handle) = &runtime.task_handle {
-            let _ = tokio::time::timeout(Duration::from_secs(2), handle).await;
-        }
-
-        // Abort if still running
+        // Give the task time to shut down gracefully (max 2s), then abort
         if let Some(handle) = runtime.task_handle.take() {
-            handle.abort();
+            let abort_handle = handle.abort_handle();
+            if tokio::time::timeout(Duration::from_secs(2), handle)
+                .await
+                .is_err()
+            {
+                abort_handle.abort();
+            }
         }
 
         runtime.shutdown_tx = None;
@@ -351,6 +374,7 @@ impl ProjectSupervisor {
         let shutdown = self.shutdown.clone();
         let session_tailer = runtime.session_tailer.clone();
         let bead_readers = runtime.bead_readers.clone();
+        let cost_aggregator = self.cost_aggregator.clone();
         let supervisor = self.clone();
 
         // Create shutdown channel for this runtime
@@ -380,6 +404,7 @@ impl ProjectSupervisor {
                 session_tailer,
                 bead_readers,
                 error_tx,
+                cost_aggregator,
             ).await;
 
             match result {
@@ -536,6 +561,7 @@ impl ProjectSupervisor {
         session_tailer_clone: Arc<std::sync::Mutex<Option<SessionTailer>>>,
         bead_readers_clone: Arc<std::sync::Mutex<Vec<BeadReader>>>,
         error_tx: mpsc::Sender<anyhow::Error>,
+        cost_aggregator: Arc<std::sync::RwLock<CostAggregator>>,
     ) -> Result<()> {
         // Subscribe to shutdown phases
         let mut shutdown_rx = shutdown.subscribe();
@@ -641,6 +667,7 @@ impl ProjectSupervisor {
             project_path: Some(project_path.clone()),
             discovery_concurrency: 16,
             poll_interval_secs: 5,
+            enabled_adapters: vec![],
         };
 
         let mut session_tailer = SessionTailer::new(session_tailer_config)
@@ -650,6 +677,7 @@ impl ProjectSupervisor {
         let mut session_rx = session_tailer.subscribe();
         let worker_registry_clone = worker_registry.clone();
         let error_tx_clone = error_tx.clone();
+        let project_name_for_tailer = project_name.clone();
 
         tokio::spawn(async move {
             while let Ok(event) = session_rx.recv().await {
@@ -661,10 +689,11 @@ impl ProjectSupervisor {
                         // Registry will handle this via the WebSocket
                     }
                     SessionEvent::Error(e) => {
-                        error!("Session tailer error for project {}: {}", project_name, e);
+                        error!("Session tailer error for project {}: {}", project_name_for_tailer, e);
                         // Send error to runtime via channel
-                        let _ = error_tx_clone.send(anyhow::anyhow!("Session tailer error for {}: {}", project_name, e));
+                        let _ = error_tx_clone.send(anyhow::anyhow!("Session tailer error for {}: {}", project_name_for_tailer, e));
                     }
+                    SessionEvent::TagJoinBound { .. } => {}
                 }
             }
         });

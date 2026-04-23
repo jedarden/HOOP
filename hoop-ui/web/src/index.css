@@ -1967,6 +1967,13 @@ pre {
   font-style: italic;
 }
 
+.cost-loading {
+  color: #666;
+  font-style: italic;
+  padding: 1rem;
+  text-align: center;
+}
+
 .cost-breakdown {
   display: flex;
   flex-direction: column;
@@ -3619,6 +3626,66 @@ pre {
 	margin-top: 0.25rem;
   }
 
+/* Dictated Note detail in StitchesTab */
+.dictated-note-detail {
+  margin-top: 0.75rem;
+}
+
+.dictated-note-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.dictated-note-transcript-preview {
+  padding: 0.75rem;
+  background: #fafafa;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  color: #555;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.dictated-note-transcript-preview p {
+  margin: 0;
+}
+
+/* Dictated Note Player wrapper */
+.dictated-note-player {
+  margin-bottom: 1rem;
+}
+
+.dictated-note-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.8125rem;
+}
+
+.dictated-note-label {
+  font-weight: 600;
+  color: #1976d2;
+  background: #e3f0fc;
+  padding: 0.125rem 0.5rem;
+  border-radius: 12px;
+}
+
+.dictated-note-lang {
+  color: #666;
+  font-variant: small-caps;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dictated-note-date {
+  color: #999;
+  margin-left: auto;
+}
+
 /* Audio Player with Transcript Sync */
 .audio-player {
   display: flex;
@@ -4296,5 +4363,16 @@ pre {
     max-height: 30vh;
     border-right: none;
     border-bottom: 1px solid #e0e0e0;
+  }
+
+  /* Cost loading responsive */
+  .cost-loading {
+    padding: 0.75rem;
+  }
+
+  /* Conversation pane responsive in project detail */
+  .conversation-pane {
+    height: auto;
+    min-height: 500px;
   }
 }

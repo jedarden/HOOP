@@ -522,7 +522,7 @@ impl NdjsonParser {
 
     /// Forward a parsed event as bead event data (if applicable)
     fn forward_bead_event(event: &NeedleEvent, tx: &broadcast::Sender<BeadEventData>) {
-        if let Some(bead_event) = BeadEventData::from(event) {
+        if let Some(bead_event) = BeadEventData::from_event(event) {
             let _ = tx.send(bead_event);
         }
     }

@@ -4,11 +4,16 @@
 //! It reads from projects, beads, sessions, files, events, and heartbeats.
 //! Its only write is `br create` for bead creation.
 
+pub mod api_attachments;
+pub mod api_dictated_notes;
+pub mod api_uploads;
+pub mod attachments;
 pub mod audit;
 pub mod beads;
 pub mod br_verbs;
 pub mod capacity;
 pub mod cost;
+pub mod dictated_notes;
 pub mod events;
 pub mod files;
 pub mod fleet;
@@ -20,7 +25,10 @@ pub mod shutdown;
 pub mod stitch_status;
 pub mod supervisor;
 pub mod tag_join;
+pub mod transcription;
+pub mod uploads;
 pub mod ws;
+pub use transcription::api_transcription;
 
 /// Worker execution state from heartbeats
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -106,7 +114,7 @@ pub struct StatusResponse {
 }
 
 use axum::{
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use hoop_schema::HealthResponse;
@@ -118,6 +126,7 @@ use std::{
     net::SocketAddr,
     os::unix::fs::PermissionsExt,
     path::PathBuf,
+    time::Duration,
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt},
@@ -173,6 +182,7 @@ pub struct DaemonState {
     pub project_status_tx: broadcast::Sender<ws::ProjectCardData>,
     pub capacity_tx: broadcast::Sender<Vec<capacity::AccountCapacity>>,
     pub cost_aggregator: Arc<std::sync::RwLock<cost::CostAggregator>>,
+    pub transcription_service: Option<Arc<transcription::TranscriptionService>>,
 }
 
 /// Health check endpoint handler
@@ -201,6 +211,23 @@ async fn get_cost_buckets_by_project(
 ) -> Json<Vec<cost::CostBucket>> {
     let aggregator = state.cost_aggregator.read().unwrap();
     Json(aggregator.get_buckets_by_project(&project))
+}
+
+/// Reload pricing configuration endpoint handler
+async fn reload_pricing(
+    axum::extract::State(state): axum::extract::State<DaemonState>,
+) -> Result<Json<serde_json::Value>, axum::http::StatusCode> {
+    let mut aggregator = state.cost_aggregator.write().unwrap();
+    aggregator.reload_pricing()
+        .map_err(|e| {
+            warn!("Failed to reload pricing configuration: {}", e);
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    info!("Pricing configuration reloaded via API request");
+    Ok(Json(serde_json::json!({
+        "status": "ok",
+        "message": "Pricing configuration reloaded successfully"
+    })))
 }
 
 /// Query parameters for the file browser endpoint.
@@ -249,16 +276,31 @@ async fn get_bead_events(
     Json(events)
 }
 
+/// Get per-account capacity utilization (on-demand compute)
+async fn get_capacity(
+    axum::extract::State(state): axum::extract::State<DaemonState>,
+) -> Json<Vec<capacity::AccountCapacity>> {
+    let config = capacity::CapacityMeterConfig::default();
+    let meter = capacity::CapacityMeter::new(config);
+    Json(meter.compute())
+}
+
 /// Build the daemon router with all endpoints
 pub fn router() -> Router<DaemonState> {
     Router::new()
         .route("/healthz", get(healthz))
         .route("/api/beads", get(get_beads))
         .route("/api/beads/:bead_id/events", get(get_bead_events))
+        .route("/api/capacity", get(get_capacity))
         .route("/api/cost/buckets", get(get_cost_buckets))
         .route("/api/cost/buckets/:project", get(get_cost_buckets_by_project))
+        .route("/api/cost/reload-pricing", post(reload_pricing))
         .route("/api/projects/:project/files", get(get_project_files))
+        .route("/api/attachments/:attachment_type/:id/:filename", get(api_attachments::serve_attachment))
         .route("/ws", get(ws::ws_handler))
+        .nest("/api/uploads", api_uploads::router())
+        .merge(api_dictated_notes::router())
+        .merge(transcription::api_transcription::router())
         .nest_service("/assets", AssetsHandler::router())
         .fallback_service(AssetsHandler::router())
         .layer(TraceLayer::new_for_http())
@@ -292,7 +334,7 @@ async fn handle_control_socket(
                             path: r.project_path.display().to_string(),
                             active_beads: r.bead_count,
                             workers: 0, // TODO: track workers per project
-                            runtime_state: Some(format!("{:?}", r.state)),
+                            runtime_state: Some(r.state.to_display_string().to_string()),
                             runtime_error: r.state.error().map(|e| e.to_string()),
                         })
                         .collect()
@@ -304,7 +346,7 @@ async fn handle_control_socket(
                             path: r.project_path.display().to_string(),
                             active_beads: r.bead_count,
                             workers: 0,
-                            runtime_state: Some(format!("{:?}", r.state)),
+                            runtime_state: Some(r.state.to_display_string().to_string()),
                             runtime_error: r.state.error().map(|e| e.to_string()),
                         })
                         .collect()
@@ -415,7 +457,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         heartbeats::HeartbeatMonitorConfig::default()
     )?;
     heartbeat_monitor.start()?;
-    let heartbeat_tx = heartbeat_monitor.subscribe();
+    let heartbeat_tx = heartbeat_monitor.sender();
 
     // Initialize session event broadcast channel
     let (session_tx, _) = broadcast::channel::<sessions::SessionEvent>(256);
@@ -435,8 +477,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     // Initialize capacity broadcast channel and start refresh loop
     let (capacity_tx, _) = broadcast::channel::<Vec<capacity::AccountCapacity>>(64);
     let capacity_meter_config = capacity::CapacityMeterConfig::default();
+    let account_count = capacity_meter_config.account_dirs.len();
     capacity::CapacityMeter::spawn_refresh_loop(capacity_meter_config, capacity_tx.clone());
-    info!("Capacity meter refresh loop started");
+    info!("Capacity meter refresh loop started ({} account(s))", account_count);
 
     // Initialize cost aggregator
     let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
@@ -446,6 +489,40 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     let cost_aggregator: Arc<std::sync::RwLock<cost::CostAggregator>> =
         Arc::new(std::sync::RwLock::new(cost_aggregator));
     info!("Cost aggregator initialized");
+
+    // Initialize transcription service
+    let whisper_cli_path = PathBuf::from("/home/coding/.local/bin/whisper");
+    let whisper_model_path = home.join("models").join("ggml-base.en.bin");
+    let transcription_config = transcription::TranscriptionConfig {
+        whisper_cli_path,
+        whisper_model_path: whisper_model_path.clone(),
+        max_concurrent: 2,
+        max_retries: 3,
+    };
+    let transcription_service = Arc::new(transcription::TranscriptionService::new(transcription_config.clone()));
+
+    // Ensure models directory exists
+    if let Some(model_dir) = whisper_model_path.parent() {
+        if !model_dir.exists() {
+            if let Err(e) = std::fs::create_dir_all(model_dir) {
+                warn!("Failed to create models directory {}: {}", model_dir.display(), e);
+            } else {
+                info!("Created models directory at {}", model_dir.display());
+                info!("Whisper models should be placed at {}", whisper_model_path.display());
+                info!("Download from: https://huggingface.co/ggerganov/whisper.cpp");
+            }
+        }
+    }
+
+    // Check if model exists
+    if !whisper_model_path.exists() {
+        warn!("Whisper model not found at {}", whisper_model_path.display());
+        warn!("Transcription will fail until model is downloaded");
+        warn!("Download from: https://huggingface.co/ggerganov/whisper.cpp");
+    } else {
+        info!("Whisper model found at {}", whisper_model_path.display());
+    }
+    info!("Transcription service initialized");
 
     // Initialize shared beads store
     let beads: Arc<std::sync::RwLock<Vec<Bead>>> = Arc::new(std::sync::RwLock::new(Vec::new()));
@@ -605,7 +682,6 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     let supervisor_snapshot = supervisor.snapshot().await;
     let initial_workers = worker_registry.snapshot().await;
     let initial_beads_guard = beads.read().unwrap().clone();
-    let initial_convos = worker_registry.conversations_snapshot().await;
 
     // Build project metadata lookup (label, color) from config
     let project_metadata: std::collections::HashMap<String, ProjectMetadata> = initial_config
@@ -631,17 +707,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
             let active_stitch_count = initial_beads_guard.iter().filter(|b| b.status == BeadStatus::Open).count();
             let last_activity = initial_workers.iter().map(|w| w.last_heartbeat).max().map(|t| t.to_rfc3339());
 
-            let today = chrono::Utc::now().date_naive();
-            let cost_today: f64 = initial_convos.iter()
-                .filter_map(|c| {
-                    let date = chrono::DateTime::parse_from_rfc3339(&c.updated_at).ok()?.date_naive();
-                    if date == today {
-                        Some(c.total_tokens as f64 * 0.000_003)
-                    } else {
-                        None
-                    }
-                })
-                .sum();
+            let cost_today = cost_aggregator.read().unwrap().cost_today_for_project(&r.project_name);
 
             let meta = meta_for_init.read().unwrap().get(&r.project_name).cloned();
             ws::ProjectCardData {
@@ -650,7 +716,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                 color: meta.as_ref().map(|m| m.color.clone()).unwrap_or_else(|| "#3b82f6".to_string()),
                 path: r.project_path.display().to_string(),
                 degraded: !r.state.is_running(),
-                runtime_state: Some(format!("{:?}", r.state)),
+                runtime_state: Some(r.state.to_display_string().to_string()),
                 runtime_error: r.state.error().map(|e| e.to_string()),
                 bead_count: r.bead_count,
                 worker_count,
@@ -676,6 +742,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         project_status_tx,
         capacity_tx,
         cost_aggregator: cost_aggregator.clone(),
+        transcription_service: Some(transcription_service),
     };
 
     // Forward project runtime status updates to shared store and broadcast
@@ -685,29 +752,18 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     let supervisor_for_cards = state.supervisor.clone();
     let project_status_tx_clone = project_status_tx.clone();
     let meta_for_updates = project_metadata.clone();
+    let cost_for_updates = cost_aggregator.clone();
     tokio::spawn(async move {
         let mut rx = supervisor_for_cards.subscribe_status();
         while let Ok(runtime_status) = rx.recv().await {
             let workers = registry_for_cards.snapshot().await;
-            let convos = registry_for_cards.conversations_snapshot().await;
             let all_beads = beads_for_cards.read().unwrap().clone();
+            let cost_today = cost_for_updates.read().unwrap().cost_today_for_project(&runtime_status.project_name);
 
             let worker_count = workers.len();
             let stuck_count = workers.iter().filter(|w| matches!(w.state, ws::WorkerDisplayState::Knot { .. })).count();
             let active_stitch_count = all_beads.iter().filter(|b| b.status == BeadStatus::Open).count();
             let last_activity = workers.iter().map(|w| w.last_heartbeat).max().map(|t| t.to_rfc3339());
-
-            let today = chrono::Utc::now().date_naive();
-            let cost_today: f64 = convos.iter()
-                .filter_map(|c| {
-                    let date = chrono::DateTime::parse_from_rfc3339(&c.updated_at).ok()?.date_naive();
-                    if date == today {
-                        Some(c.total_tokens as f64 * 0.000_003)
-                    } else {
-                        None
-                    }
-                })
-                .sum();
 
             let meta = meta_for_updates.read().unwrap().get(&runtime_status.project_name).cloned();
             let card = ws::ProjectCardData {
@@ -716,7 +772,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                 color: meta.as_ref().map(|m| m.color.clone()).unwrap_or_else(|| "#3b82f6".to_string()),
                 path: runtime_status.project_path.display().to_string(),
                 degraded: !runtime_status.state.is_running(),
-                runtime_state: Some(format!("{:?}", runtime_status.state)),
+                runtime_state: Some(runtime_status.state.to_display_string().to_string()),
                 runtime_error: runtime_status.state.error().map(|e| e.to_string()),
                 bead_count: runtime_status.bead_count,
                 worker_count,
@@ -738,6 +794,60 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
             let _ = project_status_tx_clone.send(card);
         }
     });
+
+    // Periodic project card refresh for live metrics (every 5s)
+    {
+        let supervisor_ref = state.supervisor.clone();
+        let registry_ref = state.worker_registry.clone();
+        let beads_ref = state.beads.clone();
+        let cost_ref = cost_aggregator.clone();
+        let meta_ref = project_metadata.clone();
+        let projects_ref = state.projects.clone();
+        let status_ref = project_status_tx.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(5));
+            loop {
+                interval.tick().await;
+                let runtime_statuses = supervisor_ref.snapshot().await;
+                let workers = registry_ref.snapshot().await;
+                let all_beads = beads_ref.read().unwrap().clone();
+                let meta = meta_ref.read().unwrap().clone();
+
+                let new_cards: Vec<ws::ProjectCardData> = runtime_statuses
+                    .iter()
+                    .map(|r| {
+                        let cost = cost_ref.read().unwrap().cost_today_for_project(&r.project_name);
+                        let worker_count = workers.len();
+                        let stuck_count = workers.iter().filter(|w| matches!(w.state, ws::WorkerDisplayState::Knot { .. })).count();
+                        let active_stitch_count = all_beads.iter().filter(|b| b.status == BeadStatus::Open).count();
+                        let last_activity = workers.iter().map(|w| w.last_heartbeat).max().map(|t| t.to_rfc3339());
+                        let m = meta.get(&r.project_name);
+
+                        ws::ProjectCardData {
+                            name: r.project_name.clone(),
+                            label: m.map(|m| m.label.clone()).unwrap_or_else(|| r.project_name.clone()),
+                            color: m.map(|m| m.color.clone()).unwrap_or_else(|| "#3b82f6".to_string()),
+                            path: r.project_path.display().to_string(),
+                            degraded: !r.state.is_running(),
+                            runtime_state: Some(r.state.to_display_string().to_string()),
+                            runtime_error: r.state.error().map(|e| e.to_string()),
+                            bead_count: r.bead_count,
+                            worker_count,
+                            active_stitch_count,
+                            cost,
+                            stuck_count,
+                            last_activity,
+                        }
+                    })
+                    .collect();
+
+                *projects_ref.write().unwrap() = new_cards.clone();
+                for card in new_cards {
+                    let _ = status_ref.send(card);
+                }
+            }
+        });
+    }
 
     let app = router().with_state(state.clone());
 

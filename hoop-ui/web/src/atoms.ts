@@ -35,6 +35,17 @@ export interface TranscriptData {
   words: TranscriptWord[];
 }
 
+// Dictated note metadata from backend (audio + Whisper transcript)
+export interface DictatedNote {
+  stitch_id: string;
+  audio_url: string;
+  transcript: string;
+  transcript_words: TranscriptWord[];
+  duration_secs?: number | null;
+  language?: string | null;
+  recorded_at: string;
+}
+
 // A single message in a session
 export interface SessionMessage {
   role: 'user' | 'assistant' | 'system';
@@ -60,6 +71,7 @@ export interface Conversation {
   updated_at: string;
   complete: boolean;
   file_path: string;
+  dictated_note?: DictatedNote | null;
 }
 
 // In-flight streaming content (separate atom for isolation)
@@ -180,6 +192,18 @@ export interface WsEvent {
   capacity?: AccountCapacity[];
 }
 
+// Cost bucket from backend aggregation
+export interface CostBucket {
+  date: string;
+  project: string;
+  adapter: string;
+  model: string;
+  strand: string | null;
+  usage: MessageUsage;
+  request_count: number;
+  cost_usd: number;
+}
+
 // Bead event from events.jsonl for debug panel
 export interface BeadEventFromEvents {
   timestamp: string;
@@ -188,6 +212,23 @@ export interface BeadEventFromEvents {
   worker: string;
   line_number?: number;
   raw: string;
+}
+
+// Dictated note summary from REST API
+export interface NoteSummary {
+  stitch_id: string;
+  project: string;
+  title: string;
+  kind: string;
+  recorded_at: string;
+  transcribed_at: string;
+  duration_secs: number | null;
+  language: string | null;
+  tags: string[];
+  transcript_preview: string;
+  last_activity_at: string;
+  created_at: string;
+  audio_filename: string;
 }
 
 // Atoms for state management
@@ -203,6 +244,8 @@ export const beadEventsAtom = atom<Map<string, BeadEventFromEvents[]>>(new Map()
 export const wsConnectedAtom = atom<boolean>(false);
 export const configStatusAtom = atom<ConfigStatus>({ valid: true });
 export const capacityAtom = atom<AccountCapacity[]>([]);
+export const costBucketsAtom = atom<CostBucket[]>([]);
+export const dictatedNotesAtom = atom<Map<string, NoteSummary[]>>(new Map()); // project -> notes
 
 // Format content for display (handles string and object content)
 export function formatContent(content: string | { [key: string]: any } | null): string {

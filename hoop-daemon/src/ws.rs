@@ -21,6 +21,28 @@ use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, warn};
 
+/// Word-level timestamp for Whisper transcript sync
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TranscriptWordData {
+    pub word: String,
+    pub start: f64,
+    pub end: f64,
+}
+
+/// Dictated note metadata sent to the frontend
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DictatedNoteData {
+    pub stitch_id: String,
+    pub audio_url: String,
+    pub transcript: String,
+    pub transcript_words: Vec<TranscriptWordData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_secs: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    pub recorded_at: String,
+}
+
 /// Worker data sent to the frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkerData {
@@ -109,10 +131,69 @@ pub struct ConversationData {
     pub updated_at: String,
     pub complete: bool,
     pub file_path: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dictated_note: Option<DictatedNoteData>,
+}
+
+/// Load a DictatedNote JSON from ~/.hoop/attachments/<stitch_id>/dictated_note.json
+fn load_dictated_note(stitch_id: &str) -> Option<DictatedNoteData> {
+    let home = dirs::home_dir()?;
+    let note_path = home
+        .join(".hoop")
+        .join("attachments")
+        .join(stitch_id)
+        .join("dictated_note.json");
+
+    let content = std::fs::read_to_string(&note_path).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&content).ok()?;
+
+    let note_stitch_id = json.get("stitch_id")?.as_str()?.to_string();
+    let audio_filename = json.get("audio_filename")?.as_str()?.to_string();
+    let transcript = json.get("transcript")?.as_str()?.to_string();
+    let recorded_at = json.get("recorded_at")?.as_str()?.to_string();
+    let duration_secs = json.get("duration_secs").and_then(|v| v.as_f64());
+    let language = json
+        .get("language")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let transcript_words = json
+        .get("transcript_words")
+        .and_then(|v| v.as_array())
+        .map(|words| {
+            words
+                .iter()
+                .filter_map(|w| {
+                    Some(TranscriptWordData {
+                        word: w.get("word")?.as_str()?.to_string(),
+                        start: w.get("start")?.as_f64()?,
+                        end: w.get("end")?.as_f64()?,
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let audio_url = format!(
+        "/api/attachments/stitch/{}/{}",
+        note_stitch_id, audio_filename
+    );
+
+    Some(DictatedNoteData {
+        stitch_id: note_stitch_id,
+        audio_url,
+        transcript,
+        transcript_words,
+        duration_secs,
+        language,
+        recorded_at,
+    })
 }
 
 impl From<ParsedSession> for ConversationData {
     fn from(s: ParsedSession) -> Self {
+        let is_dictated = matches!(s.kind, ParsedSessionKind::Variant1(ParsedSessionKindVariant1::Dictated));
+
         let (worker_metadata, kind_str) = match &s.kind {
             ParsedSessionKind::Variant3(ParsedSessionKindVariant3::Operator) => (None, "operator".to_string()),
             ParsedSessionKind::Variant1(ParsedSessionKindVariant1::Dictated) => (None, "dictated".to_string()),
@@ -125,6 +206,14 @@ impl From<ParsedSession> for ConversationData {
                 "worker".to_string(),
             ),
             ParsedSessionKind::Variant2(ParsedSessionKindVariant2::AdHoc) => (None, "ad-hoc".to_string()),
+        };
+
+        // For dictated sessions try session_id first, then id (in case they differ)
+        let dictated_note = if is_dictated {
+            load_dictated_note(&s.session_id)
+                .or_else(|| load_dictated_note(&s.id))
+        } else {
+            None
         };
 
         Self {
@@ -141,6 +230,7 @@ impl From<ParsedSession> for ConversationData {
             updated_at: s.updated_at.to_rfc3339(),
             complete: s.complete,
             file_path: s.file_path,
+            dictated_note,
         }
     }
 }
@@ -233,8 +323,10 @@ pub struct BeadEventData {
 
 /// WebSocket event sent to clients
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub struct WsEvent {
+    #[serde(rename = "type")]
+    pub event_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub worker: Option<WorkerData>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -263,6 +355,7 @@ impl WsEvent {
     /// Create a worker update event
     fn worker_update(worker: WorkerData) -> Self {
         Self {
+            event_type: "worker_update".to_string(),
             worker: Some(worker),
             workers: None,
             beads: None,
@@ -280,6 +373,7 @@ impl WsEvent {
     /// Create a full worker snapshot event
     fn workers_snapshot(workers: Vec<WorkerData>) -> Self {
         Self {
+            event_type: "workers_snapshot".to_string(),
             worker: None,
             workers: Some(workers),
             beads: None,
@@ -297,6 +391,7 @@ impl WsEvent {
     /// Create a beads snapshot event
     fn beads_snapshot(beads: Vec<BeadData>) -> Self {
         Self {
+            event_type: "beads_snapshot".to_string(),
             worker: None,
             workers: None,
             beads: Some(beads),
@@ -314,6 +409,7 @@ impl WsEvent {
     /// Create a conversations snapshot event
     fn conversations_snapshot(conversations: Vec<ConversationData>) -> Self {
         Self {
+            event_type: "conversations_snapshot".to_string(),
             worker: None,
             workers: None,
             beads: None,
@@ -331,6 +427,7 @@ impl WsEvent {
     /// Create a conversation update event
     fn conversation_update(conversation: ConversationData) -> Self {
         Self {
+            event_type: "conversation_update".to_string(),
             worker: None,
             workers: None,
             beads: None,
@@ -348,6 +445,7 @@ impl WsEvent {
     /// Create a streaming content event
     fn streaming_content(data: StreamingContentData) -> Self {
         Self {
+            event_type: "streaming_content".to_string(),
             worker: None,
             workers: None,
             beads: None,
@@ -365,6 +463,7 @@ impl WsEvent {
     /// Create a projects snapshot event
     pub fn projects_snapshot(projects: Vec<ProjectCardData>) -> Self {
         Self {
+            event_type: "projects_snapshot".to_string(),
             worker: None,
             workers: None,
             beads: None,
@@ -382,6 +481,7 @@ impl WsEvent {
     /// Create a config status event
     pub fn config_status(status: ConfigStatusData) -> Self {
         Self {
+            event_type: "config_status".to_string(),
             worker: None,
             workers: None,
             beads: None,
@@ -399,6 +499,7 @@ impl WsEvent {
     /// Create a capacity snapshot event
     pub fn capacity_snapshot(capacity: Vec<crate::capacity::AccountCapacity>) -> Self {
         Self {
+            event_type: "capacity_snapshot".to_string(),
             worker: None,
             workers: None,
             beads: None,
@@ -416,6 +517,7 @@ impl WsEvent {
     /// Create a bead event update (single event from events.jsonl)
     pub fn bead_event_update(event: BeadEventData) -> Self {
         Self {
+            event_type: "bead_event".to_string(),
             worker: None,
             workers: None,
             beads: None,
@@ -433,6 +535,7 @@ impl WsEvent {
     /// Create a bead events snapshot (all events for a bead)
     pub fn bead_events_snapshot(events: Vec<BeadEventData>) -> Self {
         Self {
+            event_type: "bead_events".to_string(),
             worker: None,
             workers: None,
             beads: None,

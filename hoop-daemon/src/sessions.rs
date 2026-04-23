@@ -370,7 +370,6 @@ impl Default for SessionTailerConfig {
 }
 
 /// Session tailer state
-#[derive(Debug)]
 struct SessionTailerState {
     /// Map of session IDs to their file paths
     id_to_path: HashMap<String, PathBuf>,
@@ -596,21 +595,31 @@ impl SessionTailer {
         project_path: Option<&Path>,
         is_initial: bool,
     ) -> Result<()> {
-        // Phase 1: Discover all JSONL files
-        let claude_dir = dirs::home_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(".claude")
-            .join("projects");
-
+        // Phase 1: Discover all session files from all adapters
+        let state_guard = state.lock().unwrap();
         let mut discovered = Vec::new();
-        Self::scan_directory_recursive(&claude_dir, &mut discovered)?;
+
+        for adapter in &state_guard.adapters {
+            let mut adapter_files = adapter.discover_sessions(project_path);
+            debug!(
+                "Discovered {} files from {} adapter",
+                adapter_files.len(),
+                adapter.name().as_str()
+            );
+            discovered.append(&mut adapter_files);
+        }
 
         // Sort by mtime (newest first)
         discovered.sort_by(|a, b| b.mtime.cmp(&a.mtime));
 
         // Phase 2: Parse in parallel with bounded concurrency
         let concurrency = 16;
-        let sessions = Self::parse_discovered_files(discovered, concurrency, project_path)?;
+        let sessions = Self::parse_discovered_files_multi_adapter(
+            discovered,
+            concurrency,
+            project_path,
+            &state_guard.adapters,
+        )?;
 
         // Apply bootstrap interceptor (alias new files to existing IDs)
         let sessions = Self::apply_bootstrap_interceptor(
@@ -667,11 +676,12 @@ impl SessionTailer {
         Ok(())
     }
 
-    /// Parse discovered files in parallel with bounded concurrency
-    fn parse_discovered_files(
+    /// Parse discovered files from multiple adapters
+    fn parse_discovered_files_multi_adapter(
         files: Vec<DiscoveredFile>,
         _concurrency: usize,
         project_path: Option<&Path>,
+        adapters: &[Box<dyn SessionAdapter>],
     ) -> Result<Vec<ParsedSession>> {
         // Use rayon for parallel processing
         let project_path = project_path.map(|p| p.to_path_buf());
@@ -679,22 +689,31 @@ impl SessionTailer {
         let sessions: Vec<_> = files
             .par_iter()
             .filter_map(|file| {
-                match Self::parse_session_file(&file.path, project_path.as_deref()) {
-                    Ok(Some(session)) => Some(session),
-                    Ok(None) => None, // Filtered out
-                    Err(e) => {
-                        warn!("Error parsing session file {}: {}", file.path.display(), e);
-                        None
+                // Try each adapter until one succeeds
+                for adapter in adapters {
+                    match adapter.parse_session_file(&file.path, project_path.as_deref()) {
+                        Ok(Some(session)) => return Some(session),
+                        Ok(None) => continue, // This adapter doesn't recognize the file
+                        Err(e) => {
+                            debug!(
+                                "Adapter {} failed to parse {}: {}",
+                                adapter.name().as_str(),
+                                file.path.display(),
+                                e
+                            );
+                            continue;
+                        }
                     }
                 }
+                None
             })
             .collect();
 
         Ok(sessions)
     }
 
-    /// Parse a single session file
-    fn parse_session_file(
+    /// Parse a Claude Code session file
+    fn parse_claude_session_file(
         path: &Path,
         project_path: Option<&Path>,
     ) -> Result<Option<ParsedSession>> {
@@ -904,6 +923,634 @@ impl SessionTailer {
         debug!("Session tailer stopped");
         Ok(())
     }
+
+    /// Parse a Codex session file (OpenAI Codex format)
+    fn parse_codex_session_file(
+        path: &Path,
+        project_path: Option<&Path>,
+    ) -> Result<Option<ParsedSession>> {
+        let file = File::open(path)
+            .with_context(|| format!("Failed to open Codex session file {}", path.display()))?;
+
+        let reader = BufReader::new(file);
+        let mut messages = Vec::new();
+        let mut session_id = String::new();
+        let mut cwd = String::new();
+        let mut title = String::new();
+        let mut start_time: Option<DateTime<Utc>> = None;
+        let mut end_time: Option<DateTime<Utc>> = None;
+        let mut total_usage = ParsedSessionTotalUsage {
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+        };
+        let mut first_prompt_hash = String::new();
+        let mut first_user_content: Option<String> = None;
+
+        for line in reader.lines() {
+            let line = line?;
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) {
+                let event_type = value.get("type").and_then(|v| v.as_str());
+
+                match event_type {
+                    Some("message") | Some("text") => {
+                        let role = value.get("role")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("user")
+                            .to_string();
+
+                        let content = value.get("content").cloned()
+                            .unwrap_or(serde_json::Value::Null);
+
+                        let usage = value.get("token_count").and_then(|tc| {
+                            tc.as_u64().map(|tokens| ParsedSessionMessagesItemUsage {
+                                input_tokens: if role == "user" { tokens as i64 } else { 0 },
+                                output_tokens: if role == "assistant" { tokens as i64 } else { 0 },
+                                cache_read_tokens: 0,
+                                cache_write_tokens: 0,
+                            })
+                        });
+
+                        if let Some(u) = &usage {
+                            total_usage.input_tokens += u.input_tokens;
+                            total_usage.output_tokens += u.output_tokens;
+                        }
+
+                        if role == "user" && first_prompt_hash.is_empty() {
+                            first_prompt_hash = Self::hash_content(&content);
+                            first_user_content = extract_text_content(&content);
+                        }
+
+                        let timestamp = value.get("timestamp")
+                            .and_then(|v| v.as_str())
+                            .and_then(|s| s.parse().ok());
+
+                        messages.push(ParsedSessionMessagesItem {
+                            role,
+                            content,
+                            usage,
+                            timestamp,
+                        });
+                    }
+                    Some("session_start") | Some("metadata") => {
+                        session_id = value.get("session_id")
+                            .and_then(|v| v.as_str())
+                            .or_else(|| value.get("id").and_then(|v| v.as_str()))
+                            .unwrap_or(&uuid::Uuid::new_v4().to_string())
+                            .to_string();
+
+                        cwd = value.get("cwd")
+                            .and_then(|v| v.as_str())
+                            .or_else(|| value.get("working_directory").and_then(|v| v.as_str()))
+                            .unwrap_or(&cwd)
+                            .to_string();
+
+                        title = value.get("title")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or(&title)
+                            .to_string();
+
+                        start_time = value.get("start_time")
+                            .or_else(|| value.get("created_at"))
+                            .and_then(|v| v.as_str())
+                            .and_then(|s| s.parse().ok());
+                    }
+                    Some("session_end") | Some("completed") => {
+                        end_time = value.get("end_time")
+                            .or_else(|| value.get("completed_at"))
+                            .and_then(|v| v.as_str())
+                            .and_then(|s| s.parse().ok());
+                    }
+                    _ => {
+                        debug!("Unknown Codex event type: {:?}", event_type);
+                    }
+                }
+            }
+        }
+
+        if let Some(project_path) = project_path {
+            let project_str = project_path.to_string_lossy();
+            if !cwd.starts_with(&*project_str) {
+                return Ok(None);
+            }
+        }
+
+        let tag_result = tag_join::resolve(&title, first_user_content.as_deref());
+        let kind = tag_result.kind;
+
+        let id = if session_id.is_empty() {
+            uuid::Uuid::new_v4().to_string()
+        } else {
+            session_id.clone()
+        };
+
+        let created_at = start_time.unwrap_or_else(|| Utc::now());
+        let updated_at = end_time.unwrap_or(created_at);
+        let complete = end_time.is_some();
+
+        let title = if title.is_empty() {
+            messages
+                .iter()
+                .find(|m| m.role == "user")
+                .and_then(|m| {
+                    m.content.as_str()
+                        .and_then(|s| s.chars().take(50).collect::<String>().into())
+                })
+                .unwrap_or_else(|| String::from("(Untitled)"))
+        } else {
+            title
+        };
+
+        Ok(Some(ParsedSession {
+            id,
+            session_id,
+            provider: "codex".to_string(),
+            kind,
+            cwd,
+            title,
+            messages,
+            total_usage,
+            created_at,
+            updated_at,
+            complete,
+            file_path: path.display().to_string(),
+        }))
+    }
+
+    /// Parse an OpenCode session file (OpenCode format with tokens and cost)
+    fn parse_opencode_session_file(
+        path: &Path,
+        project_path: Option<&Path>,
+    ) -> Result<Option<ParsedSession>> {
+        let file = File::open(path)
+            .with_context(|| format!("Failed to open OpenCode session file {}", path.display()))?;
+
+        let reader = BufReader::new(file);
+        let mut messages = Vec::new();
+        let mut session_id = String::new();
+        let mut cwd = String::new();
+        let mut title = String::new();
+        let mut start_time: Option<DateTime<Utc>> = None;
+        let mut end_time: Option<DateTime<Utc>> = None;
+        let mut total_usage = ParsedSessionTotalUsage {
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+        };
+        let mut first_prompt_hash = String::new();
+        let mut first_user_content: Option<String> = None;
+
+        for line in reader.lines() {
+            let line = line?;
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) {
+                let event_type = value.get("type").and_then(|v| v.as_str());
+
+                match event_type {
+                    Some("message") => {
+                        let role = value.get("role")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("user")
+                            .to_string();
+
+                        let content = value.get("content").cloned()
+                            .unwrap_or(serde_json::Value::Null);
+
+                        let usage = if let Some(tokens_obj) = value.get("tokens") {
+                            let input = tokens_obj.get("input")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0) as i64;
+                            let output = tokens_obj.get("output")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0) as i64;
+                            let cache_read = tokens_obj.get("cache_read")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0) as i64;
+                            let cache_write = tokens_obj.get("cache_write")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0) as i64;
+
+                            Some(ParsedSessionMessagesItemUsage {
+                                input_tokens: input,
+                                output_tokens: output,
+                                cache_read_tokens: cache_read,
+                                cache_write_tokens: cache_write,
+                            })
+                        } else if let Some(token_count) = value.get("token_count").and_then(|v| v.as_u64()) {
+                            Some(ParsedSessionMessagesItemUsage {
+                                input_tokens: if role == "user" { token_count as i64 } else { 0 },
+                                output_tokens: if role == "assistant" { token_count as i64 } else { 0 },
+                                cache_read_tokens: 0,
+                                cache_write_tokens: 0,
+                            })
+                        } else {
+                            None
+                        };
+
+                        if let Some(u) = &usage {
+                            total_usage.input_tokens += u.input_tokens;
+                            total_usage.output_tokens += u.output_tokens;
+                            total_usage.cache_read_tokens += u.cache_read_tokens;
+                            total_usage.cache_write_tokens += u.cache_write_tokens;
+                        }
+
+                        if role == "user" && first_prompt_hash.is_empty() {
+                            first_prompt_hash = Self::hash_content(&content);
+                            first_user_content = extract_text_content(&content);
+                        }
+
+                        let timestamp = value.get("timestamp")
+                            .and_then(|v| v.as_str())
+                            .and_then(|s| s.parse().ok());
+
+                        messages.push(ParsedSessionMessagesItem {
+                            role,
+                            content,
+                            usage,
+                            timestamp,
+                        });
+                    }
+                    Some("metadata") | Some("session") => {
+                        session_id = value.get("session_id")
+                            .or_else(|| value.get("id"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or(&uuid::Uuid::new_v4().to_string())
+                            .to_string();
+
+                        cwd = value.get("cwd")
+                            .or_else(|| value.get("working_directory"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or(&cwd)
+                            .to_string();
+
+                        title = value.get("title")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or(&title)
+                            .to_string();
+
+                        start_time = value.get("start_time")
+                            .or_else(|| value.get("created_at"))
+                            .and_then(|v| v.as_str())
+                            .and_then(|s| s.parse().ok());
+                    }
+                    Some("end") | Some("complete") => {
+                        end_time = value.get("end_time")
+                            .or_else(|| value.get("completed_at"))
+                            .and_then(|v| v.as_str())
+                            .and_then(|s| s.parse().ok());
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        if let Some(project_path) = project_path {
+            let project_str = project_path.to_string_lossy();
+            if !cwd.starts_with(&*project_str) {
+                return Ok(None);
+            }
+        }
+
+        let tag_result = tag_join::resolve(&title, first_user_content.as_deref());
+        let kind = tag_result.kind;
+
+        let id = if session_id.is_empty() {
+            uuid::Uuid::new_v4().to_string()
+        } else {
+            session_id.clone()
+        };
+
+        let created_at = start_time.unwrap_or_else(|| Utc::now());
+        let updated_at = end_time.unwrap_or(created_at);
+        let complete = end_time.is_some();
+
+        let title = if title.is_empty() {
+            messages
+                .iter()
+                .find(|m| m.role == "user")
+                .and_then(|m| {
+                    m.content.as_str()
+                        .and_then(|s| s.chars().take(50).collect::<String>().into())
+                })
+                .unwrap_or_else(|| String::from("(Untitled)"))
+        } else {
+            title
+        };
+
+        Ok(Some(ParsedSession {
+            id,
+            session_id,
+            provider: "opencode".to_string(),
+            kind,
+            cwd,
+            title,
+            messages,
+            total_usage,
+            created_at,
+            updated_at,
+            complete,
+            file_path: path.display().to_string(),
+        }))
+    }
+
+    /// Parse a Gemini session file (Google Gemini CLI format)
+    fn parse_gemini_session_file(
+        path: &Path,
+        project_path: Option<&Path>,
+    ) -> Result<Option<ParsedSession>> {
+        let file = File::open(path)
+            .with_context(|| format!("Failed to open Gemini session file {}", path.display()))?;
+
+        let reader = BufReader::new(file);
+        let mut messages = Vec::new();
+        let mut session_id = String::new();
+        let mut cwd = String::new();
+        let mut title = String::new();
+        let mut start_time: Option<DateTime<Utc>> = None;
+        let mut end_time: Option<DateTime<Utc>> = None;
+        let mut total_usage = ParsedSessionTotalUsage {
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+        };
+        let mut first_prompt_hash = String::new();
+        let mut first_user_content: Option<String> = None;
+
+        for line in reader.lines() {
+            let line = line?;
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) {
+                let event_type = value.get("type").and_then(|v| v.as_str());
+
+                match event_type {
+                    Some("message") | Some("turn") => {
+                        let role = value.get("role")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("user")
+                            .to_string();
+
+                        let content = value.get("content").cloned()
+                            .unwrap_or(serde_json::Value::Null);
+
+                        let usage = if let Some(usage_obj) = value.get("usage") {
+                            let input = usage_obj.get("promptTokenCount")
+                                .or_else(|| usage_obj.get("input_tokens"))
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0) as i64;
+                            let output = usage_obj.get("candidatesTokenCount")
+                                .or_else(|| usage_obj.get("output_tokens"))
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0) as i64;
+                            let cache_read = usage_obj.get("cachedContentTokenCount")
+                                .or_else(|| usage_obj.get("cache_read_tokens"))
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0) as i64;
+                            let cache_write = usage_obj.get("cache_write_tokens")
+                                .and_then(|v| v.as_u64())
+                                .unwrap_or(0) as i64;
+
+                            Some(ParsedSessionMessagesItemUsage {
+                                input_tokens: input,
+                                output_tokens: output,
+                                cache_read_tokens: cache_read,
+                                cache_write_tokens: cache_write,
+                            })
+                        } else {
+                            None
+                        };
+
+                        if let Some(u) = &usage {
+                            total_usage.input_tokens += u.input_tokens;
+                            total_usage.output_tokens += u.output_tokens;
+                            total_usage.cache_read_tokens += u.cache_read_tokens;
+                            total_usage.cache_write_tokens += u.cache_write_tokens;
+                        }
+
+                        if role == "user" && first_prompt_hash.is_empty() {
+                            first_prompt_hash = Self::hash_content(&content);
+                            first_user_content = extract_text_content(&content);
+                        }
+
+                        let timestamp = value.get("timestamp")
+                            .or_else(|| value.get("time"))
+                            .and_then(|v| v.as_str())
+                            .and_then(|s| s.parse().ok());
+
+                        messages.push(ParsedSessionMessagesItem {
+                            role,
+                            content,
+                            usage,
+                            timestamp,
+                        });
+                    }
+                    Some("metadata") | Some("session_info") => {
+                        session_id = value.get("session_id")
+                            .or_else(|| value.get("id"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or(&uuid::Uuid::new_v4().to_string())
+                            .to_string();
+
+                        cwd = value.get("cwd")
+                            .or_else(|| value.get("working_directory"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or(&cwd)
+                            .to_string();
+
+                        title = value.get("title")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or(&title)
+                            .to_string();
+
+                        start_time = value.get("start_time")
+                            .or_else(|| value.get("created_at"))
+                            .and_then(|v| v.as_str())
+                            .and_then(|s| s.parse().ok());
+                    }
+                    Some("end") => {
+                        end_time = value.get("end_time")
+                            .or_else(|| value.get("completed_at"))
+                            .and_then(|v| v.as_str())
+                            .and_then(|s| s.parse().ok());
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        if let Some(project_path) = project_path {
+            let project_str = project_path.to_string_lossy();
+            if !cwd.starts_with(&*project_str) {
+                return Ok(None);
+            }
+        }
+
+        let tag_result = tag_join::resolve(&title, first_user_content.as_deref());
+        let kind = tag_result.kind;
+
+        let id = if session_id.is_empty() {
+            uuid::Uuid::new_v4().to_string()
+        } else {
+            session_id.clone()
+        };
+
+        let created_at = start_time.unwrap_or_else(|| Utc::now());
+        let updated_at = end_time.unwrap_or(created_at);
+        let complete = end_time.is_some();
+
+        let title = if title.is_empty() {
+            messages
+                .iter()
+                .find(|m| m.role == "user")
+                .and_then(|m| {
+                    m.content.as_str()
+                        .and_then(|s| s.chars().take(50).collect::<String>().into())
+                })
+                .unwrap_or_else(|| String::from("(Untitled)"))
+        } else {
+            title
+        };
+
+        Ok(Some(ParsedSession {
+            id,
+            session_id,
+            provider: "gemini".to_string(),
+            kind,
+            cwd,
+            title,
+            messages,
+            total_usage,
+            created_at,
+            updated_at,
+            complete,
+            file_path: path.display().to_string(),
+        }))
+    }
+
+    /// Parse an Aider session file (similar to Claude format)
+    fn parse_aider_session_file(
+        path: &Path,
+        project_path: Option<&Path>,
+    ) -> Result<Option<ParsedSession>> {
+        let file = File::open(path)
+            .with_context(|| format!("Failed to open Aider session file {}", path.display()))?;
+
+        let reader = BufReader::new(file);
+        let mut messages = Vec::new();
+        let mut session_id = String::new();
+        let mut cwd = String::new();
+        let mut title = String::new();
+        let mut start_time: Option<DateTime<Utc>> = None;
+        let mut end_time: Option<DateTime<Utc>> = None;
+        let mut total_usage = ParsedSessionTotalUsage {
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+        };
+        let mut first_prompt_hash = String::new();
+        let mut first_user_content: Option<String> = None;
+
+        for line in reader.lines() {
+            let line = line?;
+            if let Some(entry) = serde_json::from_str::<ClaudeEntry>(&line).ok() {
+                match entry {
+                    ClaudeEntry::Message(msg) => {
+                        if let Some(usage) = &msg.usage {
+                            let usage: ParsedSessionMessagesItemUsage = usage.clone().into();
+                            total_usage.input_tokens += usage.input_tokens;
+                            total_usage.output_tokens += usage.output_tokens;
+                            total_usage.cache_read_tokens += usage.cache_read_tokens;
+                            total_usage.cache_write_tokens += usage.cache_write_tokens;
+                        }
+
+                        if msg.role == "user" && first_prompt_hash.is_empty() {
+                            if let Some(content) = &msg.content {
+                                first_prompt_hash = Self::hash_content(content);
+                                first_user_content = extract_text_content(content);
+                            }
+                        }
+
+                        let timestamp = msg.timestamp.and_then(|s| s.parse().ok());
+                        messages.push(ParsedSessionMessagesItem {
+                            role: msg.role,
+                            content: msg.content.unwrap_or(serde_json::Value::Null),
+                            usage: msg.usage.map(|u| u.into()),
+                            timestamp,
+                        });
+                    }
+                    ClaudeEntry::Metadata(meta) => {
+                        session_id = meta.session_id;
+                        cwd = meta.cwd.unwrap_or_else(|| String::new());
+                        title = meta.title.unwrap_or_else(|| String::new());
+                        start_time = meta.start_time.and_then(|s| s.parse().ok());
+                        end_time = meta.end_time.and_then(|s| s.parse().ok());
+                    }
+                    ClaudeEntry::Unknown => {}
+                }
+            }
+        }
+
+        if let Some(project_path) = project_path {
+            let project_str = project_path.to_string_lossy();
+            if !cwd.starts_with(&*project_str) {
+                return Ok(None);
+            }
+        }
+
+        let tag_result = tag_join::resolve(&title, first_user_content.as_deref());
+        let kind = tag_result.kind;
+
+        let id = if session_id.is_empty() {
+            uuid::Uuid::new_v4().to_string()
+        } else {
+            session_id.clone()
+        };
+
+        let created_at = start_time.unwrap_or_else(|| Utc::now());
+        let updated_at = end_time.unwrap_or(created_at);
+        let complete = end_time.is_some();
+
+        let title = if title.is_empty() {
+            messages
+                .iter()
+                .find(|m| m.role == "user")
+                .and_then(|m| {
+                    m.content.as_str()
+                        .and_then(|s| s.chars().take(50).collect::<String>().into())
+                })
+                .unwrap_or_else(|| String::from("(Untitled)"))
+        } else {
+            title
+        };
+
+        Ok(Some(ParsedSession {
+            id,
+            session_id,
+            provider: "aider".to_string(),
+            kind,
+            cwd,
+            title,
+            messages,
+            total_usage,
+            created_at,
+            updated_at,
+            complete,
+            file_path: path.display().to_string(),
+        }))
+    }
 }
 
 /// Extract text content from a message content field.
@@ -1004,14 +1651,11 @@ impl Default for NdjsonParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
-    use tempfile::NamedTempFile;
 
     #[test]
-    fn test_classify_session_worker() {
-        let title = "[needle:alpha:bd-abc123:pluck] Implement feature X";
-        let kind = SessionTailer::classify_session(title, "/home/coding/project");
-        match kind {
+    fn test_tag_join_worker_via_resolve() {
+        let result = tag_join::resolve("[needle:alpha:bd-abc123:pluck] Implement feature X", None);
+        match result.kind {
             ParsedSessionKind::Variant0 { worker, bead, strand } => {
                 assert_eq!(worker, "alpha");
                 assert_eq!(bead, "bd-abc123");
@@ -1019,13 +1663,13 @@ mod tests {
             }
             _ => panic!("Expected Worker kind"),
         }
+        assert!(result.binding.is_some());
     }
 
     #[test]
-    fn test_classify_session_worker_no_strand() {
-        let title = "[needle:bravo:bd-def456:] Some task";
-        let kind = SessionTailer::classify_session(title, "/home/coding/project");
-        match kind {
+    fn test_tag_join_worker_no_strand_via_resolve() {
+        let result = tag_join::resolve("[needle:bravo:bd-def456:] Some task", None);
+        match result.kind {
             ParsedSessionKind::Variant0 { worker, bead, strand } => {
                 assert_eq!(worker, "bravo");
                 assert_eq!(bead, "bd-def456");
@@ -1036,17 +1680,17 @@ mod tests {
     }
 
     #[test]
-    fn test_classify_session_ad_hoc() {
-        let title = "Fix the login bug";
-        let kind = SessionTailer::classify_session(title, "/home/coding/project");
-        assert_eq!(kind, ParsedSessionKind::Variant2(ParsedSessionKindVariant2::AdHoc));
+    fn test_tag_join_ad_hoc_via_resolve() {
+        let result = tag_join::resolve("Fix the login bug", None);
+        assert_eq!(result.kind, ParsedSessionKind::Variant2(ParsedSessionKindVariant2::AdHoc));
+        assert!(result.binding.is_none());
     }
 
     #[test]
-    fn test_classify_session_dictated() {
-        let title = "[dictated] Voice note transcript";
-        let kind = SessionTailer::classify_session(title, "/home/coding/project");
-        assert_eq!(kind, ParsedSessionKind::Variant1(ParsedSessionKindVariant1::Dictated));
+    fn test_tag_join_dictated_via_resolve() {
+        let result = tag_join::resolve("[dictated] Voice note transcript", None);
+        assert_eq!(result.kind, ParsedSessionKind::Variant1(ParsedSessionKindVariant1::Dictated));
+        assert!(result.binding.is_none());
     }
 
     #[test]
