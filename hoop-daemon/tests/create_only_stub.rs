@@ -217,7 +217,11 @@ fn test_runtime_guard_rejects_forbidden_verbs() {
             hoop_daemon::br_verbs::assert_create_only(verb);
         });
         assert!(result.is_err(), "assert_create_only('{}') should have panicked", verb);
-        let msg = format!("{:?}", result.unwrap_err());
+        let err = result.unwrap_err();
+        let msg = err.downcast_ref::<&str>()
+            .map(|s| s.to_string())
+            .or_else(|| err.downcast_ref::<String>().cloned())
+            .unwrap_or_default();
         assert!(msg.contains("create-only invariant violated"),
             "panic message should mention create-only invariant, got: {}", msg);
     }
