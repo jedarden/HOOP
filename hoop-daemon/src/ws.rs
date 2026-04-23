@@ -5,6 +5,7 @@
 
 use crate::heartbeats::{MonitorEvent, WorkerHeartbeat, WorkerLiveness};
 use crate::sessions::{SessionEvent, SessionTailer};
+use crate::{Bead, BeadStatus as DaemonBeadStatus, BeadType as DaemonBeadType, DaemonState, WorkerState};
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
@@ -14,13 +15,11 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use futures_util::{stream::StreamExt, SinkExt};
-use hoop_schema::{ParsedSession, ParsedSessionKind, ParsedSessionKindVariant1, ParsedSessionKindVariant2, ParsedSessionKindVariant3};
+use hoop_schema::{ParsedSession, ParsedSessionKind, ParsedSessionKindVariant1, ParsedSessionKindVariant2, ParsedSessionKindVariant3, ParsedSessionMessagesItem, ParsedSessionMessagesItemUsage};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, warn};
-
-use crate::DaemonState;
 
 /// Worker data sent to the frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,14 +48,14 @@ pub struct BeadData {
 /// Message usage sent to the frontend
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MessageUsageData {
-    pub input_tokens: u64,
-    pub output_tokens: u64,
-    pub cache_read_tokens: u64,
-    pub cache_write_tokens: u64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub cache_read_tokens: i64,
+    pub cache_write_tokens: i64,
 }
 
-impl From<MessageUsage> for MessageUsageData {
-    fn from(u: MessageUsage) -> Self {
+impl From<ParsedSessionMessagesItemUsage> for MessageUsageData {
+    fn from(u: ParsedSessionMessagesItemUsage) -> Self {
         Self {
             input_tokens: u.input_tokens,
             output_tokens: u.output_tokens,
@@ -75,13 +74,13 @@ pub struct SessionMessageData {
     pub timestamp: Option<String>,
 }
 
-impl From<SessionMessage> for SessionMessageData {
-    fn from(m: SessionMessage) -> Self {
+impl From<ParsedSessionMessagesItem> for SessionMessageData {
+    fn from(m: ParsedSessionMessagesItem) -> Self {
         Self {
             role: m.role,
             content: m.content,
             usage: m.usage.map(MessageUsageData::from),
-            timestamp: m.timestamp,
+            timestamp: m.timestamp.map(|t| t.to_rfc3339()),
         }
     }
 }
@@ -137,7 +136,7 @@ impl From<ParsedSession> for ConversationData {
             cwd: s.cwd,
             title: s.title,
             messages: s.messages.into_iter().map(SessionMessageData::from).collect(),
-            total_tokens: s.total_tokens(),
+            total_tokens: (s.total_usage.input_tokens + s.total_usage.output_tokens) as u64,
             created_at: s.created_at.to_rfc3339(),
             updated_at: s.updated_at.to_rfc3339(),
             complete: s.complete,
@@ -168,8 +167,19 @@ pub struct ProjectCardData {
     /// Error message if runtime is in an error state
     #[serde(skip_serializing_if = "Option::is_none")]
     pub runtime_error: Option<String>,
-    /// Number of active beads in this project
+    /// Number of active (open) beads in this project
     pub bead_count: usize,
+    /// Number of workers associated with this project
+    pub worker_count: usize,
+    /// Number of active stitches (open beads currently being worked)
+    pub active_stitch_count: usize,
+    /// Estimated cost today in USD
+    pub cost_today: f64,
+    /// Number of stuck (knot-state) workers
+    pub stuck_count: usize,
+    /// ISO 8601 timestamp of last activity
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_activity: Option<String>,
 }
 
 /// Configuration error details
@@ -210,6 +220,17 @@ pub enum WorkerDisplayState {
     },
 }
 
+/// Bead event data from events.jsonl for debug panel
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BeadEventData {
+    pub timestamp: String,
+    pub event_type: String,
+    pub bead_id: String,
+    pub worker: String,
+    pub line_number: Option<usize>,
+    pub raw: String,
+}
+
 /// WebSocket event sent to clients
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -230,6 +251,12 @@ pub struct WsEvent {
     pub projects: Option<Vec<ProjectCardData>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config_status: Option<ConfigStatusData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capacity: Option<Vec<crate::capacity::AccountCapacity>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bead_event: Option<BeadEventData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bead_events: Option<Vec<BeadEventData>>,
 }
 
 impl WsEvent {
@@ -244,6 +271,9 @@ impl WsEvent {
             streaming: None,
             projects: None,
             config_status: None,
+            capacity: None,
+            bead_event: None,
+            bead_events: None,
         }
     }
 
@@ -258,6 +288,9 @@ impl WsEvent {
             streaming: None,
             projects: None,
             config_status: None,
+            capacity: None,
+            bead_event: None,
+            bead_events: None,
         }
     }
 
@@ -272,6 +305,9 @@ impl WsEvent {
             streaming: None,
             projects: None,
             config_status: None,
+            capacity: None,
+            bead_event: None,
+            bead_events: None,
         }
     }
 
@@ -286,6 +322,9 @@ impl WsEvent {
             streaming: None,
             projects: None,
             config_status: None,
+            capacity: None,
+            bead_event: None,
+            bead_events: None,
         }
     }
 
@@ -300,6 +339,9 @@ impl WsEvent {
             streaming: None,
             projects: None,
             config_status: None,
+            capacity: None,
+            bead_event: None,
+            bead_events: None,
         }
     }
 
@@ -314,6 +356,9 @@ impl WsEvent {
             streaming: Some(data),
             projects: None,
             config_status: None,
+            capacity: None,
+            bead_event: None,
+            bead_events: None,
         }
     }
 
@@ -328,6 +373,9 @@ impl WsEvent {
             streaming: None,
             projects: Some(projects),
             config_status: None,
+            capacity: None,
+            bead_event: None,
+            bead_events: None,
         }
     }
 
@@ -342,6 +390,60 @@ impl WsEvent {
             streaming: None,
             projects: None,
             config_status: Some(status),
+            capacity: None,
+            bead_event: None,
+            bead_events: None,
+        }
+    }
+
+    /// Create a capacity snapshot event
+    pub fn capacity_snapshot(capacity: Vec<crate::capacity::AccountCapacity>) -> Self {
+        Self {
+            worker: None,
+            workers: None,
+            beads: None,
+            conversations: None,
+            conversation: None,
+            streaming: None,
+            projects: None,
+            config_status: None,
+            capacity: Some(capacity),
+            bead_event: None,
+            bead_events: None,
+        }
+    }
+
+    /// Create a bead event update (single event from events.jsonl)
+    pub fn bead_event_update(event: BeadEventData) -> Self {
+        Self {
+            worker: None,
+            workers: None,
+            beads: None,
+            conversations: None,
+            conversation: None,
+            streaming: None,
+            projects: None,
+            config_status: None,
+            capacity: None,
+            bead_event: Some(event),
+            bead_events: None,
+        }
+    }
+
+    /// Create a bead events snapshot (all events for a bead)
+    pub fn bead_events_snapshot(events: Vec<BeadEventData>) -> Self {
+        Self {
+            worker: None,
+            workers: None,
+            beads: None,
+            conversations: None,
+            conversation: None,
+            streaming: None,
+            projects: None,
+            config_status: None,
+            capacity: None,
+            bead_event: None,
+            bead_events: Some(events),
         }
     }
 }
@@ -351,6 +453,8 @@ impl WsEvent {
 pub struct WorkerRegistry {
     workers: Arc<RwLock<Vec<WorkerData>>>,
     conversations: Arc<RwLock<Vec<ConversationData>>>,
+    /// Bead events from events.jsonl, keyed by bead_id
+    bead_events: Arc<RwLock<std::collections::HashMap<String, Vec<BeadEventData>>>>,
     monitor: broadcast::Sender<MonitorEvent>,
     sessions: broadcast::Sender<SessionEvent>,
 }
@@ -360,6 +464,7 @@ impl WorkerRegistry {
         Self {
             workers: Arc::new(RwLock::new(Vec::new())),
             conversations: Arc::new(RwLock::new(Vec::new())),
+            bead_events: Arc::new(RwLock::new(std::collections::HashMap::new())),
             monitor,
             sessions,
         }
@@ -411,6 +516,63 @@ impl WorkerRegistry {
     pub fn subscribe_sessions(&self) -> broadcast::Receiver<SessionEvent> {
         self.sessions.subscribe()
     }
+
+    /// Update or insert a worker entry
+    pub async fn update_worker(&self, heartbeat: crate::heartbeats::WorkerHeartbeat, liveness: crate::heartbeats::WorkerLiveness) {
+        let mut workers = self.workers.write().await;
+        let age = (chrono::Utc::now() - heartbeat.ts).num_seconds().max(0);
+        let state = match &heartbeat.state {
+            crate::WorkerState::Executing { bead, adapter, .. } => WorkerDisplayState::Executing {
+                bead: bead.clone(),
+                adapter: adapter.clone(),
+                model: None,
+            },
+            crate::WorkerState::Idle { last_strand } => WorkerDisplayState::Idle {
+                last_strand: last_strand.clone(),
+            },
+            crate::WorkerState::Knot { reason } => WorkerDisplayState::Knot {
+                reason: reason.clone(),
+            },
+        };
+        if let Some(existing) = workers.iter_mut().find(|w| w.worker == heartbeat.worker) {
+            existing.state = state;
+            existing.liveness = liveness;
+            existing.last_heartbeat = heartbeat.ts;
+            existing.heartbeat_age_secs = age;
+        } else {
+            workers.push(WorkerData {
+                worker: heartbeat.worker,
+                state,
+                liveness,
+                last_heartbeat: heartbeat.ts,
+                heartbeat_age_secs: age,
+            });
+        }
+    }
+
+    /// Get bead events for a specific bead
+    pub async fn get_bead_events(&self, bead_id: &str) -> Vec<BeadEventData> {
+        self.bead_events.read().await.get(bead_id).cloned().unwrap_or_default()
+    }
+
+    /// Get all bead events
+    pub async fn all_bead_events(&self) -> std::collections::HashMap<String, Vec<BeadEventData>> {
+        self.bead_events.read().await.clone()
+    }
+
+    /// Add a bead event (from events.jsonl)
+    pub async fn add_bead_event(&self, event: BeadEventData) {
+        let mut events = self.bead_events.write().await;
+        events.entry(event.bead_id.clone()).or_default().push(event);
+    }
+
+    /// Add multiple bead events
+    pub async fn add_bead_events(&self, new_events: Vec<BeadEventData>) {
+        let mut events = self.bead_events.write().await;
+        for event in new_events {
+            events.entry(event.bead_id.clone()).or_default().push(event);
+        }
+    }
 }
 
 /// Convert Bead to BeadData for WebSocket
@@ -447,6 +609,8 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
     let mut bead_rx = state.bead_tx.subscribe();
     let mut session_rx = registry.subscribe_sessions();
     let mut config_status_rx = state.config_status_tx.subscribe();
+    let mut project_status_rx = state.project_status_tx.subscribe();
+    let mut capacity_rx = state.capacity_tx.subscribe();
     let mut shutdown_rx = state.shutdown.subscribe();
 
     // Send initial snapshots
@@ -655,6 +819,47 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     });
 
+    // Spawn task to forward project status events to the WebSocket
+    let projects_for_update = state.projects.clone();
+    let project_task = tokio::spawn(async move {
+        while let Ok(project_status) = project_status_rx.recv().await {
+            // Update the project in the projects store
+            {
+                let mut projects = projects_for_update.write().unwrap();
+                if let Some(project) = projects.iter_mut().find(|p| p.name == project_status.name) {
+                    *project = project_status.clone();
+                }
+            }
+
+            // Send updated projects snapshot
+            let projects = projects_for_update.read().unwrap().clone();
+            if let Ok(json) = serde_json::to_string(&WsEvent::projects_snapshot(projects)) {
+                if sender.send(Message::Text(json)).await.is_err() {
+                    break;
+                }
+            }
+        }
+    });
+
+    // Spawn task to forward capacity events to the WebSocket
+    let capacity_task = tokio::spawn(async move {
+        loop {
+            match capacity_rx.recv().await {
+                Ok(capacities) => {
+                    if let Ok(json) = serde_json::to_string(&WsEvent::capacity_snapshot(capacities)) {
+                        if sender.send(Message::Text(json)).await.is_err() {
+                            break;
+                        }
+                    }
+                }
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    debug!("Capacity broadcast lagged by {}, continuing", n);
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+
     // Handle incoming messages (just ping/pong for now)
     let recv_task = tokio::spawn(async move {
         while let Some(msg) = receiver.next().await {
@@ -698,6 +903,8 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         _ = bead_task => {},
         _ = session_task => {},
         _ = config_task => {},
+        _ = project_task => {},
+        _ = capacity_task => {},
         _ = recv_task => {},
     }
 

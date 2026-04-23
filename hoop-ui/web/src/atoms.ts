@@ -22,12 +22,27 @@ export interface MessageUsage {
   cache_write_tokens: number;
 }
 
+// Word-level timestamp for Whisper transcripts
+export interface TranscriptWord {
+  word: string;
+  start: number;  // seconds
+  end: number;    // seconds
+}
+
+// Transcript data structure
+export interface TranscriptData {
+  text: string;
+  words: TranscriptWord[];
+}
+
 // A single message in a session
 export interface SessionMessage {
   role: 'user' | 'assistant' | 'system';
   content: string | { [key: string]: any } | null;
   usage?: MessageUsage;
   timestamp?: string;
+  attachments?: string[];
+  transcript?: TranscriptData;
 }
 
 // Conversation/session data
@@ -60,6 +75,23 @@ export interface Project {
   path: string;
   activeBeads: number;
   workers: number;
+}
+
+// Project card data from backend with runtime state
+export interface ProjectCardData {
+  name: string;
+  label: string;
+  color: string;
+  path: string;
+  degraded: boolean;
+  runtime_state?: string;
+  runtime_error?: string;
+  bead_count: number;
+  worker_count: number;
+  active_stitch_count: number;
+  cost_today: number;
+  stuck_count: number;
+  last_activity?: string;
 }
 
 export interface Stitch {
@@ -113,16 +145,39 @@ export interface ConfigStatus {
   error?: ConfigError;
 }
 
+// Per-account capacity data from backend
+export interface AccountCapacity {
+  account_id: string;
+  adapter: string;
+  plan_type: string;
+  rate_limit_tier: string;
+  utilization_5h: number;
+  utilization_7d: number;
+  resets_at_5h?: string | null;
+  resets_at_7d?: string | null;
+  tokens_5h: number;
+  tokens_7d: number;
+  turns_5h: number;
+  turns_7d: number;
+  burn_rate_per_min: number;
+  forecast_full_5h_min?: number | null;
+  forecast_full_7d_min?: number | null;
+  source: string;
+  computed_at: string;
+}
+
 // WebSocket event from backend
 export interface WsEvent {
-  type: 'worker_update' | 'workers_snapshot' | 'beads_snapshot' | 'conversations_snapshot' | 'conversation_update' | 'streaming_content' | 'config_status';
+  type: 'worker_update' | 'workers_snapshot' | 'beads_snapshot' | 'conversations_snapshot' | 'conversation_update' | 'streaming_content' | 'config_status' | 'projects_snapshot' | 'capacity_snapshot';
   worker?: WorkerData;
   workers?: WorkerData[];
   beads?: BeadData[];
   conversations?: Conversation[];
   conversation?: Conversation;
   streaming?: { conversation_id: string; content: string; timestamp: number };
+  projects?: ProjectCardData[];
   config_status?: ConfigStatus;
+  capacity?: AccountCapacity[];
 }
 
 // Atoms for state management
@@ -130,11 +185,13 @@ export const conversationsAtom = atom<Conversation[]>([]);
 export const streamingContentAtom = atom<Map<string, StreamingContent>>(new Map());
 export const selectedConversationIdAtom = atom<string | null>(null);
 export const projectsAtom = atom<Project[]>([]);
+export const projectCardsAtom = atom<ProjectCardData[]>([]);
 export const stitchesAtom = atom<Stitch[]>([]);
 export const workersAtom = atom<WorkerData[]>([]);
 export const beadsAtom = atom<BeadData[]>([]);
 export const wsConnectedAtom = atom<boolean>(false);
 export const configStatusAtom = atom<ConfigStatus>({ valid: true });
+export const capacityAtom = atom<AccountCapacity[]>([]);
 
 // Format content for display (handles string and object content)
 export function formatContent(content: string | { [key: string]: any } | null): string {

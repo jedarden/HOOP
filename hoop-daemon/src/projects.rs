@@ -293,8 +293,9 @@ impl ProjectsWatcher {
                 info!("Projects configuration reloaded successfully");
             }
             Err(error) => {
+                let msg = error.message.clone();
                 let _ = event_tx.send(ProjectsEvent::ConfigError { error }).await;
-                warn!("Projects configuration failed to load: {}", error.message);
+                warn!("Projects configuration failed to load: {}", msg);
             }
         }
     }

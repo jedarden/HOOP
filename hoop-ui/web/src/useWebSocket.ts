@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useSetAtom } from 'jotai';
-import { workersAtom, beadsAtom, conversationsAtom, streamingContentAtom, wsConnectedAtom, configStatusAtom, WsEvent } from './atoms';
+import { workersAtom, beadsAtom, conversationsAtom, streamingContentAtom, wsConnectedAtom, configStatusAtom, projectCardsAtom, capacityAtom, WsEvent } from './atoms';
 
 const WS_URL = `ws://${window.location.host}/ws`;
 
@@ -11,6 +11,8 @@ export function useWebSocket() {
   const setStreamingContent = useSetAtom(streamingContentAtom);
   const setConnected = useSetAtom(wsConnectedAtom);
   const setConfigStatus = useSetAtom(configStatusAtom);
+  const setProjectCards = useSetAtom(projectCardsAtom);
+  const setCapacity = useSetAtom(capacityAtom);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -79,6 +81,10 @@ export function useWebSocket() {
             });
           } else if (data.type === 'config_status' && data.config_status) {
             setConfigStatus(data.config_status);
+          } else if (data.type === 'projects_snapshot' && data.projects) {
+            setProjectCards(data.projects);
+          } else if (data.type === 'capacity_snapshot' && data.capacity) {
+            setCapacity(data.capacity);
           }
         } catch (e) {
           console.error('Failed to parse WebSocket message:', e);
@@ -110,5 +116,5 @@ export function useWebSocket() {
       }
       wsRef.current?.close();
     };
-  }, [setWorkers, setBeads, setConversations, setStreamingContent, setConnected, setConfigStatus]);
+  }, [setWorkers, setBeads, setConversations, setStreamingContent, setConnected, setConfigStatus, setProjectCards, setCapacity]);
 }

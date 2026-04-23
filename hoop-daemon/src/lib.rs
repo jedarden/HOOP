@@ -7,14 +7,19 @@
 pub mod audit;
 pub mod beads;
 pub mod br_verbs;
+pub mod capacity;
+pub mod cost;
 pub mod events;
+pub mod files;
 pub mod fleet;
 pub mod heartbeats;
 pub mod metrics;
 pub mod projects;
 pub mod sessions;
 pub mod shutdown;
+pub mod stitch_status;
 pub mod supervisor;
+pub mod tag_join;
 pub mod ws;
 
 /// Worker execution state from heartbeats
@@ -122,7 +127,7 @@ use tokio::{
     time::Instant,
 };
 use tower_http::trace::TraceLayer;
-use tracing::{error, info, warn, Level};
+use tracing::{debug, error, info, warn, Level};
 
 /// Daemon configuration
 #[derive(Debug, Clone)]
@@ -145,6 +150,13 @@ impl Default for Config {
     }
 }
 
+/// Per-project display metadata from projects.yaml
+#[derive(Debug, Clone)]
+struct ProjectMetadata {
+    label: String,
+    color: String,
+}
+
 /// Daemon state shared across all request handlers
 #[derive(Debug, Clone)]
 pub struct DaemonState {
@@ -156,8 +168,11 @@ pub struct DaemonState {
     pub shutdown: Arc<ShutdownCoordinator>,
     pub supervisor: Arc<supervisor::ProjectSupervisor>,
     pub projects: Arc<std::sync::RwLock<Vec<ws::ProjectCardData>>>,
+    pub project_metadata: Arc<std::sync::RwLock<std::collections::HashMap<String, ProjectMetadata>>>,
     pub config_status_tx: broadcast::Sender<ws::ConfigStatusData>,
     pub project_status_tx: broadcast::Sender<ws::ProjectCardData>,
+    pub capacity_tx: broadcast::Sender<Vec<capacity::AccountCapacity>>,
+    pub cost_aggregator: Arc<std::sync::RwLock<cost::CostAggregator>>,
 }
 
 /// Health check endpoint handler
@@ -171,11 +186,78 @@ async fn get_beads(state: axum::extract::State<DaemonState>) -> Json<Vec<Bead>> 
     Json(beads.clone())
 }
 
+/// Get cost buckets endpoint handler
+async fn get_cost_buckets(
+    axum::extract::State(state): axum::extract::State<DaemonState>,
+) -> Json<Vec<cost::CostBucket>> {
+    let aggregator = state.cost_aggregator.read().unwrap();
+    Json(aggregator.get_buckets())
+}
+
+/// Get cost buckets by project endpoint handler
+async fn get_cost_buckets_by_project(
+    axum::extract::Path(project): axum::extract::Path<String>,
+    axum::extract::State(state): axum::extract::State<DaemonState>,
+) -> Json<Vec<cost::CostBucket>> {
+    let aggregator = state.cost_aggregator.read().unwrap();
+    Json(aggregator.get_buckets_by_project(&project))
+}
+
+/// Query parameters for the file browser endpoint.
+#[derive(serde::Deserialize)]
+struct FilesQuery {
+    /// Relative path from the project root (empty = root).
+    path: Option<String>,
+}
+
+/// List immediate children of a project directory.
+async fn get_project_files(
+    axum::extract::Path(project): axum::extract::Path<String>,
+    axum::extract::Query(params): axum::extract::Query<FilesQuery>,
+    axum::extract::State(state): axum::extract::State<DaemonState>,
+) -> Result<Json<Vec<files::FileEntry>>, axum::http::StatusCode> {
+    let project_root = {
+        let projects = state.projects.read().unwrap();
+        projects
+            .iter()
+            .find(|p| p.name == project)
+            .map(|p| std::path::PathBuf::from(&p.path))
+            .ok_or(axum::http::StatusCode::NOT_FOUND)?
+    };
+
+    let rel_dir = params.path.unwrap_or_default();
+
+    // Guard against path traversal before handing off to the blocking task.
+    if !files::is_safe_rel_path(&rel_dir) {
+        return Err(axum::http::StatusCode::FORBIDDEN);
+    }
+
+    let entries = tokio::task::spawn_blocking(move || files::list_dir(&project_root, &rel_dir))
+        .await
+        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(entries))
+}
+
+/// Get bead events for a specific bead (from events.jsonl)
+async fn get_bead_events(
+    axum::extract::Path(bead_id): axum::extract::Path<String>,
+    axum::extract::State(state): axum::extract::State<DaemonState>,
+) -> Json<Vec<ws::BeadEventData>> {
+    let events = state.worker_registry.get_bead_events(&bead_id).await;
+    Json(events)
+}
+
 /// Build the daemon router with all endpoints
 pub fn router() -> Router<DaemonState> {
     Router::new()
         .route("/healthz", get(healthz))
         .route("/api/beads", get(get_beads))
+        .route("/api/beads/:bead_id/events", get(get_bead_events))
+        .route("/api/cost/buckets", get(get_cost_buckets))
+        .route("/api/cost/buckets/:project", get(get_cost_buckets_by_project))
+        .route("/api/projects/:project/files", get(get_project_files))
         .route("/ws", get(ws::ws_handler))
         .nest_service("/assets", AssetsHandler::router())
         .fallback_service(AssetsHandler::router())
@@ -350,6 +432,21 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     // Initialize project status broadcast channel
     let (project_status_tx, _) = broadcast::channel::<ws::ProjectCardData>(64);
 
+    // Initialize capacity broadcast channel and start refresh loop
+    let (capacity_tx, _) = broadcast::channel::<Vec<capacity::AccountCapacity>>(64);
+    let capacity_meter_config = capacity::CapacityMeterConfig::default();
+    capacity::CapacityMeter::spawn_refresh_loop(capacity_meter_config, capacity_tx.clone());
+    info!("Capacity meter refresh loop started");
+
+    // Initialize cost aggregator
+    let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    home.push(".hoop");
+    let pricing_config_path = home.join("pricing.yml");
+    let cost_aggregator = cost::CostAggregator::new(pricing_config_path)?;
+    let cost_aggregator: Arc<std::sync::RwLock<cost::CostAggregator>> =
+        Arc::new(std::sync::RwLock::new(cost_aggregator));
+    info!("Cost aggregator initialized");
+
     // Initialize shared beads store
     let beads: Arc<std::sync::RwLock<Vec<Bead>>> = Arc::new(std::sync::RwLock::new(Vec::new()));
 
@@ -366,6 +463,11 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         beads.clone(),
         shutdown_coordinator.clone(),
     ));
+
+    // Start global event tailer (for bead claim/close/release/update events)
+    if let Err(e) = supervisor.start_event_tailer().await {
+        warn!("Failed to start event tailer: {}", e);
+    }
 
     // Start projects watcher
     let mut projects_watcher = projects::ProjectsWatcher::new()?;
@@ -411,30 +513,35 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         }
     });
 
-    // Forward bead events from supervisor to WebSocket broadcast
-    let bead_tx_clone = bead_tx.clone();
-    tokio::spawn(async move {
-        let mut rx = supervisor.subscribe_status();
-        while let Ok(status) = rx.recv().await {
-            // Runtime status updates - could be used for UI project cards
-            debug!("Project runtime status update: {} - {:?}", status.project_name, status.state);
-        }
-    });
+    // Project status update task is spawned after DaemonState creation below
 
-    // Forward session events from supervisor to worker registry
+    // Forward session events from supervisor to worker registry and cost aggregator
     let registry_for_sessions = worker_registry.clone();
+    let cost_aggregator_for_sessions = cost_aggregator.clone();
     tokio::spawn(async move {
         let mut rx = session_tx.subscribe();
         while let Ok(event) = rx.recv().await {
             match event {
                 sessions::SessionEvent::ConversationsUpdated { sessions } => {
+                    // Update worker registry with conversations
                     registry_for_sessions.update_conversations(sessions).await;
+
+                    // Aggregate sessions into cost aggregator
+                    let mut aggregator = cost_aggregator_for_sessions.write().unwrap();
+                    for session in &sessions {
+                        if let Err(e) = aggregator.aggregate_session(session) {
+                            warn!("Failed to aggregate session {} into cost: {}", session.id, e);
+                        }
+                    }
                 }
                 sessions::SessionEvent::SessionBound { .. } => {
                     // Registry will handle this via the WebSocket
                 }
                 sessions::SessionEvent::Error(e) => {
                     error!("Session tailer error: {}", e);
+                }
+                sessions::SessionEvent::TagJoinBound { .. } => {
+                    // Tag join events - sessions are already tracked
                 }
             }
         }
@@ -467,19 +574,19 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                                 worker: w.worker.clone(),
                                 state: match &w.state {
                                     ws::WorkerDisplayState::Executing { bead, adapter, .. } => {
-                                        hoop_schema::WorkerState::Executing {
+                                        WorkerState::Executing {
                                             bead: bead.clone(),
                                             pid: 0,
                                             adapter: adapter.clone(),
                                         }
                                     }
                                     ws::WorkerDisplayState::Idle { last_strand } => {
-                                        hoop_schema::WorkerState::Idle {
+                                        WorkerState::Idle {
                                             last_strand: last_strand.clone(),
                                         }
                                     }
                                     ws::WorkerDisplayState::Knot { reason } => {
-                                        hoop_schema::WorkerState::Knot {
+                                        WorkerState::Knot {
                                             reason: reason.clone(),
                                         }
                                     }
@@ -494,6 +601,67 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         }
     });
 
+    // Initialize projects data from supervisor snapshot
+    let supervisor_snapshot = supervisor.snapshot().await;
+    let initial_workers = worker_registry.snapshot().await;
+    let initial_beads_guard = beads.read().unwrap().clone();
+    let initial_convos = worker_registry.conversations_snapshot().await;
+
+    // Build project metadata lookup (label, color) from config
+    let project_metadata: std::collections::HashMap<String, ProjectMetadata> = initial_config
+        .registry
+        .projects
+        .iter()
+        .map(|p| {
+            let name = p.name().to_string();
+            let label = p.label().unwrap_or(&name).to_string();
+            let color = p.color().unwrap_or("#3b82f6").to_string();
+            (name, ProjectMetadata { label, color })
+        })
+        .collect();
+    let project_metadata: Arc<std::sync::RwLock<std::collections::HashMap<String, ProjectMetadata>>> =
+        Arc::new(std::sync::RwLock::new(project_metadata));
+
+    let meta_for_init = project_metadata.clone();
+    let initial_projects: Vec<ws::ProjectCardData> = supervisor_snapshot
+        .iter()
+        .map(|r| {
+            let worker_count = initial_workers.len();
+            let stuck_count = initial_workers.iter().filter(|w| matches!(w.state, ws::WorkerDisplayState::Knot { .. })).count();
+            let active_stitch_count = initial_beads_guard.iter().filter(|b| b.status == BeadStatus::Open).count();
+            let last_activity = initial_workers.iter().map(|w| w.last_heartbeat).max().map(|t| t.to_rfc3339());
+
+            let today = chrono::Utc::now().date_naive();
+            let cost_today: f64 = initial_convos.iter()
+                .filter_map(|c| {
+                    let date = chrono::DateTime::parse_from_rfc3339(&c.updated_at).ok()?.date_naive();
+                    if date == today {
+                        Some(c.total_tokens as f64 * 0.000_003)
+                    } else {
+                        None
+                    }
+                })
+                .sum();
+
+            let meta = meta_for_init.read().unwrap().get(&r.project_name).cloned();
+            ws::ProjectCardData {
+                name: r.project_name.clone(),
+                label: meta.as_ref().map(|m| m.label.clone()).unwrap_or_else(|| r.project_name.clone()),
+                color: meta.as_ref().map(|m| m.color.clone()).unwrap_or_else(|| "#3b82f6".to_string()),
+                path: r.project_path.display().to_string(),
+                degraded: !r.state.is_running(),
+                runtime_state: Some(format!("{:?}", r.state)),
+                runtime_error: r.state.error().map(|e| e.to_string()),
+                bead_count: r.bead_count,
+                worker_count,
+                active_stitch_count,
+                cost_today,
+                stuck_count,
+                last_activity,
+            }
+        })
+        .collect();
+
     let state = DaemonState {
         config: config.clone(),
         started_at: Instant::now(),
@@ -502,10 +670,74 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         bead_tx,
         shutdown: shutdown_coordinator.clone(),
         supervisor,
-        projects: Arc::new(std::sync::RwLock::new(Vec::new())),
+        projects: Arc::new(std::sync::RwLock::new(initial_projects)),
+        project_metadata: project_metadata.clone(),
         config_status_tx,
         project_status_tx,
+        capacity_tx,
+        cost_aggregator: cost_aggregator.clone(),
     };
+
+    // Forward project runtime status updates to shared store and broadcast
+    let projects_for_update = state.projects.clone();
+    let registry_for_cards = state.worker_registry.clone();
+    let beads_for_cards = state.beads.clone();
+    let supervisor_for_cards = state.supervisor.clone();
+    let project_status_tx_clone = project_status_tx.clone();
+    let meta_for_updates = project_metadata.clone();
+    tokio::spawn(async move {
+        let mut rx = supervisor_for_cards.subscribe_status();
+        while let Ok(runtime_status) = rx.recv().await {
+            let workers = registry_for_cards.snapshot().await;
+            let convos = registry_for_cards.conversations_snapshot().await;
+            let all_beads = beads_for_cards.read().unwrap().clone();
+
+            let worker_count = workers.len();
+            let stuck_count = workers.iter().filter(|w| matches!(w.state, ws::WorkerDisplayState::Knot { .. })).count();
+            let active_stitch_count = all_beads.iter().filter(|b| b.status == BeadStatus::Open).count();
+            let last_activity = workers.iter().map(|w| w.last_heartbeat).max().map(|t| t.to_rfc3339());
+
+            let today = chrono::Utc::now().date_naive();
+            let cost_today: f64 = convos.iter()
+                .filter_map(|c| {
+                    let date = chrono::DateTime::parse_from_rfc3339(&c.updated_at).ok()?.date_naive();
+                    if date == today {
+                        Some(c.total_tokens as f64 * 0.000_003)
+                    } else {
+                        None
+                    }
+                })
+                .sum();
+
+            let meta = meta_for_updates.read().unwrap().get(&runtime_status.project_name).cloned();
+            let card = ws::ProjectCardData {
+                name: runtime_status.project_name.clone(),
+                label: meta.as_ref().map(|m| m.label.clone()).unwrap_or_else(|| runtime_status.project_name.clone()),
+                color: meta.as_ref().map(|m| m.color.clone()).unwrap_or_else(|| "#3b82f6".to_string()),
+                path: runtime_status.project_path.display().to_string(),
+                degraded: !runtime_status.state.is_running(),
+                runtime_state: Some(format!("{:?}", runtime_status.state)),
+                runtime_error: runtime_status.state.error().map(|e| e.to_string()),
+                bead_count: runtime_status.bead_count,
+                worker_count,
+                active_stitch_count,
+                cost_today,
+                stuck_count,
+                last_activity,
+            };
+
+            {
+                let mut projects = projects_for_update.write().unwrap();
+                if let Some(p) = projects.iter_mut().find(|p| p.name == card.name) {
+                    *p = card.clone();
+                } else {
+                    projects.push(card.clone());
+                }
+            }
+
+            let _ = project_status_tx_clone.send(card);
+        }
+    });
 
     let app = router().with_state(state.clone());
 

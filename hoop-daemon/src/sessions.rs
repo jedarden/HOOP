@@ -15,6 +15,7 @@ use hoop_schema::{
     ParsedSession, ParsedSessionKind, ParsedSessionKindVariant1, ParsedSessionKindVariant2,
     ParsedSessionMessagesItem, ParsedSessionMessagesItemUsage, ParsedSessionTotalUsage,
 };
+use crate::tag_join;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use rayon::prelude::*;
 use serde::Deserialize;
@@ -35,6 +36,13 @@ pub enum SessionEvent {
     ConversationsUpdated { sessions: Vec<ParsedSession> },
     /// A new session file was bound to an existing session ID
     SessionBound { id: String, file_path: String },
+    /// A session was bound to a bead via the needle tag-join resolver (dual-identity invariant §B1)
+    TagJoinBound {
+        session_id: String,
+        bead_id: String,
+        worker: String,
+        strand: Option<String>,
+    },
     /// An error occurred
     Error(String),
 }
@@ -468,6 +476,7 @@ impl SessionTailer {
             cache_write_tokens: 0,
         };
         let mut first_prompt_hash = String::new();
+        let mut first_user_content: Option<String> = None;
 
         for line in reader.lines() {
             let line = line?;
@@ -483,10 +492,11 @@ impl SessionTailer {
                             total_usage.cache_write_tokens += usage.cache_write_tokens;
                         }
 
-                        // Capture first prompt for bootstrap matching
+                        // Capture first prompt for bootstrap matching + tag-join
                         if msg.role == "user" && first_prompt_hash.is_empty() {
                             if let Some(content) = &msg.content {
                                 first_prompt_hash = Self::hash_content(content);
+                                first_user_content = extract_text_content(content);
                             }
                         }
 
@@ -533,8 +543,9 @@ impl SessionTailer {
             }
         }
 
-        // Determine session kind from prefix tag
-        let kind = Self::classify_session(&title, &cwd);
+        // Determine session kind via tag-join resolver
+        let tag_result = tag_join::resolve(&title, first_user_content.as_deref());
+        let kind = tag_result.kind;
 
         // Generate stable ID if we don't have one
         let id = if session_id.is_empty() {
@@ -576,30 +587,6 @@ impl SessionTailer {
             complete,
             file_path: path.display().to_string(),
         }))
-    }
-
-    /// Classify a session based on title prefix tag
-    fn classify_session(title: &str, _cwd: &str) -> ParsedSessionKind {
-        // Check for NEEDLE worker tag: [needle:<worker>:<bead>:<strand>]
-        if let Some(captures) = regex::Regex::new(r"^\[needle:([^:]+):([^:]+):([^:]*)\]")
-            .ok()
-            .and_then(|re| re.captures(title))
-        {
-            return ParsedSessionKind::Variant0 {
-                worker: captures.get(1).map(|m| m.as_str().to_string()).unwrap_or_default(),
-                bead: captures.get(2).map(|m| m.as_str().to_string()).unwrap_or_default(),
-                strand: captures.get(3).map(|m| m.as_str().to_string()).filter(|s| !s.is_empty()),
-            };
-        }
-
-        // Check for dictated prefix
-        if title.starts_with("[dictated]") {
-            return ParsedSessionKind::Variant1(ParsedSessionKindVariant1::Dictated);
-        }
-
-        // Default to ad-hoc (direct CLI session without prefix)
-        // Note: "operator" kind is reserved for human ↔ agent chats through the web UI
-        ParsedSessionKind::Variant2(ParsedSessionKindVariant2::AdHoc)
     }
 
     /// Hash content for bootstrap matching
@@ -646,11 +633,13 @@ impl SessionTailer {
                     id: existing_id.clone(),
                     file_path: session.file_path.clone(),
                 });
+                emit_tag_join_bound(event_tx, existing_id, &session.kind);
             } else {
                 // New session - register it
                 state.id_to_path.insert(session.id.clone(), file_path.clone());
                 state.path_to_id.insert(file_path, session.id.clone());
                 state.bootstrap_matches.insert(key, session.id.clone());
+                emit_tag_join_bound(event_tx, &session.id, &session.kind);
                 result.push(session);
             }
         }
@@ -662,7 +651,7 @@ impl SessionTailer {
     ///
     /// Flushes any pending discoveries and stops the file watcher.
     /// This should be called during shutdown to ensure clean state.
-    pub async fn stop(&self) -> Result<()> {
+    pub async fn stop(&mut self) -> Result<()> {
         debug!("Stopping session tailer");
 
         // Drop the watcher to stop file watching
@@ -673,6 +662,44 @@ impl SessionTailer {
 
         debug!("Session tailer stopped");
         Ok(())
+    }
+}
+
+/// Extract text content from a message content field.
+///
+/// CLI adapters store content in different shapes:
+/// - Plain string: `"text here"`
+/// - Array of blocks: `[{"type": "text", "text": "..."}]`
+fn extract_text_content(content: &serde_json::Value) -> Option<String> {
+    match content {
+        serde_json::Value::String(s) => Some(s.clone()),
+        serde_json::Value::Array(blocks) => {
+            for block in blocks {
+                if block.get("type").and_then(|t| t.as_str()) == Some("text") {
+                    if let Some(text) = block.get("text").and_then(|t| t.as_str()) {
+                        return Some(text.to_string());
+                    }
+                }
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+/// Emit a TagJoinBound event for worker sessions (dual-identity invariant §B1).
+fn emit_tag_join_bound(
+    event_tx: &broadcast::Sender<SessionEvent>,
+    session_id: &str,
+    kind: &ParsedSessionKind,
+) {
+    if let ParsedSessionKind::Variant0 { worker, bead, strand } = kind {
+        let _ = event_tx.send(SessionEvent::TagJoinBound {
+            session_id: session_id.to_string(),
+            bead_id: bead.clone(),
+            worker: worker.clone(),
+            strand: strand.clone(),
+        });
     }
 }
 

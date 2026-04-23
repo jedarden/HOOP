@@ -1,6 +1,6 @@
 import { useAtomValue } from 'jotai';
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { beadsAtom, workersAtom, conversationsAtom } from './atoms';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { beadsAtom, workersAtom, conversationsAtom, WorkerData } from './atoms';
 import FleetMap from './FleetMap';
 import ConversationPane from './ConversationPane';
 import BeadGraph from './BeadGraph';
@@ -8,8 +8,9 @@ import CostPanel from './CostPanel';
 import CapacityPanel from './CapacityPanel';
 import StitchesTab from './StitchesTab';
 import FilesTab from './FilesTab';
+import DebugPanel from './DebugPanel';
 
-type TabId = 'stitches' | 'fleet' | 'graph' | 'conversations' | 'cost' | 'capacity' | 'files';
+type TabId = 'stitches' | 'fleet' | 'graph' | 'conversations' | 'cost' | 'capacity' | 'files' | 'debug';
 
 interface Tab {
   id: TabId;
@@ -25,7 +26,8 @@ const TABS: Tab[] = [
   { id: 'conversations', label: 'Conversations', description: 'Full conversation transcripts', keyboardShortcut: '4' },
   { id: 'cost', label: 'Cost', description: 'Usage and cost breakdown', keyboardShortcut: '5' },
   { id: 'capacity', label: 'Capacity', description: 'Rate limit and capacity status', keyboardShortcut: '6' },
-  { id: 'files', label: 'Files', description: 'Project file browser', keyboardShortcut: '7' },
+  { id: 'debug', label: 'Debug', description: 'Per-bead execution step-through', keyboardShortcut: '7' },
+  { id: 'files', label: 'Files', description: 'Project file browser', keyboardShortcut: '8' },
 ];
 
 export interface ProjectDetailProps {
@@ -36,25 +38,71 @@ export interface ProjectDetailProps {
 export default function ProjectDetail({ projectName, projectPath }: ProjectDetailProps) {
   const [activeTab, setActiveTab] = useState<TabId>('stitches');
   const tabsRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
-  // Filter data for this project
+  // Move focus to tab panel on keyboard-driven tab switch
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      if (panelRef.current) {
+        panelRef.current.focus();
+      }
+    });
+  }, [activeTab]);
+
+  // Read all global data
   const allBeads = useAtomValue(beadsAtom);
   const allWorkers = useAtomValue(workersAtom);
   const allConversations = useAtomValue(conversationsAtom);
 
-  // Filter beads by project (for now, all beads are shown - this will be updated with project filtering)
-  const projectBeads = allBeads;
+  // Scope conversations to this project by cwd prefix
+  const projectConversations = useMemo(() =>
+    allConversations.filter(c => c.cwd.startsWith(projectPath)),
+    [allConversations, projectPath],
+  );
+
+  // Collect bead IDs referenced by project conversations (worker sessions)
+  const projectBeadIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const c of projectConversations) {
+      if (c.worker_metadata?.bead) ids.add(c.worker_metadata.bead);
+    }
+    return ids;
+  }, [projectConversations]);
+
+  // Beads: include all beads (bead project scoping is done server-side;
+  // when the backend sends per-project bead snapshots, this will narrow automatically).
+  // Also include beads referenced by project conversations.
+  const projectBeads = useMemo(() => {
+    const result = new Map<string, typeof allBeads[0]>();
+    for (const b of allBeads) result.set(b.id, b);
+    return Array.from(result.values());
+  }, [allBeads]);
+
+  // Workers: those executing beads linked to this project, plus idle/knot workers
+  const projectWorkers = useMemo((): WorkerData[] => {
+    const executingInProject = new Set<string>();
+    for (const w of allWorkers) {
+      if (w.state.state === 'executing' && projectBeadIds.has(w.state.bead)) {
+        executingInProject.add(w.worker);
+      }
+    }
+    return allWorkers.filter(w => {
+      if (executingInProject.has(w.worker)) return true;
+      // Idle/knot workers are shared across projects
+      if (w.state.state !== 'executing') return true;
+      return false;
+    });
+  }, [allWorkers, projectBeadIds]);
 
   // Keyboard navigation
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    // Check if user is typing in an input field
     const target = event.target as HTMLElement;
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
       return;
     }
 
     // Alt+number to switch tabs
-    if (event.altKey && event.key >= '1' && event.key <= '7') {
+    if (event.altKey && event.key >= '1' && event.key <= '8') {
       event.preventDefault();
       const tabIndex = parseInt(event.key) - 1;
       if (tabIndex < TABS.length) {
@@ -93,11 +141,11 @@ export default function ProjectDetail({ projectName, projectPath }: ProjectDetai
               <span className="stat-label">Beads</span>
             </div>
             <div className="stat">
-              <span className="stat-value">{allWorkers.length}</span>
+              <span className="stat-value">{projectWorkers.length}</span>
               <span className="stat-label">Workers</span>
             </div>
             <div className="stat">
-              <span className="stat-value">{allConversations.length}</span>
+              <span className="stat-value">{projectConversations.length}</span>
               <span className="stat-label">Conversations</span>
             </div>
           </div>
@@ -129,15 +177,23 @@ export default function ProjectDetail({ projectName, projectPath }: ProjectDetai
 
       <main className="project-detail-main">
         <div
+          ref={panelRef}
           id={`panel-${activeTab}`}
           className="tab-panel"
           role="tabpanel"
           aria-labelledby={`tab-${activeTab}`}
+          tabIndex={0}
         >
-          {activeTab === 'stitches' && <StitchesTab projectName={projectName} projectPath={projectPath} />}
+          {activeTab === 'stitches' && (
+            <StitchesTab
+              projectName={projectName}
+              projectPath={projectPath}
+              conversations={projectConversations}
+            />
+          )}
           {activeTab === 'fleet' && (
             <div className="panel-content">
-              <FleetMap />
+              <FleetMap workers={projectWorkers} />
             </div>
           )}
           {activeTab === 'graph' && (
@@ -147,12 +203,12 @@ export default function ProjectDetail({ projectName, projectPath }: ProjectDetai
           )}
           {activeTab === 'conversations' && (
             <div className="panel-content">
-              <ConversationPane />
+              <ConversationPane conversations={projectConversations} />
             </div>
           )}
           {activeTab === 'cost' && (
             <div className="panel-content">
-              <CostPanel projectName={projectName} />
+              <CostPanel projectName={projectName} conversations={projectConversations} />
             </div>
           )}
           {activeTab === 'capacity' && (
@@ -162,7 +218,12 @@ export default function ProjectDetail({ projectName, projectPath }: ProjectDetai
           )}
           {activeTab === 'files' && (
             <div className="panel-content">
-              <FilesTab projectPath={projectPath} />
+              <FilesTab projectName={projectName} projectPath={projectPath} />
+            </div>
+          )}
+          {activeTab === 'debug' && (
+            <div className="panel-content">
+              <DebugPanel projectName={projectName} projectPath={projectPath} />
             </div>
           )}
         </div>
@@ -170,7 +231,7 @@ export default function ProjectDetail({ projectName, projectPath }: ProjectDetai
 
       <footer className="project-detail-footer">
         <span className="keyboard-hint">
-          Press <kbd>Alt</kbd> + <kbd>1-7</kbd> to switch tabs, <kbd>Alt</kbd> + <kbd>←</kbd>/<kbd>→</kbd> to navigate
+          Press <kbd>Alt</kbd> + <kbd>1-8</kbd> to switch tabs, <kbd>Alt</kbd> + <kbd>←</kbd>/<kbd>→</kbd> to navigate
         </span>
       </footer>
     </div>

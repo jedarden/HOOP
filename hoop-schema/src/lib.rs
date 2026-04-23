@@ -57,53 +57,74 @@ impl std::fmt::Display for WorkspaceViewRole {
     }
 }
 
-impl ProjectEntry {
-    /// Returns the project name regardless of which variant this is.
-    pub fn name(&self) -> &str {
-        match self {
-            Self::Variant0 { name, .. } => name,
-            Self::Variant1 { name, .. } => name,
-        }
-    }
-
-    /// Returns a unified workspace view for all workspaces in this project.
-    ///
-    /// For the shorthand variant (`path` field), returns a single workspace with role `Primary`.
-    pub fn workspace_views(&self) -> Vec<WorkspaceView> {
-        match self {
-            Self::Variant0 { path, .. } => vec![WorkspaceView {
-                path: std::path::PathBuf::from(path),
-                role: WorkspaceViewRole::Primary,
-            }],
-            Self::Variant1 { workspaces, .. } => workspaces
-                .iter()
-                .map(|w| WorkspaceView {
-                    path: std::path::PathBuf::from(&w.path),
-                    role: match w.role {
-                        ProjectEntryVariant1WorkspacesItemRole::Primary => {
-                            WorkspaceViewRole::Primary
-                        }
-                        ProjectEntryVariant1WorkspacesItemRole::Manifests => {
-                            WorkspaceViewRole::Manifests
-                        }
-                        ProjectEntryVariant1WorkspacesItemRole::Source => {
-                            WorkspaceViewRole::Source
-                        }
-                        ProjectEntryVariant1WorkspacesItemRole::Secrets => {
-                            WorkspaceViewRole::Secrets
-                        }
-                        ProjectEntryVariant1WorkspacesItemRole::Docs => WorkspaceViewRole::Docs,
-                    },
-                })
-                .collect(),
-        }
-    }
-
-    /// Returns an iterator over all workspace paths in this project.
-    pub fn all_paths(&self) -> impl Iterator<Item = std::path::PathBuf> + '_ {
-        self.workspace_views().into_iter().map(|w| w.path)
+impl Default for ProjectsRegistry {
+    fn default() -> Self {
+        Self { projects: vec![] }
     }
 }
+
+/// Helper methods shared between `ProjectEntry` and `ProjectsRegistryProjectsItem`.
+/// Both enums have the same two-variant shape (shorthand path vs multi-workspace).
+macro_rules! impl_project_helpers {
+    ($ty:ty, $ws_item:ty, $role_ty:ty) => {
+        impl $ty {
+            /// Returns the project name regardless of which variant this is.
+            pub fn name(&self) -> &str {
+                match self {
+                    Self::Variant0 { name, .. } => name,
+                    Self::Variant1 { name, .. } => name,
+                }
+            }
+
+            /// Returns a unified workspace view for all workspaces in this project.
+            pub fn workspace_views(&self) -> Vec<WorkspaceView> {
+                match self {
+                    Self::Variant0 { path, .. } => vec![WorkspaceView {
+                        path: std::path::PathBuf::from(path),
+                        role: WorkspaceViewRole::Primary,
+                    }],
+                    Self::Variant1 { workspaces, .. } => workspaces
+                        .iter()
+                        .map(|w| WorkspaceView {
+                            path: std::path::PathBuf::from(&w.path),
+                            role: match w.role {
+                                <$role_ty>::Primary => WorkspaceViewRole::Primary,
+                                <$role_ty>::Manifests => WorkspaceViewRole::Manifests,
+                                <$role_ty>::Source => WorkspaceViewRole::Source,
+                                <$role_ty>::Secrets => WorkspaceViewRole::Secrets,
+                                <$role_ty>::Docs => WorkspaceViewRole::Docs,
+                            },
+                        })
+                        .collect(),
+                }
+            }
+
+            /// Returns an iterator over all workspace paths in this project.
+            pub fn all_paths(&self) -> impl Iterator<Item = std::path::PathBuf> + '_ {
+                self.workspace_views().into_iter().map(|w| w.path)
+            }
+
+            /// Returns the optional display label.
+            pub fn label(&self) -> Option<&str> {
+                match self {
+                    Self::Variant0 { label, .. } => label.as_deref(),
+                    Self::Variant1 { label, .. } => label.as_deref(),
+                }
+            }
+
+            /// Returns the optional color hex code.
+            pub fn color(&self) -> Option<&str> {
+                match self {
+                    Self::Variant0 { color, .. } => color.as_ref().map(|c| c.as_str()),
+                    Self::Variant1 { color, .. } => color.as_ref().map(|c| c.as_str()),
+                }
+            }
+        }
+    };
+}
+
+impl_project_helpers!(ProjectEntry, ProjectEntryVariant1WorkspacesItem, ProjectEntryVariant1WorkspacesItemRole);
+impl_project_helpers!(ProjectsRegistryProjectsItem, ProjectsRegistryProjectsItemVariant1WorkspacesItem, ProjectsRegistryProjectsItemVariant1WorkspacesItemRole);
 
 /// Base trait for all schema records
 pub trait SchemaRecord {

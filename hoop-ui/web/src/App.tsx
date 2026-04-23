@@ -1,42 +1,97 @@
-import { useAtom, useSetAtom } from 'jotai';
-import { useState, useEffect } from 'react';
-import { wsConnectedAtom, projectsAtom, configStatusAtom, Project } from './atoms';
+import { useAtom, useAtomValue } from 'jotai';
+import { useState, useEffect, useMemo } from 'react';
+import { wsConnectedAtom, configStatusAtom, projectCardsAtom, ProjectCardData } from './atoms';
 import { useWebSocket } from './useWebSocket';
 import ProjectDetail from './ProjectDetail';
 import FleetMap from './FleetMap';
 import BeadList from './BeadList';
 import ConversationPane from './ConversationPane';
 
-// Demo project data - will be replaced with real project registry
-const DEMO_PROJECTS: Project[] = [
-  { name: 'HOOP', path: '/home/coding/HOOP', activeBeads: 3, workers: 2 },
-  { name: 'NEEDLE', path: '/home/coding/NEEDLE', activeBeads: 5, workers: 3 },
-  { name: 'FABRIC', path: '/home/coding/FABRIC', activeBeads: 0, workers: 0 },
-];
+function formatRelativeTime(iso?: string): string {
+  if (!iso) return '--';
+  const then = new Date(iso).getTime();
+  const now = Date.now();
+  const diffSec = Math.floor((now - then) / 1000);
+  if (diffSec < 60) return `${diffSec}s ago`;
+  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+  if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+  return `${Math.floor(diffSec / 86400)}d ago`;
+}
+
+function formatCost(usd: number): string {
+  if (usd === 0) return '$0';
+  if (usd < 0.01) return '<$0.01';
+  return `$${usd.toFixed(2)}`;
+}
+
+function ProjectCard({ card, onClick }: { card: ProjectCardData; onClick: () => void }) {
+  const runtimeState = card.runtime_state ?? 'unknown';
+  const isDegraded = card.degraded;
+
+  return (
+    <button
+      className={`project-card-fleet ${isDegraded ? 'project-card-degraded' : ''}`}
+      onClick={onClick}
+      style={card.color ? { '--project-accent': card.color } as React.CSSProperties : undefined}
+    >
+      <div className="pcf-header">
+        <div className="pcf-title-row">
+          {card.color && <span className="pcf-color-dot" style={{ background: card.color }} />}
+          <span className="pcf-label">{card.label || card.name}</span>
+          {isDegraded && <span className="pcf-error-badge" title={card.runtime_error}>!</span>}
+        </div>
+        <span className="pcf-arrow">&rarr;</span>
+      </div>
+
+      {isDegraded && card.runtime_error && (
+        <div className="pcf-error-message">{card.runtime_error}</div>
+      )}
+
+      <div className="pcf-stats">
+        <div className="pcf-stat">
+          <span className="pcf-stat-value">{card.worker_count}</span>
+          <span className="pcf-stat-label">workers</span>
+        </div>
+        <div className="pcf-stat">
+          <span className="pcf-stat-value">{card.active_stitch_count}</span>
+          <span className="pcf-stat-label">stitches</span>
+        </div>
+        <div className="pcf-stat">
+          <span className="pcf-stat-value">{formatCost(card.cost_today)}</span>
+          <span className="pcf-stat-label">today</span>
+        </div>
+        {card.stuck_count > 0 && (
+          <div className="pcf-stat pcf-stat-warn">
+            <span className="pcf-stat-value">{card.stuck_count}</span>
+            <span className="pcf-stat-label">stuck</span>
+          </div>
+        )}
+      </div>
+
+      <div className="pcf-footer">
+        <span className="pcf-beads">{card.bead_count} beads</span>
+        <span className="pcf-activity">{formatRelativeTime(card.last_activity)}</span>
+      </div>
+
+      <div className={`pcf-runtime-bar ${runtimeState}`} />
+    </button>
+  );
+}
 
 export default function App() {
   const [wsConnected] = useAtom(wsConnectedAtom);
-  const [projects] = useAtom(projectsAtom);
   const [configStatus] = useAtom(configStatusAtom);
-  const setProjects = useSetAtom(projectsAtom);
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const projectCards = useAtomValue(projectCardsAtom);
+  const [selectedProject, setSelectedProject] = useState<ProjectCardData | null>(null);
 
-  // Initialize WebSocket connection
   useWebSocket();
-
-  // Initialize projects atom with demo data
-  useEffect(() => {
-    if (projects.length === 0) {
-      setProjects(DEMO_PROJECTS);
-    }
-  }, [projects, setProjects]);
 
   // Handle hash-based routing
   useEffect(() => {
     const handleHashChange = () => {
-      const hash = window.location.hash.slice(1); // Remove #
+      const hash = window.location.hash.slice(1);
       if (hash) {
-        const project = DEMO_PROJECTS.find(p => p.name === hash);
+        const project = projectCards.find(p => p.name === hash);
         if (project) {
           setSelectedProject(project);
         }
@@ -46,10 +101,23 @@ export default function App() {
     };
 
     window.addEventListener('hashchange', handleHashChange);
-    handleHashChange(); // Initial check
+    handleHashChange();
 
     return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
+  }, [projectCards]);
+
+  const navigateToProject = (card: ProjectCardData) => {
+    window.location.hash = card.name;
+  };
+
+  const fleetSummary = useMemo(() => {
+    const totalWorkers = projectCards.reduce((s, c) => s + c.worker_count, 0);
+    const totalStitches = projectCards.reduce((s, c) => s + c.active_stitch_count, 0);
+    const totalCost = projectCards.reduce((s, c) => s + c.cost_today, 0);
+    const totalStuck = projectCards.reduce((s, c) => s + c.stuck_count, 0);
+    const degradedCount = projectCards.filter(c => c.degraded).length;
+    return { totalWorkers, totalStitches, totalCost, totalStuck, degradedCount };
+  }, [projectCards]);
 
   // If a project is selected, show the project detail view
   if (selectedProject) {
@@ -67,7 +135,7 @@ export default function App() {
         <header className="app-header-mini">
           <div className="header-top">
             <a href="#/" className="back-link" onClick={(e) => { e.preventDefault(); window.location.hash = ''; }}>
-              ← All Projects
+              &larr; All Projects
             </a>
             <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
               <span className="indicator-dot" />
@@ -83,7 +151,7 @@ export default function App() {
     );
   }
 
-  // Overview page - show all projects
+  // Overview page - fleet-of-fleets dashboard
   return (
     <div className="app">
       {configStatus.error && (
@@ -107,37 +175,54 @@ export default function App() {
       </header>
 
       <main>
-        {/* Projects Overview */}
-        <section className="projects-section">
-          <h2>Projects</h2>
-          <div className="projects-grid">
-            {DEMO_PROJECTS.map(project => (
-              <a
-                key={project.name}
-                href={`#${project.name}`}
-                className="project-card"
-              >
-                <div className="project-card-header">
-                  <h3 className="project-name">{project.name}</h3>
-                  <span className="project-arrow">→</span>
-                </div>
-                <div className="project-card-meta">
-                  <span className="meta-item">
-                    <span className="meta-label">Path:</span>
-                    <span className="meta-value">{project.path}</span>
-                  </span>
-                  <span className="meta-item">
-                    <span className="meta-label">Active Beads:</span>
-                    <span className="meta-value">{project.activeBeads}</span>
-                  </span>
-                  <span className="meta-item">
-                    <span className="meta-label">Workers:</span>
-                    <span className="meta-value">{project.workers}</span>
-                  </span>
-                </div>
-              </a>
-            ))}
+        {/* Fleet Summary Strip */}
+        <section className="fleet-summary-strip">
+          <div className="fss-item">
+            <span className="fss-value">{projectCards.length}</span>
+            <span className="fss-label">projects</span>
           </div>
+          <div className="fss-item">
+            <span className="fss-value">{fleetSummary.totalWorkers}</span>
+            <span className="fss-label">workers</span>
+          </div>
+          <div className="fss-item">
+            <span className="fss-value">{fleetSummary.totalStitches}</span>
+            <span className="fss-label">active stitches</span>
+          </div>
+          <div className="fss-item">
+            <span className="fss-value">{formatCost(fleetSummary.totalCost)}</span>
+            <span className="fss-label">spend today</span>
+          </div>
+          {fleetSummary.totalStuck > 0 && (
+            <div className="fss-item fss-warn">
+              <span className="fss-value">{fleetSummary.totalStuck}</span>
+              <span className="fss-label">stuck</span>
+            </div>
+          )}
+          {fleetSummary.degradedCount > 0 && (
+            <div className="fss-item fss-error">
+              <span className="fss-value">{fleetSummary.degradedCount}</span>
+              <span className="fss-label">degraded</span>
+            </div>
+          )}
+        </section>
+
+        {/* Project Cards Grid */}
+        <section className="projects-section">
+          <h2>Fleet</h2>
+          {projectCards.length === 0 ? (
+            <div className="fleet-empty">No projects registered</div>
+          ) : (
+            <div className="fleet-cards-grid">
+              {projectCards.map(card => (
+                <ProjectCard
+                  key={card.name}
+                  card={card}
+                  onClick={() => navigateToProject(card)}
+                />
+              ))}
+            </div>
+          )}
         </section>
 
         <FleetMap />

@@ -7,7 +7,41 @@
 //! Unknown event types emit a progress event + increment a metric.
 
 use anyhow::{Context, Result};
-use hoop_schema::{NeedleEvent, ParsedEvent};
+/// NEEDLE event types parsed from events.jsonl
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "event", rename_all = "snake_case")]
+pub enum NeedleEvent {
+    Claim {
+        ts: String,
+        worker: String,
+        bead: String,
+    },
+    Close {
+        ts: String,
+        worker: String,
+        bead: String,
+    },
+    Release {
+        ts: String,
+        worker: String,
+        bead: String,
+    },
+    Update {
+        ts: String,
+        worker: String,
+        bead: String,
+    },
+    #[serde(other)]
+    Unknown,
+}
+
+/// A parsed event with metadata
+#[derive(Debug, Clone)]
+pub struct ParsedEvent {
+    pub event: NeedleEvent,
+    pub line_number: usize,
+    pub raw: String,
+}
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use std::fs::{File, Metadata};
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
@@ -30,6 +64,48 @@ pub enum TailerEvent {
     Error(String),
 }
 
+/// Bead event data for WebSocket forwarding
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct BeadEventData {
+    pub timestamp: String,
+    pub event_type: String,
+    pub bead_id: String,
+    pub worker: String,
+}
+
+impl BeadEventData {
+    /// Convert a NeedleEvent to BeadEventData, returning None for unknown events
+    pub fn from_event(event: &NeedleEvent) -> Option<Self> {
+        match event {
+            NeedleEvent::Claim { ts, worker, bead } => Some(BeadEventData {
+                timestamp: ts.clone(),
+                event_type: "claim".to_string(),
+                bead_id: bead.clone(),
+                worker: worker.clone(),
+            }),
+            NeedleEvent::Close { ts, worker, bead } => Some(BeadEventData {
+                timestamp: ts.clone(),
+                event_type: "close".to_string(),
+                bead_id: bead.clone(),
+                worker: worker.clone(),
+            }),
+            NeedleEvent::Release { ts, worker, bead } => Some(BeadEventData {
+                timestamp: ts.clone(),
+                event_type: "release".to_string(),
+                bead_id: bead.clone(),
+                worker: worker.clone(),
+            }),
+            NeedleEvent::Update { ts, worker, bead } => Some(BeadEventData {
+                timestamp: ts.clone(),
+                event_type: "update".to_string(),
+                bead_id: bead.clone(),
+                worker: worker.clone(),
+            }),
+            NeedleEvent::Unknown => None,
+        }
+    }
+}
+
 /// Event tailer configuration
 #[derive(Debug, Clone)]
 pub struct EventTailerConfig {
@@ -37,6 +113,8 @@ pub struct EventTailerConfig {
     pub events_path: PathBuf,
     /// Whether to replay the entire file on startup
     pub replay_on_startup: bool,
+    /// Optional sender for bead events (for WebSocket forwarding)
+    pub bead_event_tx: Option<broadcast::Sender<BeadEventData>>,
 }
 
 impl Default for EventTailerConfig {
@@ -208,6 +286,10 @@ impl EventTailer {
             offset += line.len() as u64 + 1;
 
             if let Some(parsed) = parser.parse_line(&line, line_number)? {
+                // Forward bead event if configured
+                if let Some(ref tx) = self.config.bead_event_tx {
+                    NdjsonParser::forward_bead_event(&parsed.event, tx);
+                }
                 let _ = self.event_tx.send(TailerEvent::Event(parsed));
             }
         }
@@ -235,6 +317,7 @@ impl EventTailer {
         events_path: &Path,
         event_tx: &broadcast::Sender<TailerEvent>,
         position: Arc<Mutex<FilePosition>>,
+        bead_event_tx: Option<broadcast::Sender<BeadEventData>>,
     ) -> Result<()> {
         let event = res?;
 
@@ -251,7 +334,7 @@ impl EventTailer {
         match event.kind {
             // File created or modified - read new lines
             Access(_) | Create(_) | Modify(_) => {
-                if let Err(e) = Self::read_new_events(events_path, event_tx, position.clone()) {
+                if let Err(e) = Self::read_new_events(events_path, event_tx, position.clone(), bead_event_tx) {
                     warn!("Error reading new events: {}", e);
                 }
             }
@@ -273,6 +356,7 @@ impl EventTailer {
         events_path: &Path,
         event_tx: &broadcast::Sender<TailerEvent>,
         position: Arc<Mutex<FilePosition>>,
+        bead_event_tx: Option<broadcast::Sender<BeadEventData>>,
     ) -> Result<()> {
         let file = File::open(events_path)
             .with_context(|| format!("Failed to open events file {}", events_path.display()))?;
@@ -326,6 +410,10 @@ impl EventTailer {
             current_offset += line.len() as u64 + 1;
 
             if let Some(parsed) = parser.parse_line(&line, line_number)? {
+                // Forward bead event if configured
+                if let Some(ref tx) = bead_event_tx {
+                    NdjsonParser::forward_bead_event(&parsed.event, tx);
+                }
                 let _ = event_tx.send(TailerEvent::Event(parsed));
             }
         }
@@ -429,6 +517,13 @@ impl NdjsonParser {
                     }))
                 }
             }
+        }
+    }
+
+    /// Forward a parsed event as bead event data (if applicable)
+    fn forward_bead_event(event: &NeedleEvent, tx: &broadcast::Sender<BeadEventData>) {
+        if let Some(bead_event) = BeadEventData::from(event) {
+            let _ = tx.send(bead_event);
         }
     }
 

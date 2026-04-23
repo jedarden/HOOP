@@ -84,6 +84,9 @@
           "default": 30
         }
       }
+    },
+    "pricing": {
+      "$ref": "pricing_config.json"
     }
   },
   "schema_version": "1.0.0"

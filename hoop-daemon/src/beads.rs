@@ -5,7 +5,7 @@
 //! Survives log rotation and handles partial lines.
 
 use anyhow::{Context, Result};
-use hoop_schema::{Bead, BeadStatus, BeadType};
+use crate::{Bead, BeadStatus, BeadType};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Deserialize;
 use std::fs::{File, Metadata};
@@ -156,7 +156,7 @@ impl BeadReader {
         Ok(())
     }
 
-    fn replay_file(&self) -> Result<()> {
+    pub fn replay_file(&self) -> Result<()> {
         let issues_path = self.config.workspace_path.join(".beads").join("issues.jsonl");
         let file = File::open(&issues_path)
             .context("Failed to open beads file for replay")?;
@@ -278,7 +278,7 @@ impl BeadReader {
     ///
     /// Flushes any pending reads and stops the file watcher.
     /// This should be called during shutdown to ensure clean state.
-    pub async fn stop(&self) -> Result<()> {
+    pub async fn stop(&mut self) -> Result<()> {
         debug!("Stopping bead reader");
 
         // Drop the watcher to stop file watching

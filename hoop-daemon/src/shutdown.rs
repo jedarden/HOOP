@@ -456,10 +456,10 @@ mod tests {
 
     #[test]
     fn test_shutdown_phase_ordering() {
-        assert!(ShutdownPhase::Initiated as u8 < ShutdownPhase::Exit as u8);
-        assert!(ShutdownPhase::CloseNewConnections as u8 < ShutdownPhase::DrainInFlight as u8);
-        assert!(ShutdownPhase::FlushState as u8 < ShutdownPhase::NotifyClients as u8);
-        assert!(ShutdownPhase::CheckpointDb as u8 < ShutdownPhase::CleanupSockets as u8);
+        assert!((ShutdownPhase::Initiated as u8) < (ShutdownPhase::Exit as u8));
+        assert!((ShutdownPhase::CloseNewConnections as u8) < (ShutdownPhase::DrainInFlight as u8));
+        assert!((ShutdownPhase::FlushState as u8) < (ShutdownPhase::NotifyClients as u8));
+        assert!((ShutdownPhase::CheckpointDb as u8) < (ShutdownPhase::CleanupSockets as u8));
     }
 
     #[tokio::test]

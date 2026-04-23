@@ -3,7 +3,7 @@
 //! Each project gets its own supervised tokio task that manages:
 //! - Bead reader for the project's workspaces
 //! - Session tailer scoped to the project
-//! - Panic recovery with catch_unwind
+//! - Panic recovery via JoinError detection
 //! - Exponential backoff restart limiting
 //!
 //! A panic in one project's runtime is caught, logged, and restarted.
@@ -13,7 +13,7 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -22,6 +22,7 @@ use tokio::task::JoinError;
 use tracing::{debug, error, info, warn};
 
 use crate::beads::{BeadEvent, BeadReader, BeadReaderConfig};
+use crate::events::{BeadEventData, EventTailer, EventTailerConfig, TailerEvent};
 use crate::projects::ProjectsConfig;
 use crate::sessions::{SessionEvent, SessionTailer, SessionTailerConfig};
 use crate::shutdown::ShutdownPhase;
@@ -132,6 +133,8 @@ pub struct ProjectSupervisor {
     status_tx: broadcast::Sender<ProjectRuntimeStatus>,
     /// Shutdown coordinator for graceful shutdown
     shutdown: Arc<crate::shutdown::ShutdownCoordinator>,
+    /// Event tailer for global events.jsonl (bead claim/close/release/update events)
+    event_tailer: Arc<std::sync::Mutex<Option<EventTailer>>>,
 }
 
 impl ProjectSupervisor {
@@ -153,6 +156,63 @@ impl ProjectSupervisor {
             beads,
             status_tx,
             shutdown,
+            event_tailer: Arc::new(std::sync::Mutex::new(None)),
+        }
+    }
+
+    /// Start the global event tailer (events.jsonl)
+    pub async fn start_event_tailer(&self) -> Result<()> {
+        let mut event_tailer = EventTailer::new(EventTailerConfig {
+            replay_on_startup: true,
+            ..Default::default()
+        }).context("Failed to create event tailer")?;
+
+        event_tailer.start().context("Failed to start event tailer")?;
+
+        // Subscribe to event tailer events and forward to worker registry
+        let mut event_rx = event_tailer.subscribe();
+        let worker_registry = self.worker_registry.clone();
+
+        tokio::spawn(async move {
+            while let Ok(event) = event_rx.recv().await {
+                match event {
+                    TailerEvent::Event(parsed) => {
+                        // Convert to BeadEventData and add to registry
+                        if let Some(bead_event) = BeadEventData::from(&parsed.event) {
+                            let ws_event = crate::ws::BeadEventData {
+                                timestamp: bead_event.timestamp.clone(),
+                                event_type: bead_event.event_type.clone(),
+                                bead_id: bead_event.bead_id.clone(),
+                                worker: bead_event.worker.clone(),
+                                line_number: Some(parsed.line_number),
+                                raw: parsed.raw.clone(),
+                            };
+                            worker_registry.add_bead_event(ws_event).await;
+
+                            // Also broadcast to WebSocket clients via a dedicated channel
+                            // For now, we'll rely on periodic snapshots
+                        }
+                    }
+                    TailerEvent::Rotated => {
+                        debug!("Event log rotated");
+                    }
+                    TailerEvent::Error(e) => {
+                        warn!("Event tailer error: {}", e);
+                    }
+                }
+            }
+        });
+
+        *self.event_tailer.lock().unwrap() = Some(event_tailer);
+        info!("Global event tailer started");
+        Ok(())
+    }
+
+    /// Stop the event tailer gracefully
+    pub async fn stop_event_tailer(&self) {
+        if let Some(_tailer) = self.event_tailer.lock().unwrap().take() {
+            debug!("Stopping event tailer");
+            // The tailer will be dropped when replaced with None
         }
     }
 
