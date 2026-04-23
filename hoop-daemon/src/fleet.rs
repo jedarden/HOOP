@@ -14,11 +14,11 @@
 use anyhow::Result;
 use rusqlite::{params, Connection};
 use sha2::{Digest, Sha256};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tracing::info;
 
 /// Current schema version
-const SCHEMA_VERSION: &str = "1.1.0";
+const SCHEMA_VERSION: &str = "1.2.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -168,7 +168,7 @@ fn insert_genesis_row(conn: &mut Connection) -> Result<()> {
     // Compute hash of this row's content
     let hash_input = format!(
         "{}{}{}{}{}{:?}{}{}",
-        id, ts, actor, kind, target, project, args_json.unwrap_or_default(), result
+        id, ts, actor, kind, target, project, args_json.as_deref().unwrap_or_default(), result
     );
     let hash_self = hex_encode(sha256(hash_input.as_bytes()));
 
@@ -221,14 +221,20 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
         "0.1.0" => {
             // Migration 0.1.0 → 1.1.0: Add Stitch service tables
             migrate_v01_to_v11(conn)?;
-            update_schema_version(conn, "1.1.0")?;
+            // Fall through to 1.2.0
+            migrate_v11_to_v12(conn)?;
+            update_schema_version(conn, "1.2.0")?;
         }
         "1.1.0" => {
-            info!("Already at schema version 1.1.0, no migrations needed");
+            migrate_v11_to_v12(conn)?;
+            update_schema_version(conn, "1.2.0")?;
+        }
+        "1.2.0" => {
+            info!("Already at schema version 1.2.0, no migrations needed");
         }
         _ => {
             return Err(anyhow::anyhow!(
-                "Unsupported schema version: {}. Expected 0.1.0 or 1.1.0",
+                "Unsupported schema version: {}. Expected 0.1.0, 1.1.0, or 1.2.0",
                 from_version
             ));
         }
@@ -369,6 +375,147 @@ fn migrate_v01_to_v11(conn: &mut Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migration 1.1.0 → 1.2.0: Add Pattern service tables
+///
+/// This migration creates three Pattern-related tables:
+/// - patterns: Operator-curated groupings of Stitches toward a goal
+/// - pattern_members: Links between patterns and stitches (many-to-many)
+/// - pattern_queries: Saved queries for auto-including matching stitches
+///
+/// Includes a recursive-CTE trigger to prevent parent_pattern cycles
+/// and indexes for efficient member lookups.
+fn migrate_v11_to_v12(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.1.0 → 1.2.0: Adding Pattern service tables");
+
+    // Create patterns table
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS patterns (
+            id TEXT PRIMARY KEY NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            status TEXT NOT NULL DEFAULT 'planned'
+                CHECK(status IN ('planned', 'active', 'blocked', 'done', 'abandoned')),
+            owner TEXT,
+            deadline TEXT,
+            parent_pattern TEXT REFERENCES patterns(id) ON DELETE SET NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            CHECK(parent_pattern IS NULL OR parent_pattern != id)
+        )
+        "#,
+        [],
+    )?;
+
+    conn.execute(
+        r#"
+        CREATE INDEX IF NOT EXISTS idx_patterns_status
+        ON patterns(status)
+        "#,
+        [],
+    )?;
+
+    conn.execute(
+        r#"
+        CREATE INDEX IF NOT EXISTS idx_patterns_parent
+        ON patterns(parent_pattern)
+        "#,
+        [],
+    )?;
+
+    // Trigger: prevent parent_pattern cycles on UPDATE using recursive CTE
+    conn.execute(
+        r#"
+        CREATE TRIGGER IF NOT EXISTS check_pattern_cycle
+        BEFORE UPDATE OF parent_pattern ON patterns
+        WHEN NEW.parent_pattern IS NOT NULL
+        BEGIN
+            SELECT RAISE(ABORT, 'Pattern parent cycle detected')
+            WHERE EXISTS (
+                WITH RECURSIVE ancestors(ancestor_id) AS (
+                    SELECT NEW.parent_pattern
+                    UNION ALL
+                    SELECT p.parent_pattern
+                    FROM patterns p
+                    INNER JOIN ancestors a ON p.id = a.ancestor_id
+                    WHERE p.parent_pattern IS NOT NULL
+                )
+                SELECT 1 FROM ancestors WHERE ancestor_id = NEW.id
+            );
+        END
+        "#,
+        [],
+    )?;
+
+    // Trigger: prevent self-reference on INSERT (defensive, CHECK also covers this)
+    conn.execute(
+        r#"
+        CREATE TRIGGER IF NOT EXISTS check_pattern_self_ref_insert
+        BEFORE INSERT ON patterns
+        WHEN NEW.parent_pattern IS NOT NULL
+        BEGIN
+            SELECT RAISE(ABORT, 'Pattern cannot reference itself as parent')
+            WHERE EXISTS (
+                SELECT 1 WHERE NEW.parent_pattern = NEW.id
+            );
+        END
+        "#,
+        [],
+    )?;
+
+    // Create pattern_members table
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS pattern_members (
+            pattern_id TEXT NOT NULL REFERENCES patterns(id) ON DELETE CASCADE,
+            stitch_id TEXT NOT NULL REFERENCES stitches(id) ON DELETE CASCADE,
+            added_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (pattern_id, stitch_id)
+        )
+        "#,
+        [],
+    )?;
+
+    conn.execute(
+        r#"
+        CREATE INDEX IF NOT EXISTS idx_pattern_members_pattern
+        ON pattern_members(pattern_id)
+        "#,
+        [],
+    )?;
+
+    conn.execute(
+        r#"
+        CREATE INDEX IF NOT EXISTS idx_pattern_members_stitch
+        ON pattern_members(stitch_id)
+        "#,
+        [],
+    )?;
+
+    // Create pattern_queries table
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS pattern_queries (
+            pattern_id TEXT NOT NULL REFERENCES patterns(id) ON DELETE CASCADE,
+            saved_query TEXT NOT NULL,
+            PRIMARY KEY (pattern_id, saved_query)
+        )
+        "#,
+        [],
+    )?;
+
+    conn.execute(
+        r#"
+        CREATE INDEX IF NOT EXISTS idx_pattern_queries_pattern
+        ON pattern_queries(pattern_id)
+        "#,
+        [],
+    )?;
+
+    info!("Pattern service tables created successfully");
+    Ok(())
+}
+
 /// Update the schema version in the metadata table
 fn update_schema_version(conn: &mut Connection, version: &str) -> Result<()> {
     conn.execute(
@@ -446,7 +593,7 @@ mod tests {
     }
 
     #[test]
-    fn test_migration_v01_to_v11() -> Result<()> {
+    fn test_migration_v01_to_v12() -> Result<()> {
         let temp_file = NamedTempFile::new()?;
         let mut conn = Connection::open(temp_file.path())?;
 
@@ -462,7 +609,7 @@ mod tests {
 
         // Verify new version
         let version = get_schema_version(&conn)?;
-        assert_eq!(version, "1.1.0");
+        assert_eq!(version, "1.2.0");
 
         // Verify all Stitch tables exist
         let tables = [
@@ -480,6 +627,17 @@ mod tests {
             assert_eq!(count, 1, "Table {} should exist", table);
         }
 
+        // Verify Pattern tables exist
+        let pattern_tables = ["patterns", "pattern_members", "pattern_queries"];
+        for table in pattern_tables {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = ?",
+                [table],
+                |row| row.get(0),
+            )?;
+            assert_eq!(count, 1, "Table {} should exist", table);
+        }
+
         // Verify indexes exist
         let indexes = [
             "idx_stitches_project_activity",
@@ -488,6 +646,11 @@ mod tests {
             "idx_stitch_beads_bead",
             "idx_stitch_links_from",
             "idx_stitch_links_to",
+            "idx_patterns_status",
+            "idx_patterns_parent",
+            "idx_pattern_members_pattern",
+            "idx_pattern_members_stitch",
+            "idx_pattern_queries_pattern",
         ];
         for idx in indexes {
             let count: i64 = conn.query_row(
@@ -496,6 +659,29 @@ mod tests {
                 |row| row.get(0),
             )?;
             assert_eq!(count, 1, "Index {} should exist", idx);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_migration_v11_to_v12() -> Result<()> {
+        let temp_file = NamedTempFile::new()?;
+        let mut conn = Connection::open(temp_file.path())?;
+
+        // Create schema and migrate to 1.1.0
+        create_schema(&mut conn)?;
+        run_migrations(&mut conn, "0.1.0")?;
+        assert_eq!(get_schema_version(&conn)?, "1.2.0");
+
+        // Pattern tables should now exist
+        for table in ["patterns", "pattern_members", "pattern_queries"] {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = ?",
+                [table],
+                |row| row.get(0),
+            )?;
+            assert_eq!(count, 1, "Table {} should exist after migration", table);
         }
 
         Ok(())
@@ -767,11 +953,358 @@ mod tests {
         create_schema(&mut conn)?;
         run_migrations(&mut conn, "0.1.0")?;
 
-        // Running migration again on 1.1.0 should be a no-op
-        run_migrations(&mut conn, "1.1.0")?;
+        // Running migration again on 1.2.0 should be a no-op
+        run_migrations(&mut conn, "1.2.0")?;
 
         let version = get_schema_version(&conn)?;
-        assert_eq!(version, "1.1.0");
+        assert_eq!(version, "1.2.0");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_pattern_status_check_constraint() -> Result<()> {
+        let temp_file = NamedTempFile::new()?;
+        let mut conn = Connection::open(temp_file.path())?;
+
+        create_schema(&mut conn)?;
+        run_migrations(&mut conn, "0.1.0")?;
+
+        use uuid::Uuid;
+
+        // Valid statuses should succeed
+        for status in ["planned", "active", "blocked", "done", "abandoned"] {
+            conn.execute(
+                "INSERT INTO patterns (id, title, status) VALUES (?, ?, ?)",
+                params![Uuid::new_v4().to_string(), format!("Pattern {}", status), status],
+            )?;
+        }
+
+        // Invalid status should fail
+        let result = conn.execute(
+            "INSERT INTO patterns (id, title, status) VALUES (?, ?, ?)",
+            params![Uuid::new_v4().to_string(), "Bad", "invalid"],
+        );
+        assert!(result.is_err(), "CHECK constraint should reject invalid status");
+
+        // NULL status should also fail
+        let result = conn.execute(
+            "INSERT INTO patterns (id, title, status) VALUES (?, ?, NULL)",
+            params![Uuid::new_v4().to_string(), "Null Status"],
+        );
+        assert!(result.is_err(), "NOT NULL constraint should reject NULL status");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_pattern_self_reference_prevention() -> Result<()> {
+        let temp_file = NamedTempFile::new()?;
+        let mut conn = Connection::open(temp_file.path())?;
+
+        create_schema(&mut conn)?;
+        run_migrations(&mut conn, "0.1.0")?;
+        conn.pragma_update(None, "foreign_keys", "ON")?;
+
+        use uuid::Uuid;
+
+        let id = Uuid::new_v4().to_string();
+
+        // Insert a pattern
+        conn.execute(
+            "INSERT INTO patterns (id, title, status) VALUES (?, ?, 'planned')",
+            params![id, "Self-ref test"],
+        )?;
+
+        // Setting parent_pattern to self should fail (CHECK constraint)
+        let result = conn.execute(
+            "UPDATE patterns SET parent_pattern = ? WHERE id = ?",
+            params![id, id],
+        );
+        assert!(result.is_err(), "Should prevent self-referencing parent_pattern");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_pattern_cycle_prevention() -> Result<()> {
+        let temp_file = NamedTempFile::new()?;
+        let mut conn = Connection::open(temp_file.path())?;
+
+        create_schema(&mut conn)?;
+        run_migrations(&mut conn, "0.1.0")?;
+        conn.pragma_update(None, "foreign_keys", "ON")?;
+
+        use uuid::Uuid;
+
+        let a = Uuid::new_v4().to_string();
+        let b = Uuid::new_v4().to_string();
+        let c = Uuid::new_v4().to_string();
+
+        // Create chain: a → b → c (a is child of b, b is child of c)
+        conn.execute(
+            "INSERT INTO patterns (id, title, status) VALUES (?, 'C', 'planned')",
+            params![c],
+        )?;
+        conn.execute(
+            "INSERT INTO patterns (id, title, status, parent_pattern) VALUES (?, 'B', 'active', ?)",
+            params![b, c],
+        )?;
+        conn.execute(
+            "INSERT INTO patterns (id, title, status, parent_pattern) VALUES (?, 'A', 'active', ?)",
+            params![a, b],
+        )?;
+
+        // 2-node cycle: try to set c's parent to a (would create a→b→c→a)
+        let result = conn.execute(
+            "UPDATE patterns SET parent_pattern = ? WHERE id = ?",
+            params![a, c],
+        );
+        assert!(result.is_err(), "Should prevent 3-node cycle a→b→c→a");
+
+        // Direct 2-node cycle: try to set c's parent to b (b already has parent c)
+        let result = conn.execute(
+            "UPDATE patterns SET parent_pattern = ? WHERE id = ?",
+            params![b, c],
+        );
+        assert!(result.is_err(), "Should prevent 2-node cycle b↔c");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_pattern_valid_nesting() -> Result<()> {
+        let temp_file = NamedTempFile::new()?;
+        let mut conn = Connection::open(temp_file.path())?;
+
+        create_schema(&mut conn)?;
+        run_migrations(&mut conn, "0.1.0")?;
+        conn.pragma_update(None, "foreign_keys", "ON")?;
+
+        use uuid::Uuid;
+
+        let root = Uuid::new_v4().to_string();
+        let child = Uuid::new_v4().to_string();
+        let grandchild = Uuid::new_v4().to_string();
+
+        // Create a valid 3-level hierarchy
+        conn.execute(
+            "INSERT INTO patterns (id, title, status) VALUES (?, 'Root', 'active')",
+            params![root],
+        )?;
+        conn.execute(
+            "INSERT INTO patterns (id, title, status, parent_pattern) VALUES (?, 'Child', 'active', ?)",
+            params![child, root],
+        )?;
+        conn.execute(
+            "INSERT INTO patterns (id, title, status, parent_pattern) VALUES (?, 'Grandchild', 'planned', ?)",
+            params![grandchild, child],
+        )?;
+
+        // Verify hierarchy
+        let (parent_of_grandchild,): (Option<String>,) = conn.query_row(
+            "SELECT parent_pattern FROM patterns WHERE id = ?",
+            params![grandchild],
+            |row| Ok((row.get(0)?,)),
+        )?;
+        assert_eq!(parent_of_grandchild, Some(child));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_pattern_members_foreign_keys() -> Result<()> {
+        let temp_file = NamedTempFile::new()?;
+        let mut conn = Connection::open(temp_file.path())?;
+
+        create_schema(&mut conn)?;
+        run_migrations(&mut conn, "0.1.0")?;
+        conn.pragma_update(None, "foreign_keys", "ON")?;
+
+        use uuid::Uuid;
+
+        let pattern_id = Uuid::new_v4().to_string();
+        let stitch_id = Uuid::new_v4().to_string();
+
+        // Insert pattern and stitch
+        conn.execute(
+            "INSERT INTO patterns (id, title, status) VALUES (?, ?, 'active')",
+            params![pattern_id, "Test Pattern"],
+        )?;
+        conn.execute(
+            r#"INSERT INTO stitches (id, project, kind, title, created_by, created_at, last_activity_at)
+            VALUES (?, ?, 'operator', ?, ?, datetime('now'), datetime('now'))"#,
+            params![stitch_id, "test-project", "Test Stitch", "user"],
+        )?;
+
+        // Valid membership should succeed
+        conn.execute(
+            "INSERT INTO pattern_members (pattern_id, stitch_id) VALUES (?, ?)",
+            params![pattern_id, stitch_id],
+        )?;
+
+        // Duplicate membership should fail (PK constraint)
+        let result = conn.execute(
+            "INSERT INTO pattern_members (pattern_id, stitch_id) VALUES (?, ?)",
+            params![pattern_id, stitch_id],
+        );
+        assert!(result.is_err(), "Should reject duplicate membership");
+
+        // Invalid pattern_id should fail
+        let result = conn.execute(
+            "INSERT INTO pattern_members (pattern_id, stitch_id) VALUES (?, ?)",
+            params!["nonexistent", stitch_id],
+        );
+        assert!(result.is_err(), "FK should reject invalid pattern_id");
+
+        // Invalid stitch_id should fail
+        let result = conn.execute(
+            "INSERT INTO pattern_members (pattern_id, stitch_id) VALUES (?, ?)",
+            params![pattern_id, "nonexistent"],
+        );
+        assert!(result.is_err(), "FK should reject invalid stitch_id");
+
+        // Deleting pattern should cascade to members
+        conn.execute("DELETE FROM patterns WHERE id = ?", params![pattern_id])?;
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM pattern_members WHERE pattern_id = ?",
+            params![pattern_id],
+            |row| row.get(0),
+        )?;
+        assert_eq!(count, 0, "Deleting pattern should cascade to members");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_pattern_members_multi_pattern() -> Result<()> {
+        let temp_file = NamedTempFile::new()?;
+        let mut conn = Connection::open(temp_file.path())?;
+
+        create_schema(&mut conn)?;
+        run_migrations(&mut conn, "0.1.0")?;
+        conn.pragma_update(None, "foreign_keys", "ON")?;
+
+        use uuid::Uuid;
+
+        // One stitch can belong to multiple patterns
+        let stitch_id = Uuid::new_v4().to_string();
+        conn.execute(
+            r#"INSERT INTO stitches (id, project, kind, title, created_by, created_at, last_activity_at)
+            VALUES (?, ?, 'operator', ?, ?, datetime('now'), datetime('now'))"#,
+            params![stitch_id, "test-project", "Shared Stitch", "user"],
+        )?;
+
+        let p1 = Uuid::new_v4().to_string();
+        let p2 = Uuid::new_v4().to_string();
+        conn.execute(
+            "INSERT INTO patterns (id, title, status) VALUES (?, 'Pattern 1', 'active')",
+            params![p1],
+        )?;
+        conn.execute(
+            "INSERT INTO patterns (id, title, status) VALUES (?, 'Pattern 2', 'planned')",
+            params![p2],
+        )?;
+
+        conn.execute(
+            "INSERT INTO pattern_members (pattern_id, stitch_id) VALUES (?, ?)",
+            params![p1, stitch_id],
+        )?;
+        conn.execute(
+            "INSERT INTO pattern_members (pattern_id, stitch_id) VALUES (?, ?)",
+            params![p2, stitch_id],
+        )?;
+
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM pattern_members WHERE stitch_id = ?",
+            params![stitch_id],
+            |row| row.get(0),
+        )?;
+        assert_eq!(count, 2, "Stitch should belong to both patterns");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_pattern_queries_foreign_keys() -> Result<()> {
+        let temp_file = NamedTempFile::new()?;
+        let mut conn = Connection::open(temp_file.path())?;
+
+        create_schema(&mut conn)?;
+        run_migrations(&mut conn, "0.1.0")?;
+        conn.pragma_update(None, "foreign_keys", "ON")?;
+
+        use uuid::Uuid;
+
+        let pattern_id = Uuid::new_v4().to_string();
+        conn.execute(
+            "INSERT INTO patterns (id, title, status) VALUES (?, ?, 'active')",
+            params![pattern_id, "Query Test"],
+        )?;
+
+        // Valid query should succeed
+        conn.execute(
+            "INSERT INTO pattern_queries (pattern_id, saved_query) VALUES (?, ?)",
+            params![pattern_id, "project:kalshi-weather status:active"],
+        )?;
+
+        // Duplicate query should fail (PK)
+        let result = conn.execute(
+            "INSERT INTO pattern_queries (pattern_id, saved_query) VALUES (?, ?)",
+            params![pattern_id, "project:kalshi-weather status:active"],
+        );
+        assert!(result.is_err(), "Should reject duplicate query");
+
+        // Different query for same pattern should succeed
+        conn.execute(
+            "INSERT INTO pattern_queries (pattern_id, saved_query) VALUES (?, ?)",
+            params![pattern_id, "kind:worker cost:>5"],
+        )?;
+
+        // Deleting pattern should cascade to queries
+        conn.execute("DELETE FROM patterns WHERE id = ?", params![pattern_id])?;
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM pattern_queries WHERE pattern_id = ?",
+            params![pattern_id],
+            |row| row.get(0),
+        )?;
+        assert_eq!(count, 0, "Deleting pattern should cascade to queries");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_pattern_parent_set_null_on_delete() -> Result<()> {
+        let temp_file = NamedTempFile::new()?;
+        let mut conn = Connection::open(temp_file.path())?;
+
+        create_schema(&mut conn)?;
+        run_migrations(&mut conn, "0.1.0")?;
+        conn.pragma_update(None, "foreign_keys", "ON")?;
+
+        use uuid::Uuid;
+
+        let parent = Uuid::new_v4().to_string();
+        let child = Uuid::new_v4().to_string();
+
+        conn.execute(
+            "INSERT INTO patterns (id, title, status) VALUES (?, 'Parent', 'active')",
+            params![parent],
+        )?;
+        conn.execute(
+            "INSERT INTO patterns (id, title, status, parent_pattern) VALUES (?, 'Child', 'planned', ?)",
+            params![child, parent],
+        )?;
+
+        // Deleting parent should SET NULL on child's parent_pattern
+        conn.execute("DELETE FROM patterns WHERE id = ?", params![parent])?;
+
+        let (child_parent,): (Option<String>,) = conn.query_row(
+            "SELECT parent_pattern FROM patterns WHERE id = ?",
+            params![child],
+            |row| Ok((row.get(0)?,)),
+        )?;
+        assert_eq!(child_parent, None, "Child's parent should be NULL after parent deletion");
 
         Ok(())
     }
