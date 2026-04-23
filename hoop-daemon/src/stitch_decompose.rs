@@ -26,12 +26,16 @@ pub struct GraphBead {
     /// Issue type (task, fix, review, etc.)
     pub issue_type: String,
     /// Keys of beads this one depends on
+    #[serde(default)]
     pub depends_on: Vec<String>,
     /// Optional body template (may reference Stitch fields via {{title}}, {{description}})
+    #[serde(default)]
     pub body_template: Option<String>,
     /// Priority override (None = inherit from Stitch)
+    #[serde(default)]
     pub priority: Option<i64>,
     /// Additional labels
+    #[serde(default)]
     pub labels: Vec<String>,
 }
 
@@ -67,12 +71,16 @@ pub struct StitchIntent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GraphOverride {
     /// Beads to add (not in the original graph)
+    #[serde(default)]
     pub add: Vec<GraphBead>,
     /// Bead keys to remove
+    #[serde(default)]
     pub remove: Vec<String>,
     /// Beads to replace (matched by key)
+    #[serde(default)]
     pub replace: Vec<GraphBead>,
     /// Override the rule name (for audit)
+    #[serde(default)]
     pub override_reason: Option<String>,
 }
 
@@ -88,6 +96,7 @@ pub struct DecomposeRule {
     /// Which Stitch kinds this rule matches
     pub match_kinds: Vec<String>,
     /// Whether this rule only applies when has_acceptance_criteria is true
+    #[serde(default)]
     pub requires_acceptance_criteria: Option<bool>,
     /// Ordered bead templates
     pub beads: Vec<GraphBeadTemplate>,
@@ -103,12 +112,16 @@ pub struct GraphBeadTemplate {
     /// Title template. Supports {{title}} and {{kind}} placeholders.
     pub title_template: String,
     /// Keys of beads this one depends on
+    #[serde(default)]
     pub depends_on: Vec<String>,
     /// Body template (supports {{title}}, {{description}}, {{kind}})
+    #[serde(default)]
     pub body_template: Option<String>,
     /// Priority override
+    #[serde(default)]
     pub priority: Option<i64>,
     /// Extra labels
+    #[serde(default)]
     pub labels: Vec<String>,
 }
 
