@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# hoop-adb — trigger push-to-talk dictation on the Pixel 6 via ADB
+#
+# USAGE
+#   hoop-adb start [project]   — begin recording on the phone
+#   hoop-adb stop              — stop recording and upload to HOOP
+#   hoop-adb status            — show active-project known to HOOP
+#   hoop-adb setup             — print phone-side setup instructions
+#
+# REQUIREMENTS
+#   Server: adb in PATH, HOOP daemon reachable at HOOP_URL
+#   Phone:  Termux + Termux:API installed, hoop-listener running
+#           (see: scripts/termux-hoop-listener.sh)
+#
+# ENVIRONMENT
+#   HOOP_URL   — HOOP daemon base URL (default: http://127.0.0.1:3000)
+#   ADB_SERIAL — ADB device serial (optional, auto-detected if only one device)
+
+set -euo pipefail
+
+HOOP_URL="${HOOP_URL:-http://127.0.0.1:3000}"
+PHONE_IP="${HOOP_ADB_PHONE_IP:-100.88.10.113}"
+HOOP_PORT="${HOOP_PORT:-3000}"
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+die() { echo "error: $*" >&2; exit 1; }
+
+require_adb() {
+    command -v adb >/dev/null 2>&1 || die "adb not found in PATH"
+    adb devices | grep -qv "List of devices" || true
+}
+
+adb_shell() {
+    adb ${ADB_SERIAL:+-s "$ADB_SERIAL"} shell "$@"
+}
+
+# ── commands ──────────────────────────────────────────────────────────────────
+
+cmd_start() {
+    local project="${1:-}"
+    require_adb
+
+    # Tell Termux listener to start recording via broadcast intent
+    echo "Sending HOOP_DICTATE_START to phone..."
+    adb_shell am broadcast -a HOOP_DICTATE_START \
+        ${project:+--es project "$project"} \
+        --es hoop_url "http://${PHONE_IP}:${HOOP_PORT}" \
+        2>/dev/null || true
+
+    # Also set active project in HOOP if specified
+    if [[ -n "$project" ]]; then
+        curl -sf -X PUT "${HOOP_URL}/api/ui/active-project" \
+            -H "Content-Type: application/json" \
+            -d "{\"project\":\"${project}\"}" >/dev/null \
+            && echo "Active project set to: ${project}" \
+            || echo "Warning: could not set active project in HOOP (daemon down?)"
+    fi
+
+    echo "Recording started. Run 'hoop-adb stop' to finish."
+}
+
+cmd_stop() {
+    require_adb
+
+    echo "Sending HOOP_DICTATE_STOP to phone..."
+    adb_shell am broadcast -a HOOP_DICTATE_STOP 2>/dev/null || true
+
+    echo "Stop signal sent. The Termux listener will upload the recording automatically."
+}
+
+cmd_status() {
+    local resp
+    resp=$(curl -sf "${HOOP_URL}/api/ui/active-project" 2>/dev/null) \
+        || { echo "HOOP daemon not reachable at ${HOOP_URL}"; exit 1; }
+    local project
+    project=$(echo "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('project') or '(none)')" 2>/dev/null || echo "$resp")
+    echo "Active project: ${project}"
+}
+
+cmd_setup() {
+    cat <<'SETUP'
+== Pixel 6 ADB dictation setup ==
+
+1. Install Termux from F-Droid (NOT Google Play — Play version is outdated):
+   https://f-droid.org/en/packages/com.termux/
+
+2. Install Termux:API from F-Droid:
+   https://f-droid.org/en/packages/com.termux.api/
+
+3. Grant microphone permission to Termux:
+   Android Settings → Apps → Termux → Permissions → Microphone → Allow
+
+4. Inside Termux, install dependencies:
+   pkg install termux-api sox curl
+
+5. Copy the listener script to the phone:
+   adb push scripts/termux-hoop-listener.sh /data/data/com.termux/files/home/hoop-listener.sh
+   adb shell "chmod +x /data/data/com.termux/files/home/hoop-listener.sh"
+
+6. Start the listener in a Termux background session:
+   adb shell "run-as com.termux am startservice -n com.termux/.app.TermuxService"
+   # Then inside Termux:
+   #   nohup ~/hoop-listener.sh &
+
+   Or use Termux:Boot to start it automatically on device boot.
+
+7. Set the HOOP server's Tailscale IP in the listener:
+   Edit hoop-listener.sh and set HOOP_URL to your Tailscale IP, e.g.:
+   HOOP_URL="http://100.x.y.z:3000"
+
+8. Test:
+   hoop-adb start MyProject   # starts recording on phone
+   # speak for a few seconds
+   hoop-adb stop              # stops, uploads, creates note in HOOP
+
+== Troubleshooting ==
+
+- "adb: no devices":     Run  adb-check  on the coding host
+- Note not appearing:    Check  hoop-adb status  and HOOP daemon logs
+- Transcription pending: Whisper model may not be installed at ~/.hoop/models/ggml-base.en.bin
+SETUP
+}
+
+# ── dispatch ──────────────────────────────────────────────────────────────────
+
+CMD="${1:-help}"
+shift || true
+
+case "$CMD" in
+    start)  cmd_start  "$@" ;;
+    stop)   cmd_stop   "$@" ;;
+    status) cmd_status "$@" ;;
+    setup)  cmd_setup  "$@" ;;
+    help|--help|-h)
+        echo "Usage: hoop-adb {start [project] | stop | status | setup}"
+        ;;
+    *)
+        die "Unknown command: ${CMD}. Try: hoop-adb help"
+        ;;
+esac

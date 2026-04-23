@@ -4,6 +4,7 @@
 //! It reads from projects, beads, sessions, files, events, and heartbeats.
 //! Its only write is `br create` for bead creation.
 
+pub mod adb_dictate;
 pub mod api_attachments;
 pub mod api_dictated_notes;
 pub mod api_transcription;
@@ -136,7 +137,7 @@ use tokio::{
     time::Instant,
 };
 use tower_http::trace::TraceLayer;
-use tracing::{debug, error, info, warn, Level};
+use tracing::{error, info, warn, Level};
 
 /// Daemon configuration
 #[derive(Debug, Clone)]
@@ -183,6 +184,10 @@ pub struct DaemonState {
     pub capacity_tx: broadcast::Sender<Vec<capacity::AccountCapacity>>,
     pub cost_aggregator: Arc<std::sync::RwLock<cost::CostAggregator>>,
     pub transcription_service: Option<Arc<transcription::TranscriptionService>>,
+    pub upload_registry: Arc<uploads::UploadRegistry>,
+    /// The project currently focused in the UI, used by the ADB dictation endpoint
+    /// to associate notes without requiring an explicit ?project= query parameter.
+    pub active_project: Arc<std::sync::RwLock<Option<String>>>,
 }
 
 /// Health check endpoint handler
@@ -298,9 +303,10 @@ pub fn router() -> Router<DaemonState> {
         .route("/api/projects/:project/files", get(get_project_files))
         .route("/api/attachments/:attachment_type/:id/:filename", get(api_attachments::serve_attachment))
         .route("/ws", get(ws::ws_handler))
-        .nest("/api/uploads", api_uploads::router())
+        .merge(api_uploads::router())
         .merge(api_dictated_notes::router())
         .merge(api_transcription::router())
+        .merge(adb_dictate::router())
         .nest_service("/assets", AssetsHandler::router())
         .fallback_service(AssetsHandler::router())
         .layer(TraceLayer::new_for_http())
@@ -491,14 +497,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     info!("Cost aggregator initialized");
 
     // Initialize transcription service
-    let whisper_cli_path = PathBuf::from("/home/coding/.local/bin/whisper");
-    let whisper_model_path = home.join("models").join("ggml-base.en.bin");
-    let transcription_config = transcription::TranscriptionConfig {
-        whisper_cli_path,
-        whisper_model_path: whisper_model_path.clone(),
-        max_concurrent: 2,
-        max_retries: 3,
-    };
+    let voice_config = transcription::load_voice_config();
+    let transcription_config = transcription::build_transcription_config(&voice_config);
+    let whisper_model_path = transcription_config.whisper_model_path.clone();
     let transcription_service = Arc::new(transcription::TranscriptionService::new(transcription_config.clone()));
 
     // Ensure models directory exists
@@ -522,7 +523,14 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     } else {
         info!("Whisper model found at {}", whisper_model_path.display());
     }
-    info!("Transcription service initialized");
+    info!("Transcription service initialized (cli: {}, model: {})",
+          transcription_config.whisper_cli_path.display(),
+          transcription_config.whisper_model_path.display());
+
+    // Initialize upload registry
+    let upload_config = uploads::UploadConfig::default();
+    let upload_registry = Arc::new(uploads::UploadRegistry::new(upload_config)?);
+    info!("Upload registry initialized");
 
     // Initialize shared beads store
     let beads: Arc<std::sync::RwLock<Vec<Bead>>> = Arc::new(std::sync::RwLock::new(Vec::new()));
@@ -539,6 +547,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         worker_registry.clone(),
         beads.clone(),
         shutdown_coordinator.clone(),
+        cost_aggregator.clone(),
     ));
 
     // Start global event tailer (for bead claim/close/release/update events)
@@ -600,16 +609,18 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         while let Ok(event) = rx.recv().await {
             match event {
                 sessions::SessionEvent::ConversationsUpdated { sessions } => {
-                    // Update worker registry with conversations
-                    registry_for_sessions.update_conversations(sessions).await;
-
                     // Aggregate sessions into cost aggregator
-                    let mut aggregator = cost_aggregator_for_sessions.write().unwrap();
-                    for session in &sessions {
-                        if let Err(e) = aggregator.aggregate_session(session) {
-                            warn!("Failed to aggregate session {} into cost: {}", session.id, e);
+                    {
+                        let mut aggregator = cost_aggregator_for_sessions.write().unwrap();
+                        for session in &sessions {
+                            if let Err(e) = aggregator.aggregate_session(session) {
+                                warn!("Failed to aggregate session {} into cost: {}", session.id, e);
+                            }
                         }
                     }
+
+                    // Update worker registry with conversations
+                    registry_for_sessions.update_conversations(sessions).await;
                 }
                 sessions::SessionEvent::SessionBound { .. } => {
                     // Registry will handle this via the WebSocket
@@ -743,6 +754,8 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         capacity_tx,
         cost_aggregator: cost_aggregator.clone(),
         transcription_service: Some(transcription_service),
+        upload_registry,
+        active_project: Arc::new(std::sync::RwLock::new(None)),
     };
 
     // Forward project runtime status updates to shared store and broadcast
@@ -750,7 +763,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     let registry_for_cards = state.worker_registry.clone();
     let beads_for_cards = state.beads.clone();
     let supervisor_for_cards = state.supervisor.clone();
-    let project_status_tx_clone = project_status_tx.clone();
+    let project_status_tx_clone = state.project_status_tx.clone();
     let meta_for_updates = project_metadata.clone();
     let cost_for_updates = cost_aggregator.clone();
     tokio::spawn(async move {
@@ -803,7 +816,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         let cost_ref = cost_aggregator.clone();
         let meta_ref = project_metadata.clone();
         let projects_ref = state.projects.clone();
-        let status_ref = project_status_tx.clone();
+        let status_ref = state.project_status_tx.clone();
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(5));
             loop {
@@ -834,7 +847,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                             bead_count: r.bead_count,
                             worker_count,
                             active_stitch_count,
-                            cost,
+                            cost_today: cost,
                             stuck_count,
                             last_activity,
                         }
@@ -913,7 +926,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
 
     // Run the server with graceful shutdown
     let result = tokio::select! {
-        r = tcp_server.with_graceful_shutdown(async {
+        r = tcp_server.with_graceful_shutdown(async move {
             // Wait for shutdown to be initiated
             while let Ok(phase) = shutdown_rx.recv().await {
                 if matches!(phase, shutdown::ShutdownPhase::CloseNewConnections) {

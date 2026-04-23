@@ -116,6 +116,87 @@ NEEDLE workers will pick up the beads on their own schedule. Watch the Stitch in
 
 ---
 
+## 📱 Pixel 6 ADB dictation (push-to-talk)
+
+Capture voice notes from your Pixel 6 using ADB over Tailscale — no Android app needed beyond Termux.
+
+### How it works
+
+```
+Pixel 6 (Termux)                   Tailscale               Coding host
+────────────────                   ─────────               ────────────
+[mic] → recording.m4a   ──POST /api/adb/dictate──►  HOOP daemon
+termux-microphone-record              (raw bytes)    ├─ store audio
+                                                     ├─ create stitch
+                                                     └─ enqueue Whisper
+```
+
+1. `hoop-adb start [project]` broadcasts `HOOP_DICTATE_START` to the phone via ADB
+2. The Termux listener records audio using `termux-microphone-record`
+3. `hoop-adb stop` broadcasts `HOOP_DICTATE_STOP` — listener stops and uploads via curl
+4. HOOP creates a dictated note in the active project (or the one specified)
+5. Whisper transcribes the audio asynchronously
+
+### Phone setup
+
+```bash
+# 1. Run the setup guide from your coding host
+./scripts/hoop-adb setup
+
+# 2. Push the listener script to the phone
+adb push scripts/termux-hoop-listener.sh /data/data/com.termux/files/home/hoop-listener.sh
+adb shell chmod +x /data/data/com.termux/files/home/hoop-listener.sh
+
+# 3. Inside Termux on the phone, install deps and start listener
+pkg install termux-api sox curl
+# Edit ~/hoop-listener.sh: set HOOP_URL to your Tailscale IP (e.g. http://100.x.y.z:3000)
+nohup ~/hoop-listener.sh > ~/.hoop-listener.log 2>&1 &
+```
+
+Termux and Termux:API must be installed from **F-Droid** (not Google Play). Grant
+microphone permission to Termux in Android Settings → Apps → Termux → Permissions.
+
+### Usage
+
+```bash
+# Start recording (associate with a specific project)
+hoop-adb start HOOP
+
+# Start recording (uses whatever project you last navigated to in the UI)
+hoop-adb start
+
+# Stop recording — listener uploads automatically
+hoop-adb stop
+
+# Check which project HOOP will file notes under
+hoop-adb status
+```
+
+### Active-project API
+
+The UI automatically calls `PUT /api/ui/active-project` when you navigate to a project
+card, so the ADB endpoint knows where to file notes without a `?project=` parameter.
+
+You can also POST audio directly (useful for scripting or CI):
+
+```bash
+# Direct upload with explicit project
+curl -X POST "http://localhost:3000/api/adb/dictate?project=HOOP&filename=note.m4a" \
+     --data-binary @recording.m4a \
+     -H "Content-Type: audio/mp4"
+```
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `adb: no devices` | Run `adb-check` on the coding host; reconnect with `adb-connect <port>` |
+| `No active project` error | Navigate to a project in the UI first, or pass `?project=name` |
+| Note appears but transcript stuck at "Pending" | Whisper model not at `~/.hoop/models/ggml-base.en.bin` |
+| Upload fails (HTTP 000) | Check Tailscale is up; verify `HOOP_URL` in the Termux listener script |
+
+---
+
 ## ☀️ Daily rhythm (once v0.5 lands)
 
 After HOOP has been running for a few days, the agent will produce a **Morning Brief** when you log in:
