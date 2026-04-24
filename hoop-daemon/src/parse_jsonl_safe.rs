@@ -12,6 +12,107 @@ use chrono::Utc;
 use serde::de::DeserializeOwned;
 
 // ---------------------------------------------------------------------------
+// NdjsonReader — line-buffered chunk reassembler (§F1)
+// ---------------------------------------------------------------------------
+
+const DEFAULT_MAX_PARTIAL_LEN: usize = 1024 * 1024; // 1 MB
+
+/// Line-buffered NDJSON reader that accumulates partial lines across OS-read
+/// boundaries.
+///
+/// OS `read()` calls may return chunks split at arbitrary byte offsets,
+/// potentially in the middle of a line. This reader reassembles complete lines
+/// by buffering partial data until a `\n` delimiter is found.
+///
+/// # Memory bounds
+///
+/// The internal buffer is capped at 1 MB (configurable via
+/// [`with_max_partial_len`]). If a partial line exceeds this limit the buffer
+/// is discarded and a warning is logged.
+///
+/// [`with_max_partial_len`]: NdjsonReader::with_max_partial_len
+pub struct NdjsonReader {
+    buffer: String,
+    max_partial_len: usize,
+}
+
+impl NdjsonReader {
+    /// Create a new reader with the default 1 MB partial-line limit.
+    pub fn new() -> Self {
+        Self {
+            buffer: String::new(),
+            max_partial_len: DEFAULT_MAX_PARTIAL_LEN,
+        }
+    }
+
+    /// Set a custom partial-line memory limit (bytes).
+    pub fn with_max_partial_len(mut self, max: usize) -> Self {
+        self.max_partial_len = max;
+        self
+    }
+
+    /// Feed a chunk of text. Returns all complete lines found.
+    ///
+    /// Each returned `String` is one line **without** the trailing `\n`.
+    /// Lines that span chunk boundaries are reassembled transparently.
+    pub fn feed(&mut self, chunk: &str) -> Vec<String> {
+        let mut lines = Vec::new();
+        let mut pos = 0;
+
+        while pos < chunk.len() {
+            match chunk[pos..].find('\n') {
+                Some(nl) => {
+                    let line_end = pos + nl;
+                    if self.buffer.is_empty() {
+                        lines.push(chunk[pos..line_end].to_owned());
+                    } else {
+                        self.buffer.push_str(&chunk[pos..line_end]);
+                        lines.push(std::mem::take(&mut self.buffer));
+                    }
+                    pos = line_end + 1;
+                }
+                None => {
+                    self.buffer.push_str(&chunk[pos..]);
+                    self.enforce_limit();
+                    break;
+                }
+            }
+        }
+
+        lines
+    }
+
+    /// Drain any remaining partial line at EOF.
+    ///
+    /// Call this when the stream ends. Returns `Some(partial)` if data
+    /// remains that was never terminated by `\n`.
+    pub fn finish(&mut self) -> Option<String> {
+        if self.buffer.is_empty() {
+            None
+        } else {
+            Some(std::mem::take(&mut self.buffer))
+        }
+    }
+
+    fn enforce_limit(&mut self) {
+        if self.buffer.len() > self.max_partial_len {
+            tracing::warn!(
+                partial_len = self.buffer.len(),
+                limit = self.max_partial_len,
+                "Partial line exceeds memory limit, discarding"
+            );
+            self.buffer.clear();
+        }
+    }
+}
+
+impl Default for NdjsonReader {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
@@ -219,5 +320,138 @@ mod tests {
             count < 1_000_000,
             "quarantine count should be reasonable"
         );
+    }
+
+    // =======================================================================
+    // NdjsonReader tests
+    // =======================================================================
+
+    /// Multi-line NDJSON fixture used by the fuzz tests.
+    fn ndjson_fixture() -> String {
+        [
+            r#"{"type":"message","text":"hello"}"#,
+            r#"{"type":"message","text":"world with spaces and more content"}"#,
+            r#"{"type":"event","data":{"nested":true,"count":42}}"#,
+            r#"{"n":42}"#,
+            "",
+            r#"{"last":true}"#,
+        ]
+        .join("\n")
+            + "\n"
+    }
+
+    /// §F1 fuzz test: split a known-good NDJSON fixture at every valid
+    /// char-boundary offset and assert that all lines are recovered intact.
+    #[test]
+    fn fuzz_split_at_every_offset() {
+        let fixture = ndjson_fixture();
+        let expected: Vec<&str> = fixture.lines().collect();
+
+        // Sanity: fixture is valid NDJSON (non-empty lines are valid JSON)
+        for (i, line) in expected.iter().enumerate() {
+            if !line.is_empty() {
+                serde_json::from_str::<serde_json::Value>(line)
+                    .unwrap_or_else(|e| panic!("Line {} is not valid JSON: {e}", i + 1));
+            }
+        }
+
+        let byte_len = fixture.len();
+        let mut tested_offsets = 0usize;
+
+        for offset in 0..=byte_len {
+            if !fixture.is_char_boundary(offset) {
+                continue;
+            }
+
+            let mut reader = NdjsonReader::new();
+            let mut got = reader.feed(&fixture[..offset]);
+            got.extend(reader.feed(&fixture[offset..]));
+            if let Some(remaining) = reader.finish() {
+                got.push(remaining);
+            }
+
+            assert_eq!(
+                got, expected,
+                "Line mismatch at split offset {offset}/{byte_len}"
+            );
+            tested_offsets += 1;
+        }
+
+        // Ensure we actually tested meaningful splits, not just offset 0 and
+        // byte_len.
+        assert!(
+            tested_offsets > 10,
+            "should test more than a handful of offsets (tested {tested_offsets})"
+        );
+    }
+
+    /// Extreme case: feed the fixture one byte at a time.
+    #[test]
+    fn single_byte_feeding() {
+        let fixture = ndjson_fixture();
+        let expected: Vec<&str> = fixture.lines().collect();
+
+        let mut reader = NdjsonReader::new();
+        let mut all_lines: Vec<String> = Vec::new();
+
+        for ch in fixture.chars() {
+            all_lines.extend(reader.feed(&ch.to_string()));
+        }
+        if let Some(remaining) = reader.finish() {
+            all_lines.push(remaining);
+        }
+
+        assert_eq!(all_lines, expected);
+    }
+
+    /// Partial lines exceeding the memory limit are discarded.
+    #[test]
+    fn memory_bounded_partial_line() {
+        let mut reader = NdjsonReader::new().with_max_partial_len(64);
+        // Feed a "line" longer than the limit with no newline.
+        let long = "x".repeat(128);
+        let lines = reader.feed(&long);
+        assert!(lines.is_empty(), "no newlines → no complete lines");
+        // Buffer should have been discarded by enforce_limit.
+        assert!(reader.finish().is_none(), "over-limit partial should be discarded");
+    }
+
+    /// Feeding empty chunks is a no-op.
+    #[test]
+    fn empty_chunks_are_noop() {
+        let mut reader = NdjsonReader::new();
+        assert!(reader.feed("").is_empty());
+        assert!(reader.feed("").is_empty());
+
+        let mut got = reader.feed("{\"a\":1}\n");
+        got.extend(reader.feed(""));
+        assert_eq!(got, vec!["{\"a\":1}"]);
+        assert!(reader.finish().is_none());
+    }
+
+    /// finish() returns the remaining partial when there's no trailing newline.
+    #[test]
+    fn finish_returns_remaining() {
+        let mut reader = NdjsonReader::new();
+        let lines = reader.feed("{\"a\":1}\n{\"b\":");
+        assert_eq!(lines, vec!["{\"a\":1}"]);
+
+        let remaining = reader.finish();
+        assert_eq!(remaining, Some("{\"b\":".to_owned()));
+
+        // Second call returns None (buffer was drained).
+        assert!(reader.finish().is_none());
+    }
+
+    /// Feeding multiple chunks that each contain part of a single line.
+    #[test]
+    fn line_spanning_many_chunks() {
+        let mut reader = NdjsonReader::new();
+        let parts = ["{\"ki", "ng\":", "\"val", "ue\"}", "\n"];
+        let mut all = Vec::new();
+        for part in parts {
+            all.extend(reader.feed(part));
+        }
+        assert_eq!(all, vec![r#"{"king":"value"}"#]);
     }
 }
