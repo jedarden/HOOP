@@ -14,6 +14,7 @@ A single Rust daemon that runs on your coding host and serves as the human-facin
 |---|---|---|
 | [`README.md`](README.md) (this file) | Humans | Quickstart — install, concepts, first five minutes |
 | [`AGENTS.md`](AGENTS.md) | LLM contributors | Repository guide, terminology, non-goals, conventions |
+| [`CHANGELOG.md`](CHANGELOG.md) | Everyone | Version history following Keep-a-Changelog / SemVer |
 | [`docs/operations.md`](docs/operations.md) | Operators | Systemd service, logs, upgrades, backup, troubleshooting |
 | [`docs/plan/plan.md`](docs/plan/plan.md) | Everyone going deep | **The canonical implementation plan.** 13 sections covering vision, principles, architecture, data flows, phased roadmap (v0.1 → v1.0), marquee capabilities, technology decisions, non-goals, open questions, milestones, onboarding, and a Kubernetes appendix. Your first stop after this README. |
 | [`docs/notes/`](docs/notes/) | Contributors & LLMs | Prior-art research: feature inventory, architecture patterns, interop with NEEDLE, orchestrator problems and solutions |
