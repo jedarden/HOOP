@@ -1,0 +1,49 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+
+# Cargo.lock is committed — HOOP is a binary workspace
+
+# Node.js
+**/node_modules/
+**/dist/
+**/.vite/
+**/.next/
+**/npm-debug.log*
+**/yarn-error.log*
+**/pnpm-debug.log*
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+*.local.yaml
+*.local.yml
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.metals/
+.bsp/
+
+# OS
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# HOOP-local test artifacts
+.hoop/
+testrepo/
+
+# ML embedding cache (hoop-daemon)
+hoop-daemon/.fastembed_cache/
+
+# Beads runtime artifacts (traces, recovery — not tracked data)
+.beads/traces/
+.beads/.br_recovery/
