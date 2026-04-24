@@ -38,6 +38,10 @@ pub struct AgentSession {
     pub working_dir: Option<String>,
     /// In-memory conversation history for API-based adapters.
     pub history: Arc<Mutex<Vec<HistoryMessage>>>,
+    /// Whether the provider has acknowledged a first turn. Gated by this flag,
+    /// `build_turn_args` emits the correct create-vs-resume invocation per adapter.
+    /// Persisted in fleet.db so daemon restarts don't corrupt the provider's session store.
+    pub has_started_session: bool,
 }
 
 /// A single message in the conversation history.
@@ -103,14 +107,20 @@ pub struct SpawnConfig {
     pub working_dir: Option<String>,
 }
 
-/// Which adapter to use — mirrors `agent_config.json` enum minus codex/opencode/gemini/aider
-/// (those are session-discovery adapters, not agent-driving adapters).
+/// Which adapter to use — mirrors `agent_config.json` enum.
+///
+/// Claude/Anthropic/Zai are currently implemented. Codex/OpenCode/Gemini define
+/// their resume semantics here so that the invocation builder is correct from day
+/// one; full adapter impls will follow.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AdapterKind {
     Claude,
     Anthropic,
     Zai,
+    Codex,
+    OpenCode,
+    Gemini,
 }
 
 impl AdapterKind {
@@ -119,6 +129,9 @@ impl AdapterKind {
             Self::Claude => "claude",
             Self::Anthropic => "anthropic",
             Self::Zai => "zai",
+            Self::Codex => "codex",
+            Self::OpenCode => "opencode",
+            Self::Gemini => "gemini",
         }
     }
 
@@ -127,7 +140,71 @@ impl AdapterKind {
             "claude" => Some(Self::Claude),
             "anthropic" => Some(Self::Anthropic),
             "zai" => Some(Self::Zai),
+            "codex" => Some(Self::Codex),
+            "opencode" => Some(Self::OpenCode),
+            "gemini" => Some(Self::Gemini),
             _ => None,
+        }
+    }
+
+    /// Build CLI arguments for a turn, distinguishing first-turn (create) from
+    /// subsequent turns (resume). Each adapter has its own convention:
+    ///
+    /// - Claude: turn 1 = `--session-id <uuid>`, turn N = `--resume <uuid>`
+    /// - Codex: turn 1 = `exec`, turn N = `exec resume <thread-id>`
+    /// - OpenCode: turn 1 = `--session <sid>`, turn N = `--session <sid> --continue`
+    /// - Gemini: sandbox-native (no CLI arg distinction)
+    /// - Anthropic/Zai: API-based, no CLI invocation
+    ///
+    /// Returns `None` for API-based adapters that don't shell out.
+    pub fn build_turn_args(
+        &self,
+        session_id: &str,
+        prompt: &str,
+        has_started_session: bool,
+    ) -> Option<Vec<String>> {
+        match self {
+            Self::Claude => {
+                let mut args = if has_started_session {
+                    vec!["--resume".to_string(), session_id.to_string()]
+                } else {
+                    vec!["--session-id".to_string(), session_id.to_string()]
+                };
+                args.extend_from_slice(&[
+                    "--output-format".to_string(),
+                    "stream-json".to_string(),
+                    "-p".to_string(),
+                    prompt.to_string(),
+                ]);
+                Some(args)
+            }
+            Self::Codex => {
+                let mut args = vec!["exec".to_string()];
+                if has_started_session {
+                    args.push("resume".to_string());
+                    args.push(session_id.to_string());
+                }
+                args.push("-p".to_string());
+                args.push(prompt.to_string());
+                Some(args)
+            }
+            Self::OpenCode => {
+                let mut args = vec![
+                    "--session".to_string(),
+                    session_id.to_string(),
+                ];
+                if has_started_session {
+                    args.push("--continue".to_string());
+                }
+                args.push("-p".to_string());
+                args.push(prompt.to_string());
+                Some(args)
+            }
+            Self::Gemini => {
+                // Sandbox-native: single prompt arg, no session-id vs resume distinction.
+                Some(vec!["-p".to_string(), prompt.to_string()])
+            }
+            Self::Anthropic | Self::Zai => None,
         }
     }
 }
@@ -245,6 +322,15 @@ pub fn build_adapter(config: &AgentAdapterConfig) -> Result<Box<dyn AgentAdapter
             api_key: config.zai_api_key.clone().unwrap_or_default(),
             default_model: config.model.clone(),
         }),
+        AdapterKind::Codex => Box::new(CodexAdapter {
+            default_model: config.model.clone(),
+        }),
+        AdapterKind::OpenCode => Box::new(OpenCodeAdapter {
+            default_model: config.model.clone(),
+        }),
+        AdapterKind::Gemini => Box::new(GeminiAdapter {
+            default_model: config.model.clone(),
+        }),
     };
     Ok(adapter)
 }
@@ -323,6 +409,7 @@ impl AgentAdapter for ClaudeCodeAdapter {
             system_prompt: config.system_prompt.clone(),
             working_dir: config.working_dir.clone(),
             history: Arc::new(Mutex::new(Vec::new())),
+            has_started_session: false,
         })
     }
 
@@ -334,6 +421,7 @@ impl AgentAdapter for ClaudeCodeAdapter {
             system_prompt: None,
             working_dir: None,
             history: Arc::new(Mutex::new(Vec::new())),
+            has_started_session: true,
         })
     }
 
@@ -343,14 +431,10 @@ impl AgentAdapter for ClaudeCodeAdapter {
         prompt: &str,
         attachments: Vec<Attachment>,
     ) -> Result<EventStream> {
-        let mut args = vec![
-            "--resume".to_string(),
-            session.id.0.clone(),
-            "--output-format".to_string(),
-            "stream-json".to_string(),
-            "-p".to_string(),
-            prompt.to_string(),
-        ];
+        // Use per-adapter invocation builder — distinguishes --session-id vs --resume.
+        let mut args = AdapterKind::Claude
+            .build_turn_args(&session.id.0, prompt, session.has_started_session)
+            .expect("Claude adapter always produces CLI args");
 
         for att in &attachments {
             if let Attachment::File { path } = att {
@@ -488,6 +572,7 @@ impl AgentAdapter for AnthropicApiAdapter {
             system_prompt: config.system_prompt.clone(),
             working_dir: config.working_dir.clone(),
             history: Arc::new(Mutex::new(Vec::new())),
+            has_started_session: false,
         })
     }
 
@@ -499,6 +584,7 @@ impl AgentAdapter for AnthropicApiAdapter {
             system_prompt: None,
             working_dir: None,
             history: Arc::new(Mutex::new(Vec::new())),
+            has_started_session: true,
         })
     }
 
@@ -604,6 +690,7 @@ impl AgentAdapter for ZaiGlmAdapter {
             system_prompt: config.system_prompt.clone(),
             working_dir: config.working_dir.clone(),
             history: Arc::new(Mutex::new(Vec::new())),
+            has_started_session: false,
         })
     }
 
@@ -615,6 +702,7 @@ impl AgentAdapter for ZaiGlmAdapter {
             system_prompt: None,
             working_dir: None,
             history: Arc::new(Mutex::new(Vec::new())),
+            has_started_session: true,
         })
     }
 
@@ -686,6 +774,294 @@ impl AgentAdapter for ZaiGlmAdapter {
         let tracked_stream = track_assistant_response(parse_openai_sse_response(response), session_history).await;
 
         Ok(Box::pin(tracked_stream))
+    }
+
+    async fn close_session(&self, _session: &AgentSession) -> Result<()> {
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CodexAdapter — shells out to the `codex` CLI
+// ---------------------------------------------------------------------------
+
+/// Codex CLI adapter.
+///
+/// Turn 1: `codex exec -p <prompt>`
+/// Turn N: `codex exec resume <thread-id> -p <prompt>`
+pub struct CodexAdapter {
+    default_model: String,
+}
+
+#[async_trait]
+impl AgentAdapter for CodexAdapter {
+    fn kind(&self) -> AdapterKind {
+        AdapterKind::Codex
+    }
+
+    async fn spawn_session(&self, config: SpawnConfig) -> Result<AgentSession> {
+        let id = uuid::Uuid::new_v4().to_string();
+        Ok(AgentSession {
+            id: SessionId(id),
+            adapter: AdapterKind::Codex,
+            model: config.model,
+            system_prompt: config.system_prompt.clone(),
+            working_dir: config.working_dir.clone(),
+            history: Arc::new(Mutex::new(Vec::new())),
+            has_started_session: false,
+        })
+    }
+
+    async fn resume_session(&self, id: &SessionId) -> Result<AgentSession> {
+        Ok(AgentSession {
+            id: id.clone(),
+            adapter: AdapterKind::Codex,
+            model: self.default_model.clone(),
+            system_prompt: None,
+            working_dir: None,
+            history: Arc::new(Mutex::new(Vec::new())),
+            has_started_session: true,
+        })
+    }
+
+    async fn send_turn(
+        &self,
+        session: &AgentSession,
+        prompt: &str,
+        _attachments: Vec<Attachment>,
+    ) -> Result<EventStream> {
+        let args = AdapterKind::Codex
+            .build_turn_args(&session.id.0, prompt, session.has_started_session)
+            .expect("Codex always produces CLI args");
+
+        let mut cmd = tokio::process::Command::new("codex");
+        cmd.args(&args)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+
+        if let Some(ref dir) = session.working_dir {
+            cmd.current_dir(dir);
+        }
+
+        let mut child = cmd.spawn()?;
+        let stdout = child.stdout.take().expect("stdout piped");
+        let reader = tokio::io::BufReader::new(stdout);
+        let child_handle = Arc::new(Mutex::new(Some(child)));
+
+        use tokio::io::AsyncBufReadExt;
+
+        let stream = futures_util::stream::unfold(
+            (reader, child_handle),
+            |(mut reader, child_handle)| async move {
+                let mut line = String::new();
+                match reader.read_line(&mut line).await {
+                    Ok(0) => {
+                        let _child = child_handle.lock().await.take();
+                        None
+                    }
+                    Ok(_) => {
+                        let line = line.trim().to_string();
+                        let event = parse_claude_stream_line(&line);
+                        Some((event, (reader, child_handle)))
+                    }
+                    Err(e) => Some((Err(anyhow::anyhow!("read error: {}", e)), (reader, child_handle))),
+                }
+            },
+        );
+
+        Ok(Box::pin(stream))
+    }
+
+    async fn close_session(&self, _session: &AgentSession) -> Result<()> {
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// OpenCodeAdapter — shells out to the `opencode` CLI
+// ---------------------------------------------------------------------------
+
+/// OpenCode CLI adapter.
+///
+/// Turn 1: `opencode --session <sid> -p <prompt>`
+/// Turn N: `opencode --session <sid> --continue -p <prompt>`
+pub struct OpenCodeAdapter {
+    default_model: String,
+}
+
+#[async_trait]
+impl AgentAdapter for OpenCodeAdapter {
+    fn kind(&self) -> AdapterKind {
+        AdapterKind::OpenCode
+    }
+
+    async fn spawn_session(&self, config: SpawnConfig) -> Result<AgentSession> {
+        let id = uuid::Uuid::new_v4().to_string();
+        Ok(AgentSession {
+            id: SessionId(id),
+            adapter: AdapterKind::OpenCode,
+            model: config.model,
+            system_prompt: config.system_prompt.clone(),
+            working_dir: config.working_dir.clone(),
+            history: Arc::new(Mutex::new(Vec::new())),
+            has_started_session: false,
+        })
+    }
+
+    async fn resume_session(&self, id: &SessionId) -> Result<AgentSession> {
+        Ok(AgentSession {
+            id: id.clone(),
+            adapter: AdapterKind::OpenCode,
+            model: self.default_model.clone(),
+            system_prompt: None,
+            working_dir: None,
+            history: Arc::new(Mutex::new(Vec::new())),
+            has_started_session: true,
+        })
+    }
+
+    async fn send_turn(
+        &self,
+        session: &AgentSession,
+        prompt: &str,
+        _attachments: Vec<Attachment>,
+    ) -> Result<EventStream> {
+        let args = AdapterKind::OpenCode
+            .build_turn_args(&session.id.0, prompt, session.has_started_session)
+            .expect("OpenCode always produces CLI args");
+
+        let mut cmd = tokio::process::Command::new("opencode");
+        cmd.args(&args)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+
+        if let Some(ref dir) = session.working_dir {
+            cmd.current_dir(dir);
+        }
+
+        let mut child = cmd.spawn()?;
+        let stdout = child.stdout.take().expect("stdout piped");
+        let reader = tokio::io::BufReader::new(stdout);
+        let child_handle = Arc::new(Mutex::new(Some(child)));
+
+        use tokio::io::AsyncBufReadExt;
+
+        let stream = futures_util::stream::unfold(
+            (reader, child_handle),
+            |(mut reader, child_handle)| async move {
+                let mut line = String::new();
+                match reader.read_line(&mut line).await {
+                    Ok(0) => {
+                        let _child = child_handle.lock().await.take();
+                        None
+                    }
+                    Ok(_) => {
+                        let line = line.trim().to_string();
+                        let event = parse_claude_stream_line(&line);
+                        Some((event, (reader, child_handle)))
+                    }
+                    Err(e) => Some((Err(anyhow::anyhow!("read error: {}", e)), (reader, child_handle))),
+                }
+            },
+        );
+
+        Ok(Box::pin(stream))
+    }
+
+    async fn close_session(&self, _session: &AgentSession) -> Result<()> {
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// GeminiAdapter — sandbox-native Gemini CLI
+// ---------------------------------------------------------------------------
+
+/// Gemini CLI adapter.
+///
+/// Gemini is sandbox-native: the CLI manages continuity internally.
+/// Both turn 1 and turn N use the same args: `gemini -p <prompt>`.
+pub struct GeminiAdapter {
+    default_model: String,
+}
+
+#[async_trait]
+impl AgentAdapter for GeminiAdapter {
+    fn kind(&self) -> AdapterKind {
+        AdapterKind::Gemini
+    }
+
+    async fn spawn_session(&self, config: SpawnConfig) -> Result<AgentSession> {
+        let id = uuid::Uuid::new_v4().to_string();
+        Ok(AgentSession {
+            id: SessionId(id),
+            adapter: AdapterKind::Gemini,
+            model: config.model,
+            system_prompt: config.system_prompt.clone(),
+            working_dir: config.working_dir.clone(),
+            history: Arc::new(Mutex::new(Vec::new())),
+            has_started_session: false,
+        })
+    }
+
+    async fn resume_session(&self, id: &SessionId) -> Result<AgentSession> {
+        Ok(AgentSession {
+            id: id.clone(),
+            adapter: AdapterKind::Gemini,
+            model: self.default_model.clone(),
+            system_prompt: None,
+            working_dir: None,
+            history: Arc::new(Mutex::new(Vec::new())),
+            has_started_session: true,
+        })
+    }
+
+    async fn send_turn(
+        &self,
+        session: &AgentSession,
+        prompt: &str,
+        _attachments: Vec<Attachment>,
+    ) -> Result<EventStream> {
+        let args = AdapterKind::Gemini
+            .build_turn_args(&session.id.0, prompt, session.has_started_session)
+            .expect("Gemini always produces CLI args");
+
+        let mut cmd = tokio::process::Command::new("gemini");
+        cmd.args(&args)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+
+        if let Some(ref dir) = session.working_dir {
+            cmd.current_dir(dir);
+        }
+
+        let mut child = cmd.spawn()?;
+        let stdout = child.stdout.take().expect("stdout piped");
+        let reader = tokio::io::BufReader::new(stdout);
+        let child_handle = Arc::new(Mutex::new(Some(child)));
+
+        use tokio::io::AsyncBufReadExt;
+
+        let stream = futures_util::stream::unfold(
+            (reader, child_handle),
+            |(mut reader, child_handle)| async move {
+                let mut line = String::new();
+                match reader.read_line(&mut line).await {
+                    Ok(0) => {
+                        let _child = child_handle.lock().await.take();
+                        None
+                    }
+                    Ok(_) => {
+                        let line = line.trim().to_string();
+                        let event = parse_claude_stream_line(&line);
+                        Some((event, (reader, child_handle)))
+                    }
+                    Err(e) => Some((Err(anyhow::anyhow!("read error: {}", e)), (reader, child_handle))),
+                }
+            },
+        );
+
+        Ok(Box::pin(stream))
     }
 
     async fn close_session(&self, _session: &AgentSession) -> Result<()> {
@@ -1020,6 +1396,9 @@ mod tests {
             ("claude", AdapterKind::Claude),
             ("anthropic", AdapterKind::Anthropic),
             ("zai", AdapterKind::Zai),
+            ("codex", AdapterKind::Codex),
+            ("opencode", AdapterKind::OpenCode),
+            ("gemini", AdapterKind::Gemini),
         ] {
             assert_eq!(AdapterKind::from_config(s), Some(kind));
             assert_eq!(kind.as_str(), s);
@@ -1033,6 +1412,9 @@ mod tests {
             ("claude", AdapterKind::Claude),
             ("anthropic", AdapterKind::Anthropic),
             ("zai", AdapterKind::Zai),
+            ("codex", AdapterKind::Codex),
+            ("opencode", AdapterKind::OpenCode),
+            ("gemini", AdapterKind::Gemini),
         ] {
             let config = AgentAdapterConfig {
                 adapter: name.to_string(),
@@ -1138,5 +1520,194 @@ mod tests {
             AgentEvent::Error { message } => assert_eq!(message, "rate limited"),
             other => panic!("expected Error, got {:?}", other),
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Golden transcript: per-adapter turn 1 vs turn N invocation (§A2)
+    // -----------------------------------------------------------------------
+
+    const TEST_SESSION_ID: &str = "deadbeef-0000-0000-0000-000000000001";
+    const TEST_PROMPT: &str = "summarize the project";
+
+    /// Claude golden transcript: turn 1 uses --session-id, turn N uses --resume.
+    #[test]
+    fn golden_claude_turn1_create() {
+        let args = AdapterKind::Claude
+            .build_turn_args(TEST_SESSION_ID, TEST_PROMPT, false)
+            .unwrap();
+        assert_eq!(args, vec![
+            "--session-id", TEST_SESSION_ID,
+            "--output-format", "stream-json",
+            "-p", TEST_PROMPT,
+        ]);
+    }
+
+    #[test]
+    fn golden_claude_turn_n_resume() {
+        let args = AdapterKind::Claude
+            .build_turn_args(TEST_SESSION_ID, TEST_PROMPT, true)
+            .unwrap();
+        assert_eq!(args, vec![
+            "--resume", TEST_SESSION_ID,
+            "--output-format", "stream-json",
+            "-p", TEST_PROMPT,
+        ]);
+    }
+
+    /// Codex golden transcript: turn 1 uses `exec`, turn N uses `exec resume <id>`.
+    #[test]
+    fn golden_codex_turn1_create() {
+        let args = AdapterKind::Codex
+            .build_turn_args(TEST_SESSION_ID, TEST_PROMPT, false)
+            .unwrap();
+        assert_eq!(args, vec![
+            "exec",
+            "-p", TEST_PROMPT,
+        ]);
+    }
+
+    #[test]
+    fn golden_codex_turn_n_resume() {
+        let args = AdapterKind::Codex
+            .build_turn_args(TEST_SESSION_ID, TEST_PROMPT, true)
+            .unwrap();
+        assert_eq!(args, vec![
+            "exec", "resume", TEST_SESSION_ID,
+            "-p", TEST_PROMPT,
+        ]);
+    }
+
+    /// OpenCode golden transcript: turn 1 uses `--session <sid>`, turn N adds `--continue`.
+    #[test]
+    fn golden_opencode_turn1_create() {
+        let args = AdapterKind::OpenCode
+            .build_turn_args(TEST_SESSION_ID, TEST_PROMPT, false)
+            .unwrap();
+        assert_eq!(args, vec![
+            "--session", TEST_SESSION_ID,
+            "-p", TEST_PROMPT,
+        ]);
+    }
+
+    #[test]
+    fn golden_opencode_turn_n_resume() {
+        let args = AdapterKind::OpenCode
+            .build_turn_args(TEST_SESSION_ID, TEST_PROMPT, true)
+            .unwrap();
+        assert_eq!(args, vec![
+            "--session", TEST_SESSION_ID,
+            "--continue",
+            "-p", TEST_PROMPT,
+        ]);
+    }
+
+    /// Gemini golden transcript: sandbox-native, same args regardless of turn count.
+    #[test]
+    fn golden_gemini_turn1_and_turn_n_identical() {
+        let args_turn1 = AdapterKind::Gemini
+            .build_turn_args(TEST_SESSION_ID, TEST_PROMPT, false)
+            .unwrap();
+        let args_turnN = AdapterKind::Gemini
+            .build_turn_args(TEST_SESSION_ID, TEST_PROMPT, true)
+            .unwrap();
+        assert_eq!(args_turn1, args_turnN);
+        assert_eq!(args_turn1, vec!["-p", TEST_PROMPT]);
+    }
+
+    /// API adapters return None (no CLI invocation).
+    #[test]
+    fn api_adapters_produce_no_cli_args() {
+        assert!(AdapterKind::Anthropic.build_turn_args("sid", "prompt", false).is_none());
+        assert!(AdapterKind::Anthropic.build_turn_args("sid", "prompt", true).is_none());
+        assert!(AdapterKind::Zai.build_turn_args("sid", "prompt", false).is_none());
+        assert!(AdapterKind::Zai.build_turn_args("sid", "prompt", true).is_none());
+    }
+
+    /// Verify has_started_session is false on spawn, true on resume — for all CLI adapters.
+    #[test]
+    fn spawn_sets_has_started_false_resume_sets_true() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let adapter = ClaudeCodeAdapter { default_model: "claude-opus-4-7".into() };
+            let config = SpawnConfig {
+                model: "claude-opus-4-7".into(),
+                system_prompt: None,
+                max_tokens: None,
+                rate_limit_rpm: None,
+                cost_cap_usd: None,
+                working_dir: None,
+            };
+            let spawned = adapter.spawn_session(config).await.unwrap();
+            assert!(!spawned.has_started_session, "spawn must start with has_started_session=false");
+
+            let resumed = adapter.resume_session(&spawned.id).await.unwrap();
+            assert!(resumed.has_started_session, "resume must set has_started_session=true");
+        });
+    }
+
+    /// Codex spawn/resume flag semantics.
+    #[test]
+    fn codex_spawn_resume_flags() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let adapter = CodexAdapter { default_model: "codex-mini".into() };
+            let config = SpawnConfig {
+                model: "codex-mini".into(),
+                system_prompt: None,
+                max_tokens: None,
+                rate_limit_rpm: None,
+                cost_cap_usd: None,
+                working_dir: None,
+            };
+            let spawned = adapter.spawn_session(config).await.unwrap();
+            assert!(!spawned.has_started_session);
+            let resumed = adapter.resume_session(&spawned.id).await.unwrap();
+            assert!(resumed.has_started_session);
+            assert_eq!(resumed.adapter, AdapterKind::Codex);
+        });
+    }
+
+    /// OpenCode spawn/resume flag semantics.
+    #[test]
+    fn opencode_spawn_resume_flags() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let adapter = OpenCodeAdapter { default_model: "gpt-4o".into() };
+            let config = SpawnConfig {
+                model: "gpt-4o".into(),
+                system_prompt: None,
+                max_tokens: None,
+                rate_limit_rpm: None,
+                cost_cap_usd: None,
+                working_dir: None,
+            };
+            let spawned = adapter.spawn_session(config).await.unwrap();
+            assert!(!spawned.has_started_session);
+            let resumed = adapter.resume_session(&spawned.id).await.unwrap();
+            assert!(resumed.has_started_session);
+            assert_eq!(resumed.adapter, AdapterKind::OpenCode);
+        });
+    }
+
+    /// Gemini spawn/resume flag semantics.
+    #[test]
+    fn gemini_spawn_resume_flags() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let adapter = GeminiAdapter { default_model: "gemini-2.5-pro".into() };
+            let config = SpawnConfig {
+                model: "gemini-2.5-pro".into(),
+                system_prompt: None,
+                max_tokens: None,
+                rate_limit_rpm: None,
+                cost_cap_usd: None,
+                working_dir: None,
+            };
+            let spawned = adapter.spawn_session(config).await.unwrap();
+            assert!(!spawned.has_started_session);
+            let resumed = adapter.resume_session(&spawned.id).await.unwrap();
+            assert!(resumed.has_started_session);
+            assert_eq!(resumed.adapter, AdapterKind::Gemini);
+        });
     }
 }

@@ -21,7 +21,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 /// Current schema version
-pub const SCHEMA_VERSION: &str = "1.11.0";
+pub const SCHEMA_VERSION: &str = "1.12.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -615,6 +615,8 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v19_to_v110(conn)?;
             // Fall through to 1.11.0
             migrate_v110_to_v111(conn)?;
+            // Fall through to 1.12.0
+            migrate_v111_to_v112(conn)?;
         }
         "1.1.0" => {
             migrate_v11_to_v12(conn)?;
@@ -627,6 +629,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v18_to_v19(conn)?;
             migrate_v19_to_v110(conn)?;
             migrate_v110_to_v111(conn)?;
+            migrate_v111_to_v112(conn)?;
         }
         "1.2.0" => {
             migrate_v12_to_v13(conn)?;
@@ -638,6 +641,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v18_to_v19(conn)?;
             migrate_v19_to_v110(conn)?;
             migrate_v110_to_v111(conn)?;
+            migrate_v111_to_v112(conn)?;
         }
         "1.3.0" => {
             migrate_v13_to_v14(conn)?;
@@ -648,6 +652,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v18_to_v19(conn)?;
             migrate_v19_to_v110(conn)?;
             migrate_v110_to_v111(conn)?;
+            migrate_v111_to_v112(conn)?;
         }
         "1.4.0" => {
             migrate_v14_to_v15(conn)?;
@@ -657,6 +662,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v18_to_v19(conn)?;
             migrate_v19_to_v110(conn)?;
             migrate_v110_to_v111(conn)?;
+            migrate_v111_to_v112(conn)?;
         }
         "1.5.0" => {
             migrate_v15_to_v16(conn)?;
@@ -665,6 +671,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v18_to_v19(conn)?;
             migrate_v19_to_v110(conn)?;
             migrate_v110_to_v111(conn)?;
+            migrate_v111_to_v112(conn)?;
         }
         "1.6.0" => {
             migrate_v16_to_v17(conn)?;
@@ -672,31 +679,39 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v18_to_v19(conn)?;
             migrate_v19_to_v110(conn)?;
             migrate_v110_to_v111(conn)?;
+            migrate_v111_to_v112(conn)?;
         }
         "1.7.0" => {
             migrate_v17_to_v18(conn)?;
             migrate_v18_to_v19(conn)?;
             migrate_v19_to_v110(conn)?;
             migrate_v110_to_v111(conn)?;
+            migrate_v111_to_v112(conn)?;
         }
         "1.8.0" => {
             migrate_v18_to_v19(conn)?;
             migrate_v19_to_v110(conn)?;
             migrate_v110_to_v111(conn)?;
+            migrate_v111_to_v112(conn)?;
         }
         "1.9.0" => {
             migrate_v19_to_v110(conn)?;
             migrate_v110_to_v111(conn)?;
+            migrate_v111_to_v112(conn)?;
         }
         "1.10.0" => {
             migrate_v110_to_v111(conn)?;
+            migrate_v111_to_v112(conn)?;
         }
         "1.11.0" => {
-            info!("Already at schema version 1.11.0, no migrations needed");
+            migrate_v111_to_v112(conn)?;
+        }
+        "1.12.0" => {
+            info!("Already at schema version 1.12.0, no migrations needed");
         }
         _ => {
             return Err(anyhow::anyhow!(
-                "Unsupported schema version: {}. Expected 0.1.0–1.10.0",
+                "Unsupported schema version: {}. Expected 0.1.0–1.11.0",
                 from_version
             ));
         }
@@ -1316,6 +1331,20 @@ fn migrate_v110_to_v111(conn: &mut Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migration 1.11.0 → 1.12.0: Add `has_started_session` to agent_sessions
+///
+/// Per §A2: the flag gates whether the adapter emits a create-vs-resume invocation.
+/// It persists across daemon restarts so that a reattach after crash doesn't
+/// accidentally send `--session-id` when the provider already has the session.
+fn migrate_v111_to_v112(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.11.0 → 1.12.0: Adding has_started_session to agent_sessions");
+
+    add_column_if_not_exists(conn, "agent_sessions", "has_started_session", "INTEGER NOT NULL DEFAULT 0")?;
+
+    update_schema_version(conn, "1.12.0")?;
+    Ok(())
+}
+
 /// Update the schema version in the metadata table
 fn update_schema_version(conn: &mut Connection, version: &str) -> Result<()> {
     conn.execute(
@@ -1423,6 +1452,7 @@ pub struct AgentSessionRow {
     pub input_tokens: i64,
     pub output_tokens: i64,
     pub turn_count: i64,
+    pub has_started_session: bool,
     pub created_at: String,
     pub last_activity_at: String,
     pub archived_at: Option<String>,
@@ -1436,9 +1466,9 @@ pub fn insert_agent_session(row: &AgentSessionRow) -> Result<()> {
     conn.execute(
         r#"INSERT INTO agent_sessions
            (id, adapter_session_id, adapter, model, status, stitch_id,
-            cost_usd, input_tokens, output_tokens, turn_count,
+            cost_usd, input_tokens, output_tokens, turn_count, has_started_session,
             created_at, last_activity_at, archived_at, archived_reason)
-           VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)"#,
+           VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15)"#,
         params![
             row.id,
             row.adapter_session_id,
@@ -1450,6 +1480,7 @@ pub fn insert_agent_session(row: &AgentSessionRow) -> Result<()> {
             row.input_tokens,
             row.output_tokens,
             row.turn_count,
+            row.has_started_session as i64,
             row.created_at,
             row.last_activity_at,
             row.archived_at,
@@ -1466,7 +1497,7 @@ pub fn load_active_agent_session() -> Result<Option<AgentSessionRow>> {
     let mut stmt = conn.prepare(
         "SELECT id, adapter_session_id, adapter, model, status, stitch_id,
                 cost_usd, input_tokens, output_tokens, turn_count,
-                created_at, last_activity_at, archived_at, archived_reason
+                has_started_session, created_at, last_activity_at, archived_at, archived_reason
          FROM agent_sessions
          WHERE status = 'active'
          ORDER BY created_at DESC LIMIT 1",
@@ -1483,10 +1514,11 @@ pub fn load_active_agent_session() -> Result<Option<AgentSessionRow>> {
             input_tokens: row.get(7)?,
             output_tokens: row.get(8)?,
             turn_count: row.get(9)?,
-            created_at: row.get(10)?,
-            last_activity_at: row.get(11)?,
-            archived_at: row.get(12)?,
-            archived_reason: row.get(13)?,
+            has_started_session: row.get(10)?,
+            created_at: row.get(11)?,
+            last_activity_at: row.get(12)?,
+            archived_at: row.get(13)?,
+            archived_reason: row.get(14)?,
         })
     });
     match row {
@@ -1519,6 +1551,21 @@ pub fn update_agent_session_usage(
     Ok(())
 }
 
+/// Persist the `has_started_session` flag after the first turn completes.
+///
+/// Called by `AgentSessionManager::handle_event` on the first `TurnComplete`
+/// so that a daemon restart knows to use the resume form (`--resume`, `exec resume`,
+/// `--continue`) instead of the create form.
+pub fn update_has_started_session(session_id: &str, value: bool) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    conn.execute(
+        "UPDATE agent_sessions SET has_started_session = ?1 WHERE id = ?2",
+        params![value as i64, session_id],
+    )?;
+    Ok(())
+}
+
 /// Archive a session (mark as archived/switched/disabled).
 pub fn archive_agent_session(session_id: &str, reason: &str) -> Result<()> {
     let path = db_path();
@@ -1545,7 +1592,7 @@ pub fn list_agent_sessions(limit: usize) -> Result<Vec<AgentSessionRow>> {
     let mut stmt = conn.prepare(
         "SELECT id, adapter_session_id, adapter, model, status, stitch_id,
                 cost_usd, input_tokens, output_tokens, turn_count,
-                created_at, last_activity_at, archived_at, archived_reason
+                has_started_session, created_at, last_activity_at, archived_at, archived_reason
          FROM agent_sessions
          ORDER BY created_at DESC LIMIT ?1",
     )?;
@@ -1561,10 +1608,11 @@ pub fn list_agent_sessions(limit: usize) -> Result<Vec<AgentSessionRow>> {
             input_tokens: row.get(7)?,
             output_tokens: row.get(8)?,
             turn_count: row.get(9)?,
-            created_at: row.get(10)?,
-            last_activity_at: row.get(11)?,
-            archived_at: row.get(12)?,
-            archived_reason: row.get(13)?,
+            has_started_session: row.get(10)?,
+            created_at: row.get(11)?,
+            last_activity_at: row.get(12)?,
+            archived_at: row.get(13)?,
+            archived_reason: row.get(14)?,
         })
     })?;
     let mut result = Vec::new();

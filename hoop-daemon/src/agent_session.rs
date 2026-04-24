@@ -268,6 +268,7 @@ impl AgentSessionManager {
                     input_tokens: 0,
                     output_tokens: 0,
                     turn_count: 0,
+                    has_started_session: false,
                     created_at: chrono::Utc::now().to_rfc3339(),
                     last_activity_at: chrono::Utc::now().to_rfc3339(),
                     archived_at: None,
@@ -368,6 +369,7 @@ impl AgentSessionManager {
             input_tokens: 0,
             output_tokens: 0,
             turn_count: 0,
+            has_started_session: false,
             created_at: now,
             last_activity_at: chrono::Utc::now().to_rfc3339(),
             archived_at: None,
@@ -420,12 +422,13 @@ impl AgentSessionManager {
 
     /// Process a single event from the stream, updating DB and broadcasting.
     pub async fn handle_event(&self, event: &AgentEvent) {
-        let inner = self.inner.lock().await;
+        let mut inner = self.inner.lock().await;
         let session_id = match &inner.session {
             Some(s) => s.id.0.clone(),
             None => return,
         };
         let db_id = inner.db_row_id.clone();
+        let session_has_started = inner.session.as_ref().map(|s| s.has_started_session).unwrap_or(true);
 
         match event {
             AgentEvent::TextDelta { text } => {
@@ -456,6 +459,17 @@ impl AgentSessionManager {
                 });
             }
             AgentEvent::TurnComplete { usage } => {
+                // After the first turn completes, persist has_started_session=true so that
+                // a daemon restart resumes with the provider's resume form (--resume,
+                // exec resume, --continue) rather than the create form.
+                if !session_has_started {
+                    if let Some(ref mut session) = inner.session {
+                        session.has_started_session = true;
+                    }
+                    if let Some(ref id) = db_id {
+                        let _ = fleet::update_has_started_session(id, true);
+                    }
+                }
                 if let (Some(ref db_id), Some(usage)) = (&db_id, usage) {
                     let adapter_str = inner.adapter_kind.as_str();
                     let model = &inner.config.model;
@@ -593,6 +607,7 @@ impl AgentSessionManager {
             input_tokens: 0,
             output_tokens: 0,
             turn_count: 0,
+            has_started_session: false,
             created_at: now,
             last_activity_at: chrono::Utc::now().to_rfc3339(),
             archived_at: None,
@@ -714,6 +729,9 @@ fn estimate_cost(
             // GLM pricing placeholder (per 1M tokens)
             (2.0, 8.0, 0.5, 4.0)
         }
+        AdapterKind::Codex | AdapterKind::OpenCode | AdapterKind::Gemini => {
+            (0.0, 0.0, 0.0, 0.0)
+        }
     };
 
     let input = (input_tokens as f64 / 1_000_000.0) * input_price;
@@ -832,6 +850,7 @@ mod tests {
                 input_tokens INTEGER NOT NULL DEFAULT 0,
                 output_tokens INTEGER NOT NULL DEFAULT 0,
                 turn_count INTEGER NOT NULL DEFAULT 0,
+                has_started_session INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 last_activity_at TEXT NOT NULL,
                 archived_at TEXT,
@@ -904,7 +923,7 @@ mod tests {
         let row: fleet::AgentSessionRow = db.query_row(
             "SELECT id, adapter_session_id, adapter, model, status, stitch_id,
                     cost_usd, input_tokens, output_tokens, turn_count,
-                    created_at, last_activity_at, archived_at, archived_reason
+                    has_started_session, created_at, last_activity_at, archived_at, archived_reason
              FROM agent_sessions WHERE status = 'active' ORDER BY created_at DESC LIMIT 1",
             [],
             |row| Ok(fleet::AgentSessionRow {
@@ -918,10 +937,11 @@ mod tests {
                 input_tokens: row.get(7)?,
                 output_tokens: row.get(8)?,
                 turn_count: row.get(9)?,
-                created_at: row.get(10)?,
-                last_activity_at: row.get(11)?,
-                archived_at: row.get(12)?,
-                archived_reason: row.get(13)?,
+                has_started_session: row.get(10)?,
+                created_at: row.get(11)?,
+                last_activity_at: row.get(12)?,
+                archived_at: row.get(13)?,
+                archived_reason: row.get(14)?,
             }),
         ).unwrap();
 
@@ -935,6 +955,135 @@ mod tests {
         assert_eq!(row.input_tokens, 1200);
         assert_eq!(row.output_tokens, 300);
         assert_eq!(row.turn_count, 2);
+    }
+
+    /// Acceptance: daemon restart mid-session (after turn 1) resumes with the
+    /// correct adapter invocation.
+    ///
+    /// Simulates: session starts with has_started_session=false, first turn
+    /// completes (flag flipped to true in DB), daemon restarts and reloads the
+    /// session — subsequent turns must use the resume form (--resume / exec resume
+    /// / --continue) rather than the create form.
+    #[test]
+    fn restart_mid_session_preserves_resume_flag() {
+        use crate::agent_adapter::AdapterKind;
+
+        let db = test_db();
+        let db_row_id = uuid::Uuid::new_v4().to_string();
+        let provider_session_id = "deadbeef-0000-0000-0000-000000000002";
+        let now = chrono::Utc::now().to_rfc3339();
+
+        // 1. Persist session as if first turn already completed (has_started_session=1).
+        db.execute(
+            r#"INSERT INTO agent_sessions
+               (id, adapter_session_id, adapter, model, status, cost_usd, input_tokens,
+                output_tokens, turn_count, has_started_session, created_at, last_activity_at)
+               VALUES (?1, ?2, 'claude', 'claude-opus-4-7', 'active', 0.05, 2000, 500, 3, 1, ?3, ?3)"#,
+            rusqlite::params![db_row_id, provider_session_id, now],
+        ).unwrap();
+
+        // 2. Simulate restart: load the row from DB.
+        let row: fleet::AgentSessionRow = db.query_row(
+            "SELECT id, adapter_session_id, adapter, model, status, stitch_id,
+                    cost_usd, input_tokens, output_tokens, turn_count,
+                    has_started_session, created_at, last_activity_at, archived_at, archived_reason
+             FROM agent_sessions WHERE status = 'active' ORDER BY created_at DESC LIMIT 1",
+            [],
+            |row| Ok(fleet::AgentSessionRow {
+                id: row.get(0)?,
+                adapter_session_id: row.get(1)?,
+                adapter: row.get(2)?,
+                model: row.get(3)?,
+                status: row.get(4)?,
+                stitch_id: row.get(5)?,
+                cost_usd: row.get(6)?,
+                input_tokens: row.get(7)?,
+                output_tokens: row.get(8)?,
+                turn_count: row.get(9)?,
+                has_started_session: row.get(10)?,
+                created_at: row.get(11)?,
+                last_activity_at: row.get(12)?,
+                archived_at: row.get(13)?,
+                archived_reason: row.get(14)?,
+            }),
+        ).unwrap();
+
+        // 3. The reloaded row must have has_started_session=true.
+        assert!(row.has_started_session,
+            "reloaded session must have has_started_session=true after daemon restart");
+
+        // 4. Verify each adapter uses the resume form when has_started_session=true.
+        //    Claude: --resume (not --session-id)
+        let claude_args = AdapterKind::Claude
+            .build_turn_args(&row.adapter_session_id, "continue", row.has_started_session)
+            .unwrap();
+        assert_eq!(claude_args[0], "--resume",
+            "Claude must use --resume after restart, not --session-id");
+        assert_eq!(claude_args[1], provider_session_id);
+
+        //    Codex: exec resume <id>
+        let codex_args = AdapterKind::Codex
+            .build_turn_args(provider_session_id, "continue", true)
+            .unwrap();
+        assert_eq!(&codex_args[..3], &["exec", "resume", provider_session_id],
+            "Codex must use exec resume <id> after restart");
+
+        //    OpenCode: --session <id> --continue
+        let oc_args = AdapterKind::OpenCode
+            .build_turn_args(provider_session_id, "continue", true)
+            .unwrap();
+        assert_eq!(oc_args[0], "--session");
+        assert_eq!(oc_args[1], provider_session_id);
+        assert_eq!(oc_args[2], "--continue",
+            "OpenCode must include --continue after restart");
+
+        //    Gemini: same args (sandbox-native, no distinction)
+        let g_args_turn1 = AdapterKind::Gemini
+            .build_turn_args(provider_session_id, "continue", false)
+            .unwrap();
+        let g_args_resume = AdapterKind::Gemini
+            .build_turn_args(provider_session_id, "continue", true)
+            .unwrap();
+        assert_eq!(g_args_turn1, g_args_resume,
+            "Gemini args must be identical regardless of has_started_session");
+    }
+
+    /// Acceptance: has_started_session starts false and is updated to true after first turn.
+    #[test]
+    fn has_started_session_false_on_new_session() {
+        let db = test_db();
+        let db_row_id = uuid::Uuid::new_v4().to_string();
+        let provider_session_id = uuid::Uuid::new_v4().to_string();
+        let now = chrono::Utc::now().to_rfc3339();
+
+        // New session: has_started_session defaults to 0 (false).
+        db.execute(
+            r#"INSERT INTO agent_sessions
+               (id, adapter_session_id, adapter, model, status, cost_usd, input_tokens,
+                output_tokens, turn_count, has_started_session, created_at, last_activity_at)
+               VALUES (?1, ?2, 'claude', 'claude-opus-4-7', 'active', 0.0, 0, 0, 0, 0, ?3, ?3)"#,
+            rusqlite::params![db_row_id, provider_session_id, now],
+        ).unwrap();
+
+        let started: bool = db.query_row(
+            "SELECT has_started_session FROM agent_sessions WHERE id = ?1",
+            rusqlite::params![db_row_id],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(!started, "new session must have has_started_session=false");
+
+        // Simulate first turn completing: flip to true.
+        db.execute(
+            "UPDATE agent_sessions SET has_started_session = 1 WHERE id = ?1",
+            rusqlite::params![db_row_id],
+        ).unwrap();
+
+        let started_after: bool = db.query_row(
+            "SELECT has_started_session FROM agent_sessions WHERE id = ?1",
+            rusqlite::params![db_row_id],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(started_after, "has_started_session must be true after first turn");
     }
 
     /// Acceptance: adapter switch archives old session and starts a new one.
