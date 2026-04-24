@@ -82,7 +82,10 @@ const ProjectCard = memo(function ProjectCard({ card, now, onClick }: { card: Pr
         <span className="pcf-activity">{formatRelativeTime(card.last_activity, now)}</span>
       </div>
 
-      <div className={`pcf-runtime-bar ${runtimeState}`} />
+      <div
+        className={`pcf-runtime-bar ${runtimeState}`}
+        style={runtimeState === 'healthy' && card.color ? { background: card.color } : undefined}
+      />
     </button>
   );
 });
@@ -177,7 +180,9 @@ export default function OverviewPage({ onNavigateProject }: { onNavigateProject:
             <a href="#/fleet" className="section-header-link">Live worker map &rarr;</a>
           </div>
           {projectCards.length === 0 ? (
-            <div className="fleet-empty">No projects registered</div>
+            <div className="fleet-empty">
+              {wsConnected ? 'No projects registered' : 'Loading projects…'}
+            </div>
           ) : (
             <div className="fleet-cards-grid">
               {sortedCards.map(card => (
