@@ -35,6 +35,7 @@ pub mod events;
 pub mod files;
 pub mod fleet;
 pub mod heartbeats;
+pub mod id_validators;
 pub mod log_rotation;
 pub mod metrics;
 pub mod projects;
@@ -353,9 +354,10 @@ async fn get_project_files(
 async fn get_bead_events(
     axum::extract::Path(bead_id): axum::extract::Path<String>,
     axum::extract::State(state): axum::extract::State<DaemonState>,
-) -> Json<Vec<ws::BeadEventData>> {
+) -> Result<Json<Vec<ws::BeadEventData>>, (axum::http::StatusCode, String)> {
+    id_validators::validate_bead_id(&bead_id).map_err(id_validators::rejection)?;
     let events = state.worker_registry.get_bead_events(&bead_id).await;
-    Json(events)
+    Ok(Json(events))
 }
 
 /// Get per-account capacity utilization (on-demand compute)

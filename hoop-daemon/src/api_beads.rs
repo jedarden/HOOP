@@ -7,7 +7,7 @@
 //!
 //! Submit flow: draft → validate → dedup check → br create → audit → WS event → response
 
-use crate::br_verbs::{invoke_br_read, ReadVerb};
+use crate::br_verbs::{extract_stitch_labels, invoke_br_read, ReadVerb};
 #[cfg(not(feature = "zero-write-v01"))]
 use crate::br_verbs::invoke_br_create;
 use crate::fleet::{self, ActionKind, ActionResult, BeadActionArgs, BeadSource};
@@ -53,6 +53,11 @@ pub struct CreateBeadRequest {
     /// If true, bypass the dedup check and create anyway
     #[serde(default)]
     pub force_create: bool,
+    /// Parent bead ID to inherit stitch labels from (Hook 4).
+    /// When set, reads the parent bead's labels and copies all `stitch:*` labels
+    /// to the new bead. This ensures worker-created follow-up beads preserve
+    /// Stitch lineage even when the worker doesn't know the stitch IDs.
+    pub parent_bead_id: Option<String>,
 }
 
 /// Response after creating a bead
@@ -249,7 +254,7 @@ fn validate_draft(req: &CreateBeadRequest) -> Result<(), (StatusCode, String)> {
     }
 
     if let Some(p) = req.priority {
-        if p < 0 || p > 9 {
+        if !(0..=9).contains(&p) {
             return Err((
                 StatusCode::BAD_REQUEST,
                 format!("priority must be 0-9, got {}", p),
@@ -330,8 +335,23 @@ async fn create_bead(
     connect_info: Option<ConnectInfo<SocketAddr>>,
     Json(req): Json<CreateBeadRequest>,
 ) -> Result<Json<CreateBeadResponse>, (StatusCode, String)> {
+    // Zero-write guard: bead creation is a write operation
+    #[cfg(feature = "zero-write-v01")]
+    {
+        let _ = (&state, connect_info, req);
+        return Err((StatusCode::FORBIDDEN, "Bead creation is disabled in zero-write mode".to_string()));
+    }
+
     // 1. Validate draft against schema
     validate_draft(&req)?;
+
+    // 1b. Validate IDs in request body
+    if let Some(ref sid) = req.stitch_id {
+        crate::id_validators::validate_stitch_id(sid).map_err(crate::id_validators::rejection)?;
+    }
+    if let Some(ref pid) = req.parent_bead_id {
+        crate::id_validators::validate_bead_id(pid).map_err(crate::id_validators::rejection)?;
+    }
 
     // 2. Check for potential duplicates (unless force_create is true)
     if !req.force_create {
@@ -345,7 +365,7 @@ async fn create_bead(
                 best.item.id,
                 best.item.title
             );
-            let matches_json = serde_json::to_value(&dedup_matches.iter().map(|m| DedupMatchRef {
+            let matches_json = serde_json::to_value(dedup_matches.iter().map(|m| DedupMatchRef {
                 id: m.item.id.clone(),
                 project: m.item.project.clone(),
                 title: m.item.title.clone(),
@@ -390,6 +410,20 @@ async fn create_bead(
     let mut all_labels = labels.clone();
     if let Some(ref sid) = stitch_id {
         all_labels.push(format!("stitch:{}", sid));
+    }
+
+    // Hook 4: Inherit stitch labels from parent bead when specified.
+    // This propagates stitch lineage from a claimed bead to follow-up beads
+    // created by the worker without requiring the worker to know stitch IDs.
+    if let Some(ref parent_id) = req.parent_bead_id {
+        if let Ok(parent_labels) = lookup_bead_labels(&project_path, parent_id) {
+            let inherited = extract_stitch_labels(&parent_labels);
+            for label in &inherited {
+                if !all_labels.contains(label) {
+                    all_labels.push(label.clone());
+                }
+            }
+        }
     }
 
     // 3. Execute br create in project cwd
@@ -579,6 +613,34 @@ fn bead_type_str(t: &crate::BeadType) -> String {
     .to_string()
 }
 
+/// Look up a bead's labels via `br get --json`.
+///
+/// Used by Hook 4 to inherit stitch labels from a parent bead.
+fn lookup_bead_labels(project_path: &std::path::Path, bead_id: &str) -> Result<Vec<String>, String> {
+    let mut cmd = invoke_br_read(ReadVerb::Get, &[bead_id, "--json"]);
+    cmd.current_dir(project_path);
+    let output = cmd.output().map_err(|e| format!("Failed to run br get: {}", e))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("br get failed for {}: {}", bead_id, stderr));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let bead_json: serde_json::Value =
+        serde_json::from_str(&stdout).map_err(|e| format!("Failed to parse br get output: {}", e))?;
+
+    bead_json
+        .get("labels")
+        .and_then(|l| l.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .ok_or_else(|| "No labels field on bead".to_string())
+}
+
 #[allow(dead_code)]
 fn list_via_br(project_path: &std::path::Path) -> Result<Vec<BeadSummary>, String> {
     let mut cmd = invoke_br_read(ReadVerb::List, &["--json"]);
@@ -700,6 +762,7 @@ mod tests {
             source: "form".to_string(),
             stitch_id: None,
             force_create: false,
+            parent_bead_id: None,
         };
         assert!(validate_draft(&req).is_ok());
     }
@@ -717,6 +780,7 @@ mod tests {
             source: String::new(),
             stitch_id: None,
             force_create: false,
+            parent_bead_id: None,
         };
         let result = validate_draft(&req);
         assert!(result.is_err());
@@ -738,6 +802,7 @@ mod tests {
             source: String::new(),
             stitch_id: None,
             force_create: false,
+            parent_bead_id: None,
         };
         let result = validate_draft(&req);
         assert!(result.is_err());
@@ -759,6 +824,7 @@ mod tests {
             source: String::new(),
             stitch_id: None,
             force_create: false,
+            parent_bead_id: None,
         };
         let result = validate_draft(&req);
         assert!(result.is_err());
@@ -780,6 +846,7 @@ mod tests {
             source: String::new(),
             stitch_id: None,
             force_create: false,
+            parent_bead_id: None,
         };
         let result = validate_draft(&req);
         assert!(result.is_err());
@@ -801,6 +868,7 @@ mod tests {
             source: String::new(),
             stitch_id: None,
             force_create: false,
+            parent_bead_id: None,
         };
         assert!(validate_draft(&req).is_err());
     }
@@ -819,6 +887,7 @@ mod tests {
                 source: String::new(),
                 stitch_id: None,
                 force_create: false,
+                parent_bead_id: None,
             };
             assert!(validate_draft(&req).is_ok(), "issue_type '{}' should be valid", it);
         }
@@ -828,5 +897,76 @@ mod tests {
     fn test_resolve_actor_fallback() {
         let actor = resolve_actor(None);
         assert!(actor.starts_with("os:"));
+    }
+
+    // -----------------------------------------------------------------------
+    // Hook 4: stitch label inheritance tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_stitch_label_inheritance_single_label() {
+        let parent_labels = vec![
+            "stitch:abc123".to_string(),
+            "urgent".to_string(),
+        ];
+        let mut all_labels: Vec<String> = vec!["tests".to_string()];
+        let inherited = extract_stitch_labels(&parent_labels);
+        for label in &inherited {
+            if !all_labels.contains(label) {
+                all_labels.push(label.clone());
+            }
+        }
+        assert!(all_labels.contains(&"stitch:abc123".to_string()));
+        assert!(all_labels.contains(&"tests".to_string()));
+        assert!(!all_labels.contains(&"urgent".to_string()));
+    }
+
+    #[test]
+    fn test_stitch_label_inheritance_multiple_labels() {
+        let parent_labels = vec![
+            "stitch:abc123".to_string(),
+            "urgent".to_string(),
+            "stitch:def456".to_string(),
+        ];
+        let mut all_labels: Vec<String> = vec![];
+        let inherited = extract_stitch_labels(&parent_labels);
+        for label in &inherited {
+            if !all_labels.contains(label) {
+                all_labels.push(label.clone());
+            }
+        }
+        assert_eq!(all_labels, vec!["stitch:abc123", "stitch:def456"]);
+    }
+
+    #[test]
+    fn test_stitch_label_inheritance_no_duplicates() {
+        let parent_labels = vec![
+            "stitch:abc123".to_string(),
+            "stitch:abc123".to_string(),
+        ];
+        let mut all_labels: Vec<String> = vec!["stitch:abc123".to_string()];
+        let inherited = extract_stitch_labels(&parent_labels);
+        for label in &inherited {
+            if !all_labels.contains(label) {
+                all_labels.push(label.clone());
+            }
+        }
+        assert_eq!(all_labels, vec!["stitch:abc123"]);
+    }
+
+    #[test]
+    fn test_stitch_label_inheritance_no_stitch_labels() {
+        let parent_labels = vec![
+            "urgent".to_string(),
+            "bug".to_string(),
+        ];
+        let mut all_labels: Vec<String> = vec!["tests".to_string()];
+        let inherited = extract_stitch_labels(&parent_labels);
+        for label in &inherited {
+            if !all_labels.contains(label) {
+                all_labels.push(label.clone());
+            }
+        }
+        assert_eq!(all_labels, vec!["tests"]);
     }
 }

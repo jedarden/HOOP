@@ -291,6 +291,14 @@ pub fn validate_zero_write_invariant() {
     validate_write_invariant();
 }
 
+/// Extract `stitch:*` labels from a label list.
+///
+/// Used to propagate stitch lineage from a claimed bead to follow-up beads
+/// created by the worker (Hook 4 — stitch label inheritance).
+pub fn extract_stitch_labels(labels: &[String]) -> Vec<String> {
+    labels.iter().filter(|l| l.starts_with("stitch:")).cloned().collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -569,5 +577,52 @@ mod tests {
             cmd.arg(verb);
             validate_br_subprocess_args(&cmd);
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Stitch label extraction tests (Hook 4)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_extract_stitch_labels_single() {
+        let labels = vec!["stitch:abc123".to_string(), "urgent".to_string()];
+        let stitch_labels = extract_stitch_labels(&labels);
+        assert_eq!(stitch_labels, vec!["stitch:abc123"]);
+    }
+
+    #[test]
+    fn test_extract_stitch_labels_multiple() {
+        let labels = vec![
+            "stitch:abc123".to_string(),
+            "urgent".to_string(),
+            "stitch:def456".to_string(),
+        ];
+        let stitch_labels = extract_stitch_labels(&labels);
+        assert_eq!(stitch_labels, vec!["stitch:abc123", "stitch:def456"]);
+    }
+
+    #[test]
+    fn test_extract_stitch_labels_none() {
+        let labels = vec!["urgent".to_string(), "bug".to_string()];
+        let stitch_labels = extract_stitch_labels(&labels);
+        assert!(stitch_labels.is_empty());
+    }
+
+    #[test]
+    fn test_extract_stitch_labels_empty() {
+        let labels: Vec<String> = vec![];
+        let stitch_labels = extract_stitch_labels(&labels);
+        assert!(stitch_labels.is_empty());
+    }
+
+    #[test]
+    fn test_extract_stitch_labels_no_false_positives() {
+        let labels = vec![
+            "stitching".to_string(),
+            "nostitch:foo".to_string(),
+            "xstitch:bar".to_string(),
+        ];
+        let stitch_labels = extract_stitch_labels(&labels);
+        assert!(stitch_labels.is_empty());
     }
 }
