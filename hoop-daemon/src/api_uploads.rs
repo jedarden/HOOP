@@ -77,7 +77,7 @@ async fn upload_chunk(
     headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> Result<Json<crate::uploads::UploadProgressResponse>, StatusCode> {
-    crate::id_validators::validate_upload_id(&upload_id)
+    let valid_id = crate::id_validators::ValidUploadId::parse(&upload_id)
         .map_err(|_| StatusCode::BAD_REQUEST)?;
 
     // Parse Upload-Offset header
@@ -89,7 +89,7 @@ async fn upload_chunk(
 
     state
         .upload_registry
-        .append_chunk(&upload_id, offset, &body)
+        .append_chunk(&valid_id, offset, &body)
         .map(Json)
         .map_err(|e| {
             tracing::error!("Failed to append chunk: {}", e);
@@ -108,12 +108,12 @@ async fn get_progress(
     State(state): State<DaemonState>,
     Path(upload_id): Path<String>,
 ) -> Result<Response, StatusCode> {
-    crate::id_validators::validate_upload_id(&upload_id)
+    let valid_id = crate::id_validators::ValidUploadId::parse(&upload_id)
         .map_err(|_| StatusCode::BAD_REQUEST)?;
 
     let progress = state
         .upload_registry
-        .get_progress(&upload_id)
+        .get_progress(&valid_id)
         .map_err(|e| {
             tracing::debug!("Upload not found: {}", e);
             StatusCode::NOT_FOUND
@@ -137,12 +137,12 @@ async fn complete_upload(
     State(state): State<DaemonState>,
     Path(upload_id): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
-    crate::id_validators::validate_upload_id(&upload_id)
+    let valid_id = crate::id_validators::ValidUploadId::parse(&upload_id)
         .map_err(|_| StatusCode::BAD_REQUEST)?;
 
     state
         .upload_registry
-        .complete_upload(&upload_id)
+        .complete_upload(&valid_id)
         .map(|_| StatusCode::NO_CONTENT)
         .map_err(|e| {
             tracing::error!("Failed to complete upload: {}", e);
@@ -157,12 +157,12 @@ async fn cancel_upload(
     State(state): State<DaemonState>,
     Path(upload_id): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
-    crate::id_validators::validate_upload_id(&upload_id)
+    let valid_id = crate::id_validators::ValidUploadId::parse(&upload_id)
         .map_err(|_| StatusCode::BAD_REQUEST)?;
 
     state
         .upload_registry
-        .cancel_upload(&upload_id)
+        .cancel_upload(&valid_id)
         .map(|_| StatusCode::NO_CONTENT)
         .map_err(|e| {
             tracing::error!("Failed to cancel upload: {}", e);

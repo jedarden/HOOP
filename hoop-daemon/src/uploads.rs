@@ -10,7 +10,7 @@
 //! Chunk state is stored in ~/.hoop/uploads/{upload_id}/
 
 use anyhow::{Context, Result};
-use crate::id_validators::{ValidBeadId, ValidStitchId};
+use crate::id_validators::{ValidBeadId, ValidStitchId, ValidUploadId};
 use sha2::{Digest, Sha256};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -85,27 +85,26 @@ impl UploadRegistry {
         Ok(Self { config })
     }
 
-    /// Get directory for a specific upload
-    fn upload_dir(&self, upload_id: &str) -> Result<PathBuf> {
-        let dir = self.config.uploads_dir.join(upload_id);
-        // Validate upload_id is a UUID to prevent path traversal
-        Uuid::parse_str(upload_id)
-            .context("invalid upload ID format")?;
-        Ok(dir)
+    /// Get directory for a specific upload.
+    ///
+    /// The `ValidUploadId` newtype guarantees the ID is a valid lowercase UUID,
+    /// so no additional validation is needed before path join.
+    fn upload_dir(&self, upload_id: &ValidUploadId) -> Result<PathBuf> {
+        Ok(self.config.uploads_dir.join(upload_id.as_str()))
     }
 
     /// Get metadata file path for an upload
-    fn metadata_path(&self, upload_id: &str) -> Result<PathBuf> {
+    fn metadata_path(&self, upload_id: &ValidUploadId) -> Result<PathBuf> {
         Ok(self.upload_dir(upload_id)?.join("metadata.json"))
     }
 
     /// Get partial file path for an upload
-    fn partial_path(&self, upload_id: &str) -> Result<PathBuf> {
+    fn partial_path(&self, upload_id: &ValidUploadId) -> Result<PathBuf> {
         Ok(self.upload_dir(upload_id)?.join("partial.bin"))
     }
 
     /// Load metadata for an upload
-    pub fn load_metadata(&self, upload_id: &str) -> Result<UploadMetadata> {
+    fn load_metadata(&self, upload_id: &ValidUploadId) -> Result<UploadMetadata> {
         let meta_path = self.metadata_path(upload_id)?;
         let content = fs::read_to_string(&meta_path)
             .with_context(|| format!("upload not found: {}", upload_id))?;
@@ -115,8 +114,8 @@ impl UploadRegistry {
     }
 
     /// Save metadata for an upload
-    fn save_metadata(&self, meta: &UploadMetadata) -> Result<()> {
-        let meta_path = self.metadata_path(&meta.upload_id)?;
+    fn save_metadata(&self, upload_id: &ValidUploadId, meta: &UploadMetadata) -> Result<()> {
+        let meta_path = self.metadata_path(upload_id)?;
         let content = serde_json::to_string_pretty(meta)?;
         fs::write(&meta_path, content)
             .context("failed to write metadata")?;
@@ -147,14 +146,16 @@ impl UploadRegistry {
             anyhow::bail!("checksum must be 64-character hex string (SHA-256)");
         }
 
-        let upload_id = Uuid::new_v4().to_string();
+        let upload_id_str = Uuid::new_v4().to_string();
+        let upload_id = ValidUploadId::parse(&upload_id_str)
+            .context("generated invalid upload ID")?;
         let upload_dir = self.upload_dir(&upload_id)?;
         fs::create_dir_all(&upload_dir)
             .context("failed to create upload directory")?;
 
         let now = chrono::Utc::now();
         let meta = UploadMetadata {
-            upload_id: upload_id.clone(),
+            upload_id: upload_id_str.clone(),
             filename,
             total_size,
             received_size: 0,
@@ -165,7 +166,7 @@ impl UploadRegistry {
             updated_at: now,
         };
 
-        self.save_metadata(&meta)?;
+        self.save_metadata(&upload_id, &meta)?;
 
         // Create empty partial file
         let partial_path = self.partial_path(&upload_id)?;
@@ -173,10 +174,10 @@ impl UploadRegistry {
             .context("failed to create partial file")?;
 
         let expires_at = now + chrono::Duration::hours(self.config.upload_ttl_hours);
-        let upload_url = format!("/api/uploads/{}", upload_id);
+        let upload_url = format!("/api/uploads/{}", upload_id_str);
 
         Ok(InitUploadResponse {
-            upload_id,
+            upload_id: upload_id_str,
             upload_url,
             chunk_size: self.config.chunk_size,
             expires_at,
@@ -186,7 +187,7 @@ impl UploadRegistry {
     /// Append a chunk to an upload
     pub fn append_chunk(
         &self,
-        upload_id: &str,
+        upload_id: &ValidUploadId,
         offset: u64,
         data: &[u8],
     ) -> Result<UploadProgressResponse> {
@@ -229,7 +230,7 @@ impl UploadRegistry {
         // Update metadata
         meta.received_size = new_size;
         meta.updated_at = chrono::Utc::now();
-        self.save_metadata(&meta)?;
+        self.save_metadata(upload_id, &meta)?;
 
         Ok(UploadProgressResponse {
             upload_id: upload_id.to_string(),
@@ -240,7 +241,7 @@ impl UploadRegistry {
     }
 
     /// Get upload progress
-    pub fn get_progress(&self, upload_id: &str) -> Result<UploadProgressResponse> {
+    pub fn get_progress(&self, upload_id: &ValidUploadId) -> Result<UploadProgressResponse> {
         let meta = self.load_metadata(upload_id)?;
         Ok(UploadProgressResponse {
             upload_id: upload_id.to_string(),
@@ -251,7 +252,7 @@ impl UploadRegistry {
     }
 
     /// Complete upload and verify checksum
-    pub fn complete_upload(&self, upload_id: &str) -> Result<PathBuf> {
+    pub fn complete_upload(&self, upload_id: &ValidUploadId) -> Result<PathBuf> {
         let meta = self.load_metadata(upload_id)?;
         let partial_path = self.partial_path(upload_id)?;
 
@@ -329,7 +330,7 @@ impl UploadRegistry {
     }
 
     /// Cancel and cleanup an upload
-    pub fn cancel_upload(&self, upload_id: &str) -> Result<()> {
+    pub fn cancel_upload(&self, upload_id: &ValidUploadId) -> Result<()> {
         let upload_dir = self.upload_dir(upload_id)?;
         if upload_dir.exists() {
             fs::remove_dir_all(&upload_dir)
@@ -564,7 +565,8 @@ mod tests {
         assert!(!response.upload_id.is_empty());
 
         // Verify metadata exists
-        let meta = registry.load_metadata(&response.upload_id).unwrap();
+        let valid_id = ValidUploadId::parse(&response.upload_id).unwrap();
+        let meta = registry.load_metadata(&valid_id).unwrap();
         assert_eq!(meta.filename, "test.txt");
         assert_eq!(meta.total_size, 100);
         assert_eq!(meta.received_size, 0);
@@ -583,15 +585,16 @@ mod tests {
             "test-bead.1".to_string(),
         ).unwrap();
 
+        let valid_id = ValidUploadId::parse(&init.upload_id).unwrap();
         let data = vec![b'a'; 50];
-        let progress = registry.append_chunk(&init.upload_id, 0, &data).unwrap();
+        let progress = registry.append_chunk(&valid_id, 0, &data).unwrap();
 
         assert_eq!(progress.received_size, 50);
         assert_eq!(progress.offset, 50);
 
         // Append rest
         let data2 = vec![b'b'; 50];
-        let progress2 = registry.append_chunk(&init.upload_id, 50, &data2).unwrap();
+        let progress2 = registry.append_chunk(&valid_id, 50, &data2).unwrap();
 
         assert_eq!(progress2.received_size, 100);
     }
@@ -609,8 +612,9 @@ mod tests {
             "test-bead.1".to_string(),
         ).unwrap();
 
+        let valid_id = ValidUploadId::parse(&init.upload_id).unwrap();
         let data = vec![b'a'; 50];
-        let result = registry.append_chunk(&init.upload_id, 10, &data);
+        let result = registry.append_chunk(&valid_id, 10, &data);
 
         assert!(result.is_err());
     }
@@ -628,7 +632,8 @@ mod tests {
             "test-bead.1".to_string(),
         ).unwrap();
 
-        let progress = registry.get_progress(&init.upload_id).unwrap();
+        let valid_id = ValidUploadId::parse(&init.upload_id).unwrap();
+        let progress = registry.get_progress(&valid_id).unwrap();
         assert_eq!(progress.received_size, 0);
         assert_eq!(progress.total_size, 100);
     }
