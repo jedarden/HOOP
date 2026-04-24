@@ -9,10 +9,13 @@ pub mod agent_adapter;
 pub mod agent_context;
 pub mod agent_session;
 pub mod api_agent;
+pub mod backup;
 pub mod api_attachments;
 pub mod api_audit;
 pub mod api_beads;
 pub mod api_dictated_notes;
+pub mod api_draft_queue;
+pub mod api_metrics;
 pub mod api_preview;
 pub mod api_stitch_decompose;
 pub mod api_transcription;
@@ -28,6 +31,7 @@ pub mod events;
 pub mod files;
 pub mod fleet;
 pub mod heartbeats;
+pub mod log_rotation;
 pub mod metrics;
 pub mod projects;
 pub mod sessions;
@@ -44,6 +48,8 @@ pub mod predictor;
 pub mod risk_patterns;
 pub mod embedding;
 pub mod vector_index;
+pub mod morning_brief;
+pub mod api_morning_brief;
 
 /// Worker execution state from heartbeats
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -153,7 +159,7 @@ use tokio::{
     time::Instant,
 };
 use tower_http::trace::TraceLayer;
-use tracing::{error, info, warn, Level};
+use tracing::{error, info, warn};
 
 /// Daemon configuration
 #[derive(Debug, Clone)]
@@ -178,7 +184,7 @@ impl Default for Config {
 
 /// Per-project display metadata from projects.yaml
 #[derive(Debug, Clone)]
-struct ProjectMetadata {
+pub struct ProjectMetadata {
     label: String,
     color: String,
 }
@@ -211,6 +217,12 @@ pub struct DaemonState {
     /// Agent session manager — wraps the config-driven agent adapter with
     /// lifecycle persistence (fleet.db), WS event broadcasting, and cost tracking.
     pub agent_session_manager: Option<Arc<agent_session::AgentSessionManager>>,
+    /// Morning brief runner — orchestrates scheduled + on-demand brief generation
+    pub morning_brief_runner: Option<Arc<morning_brief::MorningBriefRunner>>,
+    /// Broadcast channel for morning brief events sent to WS clients
+    pub brief_tx: broadcast::Sender<ws::MorningBriefData>,
+    /// Broadcast channel for draft queue events sent to WS clients
+    pub draft_tx: broadcast::Sender<ws::DraftUpdateData>,
 }
 
 /// Health check endpoint handler — returns 200 if the process is responsive.
@@ -339,7 +351,7 @@ async fn get_bead_events(
 
 /// Get per-account capacity utilization (on-demand compute)
 async fn get_capacity(
-    axum::extract::State(state): axum::extract::State<DaemonState>,
+    axum::extract::State(_state): axum::extract::State<DaemonState>,
 ) -> Json<Vec<capacity::AccountCapacity>> {
     let config = capacity::CapacityMeterConfig::default();
     let meter = capacity::CapacityMeter::new(config);
@@ -366,12 +378,18 @@ pub fn router() -> Router<DaemonState> {
         .merge(adb_dictate::router())
         .merge(api_audit::router())
         .merge(api_beads::router())
+        .merge(api_draft_queue::router())
         .merge(api_preview::router())
         .merge(api_stitch_decompose::router())
         .merge(api_agent::router())
+        .merge(api_morning_brief::router())
+        .merge(api_metrics::router())
         .nest_service("/assets", AssetsHandler::router())
         .fallback_service(AssetsHandler::router())
         .layer(TraceLayer::new_for_http())
+        .layer(axum::middleware::from_fn(
+            api_metrics::http_metrics_middleware,
+        ))
 }
 
 /// Handle a single control socket connection
@@ -390,7 +408,7 @@ async fn handle_control_socket(
             break;
         }
 
-        let response = match serde_json::from_str::<ControlRequest>(&line.trim()) {
+        let response = match serde_json::from_str::<ControlRequest>(line.trim()) {
             Ok(ControlRequest::Status { project }) => {
                 let runtimes = state.supervisor.snapshot().await;
                 let projects = if let Some(proj) = project {
@@ -495,14 +513,25 @@ async fn run_control_socket(
 ///
 /// This function blocks until the server is shut down.
 pub async fn serve(config: Config) -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .init();
+    log_rotation::init_logging();
+
+    // Install panic hook that records hoop_panics_total metric before aborting.
+    let previous_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let subsystem = info.location()
+            .map(|l| l.file())
+            .unwrap_or("unknown")
+            .rsplit('/')
+            .next()
+            .unwrap_or("unknown");
+        metrics::metrics().hoop_panics_total.inc(&[subsystem]);
+        metrics::metrics().hoop_errors_total.inc(&["panic", "panic"]);
+        previous_hook(info);
+    }));
 
     // Run startup audit - refuse to start on critical failures
     info!("Running startup audit...");
-    let mut audit_config = audit::AuditConfig::default();
-    audit_config.allow_br_mismatch = config.allow_br_mismatch;
+    let audit_config = audit::AuditConfig { allow_br_mismatch: config.allow_br_mismatch, ..Default::default() };
     if let Err(e) = audit::daemon_startup_check(&audit_config) {
         error!("{}", e);
         return Err(e);
@@ -836,6 +865,55 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         }
     };
 
+    // Initialize morning brief broadcast channel and runner
+    let (brief_tx, _) = broadcast::channel::<ws::MorningBriefData>(64);
+    let morning_brief_runner = match &agent_session_manager {
+        Some(mgr) => {
+            let config = morning_brief::MorningBriefConfig::default();
+            let runner = Arc::new(morning_brief::MorningBriefRunner::new(
+                config,
+                mgr.clone(),
+                brief_tx.clone(),
+            ));
+            info!("Morning brief runner initialized");
+            Some(runner)
+        }
+        None => {
+            warn!("No agent session manager — morning brief disabled");
+            None
+        }
+    };
+
+    // Start morning brief scheduler (auto-triggers at configured hour)
+    if let Some(ref runner) = morning_brief_runner {
+        let sched_shutdown = shutdown_coordinator.subscribe();
+        runner.clone().start_scheduler(sched_shutdown);
+        info!("Morning brief scheduler started");
+    }
+
+    // Load backup config and resolve S3 credentials from env vars
+    let backup_state = backup::load_backup_config();
+    match &backup_state {
+        backup::BackupState::Ready { config, .. } => {
+            info!(
+                "Backup subsystem ready (schedule={}, retention={}d, encryption={})",
+                config.schedule, config.retention_days, config.encryption
+            );
+        }
+        backup::BackupState::Disabled { reason, .. } => {
+            warn!("Backup subsystem disabled: {}", reason);
+        }
+        backup::BackupState::NotConfigured => {
+            info!("Backup subsystem not configured — no backup: section in config.yml");
+        }
+    }
+
+    let bead_tx_for_rebuild = bead_tx.clone();
+    let stitch_tx_for_rebuild = stitch_tx.clone();
+    let vector_index_for_rebuild = vector_index.clone();
+    let beads_for_rebuild = beads.clone();
+    let initial_projects_for_rebuild = initial_projects.clone();
+
     let state = DaemonState {
         config: config.clone(),
         started_at: Instant::now(),
@@ -856,6 +934,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         active_project: Arc::new(std::sync::RwLock::new(None)),
         vector_index,
         agent_session_manager,
+        morning_brief_runner,
+        brief_tx,
+        draft_tx: broadcast::channel::<ws::DraftUpdateData>(64).0,
     };
 
     // Forward project runtime status updates to shared store and broadcast
@@ -907,6 +988,43 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
             let _ = project_status_tx_clone.send(card);
         }
     });
+
+    // Vector index rebuilder: rebuild on bead/Stitch events for real-time dedup
+    {
+        let vindex_ref = vector_index_for_rebuild;
+        let beads_ref = beads_for_rebuild;
+        let projects_ref = Arc::new(std::sync::RwLock::new(initial_projects_for_rebuild));
+        let mut bead_rx = bead_tx_for_rebuild.subscribe();
+        let mut stitch_rx = stitch_tx_for_rebuild.subscribe();
+
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    // Bead events: rebuild index when beads are created/closed
+                    result = bead_rx.recv() => {
+                        if result.is_ok() {
+                            let beads = beads_ref.read().unwrap().clone();
+                            let projects = projects_ref.read().unwrap().clone();
+                            let items = vector_index::build_index_from_state(&beads, &projects);
+                            vindex_ref.write().unwrap().rebuild(items);
+                            tracing::debug!("Vector index rebuilt on bead event");
+                        }
+                    }
+                    // Stitch events: rebuild index when stitches are created/closed
+                    result = stitch_rx.recv() => {
+                        if result.is_ok() {
+                            let beads = beads_ref.read().unwrap().clone();
+                            let projects = projects_ref.read().unwrap().clone();
+                            let items = vector_index::build_index_from_state(&beads, &projects);
+                            vindex_ref.write().unwrap().rebuild(items);
+                            tracing::debug!("Vector index rebuilt on stitch event");
+                        }
+                    }
+                }
+            }
+        });
+        info!("Vector index rebuilder started (listens to bead/Stitch events)");
+    }
 
     // Periodic project card refresh for live metrics (every 5s)
     {
@@ -1033,7 +1151,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                 info!("Received SIGTERM, initiating graceful shutdown");
             }
         }
-        shutdown_coordinator.shutdown(None).await;
+        let _ = shutdown_coordinator.shutdown(None).await;
     };
 
     // Run the server with graceful shutdown

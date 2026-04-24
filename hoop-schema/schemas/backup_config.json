@@ -2,14 +2,14 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://hoop.dev/schemas/backup_config.json",
   "title": "BackupConfig",
-  "description": "Backup configuration",
+  "description": "S3-compatible backup configuration. Credentials are resolved from environment variables only — never stored in this file.",
   "type": "object",
   "required": ["endpoint", "bucket", "prefix"],
   "properties": {
     "endpoint": {
       "type": "string",
       "format": "uri",
-      "description": "S3-compatible endpoint"
+      "description": "S3-compatible endpoint URL"
     },
     "bucket": {
       "type": "string",
@@ -17,17 +17,23 @@
     },
     "prefix": {
       "type": "string",
-      "description": "Prefix for backups"
+      "description": "Key prefix for backup objects"
     },
     "schedule": {
       "type": "string",
       "default": "0 4 * * *",
-      "description": "Cron schedule"
+      "description": "Cron schedule for automatic backups (default: daily at 04:00 UTC)"
     },
     "retention_days": {
       "type": "integer",
-      "default": 30
+      "default": 30,
+      "description": "Number of days to retain backups before pruning"
+    },
+    "encryption": {
+      "type": "boolean",
+      "default": false,
+      "description": "Encrypt backups with age (requires HOOP_BACKUP_AGE_KEY env var)"
     }
   },
-  "schema_version": "1.0.0"
+  "schema_version": "1.1.0"
 }
