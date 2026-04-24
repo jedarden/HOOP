@@ -37,7 +37,16 @@ struct InitUploadRequest {
 async fn init_upload(
     State(state): State<DaemonState>,
     Json(req): Json<InitUploadRequest>,
-) -> Result<Json<crate::uploads::InitUploadResponse>, StatusCode> {
+) -> Result<Json<crate::uploads::InitUploadResponse>, (StatusCode, String)> {
+    // Validate resource_id at the HTTP boundary before it reaches storage
+    match req.attachment_type.as_str() {
+        "bead" => crate::id_validators::validate_bead_id(&req.resource_id)
+            .map_err(crate::id_validators::rejection)?,
+        "stitch" => crate::id_validators::validate_stitch_id(&req.resource_id)
+            .map_err(crate::id_validators::rejection)?,
+        _ => return Err((StatusCode::BAD_REQUEST, "Invalid attachment_type".into())),
+    }
+
     state.upload_registry
         .initiate_upload(
             req.filename,
@@ -49,7 +58,7 @@ async fn init_upload(
         .map(Json)
         .map_err(|e| {
             tracing::error!("Failed to initiate upload: {}", e);
-            StatusCode::BAD_REQUEST
+            (StatusCode::BAD_REQUEST, e.to_string())
         })
 }
 

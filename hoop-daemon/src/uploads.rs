@@ -274,6 +274,10 @@ impl UploadRegistry {
             );
         }
 
+        // Content-type sniffing (§13): validate declared extension against magic bytes
+        let leading = read_leading_bytes(&partial_path, 8192)?;
+        let attach_meta = crate::attachments::validate_content_match(&meta.filename, &leading)?;
+
         // Move to final destination based on attachment type
         let final_path = match meta.attachment_type.as_str() {
             "bead" => {
@@ -297,6 +301,17 @@ impl UploadRegistry {
         // Atomic rename
         fs::rename(&partial_path, &final_path)
             .with_context(|| format!("failed to move {} to {}", partial_path.display(), final_path.display()))?;
+
+        // SVG sanitization (§13): strip scripts / event handlers / external refs.
+        // Runs after rename so we always work on the final path.
+        let attach_meta = if attach_meta.declared_extension.eq_ignore_ascii_case("svg") {
+            apply_svg_sanitization_after_store(&final_path, &meta, attach_meta)?
+        } else {
+            attach_meta
+        };
+
+        // Persist sniffed type as sidecar metadata
+        crate::attachments::write_attachment_meta(&final_path, &attach_meta)?;
 
         // Clean up upload directory
         let upload_dir = self.upload_dir(upload_id)?;
@@ -365,6 +380,84 @@ impl UploadRegistry {
 
         Ok(cleaned)
     }
+}
+
+/// Apply SVG sanitization to a file that has already been moved into its final
+/// destination.  If the SVG is modified:
+/// - overwrites `final_path` with the sanitized bytes (atomic),
+/// - writes the original to `<stem>_unsafe.svg` in the same directory,
+/// - returns updated `AttachmentMetadata` with an `svg_sanitize` record.
+fn apply_svg_sanitization_after_store(
+    final_path: &Path,
+    upload_meta: &UploadMetadata,
+    attach_meta: crate::attachments::AttachmentMetadata,
+) -> Result<crate::attachments::AttachmentMetadata> {
+    let svg_data = fs::read(final_path)
+        .with_context(|| format!("failed to read SVG for sanitization: {}", final_path.display()))?;
+
+    let result = crate::svg_sanitize::sanitize(&svg_data)
+        .with_context(|| format!("SVG sanitization failed for {:?}", upload_meta.filename))?;
+
+    if !result.record.was_modified {
+        return Ok(attach_meta);
+    }
+
+    // Resolve the unsafe filename path in the same directory.
+    let unsafe_name = crate::attachments::make_unsafe_svg_filename(&upload_meta.filename);
+    let unsafe_path = final_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("SVG path has no parent directory"))?
+        .join(&unsafe_name);
+
+    // Write original to unsafe path.
+    fs::write(&unsafe_path, &svg_data)
+        .with_context(|| format!("failed to write unsafe SVG: {}", unsafe_path.display()))?;
+
+    // Write unsafe sidecar (no svg_sanitize record on the unsafe copy).
+    let unsafe_meta = crate::attachments::AttachmentMetadata {
+        filename: unsafe_name.clone(),
+        svg_sanitize: None,
+        ..attach_meta.clone()
+    };
+    crate::attachments::write_attachment_meta(&unsafe_path, &unsafe_meta)?;
+
+    // Overwrite final_path with sanitized content (atomic tmp → rename).
+    let tmp_name = format!(
+        "{}.{}.tmp",
+        final_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("svg"),
+        uuid::Uuid::new_v4()
+    );
+    let tmp_path = final_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("SVG path has no parent directory"))?
+        .join(&tmp_name);
+    fs::write(&tmp_path, &result.safe_bytes)
+        .context("failed to write sanitized SVG to tmp")?;
+    fs::rename(&tmp_path, final_path)
+        .with_context(|| format!("failed to rename sanitized SVG to {}", final_path.display()))?;
+
+    Ok(crate::attachments::AttachmentMetadata {
+        svg_sanitize: Some(crate::attachments::SvgSanitizeRecord {
+            unsafe_filename: unsafe_name,
+            removed_elements: result.record.removed_elements,
+            removed_attrs: result.record.removed_attrs,
+        }),
+        ..attach_meta
+    })
+}
+
+/// Read up to `n` leading bytes from a file for content-type sniffing.
+fn read_leading_bytes(path: &Path, n: usize) -> Result<Vec<u8>> {
+    let mut buf = vec![0u8; n];
+    let mut file = File::open(path)
+        .with_context(|| format!("failed to open file for sniffing: {}", path.display()))?;
+    let bytes_read = file.read(&mut buf)
+        .context("failed to read leading bytes")?;
+    buf.truncate(bytes_read);
+    Ok(buf)
 }
 
 #[cfg(test)]
