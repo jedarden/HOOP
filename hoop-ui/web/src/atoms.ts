@@ -334,6 +334,10 @@ export const agentInflightAtom = atom<AgentInflight | null>(null);
 export const agentChatMessagesAtom = atom<AgentChatMessage[]>([]);
 export const agentChatScopeAtom = atom<AgentChatScope>({ projects: [] });
 
+// Current time atom — updated every 30s by OverviewPage; used by RelativeTime
+// so that time-tick re-renders don't defeat memo on ProjectCard.
+export const currentTimeAtom = atom<number>(Date.now());
+
 // Format content for display (handles string and object content)
 export function formatContent(content: string | { [key: string]: any } | null): string {
   if (content === null) return '';

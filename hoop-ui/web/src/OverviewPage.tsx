@@ -1,18 +1,19 @@
-import { useAtomValue } from 'jotai';
-import { useMemo, useState, useEffect, memo } from 'react';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { useMemo, useEffect, memo } from 'react';
 import {
   wsConnectedAtom,
   configStatusAtom,
   projectCardsAtom,
   projectsReceivedAtom,
+  currentTimeAtom,
   ProjectCardData,
 } from './atoms';
 
-function formatRelativeTime(iso?: string, _now?: number): string {
+function formatRelativeTime(iso?: string, now?: number): string {
   if (!iso) return '--';
   const then = new Date(iso).getTime();
-  const now = _now ?? Date.now();
-  const diffSec = Math.floor((now - then) / 1000);
+  const n = now ?? Date.now();
+  const diffSec = Math.floor((n - then) / 1000);
   if (diffSec < 60) return `${diffSec}s ago`;
   if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
   if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
@@ -25,7 +26,14 @@ function formatCost(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
-const ProjectCard = memo(function ProjectCard({ card, now, onClick }: { card: ProjectCardData; now: number; onClick: () => void }) {
+// Isolated time display — subscribes to currentTimeAtom independently so
+// the parent ProjectCard's memo is not defeated by the 30s tick.
+const RelativeTime = memo(function RelativeTime({ iso }: { iso?: string }) {
+  const now = useAtomValue(currentTimeAtom);
+  return <>{formatRelativeTime(iso, now)}</>;
+});
+
+const ProjectCard = memo(function ProjectCard({ card, onClick }: { card: ProjectCardData; onClick: () => void }) {
   const runtimeState = card.runtime_state ?? 'unknown';
   const isDegraded = card.degraded;
   const hasError = isDegraded || runtimeState === 'failed' || runtimeState === 'error';
@@ -80,7 +88,7 @@ const ProjectCard = memo(function ProjectCard({ card, now, onClick }: { card: Pr
 
       <div className="pcf-footer">
         <span className="pcf-beads">{card.bead_count} beads</span>
-        <span className="pcf-activity">{formatRelativeTime(card.last_activity, now)}</span>
+        <span className="pcf-activity"><RelativeTime iso={card.last_activity} /></span>
       </div>
 
       <div
@@ -96,13 +104,13 @@ export default function OverviewPage({ onNavigateProject }: { onNavigateProject:
   const configStatus = useAtomValue(configStatusAtom);
   const projectCards = useAtomValue(projectCardsAtom);
   const projectsReceived = useAtomValue(projectsReceivedAtom);
+  const setCurrentTime = useSetAtom(currentTimeAtom);
 
   // Tick every 30s to refresh relative time displays
-  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 30_000);
+    const id = setInterval(() => setCurrentTime(Date.now()), 30_000);
     return () => clearInterval(id);
-  }, []);
+  }, [setCurrentTime]);
 
   const fleetSummary = useMemo(() => {
     const totalWorkers = projectCards.reduce((s, c) => s + c.worker_count, 0);
@@ -194,7 +202,6 @@ export default function OverviewPage({ onNavigateProject }: { onNavigateProject:
                 <ProjectCard
                   key={card.name}
                   card={card}
-                  now={now}
                   onClick={() => onNavigateProject(card)}
                 />
               ))}
