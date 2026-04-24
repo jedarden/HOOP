@@ -106,7 +106,7 @@ async fn adb_dictate(
     conn.pragma_update(None, "journal_mode", "WAL")
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB WAL: {}", e)))?;
 
-    crate::dictated_notes::insert_stitch(&conn, &stitch_id, &project, &title, "adb").map_err(
+    crate::dictated_notes::insert_stitch(&conn, &valid_stitch_id, &project, &title, "adb").map_err(
         |e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -188,6 +188,9 @@ fn resolve_project(
             })?
     };
 
+    crate::id_validators::validate_project_name(&project)
+        .map_err(crate::id_validators::rejection)?;
+
     // Validate the project is registered
     {
         let projects = state.projects.read().unwrap();
@@ -227,6 +230,8 @@ async fn set_active_project(
     let project: Option<String> = if req.project.is_empty() {
         None
     } else {
+        crate::id_validators::validate_project_name(&req.project)
+            .map_err(crate::id_validators::rejection)?;
         // Validate project exists before accepting it
         {
             let projects = state.projects.read().unwrap();

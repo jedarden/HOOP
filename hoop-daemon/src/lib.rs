@@ -295,9 +295,10 @@ async fn get_cost_buckets(
 async fn get_cost_buckets_by_project(
     axum::extract::Path(project): axum::extract::Path<String>,
     axum::extract::State(state): axum::extract::State<DaemonState>,
-) -> Json<Vec<cost::CostBucket>> {
+) -> Result<Json<Vec<cost::CostBucket>>, (axum::http::StatusCode, String)> {
+    id_validators::validate_project_name(&project).map_err(id_validators::rejection)?;
     let aggregator = state.cost_aggregator.read().unwrap();
-    Json(aggregator.get_buckets_by_project(&project))
+    Ok(Json(aggregator.get_buckets_by_project(&project)))
 }
 
 /// Reload pricing configuration endpoint handler
@@ -330,6 +331,10 @@ async fn get_project_files(
     axum::extract::Query(params): axum::extract::Query<FilesQuery>,
     axum::extract::State(state): axum::extract::State<DaemonState>,
 ) -> Result<Json<Vec<files::FileEntry>>, axum::http::StatusCode> {
+    if id_validators::validate_project_name(&project).is_err() {
+        return Err(axum::http::StatusCode::BAD_REQUEST);
+    }
+
     let project_root = {
         let projects = state.projects.read().unwrap();
         projects
