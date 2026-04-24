@@ -5,6 +5,7 @@
 //! many native-CLI conversations.
 
 mod projects;
+mod restore;
 
 use clap::Parser;
 use hoop_daemon::{audit, serve, Config as DaemonConfig};
@@ -86,6 +87,13 @@ enum Commands {
     },
     /// Install systemd user service
     InstallSystemd,
+    /// Restore from a prior snapshot (requires daemon stopped)
+    #[command(arg_required_else_help = true)]
+    Restore {
+        /// S3 URI: s3://<bucket>/<prefix>/<snapshot-id>
+        #[arg(long)]
+        from: String,
+    },
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -202,6 +210,12 @@ async fn main() -> anyhow::Result<()> {
         Commands::InstallSystemd => {
             if let Err(e) = install_systemd() {
                 eprintln!("hoop install-systemd: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Restore { from } => {
+            if let Err(e) = restore::run_restore(&from).await {
+                eprintln!("hoop restore: {}", e);
                 std::process::exit(1);
             }
         }
@@ -397,7 +411,7 @@ fn install_systemd() -> anyhow::Result<()> {
     let hoop_path_str = hoop_path.to_str().ok_or_else(|| anyhow::anyhow!("Invalid hoop binary path"))?;
 
     // Get the username
-    let username = std::env::var("USER").unwrap_or_else(|_| "user".to_string());
+    let _username = std::env::var("USER").unwrap_or_else(|_| "user".to_string());
 
     // Get the home directory for environment variables
     let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));

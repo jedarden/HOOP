@@ -12,6 +12,7 @@ pub mod api_agent;
 pub mod attachment_sync;
 pub mod backup;
 pub mod backup_pipeline;
+pub mod config_resolver;
 pub mod api_attachments;
 pub mod api_audit;
 pub mod api_beads;
@@ -20,6 +21,7 @@ pub mod api_draft_queue;
 pub mod api_metrics;
 pub mod api_preview;
 pub mod api_stitch_decompose;
+pub mod api_stitch_read;
 pub mod api_transcription;
 pub mod api_uploads;
 pub mod attachments;
@@ -46,6 +48,7 @@ pub mod transcription;
 pub mod uploads;
 pub mod ws;
 pub mod similarity;
+pub mod snapshot_manifest;
 pub mod predictor;
 pub mod risk_patterns;
 pub mod embedding;
@@ -163,6 +166,8 @@ use tokio::{
 use tower_http::trace::TraceLayer;
 use tracing::{error, info, warn};
 
+pub use config_resolver::{CliOverrides, ResolvedConfig, ConfigSource};
+
 /// Daemon configuration
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -225,6 +230,8 @@ pub struct DaemonState {
     pub brief_tx: broadcast::Sender<ws::MorningBriefData>,
     /// Broadcast channel for draft queue events sent to WS clients
     pub draft_tx: broadcast::Sender<ws::DraftUpdateData>,
+    /// Fully resolved config with per-key attribution (§17.2)
+    pub resolved_config: Arc<ResolvedConfig>,
 }
 
 /// Health check endpoint handler — returns 200 if the process is responsive.
@@ -360,6 +367,19 @@ async fn get_capacity(
     Json(meter.compute())
 }
 
+/// /debug/state — resolved config with attribution for every key (§17.2).
+///
+/// Returns the full `ResolvedConfig` where each key carries:
+/// - `value`: the effective value
+/// - `source`: which layer won (`cli_flag`, `env_var`, `config_yml`, `default`)
+/// - `resolved_from`: human-readable attribution string
+async fn get_debug_state(
+    axum::extract::State(state): axum::extract::State<DaemonState>,
+) -> Json<serde_json::Value> {
+    let map = state.resolved_config.to_debug_map();
+    Json(serde_json::Value::Object(map.into_iter().map(|(k, v)| (k, v)).collect()))
+}
+
 /// Build the daemon router with all endpoints
 pub fn router() -> Router<DaemonState> {
     Router::new()
@@ -374,6 +394,7 @@ pub fn router() -> Router<DaemonState> {
         .route("/api/projects/:project/files", get(get_project_files))
         .route("/api/attachments/:attachment_type/:id/:filename", get(api_attachments::serve_attachment))
         .route("/ws", get(ws::ws_handler))
+        .route("/debug/state", get(get_debug_state))
         .merge(api_uploads::router())
         .merge(api_dictated_notes::router())
         .merge(api_transcription::router())
@@ -383,6 +404,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_draft_queue::router())
         .merge(api_preview::router())
         .merge(api_stitch_decompose::router())
+        .merge(api_stitch_read::router())
         .merge(api_agent::router())
         .merge(api_morning_brief::router())
         .merge(api_metrics::router())
@@ -516,6 +538,21 @@ async fn run_control_socket(
 /// This function blocks until the server is shut down.
 pub async fn serve(config: Config) -> anyhow::Result<()> {
     log_rotation::init_logging();
+
+    // Resolve full config with attribution (§17.2)
+    let cli_overrides = CliOverrides {
+        bind_addr: {
+            let default = SocketAddr::from(([127, 0, 0, 1], 3000));
+            if config.bind_addr != default {
+                Some(config.bind_addr)
+            } else {
+                None
+            }
+        },
+        allow_br_mismatch: if config.allow_br_mismatch { Some(true) } else { None },
+    };
+    let resolved_config = Arc::new(config_resolver::resolve(cli_overrides));
+    info!("Config precedence resolver initialized (§17.2)");
 
     // Install panic hook that records hoop_panics_total metric before aborting.
     let previous_hook = std::panic::take_hook();
@@ -947,6 +984,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         morning_brief_runner,
         brief_tx,
         draft_tx: broadcast::channel::<ws::DraftUpdateData>(64).0,
+        resolved_config,
     };
 
     // Forward project runtime status updates to shared store and broadcast
