@@ -1,10 +1,10 @@
 # Interop with NEEDLE
 
-How HOOP plugs into NEEDLE without duplicating state, breaking determinism, or requiring NEEDLE changes beyond three small hooks.
+How HOOP plugs into NEEDLE without duplicating state, breaking determinism, or requiring NEEDLE changes beyond four small hooks.
 
-## The three hooks NEEDLE needs
+## The four hooks NEEDLE needs
 
-HOOP is intentionally *additive* — NEEDLE runs standalone without HOOP, and HOOP doesn't replace any part of NEEDLE. The coupling is three small touchpoints:
+HOOP is intentionally *additive* — NEEDLE runs standalone without HOOP, and HOOP doesn't replace any part of NEEDLE. The coupling is four small touchpoints:
 
 ### Hook 1: Dispatch prompt prefix tag
 
@@ -55,6 +55,24 @@ Each worker appends a heartbeat line every 10s (configurable):
 **Why.** The `pid-is-alive` check works locally but not across machines. Heartbeats are the cross-machine liveness primitive.
 
 **NEEDLE change:** one background thread per worker. Trivial.
+
+### Hook 4: Stitch label inheritance
+
+When a NEEDLE worker creates follow-up beads (via `br create`), any `stitch:*` labels from the claimed bead must be copied to the new bead. Without this, retries and cascading sub-beads lose Stitch lineage.
+
+**HOOP side.** The REST API `POST /api/p/{project}/beads` supports a `parent_bead_id` field. When set, HOOP reads the parent bead's labels via `br get`, extracts all `stitch:*` labels, and appends them (deduplicated) to the new bead.
+
+**NEEDLE side.** The worker's `br create` wrapper copies stitch labels:
+
+```python
+parent_labels = current_bead.get("labels", [])
+stitch_labels = [l for l in parent_labels if l.startswith("stitch:")]
+# Append stitch_labels to br create --labels
+```
+
+**Why.** Stitches decompose work into bead graphs. Each bead carries a `stitch:<id>` label so HOOP can group them. When a worker creates follow-up beads, losing the label breaks Stitch lineage.
+
+**NEEDLE change:** one line in the `br create` wrapper.
 
 That's it. No API surface, no RPC, no shared library. HOOP is a reader + a process manager.
 

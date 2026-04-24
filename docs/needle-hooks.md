@@ -90,6 +90,8 @@ Stitch lineage — the new bead becomes orphaned from its Stitch context.
 
 ### Test Coverage
 
+Both `hoop-daemon` and `hoop-mcp` carry identical Hook 4 tests:
+
 - `test_extract_stitch_labels_single` — one stitch label among others
 - `test_extract_stitch_labels_multiple` — multiple stitch labels all extracted
 - `test_extract_stitch_labels_none` — non-stitch labels produce empty result
@@ -97,6 +99,9 @@ Stitch lineage — the new bead becomes orphaned from its Stitch context.
 - `test_extract_stitch_labels_no_false_positives` — similar prefixes not matched
 - `test_stitch_label_inheritance_single_label` — single stitch label inherited
 - `test_stitch_label_inheritance_multiple_labels` — all stitch labels inherited
+
+Daemon-only tests (REST API integration):
+
 - `test_stitch_label_inheritance_no_duplicates` — duplicate labels not added twice
 - `test_stitch_label_inheritance_no_stitch_labels` — non-stitch parent leaves labels unchanged
 

@@ -175,6 +175,15 @@ pub fn invoke_br_write(verb: WriteVerb, args: &[&str]) -> std::process::Command 
     cmd
 }
 
+/// Extract `stitch:*` labels from a label list.
+///
+/// Used to propagate stitch lineage from a claimed bead to follow-up beads
+/// created by the worker (Hook 4 — stitch label inheritance).
+#[allow(dead_code)]
+pub fn extract_stitch_labels(labels: &[String]) -> Vec<String> {
+    labels.iter().filter(|l| l.starts_with("stitch:")).cloned().collect()
+}
+
 pub fn validate_write_invariant() {
     if ZERO_WRITE_ACTIVE {
         tracing::info!(
@@ -345,5 +354,87 @@ mod tests {
             cmd.arg(verb);
             validate_br_subprocess_args(&cmd);
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Stitch label extraction tests (Hook 4)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_extract_stitch_labels_single() {
+        let labels = vec!["stitch:abc123".to_string(), "urgent".to_string()];
+        let stitch_labels = extract_stitch_labels(&labels);
+        assert_eq!(stitch_labels, vec!["stitch:abc123"]);
+    }
+
+    #[test]
+    fn test_extract_stitch_labels_multiple() {
+        let labels = vec![
+            "stitch:abc123".to_string(),
+            "urgent".to_string(),
+            "stitch:def456".to_string(),
+        ];
+        let stitch_labels = extract_stitch_labels(&labels);
+        assert_eq!(stitch_labels, vec!["stitch:abc123", "stitch:def456"]);
+    }
+
+    #[test]
+    fn test_extract_stitch_labels_none() {
+        let labels = vec!["urgent".to_string(), "bug".to_string()];
+        let stitch_labels = extract_stitch_labels(&labels);
+        assert!(stitch_labels.is_empty());
+    }
+
+    #[test]
+    fn test_extract_stitch_labels_empty() {
+        let labels: Vec<String> = vec![];
+        let stitch_labels = extract_stitch_labels(&labels);
+        assert!(stitch_labels.is_empty());
+    }
+
+    #[test]
+    fn test_extract_stitch_labels_no_false_positives() {
+        let labels = vec![
+            "stitching".to_string(),
+            "nostitch:foo".to_string(),
+            "xstitch:bar".to_string(),
+        ];
+        let stitch_labels = extract_stitch_labels(&labels);
+        assert!(stitch_labels.is_empty());
+    }
+
+    #[test]
+    fn test_stitch_label_inheritance_single_label() {
+        let parent_labels = vec![
+            "stitch:abc123".to_string(),
+            "urgent".to_string(),
+        ];
+        let mut all_labels: Vec<String> = vec!["tests".to_string()];
+        let inherited = extract_stitch_labels(&parent_labels);
+        for label in &inherited {
+            if !all_labels.contains(label) {
+                all_labels.push(label.clone());
+            }
+        }
+        assert!(all_labels.contains(&"stitch:abc123".to_string()));
+        assert!(all_labels.contains(&"tests".to_string()));
+        assert!(!all_labels.contains(&"urgent".to_string()));
+    }
+
+    #[test]
+    fn test_stitch_label_inheritance_multiple_labels() {
+        let parent_labels = vec![
+            "stitch:abc123".to_string(),
+            "urgent".to_string(),
+            "stitch:def456".to_string(),
+        ];
+        let mut all_labels: Vec<String> = vec![];
+        let inherited = extract_stitch_labels(&parent_labels);
+        for label in &inherited {
+            if !all_labels.contains(label) {
+                all_labels.push(label.clone());
+            }
+        }
+        assert_eq!(all_labels, vec!["stitch:abc123", "stitch:def456"]);
     }
 }
