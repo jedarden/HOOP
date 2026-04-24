@@ -282,9 +282,7 @@ impl HeartbeatMonitor {
             // Update offset (line bytes + newline)
             offset += line.len() as u64 + 1;
 
-            if let Err(e) = self.parse_and_update(&line, line_number) {
-                warn!("Error parsing heartbeat line {}: {}", line_number, e);
-            }
+            self.parse_and_update(&line, line_number);
         }
 
         // Update position tracking after replay
@@ -393,11 +391,13 @@ impl HeartbeatMonitor {
             current_offset += line.len() as u64 + 1;
 
             // Parse the heartbeat
-            match Self::parse_heartbeat_line(&line) {
-                Ok(heartbeat) => heartbeats.push((heartbeat, line_number)),
-                Err(e) => {
-                    warn!("Error parsing heartbeat line {}: {}", line_number, e);
-                }
+            let source = crate::parse_jsonl_safe::LineSource {
+                tag: "heartbeats",
+                file_path: heartbeats_path.to_path_buf(),
+                line_number,
+            };
+            if let Some(heartbeat) = Self::parse_heartbeat_line(&line, &source) {
+                heartbeats.push((heartbeat, line_number));
             }
         }
 
@@ -407,8 +407,12 @@ impl HeartbeatMonitor {
         Ok(heartbeats)
     }
 
-    /// Parse a heartbeat line
-    fn parse_heartbeat_line(line: &str) -> Result<WorkerHeartbeat> {
+    /// Parse a heartbeat line using the shared safe parser.
+    ///
+    /// Returns `None` for empty/quarantined lines, `Some(hb)` on success.
+    /// Additional validation failures (bad timestamp, invalid worker name) also
+    /// quarantine the line.
+    fn parse_heartbeat_line(line: &str, source: &crate::parse_jsonl_safe::LineSource) -> Option<WorkerHeartbeat> {
         #[derive(Debug, Deserialize)]
         struct HeartbeatRaw {
             ts: String,
@@ -417,16 +421,28 @@ impl HeartbeatMonitor {
             state: WorkerState,
         }
 
-        let raw: HeartbeatRaw = serde_json::from_str(line)
-            .with_context(|| format!("Failed to parse heartbeat: {}", line.trim()))?;
+        let raw = match crate::parse_jsonl_safe::parse_line::<HeartbeatRaw>(line, source) {
+            crate::parse_jsonl_safe::ParseResult::Ok(raw) => raw,
+            crate::parse_jsonl_safe::ParseResult::Empty => return None,
+            crate::parse_jsonl_safe::ParseResult::Quarantined => return None,
+        };
 
-        let ts = raw.ts.parse::<DateTime<Utc>>()
-            .with_context(|| format!("Failed to parse timestamp: {}", raw.ts))?;
+        let ts = match raw.ts.parse::<DateTime<Utc>>() {
+            Ok(t) => t,
+            Err(e) => {
+                let reason = format!("Failed to parse timestamp: {}", e);
+                crate::parse_jsonl_safe::quarantine_raw(line, &reason, source);
+                return None;
+            }
+        };
 
-        crate::id_validators::validate_worker_name(&raw.worker)
-            .with_context(|| format!("Invalid worker name in heartbeat: {:?}", raw.worker))?;
+        if let Err(e) = crate::id_validators::validate_worker_name(&raw.worker) {
+            let reason = format!("Invalid worker name: {}", e);
+            crate::parse_jsonl_safe::quarantine_raw(line, &reason, source);
+            return None;
+        }
 
-        Ok(WorkerHeartbeat {
+        Some(WorkerHeartbeat {
             ts,
             worker: raw.worker,
             state: raw.state,
@@ -434,10 +450,15 @@ impl HeartbeatMonitor {
     }
 
     /// Parse a heartbeat line and update worker state
-    fn parse_and_update(&mut self, line: &str, _line_number: usize) -> Result<()> {
-        let heartbeat = Self::parse_heartbeat_line(line)?;
-        Self::update_worker_state(&heartbeat, &self.workers, &self.event_tx);
-        Ok(())
+    fn parse_and_update(&mut self, line: &str, line_number: usize) {
+        let source = crate::parse_jsonl_safe::LineSource {
+            tag: "heartbeats",
+            file_path: self.config.heartbeats_path.clone(),
+            line_number,
+        };
+        if let Some(heartbeat) = Self::parse_heartbeat_line(line, &source) {
+            Self::update_worker_state(&heartbeat, &self.workers, &self.event_tx);
+        }
     }
 
     /// Update worker state from a heartbeat
@@ -612,10 +633,18 @@ fn is_process_alive(pid: u32) -> bool {
 mod tests {
     use super::*;
 
+    fn test_source() -> crate::parse_jsonl_safe::LineSource {
+        crate::parse_jsonl_safe::LineSource {
+            tag: "heartbeats",
+            file_path: PathBuf::from("/tmp/test_heartbeats.jsonl"),
+            line_number: 1,
+        }
+    }
+
     #[test]
     fn test_parse_heartbeat_line_executing() {
         let json = r#"{"ts":"2026-04-21T18:42:10Z","worker":"alpha","state":"executing","bead":"bd-abc123","pid":12345,"adapter":"anthropic"}"#;
-        let heartbeat = HeartbeatMonitor::parse_heartbeat_line(json).unwrap();
+        let heartbeat = HeartbeatMonitor::parse_heartbeat_line(json, &test_source()).unwrap();
 
         assert_eq!(heartbeat.worker, "alpha");
         match heartbeat.state {
@@ -631,7 +660,7 @@ mod tests {
     #[test]
     fn test_parse_heartbeat_line_idle() {
         let json = r#"{"ts":"2026-04-21T18:42:10Z","worker":"alpha","state":"idle","last_strand":null}"#;
-        let heartbeat = HeartbeatMonitor::parse_heartbeat_line(json).unwrap();
+        let heartbeat = HeartbeatMonitor::parse_heartbeat_line(json, &test_source()).unwrap();
 
         assert_eq!(heartbeat.worker, "alpha");
         match heartbeat.state {
@@ -645,7 +674,7 @@ mod tests {
     #[test]
     fn test_parse_heartbeat_line_knot() {
         let json = r#"{"ts":"2026-04-21T18:42:10Z","worker":"alpha","state":"knot","reason":"out of capacity"}"#;
-        let heartbeat = HeartbeatMonitor::parse_heartbeat_line(json).unwrap();
+        let heartbeat = HeartbeatMonitor::parse_heartbeat_line(json, &test_source()).unwrap();
 
         assert_eq!(heartbeat.worker, "alpha");
         match heartbeat.state {
@@ -659,7 +688,7 @@ mod tests {
     #[test]
     fn test_parse_heartbeat_line_malformed() {
         let json = r#"{"ts":"2026-04-21T18:42:10Z","worker":"alpha","state":"invalid"}"#;
-        assert!(HeartbeatMonitor::parse_heartbeat_line(json).is_err());
+        assert!(HeartbeatMonitor::parse_heartbeat_line(json, &test_source()).is_none());
     }
 
     #[test]

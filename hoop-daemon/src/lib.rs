@@ -38,6 +38,7 @@ pub mod heartbeats;
 pub mod id_validators;
 pub mod log_rotation;
 pub mod metrics;
+pub mod parse_jsonl_safe;
 pub mod projects;
 pub mod sessions;
 pub mod shutdown;

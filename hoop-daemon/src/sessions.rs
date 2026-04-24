@@ -741,9 +741,16 @@ impl SessionTailer {
         let mut first_prompt_hash = String::new();
         let mut first_user_content: Option<String> = None;
 
+        let mut line_number: usize = 0;
         for line in reader.lines() {
             let line = line?;
-            if let Some(entry) = parser.parse_line(&line)? {
+            line_number += 1;
+            let source = crate::parse_jsonl_safe::LineSource {
+                tag: "sessions/claude",
+                file_path: path.to_path_buf(),
+                line_number,
+            };
+            if let Some(entry) = parser.parse_line(&line, &source)? {
                 match entry {
                     ClaudeEntry::Message(msg) => {
                         // Track usage
@@ -951,87 +958,93 @@ impl SessionTailer {
         let mut first_prompt_hash = String::new();
         let mut first_user_content: Option<String> = None;
 
+        let mut line_number: usize = 0;
         for line in reader.lines() {
             let line = line?;
-            if line.trim().is_empty() {
-                continue;
-            }
+            line_number += 1;
+            let source = crate::parse_jsonl_safe::LineSource {
+                tag: "sessions/codex",
+                file_path: path.to_path_buf(),
+                line_number,
+            };
+            let value = match crate::parse_jsonl_safe::parse_line::<serde_json::Value>(&line, &source) {
+                crate::parse_jsonl_safe::ParseResult::Ok(v) => v,
+                _ => continue,
+            };
 
-            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) {
-                let event_type = value.get("type").and_then(|v| v.as_str());
+            let event_type = value.get("type").and_then(|v| v.as_str());
 
-                match event_type {
-                    Some("message") | Some("text") => {
-                        let role = value.get("role")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("user")
-                            .to_string();
+            match event_type {
+                Some("message") | Some("text") => {
+                    let role = value.get("role")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("user")
+                        .to_string();
 
-                        let content = value.get("content").cloned()
-                            .unwrap_or(serde_json::Value::Null);
+                    let content = value.get("content").cloned()
+                        .unwrap_or(serde_json::Value::Null);
 
-                        let usage = value.get("token_count").and_then(|tc| {
-                            tc.as_u64().map(|tokens| ParsedSessionMessagesItemUsage {
-                                input_tokens: if role == "user" { tokens as i64 } else { 0 },
-                                output_tokens: if role == "assistant" { tokens as i64 } else { 0 },
-                                cache_read_tokens: 0,
-                                cache_write_tokens: 0,
-                            })
-                        });
+                    let usage = value.get("token_count").and_then(|tc| {
+                        tc.as_u64().map(|tokens| ParsedSessionMessagesItemUsage {
+                            input_tokens: if role == "user" { tokens as i64 } else { 0 },
+                            output_tokens: if role == "assistant" { tokens as i64 } else { 0 },
+                            cache_read_tokens: 0,
+                            cache_write_tokens: 0,
+                        })
+                    });
 
-                        if let Some(u) = &usage {
-                            total_usage.input_tokens += u.input_tokens;
-                            total_usage.output_tokens += u.output_tokens;
-                        }
-
-                        if role == "user" && first_prompt_hash.is_empty() {
-                            first_prompt_hash = Self::hash_content(&content);
-                            first_user_content = extract_text_content(&content);
-                        }
-
-                        let timestamp = value.get("timestamp")
-                            .and_then(|v| v.as_str())
-                            .and_then(|s| s.parse().ok());
-
-                        messages.push(ParsedSessionMessagesItem {
-                            role,
-                            content,
-                            usage,
-                            timestamp,
-                        });
+                    if let Some(u) = &usage {
+                        total_usage.input_tokens += u.input_tokens;
+                        total_usage.output_tokens += u.output_tokens;
                     }
-                    Some("session_start") | Some("metadata") => {
-                        session_id = value.get("session_id")
-                            .and_then(|v| v.as_str())
-                            .or_else(|| value.get("id").and_then(|v| v.as_str()))
-                            .unwrap_or(&uuid::Uuid::new_v4().to_string())
-                            .to_string();
 
-                        cwd = value.get("cwd")
-                            .and_then(|v| v.as_str())
-                            .or_else(|| value.get("working_directory").and_then(|v| v.as_str()))
-                            .unwrap_or(&cwd)
-                            .to_string();
+                    if role == "user" && first_prompt_hash.is_empty() {
+                        first_prompt_hash = Self::hash_content(&content);
+                        first_user_content = extract_text_content(&content);
+                    }
 
-                        title = value.get("title")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or(&title)
-                            .to_string();
+                    let timestamp = value.get("timestamp")
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| s.parse().ok());
 
-                        start_time = value.get("start_time")
-                            .or_else(|| value.get("created_at"))
-                            .and_then(|v| v.as_str())
-                            .and_then(|s| s.parse().ok());
-                    }
-                    Some("session_end") | Some("completed") => {
-                        end_time = value.get("end_time")
-                            .or_else(|| value.get("completed_at"))
-                            .and_then(|v| v.as_str())
-                            .and_then(|s| s.parse().ok());
-                    }
-                    _ => {
-                        debug!("Unknown Codex event type: {:?}", event_type);
-                    }
+                    messages.push(ParsedSessionMessagesItem {
+                        role,
+                        content,
+                        usage,
+                        timestamp,
+                    });
+                }
+                Some("session_start") | Some("metadata") => {
+                    session_id = value.get("session_id")
+                        .and_then(|v| v.as_str())
+                        .or_else(|| value.get("id").and_then(|v| v.as_str()))
+                        .unwrap_or(&uuid::Uuid::new_v4().to_string())
+                        .to_string();
+
+                    cwd = value.get("cwd")
+                        .and_then(|v| v.as_str())
+                        .or_else(|| value.get("working_directory").and_then(|v| v.as_str()))
+                        .unwrap_or(&cwd)
+                        .to_string();
+
+                    title = value.get("title")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(&title)
+                        .to_string();
+
+                    start_time = value.get("start_time")
+                        .or_else(|| value.get("created_at"))
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| s.parse().ok());
+                }
+                Some("session_end") | Some("completed") => {
+                    end_time = value.get("end_time")
+                        .or_else(|| value.get("completed_at"))
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| s.parse().ok());
+                }
+                _ => {
+                    debug!("Unknown Codex event type: {:?}", event_type);
                 }
             }
         }
@@ -1109,108 +1122,114 @@ impl SessionTailer {
         let mut first_prompt_hash = String::new();
         let mut first_user_content: Option<String> = None;
 
+        let mut line_number: usize = 0;
         for line in reader.lines() {
             let line = line?;
-            if line.trim().is_empty() {
-                continue;
-            }
+            line_number += 1;
+            let source = crate::parse_jsonl_safe::LineSource {
+                tag: "sessions/opencode",
+                file_path: path.to_path_buf(),
+                line_number,
+            };
+            let value = match crate::parse_jsonl_safe::parse_line::<serde_json::Value>(&line, &source) {
+                crate::parse_jsonl_safe::ParseResult::Ok(v) => v,
+                _ => continue,
+            };
 
-            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) {
-                let event_type = value.get("type").and_then(|v| v.as_str());
+            let event_type = value.get("type").and_then(|v| v.as_str());
 
-                match event_type {
-                    Some("message") => {
-                        let role = value.get("role")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("user")
-                            .to_string();
+            match event_type {
+                Some("message") => {
+                    let role = value.get("role")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("user")
+                        .to_string();
 
-                        let content = value.get("content").cloned()
-                            .unwrap_or(serde_json::Value::Null);
+                    let content = value.get("content").cloned()
+                        .unwrap_or(serde_json::Value::Null);
 
-                        let usage = if let Some(tokens_obj) = value.get("tokens") {
-                            let input = tokens_obj.get("input")
-                                .and_then(|v| v.as_u64())
-                                .unwrap_or(0) as i64;
-                            let output = tokens_obj.get("output")
-                                .and_then(|v| v.as_u64())
-                                .unwrap_or(0) as i64;
-                            let cache_read = tokens_obj.get("cache_read")
-                                .and_then(|v| v.as_u64())
-                                .unwrap_or(0) as i64;
-                            let cache_write = tokens_obj.get("cache_write")
-                                .and_then(|v| v.as_u64())
-                                .unwrap_or(0) as i64;
+                    let usage = if let Some(tokens_obj) = value.get("tokens") {
+                        let input = tokens_obj.get("input")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0) as i64;
+                        let output = tokens_obj.get("output")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0) as i64;
+                        let cache_read = tokens_obj.get("cache_read")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0) as i64;
+                        let cache_write = tokens_obj.get("cache_write")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0) as i64;
 
-                            Some(ParsedSessionMessagesItemUsage {
-                                input_tokens: input,
-                                output_tokens: output,
-                                cache_read_tokens: cache_read,
-                                cache_write_tokens: cache_write,
-                            })
-                        } else {
-                            value.get("token_count").and_then(|v| v.as_u64()).map(|token_count| ParsedSessionMessagesItemUsage {
-                                input_tokens: if role == "user" { token_count as i64 } else { 0 },
-                                output_tokens: if role == "assistant" { token_count as i64 } else { 0 },
-                                cache_read_tokens: 0,
-                                cache_write_tokens: 0,
-                            })
-                        };
+                        Some(ParsedSessionMessagesItemUsage {
+                            input_tokens: input,
+                            output_tokens: output,
+                            cache_read_tokens: cache_read,
+                            cache_write_tokens: cache_write,
+                        })
+                    } else {
+                        value.get("token_count").and_then(|v| v.as_u64()).map(|token_count| ParsedSessionMessagesItemUsage {
+                            input_tokens: if role == "user" { token_count as i64 } else { 0 },
+                            output_tokens: if role == "assistant" { token_count as i64 } else { 0 },
+                            cache_read_tokens: 0,
+                            cache_write_tokens: 0,
+                        })
+                    };
 
-                        if let Some(u) = &usage {
-                            total_usage.input_tokens += u.input_tokens;
-                            total_usage.output_tokens += u.output_tokens;
-                            total_usage.cache_read_tokens += u.cache_read_tokens;
-                            total_usage.cache_write_tokens += u.cache_write_tokens;
-                        }
-
-                        if role == "user" && first_prompt_hash.is_empty() {
-                            first_prompt_hash = Self::hash_content(&content);
-                            first_user_content = extract_text_content(&content);
-                        }
-
-                        let timestamp = value.get("timestamp")
-                            .and_then(|v| v.as_str())
-                            .and_then(|s| s.parse().ok());
-
-                        messages.push(ParsedSessionMessagesItem {
-                            role,
-                            content,
-                            usage,
-                            timestamp,
-                        });
+                    if let Some(u) = &usage {
+                        total_usage.input_tokens += u.input_tokens;
+                        total_usage.output_tokens += u.output_tokens;
+                        total_usage.cache_read_tokens += u.cache_read_tokens;
+                        total_usage.cache_write_tokens += u.cache_write_tokens;
                     }
-                    Some("metadata") | Some("session") => {
-                        session_id = value.get("session_id")
-                            .or_else(|| value.get("id"))
-                            .and_then(|v| v.as_str())
-                            .unwrap_or(&uuid::Uuid::new_v4().to_string())
-                            .to_string();
 
-                        cwd = value.get("cwd")
-                            .or_else(|| value.get("working_directory"))
-                            .and_then(|v| v.as_str())
-                            .unwrap_or(&cwd)
-                            .to_string();
-
-                        title = value.get("title")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or(&title)
-                            .to_string();
-
-                        start_time = value.get("start_time")
-                            .or_else(|| value.get("created_at"))
-                            .and_then(|v| v.as_str())
-                            .and_then(|s| s.parse().ok());
+                    if role == "user" && first_prompt_hash.is_empty() {
+                        first_prompt_hash = Self::hash_content(&content);
+                        first_user_content = extract_text_content(&content);
                     }
-                    Some("end") | Some("complete") => {
-                        end_time = value.get("end_time")
-                            .or_else(|| value.get("completed_at"))
-                            .and_then(|v| v.as_str())
-                            .and_then(|s| s.parse().ok());
-                    }
-                    _ => {}
+
+                    let timestamp = value.get("timestamp")
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| s.parse().ok());
+
+                    messages.push(ParsedSessionMessagesItem {
+                        role,
+                        content,
+                        usage,
+                        timestamp,
+                    });
                 }
+                Some("metadata") | Some("session") => {
+                    session_id = value.get("session_id")
+                        .or_else(|| value.get("id"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(&uuid::Uuid::new_v4().to_string())
+                        .to_string();
+
+                    cwd = value.get("cwd")
+                        .or_else(|| value.get("working_directory"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(&cwd)
+                        .to_string();
+
+                    title = value.get("title")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(&title)
+                        .to_string();
+
+                    start_time = value.get("start_time")
+                        .or_else(|| value.get("created_at"))
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| s.parse().ok());
+                }
+                Some("end") | Some("complete") => {
+                    end_time = value.get("end_time")
+                        .or_else(|| value.get("completed_at"))
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| s.parse().ok());
+                }
+                _ => {}
             }
         }
 
@@ -1287,107 +1306,113 @@ impl SessionTailer {
         let mut first_prompt_hash = String::new();
         let mut first_user_content: Option<String> = None;
 
+        let mut line_number: usize = 0;
         for line in reader.lines() {
             let line = line?;
-            if line.trim().is_empty() {
-                continue;
-            }
+            line_number += 1;
+            let source = crate::parse_jsonl_safe::LineSource {
+                tag: "sessions/gemini",
+                file_path: path.to_path_buf(),
+                line_number,
+            };
+            let value = match crate::parse_jsonl_safe::parse_line::<serde_json::Value>(&line, &source) {
+                crate::parse_jsonl_safe::ParseResult::Ok(v) => v,
+                _ => continue,
+            };
 
-            if let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) {
-                let event_type = value.get("type").and_then(|v| v.as_str());
+            let event_type = value.get("type").and_then(|v| v.as_str());
 
-                match event_type {
-                    Some("message") | Some("turn") => {
-                        let role = value.get("role")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("user")
-                            .to_string();
+            match event_type {
+                Some("message") | Some("turn") => {
+                    let role = value.get("role")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("user")
+                        .to_string();
 
-                        let content = value.get("content").cloned()
-                            .unwrap_or(serde_json::Value::Null);
+                    let content = value.get("content").cloned()
+                        .unwrap_or(serde_json::Value::Null);
 
-                        let usage = if let Some(usage_obj) = value.get("usage") {
-                            let input = usage_obj.get("promptTokenCount")
-                                .or_else(|| usage_obj.get("input_tokens"))
-                                .and_then(|v| v.as_u64())
-                                .unwrap_or(0) as i64;
-                            let output = usage_obj.get("candidatesTokenCount")
-                                .or_else(|| usage_obj.get("output_tokens"))
-                                .and_then(|v| v.as_u64())
-                                .unwrap_or(0) as i64;
-                            let cache_read = usage_obj.get("cachedContentTokenCount")
-                                .or_else(|| usage_obj.get("cache_read_tokens"))
-                                .and_then(|v| v.as_u64())
-                                .unwrap_or(0) as i64;
-                            let cache_write = usage_obj.get("cache_write_tokens")
-                                .and_then(|v| v.as_u64())
-                                .unwrap_or(0) as i64;
+                    let usage = if let Some(usage_obj) = value.get("usage") {
+                        let input = usage_obj.get("promptTokenCount")
+                            .or_else(|| usage_obj.get("input_tokens"))
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0) as i64;
+                        let output = usage_obj.get("candidatesTokenCount")
+                            .or_else(|| usage_obj.get("output_tokens"))
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0) as i64;
+                        let cache_read = usage_obj.get("cachedContentTokenCount")
+                            .or_else(|| usage_obj.get("cache_read_tokens"))
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0) as i64;
+                        let cache_write = usage_obj.get("cache_write_tokens")
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0) as i64;
 
-                            Some(ParsedSessionMessagesItemUsage {
-                                input_tokens: input,
-                                output_tokens: output,
-                                cache_read_tokens: cache_read,
-                                cache_write_tokens: cache_write,
-                            })
-                        } else {
-                            None
-                        };
+                        Some(ParsedSessionMessagesItemUsage {
+                            input_tokens: input,
+                            output_tokens: output,
+                            cache_read_tokens: cache_read,
+                            cache_write_tokens: cache_write,
+                        })
+                    } else {
+                        None
+                    };
 
-                        if let Some(u) = &usage {
-                            total_usage.input_tokens += u.input_tokens;
-                            total_usage.output_tokens += u.output_tokens;
-                            total_usage.cache_read_tokens += u.cache_read_tokens;
-                            total_usage.cache_write_tokens += u.cache_write_tokens;
-                        }
-
-                        if role == "user" && first_prompt_hash.is_empty() {
-                            first_prompt_hash = Self::hash_content(&content);
-                            first_user_content = extract_text_content(&content);
-                        }
-
-                        let timestamp = value.get("timestamp")
-                            .or_else(|| value.get("time"))
-                            .and_then(|v| v.as_str())
-                            .and_then(|s| s.parse().ok());
-
-                        messages.push(ParsedSessionMessagesItem {
-                            role,
-                            content,
-                            usage,
-                            timestamp,
-                        });
+                    if let Some(u) = &usage {
+                        total_usage.input_tokens += u.input_tokens;
+                        total_usage.output_tokens += u.output_tokens;
+                        total_usage.cache_read_tokens += u.cache_read_tokens;
+                        total_usage.cache_write_tokens += u.cache_write_tokens;
                     }
-                    Some("metadata") | Some("session_info") => {
-                        session_id = value.get("session_id")
-                            .or_else(|| value.get("id"))
-                            .and_then(|v| v.as_str())
-                            .unwrap_or(&uuid::Uuid::new_v4().to_string())
-                            .to_string();
 
-                        cwd = value.get("cwd")
-                            .or_else(|| value.get("working_directory"))
-                            .and_then(|v| v.as_str())
-                            .unwrap_or(&cwd)
-                            .to_string();
-
-                        title = value.get("title")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or(&title)
-                            .to_string();
-
-                        start_time = value.get("start_time")
-                            .or_else(|| value.get("created_at"))
-                            .and_then(|v| v.as_str())
-                            .and_then(|s| s.parse().ok());
+                    if role == "user" && first_prompt_hash.is_empty() {
+                        first_prompt_hash = Self::hash_content(&content);
+                        first_user_content = extract_text_content(&content);
                     }
-                    Some("end") => {
-                        end_time = value.get("end_time")
-                            .or_else(|| value.get("completed_at"))
-                            .and_then(|v| v.as_str())
-                            .and_then(|s| s.parse().ok());
-                    }
-                    _ => {}
+
+                    let timestamp = value.get("timestamp")
+                        .or_else(|| value.get("time"))
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| s.parse().ok());
+
+                    messages.push(ParsedSessionMessagesItem {
+                        role,
+                        content,
+                        usage,
+                        timestamp,
+                    });
                 }
+                Some("metadata") | Some("session_info") => {
+                    session_id = value.get("session_id")
+                        .or_else(|| value.get("id"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(&uuid::Uuid::new_v4().to_string())
+                        .to_string();
+
+                    cwd = value.get("cwd")
+                        .or_else(|| value.get("working_directory"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(&cwd)
+                        .to_string();
+
+                    title = value.get("title")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(&title)
+                        .to_string();
+
+                    start_time = value.get("start_time")
+                        .or_else(|| value.get("created_at"))
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| s.parse().ok());
+                }
+                Some("end") => {
+                    end_time = value.get("end_time")
+                        .or_else(|| value.get("completed_at"))
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| s.parse().ok());
+                }
+                _ => {}
             }
         }
 
@@ -1464,43 +1489,52 @@ impl SessionTailer {
         let mut first_prompt_hash = String::new();
         let mut first_user_content: Option<String> = None;
 
+        let mut line_number: usize = 0;
         for line in reader.lines() {
             let line = line?;
-            if let Ok(entry) = serde_json::from_str::<ClaudeEntry>(&line) {
-                match entry {
-                    ClaudeEntry::Message(msg) => {
-                        if let Some(usage) = &msg.usage {
-                            let usage: ParsedSessionMessagesItemUsage = usage.clone().into();
-                            total_usage.input_tokens += usage.input_tokens;
-                            total_usage.output_tokens += usage.output_tokens;
-                            total_usage.cache_read_tokens += usage.cache_read_tokens;
-                            total_usage.cache_write_tokens += usage.cache_write_tokens;
-                        }
-
-                        if msg.role == "user" && first_prompt_hash.is_empty() {
-                            if let Some(content) = &msg.content {
-                                first_prompt_hash = Self::hash_content(content);
-                                first_user_content = extract_text_content(content);
-                            }
-                        }
-
-                        let timestamp = msg.timestamp.and_then(|s| s.parse().ok());
-                        messages.push(ParsedSessionMessagesItem {
-                            role: msg.role,
-                            content: msg.content.unwrap_or(serde_json::Value::Null),
-                            usage: msg.usage.map(|u| u.into()),
-                            timestamp,
-                        });
+            line_number += 1;
+            let source = crate::parse_jsonl_safe::LineSource {
+                tag: "sessions/aider",
+                file_path: path.to_path_buf(),
+                line_number,
+            };
+            let entry = match crate::parse_jsonl_safe::parse_line::<ClaudeEntry>(&line, &source) {
+                crate::parse_jsonl_safe::ParseResult::Ok(v) => v,
+                _ => continue,
+            };
+            match entry {
+                ClaudeEntry::Message(msg) => {
+                    if let Some(usage) = &msg.usage {
+                        let usage: ParsedSessionMessagesItemUsage = usage.clone().into();
+                        total_usage.input_tokens += usage.input_tokens;
+                        total_usage.output_tokens += usage.output_tokens;
+                        total_usage.cache_read_tokens += usage.cache_read_tokens;
+                        total_usage.cache_write_tokens += usage.cache_write_tokens;
                     }
-                    ClaudeEntry::Metadata(meta) => {
-                        session_id = meta.session_id;
-                        cwd = meta.cwd.unwrap_or_default();
-                        title = meta.title.unwrap_or_default();
-                        start_time = meta.start_time.and_then(|s| s.parse().ok());
-                        end_time = meta.end_time.and_then(|s| s.parse().ok());
+
+                    if msg.role == "user" && first_prompt_hash.is_empty() {
+                        if let Some(content) = &msg.content {
+                            first_prompt_hash = Self::hash_content(content);
+                            first_user_content = extract_text_content(content);
+                        }
                     }
-                    ClaudeEntry::Unknown => {}
+
+                    let timestamp = msg.timestamp.and_then(|s| s.parse().ok());
+                    messages.push(ParsedSessionMessagesItem {
+                        role: msg.role,
+                        content: msg.content.unwrap_or(serde_json::Value::Null),
+                        usage: msg.usage.map(|u| u.into()),
+                        timestamp,
+                    });
                 }
+                ClaudeEntry::Metadata(meta) => {
+                    session_id = meta.session_id;
+                    cwd = meta.cwd.unwrap_or_default();
+                    title = meta.title.unwrap_or_default();
+                    start_time = meta.start_time.and_then(|s| s.parse().ok());
+                    end_time = meta.end_time.and_then(|s| s.parse().ok());
+                }
+                ClaudeEntry::Unknown => {}
             }
         }
 
@@ -1604,7 +1638,7 @@ impl NdjsonParser {
         }
     }
 
-    fn parse_line(&mut self, line: &str) -> Result<Option<ClaudeEntry>> {
+    fn parse_line(&mut self, line: &str, source: &crate::parse_jsonl_safe::LineSource) -> Result<Option<ClaudeEntry>> {
         let mut input = line;
 
         if !self.partial.is_empty() {
@@ -1617,7 +1651,7 @@ impl NdjsonParser {
                 self.partial.clear();
                 Ok(Some(entry))
             }
-            Err(_) => {
+            Err(e) => {
                 // Treat as partial if short AND doesn't end with closing bracket
                 if input.len() < 256 && !input.ends_with('}') && !input.ends_with(']') {
                     if self.partial.is_empty() {
@@ -1625,6 +1659,7 @@ impl NdjsonParser {
                     }
                     Ok(None)
                 } else {
+                    crate::parse_jsonl_safe::quarantine_raw(input, &e.to_string(), source);
                     self.partial.clear();
                     Ok(Some(ClaudeEntry::Unknown))
                 }

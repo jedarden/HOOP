@@ -280,6 +280,11 @@ impl EventTailer {
         let mut parser = NdjsonParser::new();
         let mut line_number = 0;
         let mut offset = 0u64;
+        let source = crate::parse_jsonl_safe::LineSource {
+            tag: "events",
+            file_path: events_path.clone(),
+            line_number: 0,
+        };
 
         for line in reader.lines() {
             line_number += 1;
@@ -287,7 +292,11 @@ impl EventTailer {
             // Update offset (line bytes + newline)
             offset += line.len() as u64 + 1;
 
-            if let Some(parsed) = parser.parse_line(&line, line_number)? {
+            let line_source = crate::parse_jsonl_safe::LineSource {
+                line_number,
+                ..source.clone()
+            };
+            if let Some(parsed) = parser.parse_line(&line, line_number, &line_source)? {
                 // Forward bead event if configured
                 if let Some(ref tx) = self.config.bead_event_tx {
                     NdjsonParser::forward_bead_event(&parsed.event, tx);
@@ -397,6 +406,11 @@ impl EventTailer {
         let mut parser = NdjsonParser::new();
         let mut line_number = 0;
         let mut current_offset = offset;
+        let source = crate::parse_jsonl_safe::LineSource {
+            tag: "events",
+            file_path: events_path.to_path_buf(),
+            line_number: 0,
+        };
 
         for line in reader.lines() {
             line_number += 1;
@@ -411,7 +425,11 @@ impl EventTailer {
             // Update offset (line bytes + newline)
             current_offset += line.len() as u64 + 1;
 
-            if let Some(parsed) = parser.parse_line(&line, line_number)? {
+            let line_source = crate::parse_jsonl_safe::LineSource {
+                line_number,
+                ..source.clone()
+            };
+            if let Some(parsed) = parser.parse_line(&line, line_number, &line_source)? {
                 // Forward bead event if configured
                 if let Some(ref tx) = bead_event_tx {
                     NdjsonParser::forward_bead_event(&parsed.event, tx);
@@ -458,7 +476,7 @@ impl NdjsonParser {
     ///
     /// Returns None if the line was incomplete (carried over).
     /// Returns Some(parsed) if a complete event was parsed.
-    fn parse_line(&mut self, line: &str, line_number: usize) -> Result<Option<ParsedEvent>> {
+    fn parse_line(&mut self, line: &str, line_number: usize, source: &crate::parse_jsonl_safe::LineSource) -> Result<Option<ParsedEvent>> {
         let mut input = line;
 
         // If we have a partial line from before, prepend it
@@ -496,8 +514,9 @@ impl NdjsonParser {
                     }
                     Ok(None)
                 } else {
-                    // This is likely a malformed line - log and skip
+                    // This is likely a malformed line - quarantine and skip
                     let raw = input.to_string();
+                    crate::parse_jsonl_safe::quarantine_raw(&raw, &e.to_string(), source);
                     warn!(
                         "Malformed event on line {}: {}. Line content: {}",
                         line_number,
@@ -551,12 +570,20 @@ impl Default for NdjsonParser {
 mod tests {
     use super::*;
 
+    fn test_source() -> crate::parse_jsonl_safe::LineSource {
+        crate::parse_jsonl_safe::LineSource {
+            tag: "events",
+            file_path: PathBuf::from("/tmp/test_events.jsonl"),
+            line_number: 1,
+        }
+    }
+
     #[test]
     fn test_ndjson_parser_complete_line() {
         let mut parser = NdjsonParser::new();
 
         let json = r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-abc123"}"#;
-        let result = parser.parse_line(json, 1).unwrap().unwrap();
+        let result = parser.parse_line(json, 1, &test_source()).unwrap().unwrap();
 
         match result.event {
             NeedleEvent::Claim { worker, bead, .. } => {
@@ -573,11 +600,11 @@ mod tests {
 
         // First part is incomplete
         let partial = r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha""#;
-        assert!(parser.parse_line(partial, 1).unwrap().is_none());
+        assert!(parser.parse_line(partial, 1, &test_source()).unwrap().is_none());
 
         // Second part completes it
         let completion = r#","bead":"bd-abc123"}"#;
-        let result = parser.parse_line(completion, 2).unwrap().unwrap();
+        let result = parser.parse_line(completion, 2, &test_source()).unwrap().unwrap();
 
         match result.event {
             NeedleEvent::Claim { worker, bead, .. } => {
@@ -598,7 +625,7 @@ mod tests {
         // This is clearly malformed (missing closing brace and long enough to not be partial)
         // Using a long string to exceed the 256-char threshold for partial line detection
         let malformed = r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-abc123","very_long_field_that_makes_this_line_exceed_256_characters_threshold_so_it_will_be_treated_as_malformed_instead_of_partial":"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident."#;
-        let result = parser.parse_line(malformed, 1).unwrap().unwrap();
+        let result = parser.parse_line(malformed, 1, &test_source()).unwrap().unwrap();
 
         // Should return Unknown event
         assert!(matches!(result.event, NeedleEvent::Unknown));

@@ -254,6 +254,14 @@ async fn append_scrape_time_metrics(out: &mut String, state: &DaemonState) {
         "Total agent cost for the current UTC day across all projects, in USD.",
         cost_today,
     );
+
+    // ── §L3 JSONL quarantine: today's count ────────────────────────────────
+    push_gauge_u64(
+        out,
+        "hoop_quarantine_today_total",
+        "Number of JSONL lines quarantined in the current UTC day.",
+        crate::parse_jsonl_safe::quarantine_today_count(),
+    );
 }
 
 // ---------------------------------------------------------------------------

@@ -113,6 +113,7 @@ async fn check_dedup(
     State(state): State<crate::DaemonState>,
     Json(req): Json<DedupCheckRequest>,
 ) -> Result<Json<DedupCheckResponse>, (StatusCode, String)> {
+    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
     let _ = resolve_project_path(&project, &state)?;
 
     let title = req.title.trim().to_string();
@@ -156,6 +157,7 @@ async fn dismiss_dedup(
     Path(project): Path<String>,
     State(state): State<crate::DaemonState>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
     let _ = resolve_project_path(&project, &state)?;
     state.vector_index.read().unwrap().report_false_positive();
     Ok(Json(serde_json::json!({"status": "ok"})))
@@ -270,6 +272,7 @@ async fn list_open_beads(
     Path(project): Path<String>,
     State(state): State<crate::DaemonState>,
 ) -> Result<Json<Vec<BeadSummary>>, (StatusCode, String)> {
+    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
     let project_path = resolve_project_path(&project, &state)?;
 
     let result = tokio::task::spawn_blocking(move || {
@@ -284,18 +287,21 @@ async fn list_open_beads(
         let mut seen_ids: std::collections::HashMap<String, crate::Bead> =
             std::collections::HashMap::new();
 
-        for line in content.lines() {
-            let line = line.trim();
+        for (idx, raw_line) in content.lines().enumerate() {
+            let line = raw_line.trim();
             if line.is_empty() {
                 continue;
             }
-            match serde_json::from_str::<crate::Bead>(line) {
-                Ok(bead) => {
+            let source = crate::parse_jsonl_safe::LineSource {
+                tag: "beads",
+                file_path: beads_path.clone(),
+                line_number: idx + 1,
+            };
+            match crate::parse_jsonl_safe::parse_line::<crate::Bead>(line, &source) {
+                crate::parse_jsonl_safe::ParseResult::Ok(bead) => {
                     seen_ids.insert(bead.id.clone(), bead);
                 }
-                Err(e) => {
-                    warn!("Failed to parse bead line: {}", e);
-                }
+                _ => continue,
             }
         }
 
@@ -344,6 +350,9 @@ async fn create_bead(
 
     // 1. Validate draft against schema
     validate_draft(&req)?;
+
+    // 1a. Validate project name
+    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
 
     // 1b. Validate IDs in request body
     if let Some(ref sid) = req.stitch_id {

@@ -562,21 +562,25 @@ impl CapacityMeter {
         let reader = BufReader::new(file);
 
         let mut seen_message_ids: HashMap<String, bool> = HashMap::new();
+        let mut line_number: usize = 0;
 
         for line in reader.lines() {
             let line = line?;
-            let line = line.trim();
-            if line.is_empty() {
-                continue;
-            }
+            line_number += 1;
 
             if !line.contains("\"type\":\"assistant\"") {
                 continue;
             }
 
-            let entry: serde_json::Value = match serde_json::from_str(line) {
-                Ok(v) => v,
-                Err(_) => continue,
+            let source = crate::parse_jsonl_safe::LineSource {
+                tag: "capacity",
+                file_path: path.to_path_buf(),
+                line_number,
+            };
+
+            let entry: serde_json::Value = match crate::parse_jsonl_safe::parse_line(line.trim(), &source) {
+                crate::parse_jsonl_safe::ParseResult::Ok(v) => v,
+                _ => continue,
             };
 
             if entry.get("type").and_then(|v| v.as_str()) != Some("assistant") {

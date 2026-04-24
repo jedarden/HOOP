@@ -448,6 +448,11 @@ pub struct Metrics {
     pub hoop_capacity_meter_exhaustion_warnings_total: LabeledCounter,
     /// Number of Stitches created in the current UTC day.
     pub hoop_stitches_created_per_day: Gauge,
+
+    // ── §L3 JSONL Quarantine ──────────────────────────────────────────────────
+
+    /// JSONL lines quarantined due to parse failures, labelled by source tag.
+    pub hoop_jsonl_quarantined_lines_total: LabeledCounter,
 }
 
 impl Metrics {
@@ -498,6 +503,8 @@ impl Metrics {
             hoop_already_started_dedup_hits_total: Counter::new(),
             hoop_capacity_meter_exhaustion_warnings_total: LabeledCounter::new(&["account"]),
             hoop_stitches_created_per_day: Gauge::new(),
+
+            hoop_jsonl_quarantined_lines_total: LabeledCounter::new(&["source"]),
         }
     }
 
@@ -774,6 +781,15 @@ impl Metrics {
             "hoop_stitches_created_per_day",
             "Number of Stitches created in the current UTC day.",
             self.hoop_stitches_created_per_day.get(),
+        );
+
+        // ── §L3 JSONL Quarantine ─────────────────────────────────────────────
+        write_labeled_counter(
+            &mut out,
+            "hoop_jsonl_quarantined_lines_total",
+            "JSONL lines quarantined due to parse failures, labelled by source tag.",
+            self.hoop_jsonl_quarantined_lines_total.label_names,
+            &self.hoop_jsonl_quarantined_lines_total.snapshot(),
         );
 
         out

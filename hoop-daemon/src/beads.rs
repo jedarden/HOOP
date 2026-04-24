@@ -164,7 +164,7 @@ impl BeadReader {
             .context("Failed to get beads file metadata")?;
 
         let reader = BufReader::new(file);
-        let beads = Self::parse_all(reader)?;
+        let beads = Self::parse_all(reader, &issues_path)?;
 
         let _ = self.event_tx.send(BeadEvent::BeadsUpdated { beads });
 
@@ -240,7 +240,7 @@ impl BeadReader {
             .with_context(|| format!("Failed to seek to offset {} in {}", offset, issues_path.display()))?;
 
         let reader = BufReader::new(file);
-        let beads = Self::parse_all(reader)?;
+        let beads = Self::parse_all(reader, &issues_path)?;
 
         if !beads.is_empty() {
             let _ = event_tx.send(BeadEvent::BeadsUpdated { beads });
@@ -251,19 +251,26 @@ impl BeadReader {
         Ok(())
     }
 
-    fn parse_all<R: BufRead>(reader: R) -> Result<Vec<Bead>> {
+    fn parse_all<R: BufRead>(reader: R, file_path: &Path) -> Result<Vec<Bead>> {
         let mut beads = Vec::new();
 
-        for line in reader.lines() {
+        for (idx, line) in reader.lines().enumerate() {
             let line = line.context("Failed to read line from beads file")?;
-            if line.trim().is_empty() {
-                continue;
-            }
+            let source = crate::parse_jsonl_safe::LineSource {
+                tag: "beads",
+                file_path: file_path.to_path_buf(),
+                line_number: idx + 1,
+            };
 
-            match serde_json::from_str::<Bead>(&line) {
-                Ok(bead) => beads.push(bead),
-                Err(e) => {
-                    warn!("Failed to parse bead: {}. Line: {}", e, line.chars().take(100).collect::<String>());
+            match crate::parse_jsonl_safe::parse_line::<Bead>(&line, &source) {
+                crate::parse_jsonl_safe::ParseResult::Ok(bead) => beads.push(bead),
+                crate::parse_jsonl_safe::ParseResult::Empty => {}
+                crate::parse_jsonl_safe::ParseResult::Quarantined => {
+                    warn!(
+                        "Quarantined malformed bead line {} in {}",
+                        idx + 1,
+                        file_path.display()
+                    );
                 }
             }
         }
