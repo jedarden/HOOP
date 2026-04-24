@@ -1,0 +1,18 @@
+error[E0432]: unresolved import `hoop_daemon::br_verbs::invoke_br_write`
+ --> tests/ui/invoke_br_write_forbidden.rs:4:29
+  |
+4 | use hoop_daemon::br_verbs::{invoke_br_write, WriteVerb};
+  |                             ^^^^^^^^^^^^^^^ no `invoke_br_write` in `br_verbs`
+  |
+note: found an item that was configured out
+ --> src/br_verbs.rs
+  |
+  | #[cfg(not(any(feature = "zero-write-v01", feature = "create-only-write")))]
+  |          ---------------------------------------------------------------- the item is gated here
+  | pub fn invoke_br_write(verb: WriteVerb, args: &[&str]) -> std::process::Command {
+  |        ^^^^^^^^^^^^^^^
+help: a similar name exists in the module
+  |
+4 - use hoop_daemon::br_verbs::{invoke_br_write, WriteVerb};
+4 + use hoop_daemon::br_verbs::{invoke_br_create, WriteVerb};
+  |

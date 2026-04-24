@@ -152,6 +152,7 @@ pub fn invoke_br_read(verb: ReadVerb, args: &[&str]) -> std::process::Command {
     feature = "create-only-write",
     not(any(feature = "zero-write-v01", feature = "create-only-write"))
 ))]
+#[allow(dead_code)]
 pub fn invoke_br_create(args: &[&str]) -> std::process::Command {
     let mut cmd = std::process::Command::new("br");
     cmd.arg("create");

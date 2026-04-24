@@ -264,6 +264,7 @@ fn test_subprocess_arg_validation_allows_create_command() {
     }
 }
 
+#[cfg(any(feature = "create-only-write", feature = "zero-write-v01"))]
 #[test]
 fn test_subprocess_arg_validation_rejects_forbidden_commands() {
     // Verify that raw Command objects with forbidden verbs are rejected

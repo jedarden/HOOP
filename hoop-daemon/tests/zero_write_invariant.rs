@@ -308,6 +308,7 @@ fn test_validate_br_subprocess_args_allows_read_verbs() {
     }
 }
 
+#[cfg(any(feature = "create-only-write", feature = "zero-write-v01"))]
 #[test]
 fn test_validate_br_subprocess_args_rejects_forbidden_verbs() {
     for verb in br_verbs::FORBIDDEN_WRITE_VERBS {
@@ -317,5 +318,15 @@ fn test_validate_br_subprocess_args_rejects_forbidden_verbs() {
             br_verbs::validate_br_subprocess_args(&cmd);
         });
         assert!(result.is_err(), "validate_br_subprocess_args should reject '{}'", verb);
+    }
+}
+
+#[cfg(not(any(feature = "create-only-write", feature = "zero-write-v01")))]
+#[test]
+fn test_validate_br_subprocess_args_allows_all_in_unrestricted() {
+    for verb in br_verbs::WRITE_VERB_NAMES {
+        let mut cmd = std::process::Command::new("br");
+        cmd.arg(verb);
+        br_verbs::validate_br_subprocess_args(&cmd);
     }
 }

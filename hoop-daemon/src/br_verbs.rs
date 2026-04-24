@@ -420,6 +420,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::overly_complex_bool_expr, clippy::assertions_on_constants)]
     fn test_write_verb_function_availability_matches_feature() {
         // This test always passes — it documents the compile-time check.
         // Under create-only-write: invoke_br_create exists, invoke_br_write does not.
@@ -534,6 +535,7 @@ mod tests {
         }
     }
 
+    #[cfg(any(feature = "create-only-write", feature = "zero-write-v01"))]
     #[test]
     #[should_panic(expected = "invariant violated")]
     fn test_validate_br_subprocess_args_rejects_raw_close_command() {
@@ -542,6 +544,7 @@ mod tests {
         validate_br_subprocess_args(&cmd);
     }
 
+    #[cfg(any(feature = "create-only-write", feature = "zero-write-v01"))]
     #[test]
     #[should_panic(expected = "invariant violated")]
     fn test_validate_br_subprocess_args_rejects_raw_update_command() {
@@ -550,10 +553,21 @@ mod tests {
         validate_br_subprocess_args(&cmd);
     }
 
+    #[cfg(any(feature = "create-only-write", feature = "zero-write-v01"))]
     #[test]
     #[should_panic(expected = "invariant violated")]
     fn test_validate_br_subprocess_args_rejects_empty_command() {
         let cmd = std::process::Command::new("br");
         validate_br_subprocess_args(&cmd);
+    }
+
+    #[cfg(not(any(feature = "create-only-write", feature = "zero-write-v01")))]
+    #[test]
+    fn test_validate_br_subprocess_args_allows_all_without_feature_flag() {
+        for verb in WRITE_VERB_NAMES {
+            let mut cmd = std::process::Command::new("br");
+            cmd.arg(verb);
+            validate_br_subprocess_args(&cmd);
+        }
     }
 }

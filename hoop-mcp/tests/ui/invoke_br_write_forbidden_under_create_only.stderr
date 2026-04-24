@@ -1,0 +1,19 @@
+error[E0432]: unresolved import `hoop_mcp::br_verbs::invoke_br_write`
+ --> tests/ui/invoke_br_write_forbidden_under_create_only.rs:4:26
+  |
+4 | use hoop_mcp::br_verbs::{invoke_br_write, WriteVerb};
+  |                          ^^^^^^^^^^^^^^^ no `invoke_br_write` in `br_verbs`
+  |
+note: found an item that was configured out
+ --> src/br_verbs.rs
+  |
+  | #[cfg(not(any(feature = "zero-write-v01", feature = "create-only-write")))]
+  |          ---------------------------------------------------------------- the item is gated here
+  | #[allow(dead_code)]
+  | pub fn invoke_br_write(verb: WriteVerb, args: &[&str]) -> std::process::Command {
+  |        ^^^^^^^^^^^^^^^
+help: a similar name exists in the module
+  |
+4 - use hoop_mcp::br_verbs::{invoke_br_write, WriteVerb};
+4 + use hoop_mcp::br_verbs::{invoke_br_create, WriteVerb};
+  |
