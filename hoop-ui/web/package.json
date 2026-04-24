@@ -8,7 +8,9 @@
     "build": "node scripts/codegen-types.mjs && tsc && vite build",
     "preview": "vite preview",
     "check": "tsc --noEmit",
-    "codegen": "node scripts/codegen-types.mjs"
+    "codegen": "node scripts/codegen-types.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "jotai": "^2.10.3",
@@ -21,6 +23,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "json-schema-to-typescript": "^15.0.3",
     "typescript": "~5.7.2",
-    "vite": "^6.0.7"
+    "vite": "^6.0.7",
+    "vitest": "^2.1.8"
   }
 }
