@@ -10,6 +10,7 @@ pub mod agent_context;
 pub mod agent_session;
 pub mod api_agent;
 pub mod backup;
+pub mod backup_pipeline;
 pub mod api_attachments;
 pub mod api_audit;
 pub mod api_beads;
@@ -906,6 +907,14 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         backup::BackupState::NotConfigured => {
             info!("Backup subsystem not configured — no backup: section in config.yml");
         }
+    }
+
+    // Start backup scheduler when fully configured
+    if let backup::BackupState::Ready { config, credentials } = backup_state {
+        let pipeline = backup_pipeline::BackupPipeline::new(config, credentials);
+        let sched_shutdown = shutdown_coordinator.subscribe();
+        pipeline.start_scheduler(sched_shutdown);
+        info!("Backup scheduler started");
     }
 
     let bead_tx_for_rebuild = bead_tx.clone();

@@ -368,6 +368,8 @@ pub struct Metrics {
     pub hoop_panics_total: LabeledCounter,
     /// Application errors labelled by subsystem and kind.
     pub hoop_errors_total: LabeledCounter,
+    /// Reason for the last daemon restart (gauge with discrete reason label).
+    pub hoop_last_restart_reason: LabeledGauge,
 
     // ── §16.2 Event Ingestion ──────────────────────────────────────────────
 
@@ -431,6 +433,10 @@ pub struct Metrics {
     pub hoop_backup_last_success_timestamp: Gauge,
     /// Size of the last successful backup in bytes.
     pub hoop_backup_last_size_bytes: Gauge,
+    /// Total number of backup runs that failed after all retries.
+    pub hoop_backup_failures_total: Counter,
+    /// Wall-clock duration of backup runs in seconds.
+    pub hoop_backup_run_duration_seconds: Histogram,
 
     // ── §16.7 Business ─────────────────────────────────────────────────────
 
@@ -455,6 +461,7 @@ impl Metrics {
 
             hoop_panics_total: LabeledCounter::new(&["subsystem"]),
             hoop_errors_total: LabeledCounter::new(&["subsystem", "kind"]),
+            hoop_last_restart_reason: LabeledGauge::new(&["reason"]),
 
             hoop_event_tailer_lag_seconds: LabeledGauge::new(&["project"]),
             hoop_session_tailer_lag_seconds: LabeledGauge::new(&["adapter"]),
@@ -484,6 +491,8 @@ impl Metrics {
             hoop_schema_migration_duration_ms: LabeledHistogram::new(&["from", "to"]),
             hoop_backup_last_success_timestamp: Gauge::new(),
             hoop_backup_last_size_bytes: Gauge::new(),
+            hoop_backup_failures_total: Counter::new(),
+            hoop_backup_run_duration_seconds: Histogram::new(),
 
             hoop_cost_anomaly_alerts_total: Counter::new(),
             hoop_already_started_dedup_hits_total: Counter::new(),
@@ -546,6 +555,13 @@ impl Metrics {
             "Application errors labelled by subsystem and kind.",
             self.hoop_errors_total.label_names,
             &self.hoop_errors_total.snapshot(),
+        );
+        write_labeled_gauge(
+            &mut out,
+            "hoop_last_restart_reason",
+            "Reason for the last daemon restart (discrete gauge).",
+            self.hoop_last_restart_reason.label_names,
+            &self.hoop_last_restart_reason.snapshot(),
         );
 
         // ── §16.2 Event Ingestion ────────────────────────────────────────────
@@ -719,6 +735,19 @@ impl Metrics {
             "Size of the last successful backup in bytes.",
             self.hoop_backup_last_size_bytes.get(),
         );
+        write_counter(
+            &mut out,
+            "hoop_backup_failures_total",
+            "Total number of backup runs that failed after all retries.",
+            self.hoop_backup_failures_total.get(),
+        );
+        write_histogram_seconds(
+            &mut out,
+            "hoop_backup_run_duration_seconds",
+            "Wall-clock duration of backup runs in seconds.",
+            self.hoop_backup_run_duration_seconds.count(),
+            self.hoop_backup_run_duration_seconds.sum_seconds(),
+        );
 
         // ── §16.7 Business ───────────────────────────────────────────────────
         write_counter(
@@ -748,6 +777,12 @@ impl Metrics {
         );
 
         out
+    }
+
+    /// Set the reason for the last daemon restart.
+    /// This should be called once at startup with the reason (e.g., "normal", "panic", "upgrade").
+    pub fn set_last_restart_reason(&self, reason: &str) {
+        self.hoop_last_restart_reason.set(&[reason], 1);
     }
 }
 
