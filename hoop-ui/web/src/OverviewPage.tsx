@@ -180,9 +180,14 @@ export default function OverviewPage({ onNavigateProject }: { onNavigateProject:
             <a href="#/fleet" className="section-header-link">Live worker map &rarr;</a>
           </div>
           {projectCards.length === 0 ? (
-            <div className="fleet-empty">
-              {wsConnected ? 'No projects registered' : 'Loading projects…'}
-            </div>
+            wsConnected ? (
+              <div className="fleet-empty">No projects registered</div>
+            ) : (
+              <div className="fleet-loading">
+                <div className="fleet-loading-spinner" />
+                <span>Loading projects…</span>
+              </div>
+            )
           ) : (
             <div className="fleet-cards-grid">
               {sortedCards.map(card => (
