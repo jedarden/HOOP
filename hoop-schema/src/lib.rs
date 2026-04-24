@@ -135,7 +135,7 @@ pub trait SchemaRecord {
     }
 }
 
-/// Health check response
+/// Health check response (liveness)
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct HealthResponse {
     pub status: String,
@@ -147,6 +147,43 @@ impl HealthResponse {
         Self {
             status: "ok".to_string(),
             version: version::SCHEMA_VERSION,
+        }
+    }
+}
+
+/// Readiness check response — 200 when all project runtimes are healthy,
+/// 503 with degraded project names otherwise.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ReadinessResponse {
+    pub status: String,
+    pub version: &'static str,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub degraded: Vec<DegradedProject>,
+}
+
+/// A single degraded project entry in the readiness response.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DegradedProject {
+    pub project: String,
+    pub state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+impl ReadinessResponse {
+    pub fn ok() -> Self {
+        Self {
+            status: "ok".to_string(),
+            version: version::SCHEMA_VERSION,
+            degraded: Vec::new(),
+        }
+    }
+
+    pub fn degraded(projects: Vec<DegradedProject>) -> Self {
+        Self {
+            status: "degraded".to_string(),
+            version: version::SCHEMA_VERSION,
+            degraded: projects,
         }
     }
 }

@@ -134,7 +134,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use hoop_schema::HealthResponse;
+use hoop_schema::{HealthResponse, ReadinessResponse, DegradedProject};
 use hoop_ui::AssetsHandler;
 use shutdown::{DbCheckpointHandle, ShutdownCoordinator, SocketCleanupHandle};
 use std::sync::Arc;
@@ -213,9 +213,42 @@ pub struct DaemonState {
     pub agent_session_manager: Option<Arc<agent_session::AgentSessionManager>>,
 }
 
-/// Health check endpoint handler
+/// Health check endpoint handler — returns 200 if the process is responsive.
 async fn healthz() -> axum::Json<HealthResponse> {
     axum::Json(HealthResponse::ok())
+}
+
+/// Readiness endpoint handler — returns 200 only when all per-project
+/// runtimes are healthy (or explicitly marked degraded). Returns 503 with
+/// a JSON body naming any degraded projects.
+async fn readyz(
+    axum::extract::State(state): axum::extract::State<DaemonState>,
+) -> Result<axum::Json<ReadinessResponse>, (axum::http::StatusCode, axum::Json<ReadinessResponse>)> {
+    if state.shutdown.is_shutting_down() {
+        let body = ReadinessResponse::degraded(vec![DegradedProject {
+            project: "_daemon".into(),
+            state: "shutting_down".into(),
+            error: None,
+        }]);
+        return Err((axum::http::StatusCode::SERVICE_UNAVAILABLE, axum::Json(body)));
+    }
+
+    let snapshot = state.supervisor.snapshot().await;
+    let degraded: Vec<DegradedProject> = snapshot
+        .iter()
+        .filter(|s| !matches!(s.state, supervisor::ProjectRuntimeState::Healthy))
+        .map(|s| DegradedProject {
+            project: s.project_name.clone(),
+            state: s.state.to_display_string().to_string(),
+            error: s.state.error().map(|e| e.to_string()),
+        })
+        .collect();
+
+    if degraded.is_empty() {
+        Ok(axum::Json(ReadinessResponse::ok()))
+    } else {
+        Err((axum::http::StatusCode::SERVICE_UNAVAILABLE, axum::Json(ReadinessResponse::degraded(degraded))))
+    }
 }
 
 /// Get all beads endpoint handler
@@ -317,6 +350,7 @@ async fn get_capacity(
 pub fn router() -> Router<DaemonState> {
     Router::new()
         .route("/healthz", get(healthz))
+        .route("/readyz", get(readyz))
         .route("/api/beads", get(get_beads))
         .route("/api/beads/:bead_id/events", get(get_bead_events))
         .route("/api/capacity", get(get_capacity))
