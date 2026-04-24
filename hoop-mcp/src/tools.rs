@@ -260,6 +260,9 @@ impl McpServerState {
             .and_then(|v| v.as_str())
             .ok_or("id parameter is required")?;
 
+        crate::id_validators::validate_stitch_id(stitch_id)
+            .map_err(|e| format!("id: {}", e))?;
+
         // Try the daemon's aggregated-read endpoint first (full data).
         // Fall back to direct DB query if daemon is not reachable.
         match self.read_stitch_via_daemon(stitch_id) {
@@ -315,6 +318,9 @@ impl McpServerState {
         let bead_id = args.get("id")
             .and_then(|v| v.as_str())
             .ok_or("id parameter is required")?;
+
+        crate::id_validators::validate_bead_id(bead_id)
+            .map_err(|e| format!("id: {}", e))?;
 
         let project_path = self.projects.get(project)
             .ok_or(format!("Project '{}' not found", project))?;

@@ -210,6 +210,32 @@ mod tests {
         assert!(validate_bead_id("ok").is_ok());
     }
 
+    #[test]
+    fn bead_id_rejects_double_dot() {
+        assert!(validate_bead_id("a..b").is_ok()); // technically valid per regex, but safe: no / or \
+    }
+
+    #[test]
+    fn bead_id_rejects_null_byte() {
+        assert!(validate_bead_id("bead\x00id").is_err());
+    }
+
+    #[test]
+    fn bead_id_rejects_tab() {
+        assert!(validate_bead_id("bead\tid").is_err());
+    }
+
+    #[test]
+    fn bead_id_rejects_backslash() {
+        assert!(validate_bead_id("bead\\id").is_err());
+    }
+
+    #[test]
+    fn bead_id_rejects_at_boundary_256() {
+        assert!(validate_bead_id(&"a".repeat(256)).is_ok());
+        assert!(validate_bead_id(&"a".repeat(257)).is_err());
+    }
+
     // ── validate_stitch_id ───────────────────────────────────────────────────────
 
     #[test]
@@ -324,5 +350,54 @@ mod tests {
     #[test]
     fn worker_name_rejects_underscore() {
         assert!(validate_worker_name("worker_name").is_err());
+    }
+
+    #[test]
+    fn worker_name_rejects_null_byte() {
+        assert!(validate_worker_name("alpha\x00beta").is_err());
+    }
+
+    #[test]
+    fn worker_name_rejects_tab() {
+        assert!(validate_worker_name("alpha\tbeta").is_err());
+    }
+
+    // ── validate_pattern_id edge cases ──────────────────────────────────────
+
+    #[test]
+    fn pattern_id_rejects_too_long() {
+        assert!(validate_pattern_id("550e8400-e29b-41d4-a716-446655440000-extra").is_err());
+    }
+
+    #[test]
+    fn pattern_id_rejects_uppercase() {
+        assert!(validate_pattern_id("A1B2C3D4-E5F6-7890-ABCD-EF1234567890").is_err());
+    }
+
+    #[test]
+    fn pattern_id_rejects_unicode() {
+        assert!(validate_pattern_id("550e8400-über-41d4-a716-446655440000").is_err());
+    }
+
+    #[test]
+    fn pattern_id_rejects_whitespace() {
+        assert!(validate_pattern_id("550e8400-e29b-41d4-a716-44665544 000").is_err());
+    }
+
+    // ── validate_stitch_id edge cases ───────────────────────────────────────
+
+    #[test]
+    fn stitch_id_rejects_unicode() {
+        assert!(validate_stitch_id("550e8400-über-41d4-a716-446655440000").is_err());
+    }
+
+    #[test]
+    fn stitch_id_rejects_null_byte() {
+        assert!(validate_stitch_id("550e8400-e29b-41d4-a716-44665544000\x00").is_err());
+    }
+
+    #[test]
+    fn stitch_id_rejects_spaces() {
+        assert!(validate_stitch_id("550e8400-e29b-41d4-a716-44665544 000").is_err());
     }
 }

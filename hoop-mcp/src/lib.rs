@@ -5,6 +5,7 @@
 
 pub mod audit;
 pub mod br_verbs;
+pub mod id_validators;
 pub mod protocol;
 pub mod redaction;
 pub mod socket;
