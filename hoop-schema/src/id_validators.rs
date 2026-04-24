@@ -218,6 +218,108 @@ impl fmt::Display for ValidProjectName {
     }
 }
 
+/// A validated draft ID (`draft-` + UUID). Construct via `ValidDraftId::parse()`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ValidDraftId(String);
+
+impl ValidDraftId {
+    pub fn parse(id: &str) -> Result<Self, IdValidationError> {
+        validate_draft_id(id)?;
+        Ok(Self(id.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Deref for ValidDraftId {
+    type Target = str;
+    fn deref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl AsRef<str> for ValidDraftId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ValidDraftId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// A validated upload ID (lowercase UUID). Construct via `ValidUploadId::parse()`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ValidUploadId(String);
+
+impl ValidUploadId {
+    pub fn parse(id: &str) -> Result<Self, IdValidationError> {
+        validate_upload_id(id)?;
+        Ok(Self(id.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Deref for ValidUploadId {
+    type Target = str;
+    fn deref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl AsRef<str> for ValidUploadId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ValidUploadId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// A validated transcription job ID (lowercase UUID). Construct via `ValidJobId::parse()`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ValidJobId(String);
+
+impl ValidJobId {
+    pub fn parse(id: &str) -> Result<Self, IdValidationError> {
+        validate_job_id(id)?;
+        Ok(Self(id.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Deref for ValidJobId {
+    type Target = str;
+    fn deref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl AsRef<str> for ValidJobId {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ValidJobId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 // ── Raw validation functions ──────────────────────────────────────────────
 
 /// Validate a bead ID.
@@ -863,6 +965,13 @@ mod tests {
         assert!(validate_draft_id("draft-550e8400-e29b-41d4-a716-44665544").is_err());
     }
 
+    #[test]
+    fn draft_id_rejects_too_long() {
+        let mut id = "draft-550e8400-e29b-41d4-a716-446655440000".to_string();
+        id.push_str("extra");
+        assert!(validate_draft_id(&id).is_err());
+    }
+
     // ── validate_upload_id ───────────────────────────────────────────────────
 
     #[test]
@@ -893,6 +1002,23 @@ mod tests {
     #[test]
     fn upload_id_rejects_whitespace() {
         assert!(validate_upload_id("550e8400-e29b-41d4-a716-44665544 000").is_err());
+    }
+
+    #[test]
+    fn upload_id_rejects_leading_dash() {
+        assert!(validate_upload_id("-550e8400-e29b-41d4-a716-446655440000").is_err());
+    }
+
+    #[test]
+    fn upload_id_rejects_dot() {
+        assert!(validate_upload_id("550e8400-e29b-41d4-a716-446655440000.extra").is_err());
+    }
+
+    #[test]
+    fn upload_id_rejects_too_long() {
+        let mut id = "550e8400-e29b-41d4-a716-446655440000".to_string();
+        id.push_str("extra");
+        assert!(validate_upload_id(&id).is_err());
     }
 
     // ── validate_job_id ──────────────────────────────────────────────────────
@@ -930,5 +1056,75 @@ mod tests {
     #[test]
     fn job_id_rejects_leading_dash() {
         assert!(validate_job_id("-550e8400-e29b-41d4-a716-446655440000").is_err());
+    }
+
+    #[test]
+    fn job_id_rejects_whitespace() {
+        assert!(validate_job_id("550e8400-e29b-41d4-a716-44665544 000").is_err());
+    }
+
+    #[test]
+    fn job_id_rejects_too_long() {
+        let mut id = "550e8400-e29b-41d4-a716-446655440000".to_string();
+        id.push_str("extra");
+        assert!(validate_job_id(&id).is_err());
+    }
+
+    // ── Additional newtype tests ──────────────────────────────────────────────
+
+    #[test]
+    fn valid_project_name_parse_roundtrip() {
+        let v = ValidProjectName::parse("HOOP").unwrap();
+        assert_eq!(v.as_str(), "HOOP");
+        assert_eq!(&*v, "HOOP");
+        assert_eq!(v.to_string(), "HOOP");
+    }
+
+    #[test]
+    fn valid_project_name_rejects_traversal() {
+        assert!(ValidProjectName::parse("../etc").is_err());
+        assert!(ValidProjectName::parse("").is_err());
+        assert!(ValidProjectName::parse("-dash").is_err());
+        assert!(ValidProjectName::parse(".hidden").is_err());
+    }
+
+    #[test]
+    fn valid_draft_id_parse_roundtrip() {
+        let v = ValidDraftId::parse("draft-550e8400-e29b-41d4-a716-446655440000").unwrap();
+        assert_eq!(v.as_str(), "draft-550e8400-e29b-41d4-a716-446655440000");
+        assert_eq!(&*v, "draft-550e8400-e29b-41d4-a716-446655440000");
+    }
+
+    #[test]
+    fn valid_draft_id_rejects_invalid() {
+        assert!(ValidDraftId::parse("").is_err());
+        assert!(ValidDraftId::parse("550e8400-e29b-41d4-a716-446655440000").is_err());
+        assert!(ValidDraftId::parse("draft-not-a-uuid").is_err());
+    }
+
+    #[test]
+    fn valid_upload_id_parse_roundtrip() {
+        let v = ValidUploadId::parse("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        assert_eq!(v.as_str(), "550e8400-e29b-41d4-a716-446655440000");
+        assert_eq!(&*v, "550e8400-e29b-41d4-a716-446655440000");
+    }
+
+    #[test]
+    fn valid_upload_id_rejects_invalid() {
+        assert!(ValidUploadId::parse("").is_err());
+        assert!(ValidUploadId::parse("not-a-uuid").is_err());
+    }
+
+    #[test]
+    fn valid_job_id_parse_roundtrip() {
+        let v = ValidJobId::parse("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        assert_eq!(v.as_str(), "550e8400-e29b-41d4-a716-446655440000");
+        assert_eq!(&*v, "550e8400-e29b-41d4-a716-446655440000");
+    }
+
+    #[test]
+    fn valid_job_id_rejects_invalid() {
+        assert!(ValidJobId::parse("").is_err());
+        assert!(ValidJobId::parse("not-a-uuid").is_err());
     }
 }

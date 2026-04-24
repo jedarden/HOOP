@@ -12,6 +12,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::fleet::{self, ActionKind, AuditRow as FleetAuditRow};
+use crate::id_validators::{rejection, validate_project_name};
 
 /// Query parameters for audit log
 #[derive(Debug, Deserialize)]
@@ -104,6 +105,11 @@ pub fn router() -> axum::Router<crate::DaemonState> {
 async fn query_audit(
     Query(params): Query<AuditQuery>,
 ) -> Result<Json<AuditResponse>, (StatusCode, String)> {
+    // Validate project filter if provided
+    if let Some(ref project) = params.project {
+        validate_project_name(project).map_err(rejection)?;
+    }
+
     // Parse kind filter if provided
     let kind_filter = match params.kind.as_deref() {
         Some("bead_created") => Some(ActionKind::BeadCreated),
