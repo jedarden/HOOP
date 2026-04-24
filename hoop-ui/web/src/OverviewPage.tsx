@@ -4,6 +4,7 @@ import {
   wsConnectedAtom,
   configStatusAtom,
   projectCardsAtom,
+  projectsReceivedAtom,
   ProjectCardData,
 } from './atoms';
 
@@ -94,6 +95,7 @@ export default function OverviewPage({ onNavigateProject }: { onNavigateProject:
   const wsConnected = useAtomValue(wsConnectedAtom);
   const configStatus = useAtomValue(configStatusAtom);
   const projectCards = useAtomValue(projectCardsAtom);
+  const projectsReceived = useAtomValue(projectsReceivedAtom);
 
   // Tick every 30s to refresh relative time displays
   const [now, setNow] = useState(() => Date.now());
@@ -179,15 +181,13 @@ export default function OverviewPage({ onNavigateProject }: { onNavigateProject:
             <h2>Fleet</h2>
             <a href="#/fleet" className="section-header-link">Live worker map &rarr;</a>
           </div>
-          {projectCards.length === 0 ? (
-            wsConnected ? (
-              <div className="fleet-empty">No projects registered</div>
-            ) : (
-              <div className="fleet-loading">
-                <div className="fleet-loading-spinner" />
-                <span>Loading projects…</span>
-              </div>
-            )
+          {!projectsReceived ? (
+            <div className="fleet-loading">
+              <div className="fleet-loading-spinner" />
+              <span>Loading projects…</span>
+            </div>
+          ) : projectCards.length === 0 ? (
+            <div className="fleet-empty">No projects registered</div>
           ) : (
             <div className="fleet-cards-grid">
               {sortedCards.map(card => (

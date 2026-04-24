@@ -316,6 +316,7 @@ export const streamingContentAtom = atom<Map<string, StreamingContent>>(new Map(
 export const selectedConversationIdAtom = atom<string | null>(null);
 export const projectsAtom = atom<Project[]>([]);
 export const projectCardsAtom = atom<ProjectCardData[]>([]);
+export const projectsReceivedAtom = atom<boolean>(false);
 export const stitchesAtom = atom<Stitch[]>([]);
 export const workersAtom = atom<WorkerData[]>([]);
 export const beadsAtom = atom<BeadData[]>([]);

@@ -1255,6 +1255,21 @@ pre {
   gap: 1rem;
 }
 
+@keyframes cardFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fleet-cards-grid .project-card-fleet {
+  animation: cardFadeIn 0.2s ease-out both;
+}
+
+.fleet-cards-grid .project-card-fleet:nth-child(1) { animation-delay: 0ms; }
+.fleet-cards-grid .project-card-fleet:nth-child(2) { animation-delay: 30ms; }
+.fleet-cards-grid .project-card-fleet:nth-child(3) { animation-delay: 60ms; }
+.fleet-cards-grid .project-card-fleet:nth-child(4) { animation-delay: 90ms; }
+.fleet-cards-grid .project-card-fleet:nth-child(n+5) { animation-delay: 120ms; }
+
 /* Fleet Project Card */
 .project-card-fleet {
   display: flex;

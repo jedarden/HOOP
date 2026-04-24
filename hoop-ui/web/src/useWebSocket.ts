@@ -8,6 +8,7 @@ import {
   wsConnectedAtom,
   configStatusAtom,
   projectCardsAtom,
+  projectsReceivedAtom,
   capacityAtom,
   stitchCreatedAtom,
   agentSessionStatusAtom,
@@ -28,6 +29,7 @@ export function useWebSocket() {
   const setConnected = useSetAtom(wsConnectedAtom);
   const setConfigStatus = useSetAtom(configStatusAtom);
   const setProjectCards = useSetAtom(projectCardsAtom);
+  const setProjectsReceived = useSetAtom(projectsReceivedAtom);
   const setCapacity = useSetAtom(capacityAtom);
   const setStitchCreated = useSetAtom(stitchCreatedAtom);
   const setAgentSessionStatus = useSetAtom(agentSessionStatusAtom);
@@ -112,6 +114,7 @@ export function useWebSocket() {
             setConfigStatus(data.config_status);
           } else if (data.type === 'projects_snapshot' && data.projects) {
             setProjectCards(data.projects);
+            setProjectsReceived(true);
           } else if (data.type === 'capacity_snapshot' && data.capacity) {
             setCapacity(data.capacity);
           } else if (data.type === 'stitch_created' && data.stitch_created) {
@@ -255,5 +258,5 @@ export function useWebSocket() {
       }
       wsRef.current?.close();
     };
-  }, [setWorkers, setBeads, setConversations, setStreamingContent, setConnected, setConfigStatus, setProjectCards, setCapacity, setStitchCreated, setAgentSessionStatus, setAgentInflight, setAgentChatMessages]);
+  }, [setWorkers, setBeads, setConversations, setStreamingContent, setConnected, setConfigStatus, setProjectCards, setProjectsReceived, setCapacity, setStitchCreated, setAgentSessionStatus, setAgentInflight, setAgentChatMessages]);
 }
