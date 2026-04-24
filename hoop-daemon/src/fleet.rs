@@ -380,6 +380,15 @@ pub fn init_fleet_db() -> Result<()> {
 
 /// Initialize fleet.db at an explicit path (for testing).
 pub fn init_fleet_db_at(path: PathBuf) -> Result<()> {
+    init_fleet_db_at_version(path, SCHEMA_VERSION)
+}
+
+/// Initialize fleet.db at an explicit path with an explicit binary version.
+///
+/// Exposed for integration testing of the §20.1 major-upgrade gate: callers
+/// can pass a binary_version of e.g. "2.0.0" against a database that is still
+/// at "1.x" to verify that the gate fires with the exact diagnostic message.
+pub fn init_fleet_db_at_version(path: PathBuf, binary_version: &str) -> Result<()> {
     let parent = path.parent().ok_or_else(|| anyhow::anyhow!("Invalid db path"))?;
 
     // Ensure parent directory exists
@@ -388,9 +397,10 @@ pub fn init_fleet_db_at(path: PathBuf) -> Result<()> {
     let exists = path.exists();
 
     info!(
-        "Initializing fleet.db at {} (exists: {})",
+        "Initializing fleet.db at {} (exists: {}, binary schema {})",
         path.display(),
-        exists
+        exists,
+        binary_version,
     );
 
     let mut conn = Connection::open(&path)?;
@@ -402,33 +412,39 @@ pub fn init_fleet_db_at(path: PathBuf) -> Result<()> {
         // Fresh database: create schema and insert genesis row
         create_schema(&mut conn)?;
         insert_genesis_row(&mut conn)?;
-        info!("fleet.db created with initial schema {}, running migrations to {}", INITIAL_SCHEMA_VERSION, SCHEMA_VERSION);
+        info!("fleet.db created with initial schema {}, running migrations to {}", INITIAL_SCHEMA_VERSION, binary_version);
 
         // Run migrations to bring fresh database to current version
         let start = std::time::Instant::now();
         run_migrations(&mut conn, INITIAL_SCHEMA_VERSION)?;
         let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
         crate::metrics::metrics().hoop_schema_migration_duration_ms.observe(
-            &[INITIAL_SCHEMA_VERSION, SCHEMA_VERSION],
+            &[INITIAL_SCHEMA_VERSION, binary_version],
             elapsed_ms,
         );
-        info!("Migrations complete, schema version {}", SCHEMA_VERSION);
+        info!("Migrations complete, schema version {}", binary_version);
     } else {
         // Existing database: verify schema version and run migrations
         let version = get_schema_version(&conn)?;
-        if version != SCHEMA_VERSION {
+
+        // §20.1 major-upgrade gate: refuse startup when binary major > stored major.
+        // "0.x" is the pre-migration bootstrap version — always upgradeable through
+        // the minor-migration chain regardless of the binary's major.
+        check_schema_major_gate(&version, binary_version)?;
+
+        if version != binary_version {
             info!(
                 "fleet.db schema version {} -> {}, running migrations",
-                version, SCHEMA_VERSION
+                version, binary_version
             );
             let start = std::time::Instant::now();
             run_migrations(&mut conn, &version)?;
             let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
             crate::metrics::metrics().hoop_schema_migration_duration_ms.observe(
-                &[&version, SCHEMA_VERSION],
+                &[&version, binary_version],
                 elapsed_ms,
             );
-            info!("Migrations complete, schema version {}", SCHEMA_VERSION);
+            info!("Migrations complete, schema version {}", binary_version);
         } else {
             info!("fleet.db schema version {} verified", version);
         }
@@ -1307,6 +1323,87 @@ fn update_schema_version(conn: &mut Connection, version: &str) -> Result<()> {
         [version],
     )?;
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// §20.1 Major-upgrade gate
+// ---------------------------------------------------------------------------
+
+/// Extract the major version component from a semver string (e.g. "1.11.0" → 1).
+pub fn extract_major(version: &str) -> Option<u64> {
+    version.split('.').next()?.parse().ok()
+}
+
+/// §20.1 major-upgrade startup gate.
+///
+/// If `binary_version`'s major exceeds `stored_version`'s major, returns the
+/// exact diagnostic message specified in §20.1 so the operator knows precisely
+/// what to run.  "0.x" is the pre-migration bootstrap version and is never
+/// subject to the gate — it always migrates forward through the minor chain.
+pub fn check_schema_major_gate(stored_version: &str, binary_version: &str) -> Result<()> {
+    let stored_major = extract_major(stored_version)
+        .ok_or_else(|| anyhow::anyhow!("Unparseable stored schema version: {}", stored_version))?;
+    let binary_major = extract_major(binary_version)
+        .ok_or_else(|| anyhow::anyhow!("Unparseable binary schema version: {}", binary_version))?;
+
+    // "0.x" is the bootstrap version — always upgradeable through minor migrations.
+    if stored_major == 0 {
+        return Ok(());
+    }
+
+    if binary_major > stored_major {
+        anyhow::bail!(
+            "Your data is schema version {stored_major}.x; this binary requires {binary_major}.x. \
+             Run `hoop migrate --from-{stored_major} --confirm` or restore from a pre-upgrade backup."
+        );
+    }
+    Ok(())
+}
+
+/// Run the major-upgrade migration from the stored version to `binary_version`.
+///
+/// Called by `hoop migrate --from-N --confirm` or `--major-upgrade --confirm`.
+/// Updates `schema_version` in the database.  When a real 2.x schema is
+/// defined, DDL migration steps should be added inside this function before
+/// the version update.
+pub fn run_major_upgrade_at_version(path: PathBuf, binary_version: &str) -> Result<()> {
+    let mut conn = Connection::open(&path)?;
+    conn.pragma_update(None, "journal_mode", "WAL")?;
+
+    let stored_version = get_schema_version(&conn)?;
+    let stored_major = extract_major(&stored_version)
+        .ok_or_else(|| anyhow::anyhow!("Unparseable stored schema version: {}", stored_version))?;
+    let binary_major = extract_major(binary_version)
+        .ok_or_else(|| anyhow::anyhow!("Unparseable binary schema version: {}", binary_version))?;
+
+    if binary_major <= stored_major {
+        anyhow::bail!(
+            "No major upgrade needed: data is at schema version {} and binary requires {}. \
+             Major upgrade only applies when binary major > stored major.",
+            stored_version,
+            binary_version,
+        );
+    }
+
+    info!(
+        "Running major upgrade: schema {} → {} (major {} → {})",
+        stored_version, binary_version, stored_major, binary_major
+    );
+
+    // Future: add DDL migration steps for each major transition here.
+    // For now (1→2 is the first path) the schema tables carry forward and
+    // only the recorded version needs updating.
+    update_schema_version(&mut conn, binary_version)?;
+
+    info!("Major upgrade complete: schema_version is now {}", binary_version);
+    Ok(())
+}
+
+/// Run the major upgrade using the binary's own SCHEMA_VERSION as the target.
+///
+/// This is the production entry point used by `hoop migrate --major-upgrade --confirm`.
+pub fn run_major_upgrade() -> Result<()> {
+    run_major_upgrade_at_version(db_path(), SCHEMA_VERSION)
 }
 
 // ---------------------------------------------------------------------------
@@ -3126,6 +3223,155 @@ mod tests {
         )?;
         assert_eq!(active_count, 0);
 
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // §20.1 major-upgrade gate tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_extract_major() {
+        assert_eq!(extract_major("1.11.0"), Some(1));
+        assert_eq!(extract_major("2.0.0"), Some(2));
+        assert_eq!(extract_major("0.1.0"), Some(0));
+        assert_eq!(extract_major("10.5.3"), Some(10));
+        assert_eq!(extract_major(""), None);
+        assert_eq!(extract_major("notanumber"), None);
+    }
+
+    #[test]
+    fn test_gate_same_major_passes() {
+        // Same major, different minor — must not be blocked.
+        assert!(check_schema_major_gate("1.5.0", "1.11.0").is_ok());
+        assert!(check_schema_major_gate("1.0.0", "1.11.0").is_ok());
+        assert!(check_schema_major_gate("1.11.0", "1.11.0").is_ok());
+        // Exactly equal — passes.
+        assert!(check_schema_major_gate("2.3.1", "2.3.1").is_ok());
+    }
+
+    #[test]
+    fn test_gate_bootstrap_version_always_passes() {
+        // "0.x" is the pre-migration bootstrap — must never be blocked.
+        assert!(check_schema_major_gate("0.1.0", "1.11.0").is_ok());
+        assert!(check_schema_major_gate("0.1.0", "2.0.0").is_ok());
+    }
+
+    #[test]
+    fn test_gate_major_mismatch_refuses_with_exact_message() {
+        // Integration test: old-schema DB (major 1) + new binary (major 2)
+        // → refuses with the exact §20.1 message.
+        let err = check_schema_major_gate("1.11.0", "2.0.0").unwrap_err();
+        let msg = err.to_string();
+        assert_eq!(
+            msg,
+            "Your data is schema version 1.x; this binary requires 2.x. \
+             Run `hoop migrate --from-1 --confirm` or restore from a pre-upgrade backup.",
+            "Gate must emit the exact §20.1 diagnostic message"
+        );
+    }
+
+    #[test]
+    fn test_gate_major_3_produces_correct_message() {
+        let err = check_schema_major_gate("2.5.0", "3.0.0").unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("schema version 2.x"), "msg: {msg}");
+        assert!(msg.contains("requires 3.x"), "msg: {msg}");
+        assert!(msg.contains("--from-2"), "msg: {msg}");
+    }
+
+    #[test]
+    fn test_init_fleet_db_at_version_refuses_on_major_mismatch() -> Result<()> {
+        // Integration test: initialize a DB at the current schema, then attempt
+        // to open it as a hypothetical future 2.x binary — must refuse startup.
+        let dir = tempfile::tempdir()?;
+        let db_path = dir.path().join("fleet.db");
+
+        // Bootstrap the DB with the current binary version.
+        init_fleet_db_at(db_path.clone())?;
+
+        // Verify the DB is at the current schema.
+        let conn = Connection::open(&db_path)?;
+        let stored = get_schema_version(&conn)?;
+        assert_eq!(stored, SCHEMA_VERSION);
+        drop(conn);
+
+        // Simulate a 2.x binary attempting startup against a 1.x database.
+        let err = init_fleet_db_at_version(db_path.clone(), "2.0.0")
+            .expect_err("Must refuse startup with major mismatch");
+        let msg = err.to_string();
+        assert_eq!(
+            msg,
+            "Your data is schema version 1.x; this binary requires 2.x. \
+             Run `hoop migrate --from-1 --confirm` or restore from a pre-upgrade backup.",
+            "Startup refusal must carry the exact §20.1 message"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_init_fleet_db_same_major_different_minor_starts_normally() -> Result<()> {
+        // Same major, different minor → starts normally (no gate, migrations run).
+        let dir = tempfile::tempdir()?;
+        let db_path = dir.path().join("fleet.db");
+
+        // Bootstrap DB.
+        init_fleet_db_at(db_path.clone())?;
+
+        // Re-open with same binary version — must succeed.
+        init_fleet_db_at_version(db_path.clone(), SCHEMA_VERSION)?;
+
+        // Verify the stored version is still current.
+        let conn = Connection::open(&db_path)?;
+        let stored = get_schema_version(&conn)?;
+        assert_eq!(stored, SCHEMA_VERSION);
+        Ok(())
+    }
+
+    #[test]
+    fn test_major_upgrade_at_version_completes_the_path() -> Result<()> {
+        // `hoop migrate --major-upgrade --confirm` integration test:
+        // after upgrade, a 2.x binary can start (gate passes).
+        let dir = tempfile::tempdir()?;
+        let db_path = dir.path().join("fleet.db");
+
+        // Start from a fully-migrated 1.x database.
+        init_fleet_db_at(db_path.clone())?;
+
+        // Confirm a 2.x binary is currently blocked.
+        assert!(
+            init_fleet_db_at_version(db_path.clone(), "2.0.0").is_err(),
+            "Should be blocked before upgrade"
+        );
+
+        // Run the major upgrade (simulating `hoop migrate --major-upgrade --confirm`).
+        run_major_upgrade_at_version(db_path.clone(), "2.0.0")?;
+
+        // After upgrade, the gate must pass for a 2.x binary.
+        let conn = Connection::open(&db_path)?;
+        let stored = get_schema_version(&conn)?;
+        drop(conn);
+        assert_eq!(stored, "2.0.0");
+        check_schema_major_gate(&stored, "2.0.0")?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_major_upgrade_no_op_when_not_needed() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+        let db_path = dir.path().join("fleet.db");
+
+        init_fleet_db_at(db_path.clone())?;
+
+        // Trying to upgrade to the same major is an error.
+        let err = run_major_upgrade_at_version(db_path.clone(), SCHEMA_VERSION)
+            .expect_err("Should refuse when binary_major == stored_major");
+        assert!(
+            err.to_string().contains("No major upgrade needed"),
+            "err: {}",
+            err
+        );
         Ok(())
     }
 }

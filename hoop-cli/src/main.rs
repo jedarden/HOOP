@@ -8,7 +8,7 @@ mod projects;
 mod restore;
 
 use clap::Parser;
-use hoop_daemon::{audit, serve, Config as DaemonConfig};
+use hoop_daemon::{audit, fleet, serve, Config as DaemonConfig};
 use std::{fs, net::SocketAddr, path::PathBuf};
 
 #[derive(Parser, Debug)]
@@ -93,6 +93,18 @@ enum Commands {
         /// S3 URI: s3://<bucket>/<prefix>/<snapshot-id>
         #[arg(long)]
         from: String,
+    },
+    /// Run schema migrations (required after a major binary upgrade)
+    Migrate {
+        /// Migrate from major version N (e.g. --from-1 migrates major 1 → current)
+        #[arg(long = "from-1", conflicts_with = "major_upgrade")]
+        from_1: bool,
+        /// Auto-detect and perform the required major upgrade
+        #[arg(long = "major-upgrade", conflicts_with = "from_1")]
+        major_upgrade: bool,
+        /// Required safety confirmation
+        #[arg(long)]
+        confirm: bool,
     },
 }
 
@@ -218,6 +230,28 @@ async fn main() -> anyhow::Result<()> {
                 eprintln!("hoop restore: {}", e);
                 std::process::exit(1);
             }
+        }
+        Commands::Migrate {
+            from_1,
+            major_upgrade,
+            confirm,
+        } => {
+            if !confirm {
+                eprintln!("hoop migrate: --confirm is required to prevent accidental data migration.");
+                eprintln!("  Re-run with --confirm once you have verified you have a current backup.");
+                std::process::exit(1);
+            }
+            if !from_1 && !major_upgrade {
+                eprintln!("hoop migrate: specify --from-1 or --major-upgrade.");
+                eprintln!("  Example: hoop migrate --from-1 --confirm");
+                eprintln!("  Example: hoop migrate --major-upgrade --confirm");
+                std::process::exit(1);
+            }
+            if let Err(e) = fleet::run_major_upgrade() {
+                eprintln!("hoop migrate: {}", e);
+                std::process::exit(1);
+            }
+            println!("Migration complete. You can now start the daemon with `hoop serve`.");
         }
     }
 
