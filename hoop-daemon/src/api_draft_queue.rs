@@ -203,6 +203,9 @@ async fn get_draft(
     Path(draft_id): Path<String>,
     State(_state): State<crate::DaemonState>,
 ) -> Result<Json<DraftResponse>, (StatusCode, String)> {
+    crate::id_validators::validate_draft_id(&draft_id)
+        .map_err(crate::id_validators::rejection)?;
+
     let draft = fleet::get_draft(&draft_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Draft '{}' not found", draft_id)))?;
@@ -323,6 +326,9 @@ async fn approve_draft(
     connect_info: Option<ConnectInfo<SocketAddr>>,
     Json(req): Json<ApproveRequest>,
 ) -> Result<Json<ApproveResponse>, (StatusCode, String)> {
+    crate::id_validators::validate_draft_id(&draft_id)
+        .map_err(crate::id_validators::rejection)?;
+
     let draft = fleet::get_draft(&draft_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Draft '{}' not found", draft_id)))?;
@@ -484,6 +490,9 @@ async fn edit_draft(
     connect_info: Option<ConnectInfo<SocketAddr>>,
     Json(req): Json<EditDraftRequest>,
 ) -> Result<Json<EditResponse>, (StatusCode, String)> {
+    crate::id_validators::validate_draft_id(&draft_id)
+        .map_err(crate::id_validators::rejection)?;
+
     let draft = fleet::get_draft(&draft_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Draft '{}' not found", draft_id)))?;
@@ -563,6 +572,9 @@ async fn reject_draft(
     connect_info: Option<ConnectInfo<SocketAddr>>,
     Json(req): Json<RejectRequest>,
 ) -> Result<Json<RejectResponse>, (StatusCode, String)> {
+    crate::id_validators::validate_draft_id(&draft_id)
+        .map_err(crate::id_validators::rejection)?;
+
     let draft = fleet::get_draft(&draft_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Draft '{}' not found", draft_id)))?;

@@ -12,6 +12,7 @@
 //! 5. On failure: partial transcript saved with error, status → Failed (UI shows warning card)
 //! 6. Appears in project stitch list by `last_activity_at`
 
+use crate::id_validators::ValidStitchId;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
@@ -145,10 +146,14 @@ pub fn transcript_preview(transcript: &str, max_len: usize) -> String {
 
 /// Persist audio data to the stitch attachments directory
 pub fn store_audio(
-    stitch_id: &str,
+    stitch_id: &ValidStitchId,
     audio_filename: &str,
     audio_data: &[u8],
 ) -> Result<PathBuf> {
+    if audio_filename.contains('/') || audio_filename.contains('\\') || audio_filename.contains("..") {
+        anyhow::bail!("Invalid audio filename: {}", audio_filename);
+    }
+
     let dir = stitch_attachment_dir(stitch_id)?;
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("Failed to create attachment dir: {}", dir.display()))?;
@@ -164,19 +169,23 @@ pub fn store_audio(
     Ok(path)
 }
 
-/// Get the attachment directory for a stitch
-pub fn stitch_attachment_dir(stitch_id: &str) -> Result<PathBuf> {
-    crate::id_validators::validate_stitch_id(stitch_id)
-        .with_context(|| format!("invalid stitch id for attachment dir: {:?}", stitch_id))?;
+/// Get the attachment directory for a stitch.
+///
+/// Accepts a `ValidStitchId` to enforce compile-time proof that the ID has been
+/// validated before reaching any filesystem path construction.
+pub fn stitch_attachment_dir(stitch_id: &ValidStitchId) -> Result<PathBuf> {
     let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     home.push(".hoop");
     home.push("attachments");
-    home.push(stitch_id);
+    home.push(stitch_id.as_str());
     Ok(home)
 }
 
-/// Get the full path to an audio file for a stitch
-pub fn audio_path(stitch_id: &str, audio_filename: &str) -> Result<PathBuf> {
+/// Get the full path to an audio file for a stitch.
+///
+/// Accepts a `ValidStitchId` to enforce compile-time proof that the ID has been
+/// validated before reaching any filesystem path construction.
+pub fn audio_path(stitch_id: &ValidStitchId, audio_filename: &str) -> Result<PathBuf> {
     if audio_filename.contains('/') || audio_filename.contains('\\') || audio_filename.contains("..") {
         anyhow::bail!("Invalid audio filename: {}", audio_filename);
     }
@@ -546,9 +555,10 @@ mod tests {
 
     #[test]
     fn test_audio_path_rejects_traversal() {
-        assert!(audio_path("abc", "../etc/passwd").is_err());
-        assert!(audio_path("abc", "sub/file.wav").is_err());
-        assert!(audio_path("abc", "file.wav").is_ok());
+        let sid = ValidStitchId::parse("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        assert!(audio_path(&sid, "../etc/passwd").is_err());
+        assert!(audio_path(&sid, "sub/file.wav").is_err());
+        assert!(audio_path(&sid, "file.wav").is_ok());
     }
 
     #[test]

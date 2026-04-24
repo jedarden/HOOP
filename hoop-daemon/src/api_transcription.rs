@@ -35,6 +35,9 @@ async fn get_job(
     Path(job_id): Path<String>,
     State(state): State<crate::DaemonState>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    crate::id_validators::validate_job_id(&job_id)
+        .map_err(crate::id_validators::rejection)?;
+
     let transcription_service = state.transcription_service.as_ref()
         .ok_or_else(|| (StatusCode::SERVICE_UNAVAILABLE, "Transcription service not available".to_string()))?;
 

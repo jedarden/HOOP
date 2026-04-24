@@ -1219,6 +1219,7 @@ dependencies = [
  "clap",
  "dirs 5.0.1",
  "hex",
+ "hoop-schema",
  "ignore",
  "regex",
  "reqwest",

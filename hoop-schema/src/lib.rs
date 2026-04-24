@@ -17,6 +17,8 @@
 //! - **Rust**: Generated via typify in build.rs → `OUT_DIR/types.rs`
 //! - **TypeScript**: Generated via json-schema-to-typescript → `hoop-ui/web/src/types.gen.ts`
 
+pub mod id_validators;
+
 pub mod version {
     /// Current schema version following SemVer (X.Y.Z)
     pub const SCHEMA_VERSION: &str = "1.0.0";

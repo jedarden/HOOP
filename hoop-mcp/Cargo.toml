@@ -24,6 +24,7 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4"] }
 dirs = "5.0"
 rusqlite = { version = "0.30", features = ["bundled"] }
+hoop-schema = { path = "../hoop-schema" }
 sha2 = "0.10"
 hex = "0.4"
 regex = "1"

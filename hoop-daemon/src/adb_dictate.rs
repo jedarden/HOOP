@@ -83,11 +83,13 @@ async fn adb_dictate(
     }
 
     let stitch_id = Uuid::new_v4().to_string();
+    let valid_stitch_id = crate::id_validators::ValidStitchId::parse(&stitch_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Generated invalid UUID: {}", e)))?;
     let now = Utc::now();
     let audio_data = body.to_vec();
 
     // Store audio atomically
-    let audio_path = crate::dictated_notes::store_audio(&stitch_id, &filename, &audio_data)
+    let audio_path = crate::dictated_notes::store_audio(&valid_stitch_id, &filename, &audio_data)
         .map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,

@@ -282,7 +282,7 @@ impl UploadRegistry {
         // Move to final destination based on attachment type
         let final_path = match meta.attachment_type.as_str() {
             "bead" => {
-                let bead_id = crate::id_validators::ValidBeadId::parse(&meta.resource_id)
+                let bead_id = ValidBeadId::parse(&meta.resource_id)
                     .context("invalid bead ID in upload metadata")?;
                 let workspace = std::env::current_dir()
                     .context("failed to get current directory")?;
@@ -293,7 +293,7 @@ impl UploadRegistry {
                 )?
             }
             "stitch" => {
-                let stitch_id = crate::id_validators::ValidStitchId::parse(&meta.resource_id)
+                let stitch_id = ValidStitchId::parse(&meta.resource_id)
                     .context("invalid stitch ID in upload metadata")?;
                 crate::attachments::stitch_attachment_path(
                     &stitch_id,

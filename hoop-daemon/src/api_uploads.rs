@@ -77,6 +77,9 @@ async fn upload_chunk(
     headers: HeaderMap,
     body: axum::body::Bytes,
 ) -> Result<Json<crate::uploads::UploadProgressResponse>, StatusCode> {
+    crate::id_validators::validate_upload_id(&upload_id)
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+
     // Parse Upload-Offset header
     let offset = headers
         .get("Upload-Offset")
@@ -105,6 +108,9 @@ async fn get_progress(
     State(state): State<DaemonState>,
     Path(upload_id): Path<String>,
 ) -> Result<Response, StatusCode> {
+    crate::id_validators::validate_upload_id(&upload_id)
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+
     let progress = state
         .upload_registry
         .get_progress(&upload_id)
@@ -131,6 +137,9 @@ async fn complete_upload(
     State(state): State<DaemonState>,
     Path(upload_id): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
+    crate::id_validators::validate_upload_id(&upload_id)
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+
     state
         .upload_registry
         .complete_upload(&upload_id)
@@ -148,6 +157,9 @@ async fn cancel_upload(
     State(state): State<DaemonState>,
     Path(upload_id): Path<String>,
 ) -> Result<StatusCode, StatusCode> {
+    crate::id_validators::validate_upload_id(&upload_id)
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+
     state
         .upload_registry
         .cancel_upload(&upload_id)
