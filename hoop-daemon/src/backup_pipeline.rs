@@ -11,7 +11,9 @@
 use crate::attachment_sync;
 use crate::backup::{BackupCredentials, BackupFileConfig};
 use crate::fleet;
+use crate::id_validators::{validate_bead_id, validate_stitch_id};
 use crate::metrics;
+use crate::path_security::{canonicalize_and_check, PathAllowlist};
 use crate::shutdown::ShutdownPhase;
 use crate::snapshot_manifest::SnapshotManifest;
 use anyhow::{bail, Context, Result};
@@ -268,10 +270,30 @@ impl BackupPipeline {
     }
 
     /// Resolve an attachment manifest key back to a filesystem path.
+    ///
+    /// Validates the ID portion of the key (stitch ID or bead ID) before
+    /// constructing any path.  The resolved path is then canonicalized and
+    /// checked against the appropriate allowlist to catch symlink escapes
+    /// and traversal in the filename portion (§13, §K2).
     fn resolve_attachment_path(&self, home: &Path, key: &str) -> Result<PathBuf> {
         if let Some(rest) = key.strip_prefix("stitch/") {
-            Ok(home.join(".hoop").join("attachments").join(rest))
+            // rest is "<stitch-id>/<filename>" — validate the stitch-id portion
+            let id_part = rest.split('/').next().unwrap_or(rest);
+            validate_stitch_id(id_part)
+                .with_context(|| format!("invalid stitch ID in manifest key: {}", key))?;
+            let path = home.join(".hoop").join("attachments").join(rest);
+            if !path.exists() {
+                bail!("attachment path does not exist: {}", key);
+            }
+            let allowlist = PathAllowlist::for_stitch_attachments()
+                .context("failed to build allowlist for stitch attachments")?;
+            canonicalize_and_check(&path, &allowlist)
+                .map_err(|_| anyhow::anyhow!("path traversal detected in attachment key"))
         } else if let Some(rest) = key.strip_prefix("bead/") {
+            // rest is "<bead-id>/<filename>" — validate the bead-id portion
+            let id_part = rest.split('/').next().unwrap_or(rest);
+            validate_bead_id(id_part)
+                .with_context(|| format!("invalid bead ID in manifest key: {}", key))?;
             // Bead attachments require workspace context; fall back to first project workspace
             // In practice, the daemon always knows the workspace via config
             let config_dir = home.join(".hoop");
@@ -281,7 +303,14 @@ impl BackupPipeline {
                 let projects: Vec<serde_json::Value> = serde_json::from_str(&data)?;
                 if let Some(first) = projects.first() {
                     if let Some(ws) = first.get("path").and_then(|p| p.as_str()) {
-                        return Ok(PathBuf::from(ws).join(".beads").join("attachments").join(rest));
+                        let path = PathBuf::from(ws).join(".beads").join("attachments").join(rest);
+                        if !path.exists() {
+                            bail!("attachment path does not exist: {}", key);
+                        }
+                        let allowlist = PathAllowlist::for_workspace(Path::new(ws))
+                            .context("failed to build allowlist for workspace")?;
+                        return canonicalize_and_check(&path, &allowlist)
+                            .map_err(|_| anyhow::anyhow!("path traversal detected in attachment key"));
                     }
                 }
             }
