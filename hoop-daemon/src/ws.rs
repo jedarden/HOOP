@@ -17,9 +17,93 @@ use chrono::{DateTime, Utc};
 use futures_util::{stream::StreamExt, SinkExt};
 use hoop_schema::{ParsedSession, ParsedSessionKind, ParsedSessionKindVariant1, ParsedSessionKindVariant2, ParsedSessionKindVariant3, ParsedSessionMessagesItem, ParsedSessionMessagesItemUsage};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, warn};
+
+// ---------------------------------------------------------------------------
+// WS connection tracker (§16.8: every WS client in /debug/state)
+// ---------------------------------------------------------------------------
+
+/// Snapshot of a single connected WS client for /debug/state.
+#[derive(Debug, Clone, Serialize)]
+pub struct WsClientRecord {
+    pub conn_id: u64,
+    pub connected_at: DateTime<Utc>,
+    pub connected_secs: i64,
+}
+
+/// Registry of currently connected WebSocket clients.
+///
+/// Each call to [`register`] returns a [`WsConnectionGuard`]; when the guard
+/// is dropped the connection is automatically removed.
+#[derive(Debug, Clone)]
+pub struct WsConnectionTracker {
+    next_id: Arc<AtomicU64>,
+    clients: Arc<std::sync::RwLock<Vec<(u64, DateTime<Utc>)>>>,
+}
+
+impl WsConnectionTracker {
+    pub fn new() -> Self {
+        Self {
+            next_id: Arc::new(AtomicU64::new(1)),
+            clients: Arc::new(std::sync::RwLock::new(Vec::new())),
+        }
+    }
+
+    /// Register a new WS connection. The returned guard must be held for the
+    /// duration of the connection; dropping it deregisters the client.
+    pub fn register(&self) -> WsConnectionGuard {
+        let conn_id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let connected_at = Utc::now();
+        self.clients.write().unwrap().push((conn_id, connected_at));
+        WsConnectionGuard {
+            conn_id,
+            clients: self.clients.clone(),
+        }
+    }
+
+    /// Return a snapshot of all currently connected clients.
+    pub fn snapshot(&self) -> Vec<WsClientRecord> {
+        let now = Utc::now();
+        self.clients
+            .read()
+            .unwrap()
+            .iter()
+            .map(|(id, connected_at)| WsClientRecord {
+                conn_id: *id,
+                connected_at: *connected_at,
+                connected_secs: (now - *connected_at).num_seconds().max(0),
+            })
+            .collect()
+    }
+
+    pub fn count(&self) -> usize {
+        self.clients.read().unwrap().len()
+    }
+}
+
+impl Default for WsConnectionTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// RAII guard returned by [`WsConnectionTracker::register`].
+/// Removes the connection from the tracker on drop.
+pub struct WsConnectionGuard {
+    conn_id: u64,
+    clients: Arc<std::sync::RwLock<Vec<(u64, DateTime<Utc>)>>>,
+}
+
+impl Drop for WsConnectionGuard {
+    fn drop(&mut self) {
+        let mut lock = self.clients.write().unwrap();
+        lock.retain(|(id, _)| *id != self.conn_id);
+    }
+}
 
 /// Word-level timestamp for Whisper transcript sync
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -743,7 +827,9 @@ pub struct WorkerRegistry {
     workers: Arc<RwLock<Vec<WorkerData>>>,
     conversations: Arc<RwLock<Vec<ConversationData>>>,
     /// Bead events from events.jsonl, keyed by bead_id
-    bead_events: Arc<RwLock<std::collections::HashMap<String, Vec<BeadEventData>>>>,
+    bead_events: Arc<RwLock<HashMap<String, Vec<BeadEventData>>>>,
+    /// Latest observed OS PID per worker name (persists across state transitions).
+    worker_pids: Arc<RwLock<HashMap<String, u32>>>,
     monitor: broadcast::Sender<MonitorEvent>,
     sessions: broadcast::Sender<SessionEvent>,
 }
@@ -753,7 +839,8 @@ impl WorkerRegistry {
         Self {
             workers: Arc::new(RwLock::new(Vec::new())),
             conversations: Arc::new(RwLock::new(Vec::new())),
-            bead_events: Arc::new(RwLock::new(std::collections::HashMap::new())),
+            bead_events: Arc::new(RwLock::new(HashMap::new())),
+            worker_pids: Arc::new(RwLock::new(HashMap::new())),
             monitor,
             sessions,
         }
@@ -806,8 +893,15 @@ impl WorkerRegistry {
         self.sessions.subscribe()
     }
 
-    /// Update or insert a worker entry
+    /// Update or insert a worker entry, tracking the latest observed PID.
     pub async fn update_worker(&self, heartbeat: crate::heartbeats::WorkerHeartbeat, liveness: crate::heartbeats::WorkerLiveness) {
+        // Track PID when the worker is in Executing state.
+        if let crate::WorkerState::Executing { pid, .. } = &heartbeat.state {
+            if *pid > 0 {
+                self.worker_pids.write().await.insert(heartbeat.worker.clone(), *pid);
+            }
+        }
+
         let mut workers = self.workers.write().await;
         let age = (chrono::Utc::now() - heartbeat.ts).num_seconds().max(0);
         let state = match &heartbeat.state {
@@ -837,6 +931,11 @@ impl WorkerRegistry {
                 heartbeat_age_secs: age,
             });
         }
+    }
+
+    /// Return a snapshot of latest observed PIDs, keyed by worker name.
+    pub async fn worker_pids_snapshot(&self) -> HashMap<String, u32> {
+        self.worker_pids.read().await.clone()
     }
 
     /// Get bead events for a specific bead
@@ -889,8 +988,10 @@ pub async fn ws_handler(
 
 /// Handle a WebSocket connection
 async fn handle_socket(socket: WebSocket, state: DaemonState) {
-    // Register this connection with the shutdown coordinator for tracking
+    // Register with the shutdown coordinator (for graceful drain) and with the
+    // WS connection tracker (for /debug/state "every WS client" requirement).
     let _conn_token = state.shutdown.register_connection();
+    let _ws_guard = state.ws_connection_tracker.register();
 
     let (mut sender, mut receiver) = socket.split();
     let registry = state.worker_registry.clone();

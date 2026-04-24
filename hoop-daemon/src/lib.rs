@@ -153,9 +153,11 @@ use axum::{
 };
 use hoop_schema::{HealthResponse, ReadinessResponse, DegradedProject};
 use hoop_ui::AssetsHandler;
+use sha2::Sha256;
 use shutdown::{DbCheckpointHandle, ShutdownCoordinator, SocketCleanupHandle};
 use std::sync::Arc;
 use std::{
+    collections::HashMap,
     fs,
     net::SocketAddr,
     os::unix::fs::PermissionsExt,
@@ -238,6 +240,8 @@ pub struct DaemonState {
     pub draft_tx: broadcast::Sender<ws::DraftUpdateData>,
     /// Fully resolved config with per-key attribution (§17.2)
     pub resolved_config: Arc<ResolvedConfig>,
+    /// Per-connection WS client registry for /debug/state (§16.8)
+    pub ws_connection_tracker: Arc<ws::WsConnectionTracker>,
 }
 
 /// Health check endpoint handler — returns 200 if the process is responsive.
@@ -997,6 +1001,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         brief_tx,
         draft_tx: broadcast::channel::<ws::DraftUpdateData>(64).0,
         resolved_config,
+        ws_connection_tracker: Arc::new(ws::WsConnectionTracker::new()),
     };
 
     // Forward project runtime status updates to shared store and broadcast
