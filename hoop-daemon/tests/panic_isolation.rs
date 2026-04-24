@@ -9,28 +9,23 @@
 //! 3. Other runtimes continue operating normally
 
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio::sync::broadcast;
 
-use hoop_daemon::supervisor::{ProjectSupervisor, ProjectRuntimeState};
+use hoop_daemon::supervisor::{ProjectRuntimeState, ProjectSupervisor};
 use hoop_daemon::projects::ProjectsConfig;
-use hoop_schema::ProjectsRegistry;
+use hoop_schema::{ProjectsRegistry, ProjectsRegistryProjectsItem};
 
-/// Create a test project with workspace path
-fn create_test_project(name: &str, path: PathBuf) -> hoop_schema::Project {
-    hoop_schema::Project {
+/// Create a test project with workspace path (shorthand single-workspace variant)
+fn create_test_project(name: &str, path: PathBuf) -> ProjectsRegistryProjectsItem {
+    ProjectsRegistryProjectsItem::Variant0 {
         name: name.to_string(),
-        workspaces: vec![hoop_schema::Workspace {
-            path: path.clone(),
-            role: hoop_schema::WorkspaceRole::Primary,
-        }],
-        linked_workspaces: vec![],
+        path: path.to_string_lossy().into_owned(),
+        label: None,
+        color: None,
     }
 }
 
 /// Helper to create a temporary .beads directory
-fn create_beads_dir(path: &PathBuf) -> tempfile::TempDir {
+fn create_beads_dir(path: &std::path::Path) -> tempfile::TempDir {
     let beads_dir = path.join(".beads");
     std::fs::create_dir_all(&beads_dir).unwrap();
     let issues_path = beads_dir.join("issues.jsonl");
@@ -58,7 +53,7 @@ async fn test_panic_isolation_between_projects() {
             create_test_project("project2", project2_path),
         ],
     };
-    let config = ProjectsConfig {
+    let _config = ProjectsConfig {
         registry: registry.clone(),
         path: PathBuf::from("/test/projects.yaml"),
     };
@@ -94,21 +89,21 @@ async fn test_panic_isolation_between_projects() {
 #[tokio::test]
 async fn test_permanent_error_no_restart() {
     // Verify that permanent errors are detected correctly
-    assert!(hoop_daemon::supervisor::ProjectSupervisor::is_permanent_error(
+    assert!(ProjectSupervisor::is_permanent_error(
         "Workspace path does not exist: /test"
     ));
-    assert!(hoop_daemon::supervisor::ProjectSupervisor::is_permanent_error(
+    assert!(ProjectSupervisor::is_permanent_error(
         ".beads directory not found at: /test"
     ));
 
     // Verify that transient errors are not considered permanent
-    assert!(!hoop_daemon::supervisor::ProjectSupervisor::is_permanent_error(
+    assert!(!ProjectSupervisor::is_permanent_error(
         "Connection refused"
     ));
-    assert!(!hoop_daemon::supervisor::ProjectSupervisor::is_permanent_error(
+    assert!(!ProjectSupervisor::is_permanent_error(
         "Timeout"
     ));
-    assert!(!hoop_daemon::supervisor::ProjectSupervisor::is_permanent_error(
+    assert!(!ProjectSupervisor::is_permanent_error(
         "Panic: synthetic panic"
     ));
 }

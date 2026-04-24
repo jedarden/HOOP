@@ -553,7 +553,7 @@ mod tests {
     #[test]
     fn test_rule_labels_merged_with_stitch_labels() {
         let rules = default_rules();
-        let mut i = intent_with_criteria("fix", "Fix auth");
+        let i = intent_with_criteria("fix", "Fix auth");
         let graph = decompose(&rules, &i).unwrap();
 
         // tests bead has rule label "tests" + stitch label "urgent"

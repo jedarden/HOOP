@@ -353,12 +353,9 @@ impl AgentAdapter for ClaudeCodeAdapter {
         ];
 
         for att in &attachments {
-            match att {
-                Attachment::File { path } => {
-                    args.push("--attach".to_string());
-                    args.push(path.clone());
-                }
-                _ => {}
+            if let Attachment::File { path } = att {
+                args.push("--attach".to_string());
+                args.push(path.clone());
             }
         }
 
@@ -756,14 +753,13 @@ async fn track_assistant_response(
             match result {
                 Ok(event) => {
                     match &event {
-                        AgentEvent::TextDelta { text } => {
-                            if !text.is_empty() {
+                        AgentEvent::TextDelta { text }
+                            if !text.is_empty() => {
                                 accumulating.store(true, Ordering::Relaxed);
                                 buffer.lock().await.push_str(text);
                             }
-                        }
-                        AgentEvent::TurnComplete { .. } | AgentEvent::SessionEnded { .. } => {
-                            if accumulating.load(Ordering::Relaxed) {
+                        AgentEvent::TurnComplete { .. } | AgentEvent::SessionEnded { .. }
+                            if accumulating.load(Ordering::Relaxed) => {
                                 let full_text = buffer.lock().await.clone();
                                 if !full_text.is_empty() {
                                     history.lock().await.push(HistoryMessage {
@@ -774,7 +770,6 @@ async fn track_assistant_response(
                                 buffer.lock().await.clear();
                                 accumulating.store(false, Ordering::Relaxed);
                             }
-                        }
                         _ => {}
                     }
                     Ok(event)
@@ -837,13 +832,11 @@ fn anthropic_sse_to_event(val: &serde_json::Value) -> Result<AgentEvent> {
             Ok(AgentEvent::TextDelta { text: String::new() })
         }
         "message_delta" => {
-            let usage = val.get("usage").and_then(|u| {
-                Some(TurnUsage {
-                    input_tokens: 0,
-                    output_tokens: u.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
-                    cache_read_tokens: None,
-                    cache_write_tokens: None,
-                })
+            let usage = val.get("usage").map(|u| TurnUsage {
+                input_tokens: 0,
+                output_tokens: u.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
+                cache_read_tokens: None,
+                cache_write_tokens: None,
             });
             Ok(AgentEvent::TurnComplete { usage })
         }
@@ -899,15 +892,13 @@ fn openai_sse_to_event(val: &serde_json::Value) -> Result<AgentEvent> {
 
         // Finish reason
         if choice.get("finish_reason").and_then(|v| v.as_str()).is_some() {
-            let usage = val.get("usage").and_then(|u| {
-                Some(TurnUsage {
-                    input_tokens: u.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
-                    output_tokens: u.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
-                    cache_read_tokens: u.get("prompt_tokens_details")
-                        .and_then(|d| d.get("cached_tokens"))
-                        .and_then(|v| v.as_u64()),
-                    cache_write_tokens: None,
-                })
+            let usage = val.get("usage").map(|u| TurnUsage {
+                input_tokens: u.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
+                output_tokens: u.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
+                cache_read_tokens: u.get("prompt_tokens_details")
+                    .and_then(|d| d.get("cached_tokens"))
+                    .and_then(|v| v.as_u64()),
+                cache_write_tokens: None,
             });
             return Ok(AgentEvent::TurnComplete { usage });
         }

@@ -21,7 +21,7 @@ use tracing::info;
 use uuid::Uuid;
 
 /// Current schema version
-const SCHEMA_VERSION: &str = "1.11.0";
+pub const SCHEMA_VERSION: &str = "1.11.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -546,7 +546,7 @@ fn insert_genesis_row(conn: &mut Connection) -> Result<()> {
 }
 
 /// Get current schema version from metadata table
-fn get_schema_version(conn: &Connection) -> Result<String> {
+pub fn get_schema_version(conn: &Connection) -> Result<String> {
     conn.query_row(
         "SELECT value FROM metadata WHERE key = 'schema_version'",
         [],
@@ -1998,6 +1998,65 @@ fn read_morning_brief_row(
         status: row.get(8)?,
         error: row.get(9)?,
     })
+}
+
+/// Open a restored fleet.db at an explicit path and run schema migrations.
+///
+/// Returns the pre-migration schema version for caller logging.
+/// Refuses if the snapshot's schema version is newer than this binary's
+/// `SCHEMA_VERSION` (per §20).
+pub fn restore_and_migrate(db_path: &std::path::Path) -> Result<String> {
+    let mut conn = Connection::open(db_path)?;
+
+    // Enable WAL mode
+    conn.pragma_update(None, "journal_mode", "WAL")?;
+
+    let version = get_schema_version(&conn)?;
+
+    // Reject newer-than-current snapshots (§20.1)
+    if is_newer_version(&version, SCHEMA_VERSION) {
+        return Err(anyhow::anyhow!(
+            "Snapshot schema version {} is newer than this binary's {}. \
+             Upgrade HOOP before restoring this snapshot.",
+            version,
+            SCHEMA_VERSION
+        ));
+    }
+
+    if version != SCHEMA_VERSION {
+        info!(
+            "Restored fleet.db schema {} -> {}, running migrations",
+            version, SCHEMA_VERSION
+        );
+        run_migrations(&mut conn, &version)?;
+        info!("Migrations complete, schema version {}", SCHEMA_VERSION);
+    } else {
+        info!("Restored fleet.db schema version {} verified", version);
+    }
+
+    Ok(version)
+}
+
+/// Compare two semver strings. Returns true if `a` is strictly newer than `b`.
+fn is_newer_version(a: &str, b: &str) -> bool {
+    let parse = |v: &str| -> Vec<u32> {
+        v.split('.')
+            .filter_map(|p| p.parse().ok())
+            .collect::<Vec<_>>()
+    };
+    let va = parse(a);
+    let vb = parse(b);
+    for i in 0..std::cmp::max(va.len(), vb.len()) {
+        let na = va.get(i).unwrap_or(&0);
+        let nb = vb.get(i).unwrap_or(&0);
+        if na > nb {
+            return true;
+        }
+        if na < nb {
+            return false;
+        }
+    }
+    false
 }
 
 #[cfg(test)]

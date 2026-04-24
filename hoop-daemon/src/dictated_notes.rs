@@ -166,6 +166,8 @@ pub fn store_audio(
 
 /// Get the attachment directory for a stitch
 pub fn stitch_attachment_dir(stitch_id: &str) -> Result<PathBuf> {
+    crate::id_validators::validate_stitch_id(stitch_id)
+        .with_context(|| format!("invalid stitch id for attachment dir: {:?}", stitch_id))?;
     let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     home.push(".hoop");
     home.push("attachments");

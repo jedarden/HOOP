@@ -423,6 +423,9 @@ impl HeartbeatMonitor {
         let ts = raw.ts.parse::<DateTime<Utc>>()
             .with_context(|| format!("Failed to parse timestamp: {}", raw.ts))?;
 
+        crate::id_validators::validate_worker_name(&raw.worker)
+            .with_context(|| format!("Invalid worker name in heartbeat: {:?}", raw.worker))?;
+
         Ok(WorkerHeartbeat {
             ts,
             worker: raw.worker,
@@ -482,7 +485,7 @@ impl HeartbeatMonitor {
                 let now = Utc::now();
                 let heartbeat_age = now.signed_duration_since(worker_entry.last_heartbeat_at).num_seconds() as u64;
 
-                if heartbeat_age <= HEARTBEAT_GRACE_SECS as u64 {
+                if heartbeat_age <= HEARTBEAT_GRACE_SECS {
                     WorkerLiveness::Live
                 } else {
                     WorkerLiveness::Hung
@@ -550,7 +553,7 @@ impl HeartbeatMonitor {
                     let now = Utc::now();
                     let heartbeat_age = now.signed_duration_since(last_heartbeat_at).num_seconds() as u64;
 
-                    if heartbeat_age <= HEARTBEAT_GRACE_SECS as u64 {
+                    if heartbeat_age <= HEARTBEAT_GRACE_SECS {
                         WorkerLiveness::Live
                     } else {
                         WorkerLiveness::Hung
@@ -663,7 +666,7 @@ mod tests {
     fn test_liveness_fresh_heartbeat() {
         // Fresh heartbeat should be considered live if PID is alive
         // We can't test actual PID checking in unit tests, but we can test the logic
-        assert!(HEARTBEAT_GRACE_SECS >= 20);
+        const { assert!(HEARTBEAT_GRACE_SECS >= 20); }
         assert_eq!(HEARTBEAT_INTERVAL_SECS, 10);
     }
 }

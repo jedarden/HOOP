@@ -322,7 +322,7 @@ impl ProjectsWatcher {
             })?;
 
         let registry: hoop_schema::ProjectsRegistry = serde_yaml::from_str(&contents)
-            .map_err(|e| ConfigError::from(e))?;
+            .map_err(ConfigError::from)?;
 
         let new_config = ProjectsConfig {
             registry,

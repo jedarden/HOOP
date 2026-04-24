@@ -22,24 +22,41 @@ pub async fn serve_attachment(
 ) -> impl IntoResponse {
     use std::fs;
 
+    // Validate ID at the HTTP boundary before any filesystem path construction
+    match attachment_type.as_str() {
+        "bead" => {
+            if let Err(e) = crate::id_validators::validate_bead_id(&id) {
+                let (status, body) = crate::id_validators::rejection(e);
+                return Err((status, body));
+            }
+        }
+        "stitch" => {
+            if let Err(e) = crate::id_validators::validate_stitch_id(&id) {
+                let (status, body) = crate::id_validators::rejection(e);
+                return Err((status, body));
+            }
+        }
+        _ => return Err((axum::http::StatusCode::BAD_REQUEST, "invalid attachment type".to_string())),
+    }
+
     let file_path = match attachment_type.as_str() {
         "bead" => {
             // Resolve workspace from current directory
             let workspace = std::env::current_dir()
-                .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+                .map_err(|_| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "internal error".to_string()))?;
             attachments::bead_attachment_path(&workspace, &id, &filename)
-                .map_err(|_| axum::http::StatusCode::NOT_FOUND)?
+                .map_err(|_| (axum::http::StatusCode::NOT_FOUND, "attachment not found".to_string()))?
         }
         "stitch" => {
             attachments::stitch_attachment_path(&id, &filename)
-                .map_err(|_| axum::http::StatusCode::NOT_FOUND)?
+                .map_err(|_| (axum::http::StatusCode::NOT_FOUND, "attachment not found".to_string()))?
         }
-        _ => return Err(axum::http::StatusCode::BAD_REQUEST),
+        _ => return Err((axum::http::StatusCode::BAD_REQUEST, "invalid attachment type".to_string())),
     };
 
     // Read file contents
     let contents = fs::read(&file_path)
-        .map_err(|_| axum::http::StatusCode::NOT_FOUND)?;
+        .map_err(|_| (axum::http::StatusCode::NOT_FOUND, "attachment not found".to_string()))?;
 
     // Detect content type from magic bytes
     let mime_type = attachments::AttachmentKind::from_magic(&contents)

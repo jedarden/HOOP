@@ -320,7 +320,7 @@ mod tests {
 
     #[test]
     fn test_predict_with_labels() {
-        let historical = vec![
+        let historical = [
             make_stitch("st1", "fix bug", Some("claude:opus"), 1.5, 600, 10),
         ];
         let mut stitch = historical[0].clone();

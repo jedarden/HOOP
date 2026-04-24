@@ -398,6 +398,7 @@ pub struct ConnectionToken {
 
 impl ConnectionToken {
     /// Create a new connection token
+    #[allow(dead_code)]
     fn new(coordinator: ShutdownCoordinator) -> Self {
         Self { coordinator }
     }

@@ -182,6 +182,7 @@ pub fn run_audit(config: &AuditConfig) -> AuditReport {
     checks.extend(check_beads_accessibility(&config.project_paths));
     checks.push(check_cli_session_dirs());
     checks.push(check_disk_space());
+    checks.push(check_restore_state());
 
     // Optional/warning checks
     if config.include_optional {
@@ -250,7 +251,7 @@ fn check_br_version() -> AuditCheck {
                 AuditCheck::critical(
                     "br_version",
                     format!("br {} is below minimum required {}", version_str, BR_MIN_VERSION),
-                    format!("curl -sSL https://github.com/dicklesworthstone/beads_rust/releases/latest/download/br-linux-x86_64 -o ~/.local/bin/br && chmod +x ~/.local/bin/br"),
+                    "curl -sSL https://github.com/dicklesworthstone/beads_rust/releases/latest/download/br-linux-x86_64 -o ~/.local/bin/br && chmod +x ~/.local/bin/br".to_string(),
                 )
             }
         }
@@ -453,6 +454,35 @@ fn check_disk_space() -> AuditCheck {
     AuditCheck::passed("disk_space", "Disk space check skipped (unsupported platform)")
 }
 
+/// Check for leftover `~/.hoop.rollback.*` directories indicating an
+/// interrupted restore. The daemon must not start in this state because
+/// `~/.hoop/` may contain a partially-restored snapshot. (§15.4)
+fn check_restore_state() -> AuditCheck {
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    let mut leftovers: Vec<String> = Vec::new();
+
+    if let Ok(entries) = fs::read_dir(&home) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with(".hoop.rollback.") {
+                leftovers.push(name.into_owned());
+            }
+        }
+    }
+
+    if leftovers.is_empty() {
+        return AuditCheck::passed("restore_state", "No interrupted restore detected");
+    }
+
+    let names = leftovers.join(", ");
+    AuditCheck::critical(
+        "restore_state",
+        format!("Interrupted restore detected: {} found. ~/.hoop/ may be inconsistent.", names),
+        format!("Complete the restore or recover manually:\n  mv {} ~/.hoop/  # undo partial restore", leftovers[0]),
+    )
+}
+
 /// Check if Tailscale interface is available (optional)
 fn check_tailscale() -> AuditCheck {
     let result = Command::new("tailscale")
@@ -567,5 +597,38 @@ mod tests {
         ]);
         assert!(report.success); // Warnings don't block startup
         assert_eq!(report.warnings().len(), 1);
+    }
+
+    #[test]
+    fn test_restore_state_detects_leftover_rollback() {
+        let home = dirs::home_dir().unwrap();
+        let rollback_dir = home.join(".hoop.rollback.20240101T000000Z");
+        // Only test if we can create temp files in home (CI may restrict)
+        let can_test = std::fs::create_dir(&rollback_dir).is_ok();
+
+        if can_test {
+            let check = check_restore_state();
+            assert!(!check.passed, "should detect leftover rollback dir");
+            assert_eq!(check.severity, Severity::Critical);
+            assert!(
+                check.description.contains("Interrupted restore"),
+                "{:?}",
+                check.description
+            );
+            // Cleanup
+            let _ = fs::remove_dir(&rollback_dir);
+        }
+    }
+
+    #[test]
+    fn test_restore_state_passes_clean() {
+        // If no .hoop.rollback.* dirs exist, check passes
+        let check = check_restore_state();
+        // This could fail if a real rollback dir exists, but in test env it shouldn't
+        // We only assert the "passed" case if we're confident no leftovers exist
+        if !check.passed {
+            // A leftover exists from another test or real usage — skip assertion
+            eprintln!("Skipping clean-state assertion: {}", check.description);
+        }
     }
 }

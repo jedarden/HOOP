@@ -1414,6 +1414,23 @@ pre {
 .pcf-runtime-bar.abandoned { background: #999; }
 .pcf-runtime-bar.unknown { background: #e0e0e0; }
 
+/* Section header with link */
+.section-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.section-header-link {
+  font-size: 0.8rem;
+  color: #1976d2;
+  text-decoration: none;
+}
+
+.section-header-link:hover {
+  text-decoration: underline;
+}
+
 /* Responsive: mobile */
 @media (max-width: 768px) {
   .fleet-summary-strip {

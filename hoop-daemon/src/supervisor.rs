@@ -439,7 +439,7 @@ impl ProjectSupervisor {
     }
 
     /// Check if an error is permanent (should not trigger auto-restart)
-    fn is_permanent_error(error: &str) -> bool {
+    pub fn is_permanent_error(error: &str) -> bool {
         let error_lower = error.to_lowercase();
         error_lower.contains("workspace path does not exist") ||
         error_lower.contains(".beads directory not found") ||
@@ -550,18 +550,19 @@ impl ProjectSupervisor {
     }
 
     /// Run the project runtime (bead reader + session tailer)
+    #[allow(clippy::too_many_arguments)]
     async fn run_project_runtime(
         project_name: String,
         workspaces: Vec<PathBuf>,
         bead_tx: broadcast::Sender<BeadEvent>,
-        session_tx: broadcast::Sender<SessionEvent>,
+        _session_tx: broadcast::Sender<SessionEvent>,
         worker_registry: Arc<crate::ws::WorkerRegistry>,
         beads: Arc<std::sync::RwLock<Vec<Bead>>>,
         shutdown: Arc<crate::shutdown::ShutdownCoordinator>,
         session_tailer_clone: Arc<std::sync::Mutex<Option<SessionTailer>>>,
         bead_readers_clone: Arc<std::sync::Mutex<Vec<BeadReader>>>,
         error_tx: mpsc::Sender<anyhow::Error>,
-        cost_aggregator: Arc<std::sync::RwLock<CostAggregator>>,
+        _cost_aggregator: Arc<std::sync::RwLock<CostAggregator>>,
     ) -> Result<()> {
         // Subscribe to shutdown phases
         let mut shutdown_rx = shutdown.subscribe();
@@ -609,7 +610,7 @@ impl ProjectSupervisor {
             let workspace_clone = workspace.clone();
             let beads_clone = beads.clone();
             let bead_tx_clone = bead_tx.clone();
-            let project_name_clone = project_name.clone();
+            let _project_name_clone = project_name.clone();
             let error_tx_clone = error_tx.clone();
 
             tokio::spawn(async move {
@@ -628,7 +629,7 @@ impl ProjectSupervisor {
                             // Add new beads from this workspace
                             all_beads.extend(new_beads.clone());
                             // Sort by created_at descending
-                            all_beads.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+                            all_beads.sort_by_key(|b| std::cmp::Reverse(b.created_at));
 
                             *beads_clone.write().unwrap() = all_beads.clone();
 
@@ -640,7 +641,7 @@ impl ProjectSupervisor {
                         BeadEvent::Error(e) => {
                             error!("Bead reader error for {}: {}", workspace_clone.display(), e);
                             // Send error to runtime via channel
-                            let _ = error_tx_clone.send(anyhow::anyhow!("Bead reader error for {}: {}", workspace_clone.display(), e));
+                            let _ = error_tx_clone.send(anyhow::anyhow!("Bead reader error for {}: {}", workspace_clone.display(), e)).await;
                         }
                     }
                 }
@@ -691,7 +692,7 @@ impl ProjectSupervisor {
                     SessionEvent::Error(e) => {
                         error!("Session tailer error for project {}: {}", project_name_for_tailer, e);
                         // Send error to runtime via channel
-                        let _ = error_tx_clone.send(anyhow::anyhow!("Session tailer error for {}: {}", project_name_for_tailer, e));
+                        let _ = error_tx_clone.send(anyhow::anyhow!("Session tailer error for {}: {}", project_name_for_tailer, e)).await;
                     }
                     SessionEvent::TagJoinBound { .. } => {}
                 }
@@ -758,6 +759,7 @@ impl ProjectSupervisor {
 }
 
 /// Convert a panic payload to a string
+#[allow(dead_code)]
 fn panic_payload_to_string(payload: &dyn std::any::Any) -> String {
     if let Some(s) = payload.downcast_ref::<&str>() {
         s.to_string()

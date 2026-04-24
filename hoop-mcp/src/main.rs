@@ -7,14 +7,15 @@
 
 mod audit;
 mod br_verbs;
+mod log_rotation;
 mod protocol;
+mod redaction;
 mod socket;
 mod tools;
 
 use anyhow::Result;
 use clap::Parser;
 use socket::SocketConfig;
-use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 #[derive(Parser, Debug)]
 #[command(name = "hoop-mcp")]
@@ -37,18 +38,15 @@ struct Cli {
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Initialize tracing
-    tracing_subscriber::registry()
-        .with(fmt::layer())
-        .with(EnvFilter::from_default_env().add_directive(tracing::Level::INFO.into()))
-        .init();
+    // Initialize tracing with file rotation and redaction
+    log_rotation::init_logging();
 
     // Validate write invariant at startup
     br_verbs::validate_write_invariant();
 
     // Print tool list for documentation
     println!("# HOOP MCP Server Tools");
-    println!("");
+    println!();
     println!("Read tools:");
     println!("  - find_stitches: List stitches with filtering");
     println!("  - read_stitch: Get detailed stitch information");
@@ -59,18 +57,18 @@ async fn main() -> Result<()> {
     println!("  - search_conversations: Search conversation transcripts");
     println!("  - summarize_project: Get project summary");
     println!("  - summarize_day: Get daily summary across all projects");
-    println!("");
+    println!();
     println!("Write tools:");
     println!("  - create_stitch: Create a new stitch (ONE write operation)");
-    println!("");
+    println!();
     println!("Utility tools:");
     println!("  - escalate_to_operator: Send message to operator (UI banner)");
-    println!("");
+    println!();
     println!("Security:");
     println!("  - Unix socket with 0600 permissions (same user only)");
     println!("  - Audit log records every tool call with args hash");
     println!("  - No forbidden verbs (close, update, release, claim, depend)");
-    println!("");
+    println!();
 
     if cli.stdio {
         // Run in stdio mode (useful for testing with mcp-client)

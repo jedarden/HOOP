@@ -11,6 +11,7 @@ use crate::api_preview::FileConflict;
 #[cfg(not(feature = "zero-write-v01"))]
 use crate::br_verbs::invoke_br_create;
 use crate::fleet::{self, ActionKind, ActionResult, BeadActionArgs};
+use crate::metrics;
 use crate::predictor::{predict_stitch, PercentileEstimate, DateRange};
 
 use crate::stitch_decompose::{
@@ -25,6 +26,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
+use std::time::Instant;
 use tracing::warn;
 
 // ---------------------------------------------------------------------------
@@ -153,6 +155,14 @@ pub struct CreatedBead {
     pub issue_type: String,
 }
 
+/// Result of a successful stitch submission (shared between direct submit and draft approve)
+#[derive(Debug, Serialize)]
+pub struct SubmitResult {
+    pub stitch_id: String,
+    pub graph: BeadGraph,
+    pub created_beads: Vec<CreatedBead>,
+}
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
@@ -223,16 +233,8 @@ async fn preview_decompose(
 
 /// POST /api/p/:project/stitch/submit — submit a decomposed Stitch, creating beads via br
 ///
-/// Full submit flow:
-/// 1. Validate draft against schema
-/// 2. Check for potential duplicates (unless force_create is true)
-/// 3. Decompose into bead payloads via Stitch decomposition service
-/// 4. Execute `br create` with `stitch:<stitch-id>` label for each bead
-/// 5. Insert audit row with actor + source
-/// 6. Emit `stitch_created` event on WS
-/// 7. Return response with created bead IDs
-///
-/// On partial failure, previously created beads are closed and audit rows are voided.
+/// Thin wrapper: validates, dedup-checks, resolves path/actor, then delegates to
+/// `submit_stitch_internal` for the actual bead creation.
 async fn submit_stitch(
     Path(project): Path<String>,
     State(state): State<crate::DaemonState>,
@@ -242,11 +244,17 @@ async fn submit_stitch(
     // 1. Validate draft against schema
     validate_stitch_draft(&req)?;
 
+    // 1b. Validate stitch_id if provided
+    if let Some(ref sid) = req.stitch_id {
+        crate::id_validators::validate_stitch_id(sid).map_err(crate::id_validators::rejection)?;
+    }
+
     // 2. Check for potential duplicates (unless force_create is true)
     if !req.force_create {
         let index = state.vector_index.read().unwrap();
         let dedup_matches = index.check_duplicate(&req.title, req.description.as_deref());
         if !dedup_matches.is_empty() {
+            metrics::metrics().hoop_already_started_dedup_hits_total.inc();
             let best = &dedup_matches[0];
             let message = format!(
                 "This looks like `{}/{}` ({}), which is in progress. Continue that, add this as a child, or proceed as new?",
@@ -254,8 +262,7 @@ async fn submit_stitch(
                 best.item.id,
                 best.item.title
             );
-            // Return the matches as JSON with a 409 Conflict status
-            let matches_json = serde_json::to_value(&dedup_matches.iter().map(|m| DedupMatchRef {
+            let matches_json = serde_json::to_value(dedup_matches.iter().map(|m| DedupMatchRef {
                 id: m.item.id.clone(),
                 project: m.item.project.clone(),
                 title: m.item.title.clone(),
@@ -281,6 +288,34 @@ async fn submit_stitch(
         ));
     }
 
+    let actor = resolve_actor(connect_info.map(|ci| ci.0));
+
+    let result = submit_stitch_internal(&project, &project_path, &req, &state, &actor).await?;
+
+    Ok(Json(StitchSubmitResponse {
+        stitch_id: result.stitch_id,
+        graph: result.graph,
+        created_beads: result.created_beads,
+        errors: vec![],
+        rolled_back: false,
+    }))
+}
+
+/// Internal stitch submission: decompose intent, create beads via br, persist, audit, emit WS.
+///
+/// Called from both the direct submit endpoint and the draft approve flow.
+/// Callers are responsible for validation, dedup, and path resolution before invoking this.
+pub async fn submit_stitch_internal(
+    project: &str,
+    project_path: &std::path::Path,
+    req: &StitchSubmitRequest,
+    state: &crate::DaemonState,
+    actor: &str,
+) -> Result<SubmitResult, (StatusCode, String)> {
+    // Zero-write guard: stitch submit creates beads via br create
+    #[cfg(feature = "zero-write-v01")]
+    return Err((StatusCode::FORBIDDEN, "Stitch submission is disabled in zero-write mode".to_string()));
+
     // Auto-generate stitch_id if not provided
     let stitch_id = req.stitch_id.clone().unwrap_or_else(|| {
         format!("stitch-{}", uuid::Uuid::new_v4().to_string().split('-').next().unwrap_or("unknown"))
@@ -292,7 +327,7 @@ async fn submit_stitch(
         title: req.title.clone(),
         description: req.description.clone(),
         has_acceptance_criteria: req.has_acceptance_criteria.unwrap_or(false),
-        project: project.clone(),
+        project: project.to_string(),
         priority: req.priority,
         labels: req.labels.clone().unwrap_or_default(),
     };
@@ -306,9 +341,6 @@ async fn submit_stitch(
         base_graph
     };
 
-    // Resolve actor identity (§13: Tailscale whois → OS username fallback)
-    let actor = resolve_actor(connect_info.map(|ci| ci.0));
-
     let source_str = if req.source.is_empty() {
         "form".to_string()
     } else {
@@ -316,7 +348,7 @@ async fn submit_stitch(
     };
     let (source, _) = crate::api_beads::parse_source(&source_str);
 
-    // 2–4. Create beads in dependency order, with audit
+    // Create beads in dependency order, with audit
     let mut created_beads: Vec<CreatedBead> = Vec::new();
     let mut errors: Vec<String> = Vec::new();
     let mut key_to_id: std::collections::HashMap<String, String> = std::collections::HashMap::new();
@@ -331,10 +363,9 @@ async fn submit_stitch(
         let bead_key = bead.key.clone();
         let bead_depends_on = bead.depends_on.clone();
         let stitch_id_clone = stitch_id.clone();
-        let actor_clone = actor.clone();
-        let cwd = project_path.clone();
+        let actor_clone = actor.to_string();
+        let cwd = project_path.to_path_buf();
 
-        // Clones for audit row (originals move into spawn_blocking)
         let bead_title_for_audit = bead_title.clone();
         let bead_issue_type_for_audit = bead_issue_type.clone();
 
@@ -345,6 +376,7 @@ async fn submit_stitch(
             .collect();
 
         let stitch_label = format!("stitch:{}", stitch_id_clone);
+        let br_start = Instant::now();
         let output = tokio::task::spawn_blocking(move || {
             let mut all_labels = bead_labels;
             all_labels.push(stitch_label);
@@ -380,6 +412,10 @@ async fn submit_stitch(
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Task join failed: {}", e)))?
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to run br: {}", e)))?;
+        let br_elapsed_ms = br_start.elapsed().as_secs_f64() * 1_000.0;
+        let br_ok = output.status.success();
+        metrics::metrics().hoop_br_subprocess_total.inc(&["create", if br_ok { "ok" } else { "error" }]);
+        metrics::metrics().hoop_br_subprocess_duration_ms.observe(&["create"], br_elapsed_ms);
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -395,12 +431,11 @@ async fn submit_stitch(
             break;
         }
 
-        // 4. Insert audit row with actor + source
         if let Err(e) = fleet::write_audit_row(
-            &actor,
+            actor,
             ActionKind::BeadCreated,
             &id,
-            Some(&project),
+            Some(project),
             Some(serde_json::to_string(&BeadActionArgs {
                 source: source.clone(),
                 stitch_id: Some(stitch_id.clone()),
@@ -420,6 +455,7 @@ async fn submit_stitch(
         }
 
         key_to_id.insert(bead_key.clone(), id.clone());
+        metrics::metrics().hoop_bead_created_by_hoop_total.inc(&[project]);
         created_beads.push(CreatedBead {
             key: bead_key,
             id: id.clone(),
@@ -428,7 +464,7 @@ async fn submit_stitch(
         });
     }
 
-    // Roll back on partial failure: close created beads, delete stitch row, void audit rows
+    // Roll back on partial failure
     if had_failure && !created_beads.is_empty() {
         warn!(
             "Stitch submit partial failure: rolling back {} created beads for stitch {}",
@@ -439,30 +475,33 @@ async fn submit_stitch(
         for created in &created_beads {
             let close_stitch_id = stitch_id.clone();
 
-            // Under create-only-write, br close is forbidden — beads remain open.
-            // The audit trail still records the partial failure.
-            #[cfg(not(feature = "create-only-write"))]
+            #[cfg(not(any(feature = "create-only-write", feature = "zero-write-v01")))]
             {
                 let close_id = created.id.clone();
-                let close_actor = actor.clone();
-                let close_cwd = project_path.clone();
+                let close_actor = actor.to_string();
+                let close_cwd = project_path.to_path_buf();
 
                 let _ = tokio::task::spawn_blocking(move || {
+                    let start = std::time::Instant::now();
                     let mut cmd = crate::br_verbs::invoke_br_write(crate::br_verbs::WriteVerb::Close, &[]);
                     cmd.current_dir(&close_cwd);
                     cmd.arg(&close_id);
                     cmd.arg("--actor").arg(&close_actor);
                     cmd.arg("--silent");
-                    cmd.output()
+                    let result = cmd.output();
+                    let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
+                    let ok = result.as_ref().map(|o| o.status.success()).unwrap_or(false);
+                    crate::metrics::metrics().hoop_br_subprocess_total.inc(&["close", if ok { "ok" } else { "error" }]);
+                    crate::metrics::metrics().hoop_br_subprocess_duration_ms.observe(&["close"], elapsed_ms);
+                    result
                 }).await;
             }
 
-            // Write a rollback audit entry
             let _ = fleet::write_audit_row(
-                &actor,
+                actor,
                 ActionKind::BeadCreated,
                 &created.id,
-                Some(&project),
+                Some(project),
                 None,
                 ActionResult::Failure,
                 Some("Rolled back: subsequent bead creation failed in stitch submit".to_string()),
@@ -472,17 +511,15 @@ async fn submit_stitch(
             );
         }
 
-        // Delete the stitch row so no orphaned Stitch remains
         if let Err(e) = fleet::delete_stitch(&stitch_id) {
             warn!("Failed to delete orphaned stitch row {}: {}", stitch_id, e);
         }
 
-        // Write StitchCreated Failure audit row for the rolled-back stitch
         let _ = fleet::write_audit_row(
-            &actor,
+            actor,
             ActionKind::StitchCreated,
             &stitch_id,
-            Some(&project),
+            Some(project),
             None,
             ActionResult::Failure,
             Some(format!("Rolled back: {} bead(s) created then closed due to partial failure", created_beads.len())),
@@ -508,7 +545,6 @@ async fn submit_stitch(
         return Err((StatusCode::INTERNAL_SERVER_ERROR, rollback_msg));
     }
 
-    // Also handle the case where all beads failed (no created_beads to roll back)
     if had_failure && created_beads.is_empty() {
         return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -516,30 +552,32 @@ async fn submit_stitch(
         ));
     }
 
-    // 5. Persist stitch row in fleet.db and link beads
+    // Persist stitch row in fleet.db and link beads
     let bead_links: Vec<(&str, &str)> = created_beads
         .iter()
-        .map(|b| (b.id.as_str(), project.as_str()))
+        .map(|b| (b.id.as_str(), project))
         .collect();
     if let Err(e) = fleet::create_stitch(
         &stitch_id,
-        &project,
+        project,
         "operator",
         &req.title,
-        &actor,
+        actor,
         &bead_links,
     ) {
         warn!("Failed to persist stitch row for {}: {}", stitch_id, e);
-        // Non-fatal: the beads were created, but we couldn't record the stitch.
-        // The stitch_created WS event still carries the data.
     }
 
-    // 6. Write StitchCreated audit row
+    // Emit stitch creation metrics
+    metrics::metrics().hoop_stitch_created_total.inc(&[project, &req.kind]);
+    metrics::metrics().hoop_stitches_created_per_day.inc();
+
+    // Write StitchCreated audit row
     if let Err(e) = fleet::write_audit_row(
-        &actor,
+        actor,
         ActionKind::StitchCreated,
         &stitch_id,
-        Some(&project),
+        Some(project),
         Some(serde_json::json!({
             "source": source_str,
             "kind": req.kind,
@@ -556,20 +594,18 @@ async fn submit_stitch(
         warn!("Failed to write StitchCreated audit row for {}: {}", stitch_id, e);
     }
 
-    // 7. Emit stitch_created event on WS for each created bead
+    // Emit WS events
     for created in &created_beads {
         let created_at = chrono::Utc::now().to_rfc3339();
-        let stitch_event = StitchCreatedData {
+        let _ = state.stitch_tx.send(StitchCreatedData {
             bead_id: created.id.clone(),
             title: created.title.clone(),
-            project: project.clone(),
+            project: project.to_string(),
             stitch_id: Some(stitch_id.clone()),
             source: source_str.clone(),
-            actor: actor.clone(),
+            actor: actor.to_string(),
             created_at: created_at.clone(),
-        };
-
-        let _ = state.stitch_tx.send(stitch_event);
+        });
         let _ = state.bead_tx.send(crate::ws::BeadData {
             id: created.id.clone(),
             title: created.title.clone(),
@@ -578,19 +614,16 @@ async fn submit_stitch(
             issue_type: created.issue_type.clone(),
             created_at: created_at.clone(),
             updated_at: created_at,
-            created_by: actor.clone(),
+            created_by: actor.to_string(),
             dependencies: vec![],
         });
     }
 
-    // 8. Return response
-    Ok(Json(StitchSubmitResponse {
+    Ok(SubmitResult {
         stitch_id,
         graph,
         created_beads,
-        errors,
-        rolled_back: false,
-    }))
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -674,7 +707,7 @@ async fn fetch_stitch_preview(
 // ---------------------------------------------------------------------------
 
 /// Validate the stitch submit request fields against schema constraints
-fn validate_stitch_draft(req: &StitchSubmitRequest) -> Result<(), (StatusCode, String)> {
+pub fn validate_stitch_draft(req: &StitchSubmitRequest) -> Result<(), (StatusCode, String)> {
     let title = req.title.trim();
     if title.is_empty() {
         return Err((StatusCode::BAD_REQUEST, "title is required".to_string()));
@@ -687,7 +720,7 @@ fn validate_stitch_draft(req: &StitchSubmitRequest) -> Result<(), (StatusCode, S
     }
 
     if let Some(p) = req.priority {
-        if p < 0 || p > 9 {
+        if !(0..=9).contains(&p) {
             return Err((
                 StatusCode::BAD_REQUEST,
                 format!("priority must be 0-9, got {}", p),
@@ -700,11 +733,12 @@ fn validate_stitch_draft(req: &StitchSubmitRequest) -> Result<(), (StatusCode, S
     if !req.source.is_empty()
         && !valid_sources.iter().any(|s| req.source == *s)
         && !req.source.starts_with("template:")
+        && !req.source.starts_with("draft:")
     {
         return Err((
             StatusCode::BAD_REQUEST,
             format!(
-                "invalid source '{}'. Must be one of: form, chat, bulk, template:<name>",
+                "invalid source '{}'. Must be one of: form, chat, bulk, template:<name>, draft:<id>",
                 req.source
             ),
         ));
@@ -717,7 +751,7 @@ fn validate_stitch_draft(req: &StitchSubmitRequest) -> Result<(), (StatusCode, S
 }
 
 /// Validate that the stitch kind matches at least one decomposition rule
-fn validate_stitch_kind(kind: &str, has_acceptance_criteria: bool) -> Result<(), (StatusCode, String)> {
+pub fn validate_stitch_kind(kind: &str, has_acceptance_criteria: bool) -> Result<(), (StatusCode, String)> {
     let config = stitch_decompose::load_config_from_file();
     let test_intent = StitchIntent {
         kind: kind.to_string(),

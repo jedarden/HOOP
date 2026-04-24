@@ -65,6 +65,10 @@ impl From<FleetAuditRow> for AuditRow {
             ActionKind::ConfigChanged => "config_changed".to_string(),
             ActionKind::ProjectAdded => "project_added".to_string(),
             ActionKind::ProjectRemoved => "project_removed".to_string(),
+            ActionKind::DraftCreated => "draft_created".to_string(),
+            ActionKind::DraftApproved => "draft_approved".to_string(),
+            ActionKind::DraftEdited => "draft_edited".to_string(),
+            ActionKind::DraftRejected => "draft_rejected".to_string(),
         };
 
         let result_str = match row.result {

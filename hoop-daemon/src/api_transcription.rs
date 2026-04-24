@@ -54,6 +54,8 @@ async fn list_jobs(
 
     // If stitch_id is specified, filter by stitch
     if let Some(stitch_id) = params.stitch_id {
+        crate::id_validators::validate_stitch_id(&stitch_id)
+            .map_err(crate::id_validators::rejection)?;
         let jobs = transcription_service.get_jobs_for_stitch(&stitch_id).await;
 
         // Optionally filter by status

@@ -58,6 +58,7 @@ struct ClaudeMessage {
     /// Message content
     content: Option<serde_json::Value>,
     /// Model used (for assistant messages)
+    #[allow(dead_code)]
     model: Option<String>,
     /// Token usage
     usage: Option<ClaudeUsage>,
@@ -133,6 +134,7 @@ enum ClaudeEntry {
 struct DiscoveredFile {
     path: PathBuf,
     mtime: std::time::SystemTime,
+    #[allow(dead_code)]
     size: u64,
 }
 
@@ -159,6 +161,7 @@ impl AdapterName {
     }
 
     /// Parse from string
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "claude" => Some(Self::Claude),
@@ -173,6 +176,7 @@ impl AdapterName {
 
 /// Result of parsing a session file
 #[derive(Debug)]
+#[allow(dead_code)]
 struct ParsedSessionFile {
     /// Path to the session file
     path: PathBuf,
@@ -436,8 +440,7 @@ impl SessionTailer {
                 .collect()
         };
 
-        let mut state = SessionTailerState::default();
-        state.adapters = adapters;
+        let state = SessionTailerState { adapters, ..Default::default() };
 
         Ok(Self {
             config,
@@ -561,7 +564,7 @@ impl SessionTailer {
                 // Trigger discovery for the modified file
                 if let Err(e) = Self::do_discovery(
                     &state,
-                    &event_tx,
+                    event_tx,
                     project_path.as_deref(),
                     false,
                 ) {
@@ -610,7 +613,7 @@ impl SessionTailer {
         }
 
         // Sort by mtime (newest first)
-        discovered.sort_by(|a, b| b.mtime.cmp(&a.mtime));
+        discovered.sort_by_key(|b| std::cmp::Reverse(b.mtime));
 
         // Phase 2: Parse in parallel with bounded concurrency
         let concurrency = 16;
@@ -770,7 +773,7 @@ impl SessionTailer {
                     }
                     ClaudeEntry::Metadata(meta) => {
                         session_id = meta.session_id;
-                        cwd = meta.cwd.unwrap_or_else(|| String::new());
+                        cwd = meta.cwd.unwrap_or_default();
                         title = meta.title.unwrap_or_else(|| {
                             // Derive title from first user message
                             messages
@@ -815,7 +818,7 @@ impl SessionTailer {
         };
 
         // Derive timestamps
-        let created_at = start_time.unwrap_or_else(|| Utc::now());
+        let created_at = start_time.unwrap_or_else(Utc::now);
         let updated_at = end_time.unwrap_or(created_at);
         let complete = end_time.is_some();
 
@@ -1049,7 +1052,7 @@ impl SessionTailer {
             session_id.clone()
         };
 
-        let created_at = start_time.unwrap_or_else(|| Utc::now());
+        let created_at = start_time.unwrap_or_else(Utc::now);
         let updated_at = end_time.unwrap_or(created_at);
         let complete = end_time.is_some();
 
@@ -1145,15 +1148,13 @@ impl SessionTailer {
                                 cache_read_tokens: cache_read,
                                 cache_write_tokens: cache_write,
                             })
-                        } else if let Some(token_count) = value.get("token_count").and_then(|v| v.as_u64()) {
-                            Some(ParsedSessionMessagesItemUsage {
+                        } else {
+                            value.get("token_count").and_then(|v| v.as_u64()).map(|token_count| ParsedSessionMessagesItemUsage {
                                 input_tokens: if role == "user" { token_count as i64 } else { 0 },
                                 output_tokens: if role == "assistant" { token_count as i64 } else { 0 },
                                 cache_read_tokens: 0,
                                 cache_write_tokens: 0,
                             })
-                        } else {
-                            None
                         };
 
                         if let Some(u) = &usage {
@@ -1229,7 +1230,7 @@ impl SessionTailer {
             session_id.clone()
         };
 
-        let created_at = start_time.unwrap_or_else(|| Utc::now());
+        let created_at = start_time.unwrap_or_else(Utc::now);
         let updated_at = end_time.unwrap_or(created_at);
         let complete = end_time.is_some();
 
@@ -1406,7 +1407,7 @@ impl SessionTailer {
             session_id.clone()
         };
 
-        let created_at = start_time.unwrap_or_else(|| Utc::now());
+        let created_at = start_time.unwrap_or_else(Utc::now);
         let updated_at = end_time.unwrap_or(created_at);
         let complete = end_time.is_some();
 
@@ -1465,7 +1466,7 @@ impl SessionTailer {
 
         for line in reader.lines() {
             let line = line?;
-            if let Some(entry) = serde_json::from_str::<ClaudeEntry>(&line).ok() {
+            if let Ok(entry) = serde_json::from_str::<ClaudeEntry>(&line) {
                 match entry {
                     ClaudeEntry::Message(msg) => {
                         if let Some(usage) = &msg.usage {
@@ -1493,8 +1494,8 @@ impl SessionTailer {
                     }
                     ClaudeEntry::Metadata(meta) => {
                         session_id = meta.session_id;
-                        cwd = meta.cwd.unwrap_or_else(|| String::new());
-                        title = meta.title.unwrap_or_else(|| String::new());
+                        cwd = meta.cwd.unwrap_or_default();
+                        title = meta.title.unwrap_or_default();
                         start_time = meta.start_time.and_then(|s| s.parse().ok());
                         end_time = meta.end_time.and_then(|s| s.parse().ok());
                     }
@@ -1519,7 +1520,7 @@ impl SessionTailer {
             session_id.clone()
         };
 
-        let created_at = start_time.unwrap_or_else(|| Utc::now());
+        let created_at = start_time.unwrap_or_else(Utc::now);
         let updated_at = end_time.unwrap_or(created_at);
         let complete = end_time.is_some();
 

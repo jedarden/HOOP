@@ -99,9 +99,12 @@ pub struct SessionMessageData {
 
 impl From<ParsedSessionMessagesItem> for SessionMessageData {
     fn from(m: ParsedSessionMessagesItem) -> Self {
+        // §18.3: Apply read-side redaction before emitting to UI.
+        // Raw CLI session files are never modified; only the projection is redacted.
+        let content = crate::redaction::redact_json_value(m.content);
         Self {
             role: m.role,
-            content: m.content,
+            content,
             usage: m.usage.map(MessageUsageData::from),
             timestamp: m.timestamp.map(|t| t.to_rfc3339()),
         }
@@ -164,7 +167,7 @@ fn load_dictated_note(stitch_id: &str) -> Option<DictatedNoteData> {
     );
 
     match result {
-        Ok((audio_filename, transcript, words_json, duration_secs, language, recorded_at, status_str)) => {
+        Ok((_audio_filename, transcript, words_json, duration_secs, language, recorded_at, status_str)) => {
             let transcript_words: Vec<TranscriptWordData> = words_json
                 .and_then(|j| serde_json::from_str::<Vec<crate::dictated_notes::TranscriptWord>>(&j).ok())
                 .unwrap_or_default()
@@ -325,6 +328,16 @@ pub struct BeadEventData {
     pub raw: String,
 }
 
+/// Morning brief event data sent to WS clients
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MorningBriefData {
+    pub id: String,
+    pub headline: String,
+    pub generated_at: String,
+    pub draft_count: usize,
+    pub status: String,
+}
+
 /// Stitch created event data sent after a bead is created via the submit flow
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StitchCreatedData {
@@ -335,6 +348,21 @@ pub struct StitchCreatedData {
     pub source: String,
     pub actor: String,
     pub created_at: String,
+}
+
+/// Draft queue event data sent to WS clients when a draft is created, edited, approved, or rejected.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DraftUpdateData {
+    pub draft_id: String,
+    pub project: String,
+    pub title: String,
+    pub kind: String,
+    pub status: String,
+    pub action: String,
+    pub actor: String,
+    pub created_by: String,
+    pub version: i64,
+    pub rejection_reason: Option<String>,
 }
 
 /// WebSocket event sent to clients
@@ -369,6 +397,10 @@ pub struct WsEvent {
     pub stitch_created: Option<StitchCreatedData>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_session: Option<crate::agent_session::AgentSessionEvent>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub morning_brief: Option<MorningBriefData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub draft_update: Option<DraftUpdateData>,
 }
 
 impl WsEvent {
@@ -389,6 +421,8 @@ impl WsEvent {
             bead_events: None,
             stitch_created: None,
             agent_session: None,
+            morning_brief: None,
+            draft_update: None,
         }
     }
 
@@ -409,6 +443,8 @@ impl WsEvent {
             bead_events: None,
             stitch_created: None,
             agent_session: None,
+            morning_brief: None,
+            draft_update: None,
         }
     }
 
@@ -429,6 +465,8 @@ impl WsEvent {
             bead_events: None,
             stitch_created: None,
             agent_session: None,
+            morning_brief: None,
+            draft_update: None,
         }
     }
 
@@ -449,10 +487,13 @@ impl WsEvent {
             bead_events: None,
             stitch_created: None,
             agent_session: None,
+            morning_brief: None,
+            draft_update: None,
         }
     }
 
     /// Create a conversation update event
+    #[allow(dead_code)]
     fn conversation_update(conversation: ConversationData) -> Self {
         Self {
             event_type: "conversation_update".to_string(),
@@ -469,10 +510,13 @@ impl WsEvent {
             bead_events: None,
             stitch_created: None,
             agent_session: None,
+            morning_brief: None,
+            draft_update: None,
         }
     }
 
     /// Create a streaming content event
+    #[allow(dead_code)]
     fn streaming_content(data: StreamingContentData) -> Self {
         Self {
             event_type: "streaming_content".to_string(),
@@ -489,6 +533,8 @@ impl WsEvent {
             bead_events: None,
             stitch_created: None,
             agent_session: None,
+            morning_brief: None,
+            draft_update: None,
         }
     }
 
@@ -509,6 +555,8 @@ impl WsEvent {
             bead_events: None,
             stitch_created: None,
             agent_session: None,
+            morning_brief: None,
+            draft_update: None,
         }
     }
 
@@ -529,6 +577,8 @@ impl WsEvent {
             bead_events: None,
             stitch_created: None,
             agent_session: None,
+            morning_brief: None,
+            draft_update: None,
         }
     }
 
@@ -549,6 +599,8 @@ impl WsEvent {
             bead_events: None,
             stitch_created: None,
             agent_session: None,
+            morning_brief: None,
+            draft_update: None,
         }
     }
 
@@ -569,6 +621,8 @@ impl WsEvent {
             bead_events: None,
             stitch_created: None,
             agent_session: None,
+            morning_brief: None,
+            draft_update: None,
         }
     }
 
@@ -589,6 +643,8 @@ impl WsEvent {
             bead_events: Some(events),
             stitch_created: None,
             agent_session: None,
+            morning_brief: None,
+            draft_update: None,
         }
     }
 
@@ -609,6 +665,8 @@ impl WsEvent {
             bead_events: None,
             stitch_created: Some(data),
             agent_session: None,
+            morning_brief: None,
+            draft_update: None,
         }
     }
 
@@ -629,6 +687,52 @@ impl WsEvent {
             bead_events: None,
             stitch_created: None,
             agent_session: Some(event),
+            morning_brief: None,
+            draft_update: None,
+        }
+    }
+
+    /// Create a morning brief event
+    pub fn morning_brief(data: MorningBriefData) -> Self {
+        Self {
+            event_type: "morning_brief".to_string(),
+            worker: None,
+            workers: None,
+            beads: None,
+            conversations: None,
+            conversation: None,
+            streaming: None,
+            projects: None,
+            config_status: None,
+            capacity: None,
+            bead_event: None,
+            bead_events: None,
+            stitch_created: None,
+            agent_session: None,
+            morning_brief: Some(data),
+            draft_update: None,
+        }
+    }
+
+    /// Create a draft_update event for the draft queue
+    pub fn draft_update(data: DraftUpdateData) -> Self {
+        Self {
+            event_type: "draft_update".to_string(),
+            worker: None,
+            workers: None,
+            beads: None,
+            conversations: None,
+            conversation: None,
+            streaming: None,
+            projects: None,
+            config_status: None,
+            capacity: None,
+            bead_event: None,
+            bead_events: None,
+            stitch_created: None,
+            agent_session: None,
+            morning_brief: None,
+            draft_update: Some(data),
         }
     }
 }
@@ -797,6 +901,8 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
     let mut config_status_rx = state.config_status_tx.subscribe();
     let mut project_status_rx = state.project_status_tx.subscribe();
     let mut capacity_rx = state.capacity_tx.subscribe();
+    let mut brief_rx = state.brief_tx.subscribe();
+    let mut draft_rx = state.draft_tx.subscribe();
     let mut shutdown_rx = state.shutdown.subscribe();
 
     // Create an mpsc channel as intermediary: all producer tasks send WsEvent strings here,
@@ -867,6 +973,21 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
                 if sender.send(Message::Text(json)).await.is_err() {
                     return;
                 }
+            }
+        }
+    }
+
+    // Send latest morning brief snapshot (if one exists)
+    if let Ok(Some(brief)) = crate::fleet::get_latest_morning_brief() {
+        if let Ok(json) = serde_json::to_string(&WsEvent::morning_brief(MorningBriefData {
+            id: brief.id,
+            headline: brief.headline,
+            generated_at: brief.generated_at,
+            draft_count: brief.draft_ids.len(),
+            status: brief.status,
+        })) {
+            if sender.send(Message::Text(json)).await.is_err() {
+                return;
             }
         }
     }
@@ -1070,6 +1191,42 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     });
 
+    // Spawn task to forward draft queue events to the WebSocket
+    let ws_tx_draft = ws_tx.clone();
+    let draft_task = tokio::spawn(async move {
+        loop {
+            match draft_rx.recv().await {
+                Ok(data) => {
+                    if let Ok(json) = serde_json::to_string(&WsEvent::draft_update(data)) {
+                        let _ = ws_tx_draft.send(json).await;
+                    }
+                }
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    debug!("Draft queue broadcast lagged by {}, continuing", n);
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+
+    // Spawn task to forward morning brief events to the WebSocket
+    let ws_tx_brief = ws_tx.clone();
+    let brief_task = tokio::spawn(async move {
+        loop {
+            match brief_rx.recv().await {
+                Ok(data) => {
+                    if let Ok(json) = serde_json::to_string(&WsEvent::morning_brief(data)) {
+                        let _ = ws_tx_brief.send(json).await;
+                    }
+                }
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    debug!("Morning brief broadcast lagged by {}, continuing", n);
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+
     // Handle incoming messages (just ping/pong for now)
     let recv_task = tokio::spawn(async move {
         while let Some(msg) = receiver.next().await {
@@ -1116,6 +1273,8 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         _ = project_task => {},
         _ = capacity_task => {},
         _ = agent_task => {},
+        _ = brief_task => {},
+        _ = draft_task => {},
         _ = recv_task => {},
         _ = shutdown_task => {},
     }

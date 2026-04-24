@@ -50,12 +50,14 @@ pub mod uploads;
 pub mod ws;
 pub mod similarity;
 pub mod snapshot_manifest;
+pub mod svg_sanitize;
 pub mod predictor;
 pub mod risk_patterns;
 pub mod embedding;
 pub mod vector_index;
 pub mod morning_brief;
 pub mod api_morning_brief;
+pub mod redaction;
 
 /// Worker execution state from heartbeats
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

@@ -27,20 +27,15 @@ fn ensure_hoop_dir() -> Result<PathBuf> {
 }
 
 /// Workspace role within a project.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum WorkspaceRole {
+    #[default]
     Primary,
     Manifests,
     Source,
     Secrets,
     Docs,
-}
-
-impl Default for WorkspaceRole {
-    fn default() -> Self {
-        Self::Primary
-    }
 }
 
 impl fmt::Display for WorkspaceRole {
@@ -65,7 +60,7 @@ pub struct WorkspaceEntry {
 }
 
 /// Project registry structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProjectsRegistry {
     pub projects: Vec<ProjectEntry>,
 }
@@ -120,6 +115,7 @@ impl ProjectEntry {
 
     /// Validate workspace invariants. Returns a list of warnings (non-fatal).
     /// Returns `Err` if the workspaces array is empty (hard error).
+    #[allow(dead_code)]
     pub fn validate_workspaces(&self) -> Result<Vec<String>> {
         if self.workspaces.is_empty() {
             anyhow::bail!(
@@ -240,14 +236,6 @@ impl<'de> Deserialize<'de> for ProjectEntry {
 }
 
 // ── Registry operations ─────────────────────────────────────────────────────
-
-impl Default for ProjectsRegistry {
-    fn default() -> Self {
-        Self {
-            projects: Vec::new(),
-        }
-    }
-}
 
 impl ProjectsRegistry {
     /// Load the registry from disk, creating a default one if it doesn't exist

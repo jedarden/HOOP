@@ -167,6 +167,8 @@ async fn list_notes(
 async fn get_note(
     Path(stitch_id): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    crate::id_validators::validate_stitch_id(&stitch_id).map_err(crate::id_validators::rejection)?;
+
     let db_path = fleet::db_path();
     let conn = rusqlite::Connection::open(&db_path)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e)))?;
@@ -184,6 +186,8 @@ async fn get_note(
 async fn get_audio(
     Path(stitch_id): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    crate::id_validators::validate_stitch_id(&stitch_id).map_err(crate::id_validators::rejection)?;
+
     let db_path = fleet::db_path();
     let conn = rusqlite::Connection::open(&db_path)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e)))?;
@@ -220,6 +224,8 @@ async fn update_note(
     Path(stitch_id): Path<String>,
     Json(req): Json<UpdateNoteRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    crate::id_validators::validate_stitch_id(&stitch_id).map_err(crate::id_validators::rejection)?;
+
     let db_path = fleet::db_path();
     let conn = rusqlite::Connection::open(&db_path)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e)))?;

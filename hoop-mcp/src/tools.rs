@@ -180,7 +180,7 @@ impl McpServerState {
             // Write tools
             Tool {
                 name: "create_stitch".to_string(),
-                description: "Create a new stitch with one or more beads. This is the ONLY write operation exposed via MCP. Internally issues br create calls.".to_string(),
+                description: "Submit a stitch draft for operator review. Creates a draft in the preview queue — the operator must approve before any beads are created. No silent writes.".to_string(),
                 input_schema: input_schema_create_stitch(),
                 output_schema: Some(output_schema_create_stitch()),
             },
@@ -260,17 +260,31 @@ impl McpServerState {
             .and_then(|v| v.as_str())
             .ok_or("id parameter is required")?;
 
-        // Read stitch details from fleet.db
-        let stitch = self.query_stitch_detail_from_db(stitch_id)
-            .map_err(|e| format!("Failed to read stitch: {}", e))?;
+        // Try the daemon's aggregated-read endpoint first (full data).
+        // Fall back to direct DB query if daemon is not reachable.
+        match self.read_stitch_via_daemon(stitch_id) {
+            Ok(result) => {
+                let content = serde_json::to_string_pretty(&result)
+                    .map_err(|e| format!("Failed to serialize result: {}", e))?;
+                Ok(ToolCallResult {
+                    content: vec![Content::Text { text: content }],
+                    is_error: None,
+                })
+            }
+            Err(_) => {
+                // Daemon not available — fall back to direct DB query
+                let stitch = self.query_stitch_detail_from_db(stitch_id)
+                    .map_err(|e| format!("Failed to read stitch: {}", e))?;
 
-        let content = serde_json::to_string_pretty(&stitch)
-            .map_err(|e| format!("Failed to serialize result: {}", e))?;
+                let content = serde_json::to_string_pretty(&stitch)
+                    .map_err(|e| format!("Failed to serialize result: {}", e))?;
 
-        Ok(ToolCallResult {
-            content: vec![Content::Text { text: content }],
-            is_error: None,
-        })
+                Ok(ToolCallResult {
+                    content: vec![Content::Text { text: content }],
+                    is_error: None,
+                })
+            }
+        }
     }
 
     fn find_beads(&self, args: &Map<String, Value>) -> Result<ToolCallResult, String> {
@@ -448,13 +462,16 @@ impl McpServerState {
         let description = args.get("description")
             .and_then(|v| v.as_str());
 
-        let project_path = self.projects.get(project)
+        let priority = args.get("priority")
+            .and_then(|v| v.as_i64());
+
+        // Validate project exists
+        let _project_path = self.projects.get(project)
             .ok_or(format!("Project '{}' not found", project))?;
 
-        // This is the ONE write operation: create stitch via the daemon's API
-        // or via br create directly
-        let result = self.create_stitch_via_br(project_path, title, description, kind, args)
-            .map_err(|e| format!("Failed to create stitch: {}", e))?;
+        // Call the daemon's draft API which performs deduplication check
+        let result = self.create_stitch_via_daemon(project, title, description, kind, priority)
+            .map_err(|e| format!("Failed to create stitch draft: {}", e))?;
 
         let content = serde_json::to_string_pretty(&result)
             .map_err(|e| format!("Failed to serialize result: {}", e))?;
@@ -494,7 +511,7 @@ impl McpServerState {
             .map_err(|e| format!("Failed to open escalations file: {}", e))?;
 
         use std::io::Write;
-        writeln!(file, "{}", entry.to_string())
+        writeln!(file, "{}", entry)
             .map_err(|e| format!("Failed to write escalation: {}", e))?;
 
         Ok(ToolCallResult {
@@ -515,6 +532,37 @@ impl McpServerState {
         }
         rusqlite::Connection::open(&self.fleet_db_path)
             .map_err(|e| format!("Failed to open fleet.db: {}", e))
+    }
+
+    /// Call the daemon's aggregated-read endpoint for a stitch.
+    /// Returns the full enriched response (messages, live beads, cost/duration, link graph).
+    fn read_stitch_via_daemon(&self, stitch_id: &str) -> Result<Value, String> {
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .map_err(|e| format!("HTTP client error: {}", e))?;
+
+        let url = format!("http://127.0.0.1:3000/api/stitches/{}", stitch_id);
+        let response = client
+            .get(&url)
+            .send()
+            .map_err(|e| format!("Daemon unreachable: {}", e))?;
+
+        let status = response.status();
+        if status == reqwest::StatusCode::NOT_FOUND {
+            return Err(format!("Stitch '{}' not found", stitch_id));
+        }
+        if !status.is_success() {
+            let error_text = response.text().unwrap_or_else(|_| format!("HTTP {}", status.as_u16()));
+            return Err(format!("Daemon returned error: {}", error_text));
+        }
+
+        let data: Value = response
+            .json()
+            .map_err(|e| format!("Failed to parse daemon response: {}", e))?;
+
+        // §18.3: Redact secrets in message content before forwarding to the agent.
+        Ok(redact_stitch_response(data))
     }
 
     fn query_stitches_from_db(&self, project: &str, args: &Map<String, Value>) -> Result<Vec<Value>, String> {
@@ -601,11 +649,14 @@ impl McpServerState {
         ).map_err(|e| format!("Failed to prepare messages query: {}", e))?;
 
         let messages: Vec<Value> = stmt.query_map([stitch_id], |row| {
+            let content: String = row.get(3)?;
+            // §18.3: Redact secrets before forwarding to the agent.
+            let content = crate::redaction::redact_text(&content);
             Ok(json!({
                 "id": row.get::<_, String>(0)?,
                 "ts": row.get::<_, String>(1)?,
                 "role": row.get::<_, String>(2)?,
-                "content": row.get::<_, String>(3)?,
+                "content": content,
             }))
         }).map_err(|e| format!("Failed to execute messages query: {}", e))?
             .collect::<Result<Vec<_>, _>>()
@@ -758,6 +809,9 @@ impl McpServerState {
 
         let pattern = format!("%{}%", query);
 
+        // §18.3: redact content before forwarding to the agent.
+        let redact = |raw: String| crate::redaction::redact_text(&raw);
+
         if let Some(proj) = project {
             let mut stmt = conn.prepare(
                 "SELECT sm.stitch_id, sm.ts, sm.role, sm.content, s.project
@@ -769,11 +823,12 @@ impl McpServerState {
             ).map_err(|e| format!("Failed to prepare query: {}", e))?;
 
             let rows: Result<Vec<Value>, _> = stmt.query_map([proj, &pattern], |row| {
+                let content: String = row.get(3)?;
                 Ok(json!({
                     "stitch_id": row.get::<_, String>(0)?,
                     "timestamp": row.get::<_, String>(1)?,
                     "role": row.get::<_, String>(2)?,
-                    "content": row.get::<_, String>(3)?,
+                    "content": redact(content),
                     "project": row.get::<_, String>(4)?,
                 }))
             }).map_err(|e| format!("Failed to execute query: {}", e))?
@@ -791,11 +846,12 @@ impl McpServerState {
             ).map_err(|e| format!("Failed to prepare query: {}", e))?;
 
             let rows: Result<Vec<Value>, _> = stmt.query_map([&pattern], |row| {
+                let content: String = row.get(3)?;
                 Ok(json!({
                     "stitch_id": row.get::<_, String>(0)?,
                     "timestamp": row.get::<_, String>(1)?,
                     "role": row.get::<_, String>(2)?,
-                    "content": row.get::<_, String>(3)?,
+                    "content": redact(content),
                     "project": row.get::<_, String>(4)?,
                 }))
             }).map_err(|e| format!("Failed to execute query: {}", e))?
@@ -869,50 +925,103 @@ impl McpServerState {
         }))
     }
 
-    fn create_stitch_via_br(&self, project_path: &str, title: &str, description: Option<&str>, kind: &str, _args: &Map<String, Value>) -> Result<Value, String> {
-        // This creates a stitch by calling br create — the ONE allowed write verb
-        #[cfg(any(
-            feature = "create-only-write",
-            not(any(feature = "zero-write-v01", feature = "create-only-write"))
-        ))]
-        {
-            let mut cmd = crate::br_verbs::invoke_br_create(&[]);
-            cmd.arg(title)
-                .arg("--type").arg("task")
-                .arg("--labels").arg(format!("stitch-kind:{}", kind))
-                .arg("--actor").arg(format!("hoop-mcp:{}", self.actor))
-                .arg("--silent");
+    /// Create a stitch draft by calling the daemon's draft API.
+    ///
+    /// The daemon performs deduplication checking before creating the draft.
+    /// If a duplicate is detected, a 409 CONFLICT response is returned.
+    /// This ensures agents never silently create duplicate work (§3.10 read-first principle).
+    fn create_stitch_via_daemon(
+        &self,
+        project: &str,
+        title: &str,
+        description: Option<&str>,
+        kind: &str,
+        priority: Option<i64>,
+    ) -> Result<Value, String> {
+        // Build the request body matching CreateDraftRequest
+        let request_body = json!({
+            "project": project,
+            "title": title,
+            "kind": kind,
+            "description": description,
+            "has_acceptance_criteria": false,
+            "priority": priority,
+            "labels": [],
+            "source": "agent",
+        });
 
-            if let Some(desc) = description {
-                if !desc.is_empty() {
-                    cmd.arg("--description").arg(desc);
-                }
-            }
+        // Call the daemon's draft API
+        let client = reqwest::blocking::Client::new();
+        let response = client
+            .post("http://127.0.0.1:3000/api/drafts")
+            .json(&request_body)
+            .send()
+            .map_err(|e| format!("Failed to connect to daemon: {}. Is hoop-daemon running on 127.0.0.1:3000?", e))?;
 
-            let output = cmd.current_dir(project_path)
-                .output()
-                .map_err(|e| format!("Failed to execute br: {}", e))?;
+        let status = response.status();
 
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(format!("br create failed: {}", stderr));
-            }
-
-            let bead_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
-
-            Ok(json!({
-                "bead_id": bead_id,
-                "title": title,
-                "kind": kind,
-                "created_at": chrono::Utc::now().to_rfc3339(),
-            }))
+        if status == reqwest::StatusCode::CONFLICT {
+            // Deduplication check failed - a similar stitch/bead exists
+            let error_msg = response
+                .text()
+                .unwrap_or_else(|_| "Duplicate detected".to_string());
+            return Err(error_msg);
         }
 
-        #[cfg(feature = "zero-write-v01")]
-        {
-            let _ = (project_path, title, description, kind);
-            Err("create_stitch is not available under zero-write-v01".to_string())
+        if !status.is_success() {
+            let error_text = response
+                .text()
+                .unwrap_or_else(|_| format!("HTTP {}", status.as_u16()));
+            return Err(format!("Daemon returned error: {}", error_text));
         }
+
+        let response_json: Value = response
+            .json()
+            .map_err(|e| format!("Failed to parse daemon response: {}", e))?;
+
+        Ok(response_json)
+    }
+}
+
+// -----------------------------------------------------------------------
+// Redaction helpers
+// -----------------------------------------------------------------------
+
+/// Redact secrets in message content within a stitch response object.
+///
+/// The daemon returns `{ stitch: {...}, messages: [{..., content: "..."}, ...], ... }`.
+/// We walk the `messages` array and redact the `content` field of each message
+/// before forwarding to the agent (§18.3).
+fn redact_stitch_response(mut value: Value) -> Value {
+    if let Some(messages) = value.get_mut("messages").and_then(|m| m.as_array_mut()) {
+        for msg in messages.iter_mut() {
+            if let Some(content) = msg.get_mut("content") {
+                let redacted = match content.take() {
+                    Value::String(s) => Value::String(crate::redaction::redact_text(&s)),
+                    other => {
+                        // Recursively redact nested JSON (content blocks, tool results, etc.)
+                        redact_json_value_mcp(other)
+                    }
+                };
+                *content = redacted;
+            }
+        }
+    }
+    value
+}
+
+/// Recursively redact all string leaves in a JSON value.
+fn redact_json_value_mcp(value: Value) -> Value {
+    match value {
+        Value::String(s) => Value::String(crate::redaction::redact_text(&s)),
+        Value::Array(arr) => Value::Array(arr.into_iter().map(redact_json_value_mcp).collect()),
+        Value::Object(mut obj) => {
+            for v in obj.values_mut() {
+                *v = redact_json_value_mcp(v.take());
+            }
+            Value::Object(obj)
+        }
+        other => other,
     }
 }
 
@@ -1190,7 +1299,8 @@ fn output_schema_read_stitch() -> OutputSchema {
                     "title": { "type": "string" },
                     "created_by": { "type": "string" },
                     "created_at": { "type": "string" },
-                    "last_activity_at": { "type": "string" }
+                    "last_activity_at": { "type": "string" },
+                    "participants": { "type": "array", "items": { "type": "string" } }
                 }
             }));
             props.insert("messages".to_string(), json!({
@@ -1202,25 +1312,99 @@ fn output_schema_read_stitch() -> OutputSchema {
                         "id": { "type": "string" },
                         "ts": { "type": "string" },
                         "role": { "type": "string" },
-                        "content": { "type": "string" }
+                        "content": { "type": "string" },
+                        "tokens": { "type": "number" }
                     }
                 }
             }));
             props.insert("linked_beads".to_string(), json!({
                 "type": "array",
-                "description": "Beads linked to this stitch",
+                "description": "Beads linked to this stitch with live status",
                 "items": {
                     "type": "object",
                     "properties": {
                         "bead_id": { "type": "string" },
                         "workspace": { "type": "string" },
-                        "relationship": { "type": "string" }
+                        "relationship": { "type": "string" },
+                        "live_status": {
+                            "type": "object",
+                            "description": "Live status from in-memory bead store",
+                            "properties": {
+                                "title": { "type": "string" },
+                                "status": { "type": "string" },
+                                "priority": { "type": "number" },
+                                "issue_type": { "type": "string" },
+                                "created_by": { "type": "string" },
+                                "dependencies": { "type": "array", "items": { "type": "string" } }
+                            }
+                        }
                     }
                 }
             }));
+            props.insert("touched_files".to_string(), json!({
+                "type": "array",
+                "description": "Files mentioned in stitch messages, sorted by mention count",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "path": { "type": "string" },
+                        "mention_count": { "type": "number" }
+                    }
+                }
+            }));
+            props.insert("cost_duration".to_string(), json!({
+                "type": "object",
+                "description": "Token and wall-clock cost/duration roll-up",
+                "properties": {
+                    "total_tokens": { "type": "number" },
+                    "message_count": { "type": "number" },
+                    "wall_clock": { "type": "string" },
+                    "first_message_ts": { "type": "string" },
+                    "last_message_ts": { "type": "string" }
+                }
+            }));
+            props.insert("link_graph".to_string(), json!({
+                "type": "object",
+                "description": "Stitch-to-stitch link graph (incoming and outgoing)",
+                "properties": {
+                    "outgoing": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "stitch_id": { "type": "string" },
+                                "kind": { "type": "string" },
+                                "title": { "type": "string" }
+                            }
+                        }
+                    },
+                    "incoming": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "stitch_id": { "type": "string" },
+                                "kind": { "type": "string" },
+                                "title": { "type": "string" }
+                            }
+                        }
+                    }
+                }
+            }));
+            props.insert("elapsed_ms".to_string(), json!({
+                "type": "number",
+                "description": "Server-side processing time in milliseconds"
+            }));
             props
         },
-        required: Some(vec!["stitch".to_string(), "messages".to_string(), "linked_beads".to_string()]),
+        required: Some(vec![
+            "stitch".to_string(),
+            "messages".to_string(),
+            "linked_beads".to_string(),
+            "touched_files".to_string(),
+            "cost_duration".to_string(),
+            "link_graph".to_string(),
+        ]),
     }
 }
 
@@ -1369,16 +1553,25 @@ fn output_schema_create_stitch() -> OutputSchema {
         schema_type: "object".to_string(),
         properties: {
             let mut props = serde_json::Map::new();
-            props.insert("bead_id".to_string(), json!({
+            props.insert("draft_id".to_string(), json!({
                 "type": "string",
-                "description": "ID of the created bead"
+                "description": "ID of the created draft"
+            }));
+            props.insert("status".to_string(), json!({
+                "type": "string",
+                "description": "Draft status (always 'pending' on creation)"
             }));
             props.insert("title".to_string(), json!({ "type": "string" }));
             props.insert("kind".to_string(), json!({ "type": "string" }));
+            props.insert("project".to_string(), json!({ "type": "string" }));
             props.insert("created_at".to_string(), json!({ "type": "string" }));
+            props.insert("message".to_string(), json!({
+                "type": "string",
+                "description": "Explanation that the draft is pending operator review"
+            }));
             props
         },
-        required: Some(vec!["bead_id".to_string(), "title".to_string()]),
+        required: Some(vec!["draft_id".to_string(), "status".to_string(), "title".to_string()]),
     }
 }
 

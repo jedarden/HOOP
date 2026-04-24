@@ -31,6 +31,7 @@ chrono = { workspace = true }
 rusqlite = { version = "0.30", features = ["bundled"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 bytes = "1"
+zstd = "0.13"
 
 [dev-dependencies]
 tempfile = "3"

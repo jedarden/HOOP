@@ -97,7 +97,7 @@ impl FixLineageLibrary {
             for keyword in &pattern.keywords {
                 keyword_index
                     .entry(keyword.to_lowercase())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(idx);
             }
         }
@@ -171,7 +171,7 @@ impl FixLineageLibrary {
         for keyword in &pattern.keywords {
             self.keyword_index
                 .entry(keyword.to_lowercase())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(idx);
         }
         self.patterns.push(pattern);
@@ -212,7 +212,7 @@ impl RiskMatchBuilder {
         }
     }
 
-    fn build(self, labels_lower: &[String]) -> RiskMatch {
+    fn build(self, _labels_lower: &[String]) -> RiskMatch {
         // Calculate confidence:
         // - Each keyword match adds 0.3
         // - Each label match adds 0.2

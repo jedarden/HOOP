@@ -131,6 +131,7 @@ struct ParsedTurn {
     output_tokens: u64,
     cache_read_tokens: u64,
     cache_write_tokens: u64,
+    #[allow(dead_code)]
     model: Option<String>,
 }
 
@@ -479,7 +480,7 @@ impl CapacityMeter {
         let content = fs::read_to_string(&creds_path)?;
         let creds: Credentials = serde_json::from_str(&content)?;
 
-        let oauth = creds.claude_ai_oauth.unwrap_or_else(|| OAuthCreds {
+        let oauth = creds.claude_ai_oauth.unwrap_or(OAuthCreds {
             subscription_type: None,
             rate_limit_tier: None,
         });

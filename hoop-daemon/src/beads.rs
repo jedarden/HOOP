@@ -268,7 +268,7 @@ impl BeadReader {
             }
         }
 
-        beads.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        beads.sort_by_key(|b| std::cmp::Reverse(b.created_at));
 
         Ok(beads)
     }

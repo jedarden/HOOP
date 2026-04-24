@@ -141,7 +141,7 @@ impl Default for ContextBudget {
 impl ContextIndex {
     /// Build the thin context index from fleet.db and projects.yaml
     pub fn build(projects_config: &serde_yaml::Value) -> Result<Self> {
-        let conn = Connection::open(&crate::fleet::db_path())?;
+        let conn = Connection::open(crate::fleet::db_path())?;
 
         // Load projects from config
         let projects = Self::load_projects(projects_config);
@@ -202,7 +202,7 @@ impl ContextIndex {
                 prompt.push_str(&format!("- {}\n", project.name));
             }
         }
-        prompt.push_str("\n");
+        prompt.push('\n');
 
         // Recent activity
         prompt.push_str("## Recent Activity (Last 10 closed Stitches)\n");
@@ -214,7 +214,7 @@ impl ContextIndex {
         }
         prompt.push_str(&format!("Closed today: {}\n", self.recent_activity.closed_today));
         prompt.push_str(&format!("Created today: {}\n", self.recent_activity.created_today));
-        prompt.push_str("\n");
+        prompt.push('\n');
 
         // Open Stitches (titles only)
         prompt.push_str("## Open Stitches\n");
@@ -228,7 +228,7 @@ impl ContextIndex {
                     stitch.title));
             }
         }
-        prompt.push_str("\n");
+        prompt.push('\n');
 
         // Alerts
         if !self.alerts.is_empty() {
@@ -245,7 +245,7 @@ impl ContextIndex {
                     prompt.push_str(&format!("- [{}]: {}\n", level_str, alert.message));
                 }
             }
-            prompt.push_str("\n");
+            prompt.push('\n');
         }
 
         // Tools instruction
