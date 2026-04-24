@@ -51,8 +51,12 @@ retries and cascading sub-beads lose Stitch lineage.
 
 ### HOOP Side
 
-HOOP's REST API supports `parent_bead_id` in the `POST /api/p/{project}/beads`
-request. When provided, HOOP reads the parent bead's labels via `br get`,
+HOOP provides two paths for Hook 4 label propagation:
+
+#### Daemon REST API
+
+The `POST /api/p/{project}/beads` endpoint supports `parent_bead_id` in the
+request body. When provided, HOOP reads the parent bead's labels via `br get`,
 extracts all `stitch:*` labels using `extract_stitch_labels()`, and appends
 them to the new bead (deduplicating against any already-present labels).
 
@@ -64,9 +68,24 @@ them to the new bead (deduplicating against any already-present labels).
 }
 ```
 
-The `extract_stitch_labels()` function in `br_verbs.rs` filters a label list
-to return only labels matching the `stitch:*` prefix. It handles single labels,
-multiple labels, empty lists, and avoids false positives on non-`stitch:` prefixes.
+#### MCP `create_bead` Tool
+
+The MCP server exposes a `create_bead` tool that workers can use to create
+follow-up beads. When `parent_bead_id` is provided, the tool reads the parent
+bead's labels via `br get --json`, propagates `stitch:*` labels using
+`propagate_stitch_labels()`, and passes the combined labels to `br create`.
+
+```json
+{
+  "project": "my-project",
+  "title": "Follow-up: retry edge case",
+  "parent_bead_id": "bd-parent123",
+  "issue_type": "task"
+}
+```
+
+The `propagate_stitch_labels()` function in `hoop-mcp/src/br_verbs.rs` encapsulates
+the one-line label copy: extract `stitch:*` labels from parent, append deduplicated.
 
 ### NEEDLE Side
 
@@ -99,6 +118,11 @@ Both `hoop-daemon` and `hoop-mcp` carry identical Hook 4 tests:
 - `test_extract_stitch_labels_no_false_positives` — similar prefixes not matched
 - `test_stitch_label_inheritance_single_label` — single stitch label inherited
 - `test_stitch_label_inheritance_multiple_labels` — all stitch labels inherited
+
+MCP-specific Hook 4 tests (`hoop-mcp`):
+
+- `test_propagate_stitch_labels_worker_followup_single` — worker-created follow-up bead inherits parent's stitch label
+- `test_propagate_stitch_labels_multiple_stitch_labels` — multiple stitch labels all propagate
 
 Daemon-only tests (REST API integration):
 

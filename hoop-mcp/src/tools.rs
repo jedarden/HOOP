@@ -184,6 +184,12 @@ impl McpServerState {
                 input_schema: input_schema_create_stitch(),
                 output_schema: Some(output_schema_create_stitch()),
             },
+            Tool {
+                name: "create_bead".to_string(),
+                description: "Create a follow-up bead in a project. When parent_bead_id is set, stitch:* labels are automatically inherited from the parent bead (Hook 4).".to_string(),
+                input_schema: input_schema_create_bead(),
+                output_schema: Some(output_schema_create_bead()),
+            },
             // Utility tools
             Tool {
                 name: "escalate_to_operator".to_string(),
@@ -214,6 +220,7 @@ impl McpServerState {
             "summarize_day" => self.summarize_day(args),
             // Write tools
             "create_stitch" => self.create_stitch(args),
+            "create_bead" => self.create_bead(args),
             // Utility tools
             "escalate_to_operator" => self.escalate_to_operator(args),
             _ => Err(format!("Unknown tool: {}", name)),
@@ -488,6 +495,123 @@ impl McpServerState {
         })
     }
 
+    /// Create a follow-up bead via `br create` with Hook 4 label propagation.
+    ///
+    /// When `parent_bead_id` is set, reads the parent bead's labels via `br get`,
+    /// extracts all `stitch:*` labels, and appends them to the new bead (deduplicated).
+    fn create_bead(&self, args: &Map<String, Value>) -> Result<ToolCallResult, String> {
+        // Zero-write guard
+        #[cfg(feature = "zero-write-v01")]
+        {
+            let _ = args;
+            return Err("Bead creation is disabled in zero-write mode".to_string());
+        }
+
+        let project = args.get("project")
+            .and_then(|v| v.as_str())
+            .ok_or("project parameter is required")?;
+
+        let title = args.get("title")
+            .and_then(|v| v.as_str())
+            .ok_or("title parameter is required")?;
+
+        let description = args.get("description")
+            .and_then(|v| v.as_str());
+
+        let issue_type = args.get("issue_type")
+            .and_then(|v| v.as_str())
+            .unwrap_or("task");
+
+        let priority = args.get("priority")
+            .and_then(|v| v.as_i64());
+
+        let labels: Vec<String> = args.get("labels")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let parent_bead_id = args.get("parent_bead_id")
+            .and_then(|v| v.as_str());
+
+        // Validate parent bead ID
+        if let Some(pid) = parent_bead_id {
+            crate::id_validators::validate_bead_id(pid)
+                .map_err(|e| format!("parent_bead_id: {}", e))?;
+        }
+
+        let project_path = self.projects.get(project)
+            .ok_or(format!("Project '{}' not found", project))?;
+
+        // Build label list
+        let mut all_labels = labels;
+
+        // Hook 4: Inherit stitch labels from parent bead
+        if let Some(pid) = parent_bead_id {
+            if let Ok(parent_labels) = self.lookup_bead_labels(project_path, pid) {
+                crate::br_verbs::propagate_stitch_labels(&mut all_labels, &parent_labels);
+            }
+        }
+
+        // Execute br create
+        #[cfg(not(feature = "zero-write-v01"))]
+        {
+            let mut cmd = crate::br_verbs::invoke_br_create(&[]);
+            cmd.current_dir(project_path);
+            cmd.arg(title);
+            cmd.arg("--type").arg(issue_type);
+
+            if let Some(desc) = description {
+                if !desc.is_empty() {
+                    cmd.arg("--description").arg(desc);
+                }
+            }
+
+            if let Some(p) = priority {
+                cmd.arg("--priority").arg(p.to_string());
+            }
+
+            if !all_labels.is_empty() {
+                cmd.arg("--labels").arg(all_labels.join(","));
+            }
+
+            cmd.arg("--actor").arg(&self.actor);
+            cmd.arg("--silent");
+
+            let output = cmd.output()
+                .map_err(|e| format!("Failed to run br create: {}", e))?;
+
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                return Err(format!("br create failed: {}", stderr.trim()));
+            }
+
+            let bead_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if bead_id.is_empty() {
+                return Err("br create did not return a bead ID".to_string());
+            }
+
+            let result = json!({
+                "id": bead_id,
+                "title": title,
+                "project": project,
+                "labels": all_labels,
+                "parent_bead_id": parent_bead_id,
+            });
+
+            let content = serde_json::to_string_pretty(&result)
+                .map_err(|e| format!("Failed to serialize result: {}", e))?;
+
+            Ok(ToolCallResult {
+                content: vec![Content::Text { text: content }],
+                is_error: None,
+            })
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Utility tools
     // -----------------------------------------------------------------------
@@ -751,6 +875,22 @@ impl McpServerState {
         let stdout = String::from_utf8_lossy(&output.stdout);
         serde_json::from_str(&stdout)
             .map_err(|e| format!("Failed to parse br output: {}", e))
+    }
+
+    /// Look up a bead's labels via `br get --json`.
+    ///
+    /// Used by Hook 4 to inherit stitch labels from a parent bead.
+    fn lookup_bead_labels(&self, project_path: &str, bead_id: &str) -> Result<Vec<String>, String> {
+        let bead_json = self.get_bead_via_br(project_path, bead_id)?;
+        bead_json
+            .get("labels")
+            .and_then(|l| l.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .ok_or_else(|| "No labels field on bead".to_string())
     }
 
     fn grep_in_project(&self, project_path: &str, pattern: &str, args: &Map<String, Value>) -> Result<Vec<Value>, String> {
@@ -1244,6 +1384,50 @@ fn input_schema_create_stitch() -> InputSchema {
     }
 }
 
+fn input_schema_create_bead() -> InputSchema {
+    InputSchema {
+        schema_type: "object".to_string(),
+        properties: {
+            let mut props = serde_json::Map::new();
+            props.insert("project".to_string(), json!({
+                "type": "string",
+                "description": "Target project for the bead"
+            }));
+            props.insert("title".to_string(), json!({
+                "type": "string",
+                "description": "Bead title"
+            }));
+            props.insert("description".to_string(), json!({
+                "type": "string",
+                "description": "Optional bead description"
+            }));
+            props.insert("issue_type".to_string(), json!({
+                "type": "string",
+                "description": "Bead issue type",
+                "enum": ["task", "bug", "epic", "genesis", "review", "fix"],
+                "default": "task"
+            }));
+            props.insert("priority".to_string(), json!({
+                "type": "number",
+                "description": "Bead priority (0-9, default: 2)",
+                "minimum": 0,
+                "maximum": 9
+            }));
+            props.insert("labels".to_string(), json!({
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Labels for the bead"
+            }));
+            props.insert("parent_bead_id".to_string(), json!({
+                "type": "string",
+                "description": "Parent bead ID to inherit stitch:* labels from (Hook 4). When set, stitch labels are automatically propagated to the new bead."
+            }));
+            props
+        },
+        required: Some(vec!["project".to_string(), "title".to_string()]),
+    }
+}
+
 fn input_schema_escalate_to_operator() -> InputSchema {
     InputSchema {
         schema_type: "object".to_string(),
@@ -1578,6 +1762,32 @@ fn output_schema_create_stitch() -> OutputSchema {
             props
         },
         required: Some(vec!["draft_id".to_string(), "status".to_string(), "title".to_string()]),
+    }
+}
+
+fn output_schema_create_bead() -> OutputSchema {
+    OutputSchema {
+        schema_type: "object".to_string(),
+        properties: {
+            let mut props = serde_json::Map::new();
+            props.insert("id".to_string(), json!({
+                "type": "string",
+                "description": "ID of the created bead"
+            }));
+            props.insert("title".to_string(), json!({ "type": "string" }));
+            props.insert("project".to_string(), json!({ "type": "string" }));
+            props.insert("labels".to_string(), json!({
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Labels on the created bead (including inherited stitch labels)"
+            }));
+            props.insert("parent_bead_id".to_string(), json!({
+                "type": "string",
+                "description": "Parent bead ID if stitch labels were inherited"
+            }));
+            props
+        },
+        required: Some(vec!["id".to_string(), "title".to_string(), "project".to_string()]),
     }
 }
 
