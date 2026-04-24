@@ -51,6 +51,7 @@ pub mod ws;
 pub mod similarity;
 pub mod snapshot_manifest;
 pub mod svg_sanitize;
+pub mod pdf_sanitize;
 pub mod predictor;
 pub mod risk_patterns;
 pub mod embedding;

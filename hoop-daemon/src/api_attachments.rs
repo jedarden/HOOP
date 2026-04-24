@@ -3,6 +3,7 @@
 //! Serves audio, video, image, and PDF attachments from bead and stitch storage.
 
 use crate::attachments;
+use crate::id_validators::{ValidBeadId, ValidStitchId};
 use axum::{
     extract::Path,
     response::IntoResponse,
@@ -41,14 +42,18 @@ pub async fn serve_attachment(
 
     let file_path = match attachment_type.as_str() {
         "bead" => {
+            let bead_id = ValidBeadId::parse(&id)
+                .map_err(|_| (axum::http::StatusCode::BAD_REQUEST, "invalid bead id".to_string()))?;
             // Resolve workspace from current directory
             let workspace = std::env::current_dir()
                 .map_err(|_| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, "internal error".to_string()))?;
-            attachments::bead_attachment_path(&workspace, &id, &filename)
+            attachments::bead_attachment_path(&workspace, &bead_id, &filename)
                 .map_err(|_| (axum::http::StatusCode::NOT_FOUND, "attachment not found".to_string()))?
         }
         "stitch" => {
-            attachments::stitch_attachment_path(&id, &filename)
+            let stitch_id = ValidStitchId::parse(&id)
+                .map_err(|_| (axum::http::StatusCode::BAD_REQUEST, "invalid stitch id".to_string()))?;
+            attachments::stitch_attachment_path(&stitch_id, &filename)
                 .map_err(|_| (axum::http::StatusCode::NOT_FOUND, "attachment not found".to_string()))?
         }
         _ => return Err((axum::http::StatusCode::BAD_REQUEST, "invalid attachment type".to_string())),

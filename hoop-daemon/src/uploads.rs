@@ -10,6 +10,7 @@
 //! Chunk state is stored in ~/.hoop/uploads/{upload_id}/
 
 use anyhow::{Context, Result};
+use crate::id_validators::{ValidBeadId, ValidStitchId};
 use sha2::{Digest, Sha256};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -281,17 +282,21 @@ impl UploadRegistry {
         // Move to final destination based on attachment type
         let final_path = match meta.attachment_type.as_str() {
             "bead" => {
+                let bead_id = crate::id_validators::ValidBeadId::parse(&meta.resource_id)
+                    .context("invalid bead ID in upload metadata")?;
                 let workspace = std::env::current_dir()
                     .context("failed to get current directory")?;
                 crate::attachments::bead_attachment_path(
                     &workspace,
-                    &meta.resource_id,
+                    &bead_id,
                     &meta.filename,
                 )?
             }
             "stitch" => {
+                let stitch_id = crate::id_validators::ValidStitchId::parse(&meta.resource_id)
+                    .context("invalid stitch ID in upload metadata")?;
                 crate::attachments::stitch_attachment_path(
-                    &meta.resource_id,
+                    &stitch_id,
                     &meta.filename,
                 )?
             }
@@ -306,6 +311,8 @@ impl UploadRegistry {
         // Runs after rename so we always work on the final path.
         let attach_meta = if attach_meta.declared_extension.eq_ignore_ascii_case("svg") {
             apply_svg_sanitization_after_store(&final_path, &meta, attach_meta)?
+        } else if attach_meta.declared_extension.eq_ignore_ascii_case("pdf") {
+            apply_pdf_sanitization_after_store(&final_path, &meta, attach_meta)?
         } else {
             attach_meta
         };
@@ -449,7 +456,71 @@ fn apply_svg_sanitization_after_store(
     })
 }
 
-/// Read up to `n` leading bytes from a file for content-type sniffing.
+/// Apply PDF sanitization to a file that has already been moved into its final
+/// destination.  If the PDF is modified:
+/// - overwrites `final_path` with the sanitized bytes (atomic),
+/// - writes the original to `<stem>_unsafe.pdf` in the same directory,
+/// - returns updated `AttachmentMetadata` with a `pdf_sanitize` record.
+fn apply_pdf_sanitization_after_store(
+    final_path: &Path,
+    upload_meta: &UploadMetadata,
+    attach_meta: crate::attachments::AttachmentMetadata,
+) -> Result<crate::attachments::AttachmentMetadata> {
+    let pdf_data = fs::read(final_path)
+        .with_context(|| format!("failed to read PDF for sanitization: {}", final_path.display()))?;
+
+    let result = crate::pdf_sanitize::sanitize(&pdf_data)
+        .with_context(|| format!("PDF sanitization failed for {:?}", upload_meta.filename))?;
+
+    if !result.record.was_modified {
+        return Ok(attach_meta);
+    }
+
+    // Resolve the unsafe filename path in the same directory.
+    let unsafe_name = crate::attachments::make_unsafe_pdf_filename(&upload_meta.filename);
+    let unsafe_path = final_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("PDF path has no parent directory"))?
+        .join(&unsafe_name);
+
+    // Write original to unsafe path.
+    fs::write(&unsafe_path, &pdf_data)
+        .with_context(|| format!("failed to write unsafe PDF: {}", unsafe_path.display()))?;
+
+    // Write unsafe sidecar (no pdf_sanitize record on the unsafe copy).
+    let unsafe_meta = crate::attachments::AttachmentMetadata {
+        filename: unsafe_name.clone(),
+        pdf_sanitize: None,
+        ..attach_meta.clone()
+    };
+    crate::attachments::write_attachment_meta(&unsafe_path, &unsafe_meta)?;
+
+    // Overwrite final_path with sanitized content (atomic tmp → rename).
+    let tmp_name = format!(
+        "{}.{}.tmp",
+        final_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("pdf"),
+        uuid::Uuid::new_v4()
+    );
+    let tmp_path = final_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("PDF path has no parent directory"))?
+        .join(&tmp_name);
+    fs::write(&tmp_path, &result.safe_bytes)
+        .context("failed to write sanitized PDF to tmp")?;
+    fs::rename(&tmp_path, final_path)
+        .with_context(|| format!("failed to rename sanitized PDF to {}", final_path.display()))?;
+
+    Ok(crate::attachments::AttachmentMetadata {
+        pdf_sanitize: Some(crate::attachments::PdfSanitizeRecord {
+            unsafe_filename: unsafe_name,
+            removed_threats: result.record.removed_threats,
+        }),
+        ..attach_meta
+    })
+}
 fn read_leading_bytes(path: &Path, n: usize) -> Result<Vec<u8>> {
     let mut buf = vec![0u8; n];
     let mut file = File::open(path)

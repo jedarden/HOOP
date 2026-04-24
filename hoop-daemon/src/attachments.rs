@@ -7,7 +7,7 @@
 //! after creation and prefix-checked against the expected root to prevent
 //! path-traversal attacks (§13 Security).
 
-use crate::id_validators::{validate_bead_id, validate_stitch_id};
+use crate::id_validators::{ValidBeadId, ValidStitchId};
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
@@ -72,6 +72,17 @@ pub struct SvgSanitizeRecord {
     pub removed_attrs: Vec<String>,
 }
 
+/// Record of PDF sanitization, embedded in the sidecar `.meta.json` when the
+/// sanitizer modified the file.  Present only on the *sanitized* copy; absent
+/// on the `_unsafe` original copy.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PdfSanitizeRecord {
+    /// Filename of the preserved unsafe original (e.g. `report_unsafe.pdf`).
+    pub unsafe_filename: String,
+    /// Threats that were neutralised (e.g. `["/JS string", "JavaScript action type"]`).
+    pub removed_threats: Vec<String>,
+}
+
 /// Metadata persisted alongside an attachment recording both declared and sniffed types.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AttachmentMetadata {
@@ -88,6 +99,9 @@ pub struct AttachmentMetadata {
     /// SVG sanitization record, present only when an SVG was modified.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub svg_sanitize: Option<SvgSanitizeRecord>,
+    /// PDF sanitization record, present only when a PDF was modified.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pdf_sanitize: Option<PdfSanitizeRecord>,
 }
 
 /// Validate that the declared filename extension matches the actual content.
@@ -116,6 +130,7 @@ pub fn validate_content_match(filename: &str, data: &[u8]) -> Result<AttachmentM
         sniffed_mime,
         verified_at: chrono::Utc::now(),
         svg_sanitize: None,
+        pdf_sanitize: None,
     })
 }
 
@@ -138,6 +153,22 @@ pub fn make_unsafe_svg_filename(filename: &str) -> String {
     } else {
         format!("{filename}_unsafe")
     }
+}
+
+/// Build the filename used for the preserved unsafe copy of a sanitized PDF.
+///
+/// `report.pdf` → `report_unsafe.pdf`
+/// `REPORT.PDF` → `REPORT_unsafe.PDF`
+pub fn make_unsafe_pdf_filename(filename: &str) -> String {
+    for suffix in &[".pdf", ".PDF"] {
+        if let Some(stem) = filename.strip_suffix(suffix) {
+            if stem.to_ascii_lowercase().ends_with("_unsafe") {
+                return filename.to_owned();
+            }
+            return format!("{stem}_unsafe{suffix}");
+        }
+    }
+    format!("{filename}_unsafe")
 }
 
 /// Write attachment metadata as a sidecar `<filename>.meta.json` file.
@@ -276,14 +307,14 @@ fn is_valid_filename(filename: &str) -> bool {
 /// Return (and lazily create) the attachment directory for a bead.
 ///
 /// Path: `<workspace>/.beads/attachments/<bead-id>/`
-pub fn bead_attachment_dir(workspace: &Path, bead_id: &str) -> Result<PathBuf> {
-    if validate_bead_id(bead_id).is_err() {
-        anyhow::bail!("invalid bead id: {:?}", bead_id);
-    }
+///
+/// Accepts a `ValidBeadId` to enforce compile-time proof that the ID has been
+/// validated before reaching any filesystem path construction.
+pub fn bead_attachment_dir(workspace: &Path, bead_id: &ValidBeadId) -> Result<PathBuf> {
     let dir = workspace
         .join(".beads")
         .join("attachments")
-        .join(bead_id);
+        .join(bead_id.as_str());
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("failed to create bead attachment dir: {}", dir.display()))?;
 
@@ -307,12 +338,12 @@ pub fn bead_attachment_dir(workspace: &Path, bead_id: &str) -> Result<PathBuf> {
 /// Return (and lazily create) the attachment directory for a stitch/Note.
 ///
 /// Path: `~/.hoop/attachments/<stitch-id>/`
-pub fn stitch_attachment_dir(stitch_id: &str) -> Result<PathBuf> {
-    if validate_stitch_id(stitch_id).is_err() {
-        anyhow::bail!("invalid stitch id: {:?}", stitch_id);
-    }
+///
+/// Accepts a `ValidStitchId` to enforce compile-time proof that the ID has been
+/// validated before reaching any filesystem path construction.
+pub fn stitch_attachment_dir(stitch_id: &ValidStitchId) -> Result<PathBuf> {
     let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
-    let dir = home.join(".hoop").join("attachments").join(stitch_id);
+    let dir = home.join(".hoop").join("attachments").join(stitch_id.as_str());
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("failed to create stitch attachment dir: {}", dir.display()))?;
 
@@ -336,11 +367,11 @@ pub fn stitch_attachment_dir(stitch_id: &str) -> Result<PathBuf> {
 
 /// Resolve the destination path for a bead attachment file.
 ///
-/// The directory is created lazily. Returns an error if the bead ID or filename
+/// The directory is created lazily. Returns an error if the filename
 /// fails validation.
 pub fn bead_attachment_path(
     workspace: &Path,
-    bead_id: &str,
+    bead_id: &ValidBeadId,
     filename: &str,
 ) -> Result<PathBuf> {
     if !is_valid_filename(filename) {
@@ -361,7 +392,7 @@ pub fn bead_attachment_path(
 }
 
 /// Resolve the destination path for a stitch attachment file.
-pub fn stitch_attachment_path(stitch_id: &str, filename: &str) -> Result<PathBuf> {
+pub fn stitch_attachment_path(stitch_id: &ValidStitchId, filename: &str) -> Result<PathBuf> {
     if !is_valid_filename(filename) {
         anyhow::bail!("invalid attachment filename: {:?}", filename);
     }
@@ -384,12 +415,12 @@ pub fn stitch_attachment_path(stitch_id: &str, filename: &str) -> Result<PathBuf
 ///
 /// The attachment kind is inferred from magic bytes and checked against
 /// `limits`. Content-type is sniffed and validated against the declared
-/// extension (§13).  SVG files are sanitized (§13) before storage; the
-/// original unsafe copy is also retained when modified.
+/// extension (§13).  SVG and PDF files are sanitized (§13) before storage;
+/// the original unsafe copy is also retained when modified.
 /// Returns the canonical destination path.
 pub fn store_bead_attachment(
     workspace: &Path,
-    bead_id: &str,
+    bead_id: &ValidBeadId,
     filename: &str,
     data: &[u8],
     limits: &SizeLimits,
@@ -403,6 +434,12 @@ pub fn store_bead_attachment(
         });
     }
 
+    if meta.declared_extension.eq_ignore_ascii_case("pdf") {
+        return store_pdf_with_sanitization(data, filename, meta, |name| {
+            bead_attachment_path(workspace, bead_id, name)
+        });
+    }
+
     let dest = bead_attachment_path(workspace, bead_id, filename)?;
     write_atomic(&dest, data)?;
     write_attachment_meta(&dest, &meta)?;
@@ -412,9 +449,9 @@ pub fn store_bead_attachment(
 /// Store bytes as a stitch attachment using an atomic write (tmp → rename).
 ///
 /// Content-type is sniffed and validated against the declared extension (§13).
-/// SVG files are sanitized before storage.
+/// SVG and PDF files are sanitized before storage.
 pub fn store_stitch_attachment(
-    stitch_id: &str,
+    stitch_id: &ValidStitchId,
     filename: &str,
     data: &[u8],
     limits: &SizeLimits,
@@ -424,6 +461,12 @@ pub fn store_stitch_attachment(
 
     if meta.declared_extension.eq_ignore_ascii_case("svg") {
         return store_svg_with_sanitization(data, filename, meta, |name| {
+            stitch_attachment_path(stitch_id, name)
+        });
+    }
+
+    if meta.declared_extension.eq_ignore_ascii_case("pdf") {
+        return store_pdf_with_sanitization(data, filename, meta, |name| {
             stitch_attachment_path(stitch_id, name)
         });
     }
@@ -485,7 +528,54 @@ where
     Ok(dest)
 }
 
-/// Enforce size limit if the kind is recognisable; unknown types are uncapped.
+/// Internal helper: sanitize a PDF and store both the safe and unsafe copies.
+///
+/// `resolve_path(filename)` must return the canonical destination for any
+/// filename within the same attachment directory.
+fn store_pdf_with_sanitization<F>(
+    data: &[u8],
+    filename: &str,
+    meta: AttachmentMetadata,
+    resolve_path: F,
+) -> Result<PathBuf>
+where
+    F: Fn(&str) -> Result<PathBuf>,
+{
+    let result = crate::pdf_sanitize::sanitize(data)
+        .with_context(|| format!("PDF sanitization failed for {:?}", filename))?;
+
+    // Sanitized version is always stored at the declared filename.
+    let dest = resolve_path(filename)?;
+    write_atomic(&dest, &result.safe_bytes)?;
+
+    let pdf_record = if result.record.was_modified {
+        // Store original as _unsafe sibling.
+        let unsafe_name = make_unsafe_pdf_filename(filename);
+        let unsafe_dest = resolve_path(&unsafe_name)?;
+        write_atomic(&unsafe_dest, data)?;
+        let unsafe_meta = AttachmentMetadata {
+            filename: unsafe_name.clone(),
+            pdf_sanitize: None,
+            ..meta.clone()
+        };
+        write_attachment_meta(&unsafe_dest, &unsafe_meta)?;
+
+        Some(PdfSanitizeRecord {
+            unsafe_filename: unsafe_name,
+            removed_threats: result.record.removed_threats,
+        })
+    } else {
+        None
+    };
+
+    let final_meta = AttachmentMetadata {
+        pdf_sanitize: pdf_record,
+        ..meta
+    };
+    write_attachment_meta(&dest, &final_meta)?;
+
+    Ok(dest)
+}
 fn check_size(data: &[u8], limits: &SizeLimits) -> Result<()> {
     if let Some(kind) = AttachmentKind::from_magic(data) {
         let max = kind.size_limit(limits);
@@ -528,6 +618,7 @@ fn write_atomic(dest: &Path, data: &[u8]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::id_validators::{validate_bead_id, validate_stitch_id, ValidBeadId, ValidStitchId};
     use tempfile::TempDir;
 
     // ── Validation ────────────────────────────────────────────────────────────
@@ -692,7 +783,8 @@ mod tests {
     fn bead_attachment_dir_created_lazily() {
         let tmp = TempDir::new().unwrap();
         let ws = tmp.path();
-        let dir = bead_attachment_dir(ws, "test-bead.1.0").unwrap();
+        let bid = ValidBeadId::parse("test-bead.1.0").unwrap();
+        let dir = bead_attachment_dir(ws, &bid).unwrap();
         assert!(dir.is_dir());
         assert!(dir.ends_with("test-bead.1.0"));
     }
@@ -701,34 +793,35 @@ mod tests {
     fn bead_attachment_dir_idempotent() {
         let tmp = TempDir::new().unwrap();
         let ws = tmp.path();
-        let dir1 = bead_attachment_dir(ws, "my-bead.1").unwrap();
-        let dir2 = bead_attachment_dir(ws, "my-bead.1").unwrap();
+        let bid = ValidBeadId::parse("my-bead.1").unwrap();
+        let dir1 = bead_attachment_dir(ws, &bid).unwrap();
+        let dir2 = bead_attachment_dir(ws, &bid).unwrap();
         assert_eq!(dir1, dir2);
     }
 
     #[test]
     fn bead_attachment_dir_rejects_invalid_id() {
-        let tmp = TempDir::new().unwrap();
-        let ws = tmp.path();
-        assert!(bead_attachment_dir(ws, "").is_err());
-        assert!(bead_attachment_dir(ws, "-bad").is_err());
-        assert!(bead_attachment_dir(ws, "../escape").is_err());
+        assert!(ValidBeadId::parse("").is_err());
+        assert!(ValidBeadId::parse("-bad").is_err());
+        assert!(ValidBeadId::parse("../escape").is_err());
     }
 
     #[test]
     fn bead_attachment_path_rejects_bad_filename() {
         let tmp = TempDir::new().unwrap();
         let ws = tmp.path();
-        assert!(bead_attachment_path(ws, "bead.1", "..").is_err());
-        assert!(bead_attachment_path(ws, "bead.1", "sub/dir.png").is_err());
-        assert!(bead_attachment_path(ws, "bead.1", "").is_err());
+        let bid = ValidBeadId::parse("bead.1").unwrap();
+        assert!(bead_attachment_path(ws, &bid, "..").is_err());
+        assert!(bead_attachment_path(ws, &bid, "sub/dir.png").is_err());
+        assert!(bead_attachment_path(ws, &bid, "").is_err());
     }
 
     #[test]
     fn bead_attachment_path_ok() {
         let tmp = TempDir::new().unwrap();
         let ws = tmp.path();
-        let p = bead_attachment_path(ws, "bead.1", "image.png").unwrap();
+        let bid = ValidBeadId::parse("bead.1").unwrap();
+        let p = bead_attachment_path(ws, &bid, "image.png").unwrap();
         // Should end with bead.1/image.png
         assert!(p.ends_with("image.png"));
         assert!(p.parent().unwrap().ends_with("bead.1"));
@@ -738,8 +831,8 @@ mod tests {
 
     #[test]
     fn stitch_id_format_gate() {
-        assert!(stitch_attachment_dir("not-a-uuid").is_err());
-        assert!(stitch_attachment_dir("").is_err());
+        assert!(ValidStitchId::parse("not-a-uuid").is_err());
+        assert!(ValidStitchId::parse("").is_err());
     }
 
     // ── store_bead_attachment ─────────────────────────────────────────────────
@@ -750,7 +843,8 @@ mod tests {
         let ws = tmp.path();
         let data = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"; // PNG header stub
         let limits = SizeLimits::default();
-        let dest = store_bead_attachment(ws, "bead.1", "test.png", data, &limits).unwrap();
+        let bead_id = ValidBeadId::parse("bead.1").unwrap();
+        let dest = store_bead_attachment(ws, &bead_id, "test.png", data, &limits).unwrap();
         assert!(dest.exists());
         assert_eq!(std::fs::read(&dest).unwrap(), data);
     }
@@ -766,7 +860,8 @@ mod tests {
         // WebM magic + extra bytes to exceed the limit
         let mut data = vec![0u8; 10];
         data[..4].copy_from_slice(b"\x1a\x45\xdf\xa3");
-        assert!(store_bead_attachment(ws, "bead.1", "clip.webm", &data, &limits).is_err());
+        let bead_id = ValidBeadId::parse("bead.1").unwrap();
+        assert!(store_bead_attachment(ws, &bead_id, "clip.webm", &data, &limits).is_err());
     }
 
     #[test]
@@ -775,7 +870,8 @@ mod tests {
         let ws = tmp.path();
         let data = b"%PDF-1.4 minimal";
         let limits = SizeLimits::default();
-        let dest = store_bead_attachment(ws, "bead.1", "doc.pdf", data, &limits).unwrap();
+        let bead_id = ValidBeadId::parse("bead.1").unwrap();
+        let dest = store_bead_attachment(ws, &bead_id, "doc.pdf", data, &limits).unwrap();
         let parent = dest.parent().unwrap();
         // No stale .tmp files should remain
         let tmps: Vec<_> = std::fs::read_dir(parent)
@@ -925,7 +1021,8 @@ mod tests {
         let png_data = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR";
         let limits = SizeLimits::default();
 
-        let dest = store_bead_attachment(ws, "bead.1", "image.png", png_data, &limits).unwrap();
+        let bead_id = ValidBeadId::parse("bead.1").unwrap();
+        let dest = store_bead_attachment(ws, &bead_id, "image.png", png_data, &limits).unwrap();
 
         let meta_path = dest.parent().unwrap().join("image.png.meta.json");
         assert!(meta_path.exists(), "sidecar .meta.json should exist");
@@ -946,7 +1043,8 @@ mod tests {
         let png_data = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR";
         let limits = SizeLimits::default();
 
-        let result = store_bead_attachment(ws, "bead.1", "photo.jpg", png_data, &limits);
+        let bead_id = ValidBeadId::parse("bead.1").unwrap();
+        let result = store_bead_attachment(ws, &bead_id, "photo.jpg", png_data, &limits);
         assert!(result.is_err());
 
         // Neither the attachment nor the sidecar should exist
@@ -955,5 +1053,94 @@ mod tests {
             let entries: Vec<_> = std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).collect();
             assert!(entries.is_empty(), "no files should be written on rejection");
         }
+    }
+
+    // ── §13 Acceptance: SVG script tag stripped with clear record ──────────────
+
+    #[test]
+    fn svg_with_script_tag_stripped_and_recorded() {
+        let tmp = TempDir::new().unwrap();
+        let ws = tmp.path();
+        let limits = SizeLimits::default();
+        let bead_id = ValidBeadId::parse("bead.1").unwrap();
+
+        let svg = br#"<svg xmlns="http://www.w3.org/2000/svg"><script>alert('xss')</script><rect width="10" height="10"/></svg>"#;
+        let dest = store_bead_attachment(ws, &bead_id, "diagram.svg", svg, &limits).unwrap();
+
+        // The sanitized file should NOT contain script or alert
+        let stored = std::fs::read_to_string(&dest).unwrap();
+        assert!(!stored.contains("script"), "script tag should be stripped");
+        assert!(!stored.contains("alert"), "script content should be stripped");
+        assert!(stored.contains("rect"), "non-dangerous content should survive");
+
+        // The sidecar metadata should record what was removed
+        let meta_path = dest.parent().unwrap().join("diagram.svg.meta.json");
+        let meta: AttachmentMetadata =
+            serde_json::from_str(&std::fs::read_to_string(&meta_path).unwrap()).unwrap();
+        let rec = meta.svg_sanitize.expect("SVG sanitize record should be present");
+        assert!(rec.removed_elements.iter().any(|e| e == "script"));
+        assert!(!rec.unsafe_filename.is_empty());
+
+        // The unsafe original should be preserved
+        let unsafe_path = dest.parent().unwrap().join(&rec.unsafe_filename);
+        assert!(unsafe_path.exists(), "unsafe copy should be preserved");
+        let unsafe_content = std::fs::read_to_string(&unsafe_path).unwrap();
+        assert!(unsafe_content.contains("script"), "unsafe copy should have original script");
+    }
+
+    // ── §13 Acceptance: mismatch (claimed PNG, actual EXE) rejected ────────────
+
+    #[test]
+    fn exe_claimed_as_png_rejected_with_clear_error() {
+        let tmp = TempDir::new().unwrap();
+        let ws = tmp.path();
+        let limits = SizeLimits::default();
+        let bead_id = ValidBeadId::parse("bead.1").unwrap();
+
+        // Windows PE (MZ header) disguised as PNG
+        let exe_bytes = b"\x4d\x5a\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff\x00\x00";
+        let result = store_bead_attachment(ws, &bead_id, "photo.png", exe_bytes, &limits);
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("content-type mismatch"),
+            "should reject with mismatch error, got: {err}"
+        );
+        assert!(
+            err.contains("png") && (err.contains("executable") || err.contains("dosexec")),
+            "error should reference both declared and actual type: {err}"
+        );
+    }
+
+    // ── §13 Acceptance: PDF with embedded JS sanitized to no-JS version ───────
+
+    #[test]
+    fn pdf_with_js_sanitized_through_storage() {
+        let tmp = TempDir::new().unwrap();
+        let ws = tmp.path();
+        let limits = SizeLimits::default();
+        let bead_id = ValidBeadId::parse("bead.1").unwrap();
+
+        let pdf = b"%PDF-1.4\n1 0 obj\n<< /Type /Action /S /JavaScript /JS (alert('xss')) >>\nendobj\n%%EOF\n";
+        let dest = store_bead_attachment(ws, &bead_id, "doc.pdf", pdf, &limits).unwrap();
+
+        // The sanitized PDF should not contain JavaScript or alert
+        let stored = std::fs::read(&dest).unwrap();
+        let stored_str = String::from_utf8_lossy(&stored);
+        assert!(!stored_str.contains("/JavaScript"), "JS action should be neutralised");
+        assert!(!stored_str.contains("alert"), "JS code should be stripped");
+
+        // Sidecar metadata should record the sanitization
+        let meta_path = dest.parent().unwrap().join("doc.pdf.meta.json");
+        let meta: AttachmentMetadata =
+            serde_json::from_str(&std::fs::read_to_string(&meta_path).unwrap()).unwrap();
+        let rec = meta.pdf_sanitize.expect("PDF sanitize record should be present");
+        assert!(!rec.removed_threats.is_empty(), "should record removed threats");
+        assert!(!rec.unsafe_filename.is_empty());
+
+        // The unsafe original should contain the original JS
+        let unsafe_path = dest.parent().unwrap().join(&rec.unsafe_filename);
+        assert!(unsafe_path.exists());
+        let unsafe_content = std::fs::read_to_string(&unsafe_path).unwrap();
+        assert!(unsafe_content.contains("/JavaScript"), "unsafe copy should preserve JS");
     }
 }
