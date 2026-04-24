@@ -183,6 +183,7 @@ async fn preview_decompose(
     State(state): State<crate::DaemonState>,
     Json(req): Json<DecomposePreviewRequest>,
 ) -> Result<Json<DecomposePreviewResponse>, (StatusCode, String)> {
+    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
     let _project_path = resolve_project_path(&project, &state)?;
 
     validate_stitch_kind(&req.kind, req.has_acceptance_criteria.unwrap_or(false))?;
@@ -243,6 +244,9 @@ async fn submit_stitch(
 ) -> Result<Json<StitchSubmitResponse>, (StatusCode, String)> {
     // 1. Validate draft against schema
     validate_stitch_draft(&req)?;
+
+    // 1a. Validate project name
+    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
 
     // 1b. Validate stitch_id if provided
     if let Some(ref sid) = req.stitch_id {

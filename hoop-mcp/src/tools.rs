@@ -75,6 +75,19 @@ impl McpServerState {
         })
     }
 
+    /// Validate a project name and resolve it to a filesystem path.
+    ///
+    /// Returns the project path from the registry, or an error if the project
+    /// name is malformed or not registered. Validates format first (§13), then
+    /// checks existence in the project registry.
+    fn require_project(&self, project: &str) -> Result<&str, String> {
+        crate::id_validators::validate_project_name(project)
+            .map_err(|e| format!("project: {}", e))?;
+        self.projects.get(project)
+            .map(|s| s.as_str())
+            .ok_or_else(|| format!("Project '{}' not found", project))
+    }
+
     /// Load projects from ~/.hoop/projects.yaml
     fn load_projects() -> Result<HashMap<String, String>> {
         let mut path = dirs::home_dir()
@@ -247,8 +260,7 @@ impl McpServerState {
             .and_then(|v| v.as_str())
             .ok_or("project parameter is required")?;
 
-        let _project_path = self.projects.get(project)
-            .ok_or(format!("Project '{}' not found", project))?;
+        let _project_path = self.require_project(project)?;
 
         // Read stitches from fleet.db
         let stitches = self.query_stitches_from_db(project, args)?;
@@ -302,8 +314,7 @@ impl McpServerState {
             .and_then(|v| v.as_str())
             .ok_or("project parameter is required")?;
 
-        let project_path = self.projects.get(project)
-            .ok_or(format!("Project '{}' not found", project))?;
+        let project_path = self.require_project(project)?;
 
         // Read beads using br list
         let beads = self.list_beads_via_br(project_path, args)?;
@@ -321,6 +332,8 @@ impl McpServerState {
         let project = args.get("project")
             .and_then(|v| v.as_str())
             .ok_or("project parameter is required")?;
+
+        let _project_path = self.require_project(project)?;
 
         let bead_id = args.get("id")
             .and_then(|v| v.as_str())
@@ -354,8 +367,7 @@ impl McpServerState {
             .and_then(|v| v.as_str())
             .ok_or("path parameter is required")?;
 
-        let project_path = self.projects.get(project)
-            .ok_or(format!("Project '{}' not found", project))?;
+        let project_path = self.require_project(project)?;
 
         let full_path = PathBuf::from(project_path).join(file_path);
 
@@ -387,8 +399,7 @@ impl McpServerState {
             .and_then(|v| v.as_str())
             .ok_or("pattern parameter is required")?;
 
-        let project_path = self.projects.get(project)
-            .ok_or(format!("Project '{}' not found", project))?;
+        let project_path = self.require_project(project)?;
 
         let results = self.grep_in_project(project_path, pattern, args)
             .map_err(|e| format!("Grep error: {}", e))?;
@@ -427,8 +438,7 @@ impl McpServerState {
             .and_then(|v| v.as_str())
             .ok_or("project parameter is required")?;
 
-        let _project_path = self.projects.get(project)
-            .ok_or(format!("Project '{}' not found", project))?;
+        let _project_path = self.require_project(project)?;
 
         let summary = self.generate_project_summary(project)
             .map_err(|e| format!("Failed to generate summary: {}", e))?;
@@ -902,7 +912,16 @@ impl McpServerState {
             .and_then(|v| v.as_str());
 
         let base_path = if let Some(p) = path_arg {
-            PathBuf::from(project_path).join(p)
+            let full = PathBuf::from(project_path).join(p);
+            // Path traversal guard (§13): canonicalize and verify containment
+            let canonical = full.canonicalize()
+                .map_err(|e| format!("Path error: {}", e))?;
+            let canonical_project = PathBuf::from(project_path).canonicalize()
+                .map_err(|e| format!("Project path error: {}", e))?;
+            if !canonical.starts_with(&canonical_project) {
+                return Err("Path traversal detected".to_string());
+            }
+            canonical
         } else {
             PathBuf::from(project_path)
         };

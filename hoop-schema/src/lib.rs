@@ -33,7 +33,10 @@ include!(concat!(env!("OUT_DIR"), "/types.rs"));
 /// A unified view of a workspace, abstracting over both `ProjectEntry` variants.
 #[derive(Debug, Clone)]
 pub struct WorkspaceView {
+    /// Raw workspace path (display-only)
     pub path: std::path::PathBuf,
+    /// Realpath-resolved absolute path (for joins/dedup). None if not yet resolved.
+    pub canonical_path: Option<std::path::PathBuf>,
     pub role: WorkspaceViewRole,
 }
 

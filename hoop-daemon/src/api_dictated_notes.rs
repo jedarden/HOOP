@@ -45,6 +45,8 @@ async fn create_note(
     State(state): State<crate::DaemonState>,
     Json(req): Json<CreateNoteRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
+
     // Validate project exists
     {
         let projects = state.projects.read().unwrap();
@@ -89,7 +91,7 @@ async fn create_note(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB WAL error: {}", e)))?;
 
     // Insert stitch row
-    dictated_notes::insert_stitch(&conn, &stitch_id, &project, &title, "operator")
+    dictated_notes::insert_stitch(&conn, &valid_stitch_id, &project, &title, "operator")
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create stitch: {}", e)))?;
 
     // Insert note metadata
@@ -156,6 +158,8 @@ async fn create_note(
 async fn list_notes(
     Path(project): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
+
     let db_path = fleet::db_path();
     let conn = rusqlite::Connection::open(&db_path)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e)))?;

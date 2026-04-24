@@ -5,6 +5,7 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::borrow::Cow;
 use std::fmt;
 use std::fs;
 use std::io::Write;
@@ -53,8 +54,12 @@ impl fmt::Display for WorkspaceRole {
 /// A single workspace within a project.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WorkspaceEntry {
-    /// Absolute path to the workspace
+    /// Raw workspace path as provided by the operator (display-only)
     pub path: PathBuf,
+    /// Realpath-resolved absolute path used for joins and dedup.
+    /// Stored on write; reconciled on read.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub canonical_path: Option<PathBuf>,
     /// Workspace role
     pub role: WorkspaceRole,
 }
@@ -108,9 +113,20 @@ impl ProjectEntry {
             .map(|w| w.path.as_path())
     }
 
-    /// Iterate over all workspace paths.
+    /// Iterate over all workspace raw paths (for display).
     pub fn all_paths(&self) -> impl Iterator<Item = &Path> {
         self.workspaces.iter().map(|w| w.path.as_path())
+    }
+
+    /// Iterate over all workspace canonical paths (for joins/dedup).
+    /// Falls back to raw path when canonical_path is absent (legacy data).
+    pub fn all_canonical_paths(&self) -> impl Iterator<Item = Cow<'_, Path>> {
+        self.workspaces.iter().map(|w| {
+            match &w.canonical_path {
+                Some(cp) => Cow::Borrowed(cp.as_path()),
+                None => Cow::Borrowed(w.path.as_path()),
+            }
+        })
     }
 
     /// Validate workspace invariants. Returns a list of warnings (non-fatal).
@@ -204,6 +220,7 @@ impl<'de> Deserialize<'de> for ProjectEntry {
         let workspaces = match (raw.path, raw.workspaces) {
             (Some(path), None) => vec![WorkspaceEntry {
                 path,
+                canonical_path: None,
                 role: WorkspaceRole::Primary,
             }],
             (None, Some(ws)) => {
@@ -269,20 +286,21 @@ impl ProjectsRegistry {
     ///
     /// If `name_override` is provided it is used as the project name;
     /// otherwise the name is derived from the directory basename.
+    /// Stores both the raw input path and the canonical (realpath) form.
     pub fn add(&mut self, path: PathBuf, name_override: Option<&str>) -> Result<ProjectEntry> {
-        let absolute_path = fs::canonicalize(&path)
+        let canonical = fs::canonicalize(&path)
             .with_context(|| format!("Path does not exist: {}", path.display()))?;
 
-        let beads_path = absolute_path.join(".beads");
+        let beads_path = canonical.join(".beads");
         if !beads_path.exists() || !beads_path.is_dir() {
             anyhow::bail!(
                 "Path does not contain a .beads/ directory: {}",
-                absolute_path.display()
+                canonical.display()
             );
         }
 
         let name = name_override.map(|s| s.to_string()).unwrap_or_else(|| {
-            absolute_path
+            canonical
                 .file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("unknown")
@@ -293,20 +311,25 @@ impl ProjectsRegistry {
             anyhow::bail!("Project '{}' already exists in registry", name);
         }
 
+        // Dedup by canonical path (catches symlink aliases)
         if let Some(existing) = self
             .projects
             .iter()
-            .find(|p| p.all_paths().any(|wp| wp == absolute_path))
+            .find(|p| p.all_paths().any(|wp| wp == canonical))
         {
             anyhow::bail!("Path already registered as project '{}'", existing.name);
         }
+
+        // raw = original input (or canonical if they're the same)
+        let raw = if path == canonical { canonical.clone() } else { path };
 
         let entry = ProjectEntry {
             name,
             label: None,
             color: None,
             workspaces: vec![WorkspaceEntry {
-                path: absolute_path,
+                path: raw,
+                canonical_path: Some(canonical),
                 role: WorkspaceRole::Primary,
             }],
         };
@@ -327,31 +350,33 @@ impl ProjectsRegistry {
         self.projects.iter().find(|p| p.name == name)
     }
 
-    /// Returns the set of all workspace paths already registered (across all projects)
+    /// Returns the set of all canonical workspace paths already registered (across all projects).
+    /// Uses canonical_path when available, falls back to raw path for legacy entries.
     fn registered_paths(&self) -> HashSet<PathBuf> {
         self.projects
             .iter()
-            .flat_map(|p| p.all_paths().map(|p| p.to_path_buf()))
+            .flat_map(|p| p.all_canonical_paths().map(|cp| cp.to_path_buf()))
             .collect()
     }
 }
 
 // ── Public helpers ──────────────────────────────────────────────────────────
 
-/// Validate that a path exists and contains a .beads directory
+/// Validate that a path exists and contains a .beads directory.
+/// Returns the canonical (realpath) version.
 pub fn validate_workspace(path: &Path) -> Result<PathBuf> {
-    let absolute_path = fs::canonicalize(path)
+    let canonical = fs::canonicalize(path)
         .with_context(|| format!("Path does not exist: {}", path.display()))?;
 
-    let beads_path = absolute_path.join(".beads");
+    let beads_path = canonical.join(".beads");
     if !beads_path.exists() || !beads_path.is_dir() {
         anyhow::bail!(
             "Path does not contain a .beads/ directory: {}",
-            absolute_path.display()
+            canonical.display()
         );
     }
 
-    Ok(absolute_path)
+    Ok(canonical)
 }
 
 /// Add a project to the registry
@@ -568,7 +593,8 @@ mod tests {
             label: None,
             color: None,
             workspaces: vec![WorkspaceEntry {
-                path,
+                path: path.clone(),
+                canonical_path: Some(path),
                 role: WorkspaceRole::Primary,
             }],
         }
@@ -638,6 +664,7 @@ workspaces:
             color: Some("#FF0000".to_string()),
             workspaces: vec![WorkspaceEntry {
                 path: PathBuf::from("/tmp/colored"),
+                canonical_path: None,
                 role: WorkspaceRole::Primary,
             }],
         };
@@ -689,10 +716,12 @@ workspaces:
             vec![
                 WorkspaceEntry {
                     path: PathBuf::from("/tmp/a"),
+                    canonical_path: None,
                     role: WorkspaceRole::Primary,
                 },
                 WorkspaceEntry {
                     path: PathBuf::from("/tmp/b"),
+                    canonical_path: None,
                     role: WorkspaceRole::Primary,
                 },
             ],
@@ -709,10 +738,12 @@ workspaces:
             vec![
                 WorkspaceEntry {
                     path: PathBuf::from("/tmp/a"),
+                    canonical_path: None,
                     role: WorkspaceRole::Primary,
                 },
                 WorkspaceEntry {
                     path: PathBuf::from("/tmp/b"),
+                    canonical_path: None,
                     role: WorkspaceRole::Manifests,
                 },
             ],
@@ -835,10 +866,12 @@ workspaces:
                     vec![
                         WorkspaceEntry {
                             path: PathBuf::from("/tmp/b1"),
+                            canonical_path: Some(PathBuf::from("/tmp/b1")),
                             role: WorkspaceRole::Primary,
                         },
                         WorkspaceEntry {
                             path: PathBuf::from("/tmp/b2"),
+                            canonical_path: Some(PathBuf::from("/tmp/b2")),
                             role: WorkspaceRole::Manifests,
                         },
                     ],
@@ -957,10 +990,12 @@ workspaces:
             vec![
                 WorkspaceEntry {
                     path: PathBuf::from("/tmp/manifests"),
+                    canonical_path: None,
                     role: WorkspaceRole::Manifests,
                 },
                 WorkspaceEntry {
                     path: PathBuf::from("/tmp/primary"),
+                    canonical_path: None,
                     role: WorkspaceRole::Primary,
                 },
             ],
@@ -974,6 +1009,7 @@ workspaces:
             "p",
             vec![WorkspaceEntry {
                 path: PathBuf::from("/tmp/manifests"),
+                canonical_path: None,
                 role: WorkspaceRole::Manifests,
             }],
         );

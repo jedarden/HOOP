@@ -22,7 +22,7 @@ use crate::tag_join;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use rayon::prelude::*;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -39,12 +39,18 @@ pub enum SessionEvent {
     ConversationsUpdated { sessions: Vec<ParsedSession> },
     /// A new session file was bound to an existing session ID
     SessionBound { id: String, file_path: String },
-    /// A session was bound to a bead via the needle tag-join resolver (dual-identity invariant §B1)
+    /// A session was bound to a bead via the needle tag-join resolver (dual-identity invariant §B1).
+    /// Emitted exactly once per (bead_id, provider_session_id) pair — subsequent appearances are no-ops.
     TagJoinBound {
+        /// HOOP internal stable session ID
         session_id: String,
+        /// Provider-native session ID (e.g. Claude Code's UUID)
+        provider_session_id: String,
         bead_id: String,
         worker: String,
         strand: Option<String>,
+        /// Timestamp of the first join
+        ts: DateTime<Utc>,
     },
     /// An error occurred
     Error(String),
@@ -385,6 +391,12 @@ struct SessionTailerState {
     last_discovery: Option<DateTime<Utc>>,
     /// Available session adapters
     adapters: Vec<Box<dyn SessionAdapter>>,
+    /// (bead_id, provider_session_id) pairs already emitted — enforces at-most-once emission (§B1)
+    session_bound_seen: HashSet<(String, String)>,
+    /// Forward index: bead_id → provider_session_id
+    bead_to_provider_session: HashMap<String, String>,
+    /// Reverse index: provider_session_id → bead_id
+    provider_session_to_bead: HashMap<String, String>,
 }
 
 impl Default for SessionTailerState {
@@ -401,6 +413,9 @@ impl Default for SessionTailerState {
                 Box::new(GeminiAdapter),
                 Box::new(AiderAdapter),
             ],
+            session_bound_seen: HashSet::new(),
+            bead_to_provider_session: HashMap::new(),
+            provider_session_to_bead: HashMap::new(),
         }
     }
 }
@@ -894,7 +909,7 @@ impl SessionTailer {
 
             let key = (first_prompt, session.cwd.clone());
 
-            if let Some(existing_id) = state.bootstrap_matches.get(&key) {
+            if let Some(existing_id) = state.bootstrap_matches.get(&key).cloned() {
                 // Found a match - alias this file to the existing session ID
                 state.path_to_id.insert(file_path.clone(), existing_id.clone());
                 state.id_to_path.insert(existing_id.clone(), file_path);
@@ -903,13 +918,13 @@ impl SessionTailer {
                     id: existing_id.clone(),
                     file_path: session.file_path.clone(),
                 });
-                emit_tag_join_bound(event_tx, existing_id, &session.kind);
+                maybe_emit_session_bound(event_tx, &existing_id, &session.session_id, &session.kind, state);
             } else {
                 // New session - register it
                 state.id_to_path.insert(session.id.clone(), file_path.clone());
                 state.path_to_id.insert(file_path, session.id.clone());
                 state.bootstrap_matches.insert(key, session.id.clone());
-                emit_tag_join_bound(event_tx, &session.id, &session.kind);
+                maybe_emit_session_bound(event_tx, &session.id, &session.session_id, &session.kind, state);
                 result.push(session);
             }
         }
@@ -1611,18 +1626,31 @@ fn extract_text_content(content: &serde_json::Value) -> Option<String> {
 }
 
 /// Emit a TagJoinBound event for worker sessions (dual-identity invariant §B1).
-fn emit_tag_join_bound(
+///
+/// Idempotent: emits exactly once per (bead_id, provider_session_id) pair within this
+/// state lifetime.  Subsequent calls with the same pair are silent no-ops.
+fn maybe_emit_session_bound(
     event_tx: &broadcast::Sender<SessionEvent>,
     session_id: &str,
+    provider_session_id: &str,
     kind: &ParsedSessionKind,
+    state: &mut SessionTailerState,
 ) {
     if let ParsedSessionKind::Variant0 { worker, bead, strand } = kind {
-        let _ = event_tx.send(SessionEvent::TagJoinBound {
-            session_id: session_id.to_string(),
-            bead_id: bead.clone(),
-            worker: worker.clone(),
-            strand: strand.clone(),
-        });
+        let key = (bead.clone(), provider_session_id.to_string());
+        if state.session_bound_seen.insert(key) {
+            // First meeting of this (bead_id, provider_session_id) pair — record and emit.
+            state.bead_to_provider_session.insert(bead.clone(), provider_session_id.to_string());
+            state.provider_session_to_bead.insert(provider_session_id.to_string(), bead.clone());
+            let _ = event_tx.send(SessionEvent::TagJoinBound {
+                session_id: session_id.to_string(),
+                provider_session_id: provider_session_id.to_string(),
+                bead_id: bead.clone(),
+                worker: worker.clone(),
+                strand: strand.clone(),
+                ts: Utc::now(),
+            });
+        }
     }
 }
 
@@ -1743,5 +1771,121 @@ mod tests {
         assert_eq!(usage.output_tokens, 50);
         assert_eq!(usage.cache_read_tokens, 10);
         assert_eq!(usage.cache_write_tokens, 5);
+    }
+
+    // --- session_bound idempotency tests (§B1, §3.4) ---
+
+    fn make_worker_kind(worker: &str, bead: &str, strand: Option<&str>) -> ParsedSessionKind {
+        ParsedSessionKind::Variant0 {
+            worker: worker.to_string(),
+            bead: bead.to_string(),
+            strand: strand.map(|s| s.to_string()),
+        }
+    }
+
+    #[test]
+    fn session_bound_emitted_on_first_join() {
+        let (event_tx, mut event_rx) = broadcast::channel(16);
+        let mut state = SessionTailerState {
+            adapters: vec![],
+            ..SessionTailerState::default()
+        };
+
+        let kind = make_worker_kind("alpha", "bd-abc123", Some("pluck"));
+        maybe_emit_session_bound(&event_tx, "hoop-session-1", "provider-sess-xyz", &kind, &mut state);
+
+        match event_rx.try_recv().expect("expected exactly one TagJoinBound event") {
+            SessionEvent::TagJoinBound { bead_id, provider_session_id, worker, .. } => {
+                assert_eq!(bead_id, "bd-abc123");
+                assert_eq!(provider_session_id, "provider-sess-xyz");
+                assert_eq!(worker, "alpha");
+            }
+            other => panic!("unexpected event: {:?}", other),
+        }
+        assert!(event_rx.try_recv().is_err(), "no second event expected");
+    }
+
+    #[test]
+    fn session_bound_replay_fixture_twice_emits_exactly_once() {
+        let (event_tx, mut event_rx) = broadcast::channel(16);
+        let mut state = SessionTailerState {
+            adapters: vec![],
+            ..SessionTailerState::default()
+        };
+
+        let kind = make_worker_kind("bravo", "bd-def456", None);
+
+        // First pass — should emit
+        maybe_emit_session_bound(&event_tx, "hoop-s1", "prov-id-001", &kind, &mut state);
+        // Second pass with identical (bead_id, provider_session_id) — must be a no-op
+        maybe_emit_session_bound(&event_tx, "hoop-s1", "prov-id-001", &kind, &mut state);
+
+        // Exactly one event in the channel
+        event_rx.try_recv().expect("expected one event");
+        assert!(event_rx.try_recv().is_err(), "second identical pair must not emit");
+    }
+
+    #[test]
+    fn session_bound_different_pairs_each_emit_once() {
+        let (event_tx, mut event_rx) = broadcast::channel(16);
+        let mut state = SessionTailerState {
+            adapters: vec![],
+            ..SessionTailerState::default()
+        };
+
+        let kind_a = make_worker_kind("alpha", "bd-aaa", Some("pluck"));
+        let kind_b = make_worker_kind("bravo", "bd-bbb", Some("mend"));
+
+        maybe_emit_session_bound(&event_tx, "s1", "prov-a", &kind_a, &mut state);
+        maybe_emit_session_bound(&event_tx, "s2", "prov-b", &kind_b, &mut state);
+
+        // Both pairs should emit independently
+        event_rx.try_recv().expect("first pair should emit");
+        event_rx.try_recv().expect("second pair should emit");
+        assert!(event_rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn session_bound_indexes_both_ids() {
+        let (event_tx, _) = broadcast::channel(16);
+        let mut state = SessionTailerState {
+            adapters: vec![],
+            ..SessionTailerState::default()
+        };
+
+        let kind = make_worker_kind("gamma", "bd-ccc999", Some("weave"));
+        maybe_emit_session_bound(&event_tx, "s1", "prov-session-gamma", &kind, &mut state);
+
+        // Forward index: bead → provider session
+        assert_eq!(
+            state.bead_to_provider_session.get("bd-ccc999").map(|s| s.as_str()),
+            Some("prov-session-gamma"),
+        );
+        // Reverse index: provider session → bead
+        assert_eq!(
+            state.provider_session_to_bead.get("prov-session-gamma").map(|s| s.as_str()),
+            Some("bd-ccc999"),
+        );
+        // Dedup set contains the pair
+        assert!(state.session_bound_seen.contains(&(
+            "bd-ccc999".to_string(),
+            "prov-session-gamma".to_string(),
+        )));
+    }
+
+    #[test]
+    fn session_bound_ad_hoc_kind_emits_nothing() {
+        use hoop_schema::ParsedSessionKindVariant2;
+        let (event_tx, mut event_rx) = broadcast::channel(16);
+        let mut state = SessionTailerState {
+            adapters: vec![],
+            ..SessionTailerState::default()
+        };
+
+        let kind = ParsedSessionKind::Variant2(ParsedSessionKindVariant2::AdHoc);
+        maybe_emit_session_bound(&event_tx, "s1", "prov-id", &kind, &mut state);
+
+        assert!(event_rx.try_recv().is_err(), "ad-hoc sessions must not emit session_bound");
+        assert!(state.session_bound_seen.is_empty());
     }
 }

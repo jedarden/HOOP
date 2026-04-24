@@ -187,6 +187,7 @@ async fn list_project_drafts(
     Path(project): Path<String>,
     State(_state): State<crate::DaemonState>,
 ) -> Result<Json<DraftListResponse>, (StatusCode, String)> {
+    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
     let mut drafts = fleet::list_drafts(Some(&project), Some("pending"), 200)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     drafts.extend(
@@ -222,6 +223,9 @@ async fn create_draft(
     connect_info: Option<ConnectInfo<SocketAddr>>,
     Json(req): Json<CreateDraftRequest>,
 ) -> Result<Json<CreateDraftResponse>, (StatusCode, String)> {
+    // Validate project name from request body
+    crate::id_validators::validate_project_name(&req.project).map_err(crate::id_validators::rejection)?;
+
     // Validate project exists
     let _project_path = resolve_project_path(&req.project, &state)?;
 

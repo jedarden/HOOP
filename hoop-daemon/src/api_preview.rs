@@ -108,6 +108,7 @@ async fn preview_bead(
     State(state): State<crate::DaemonState>,
     Query(params): Query<PreviewRequest>,
 ) -> Result<Json<StitchPreview>, (StatusCode, String)> {
+    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
     let _project_path = resolve_project_path(&project, &state)?;
 
     let labels: Vec<String> = params

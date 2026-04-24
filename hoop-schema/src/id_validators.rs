@@ -18,6 +18,7 @@
 //! | `validate_upload_id` | lowercase UUID v4 (36 chars) | `550e8400-e29b-41d4-a716-446655440000` |
 //! | `validate_job_id` | lowercase UUID v4 (36 chars) | `550e8400-e29b-41d4-a716-446655440000` |
 //! | `validate_worker_name` | `^[a-z][a-z0-9]*$` (len 1–64) | `alpha` |
+//! | `validate_project_name` | `^[a-zA-Z0-9][a-zA-Z0-9._-]*$` (len 1–128) | `HOOP` |
 //!
 //! # Compile-time safety
 //!
@@ -34,6 +35,9 @@ const BEAD_ID_MAX_LEN: usize = 256;
 
 /// Maximum worker name length.
 const WORKER_NAME_MAX_LEN: usize = 64;
+
+/// Maximum project name length.
+const PROJECT_NAME_MAX_LEN: usize = 128;
 
 // ── Validated newtypes ─────────────────────────────────────────────────────
 
@@ -177,6 +181,43 @@ impl fmt::Display for ValidWorkerName {
     }
 }
 
+/// A validated project name. Construct via `ValidProjectName::parse()`.
+///
+/// Project names are used in URL paths and filesystem lookups — they must be
+/// safe for both contexts (no path traversal, no special characters).
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ValidProjectName(String);
+
+impl ValidProjectName {
+    pub fn parse(name: &str) -> Result<Self, IdValidationError> {
+        validate_project_name(name)?;
+        Ok(Self(name.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Deref for ValidProjectName {
+    type Target = str;
+    fn deref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl AsRef<str> for ValidProjectName {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ValidProjectName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 // ── Raw validation functions ──────────────────────────────────────────────
 
 /// Validate a bead ID.
@@ -258,6 +299,32 @@ pub fn validate_worker_name(name: &str) -> Result<(), IdValidationError> {
     }
     if !name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) {
         return Err(IdValidationError::new("worker_name", name, "contains invalid characters"));
+    }
+    Ok(())
+}
+
+/// Validate a project name.
+///
+/// Project names appear in URL paths and are used to resolve filesystem paths
+/// from the project registry. Uses the same safe-character set as bead IDs
+/// (lowercase alphanumeric, hyphens, dots, underscores) but with a shorter
+/// max length. Must not start with `-` or `.` to prevent path-traversal patterns.
+pub fn validate_project_name(name: &str) -> Result<(), IdValidationError> {
+    if name.is_empty() {
+        return Err(IdValidationError::new("project_name", name, "empty"));
+    }
+    if name.len() > PROJECT_NAME_MAX_LEN {
+        return Err(IdValidationError::new("project_name", name, "too long"));
+    }
+    let first = name.as_bytes()[0];
+    if first == b'-' || first == b'.' {
+        return Err(IdValidationError::new("project_name", name, "starts with '-' or '.'"));
+    }
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.' || c == '_')
+    {
+        return Err(IdValidationError::new("project_name", name, "contains invalid characters"));
     }
     Ok(())
 }
@@ -598,6 +665,74 @@ mod tests {
     #[test]
     fn worker_name_rejects_tab() {
         assert!(validate_worker_name("alpha\tbeta").is_err());
+    }
+
+    // ── validate_project_name ──────────────────────────────────────────────────
+
+    #[test]
+    fn project_name_valid() {
+        assert!(validate_project_name("HOOP").is_ok());
+        assert!(validate_project_name("my-project").is_ok());
+        assert!(validate_project_name("project_1").is_ok());
+        assert!(validate_project_name("a.b.c").is_ok());
+        assert!(validate_project_name("0starts-with-digit").is_ok());
+    }
+
+    #[test]
+    fn project_name_rejects_empty() {
+        assert!(validate_project_name("").is_err());
+    }
+
+    #[test]
+    fn project_name_rejects_leading_dash() {
+        let err = validate_project_name("-starts-with-dash").unwrap_err();
+        assert_eq!(err.kind, "project_name");
+    }
+
+    #[test]
+    fn project_name_rejects_leading_dot() {
+        let err = validate_project_name(".hidden").unwrap_err();
+        assert_eq!(err.kind, "project_name");
+    }
+
+    #[test]
+    fn project_name_rejects_slash() {
+        assert!(validate_project_name("has/slash").is_err());
+    }
+
+    #[test]
+    fn project_name_rejects_unicode() {
+        assert!(validate_project_name("projét").is_err());
+    }
+
+    #[test]
+    fn project_name_rejects_spaces() {
+        assert!(validate_project_name("my project").is_err());
+    }
+
+    #[test]
+    fn project_name_rejects_too_long() {
+        assert!(validate_project_name(&"a".repeat(129)).is_err());
+    }
+
+    #[test]
+    fn project_name_accepts_max_length() {
+        assert!(validate_project_name(&"a".repeat(128)).is_ok());
+    }
+
+    #[test]
+    fn project_name_rejects_null_byte() {
+        assert!(validate_project_name("proj\x00ect").is_err());
+    }
+
+    #[test]
+    fn project_name_rejects_double_dot() {
+        assert!(validate_project_name("..").is_err());
+    }
+
+    #[test]
+    fn project_name_rejects_dot_dot_slash() {
+        assert!(validate_project_name("../etc").is_err());
     }
 
     // ── Validated newtypes ─────────────────────────────────────────────────────

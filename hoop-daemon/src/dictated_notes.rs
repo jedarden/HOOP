@@ -226,10 +226,13 @@ pub fn insert_note(conn: &Connection, note: &DictatedNote) -> Result<()> {
     Ok(())
 }
 
-/// Insert the stitch row for a dictated note
+/// Insert the stitch row for a dictated note.
+///
+/// Accepts `&ValidStitchId` to enforce compile-time proof that the ID has been
+/// validated before reaching any filesystem path construction (§13).
 pub fn insert_stitch(
     conn: &Connection,
-    stitch_id: &str,
+    stitch_id: &ValidStitchId,
     project: &str,
     title: &str,
     created_by: &str,
@@ -242,12 +245,12 @@ pub fn insert_stitch(
         VALUES (?1, ?2, 'dictated', ?3, ?4, ?5, ?5, '[]', ?6)
         "#,
         params![
-            stitch_id,
+            stitch_id.as_str(),
             project,
             title,
             created_by,
             now,
-            format!("~/.hoop/attachments/{}", stitch_id),
+            format!("~/.hoop/attachments/{}", stitch_id.as_str()),
         ],
     )
     .context("Failed to insert stitch for dictated note")?;
@@ -605,20 +608,27 @@ mod tests {
     fn test_list_notes_for_project() {
         let conn = init_test_db();
 
-        for (id, project, title) in [
-            ("st-001", "project-a", "Note one"),
-            ("st-002", "project-a", "Note two"),
-            ("st-003", "project-b", "Note three"),
+        let ids = [
+            "00000000-0000-4000-a000-000000000001",
+            "00000000-0000-4000-a000-000000000002",
+            "00000000-0000-4000-b000-000000000003",
+        ];
+
+        for (sid, project, title) in [
+            (ids[0], "project-a", "Note one"),
+            (ids[1], "project-a", "Note two"),
+            (ids[2], "project-b", "Note three"),
         ] {
-            insert_stitch(&conn, id, project, title, "operator").unwrap();
+            let valid_sid = ValidStitchId::parse(sid).unwrap();
+            insert_stitch(&conn, &valid_sid, project, title, "operator").unwrap();
             insert_note(
                 &conn,
                 &DictatedNote {
-                    stitch_id: id.to_string(),
+                    stitch_id: sid.to_string(),
                     recorded_at: Utc::now(),
                     transcribed_at: Utc::now(),
-                    audio_filename: format!("{}.webm", id),
-                    transcript: format!("Transcript for {}", id),
+                    audio_filename: format!("{}.webm", sid),
+                    transcript: format!("Transcript for {}", sid),
                     transcript_words: vec![],
                     duration_secs: None,
                     language: None,
