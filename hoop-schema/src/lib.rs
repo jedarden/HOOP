@@ -85,9 +85,9 @@ macro_rules! impl_project_helpers {
             /// Returns a unified workspace view for all workspaces in this project.
             pub fn workspace_views(&self) -> Vec<WorkspaceView> {
                 match self {
-                    Self::Variant0 { path, .. } => vec![WorkspaceView {
+                    Self::Variant0 { path, canonical_path, .. } => vec![WorkspaceView {
                         path: std::path::PathBuf::from(path),
-                        canonical_path: None,
+                        canonical_path: canonical_path.as_ref().map(std::path::PathBuf::from),
                         role: WorkspaceViewRole::Primary,
                     }],
                     Self::Variant1 { workspaces, .. } => workspaces

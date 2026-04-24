@@ -43,7 +43,11 @@ fn cwd_matches_project(cwd: &str, project_path: &Path) -> bool {
     let resolved_project = std::fs::canonicalize(project_path).unwrap_or_else(|_| project_path.to_path_buf());
     let cwd_str = resolved_cwd.to_string_lossy();
     let project_str = resolved_project.to_string_lossy();
+    if cwd_str == *project_str {
+        return true;
+    }
     cwd_str.starts_with(&*project_str)
+        && cwd_str.as_ref().get(project_str.len()..=project_str.len()) == Some("/")
 }
 
 /// Events emitted by the session tailer
@@ -1896,5 +1900,102 @@ mod tests {
 
         assert!(event_rx.try_recv().is_err(), "ad-hoc sessions must not emit session_bound");
         assert!(state.session_bound_seen.is_empty());
+    }
+
+    // ── Canonicalization symlink fixtures ──────────────────────────────────
+
+    #[test]
+    fn cwd_matches_project_via_symlink() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let real = tmp.path().join("real-project");
+        fs::create_dir_all(&real).expect("mkdir");
+
+        let link = tmp.path().join("link-project");
+        std::os::unix::fs::symlink(&real, &link).expect("symlink");
+
+        let canonical = fs::canonicalize(&real).expect("canonicalize");
+
+        // Session CWD is under the symlink, project path is canonical
+        assert!(
+            cwd_matches_project(&link.to_string_lossy(), &canonical),
+            "symlink CWD must match canonical project path"
+        );
+
+        // Session CWD is canonical, project path is the symlink
+        assert!(
+            cwd_matches_project(&canonical.to_string_lossy(), &link.as_path()),
+            "canonical CWD must match symlink project path"
+        );
+
+        // Both are the same (no symlink)
+        assert!(
+            cwd_matches_project(&canonical.to_string_lossy(), &canonical.as_path()),
+            "identical canonical paths must match"
+        );
+    }
+
+    #[test]
+    fn cwd_matches_project_subdir_via_symlink() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let real = tmp.path().join("real-project");
+        let subdir = real.join("src");
+        fs::create_dir_all(&subdir).expect("mkdir");
+
+        let link = tmp.path().join("link-project");
+        std::os::unix::fs::symlink(&real, &link).expect("symlink");
+
+        let canonical = fs::canonicalize(&real).expect("canonicalize");
+        let cwd = link.join("src").to_string_lossy().to_string();
+
+        assert!(
+            cwd_matches_project(&cwd, &canonical),
+            "subdirectory under symlink CWD must match canonical project path"
+        );
+    }
+
+    #[test]
+    fn cwd_does_not_match_unrelated_path() {
+        assert!(
+            !cwd_matches_project("/home/coding/project-a", Path::new("/home/coding/project-b")),
+            "unrelated paths must not match"
+        );
+    }
+
+    #[test]
+    fn cwd_does_not_match_prefix_path_without_separator() {
+        // /home/coding/FOOBAR must NOT match project /home/coding/FOO
+        assert!(
+            !cwd_matches_project("/home/coding/FOOBAR", Path::new("/home/coding/FOO")),
+            "path that extends the project name without / separator must not match"
+        );
+        // But /home/coding/FOO/src should match
+        assert!(
+            cwd_matches_project("/home/coding/FOO/src", Path::new("/home/coding/FOO")),
+            "subdirectory under project must match"
+        );
+        // And /home/coding/FOO itself should match
+        assert!(
+            cwd_matches_project("/home/coding/FOO", Path::new("/home/coding/FOO")),
+            "exact match must work"
+        );
+    }
+
+    #[test]
+    fn cwd_matches_symlink_with_subdir() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let real = tmp.path().join("real");
+        let subdir = real.join("subdir");
+        fs::create_dir_all(&subdir).expect("mkdir");
+
+        let link = tmp.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).expect("symlink");
+
+        let canonical = fs::canonicalize(&real).expect("canonicalize");
+        // CWD via symlink subdir must match canonical project
+        let cwd_via_link = link.join("subdir").to_string_lossy().to_string();
+        assert!(
+            cwd_matches_project(&cwd_via_link, &canonical),
+            "CWD via symlink subdir must match canonical project"
+        );
     }
 }

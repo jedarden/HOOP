@@ -14,7 +14,11 @@
         },
         "path": {
           "type": "string",
-          "description": "Absolute path to the workspace (single-workspace shorthand)"
+          "description": "Raw workspace path as provided by the operator (display-only)"
+        },
+        "canonical_path": {
+          "type": "string",
+          "description": "Realpath-resolved absolute path used for joins and dedup"
         },
         "label": {
           "type": "string",

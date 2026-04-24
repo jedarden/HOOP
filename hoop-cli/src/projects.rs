@@ -172,9 +172,13 @@ impl Serialize for ProjectEntry {
             && self.label.is_none()
             && self.color.is_none()
         {
-            let mut map = serializer.serialize_map(Some(2))?;
+            let n = 2 + usize::from(self.workspaces[0].canonical_path.is_some());
+            let mut map = serializer.serialize_map(Some(n))?;
             map.serialize_entry("name", &self.name)?;
             map.serialize_entry("path", &self.workspaces[0].path)?;
+            if let Some(cp) = &self.workspaces[0].canonical_path {
+                map.serialize_entry("canonical_path", cp)?;
+            }
             return map.end();
         }
 
@@ -210,6 +214,9 @@ impl<'de> Deserialize<'de> for ProjectEntry {
             /// v0.1 shorthand — single workspace, role defaults to primary
             #[serde(default)]
             path: Option<PathBuf>,
+            /// v0.1 shorthand — canonical path (optional)
+            #[serde(default)]
+            canonical_path: Option<PathBuf>,
             /// v0.2 multi-workspace
             #[serde(default)]
             workspaces: Option<Vec<WorkspaceEntry>>,
@@ -220,7 +227,7 @@ impl<'de> Deserialize<'de> for ProjectEntry {
         let workspaces = match (raw.path, raw.workspaces) {
             (Some(path), None) => vec![WorkspaceEntry {
                 path,
-                canonical_path: None,
+                canonical_path: raw.canonical_path,
                 role: WorkspaceRole::Primary,
             }],
             (None, Some(ws)) => {
@@ -388,13 +395,15 @@ pub fn validate_workspace(path: &Path) -> Result<PathBuf> {
     Ok(canonical)
 }
 
-/// Add a project to the registry
+/// Add a project to the registry.
+///
+/// Passes the raw input path to `add()` so the original (possibly symlink)
+/// path is preserved for display while the canonical path is used for joins.
 pub fn add_project(path: &str) -> Result<ProjectEntry> {
-    let path_buf = PathBuf::from(path);
-    let absolute_path = validate_workspace(&path_buf)?;
+    let raw_path = PathBuf::from(path);
 
     let mut registry = ProjectsRegistry::load()?;
-    let entry = registry.add(absolute_path, None)?;
+    let entry = registry.add(raw_path, None)?;
     registry.save()?;
 
     Ok(entry)
@@ -1023,5 +1032,138 @@ workspaces:
             }],
         );
         assert_eq!(entry.primary_path(), Some(Path::new("/tmp/manifests")));
+    }
+
+    // ── Canonicalization symlink fixtures ──────────────────────────────────
+
+    #[test]
+    fn add_via_symlink_preserves_raw_and_canonical() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let real = tmp.path().join("real-repo");
+        fs::create_dir_all(real.join(".beads")).expect("mkdir");
+
+        let link = tmp.path().join("link-repo");
+        std::os::unix::fs::symlink(&real, &link).expect("symlink");
+
+        let canonical = fs::canonicalize(&real).expect("canonicalize");
+        assert_ne!(link, canonical, "symlink and canonical should differ");
+
+        let mut registry = ProjectsRegistry::default();
+        let entry = registry.add(link.clone(), None).expect("add via symlink");
+
+        // raw = symlink path, canonical = real resolved path
+        assert_eq!(entry.workspaces[0].path, link, "raw path should be the symlink");
+        assert_eq!(
+            entry.workspaces[0].canonical_path.as_ref(),
+            Some(&canonical),
+            "canonical_path should resolve to the real directory"
+        );
+    }
+
+    #[test]
+    fn add_via_symlink_rejects_duplicate_canonical() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let real = tmp.path().join("real-repo");
+        fs::create_dir_all(real.join(".beads")).expect("mkdir");
+
+        let link = tmp.path().join("link-repo");
+        std::os::unix::fs::symlink(&real, &link).expect("symlink");
+
+        let mut registry = ProjectsRegistry::default();
+        registry.add(real.clone(), Some("via-real")).expect("add via real");
+
+        let result = registry.add(link, Some("via-link"));
+        assert!(result.is_err(), "should reject duplicate canonical path");
+        assert!(
+            result.unwrap_err().to_string().contains("already registered"),
+            "error should reference the existing project"
+        );
+    }
+
+    #[test]
+    fn shorthand_round_trip_preserves_canonical_path() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let real = tmp.path().join("real-repo");
+        fs::create_dir_all(real.join(".beads")).expect("mkdir");
+        let canonical = fs::canonicalize(&real).expect("canonicalize");
+
+        let link = tmp.path().join("link-repo");
+        std::os::unix::fs::symlink(&real, &link).expect("symlink");
+
+        // Simulate what add() produces: raw=symlink, canonical=real
+        let entry = ProjectEntry {
+            name: "symlink-proj".to_string(),
+            label: None,
+            color: None,
+            workspaces: vec![WorkspaceEntry {
+                path: link.clone(),
+                canonical_path: Some(canonical.clone()),
+                role: WorkspaceRole::Primary,
+            }],
+        };
+
+        // Serialize as shorthand
+        let yaml = serde_yaml::to_string(&entry).expect("serialize");
+        assert!(yaml.contains("path:"), "should use shorthand form");
+        assert!(yaml.contains("canonical_path:"), "should include canonical_path");
+        assert!(!yaml.contains("workspaces:"), "should not use multi-workspace form");
+
+        // Deserialize back
+        let parsed: ProjectEntry = serde_yaml::from_str(&yaml).expect("deserialize");
+        assert_eq!(parsed.workspaces[0].path, link, "raw path preserved");
+        assert_eq!(
+            parsed.workspaces[0].canonical_path.as_ref(),
+            Some(&canonical),
+            "canonical path preserved"
+        );
+    }
+
+    #[test]
+    fn shorthand_without_canonical_round_trips_cleanly() {
+        let yaml = "name: test-project\npath: /home/coding/test-project\n";
+        let parsed: ProjectEntry = serde_yaml::from_str(yaml).expect("deserialize");
+        assert!(parsed.workspaces[0].canonical_path.is_none());
+
+        let reserialized = serde_yaml::to_string(&parsed).expect("serialize");
+        assert!(!reserialized.contains("canonical_path:"),
+            "should not emit canonical_path when None");
+    }
+
+    #[test]
+    fn add_direct_path_stores_both_equal() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo = tmp.path().join("my-repo");
+        fs::create_dir_all(repo.join(".beads")).expect("mkdir");
+        let canonical = fs::canonicalize(&repo).expect("canonicalize");
+
+        // When raw == canonical (no symlink), both should still be stored
+        let mut registry = ProjectsRegistry::default();
+        let entry = registry.add(canonical.clone(), None).expect("add");
+
+        assert_eq!(entry.workspaces[0].path, canonical);
+        assert_eq!(
+            entry.workspaces[0].canonical_path.as_ref(),
+            Some(&canonical)
+        );
+    }
+
+    #[test]
+    fn discover_symlink_dedup_across_dirs() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let real = tmp.path().join("real-repo");
+        fs::create_dir_all(real.join(".beads")).expect("mkdir");
+
+        // Create a subdirectory with a symlink to the same repo
+        let sub = tmp.path().join("subdir");
+        fs::create_dir_all(&sub).expect("mkdir");
+        let link = sub.join("alias-repo");
+        std::os::unix::fs::symlink(&real, &link).expect("symlink");
+
+        let found = discover_bead_workspaces(tmp.path()).expect("scan");
+        // Should find the real repo and the symlink alias — but deduplicated
+        // by canonical path, so only one entry
+        let canonical = fs::canonicalize(&real).expect("canonicalize");
+        let canonical_count = found.iter().filter(|p| **p == canonical).count();
+        assert_eq!(canonical_count, 1, "dedup by canonical should collapse symlink alias");
     }
 }
