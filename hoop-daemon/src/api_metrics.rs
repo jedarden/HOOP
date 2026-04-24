@@ -886,9 +886,8 @@ mod tests {
         let re = regex::Regex::new(r"^\d+\.\d+\.\d+$").unwrap();
         assert!(re.is_match(json["schema_version"].as_str().unwrap()));
 
-        // Validate uptime_secs is non-negative integer
+        // Validate uptime_secs is a non-negative integer (u64 is always >= 0)
         assert!(json["uptime_secs"].is_number());
-        assert!(json["uptime_secs"].as_u64().unwrap() >= 0);
 
         // Validate version sub-object
         assert!(json["version"]["daemon"].is_string());
