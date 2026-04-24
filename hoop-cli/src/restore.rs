@@ -12,23 +12,6 @@ use std::path::{Path, PathBuf};
 
 type HmacSha256 = Hmac<Sha256>;
 
-// ── Manifest types ──────────────────────────────────────────────────
-
-#[derive(Debug, serde::Deserialize)]
-pub struct SnapshotManifest {
-    pub snapshot_id: String,
-    pub timestamp: String,
-    pub schema_version: String,
-    pub hoop_version: Option<String>,
-    pub files: std::collections::HashMap<String, FileEntry>,
-}
-
-#[derive(Debug, serde::Deserialize)]
-pub struct FileEntry {
-    pub sha256: String,
-    pub size: u64,
-}
-
 // ── S3 URI parsing ──────────────────────────────────────────────────
 
 #[derive(Debug)]
@@ -275,33 +258,22 @@ pub async fn run_restore(from_uri: &str) -> Result<()> {
 
     println!("Fetching manifest from s3://{}/{} ...", locator.bucket, locator.key);
 
-    // 3. Download and parse manifest
+    // 3. Download and parse manifest (uploaded last by backup pipeline)
     let manifest_bytes = s3_get(&s3_config, &locator.bucket, &format!("{}/manifest.json", locator.key)).await?;
-    let manifest: SnapshotManifest = serde_json::from_slice(&manifest_bytes)
+    let manifest: hoop_daemon::snapshot_manifest::SnapshotManifest = serde_json::from_slice(&manifest_bytes)
         .context("Failed to parse manifest.json")?;
 
     println!(
         "Snapshot: {} (schema {}, {})",
         manifest.snapshot_id,
         manifest.schema_version,
-        manifest.timestamp
+        manifest.created_at
     );
 
-    // 4. Validate schema version — refuse newer-than-current (§20)
+    // 4. Validate manifest before any destructive action (§20.1)
     let current = hoop_daemon::fleet::SCHEMA_VERSION;
-    if is_newer(&manifest.schema_version, current) {
-        bail!(
-            "Snapshot schema version {} is newer than this binary's {}. \
-             Upgrade HOOP before restoring this snapshot.",
-            manifest.schema_version,
-            current
-        );
-    }
-
-    // Verify manifest has fleet.db
-    let db_entry = manifest.files.get("fleet.db").context(
-        "Manifest does not contain fleet.db — snapshot is incomplete",
-    )?;
+    manifest.validate(current)
+        .context("Manifest validation failed")?;
 
     // 5. Move existing ~/.hoop/ aside (destructive action follows)
     let backup_dir = move_aside_for_rollback()
@@ -332,47 +304,65 @@ pub async fn run_restore(from_uri: &str) -> Result<()> {
     std::fs::create_dir_all(&hoop)
         .with_context(|| format!("Failed to create {}", hoop.display()))?;
 
-    // 7. Download and restore fleet.db
+    // 7. Download and restore fleet.db (compressed, optionally encrypted)
     let result = async {
-        println!("Downloading fleet.db ...");
-        let db_data = s3_get(&s3_config, &locator.bucket, &format!("{}/fleet.db", locator.key)).await?;
-        verify_sha256(&db_data, &db_entry.sha256)
-            .context("fleet.db integrity check failed")?;
+        println!("Downloading {} ...", manifest.fleet_db_key);
+        let db_compressed = s3_get(&s3_config, &locator.bucket, &manifest.fleet_db_key).await?;
+
+        // Integrity check using manifest hash
+        if let Some(ref expected_sha) = manifest.fleet_db_sha256 {
+            verify_sha256(&db_compressed, expected_sha)
+                .context("fleet.db integrity check failed")?;
+        }
+
+        // Decompress
+        let db_data = if manifest.fleet_db_key.ends_with(".zst") || manifest.fleet_db_key.ends_with(".age") {
+            // If encrypted, try to decrypt first
+            let compressed = if manifest.encryption == "age" {
+                decrypt_with_age(&db_compressed)?
+            } else {
+                db_compressed
+            };
+            zstd::decode_all(&compressed[..])
+                .context("zstd decompress fleet.db")?
+        } else {
+            db_compressed.to_vec()
+        };
+
         let db_path = hoop.join("fleet.db");
         std::fs::write(&db_path, &db_data)
             .with_context(|| format!("Failed to write {}", db_path.display()))?;
         println!("fleet.db restored ({} bytes)", db_data.len());
 
-        // 8. Download and restore attachments (if present)
-        let attachments_dir = hoop.join("attachments");
-        for (name, entry) in &manifest.files {
-            if name.starts_with("attachments/") {
-                let rel_path = name.strip_prefix("attachments/").unwrap();
-                let file_path = attachments_dir.join(rel_path);
-                if let Some(parent) = file_path.parent() {
-                    std::fs::create_dir_all(parent)?;
-                }
+        // 8. Download and restore attachments (if manifest references them)
+        if let Some(ref att_key) = manifest.attachments_manifest_key {
+            println!("Fetching attachment manifest from {} ...", att_key);
+            let att_manifest_bytes = s3_get(&s3_config, &locator.bucket, att_key).await?;
+            let att_manifest: serde_json::Value = serde_json::from_slice(&att_manifest_bytes)
+                .context("Failed to parse attachment manifest")?;
 
-                println!("Downloading {} ...", name);
-                let data = s3_get(&s3_config, &locator.bucket, &format!("{}/{}", locator.key, name)).await?;
-                verify_sha256(&data, &entry.sha256)
-                    .with_context(|| format!("{} integrity check failed", name))?;
-                std::fs::write(&file_path, &data)?;
+            // Download each tracked attachment file
+            if let Some(files) = att_manifest.get("files").and_then(|f| f.as_object()) {
+                let attachments_dir = hoop.join("attachments");
+                for (rel_path, _entry) in files {
+                    let file_path = attachments_dir.join(rel_path);
+                    if let Some(parent) = file_path.parent() {
+                        std::fs::create_dir_all(parent)?;
+                    }
+
+                    let s3_key = format!("{}/attachments/{}.zst", locator.key, rel_path);
+                    println!("Downloading attachment {} ...", rel_path);
+                    let data = s3_get(&s3_config, &locator.bucket, &s3_key).await?;
+                    let decompressed = zstd::decode_all(&data[..])
+                        .with_context(|| format!("decompress attachment {}", rel_path))?;
+                    std::fs::write(&file_path, &decompressed)?;
+                }
             }
         }
 
-        // 9. Download and restore config (if present)
-        if let Some(entry) = manifest.files.get("config.json") {
-            println!("Downloading config.json ...");
-            let config_data = s3_get(&s3_config, &locator.bucket, &format!("{}/config.json", locator.key)).await?;
-            verify_sha256(&config_data, &entry.sha256)
-                .context("config.json integrity check failed")?;
-            std::fs::write(hoop.join("config.json"), &config_data)?;
-        }
-
-        // 10. Restore projects.yaml from backup if the new snapshot doesn't include one
+        // 9. Restore projects.yaml from backup if available
         let projects_backup = backup_dir.join("projects.yaml");
-        if projects_backup.exists() && !manifest.files.contains_key("projects.yaml") {
+        if projects_backup.exists() {
             let dst = hoop.join("projects.yaml");
             std::fs::copy(&projects_backup, &dst).with_context(|| {
                 format!(
@@ -383,7 +373,7 @@ pub async fn run_restore(from_uri: &str) -> Result<()> {
             println!("Preserved projects.yaml from previous state");
         }
 
-        // 11. Run schema migrations on restored fleet.db
+        // 10. Run schema migrations on restored fleet.db
         println!("Running schema migrations ...");
         let db_path = hoop.join("fleet.db");
         let pre_version = hoop_daemon::fleet::restore_and_migrate(&db_path)
@@ -404,26 +394,35 @@ pub async fn run_restore(from_uri: &str) -> Result<()> {
     Ok(())
 }
 
-/// Compare two semver-like strings; true if `a` > `b`.
-fn is_newer(a: &str, b: &str) -> bool {
-    let parse = |v: &str| -> Vec<u32> {
-        v.split('.')
-            .filter_map(|p| p.parse().ok())
-            .collect()
-    };
-    let va = parse(a);
-    let vb = parse(b);
-    for i in 0..std::cmp::max(va.len(), vb.len()) {
-        let na = va.get(i).unwrap_or(&0);
-        let nb = vb.get(i).unwrap_or(&0);
-        if na > nb {
-            return true;
-        }
-        if na < nb {
-            return false;
-        }
+/// Decrypt age-encrypted data using the identity from the environment.
+fn decrypt_with_age(data: &[u8]) -> Result<bytes::Bytes> {
+    let identity = std::env::var("HOOP_BACKUP_AGE_IDENTITY")
+        .or_else(|_| std::env::var("AGE_IDENTITY"))
+        .context("Set HOOP_BACKUP_AGE_IDENTITY or AGE_IDENTITY to decrypt age-encrypted backups")?;
+
+    let mut child = std::process::Command::new("age")
+        .arg("--decrypt")
+        .arg("--identity")
+        .arg(&identity)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .context("failed to spawn `age` — is it installed?")?;
+
+    use std::io::Write;
+    if let Some(ref mut stdin) = child.stdin {
+        stdin.write_all(data)?;
     }
-    false
+    drop(child.stdin.take());
+
+    let output = child.wait_with_output()?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("age decrypt failed: {}", stderr.trim());
+    }
+
+    Ok(bytes::Bytes::from(output.stdout))
 }
 
 #[cfg(test)]
@@ -448,16 +447,6 @@ mod tests {
     }
 
     #[test]
-    fn test_is_newer() {
-        assert!(is_newer("2.0.0", "1.11.0"));
-        assert!(is_newer("1.12.0", "1.11.0"));
-        assert!(is_newer("1.11.1", "1.11.0"));
-        assert!(!is_newer("1.11.0", "1.11.0"));
-        assert!(!is_newer("1.10.0", "1.11.0"));
-        assert!(!is_newer("0.9.0", "1.0.0"));
-    }
-
-    #[test]
     fn test_verify_sha256() {
         let data = b"hello world";
         let mut hasher = Sha256::new();
@@ -471,19 +460,19 @@ mod tests {
     fn test_manifest_parsing() {
         let json = r#"{
             "snapshot_id": "snap-001",
-            "timestamp": "2024-01-15T04:00:00Z",
+            "created_at": "2024-01-15T04:00:00Z",
             "schema_version": "1.11.0",
+            "fleet_db_key": "backups/snap-001/fleet.db.zst",
+            "attachments_manifest_key": "backups/snap-001/attachments.manifest.json",
+            "encryption": "none",
             "hoop_version": "0.1.0",
-            "files": {
-                "fleet.db": { "sha256": "abc123", "size": 4096 },
-                "config.json": { "sha256": "def456", "size": 128 },
-                "attachments/note.wav": { "sha256": "ghi789", "size": 8192 }
-            }
+            "fleet_db_sha256": "abc123",
+            "fleet_db_size": 4096
         }"#;
-        let m: SnapshotManifest = serde_json::from_str(json).unwrap();
+        let m: hoop_daemon::snapshot_manifest::SnapshotManifest = serde_json::from_str(json).unwrap();
         assert_eq!(m.snapshot_id, "snap-001");
-        assert_eq!(m.files.len(), 3);
-        assert!(m.files.contains_key("fleet.db"));
-        assert_eq!(m.files["fleet.db"].sha256, "abc123");
+        assert_eq!(m.fleet_db_key, "backups/snap-001/fleet.db.zst");
+        assert_eq!(m.encryption, "none");
+        assert_eq!(m.fleet_db_sha256.as_deref(), Some("abc123"));
     }
 }

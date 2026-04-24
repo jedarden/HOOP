@@ -13,6 +13,7 @@ use crate::backup::{BackupCredentials, BackupFileConfig};
 use crate::fleet;
 use crate::metrics;
 use crate::shutdown::ShutdownPhase;
+use crate::snapshot_manifest::SnapshotManifest;
 use anyhow::{bail, Context, Result};
 use chrono::{Datelike, Timelike, Utc};
 use hmac::{Hmac, Mac};
@@ -84,6 +85,7 @@ impl BackupPipeline {
 
     async fn run_snapshot(&self) -> Result<u64> {
         let start = std::time::Instant::now();
+        let snapshot_id = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
 
         // 1. VACUUM INTO temp snapshot
         let snapshot_path = self.vacuum_into()?;
@@ -105,13 +107,29 @@ impl BackupPipeline {
             (compressed_path.clone(), false)
         };
 
-        // 4. Upload to S3 with retry
-        let file_size = std::fs::metadata(&upload_path)
-            .with_context(|| format!("stat {}", upload_path.display()))?
-            .len();
-        let s3_key = self.build_s3_key(encrypted);
+        // 4. Upload fleet.db to S3 with retry
+        let file_data = std::fs::read(&upload_path)
+            .with_context(|| format!("read {}", upload_path.display()))?;
+        let file_size = file_data.len() as u64;
 
-        self.upload_with_retry(&upload_path, &s3_key).await?;
+        let fleet_db_filename = if encrypted {
+            "fleet.db.zst.age"
+        } else {
+            "fleet.db.zst"
+        };
+        let fleet_db_key = format!(
+            "{}/{}/{}",
+            self.config.prefix.trim_end_matches('/'),
+            snapshot_id,
+            fleet_db_filename,
+        );
+
+        self.upload_with_retry(&upload_path, &fleet_db_key).await?;
+
+        // Compute SHA-256 of the compressed blob for the manifest
+        let mut hasher = Sha256::new();
+        hasher.update(&file_data);
+        let fleet_db_sha256 = hex::encode(hasher.finalize());
 
         // 5. Cleanup temp files
         let _ = std::fs::remove_file(&compressed_path);
@@ -120,11 +138,45 @@ impl BackupPipeline {
         }
 
         // 6. Incremental attachment sync
-        if let Err(e) = self.sync_attachments().await {
+        let attachments_key = if let Err(e) = self.sync_attachments_with_snapshot(&snapshot_id).await {
             warn!("Attachment sync failed (fleet.db backup succeeded): {}", e);
-        }
+            None
+        } else {
+            Some(format!(
+                "{}/{}/attachments.manifest.json",
+                self.config.prefix.trim_end_matches('/'),
+                snapshot_id,
+            ))
+        };
 
-        // 7. Record metrics
+        // 7. Build and upload manifest (LAST — after all pieces)
+        let manifest = SnapshotManifest {
+            snapshot_id: snapshot_id.clone(),
+            created_at: Utc::now().to_rfc3339(),
+            schema_version: fleet::SCHEMA_VERSION.to_string(),
+            fleet_db_key: fleet_db_key.clone(),
+            attachments_manifest_key: attachments_key,
+            encryption: if encrypted { "age" } else { "none" }.to_string(),
+            hoop_version: env!("CARGO_PKG_VERSION").to_string(),
+            fleet_db_sha256: Some(fleet_db_sha256),
+            fleet_db_size: Some(file_size),
+        };
+
+        let manifest_json = serde_json::to_vec_pretty(&manifest)
+            .context("serialize snapshot manifest")?;
+        let manifest_key = format!(
+            "{}/{}/manifest.json",
+            self.config.prefix.trim_end_matches('/'),
+            snapshot_id,
+        );
+        self.upload_with_retry_from_bytes(&manifest_json, &manifest_key).await?;
+
+        info!(
+            "Snapshot manifest uploaded: {}/manifest.json",
+            manifest_key.rsplit_once('/').map(|(p, _)| p).unwrap_or(&manifest_key),
+        );
+
+        // 8. Record metrics
         let elapsed = start.elapsed();
         let m = metrics::metrics();
         m.hoop_backup_last_success_timestamp.set(Utc::now().timestamp());
@@ -132,10 +184,10 @@ impl BackupPipeline {
         m.hoop_backup_run_duration_seconds.observe(elapsed.as_secs_f64());
 
         info!(
-            "Backup snapshot uploaded: {} bytes in {:.1}s (key={})",
+            "Backup snapshot completed: {} bytes in {:.1}s (snapshot_id={})",
             file_size,
             elapsed.as_secs_f64(),
-            s3_key,
+            snapshot_id,
         );
 
         Ok(file_size)
@@ -143,7 +195,8 @@ impl BackupPipeline {
 
     // ── Attachment incremental sync ──────────────────────────────────
 
-    async fn sync_attachments(&self) -> Result<()> {
+    /// Incremental attachment sync, uploading to the per-snapshot directory.
+    async fn sync_attachments_with_snapshot(&self, snapshot_id: &str) -> Result<()> {
         let manifest_path = attachment_sync::manifest_path();
         let mut manifest = attachment_sync::BackupManifest::load(&manifest_path)?;
 
@@ -165,7 +218,7 @@ impl BackupPipeline {
             return Ok(());
         }
 
-        // Upload added/changed files
+        // Upload added/changed files into the snapshot directory
         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
         let all_uploads: Vec<_> = diff.added.iter().chain(diff.changed.iter()).collect();
         for (rel_path, _entry) in &all_uploads {
@@ -182,8 +235,9 @@ impl BackupPipeline {
                 .context("zstd compress attachment")?;
 
             let s3_key = format!(
-                "{}/attachments/{}.zst",
+                "{}/{}/attachments/{}.zst",
                 self.config.prefix.trim_end_matches('/'),
+                snapshot_id,
                 rel_path,
             );
 
@@ -193,6 +247,16 @@ impl BackupPipeline {
         // Apply diff to manifest (adds tombstones for deletions)
         attachment_sync::apply_diff(&mut manifest, &diff, self.config.retention_days);
         manifest.save(&manifest_path)?;
+
+        // Upload attachment manifest to snapshot directory
+        let manifest_json = serde_json::to_vec_pretty(&manifest)
+            .context("serialize attachment manifest")?;
+        let s3_key = format!(
+            "{}/{}/attachments.manifest.json",
+            self.config.prefix.trim_end_matches('/'),
+            snapshot_id,
+        );
+        self.upload_with_retry_from_bytes(&manifest_json, &s3_key).await?;
 
         info!(
             "Attachment sync complete: {} files tracked, {} tombstones",
@@ -349,16 +413,13 @@ impl BackupPipeline {
         Ok(output)
     }
 
-    // ── S3 key layout ─────────────────────────────────────────────────
+    // ── S3 key helpers ─────────────────────────────────────────────────
 
-    fn build_s3_key(&self, encrypted: bool) -> String {
-        let ts = Utc::now().format("%Y%m%dT%H%M%SZ");
-        let ext = if encrypted { ".zst.age" } else { ".zst" };
+    fn snapshot_prefix(&self, snapshot_id: &str) -> String {
         format!(
-            "{}/fleet.db.{}{}",
+            "{}/{}",
             self.config.prefix.trim_end_matches('/'),
-            ts,
-            ext,
+            snapshot_id,
         )
     }
 
@@ -585,7 +646,7 @@ mod tests {
     }
 
     #[test]
-    fn build_s3_key_format() {
+    fn snapshot_prefix_layout() {
         let config = BackupFileConfig {
             endpoint: "https://s3.example.com".into(),
             bucket: "bkt".into(),
@@ -600,30 +661,7 @@ mod tests {
             age_key: None,
         };
         let pipeline = BackupPipeline::new(config, creds);
-        let key = pipeline.build_s3_key(false);
-        assert!(key.starts_with("backups/fleet.db.2"));
-        assert!(key.ends_with(".zst"));
-        assert!(!key.contains(".age"));
-    }
-
-    #[test]
-    fn build_s3_key_encrypted() {
-        let config = BackupFileConfig {
-            endpoint: "https://s3.example.com".into(),
-            bucket: "bkt".into(),
-            prefix: "backups/".into(),
-            schedule: "0 4 * * *".into(),
-            retention_days: 30,
-            encryption: true,
-        };
-        let creds = BackupCredentials {
-            access_key_id: "key".into(),
-            secret_access_key: "secret".into(),
-            age_key: Some("age1test".into()),
-        };
-        let pipeline = BackupPipeline::new(config, creds);
-        let key = pipeline.build_s3_key(true);
-        assert!(key.ends_with(".zst.age"));
+        assert_eq!(pipeline.snapshot_prefix("20240615T040000Z"), "backups/20240615T040000Z");
     }
 
     #[test]
