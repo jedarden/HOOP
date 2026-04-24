@@ -9,6 +9,7 @@ pub mod agent_adapter;
 pub mod agent_context;
 pub mod agent_session;
 pub mod api_agent;
+pub mod attachment_sync;
 pub mod backup;
 pub mod backup_pipeline;
 pub mod api_attachments;

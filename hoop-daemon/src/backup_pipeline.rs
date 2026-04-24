@@ -8,6 +8,7 @@
 //! - Encryption skipped cleanly when no age key set
 //! - Metrics `hoop_backup_last_success_timestamp`, `hoop_backup_last_size_bytes` updated
 
+use crate::attachment_sync;
 use crate::backup::{BackupCredentials, BackupFileConfig};
 use crate::fleet;
 use crate::metrics;
@@ -118,7 +119,12 @@ impl BackupPipeline {
             let _ = std::fs::remove_file(&upload_path);
         }
 
-        // 6. Record metrics
+        // 6. Incremental attachment sync
+        if let Err(e) = self.sync_attachments().await {
+            warn!("Attachment sync failed (fleet.db backup succeeded): {}", e);
+        }
+
+        // 7. Record metrics
         let elapsed = start.elapsed();
         let m = metrics::metrics();
         m.hoop_backup_last_success_timestamp.set(Utc::now().timestamp());
@@ -133,6 +139,116 @@ impl BackupPipeline {
         );
 
         Ok(file_size)
+    }
+
+    // ── Attachment incremental sync ──────────────────────────────────
+
+    async fn sync_attachments(&self) -> Result<()> {
+        let manifest_path = attachment_sync::manifest_path();
+        let mut manifest = attachment_sync::BackupManifest::load(&manifest_path)?;
+
+        // Scan current attachment tree
+        let current = attachment_sync::scan_all_attachments(None)?;
+
+        // Diff against prior manifest
+        let diff = attachment_sync::compute_diff(&current, &manifest);
+
+        info!(
+            "Attachment sync: +{} added, ~{} changed, -{} deleted, {} unchanged",
+            diff.added.len(),
+            diff.changed.len(),
+            diff.deleted.len(),
+            diff.unchanged_count,
+        );
+
+        if !diff.has_changes() {
+            return Ok(());
+        }
+
+        // Upload added/changed files
+        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        let all_uploads: Vec<_> = diff.added.iter().chain(diff.changed.iter()).collect();
+        for (rel_path, _entry) in &all_uploads {
+            let disk_path = self.resolve_attachment_path(&home, rel_path)?;
+            if !disk_path.exists() {
+                warn!("Attachment file vanished before upload: {}", rel_path);
+                continue;
+            }
+
+            let data = std::fs::read(&disk_path)
+                .with_context(|| format!("read attachment {}", disk_path.display()))?;
+
+            let compressed = zstd::encode_all(&data[..], 3)
+                .context("zstd compress attachment")?;
+
+            let s3_key = format!(
+                "{}/attachments/{}.zst",
+                self.config.prefix.trim_end_matches('/'),
+                rel_path,
+            );
+
+            self.upload_with_retry_from_bytes(&compressed, &s3_key).await?;
+        }
+
+        // Apply diff to manifest (adds tombstones for deletions)
+        attachment_sync::apply_diff(&mut manifest, &diff, self.config.retention_days);
+        manifest.save(&manifest_path)?;
+
+        info!(
+            "Attachment sync complete: {} files tracked, {} tombstones",
+            manifest.files.len(),
+            manifest.tombstones.len(),
+        );
+
+        Ok(())
+    }
+
+    /// Resolve an attachment manifest key back to a filesystem path.
+    fn resolve_attachment_path(&self, home: &Path, key: &str) -> Result<PathBuf> {
+        if let Some(rest) = key.strip_prefix("stitch/") {
+            Ok(home.join(".hoop").join("attachments").join(rest))
+        } else if let Some(rest) = key.strip_prefix("bead/") {
+            // Bead attachments require workspace context; fall back to first project workspace
+            // In practice, the daemon always knows the workspace via config
+            let config_dir = home.join(".hoop");
+            let projects_file = config_dir.join("projects.json");
+            if projects_file.exists() {
+                let data = std::fs::read_to_string(&projects_file)?;
+                let projects: Vec<serde_json::Value> = serde_json::from_str(&data)?;
+                if let Some(first) = projects.first() {
+                    if let Some(ws) = first.get("path").and_then(|p| p.as_str()) {
+                        return Ok(PathBuf::from(ws).join(".beads").join("attachments").join(rest));
+                    }
+                }
+            }
+            bail!("cannot resolve bead attachment path without workspace: {}", key)
+        } else {
+            bail!("unknown attachment key prefix: {}", key)
+        }
+    }
+
+    /// Upload raw bytes to S3 with retry (for attachment sync).
+    async fn upload_with_retry_from_bytes(&self, data: &[u8], s3_key: &str) -> Result<()> {
+        let mut attempt = 0u32;
+        let mut backoff_secs = INITIAL_BACKOFF_SECS;
+
+        loop {
+            attempt += 1;
+            match self.s3_put(data, s3_key).await {
+                Ok(()) => return Ok(()),
+                Err(e) if attempt < MAX_RETRIES => {
+                    warn!(
+                        "S3 PUT attempt {}/{} failed for attachment {}: {} — retrying in {}s",
+                        attempt, MAX_RETRIES, s3_key, e, backoff_secs,
+                    );
+                    tokio::time::sleep(std::time::Duration::from_secs(backoff_secs)).await;
+                    backoff_secs = (backoff_secs * 2).min(MAX_BACKOFF_SECS);
+                }
+                Err(e) => {
+                    bail!("S3 PUT failed for attachment after {} attempts: {}", attempt, e);
+                }
+            }
+        }
     }
 
     // ── Step 1: VACUUM INTO ──────────────────────────────────────────
