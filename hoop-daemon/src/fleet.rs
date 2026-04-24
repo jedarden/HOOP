@@ -21,7 +21,7 @@ use tracing::info;
 use uuid::Uuid;
 
 /// Current schema version
-const SCHEMA_VERSION: &str = "1.10.0";
+const SCHEMA_VERSION: &str = "1.11.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -30,7 +30,7 @@ const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
 const GENESIS_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 /// Action kind for audit log
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum ActionKind {
     BeadCreated,
@@ -108,6 +108,7 @@ pub struct AuditRow {
 /// 1. Fetching the most recent row's hash_self as hash_prev
 /// 2. Computing hash_self from the row content
 /// 3. Inserting the new row
+#[allow(clippy::too_many_arguments)]
 pub fn write_audit_row(
     actor: &str,
     kind: ActionKind,
@@ -153,6 +154,9 @@ pub fn write_audit_row(
             error, source, stitch_id, args_hash, hash_prev, hash_self
         ],
     )?;
+
+    // Update audit append rate metric
+    crate::metrics::metrics().hoop_audit_append_rate_per_second.inc();
 
     Ok(AuditRow {
         id,
@@ -356,6 +360,10 @@ pub fn delete_stitch(stitch_id: &str) -> Result<()> {
 
 /// Database path: `~/.hoop/fleet.db`
 pub fn db_path() -> PathBuf {
+    // Allow tests to override the database path via env var
+    if let Ok(path) = std::env::var("_HOOP_FLEET_DB_PATH") {
+        return PathBuf::from(path);
+    }
     let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     home.push(".hoop");
     home.push("fleet.db");
@@ -367,10 +375,14 @@ pub fn db_path() -> PathBuf {
 /// Creates the database if it doesn't exist, enables WAL mode,
 /// creates the actions table, metadata table, and inserts the genesis row.
 pub fn init_fleet_db() -> Result<()> {
-    let path = db_path();
+    init_fleet_db_at(db_path())
+}
+
+/// Initialize fleet.db at an explicit path (for testing).
+pub fn init_fleet_db_at(path: PathBuf) -> Result<()> {
     let parent = path.parent().ok_or_else(|| anyhow::anyhow!("Invalid db path"))?;
 
-    // Ensure ~/.hoop/ exists
+    // Ensure parent directory exists
     std::fs::create_dir_all(parent)?;
 
     let exists = path.exists();
@@ -393,7 +405,13 @@ pub fn init_fleet_db() -> Result<()> {
         info!("fleet.db created with initial schema {}, running migrations to {}", INITIAL_SCHEMA_VERSION, SCHEMA_VERSION);
 
         // Run migrations to bring fresh database to current version
+        let start = std::time::Instant::now();
         run_migrations(&mut conn, INITIAL_SCHEMA_VERSION)?;
+        let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
+        crate::metrics::metrics().hoop_schema_migration_duration_ms.observe(
+            &[INITIAL_SCHEMA_VERSION, SCHEMA_VERSION],
+            elapsed_ms,
+        );
         info!("Migrations complete, schema version {}", SCHEMA_VERSION);
     } else {
         // Existing database: verify schema version and run migrations
@@ -403,7 +421,13 @@ pub fn init_fleet_db() -> Result<()> {
                 "fleet.db schema version {} -> {}, running migrations",
                 version, SCHEMA_VERSION
             );
+            let start = std::time::Instant::now();
             run_migrations(&mut conn, &version)?;
+            let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
+            crate::metrics::metrics().hoop_schema_migration_duration_ms.observe(
+                &[&version, SCHEMA_VERSION],
+                elapsed_ms,
+            );
             info!("Migrations complete, schema version {}", SCHEMA_VERSION);
         } else {
             info!("fleet.db schema version {} verified", version);
@@ -571,6 +595,10 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v17_to_v18(conn)?;
             // Fall through to 1.9.0
             migrate_v18_to_v19(conn)?;
+            // Fall through to 1.10.0
+            migrate_v19_to_v110(conn)?;
+            // Fall through to 1.11.0
+            migrate_v110_to_v111(conn)?;
         }
         "1.1.0" => {
             migrate_v11_to_v12(conn)?;
@@ -581,6 +609,8 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v16_to_v17(conn)?;
             migrate_v17_to_v18(conn)?;
             migrate_v18_to_v19(conn)?;
+            migrate_v19_to_v110(conn)?;
+            migrate_v110_to_v111(conn)?;
         }
         "1.2.0" => {
             migrate_v12_to_v13(conn)?;
@@ -590,6 +620,8 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v16_to_v17(conn)?;
             migrate_v17_to_v18(conn)?;
             migrate_v18_to_v19(conn)?;
+            migrate_v19_to_v110(conn)?;
+            migrate_v110_to_v111(conn)?;
         }
         "1.3.0" => {
             migrate_v13_to_v14(conn)?;
@@ -598,6 +630,8 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v16_to_v17(conn)?;
             migrate_v17_to_v18(conn)?;
             migrate_v18_to_v19(conn)?;
+            migrate_v19_to_v110(conn)?;
+            migrate_v110_to_v111(conn)?;
         }
         "1.4.0" => {
             migrate_v14_to_v15(conn)?;
@@ -605,31 +639,48 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v16_to_v17(conn)?;
             migrate_v17_to_v18(conn)?;
             migrate_v18_to_v19(conn)?;
+            migrate_v19_to_v110(conn)?;
+            migrate_v110_to_v111(conn)?;
         }
         "1.5.0" => {
             migrate_v15_to_v16(conn)?;
             migrate_v16_to_v17(conn)?;
             migrate_v17_to_v18(conn)?;
             migrate_v18_to_v19(conn)?;
+            migrate_v19_to_v110(conn)?;
+            migrate_v110_to_v111(conn)?;
         }
         "1.6.0" => {
             migrate_v16_to_v17(conn)?;
             migrate_v17_to_v18(conn)?;
             migrate_v18_to_v19(conn)?;
+            migrate_v19_to_v110(conn)?;
+            migrate_v110_to_v111(conn)?;
         }
         "1.7.0" => {
             migrate_v17_to_v18(conn)?;
             migrate_v18_to_v19(conn)?;
+            migrate_v19_to_v110(conn)?;
+            migrate_v110_to_v111(conn)?;
         }
         "1.8.0" => {
             migrate_v18_to_v19(conn)?;
+            migrate_v19_to_v110(conn)?;
+            migrate_v110_to_v111(conn)?;
         }
         "1.9.0" => {
-            info!("Already at schema version 1.9.0, no migrations needed");
+            migrate_v19_to_v110(conn)?;
+            migrate_v110_to_v111(conn)?;
+        }
+        "1.10.0" => {
+            migrate_v110_to_v111(conn)?;
+        }
+        "1.11.0" => {
+            info!("Already at schema version 1.11.0, no migrations needed");
         }
         _ => {
             return Err(anyhow::anyhow!(
-                "Unsupported schema version: {}. Expected 0.1.0–1.8.0",
+                "Unsupported schema version: {}. Expected 0.1.0–1.10.0",
                 from_version
             ));
         }
@@ -1158,6 +1209,97 @@ fn migrate_v18_to_v19(conn: &mut Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migration 1.9.0 → 1.10.0: Add draft_queue table
+///
+/// The draft queue holds agent-created stitch drafts pending operator review.
+/// Agent calls to `create_stitch` insert here instead of calling `br create`.
+/// The operator reviews, edits, approves, or rejects drafts through the UI.
+fn migrate_v19_to_v110(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.9.0 → 1.10.0: Adding draft_queue table");
+
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS draft_queue (
+            id TEXT PRIMARY KEY NOT NULL,
+            project TEXT NOT NULL,
+            title TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            description TEXT,
+            has_acceptance_criteria INTEGER NOT NULL DEFAULT 0,
+            priority INTEGER,
+            labels TEXT DEFAULT '[]',
+            created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            source TEXT NOT NULL DEFAULT 'agent',
+            agent_session_id TEXT,
+            status TEXT NOT NULL DEFAULT 'pending'
+                CHECK(status IN ('pending', 'approved', 'submitted', 'rejected', 'edited')),
+            version INTEGER NOT NULL DEFAULT 1,
+            original_json TEXT,
+            resolved_by TEXT,
+            resolved_at TEXT,
+            rejection_reason TEXT,
+            stitch_id TEXT,
+            preview_json TEXT
+        )
+        "#,
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_draft_queue_status ON draft_queue(status)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_draft_queue_project ON draft_queue(project)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_draft_queue_created_at ON draft_queue(created_at DESC)",
+        [],
+    )?;
+
+    update_schema_version(conn, "1.10.0")?;
+    Ok(())
+}
+
+/// Migration 1.10.0 → 1.11.0: Add morning_briefs table
+///
+/// Stores generated morning briefs with their markdown content, headline,
+/// and references to any draft Stitches created during generation.
+fn migrate_v110_to_v111(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.10.0 → 1.11.0: Adding morning_briefs table");
+
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS morning_briefs (
+            id TEXT PRIMARY KEY NOT NULL,
+            generated_at TEXT NOT NULL,
+            window_from TEXT NOT NULL,
+            window_to TEXT NOT NULL,
+            headline TEXT NOT NULL,
+            markdown_content TEXT NOT NULL,
+            draft_ids TEXT NOT NULL DEFAULT '[]',
+            session_id TEXT,
+            status TEXT NOT NULL DEFAULT 'complete'
+                CHECK(status IN ('running', 'complete', 'failed')),
+            error TEXT
+        )
+        "#,
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_morning_briefs_generated_at ON morning_briefs(generated_at DESC)",
+        [],
+    )?;
+
+    update_schema_version(conn, "1.11.0")?;
+    Ok(())
+}
+
 /// Update the schema version in the metadata table
 fn update_schema_version(conn: &mut Connection, version: &str) -> Result<()> {
     conn.execute(
@@ -1336,6 +1478,228 @@ pub fn list_agent_sessions(limit: usize) -> Result<Vec<AgentSessionRow>> {
 }
 
 // ---------------------------------------------------------------------------
+// Draft queue CRUD
+// ---------------------------------------------------------------------------
+
+/// A row from the `draft_queue` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DraftRow {
+    pub id: String,
+    pub project: String,
+    pub title: String,
+    pub kind: String,
+    pub description: Option<String>,
+    pub has_acceptance_criteria: bool,
+    pub priority: Option<i64>,
+    pub labels: Vec<String>,
+    pub created_by: String,
+    pub created_at: String,
+    pub source: String,
+    pub agent_session_id: Option<String>,
+    pub status: String,
+    pub version: i64,
+    pub original_json: Option<String>,
+    pub resolved_by: Option<String>,
+    pub resolved_at: Option<String>,
+    pub rejection_reason: Option<String>,
+    pub stitch_id: Option<String>,
+    pub preview_json: Option<String>,
+}
+
+/// Insert a new draft into the queue.
+pub fn insert_draft(row: &DraftRow) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let labels_json = serde_json::to_string(&row.labels)?;
+    conn.execute(
+        r#"INSERT INTO draft_queue
+           (id, project, title, kind, description, has_acceptance_criteria,
+            priority, labels, created_by, created_at, source, agent_session_id,
+            status, version, original_json, resolved_by, resolved_at,
+            rejection_reason, stitch_id, preview_json)
+           VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20)"#,
+        params![
+            row.id,
+            row.project,
+            row.title,
+            row.kind,
+            row.description,
+            row.has_acceptance_criteria as i64,
+            row.priority,
+            labels_json,
+            row.created_by,
+            row.created_at,
+            row.source,
+            row.agent_session_id,
+            row.status,
+            row.version,
+            row.original_json,
+            row.resolved_by,
+            row.resolved_at,
+            row.rejection_reason,
+            row.stitch_id,
+            row.preview_json,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Get a single draft by ID.
+pub fn get_draft(draft_id: &str) -> Result<Option<DraftRow>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let row = conn.query_row(
+        r#"SELECT id, project, title, kind, description, has_acceptance_criteria,
+                  priority, labels, created_by, created_at, source, agent_session_id,
+                  status, version, original_json, resolved_by, resolved_at,
+                  rejection_reason, stitch_id, preview_json
+           FROM draft_queue WHERE id = ?1"#,
+        [draft_id],
+        read_draft_row,
+    );
+    match row {
+        Ok(r) => Ok(Some(r)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(anyhow::anyhow!("Failed to get draft: {}", e)),
+    }
+}
+
+/// List drafts, optionally filtered by project and/or status.
+pub fn list_drafts(
+    project: Option<&str>,
+    status: Option<&str>,
+    limit: usize,
+) -> Result<Vec<DraftRow>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let mut sql = String::from(
+        r#"SELECT id, project, title, kind, description, has_acceptance_criteria,
+                  priority, labels, created_by, created_at, source, agent_session_id,
+                  status, version, original_json, resolved_by, resolved_at,
+                  rejection_reason, stitch_id, preview_json
+           FROM draft_queue WHERE 1=1"#,
+    );
+    let mut p: Vec<String> = Vec::new();
+    if let Some(proj) = project {
+        sql.push_str(&format!(" AND project = ?{}", p.len() + 1));
+        p.push(proj.to_string());
+    }
+    if let Some(st) = status {
+        sql.push_str(&format!(" AND status = ?{}", p.len() + 1));
+        p.push(st.to_string());
+    }
+    sql.push_str(&format!(" ORDER BY created_at DESC LIMIT {}", limit));
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(rusqlite::params_from_iter(p.iter()), read_draft_row)?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row?);
+    }
+    Ok(result)
+}
+
+/// Update a draft's status and resolution metadata.
+pub fn update_draft_status(
+    draft_id: &str,
+    status: &str,
+    resolved_by: Option<&str>,
+    resolved_at: Option<&str>,
+    rejection_reason: Option<&str>,
+    stitch_id: Option<&str>,
+) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    conn.execute(
+        r#"UPDATE draft_queue
+           SET status = ?1, resolved_by = ?2, resolved_at = ?3,
+               rejection_reason = ?4, stitch_id = ?5
+           WHERE id = ?6"#,
+        params![status, resolved_by, resolved_at, rejection_reason, stitch_id, draft_id],
+    )?;
+    Ok(())
+}
+
+/// Edit a draft's content (creates a new version).
+pub fn edit_draft(
+    draft_id: &str,
+    title: Option<&str>,
+    description: Option<&str>,
+    kind: Option<&str>,
+    priority: Option<i64>,
+    labels: Option<&[String]>,
+) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let now = Utc::now().to_rfc3339();
+
+    if let Some(t) = title {
+        conn.execute("UPDATE draft_queue SET title = ?1 WHERE id = ?2", params![t, draft_id])?;
+    }
+    if let Some(d) = description {
+        conn.execute("UPDATE draft_queue SET description = ?1 WHERE id = ?2", params![d, draft_id])?;
+    }
+    if let Some(k) = kind {
+        conn.execute("UPDATE draft_queue SET kind = ?1 WHERE id = ?2", params![k, draft_id])?;
+    }
+    if let Some(p) = priority {
+        conn.execute("UPDATE draft_queue SET priority = ?1 WHERE id = ?2", params![p, draft_id])?;
+    }
+    if let Some(l) = labels {
+        let labels_json = serde_json::to_string(l)?;
+        conn.execute("UPDATE draft_queue SET labels = ?1 WHERE id = ?2", params![labels_json, draft_id])?;
+    }
+
+    conn.execute(
+        "UPDATE draft_queue SET version = version + 1, status = 'edited' WHERE id = ?1",
+        params![draft_id],
+    )?;
+
+    // Store original on first edit
+    conn.execute(
+        "UPDATE draft_queue SET original_json = (
+            SELECT json_object(
+                'title', title, 'description', description, 'kind', kind,
+                'priority', priority, 'labels', labels
+            )
+            FROM draft_queue WHERE id = ?1
+        ) WHERE id = ?1 AND original_json IS NULL",
+        params![draft_id],
+    )?;
+
+    let _ = now; // resolved_at is set on approve/reject, not on edit
+    Ok(())
+}
+
+/// Helper to read a draft row from a query result.
+fn read_draft_row(row: &rusqlite::Row<'_>) -> std::result::Result<DraftRow, rusqlite::Error> {
+    let labels_str: String = row.get(7).unwrap_or_else(|_| "[]".to_string());
+    let labels: Vec<String> = serde_json::from_str(&labels_str).unwrap_or_default();
+    let has_ac: i64 = row.get(5).unwrap_or(0);
+    Ok(DraftRow {
+        id: row.get(0)?,
+        project: row.get(1)?,
+        title: row.get(2)?,
+        kind: row.get(3)?,
+        description: row.get(4)?,
+        has_acceptance_criteria: has_ac != 0,
+        priority: row.get(6)?,
+        labels,
+        created_by: row.get(8)?,
+        created_at: row.get(9)?,
+        source: row.get(10)?,
+        agent_session_id: row.get(11)?,
+        status: row.get(12)?,
+        version: row.get(13)?,
+        original_json: row.get(14)?,
+        resolved_by: row.get(15)?,
+        resolved_at: row.get(16)?,
+        rejection_reason: row.get(17)?,
+        stitch_id: row.get(18)?,
+        preview_json: row.get(19)?,
+    })
+}
+
+// ---------------------------------------------------------------------------
 // Agent enabled persistence (metadata table)
 // ---------------------------------------------------------------------------
 
@@ -1492,6 +1856,148 @@ pub fn load_recent_stitches(limit: usize) -> Result<Vec<(String, String, String,
         result.push(row?);
     }
     Ok(result)
+}
+
+// ---------------------------------------------------------------------------
+// Morning Brief CRUD
+// ---------------------------------------------------------------------------
+
+/// A row from the `morning_briefs` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MorningBriefRow {
+    pub id: String,
+    pub generated_at: String,
+    pub window_from: String,
+    pub window_to: String,
+    pub headline: String,
+    pub markdown_content: String,
+    /// JSON array of draft Stitch IDs created during this brief
+    pub draft_ids: Vec<String>,
+    pub session_id: Option<String>,
+    pub status: String,
+    pub error: Option<String>,
+}
+
+/// Insert a new morning brief record.
+pub fn insert_morning_brief(row: &MorningBriefRow) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let draft_ids_json = serde_json::to_string(&row.draft_ids)?;
+    conn.execute(
+        r#"INSERT INTO morning_briefs
+           (id, generated_at, window_from, window_to, headline, markdown_content,
+            draft_ids, session_id, status, error)
+           VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)"#,
+        params![
+            row.id,
+            row.generated_at,
+            row.window_from,
+            row.window_to,
+            row.headline,
+            row.markdown_content,
+            draft_ids_json,
+            row.session_id,
+            row.status,
+            row.error,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Update the status (and optional error) of a morning brief record.
+pub fn update_morning_brief_status(id: &str, status: &str, error: Option<&str>) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    conn.execute(
+        "UPDATE morning_briefs SET status = ?1, error = ?2 WHERE id = ?3",
+        params![status, error, id],
+    )?;
+    Ok(())
+}
+
+/// Update the session_id of a morning brief record.
+pub fn update_morning_brief_session(id: &str, session_id: &str) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    conn.execute(
+        "UPDATE morning_briefs SET session_id = ?1 WHERE id = ?2",
+        params![session_id, id],
+    )?;
+    Ok(())
+}
+
+/// Update headline, content, and draft_ids when the brief completes.
+pub fn update_morning_brief_content(
+    id: &str,
+    headline: &str,
+    markdown_content: &str,
+    draft_ids: &[String],
+) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let draft_ids_json = serde_json::to_string(draft_ids)?;
+    conn.execute(
+        "UPDATE morning_briefs SET headline = ?1, markdown_content = ?2, draft_ids = ?3, status = 'complete' WHERE id = ?4",
+        params![headline, markdown_content, draft_ids_json, id],
+    )?;
+    Ok(())
+}
+
+/// Load the most recent completed morning brief.
+pub fn get_latest_morning_brief() -> Result<Option<MorningBriefRow>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let result = conn.query_row(
+        r#"SELECT id, generated_at, window_from, window_to, headline, markdown_content,
+                  draft_ids, session_id, status, error
+           FROM morning_briefs
+           WHERE status = 'complete'
+           ORDER BY generated_at DESC LIMIT 1"#,
+        [],
+        read_morning_brief_row,
+    );
+    match result {
+        Ok(r) => Ok(Some(r)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(anyhow::anyhow!("Failed to get latest morning brief: {}", e)),
+    }
+}
+
+/// List recent morning briefs (most recent first).
+pub fn list_morning_briefs(limit: usize) -> Result<Vec<MorningBriefRow>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let mut stmt = conn.prepare(
+        r#"SELECT id, generated_at, window_from, window_to, headline, markdown_content,
+                  draft_ids, session_id, status, error
+           FROM morning_briefs
+           ORDER BY generated_at DESC LIMIT ?1"#,
+    )?;
+    let rows = stmt.query_map(params![limit as i64], read_morning_brief_row)?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row?);
+    }
+    Ok(result)
+}
+
+fn read_morning_brief_row(
+    row: &rusqlite::Row<'_>,
+) -> std::result::Result<MorningBriefRow, rusqlite::Error> {
+    let draft_ids_str: String = row.get(6).unwrap_or_else(|_| "[]".to_string());
+    let draft_ids: Vec<String> = serde_json::from_str(&draft_ids_str).unwrap_or_default();
+    Ok(MorningBriefRow {
+        id: row.get(0)?,
+        generated_at: row.get(1)?,
+        window_from: row.get(2)?,
+        window_to: row.get(3)?,
+        headline: row.get(4)?,
+        markdown_content: row.get(5)?,
+        draft_ids,
+        session_id: row.get(7)?,
+        status: row.get(8)?,
+        error: row.get(9)?,
+    })
 }
 
 #[cfg(test)]
