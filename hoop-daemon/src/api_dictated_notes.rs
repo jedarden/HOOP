@@ -73,6 +73,18 @@ async fn create_note(
         ("Transcription pending...".to_string(), TranscriptionStatus::Pending)
     };
 
+    // §18.2 secrets scan: flag secrets in the incoming transcript (Phase 3)
+    if has_transcript {
+        let findings = crate::redaction::scan_voice_transcript(&transcript);
+        if !findings.is_empty() {
+            tracing::warn!(
+                project = %project,
+                findings = findings.len(),
+                "Voice transcript contains potential secrets — flagged for operator review (§18.2)"
+            );
+        }
+    }
+
     let title = if has_transcript {
         dictated_notes::derive_title(&transcript)
     } else {
@@ -250,6 +262,15 @@ async fn update_note(
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Title update error: {}", e)))?;
     }
     if let Some(transcript) = req.transcript {
+        // §18.2 secrets scan: flag secrets in the updated transcript (Phase 3)
+        let findings = crate::redaction::scan_voice_transcript(&transcript);
+        if !findings.is_empty() {
+            tracing::warn!(
+                stitch_id = %valid_id.as_str(),
+                findings = findings.len(),
+                "Updated voice transcript contains potential secrets — flagged for operator review (§18.2)"
+            );
+        }
         note.transcript = transcript;
         note.transcription_status = TranscriptionStatus::Completed;
     }

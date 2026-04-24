@@ -87,12 +87,14 @@ macro_rules! impl_project_helpers {
                 match self {
                     Self::Variant0 { path, .. } => vec![WorkspaceView {
                         path: std::path::PathBuf::from(path),
+                        canonical_path: None,
                         role: WorkspaceViewRole::Primary,
                     }],
                     Self::Variant1 { workspaces, .. } => workspaces
                         .iter()
                         .map(|w| WorkspaceView {
                             path: std::path::PathBuf::from(&w.path),
+                            canonical_path: w.canonical_path.as_ref().map(std::path::PathBuf::from),
                             role: match w.role {
                                 <$role_ty>::Primary => WorkspaceViewRole::Primary,
                                 <$role_ty>::Manifests => WorkspaceViewRole::Manifests,
@@ -105,9 +107,17 @@ macro_rules! impl_project_helpers {
                 }
             }
 
-            /// Returns an iterator over all workspace paths in this project.
+            /// Returns an iterator over all workspace raw paths in this project (for display).
             pub fn all_paths(&self) -> impl Iterator<Item = std::path::PathBuf> + '_ {
                 self.workspace_views().into_iter().map(|w| w.path)
+            }
+
+            /// Returns an iterator over all workspace canonical paths (for joins/dedup).
+            /// Falls back to raw path when canonical_path is absent (legacy or v0.1 shorthand).
+            pub fn all_canonical_paths(&self) -> impl Iterator<Item = std::path::PathBuf> + '_ {
+                self.workspace_views().into_iter().map(|w| {
+                    w.canonical_path.unwrap_or(w.path)
+                })
             }
 
             /// Returns the optional display label.
@@ -132,13 +142,63 @@ macro_rules! impl_project_helpers {
 impl_project_helpers!(ProjectEntry, ProjectEntryVariant1WorkspacesItem, ProjectEntryVariant1WorkspacesItemRole);
 impl_project_helpers!(ProjectsRegistryProjectsItem, ProjectsRegistryProjectsItemVariant1WorkspacesItem, ProjectsRegistryProjectsItemVariant1WorkspacesItemRole);
 
-/// Base trait for all schema records
-pub trait SchemaRecord {
-    /// Returns the schema version for this record
-    fn schema_version(&self) -> &'static str {
+/// Trait for records persisted to durable storage (SQLite, JSONL, config).
+///
+/// Every durable record carries a `schema_version` field for forward-compatible
+/// migration (§20). Types implementing this trait are validated by [`write_versioned`]
+/// to guarantee the serialized JSON includes a version matching [`version::SCHEMA_VERSION`].
+pub trait DurableRecord: serde::Serialize {}
+
+/// Serialize a durable record to JSON, asserting `schema_version` matches the
+/// compiled constant.
+///
+/// # Panics
+///
+/// If the record's `schema_version` differs from [`version::SCHEMA_VERSION`] or
+/// the serialized JSON lacks the field entirely.
+pub fn write_versioned<T: DurableRecord>(record: &T) -> String {
+    let json = serde_json::to_string(record).expect("serialization failed");
+    let parsed: serde_json::Value = serde_json::from_str(&json).expect("re-parse failed");
+    let sv = parsed["schema_version"].as_str().unwrap_or_else(|| {
+        panic!(
+            "{}: missing schema_version in serialized output",
+            std::any::type_name::<T>()
+        )
+    });
+    assert_eq!(
+        sv,
+        version::SCHEMA_VERSION,
+        "{}: schema_version mismatch: got {sv}, expected {}",
+        std::any::type_name::<T>(),
         version::SCHEMA_VERSION
-    }
+    );
+    json
 }
+
+/// Implement [`DurableRecord`] for each listed type.
+macro_rules! impl_durable_record {
+    ($($ty:ty),+ $(,)?) => {
+        $(impl DurableRecord for $ty {})+
+    };
+}
+
+impl_durable_record!(
+    AuditRow,
+    Bead,
+    CapacityAccount,
+    DictatedNote,
+    HoopConfig,
+    Pattern,
+    PatternMember,
+    PatternQuery,
+    ReflectionLedger,
+    Stitch,
+    StitchBead,
+    StitchLink,
+    StitchMessage,
+    StitchPreview,
+    UiState,
+);
 
 /// Health check response (liveness)
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -533,5 +593,222 @@ mod tests {
         let round_tripped: HoopConfig =
             serde_json::from_str(&json).expect("deserialize");
         assert_eq!(original, round_tripped);
+    }
+
+    /// Fuzz-style test: every `DurableRecord` type must emit `schema_version`
+    /// matching the compiled constant when serialized (§3.5, §20).
+    ///
+    /// Constructs a minimal valid instance of each durable type, passes it
+    /// through `write_versioned`, and asserts the invariant holds. Adding a
+    /// new DurableRecord impl without a schema_version field will panic here.
+    #[test]
+    fn every_durable_record_carries_schema_version() {
+        let ts = parse_utc("2024-01-01T00:00:00Z");
+
+        // AuditRow
+        write_versioned(&AuditRow {
+            id: Uuid::new_v4(),
+            ts,
+            actor: "user:test".to_string(),
+            kind: AuditRowKind::BeadCreated,
+            target: "bd-123".to_string(),
+            args: serde_json::Map::new(),
+            result: AuditRowResult::Success,
+            error: None,
+            schema_version: AuditRowSchemaVersion("1.0.0".to_string()),
+        });
+
+        // Bead
+        write_versioned(&Bead {
+            id: "hoop-ttb.1".to_string(),
+            title: "Test bead".to_string(),
+            description: None,
+            status: BeadStatus::Open,
+            priority: 0,
+            issue_type: BeadIssueType::Task,
+            created_at: ts,
+            updated_at: ts,
+            created_by: "user".to_string(),
+            dependencies: vec![],
+            schema_version: BeadSchemaVersion("1.0.0".to_string()),
+        });
+
+        // CapacityAccount
+        write_versioned(&CapacityAccount {
+            id: "account-1".to_string(),
+            adapter: CapacityAccountAdapter::Claude,
+            account_id: "acc-123".to_string(),
+            limits: CapacityAccountLimits {
+                concurrent_requests: None,
+                requests_per_day: None,
+                spend_usd_per_day: None,
+                tokens_per_5h: None,
+                tokens_per_7d: Some(1000000),
+            },
+            usage: CapacityAccountUsage {
+                active_requests: None,
+                requests_today: 100,
+                spend_usd_today: 50.0,
+                tokens_5h: 50000,
+                tokens_7d: 500000,
+            },
+            window_start: None,
+            window_end: None,
+            updated_at: ts,
+            schema_version: CapacityAccountSchemaVersion("1.0.0".to_string()),
+        });
+
+        // DictatedNote
+        write_versioned(&DictatedNote {
+            stitch_id: Uuid::new_v4(),
+            recorded_at: ts,
+            transcribed_at: ts,
+            audio_filename: "note.webm".to_string(),
+            transcript: "hello world".to_string(),
+            transcript_words: vec![],
+            duration_secs: None,
+            language: None,
+            tags: vec![],
+            schema_version: DictatedNoteSchemaVersion("1.0.0".to_string()),
+        });
+
+        // HoopConfig (minimal)
+        write_versioned(&HoopConfig {
+            schema_version: HoopConfigSchemaVersion("1.0.0".to_string()),
+            agent: None,
+            projects_file: None,
+            backup: None,
+            ui: None,
+            voice: None,
+            agent_extensions: None,
+            metrics: None,
+            audit: None,
+            reflection: None,
+            pricing: None,
+        });
+
+        // Pattern
+        write_versioned(&Pattern {
+            id: Uuid::new_v4(),
+            title: "Test pattern".to_string(),
+            description: None,
+            status: PatternStatus::Active,
+            owner: None,
+            deadline: None,
+            parent_pattern: None,
+            created_at: ts,
+            updated_at: None,
+            closed_at: None,
+            progress_percent: None,
+            total_cost_usd: None,
+            duration_seconds: None,
+            schema_version: PatternSchemaVersion("1.0.0".to_string()),
+        });
+
+        // PatternMember
+        write_versioned(&PatternMember {
+            pattern_id: Uuid::new_v4(),
+            stitch_id: Uuid::new_v4(),
+            added_at: None,
+            added_by: None,
+            schema_version: PatternMemberSchemaVersion("1.0.0".to_string()),
+        });
+
+        // PatternQuery
+        write_versioned(&PatternQuery {
+            pattern_id: Uuid::new_v4(),
+            query: "status:open".to_string(),
+            created_at: None,
+            schema_version: PatternQuerySchemaVersion("1.0.0".to_string()),
+        });
+
+        // ReflectionLedger
+        write_versioned(&ReflectionLedger {
+            id: Uuid::new_v4(),
+            scope: "global".to_string(),
+            rule: "Always use snake_case".to_string(),
+            reason: None,
+            source_stitches: vec![],
+            status: ReflectionLedgerStatus::Proposed,
+            created_at: ts,
+            last_applied: None,
+            applied_count: 0,
+            approved_by: None,
+            approved_at: None,
+            archived_at: None,
+            schema_version: ReflectionLedgerSchemaVersion("1.0.0".to_string()),
+        });
+
+        // Stitch
+        write_versioned(&Stitch {
+            id: Uuid::new_v4(),
+            project: "test-project".to_string(),
+            kind: StitchKind::Operator,
+            title: "Test stitch".to_string(),
+            created_by: "user".to_string(),
+            created_at: ts,
+            updated_at: None,
+            closed_at: None,
+            participants: vec![],
+            attachments_path: None,
+            archived: false,
+            archived_at: None,
+            worker_metadata: None,
+            parent_stitch_id: None,
+            pattern_id: None,
+            schema_version: StitchSchemaVersion("1.0.0".to_string()),
+        });
+
+        // StitchBead
+        write_versioned(&StitchBead {
+            stitch_id: Uuid::new_v4(),
+            bead_id: "hoop-ttb.1".to_string(),
+            workspace: "/home/user/project".to_string(),
+            relationship: StitchBeadRelationship::CreatedHere,
+            linked_at: None,
+            schema_version: StitchBeadSchemaVersion("1.0.0".to_string()),
+        });
+
+        // StitchLink
+        write_versioned(&StitchLink {
+            from_stitch: Uuid::new_v4(),
+            to_stitch: Uuid::new_v4(),
+            kind: StitchLinkKind::Spawned,
+            created_at: None,
+            schema_version: StitchLinkSchemaVersion("1.0.0".to_string()),
+        });
+
+        // StitchMessage
+        write_versioned(&StitchMessage {
+            id: Uuid::new_v4(),
+            stitch_id: Uuid::new_v4(),
+            ts,
+            role: StitchMessageRole::User,
+            content: serde_json::Value::String("hello".to_string()),
+            attachments: vec![],
+            tokens: None,
+            tool_use: None,
+            schema_version: StitchMessageSchemaVersion("1.0.0".to_string()),
+        });
+
+        // StitchPreview (minimal — only schema_version required)
+        write_versioned(&StitchPreview {
+            schema_version: StitchPreviewSchemaVersion("1.0.0".to_string()),
+            prediction: None,
+            risk_patterns: vec![],
+            file_conflicts: vec![],
+            similar_stitches: vec![],
+        });
+
+        // UiState (minimal — only schema_version + defaults required)
+        write_versioned(&UiState {
+            schema_version: UiStateSchemaVersion("1.0.0".to_string()),
+            active_project: None,
+            active_stitch: None,
+            sidebar_width: 300,
+            panel_layout: None,
+            filters: None,
+            theme: UiStateTheme::Auto,
+        });
     }
 }

@@ -17,7 +17,7 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
-use tracing::info;
+use tracing::{info, warn};
 use uuid::Uuid;
 
 /// Current schema version
@@ -1977,6 +1977,18 @@ pub struct MorningBriefRow {
 
 /// Insert a new morning brief record.
 pub fn insert_morning_brief(row: &MorningBriefRow) -> Result<()> {
+    // §18.1 secrets scan: flag secrets before storage and lateral propagation (Phase 5)
+    {
+        let findings = crate::redaction::scan_morning_brief(&row.markdown_content);
+        if !findings.is_empty() {
+            warn!(
+                brief_id = %row.id,
+                findings = findings.len(),
+                "Morning brief content contains potential secrets — lateral leak risk (§18.1)"
+            );
+        }
+    }
+
     let path = db_path();
     let conn = Connection::open(&path)?;
     let draft_ids_json = serde_json::to_string(&row.draft_ids)?;

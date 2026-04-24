@@ -315,8 +315,17 @@ impl ProjectsRegistry {
         if let Some(existing) = self
             .projects
             .iter()
-            .find(|p| p.all_paths().any(|wp| wp == canonical))
+            .find(|p| p.all_canonical_paths().any(|cp| cp.as_ref() == canonical))
         {
+            // Warn if raw paths differ — indicates symlink or alternate mount
+            if !existing.all_paths().any(|wp| wp == path) {
+                eprintln!(
+                    "warning: path '{}' resolves to the same canonical location as project '{}' ({})",
+                    path.display(),
+                    existing.name,
+                    canonical.display()
+                );
+            }
             anyhow::bail!("Path already registered as project '{}'", existing.name);
         }
 

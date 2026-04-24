@@ -3,6 +3,7 @@
 //! Lists directory contents lazily (one level at a time), respecting .gitignore
 //! and .hoopignore files. Git status is derived from `git status --porcelain`.
 
+use crate::path_security::{canonicalize_and_check, PathAllowlist};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -112,6 +113,11 @@ fn git_status_map(project_root: &Path, rel_dir: &str) -> HashMap<String, GitStat
 ///
 /// Respects `.gitignore` and `.hoopignore` files in each directory.
 /// Returns entries sorted: directories first, then alphabetically (case-insensitive).
+///
+/// Performs `canonicalize()` on the resolved directory and verifies it is
+/// within the project workspace (§13 path-traversal hardening).  This catches
+/// symlinks that point outside the project root even when `rel_dir` contains
+/// no `..` components.
 pub fn list_dir(project_root: &Path, rel_dir: &str) -> Result<Vec<FileEntry>> {
     let abs_dir = if rel_dir.is_empty() {
         project_root.to_path_buf()
@@ -120,8 +126,16 @@ pub fn list_dir(project_root: &Path, rel_dir: &str) -> Result<Vec<FileEntry>> {
     };
 
     if !abs_dir.is_dir() {
-        anyhow::bail!("not a directory: {}", abs_dir.display());
+        anyhow::bail!("not a directory");
     }
+
+    // Build the allowlist from the project workspace root (pre-computed canonical).
+    let allowlist = PathAllowlist::for_workspace(project_root)
+        .context("failed to build path allowlist for project")?;
+
+    // Realpath resolution + allowlist check — rejects symlink escapes (§13, §K2).
+    canonicalize_and_check(&abs_dir, &allowlist)
+        .map_err(|_| anyhow::anyhow!("directory not within project workspace"))?;
 
     let status_map = git_status_map(project_root, rel_dir);
 

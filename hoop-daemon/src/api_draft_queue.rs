@@ -250,6 +250,19 @@ async fn create_draft(
     let now = chrono::Utc::now().to_rfc3339();
     let draft_id = format!("draft-{}", Uuid::new_v4());
 
+    // §18.1 secrets scan: flag secrets in draft title and body (Phase 4)
+    {
+        let findings = crate::redaction::scan_draft_body(&req.title, req.description.as_deref());
+        if !findings.is_empty() {
+            warn!(
+                project = %req.project,
+                draft_id = %draft_id,
+                findings = findings.len(),
+                "Draft body contains potential secrets — flagged for operator review (§18.1)"
+            );
+        }
+    }
+
     // Build the draft row
     let draft_row = fleet::DraftRow {
         id: draft_id.clone(),

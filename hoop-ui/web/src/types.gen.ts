@@ -915,9 +915,13 @@ export interface CapacityAccount {
  */
 export interface WorkspaceEntry {
   /**
-   * Absolute path to the workspace
+   * Raw workspace path as provided by the operator (display-only)
    */
   path: string;
+  /**
+   * Realpath-resolved absolute path used for joins and dedup
+   */
+  canonical_path?: string;
   /**
    * Workspace role
    */
@@ -964,9 +968,13 @@ export type ProjectEntry =
       color?: string;
       workspaces: {
         /**
-         * Absolute path to the workspace
+         * Raw workspace path as provided by the operator (display-only)
          */
         path: string;
+        /**
+         * Realpath-resolved absolute path used for joins and dedup
+         */
+        canonical_path?: string;
         /**
          * Workspace role
          */
@@ -1016,9 +1024,13 @@ export interface ProjectsRegistry {
         color?: string;
         workspaces: {
           /**
-           * Absolute path to the workspace
+           * Raw workspace path as provided by the operator (display-only)
            */
           path: string;
+          /**
+           * Realpath-resolved absolute path used for joins and dedup
+           */
+          canonical_path?: string;
           /**
            * Workspace role
            */

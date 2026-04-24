@@ -269,10 +269,10 @@ impl ProjectSupervisor {
         // Build map of existing projects
         let existing: std::collections::HashSet<String> = runtimes.keys().cloned().collect();
 
-        // Build map of desired projects
+        // Build map of desired projects using canonical paths for joins
         let mut desired: HashMap<String, Vec<PathBuf>> = HashMap::new();
         for project in &config.registry.projects {
-            let paths: Vec<PathBuf> = project.all_paths().map(|p| p.to_path_buf()).collect();
+            let paths: Vec<PathBuf> = project.all_canonical_paths().collect();
             desired.insert(project.name().to_string(), paths);
         }
 

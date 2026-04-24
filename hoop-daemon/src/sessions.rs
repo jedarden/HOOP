@@ -32,6 +32,20 @@ use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 
+/// Check whether `cwd` falls under `project_path` using canonical comparison.
+///
+/// Both sides are resolved via `fs::canonicalize` to handle symlinks and alternate
+/// mounts. If canonicalization fails (e.g. path doesn't exist on this host), the
+/// raw path is used as a fallback so sessions from remote machines aren't silently
+/// dropped.
+fn cwd_matches_project(cwd: &str, project_path: &Path) -> bool {
+    let resolved_cwd = std::fs::canonicalize(cwd).unwrap_or_else(|_| PathBuf::from(cwd));
+    let resolved_project = std::fs::canonicalize(project_path).unwrap_or_else(|_| project_path.to_path_buf());
+    let cwd_str = resolved_cwd.to_string_lossy();
+    let project_str = resolved_project.to_string_lossy();
+    cwd_str.starts_with(&*project_str)
+}
+
 /// Events emitted by the session tailer
 #[derive(Debug, Clone)]
 pub enum SessionEvent {
@@ -820,10 +834,9 @@ impl SessionTailer {
             warn!("Incomplete final line in session file: {}", partial.trim());
         }
 
-        // Filter by cwd if project_path is specified
+        // Filter by cwd if project_path is specified (canonical comparison)
         if let Some(project_path) = project_path {
-            let project_str = project_path.to_string_lossy();
-            if !cwd.starts_with(&*project_str) {
+            if !cwd_matches_project(&cwd, project_path) {
                 return Ok(None); // Filter out sessions not under this project
             }
         }
@@ -1065,8 +1078,7 @@ impl SessionTailer {
         }
 
         if let Some(project_path) = project_path {
-            let project_str = project_path.to_string_lossy();
-            if !cwd.starts_with(&*project_str) {
+            if !cwd_matches_project(&cwd, project_path) {
                 return Ok(None);
             }
         }
@@ -1249,8 +1261,7 @@ impl SessionTailer {
         }
 
         if let Some(project_path) = project_path {
-            let project_str = project_path.to_string_lossy();
-            if !cwd.starts_with(&*project_str) {
+            if !cwd_matches_project(&cwd, project_path) {
                 return Ok(None);
             }
         }
@@ -1432,8 +1443,7 @@ impl SessionTailer {
         }
 
         if let Some(project_path) = project_path {
-            let project_str = project_path.to_string_lossy();
-            if !cwd.starts_with(&*project_str) {
+            if !cwd_matches_project(&cwd, project_path) {
                 return Ok(None);
             }
         }
@@ -1554,8 +1564,7 @@ impl SessionTailer {
         }
 
         if let Some(project_path) = project_path {
-            let project_str = project_path.to_string_lossy();
-            if !cwd.starts_with(&*project_str) {
+            if !cwd_matches_project(&cwd, project_path) {
                 return Ok(None);
             }
         }

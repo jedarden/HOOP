@@ -8,6 +8,7 @@
 //! path-traversal attacks (§13 Security).
 
 use crate::id_validators::{ValidBeadId, ValidStitchId};
+use crate::path_security::{canonicalize_and_check, PathAllowlist};
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 
@@ -311,6 +312,10 @@ fn is_valid_filename(filename: &str) -> bool {
 /// Accepts a `ValidBeadId` to enforce compile-time proof that the ID has been
 /// validated before reaching any filesystem path construction.
 pub fn bead_attachment_dir(workspace: &Path, bead_id: &ValidBeadId) -> Result<PathBuf> {
+    // Build the pre-computed allowlist for this workspace (includes .beads/attachments/).
+    let allowlist = PathAllowlist::for_workspace(workspace)
+        .context("failed to build path allowlist for workspace")?;
+
     let dir = workspace
         .join(".beads")
         .join("attachments")
@@ -318,19 +323,9 @@ pub fn bead_attachment_dir(workspace: &Path, bead_id: &ValidBeadId) -> Result<Pa
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("failed to create bead attachment dir: {}", dir.display()))?;
 
-    let canonical = dir
-        .canonicalize()
-        .with_context(|| format!("failed to canonicalize: {}", dir.display()))?;
-
-    // Prefix guard: resolved path must be under <workspace>/.beads/attachments/
-    let prefix = workspace
-        .join(".beads")
-        .join("attachments")
-        .canonicalize()
-        .context("failed to canonicalize bead attachments prefix")?;
-    if !canonical.starts_with(&prefix) {
-        anyhow::bail!("path traversal detected for bead id: {:?}", bead_id);
-    }
+    // Realpath resolution + allowlist prefix-check (§13, §K2).
+    let canonical = canonicalize_and_check(&dir, &allowlist)
+        .map_err(|_| anyhow::anyhow!("path traversal detected for bead id"))?;
 
     Ok(canonical)
 }
@@ -342,23 +337,18 @@ pub fn bead_attachment_dir(workspace: &Path, bead_id: &ValidBeadId) -> Result<Pa
 /// Accepts a `ValidStitchId` to enforce compile-time proof that the ID has been
 /// validated before reaching any filesystem path construction.
 pub fn stitch_attachment_dir(stitch_id: &ValidStitchId) -> Result<PathBuf> {
+    // Build the pre-computed allowlist for stitch/note attachments.
+    let allowlist = PathAllowlist::for_stitch_attachments()
+        .context("failed to build path allowlist for stitch attachments")?;
+
     let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
     let dir = home.join(".hoop").join("attachments").join(stitch_id.as_str());
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("failed to create stitch attachment dir: {}", dir.display()))?;
 
-    let canonical = dir
-        .canonicalize()
-        .with_context(|| format!("failed to canonicalize: {}", dir.display()))?;
-
-    let prefix = home
-        .join(".hoop")
-        .join("attachments")
-        .canonicalize()
-        .context("failed to canonicalize stitch attachments prefix")?;
-    if !canonical.starts_with(&prefix) {
-        anyhow::bail!("path traversal detected for stitch id: {:?}", stitch_id);
-    }
+    // Realpath resolution + allowlist prefix-check (§13, §K2).
+    let canonical = canonicalize_and_check(&dir, &allowlist)
+        .map_err(|_| anyhow::anyhow!("path traversal detected for stitch id"))?;
 
     Ok(canonical)
 }
@@ -377,15 +367,17 @@ pub fn bead_attachment_path(
     if !is_valid_filename(filename) {
         anyhow::bail!("invalid attachment filename: {:?}", filename);
     }
+    // bead_attachment_dir already performs canonicalize_and_check on the directory.
     let dir = bead_attachment_dir(workspace, bead_id)?;
     let dest = dir.join(filename);
 
-    // Defense-in-depth: the parent of the resolved path must equal the dir.
+    // Defense-in-depth: the parent of the destination path must equal the
+    // already-checked dir (catches filenames that somehow encode a separator).
     let parent = dest
         .parent()
         .ok_or_else(|| anyhow::anyhow!("attachment path has no parent"))?;
-    if parent.canonicalize().ok().as_deref() != Some(dir.as_path()) {
-        anyhow::bail!("path traversal detected in filename: {:?}", filename);
+    if parent != dir.as_path() {
+        anyhow::bail!("path traversal detected in filename");
     }
 
     Ok(dest)
@@ -396,14 +388,16 @@ pub fn stitch_attachment_path(stitch_id: &ValidStitchId, filename: &str) -> Resu
     if !is_valid_filename(filename) {
         anyhow::bail!("invalid attachment filename: {:?}", filename);
     }
+    // stitch_attachment_dir already performs canonicalize_and_check on the directory.
     let dir = stitch_attachment_dir(stitch_id)?;
     let dest = dir.join(filename);
 
+    // Defense-in-depth: the parent must equal the already-checked dir.
     let parent = dest
         .parent()
         .ok_or_else(|| anyhow::anyhow!("attachment path has no parent"))?;
-    if parent.canonicalize().ok().as_deref() != Some(dir.as_path()) {
-        anyhow::bail!("path traversal detected in filename: {:?}", filename);
+    if parent != dir.as_path() {
+        anyhow::bail!("path traversal detected in filename");
     }
 
     Ok(dest)

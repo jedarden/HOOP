@@ -139,6 +139,133 @@ fn hash_str(s: &str) -> u64 {
     hasher.finish()
 }
 
+// ── Scanning (detection without mutation) ─────────────────────────────────────
+
+/// A secret detected in scanned text. Returned by `scan_text_for_secrets`.
+///
+/// Per §18.1 the finding is **flagged, not blocked** — nothing is silently
+/// deleted. The operator sees which surface was scanned and how many findings
+/// were detected, then chooses to redact-in-place, redact-and-delete, or
+/// proceed anyway.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SecretFinding {
+    /// Which scanner pattern matched (e.g. `"anthropic_api_key"`).
+    pub pattern_name: &'static str,
+    /// Byte offset of the start of the match within the scanned text.
+    pub match_start: usize,
+    /// Length of the matched substring in bytes.
+    pub match_len: usize,
+}
+
+/// Named patterns for detection. Each tuple is `(name, Regex)`.
+/// Mirrors `build_patterns` but retains the pattern name for reporting.
+static NAMED_PATTERNS: LazyLock<Vec<(&'static str, Regex)>> =
+    LazyLock::new(build_named_patterns);
+
+fn build_named_patterns() -> Vec<(&'static str, Regex)> {
+    vec![
+        ("anthropic_api_key",
+            Regex::new(r"sk-ant-[a-zA-Z0-9_-]{20,}").unwrap()),
+        ("generic_sk_key",
+            Regex::new(r"\bsk-[a-zA-Z0-9]{20,}\b").unwrap()),
+        ("aws_access_key",
+            Regex::new(r"\bAKIA[A-Z0-9]{16}\b").unwrap()),
+        ("github_token_ghp",
+            Regex::new(r"\bghp_[a-zA-Z0-9]{36}\b").unwrap()),
+        ("github_token_ghs",
+            Regex::new(r"\bghs_[a-zA-Z0-9]{36}\b").unwrap()),
+        ("github_token_ghu",
+            Regex::new(r"\bghu_[a-zA-Z0-9]{36}\b").unwrap()),
+        ("github_pat",
+            Regex::new(r"\bgithub_pat_[a-zA-Z0-9_]{82}\b").unwrap()),
+        ("slack_bot_token",
+            Regex::new(r"\bxoxb-[0-9A-Za-z-]{24,}\b").unwrap()),
+        ("slack_user_token",
+            Regex::new(r"\bxoxp-[0-9A-Za-z-]{24,}\b").unwrap()),
+        ("jwt",
+            Regex::new(r"\bey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b").unwrap()),
+        ("bearer_token",
+            Regex::new(r"(?i)bearer\s+[A-Za-z0-9._\-+/]{20,}").unwrap()),
+        ("env_var_secret",
+            Regex::new(
+                r#"(?i)(?:api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|private[_-]?key|client[_-]?secret|anthropic[_-]?api[_-]?key|openai[_-]?api[_-]?key|github[_-]?token)\s*[:=]\s*["']?([A-Za-z0-9+/_.~\-]{16,})["']?"#
+            ).unwrap()),
+        ("json_secret_field",
+            Regex::new(
+                r#"(?i)"(?:password|passwd|secret|token|api_key|apikey|access_token|auth_token|private_key|client_secret)"\s*:\s*"([^"]{8,})""#
+            ).unwrap()),
+    ]
+}
+
+/// Scan `text` for secrets and return all findings.
+///
+/// Returns an empty vec if no secrets are detected. The text is never mutated
+/// — this is detection-only. Use `redact_text` if you also want to replace
+/// findings with `[REDACTED]`.
+///
+/// Returned findings may overlap when the same key matches multiple patterns
+/// (e.g. both `anthropic_api_key` and `env_var_secret`).
+pub fn scan_text_for_secrets(text: &str) -> Vec<SecretFinding> {
+    let mut findings = Vec::new();
+    for (name, re) in NAMED_PATTERNS.iter() {
+        for m in re.find_iter(text) {
+            findings.push(SecretFinding {
+                pattern_name: name,
+                match_start: m.start(),
+                match_len: m.len(),
+            });
+        }
+    }
+    findings
+}
+
+// ── Per-surface scanning entry points (§18) ───────────────────────────────────
+//
+// Each function is a thin named wrapper over `scan_text_for_secrets`. The name
+// labels the ingestion surface so call sites are self-documenting in review.
+
+/// Phase 3: Scan a Whisper voice transcript for secrets before storage (§18.2).
+pub fn scan_voice_transcript(transcript: &str) -> Vec<SecretFinding> {
+    scan_text_for_secrets(transcript)
+}
+
+/// Phase 3: Scan text extracted from a screen-capture frame for secrets (§18.1).
+///
+/// Frame text may be produced by OCR of individual frames or from the
+/// narration transcript attached to a screen walkthrough.
+pub fn scan_screen_capture_text(frame_text: &str) -> Vec<SecretFinding> {
+    scan_text_for_secrets(frame_text)
+}
+
+/// Phase 4: Scan a draft title and optional description body for secrets (§18.1).
+///
+/// Both single-item and bulk-draft creation paths call this before the draft
+/// is inserted into the queue.
+pub fn scan_draft_body(title: &str, body: Option<&str>) -> Vec<SecretFinding> {
+    let mut combined = title.to_owned();
+    if let Some(b) = body {
+        combined.push('\n');
+        combined.push_str(b);
+    }
+    scan_text_for_secrets(&combined)
+}
+
+/// Phase 5: Scan a morning brief's markdown content for secrets before storage
+/// and before it is forwarded to Stitches (§18.1 lateral-leak prevention).
+pub fn scan_morning_brief(content: &str) -> Vec<SecretFinding> {
+    scan_text_for_secrets(content)
+}
+
+/// Phase 5: Scan a cross-project propagation draft for secrets (§18.1).
+///
+/// Propagation drafts are synthesised by the human-interface agent from
+/// patterns observed in one project and proposed for sibling projects. Any
+/// secret embedded in the source project's context must not propagate laterally.
+pub fn scan_propagation_draft(title: &str, body: &str) -> Vec<SecretFinding> {
+    let combined = format!("{title}\n{body}");
+    scan_text_for_secrets(&combined)
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
