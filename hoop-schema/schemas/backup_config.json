@@ -5,6 +5,7 @@
   "description": "S3-compatible backup configuration. Credentials are resolved from environment variables only — never stored in this file.",
   "type": "object",
   "required": ["endpoint", "bucket", "prefix"],
+  "additionalProperties": false,
   "properties": {
     "endpoint": {
       "type": "string",
@@ -34,6 +35,5 @@
       "default": false,
       "description": "Encrypt backups with age (requires HOOP_BACKUP_AGE_KEY env var)"
     }
-  },
-  "schema_version": "1.1.0"
+  }
 }

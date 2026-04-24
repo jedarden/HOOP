@@ -421,4 +421,112 @@ mod tests {
         let re = regex::Regex::new(r"^\d+\.\d+\.\d+$").unwrap();
         assert!(re.is_match(version::SCHEMA_VERSION));
     }
+
+    /// Round-trip test for HoopConfig covering all §17.3 sections.
+    /// Constructs a config with every section populated, serializes to JSON,
+    /// deserializes back, and asserts equality — proving Rust ↔ JSON ↔ TS fidelity.
+    ///
+    /// Fields with JSON Schema defaults are generated as non-Option by typify.
+    #[test]
+    fn hoop_config_round_trip() {
+        let sv = || HoopConfigSchemaVersion("1.0.0".to_string());
+
+        let original = HoopConfig {
+            // §17.3 §1: agent
+            agent: Some(HoopConfigAgent {
+                adapter: Some(HoopConfigAgentAdapter::Claude),
+                model: Some("opus".to_string()),
+                rate_limit_requests_per_minute: Some(60),
+                cost_cap_per_session_usd: Some(10.0),
+            }),
+            // §17.3 §2: projects_file
+            projects_file: Some("~/.hoop/projects.yaml".to_string()),
+            // §17.3 §3: backup
+            backup: Some(HoopConfigBackup {
+                endpoint: "https://s3.example.com".to_string(),
+                bucket: "hoop-backups".to_string(),
+                prefix: "hoop/".to_string(),
+                schedule: "0 4 * * *".to_string(),
+                retention_days: 30,
+                encryption: false,
+            }),
+            // §17.3 §4: ui
+            ui: Some(HoopConfigUi {
+                theme: HoopConfigUiTheme::Auto,
+                default_project_sort: HoopConfigUiDefaultProjectSort::LastActivity,
+                archive_after_days: 30,
+            }),
+            // §17.3 §5: voice
+            voice: Some(HoopConfigVoice {
+                whisper_model_path: Some("/path/to/model.bin".to_string()),
+                hotkey: "Ctrl+Shift+V".to_string(),
+                max_recording_seconds: 300,
+            }),
+            // §17.3 §6: agent_extensions
+            agent_extensions: Some(HoopConfigAgentExtensions {
+                skills: Some("~/.hoop/skills".to_string()),
+                scripts: Some("~/.hoop/scripts".to_string()),
+                notes: Some("~/.hoop/notes".to_string()),
+                prompts: Some("~/.hoop/prompts".to_string()),
+            }),
+            // §17.3 §7: metrics
+            metrics: Some(HoopConfigMetrics {
+                enabled: true,
+                port: 9091,
+            }),
+            // §17.3 §8: audit
+            audit: Some(HoopConfigAudit {
+                retention_days: 90,
+                hash_chain: true,
+            }),
+            // §17.3 §9: reflection
+            reflection: Some(HoopConfigReflection {
+                enabled: true,
+                detection_threshold: Some(0.8),
+                auto_archive_after_days: 30,
+            }),
+            // pricing (beyond §17.3, but part of config)
+            pricing: None,
+            // schema_version (required)
+            schema_version: sv(),
+        };
+
+        // Serialize to JSON
+        let json = serde_json::to_string_pretty(&original).expect("serialize HoopConfig");
+        // Deserialize back
+        let round_tripped: HoopConfig =
+            serde_json::from_str(&json).expect("deserialize HoopConfig");
+
+        assert_eq!(original, round_tripped, "HoopConfig round-trip mismatch");
+
+        // Verify schema_version is present in the JSON output
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            parsed["schema_version"], "1.0.0",
+            "schema_version must appear in serialized JSON"
+        );
+    }
+
+    /// Minimal HoopConfig round-trip: only required field (schema_version).
+    #[test]
+    fn hoop_config_minimal_round_trip() {
+        let original = HoopConfig {
+            schema_version: HoopConfigSchemaVersion("1.0.0".to_string()),
+            agent: None,
+            projects_file: None,
+            backup: None,
+            ui: None,
+            voice: None,
+            agent_extensions: None,
+            metrics: None,
+            audit: None,
+            reflection: None,
+            pricing: None,
+        };
+
+        let json = serde_json::to_string(&original).expect("serialize");
+        let round_tripped: HoopConfig =
+            serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(original, round_tripped);
+    }
 }

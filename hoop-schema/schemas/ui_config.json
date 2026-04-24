@@ -4,6 +4,7 @@
   "title": "UiConfig",
   "description": "UI configuration",
   "type": "object",
+  "additionalProperties": false,
   "properties": {
     "theme": {
       "type": "string",
@@ -19,6 +20,5 @@
       "type": "integer",
       "default": 30
     }
-  },
-  "schema_version": "1.0.0"
+  }
 }

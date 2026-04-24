@@ -4,17 +4,21 @@
   "title": "PricingConfig",
   "description": "Provider pricing configuration for cost calculation",
   "type": "object",
+  "additionalProperties": false,
   "properties": {
     "adapters": {
       "type": "object",
       "description": "Pricing per adapter",
       "additionalProperties": {
         "type": "object",
+        "additionalProperties": false,
         "properties": {
           "models": {
             "type": "object",
             "additionalProperties": {
               "type": "object",
+              "additionalProperties": false,
+              "required": ["input_per_million", "output_per_million"],
               "properties": {
                 "input_per_million": {
                   "type": "number",
@@ -32,8 +36,7 @@
                   "type": "number",
                   "description": "Cache write price per million tokens (USD)"
                 }
-              },
-              "required": ["input_per_million", "output_per_million"]
+              }
             }
           },
           "default_model": {
@@ -43,6 +46,5 @@
         }
       }
     }
-  },
-  "schema_version": "1.0.0"
+  }
 }

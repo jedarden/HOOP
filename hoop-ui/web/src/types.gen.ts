@@ -1052,16 +1052,15 @@ export interface AgentConfig {
    * Optional cost cap per session
    */
   cost_cap_per_session_usd?: number;
-  [k: string]: unknown;
 }
 
 
 /**
- * Backup configuration
+ * S3-compatible backup configuration. Credentials are resolved from environment variables only — never stored in this file.
  */
 export interface BackupConfig {
   /**
-   * S3-compatible endpoint
+   * S3-compatible endpoint URL
    */
   endpoint: string;
   /**
@@ -1069,15 +1068,21 @@ export interface BackupConfig {
    */
   bucket: string;
   /**
-   * Prefix for backups
+   * Key prefix for backup objects
    */
   prefix: string;
   /**
-   * Cron schedule
+   * Cron schedule for automatic backups (default: daily at 04:00 UTC)
    */
   schedule?: string;
+  /**
+   * Number of days to retain backups before pruning
+   */
   retention_days?: number;
-  [k: string]: unknown;
+  /**
+   * Encrypt backups with age (requires HOOP_BACKUP_AGE_KEY env var)
+   */
+  encryption?: boolean;
 }
 
 
@@ -1088,7 +1093,6 @@ export interface UiConfig {
   theme?: "light" | "dark" | "auto";
   default_project_sort?: "name" | "last_activity" | "worker_count";
   archive_after_days?: number;
-  [k: string]: unknown;
 }
 
 
@@ -1105,7 +1109,6 @@ export interface VoiceConfig {
    */
   hotkey?: string;
   max_recording_seconds?: number;
-  [k: string]: unknown;
 }
 
 
@@ -1136,17 +1139,14 @@ export interface PricingConfig {
            * Cache write price per million tokens (USD)
            */
           cache_write_per_million?: number;
-          [k: string]: unknown;
         };
       };
       /**
        * Default model if not specified
        */
       default_model?: string;
-      [k: string]: unknown;
     };
   };
-  [k: string]: unknown;
 }
 
 
@@ -1212,6 +1212,10 @@ export interface CostBucket {
  * HOOP daemon configuration from config.yml
  */
 export interface HoopConfig {
+  /**
+   * Schema version for compatibility tracking (SemVer)
+   */
+  schema_version: string;
   agent?: {
     /**
      * Adapter selection
@@ -1229,7 +1233,6 @@ export interface HoopConfig {
      * Optional cost cap per session
      */
     cost_cap_per_session_usd?: number;
-    [k: string]: unknown;
   };
   /**
    * Path to projects.yaml (default ~/.hoop/projects.yaml)
@@ -1237,7 +1240,7 @@ export interface HoopConfig {
   projects_file?: string;
   backup?: {
     /**
-     * S3-compatible endpoint
+     * S3-compatible endpoint URL
      */
     endpoint: string;
     /**
@@ -1245,21 +1248,26 @@ export interface HoopConfig {
      */
     bucket: string;
     /**
-     * Prefix for backups
+     * Key prefix for backup objects
      */
     prefix: string;
     /**
-     * Cron schedule
+     * Cron schedule for automatic backups (default: daily at 04:00 UTC)
      */
     schedule?: string;
+    /**
+     * Number of days to retain backups before pruning
+     */
     retention_days?: number;
-    [k: string]: unknown;
+    /**
+     * Encrypt backups with age (requires HOOP_BACKUP_AGE_KEY env var)
+     */
+    encryption?: boolean;
   };
   ui?: {
     theme?: "light" | "dark" | "auto";
     default_project_sort?: "name" | "last_activity" | "worker_count";
     archive_after_days?: number;
-    [k: string]: unknown;
   };
   voice?: {
     /**
@@ -1271,7 +1279,6 @@ export interface HoopConfig {
      */
     hotkey?: string;
     max_recording_seconds?: number;
-    [k: string]: unknown;
   };
   agent_extensions?: {
     /**
@@ -1290,23 +1297,19 @@ export interface HoopConfig {
      * Path to prompts directory
      */
     prompts?: string;
-    [k: string]: unknown;
   };
   metrics?: {
     enabled?: boolean;
     port?: number;
-    [k: string]: unknown;
   };
   audit?: {
     retention_days?: number;
     hash_chain?: boolean;
-    [k: string]: unknown;
   };
   reflection?: {
     enabled?: boolean;
     detection_threshold?: number;
     auto_archive_after_days?: number;
-    [k: string]: unknown;
   };
   pricing?: {
     /**
@@ -1332,19 +1335,15 @@ export interface HoopConfig {
              * Cache write price per million tokens (USD)
              */
             cache_write_per_million?: number;
-            [k: string]: unknown;
           };
         };
         /**
          * Default model if not specified
          */
         default_model?: string;
-        [k: string]: unknown;
       };
     };
-    [k: string]: unknown;
   };
-  [k: string]: unknown;
 }
 
 

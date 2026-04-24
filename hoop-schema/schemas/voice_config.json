@@ -4,6 +4,7 @@
   "title": "VoiceConfig",
   "description": "Voice/dictation configuration",
   "type": "object",
+  "additionalProperties": false,
   "properties": {
     "whisper_model_path": {
       "type": "string",
@@ -18,6 +19,5 @@
       "type": "integer",
       "default": 300
     }
-  },
-  "schema_version": "1.0.0"
+  }
 }

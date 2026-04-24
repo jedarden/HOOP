@@ -4,6 +4,7 @@
   "title": "AgentConfig",
   "description": "Human-interface agent configuration",
   "type": "object",
+  "additionalProperties": false,
   "properties": {
     "adapter": {
       "type": "string",
@@ -22,6 +23,5 @@
       "type": "number",
       "description": "Optional cost cap per session"
     }
-  },
-  "schema_version": "1.0.0"
+  }
 }
