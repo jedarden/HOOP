@@ -84,6 +84,8 @@ enum Commands {
         /// Optional project filter
         project: Option<String>,
     },
+    /// Install systemd user service
+    InstallSystemd,
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -196,6 +198,12 @@ async fn main() -> anyhow::Result<()> {
         Commands::Stitch { project: _ } => {
             eprintln!("hoop stitch: not yet implemented");
             std::process::exit(1);
+        }
+        Commands::InstallSystemd => {
+            if let Err(e) = install_systemd() {
+                eprintln!("hoop install-systemd: {}", e);
+                std::process::exit(1);
+            }
         }
     }
 
@@ -368,6 +376,81 @@ fn print_report(report: &audit::AuditReport) {
             "\n\u{001b}[33mWarnings detected. Daemon will start with degraded features.\u{001b}[0m"
         );
     } else {
-        println!("\n\u{001b}[32m\u{001b}[1mAll checks passed!\u{001b}[0m");
+        println!("\u{001b}[32m\u{001b}[1mAll checks passed!\u{001b}[0m");
     }
+}
+
+/// Install the systemd user service for HOOP
+fn install_systemd() -> anyhow::Result<()> {
+    let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    home.push(".config");
+    home.push("systemd");
+    home.push("user");
+
+    // Create the directory if it doesn't exist
+    fs::create_dir_all(&home)?;
+
+    let service_path = home.join("hoop.service");
+
+    // Get the hoop binary path
+    let hoop_path = std::env::current_exe()?;
+    let hoop_path_str = hoop_path.to_str().ok_or_else(|| anyhow::anyhow!("Invalid hoop binary path"))?;
+
+    // Get the username
+    let username = std::env::var("USER").unwrap_or_else(|_| "user".to_string());
+
+    // Get the home directory for environment variables
+    let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    let home_dir_str = home_dir.to_str().ok_or_else(|| anyhow::anyhow!("Invalid home directory"))?;
+
+    // Create the systemd unit file content
+    let unit_content = format!(
+        r#"[Unit]
+Description=HOOP daemon - Control plane for NEEDLE fleets
+After=network.target tailscale.service
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=5s
+StartLimitBurst=5
+StartLimitIntervalSec=5min
+TimeoutStartSec=30
+TimeoutStopSec=30
+Environment="HOME={home_dir_str}"
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+ExecStart={hoop_path_str} serve --addr 127.0.0.1:3000
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hoop
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target
+"#
+    );
+
+    // Write the service file
+    fs::write(&service_path, unit_content)?;
+
+    println!("Installed systemd user service to:");
+    println!("  {}", service_path.display());
+    println!();
+    println!("To enable and start the service:");
+    println!("  systemctl --user daemon-reload");
+    println!("  systemctl --user enable hoop");
+    println!("  systemctl --user start hoop");
+    println!();
+    println!("To view logs:");
+    println!("  journalctl --user -u hoop -f");
+    println!();
+    println!("To check status:");
+    println!("  systemctl --user status hoop");
+
+    Ok(())
 }
