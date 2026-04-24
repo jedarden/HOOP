@@ -7,7 +7,7 @@
 //!
 //! Submit flow: draft → validate → dedup check → br create → audit → WS event → response
 
-use crate::br_verbs::{extract_stitch_labels, invoke_br_read, ReadVerb};
+use crate::br_verbs::{invoke_br_read, propagate_stitch_labels, ReadVerb};
 #[cfg(not(feature = "zero-write-v01"))]
 use crate::br_verbs::invoke_br_create;
 use crate::fleet::{self, ActionKind, ActionResult, BeadActionArgs, BeadSource};
@@ -413,16 +413,9 @@ async fn create_bead(
     }
 
     // Hook 4: Inherit stitch labels from parent bead when specified.
-    // This propagates stitch lineage from a claimed bead to follow-up beads
-    // created by the worker without requiring the worker to know stitch IDs.
     if let Some(ref parent_id) = req.parent_bead_id {
         if let Ok(parent_labels) = lookup_bead_labels(&project_path, parent_id) {
-            let inherited = extract_stitch_labels(&parent_labels);
-            for label in &inherited {
-                if !all_labels.contains(label) {
-                    all_labels.push(label.clone());
-                }
-            }
+            propagate_stitch_labels(&mut all_labels, &parent_labels);
         }
     }
 
@@ -910,12 +903,7 @@ mod tests {
             "urgent".to_string(),
         ];
         let mut all_labels: Vec<String> = vec!["tests".to_string()];
-        let inherited = extract_stitch_labels(&parent_labels);
-        for label in &inherited {
-            if !all_labels.contains(label) {
-                all_labels.push(label.clone());
-            }
-        }
+        propagate_stitch_labels(&mut all_labels, &parent_labels);
         assert!(all_labels.contains(&"stitch:abc123".to_string()));
         assert!(all_labels.contains(&"tests".to_string()));
         assert!(!all_labels.contains(&"urgent".to_string()));
@@ -929,12 +917,7 @@ mod tests {
             "stitch:def456".to_string(),
         ];
         let mut all_labels: Vec<String> = vec![];
-        let inherited = extract_stitch_labels(&parent_labels);
-        for label in &inherited {
-            if !all_labels.contains(label) {
-                all_labels.push(label.clone());
-            }
-        }
+        propagate_stitch_labels(&mut all_labels, &parent_labels);
         assert_eq!(all_labels, vec!["stitch:abc123", "stitch:def456"]);
     }
 
@@ -945,12 +928,7 @@ mod tests {
             "stitch:abc123".to_string(),
         ];
         let mut all_labels: Vec<String> = vec!["stitch:abc123".to_string()];
-        let inherited = extract_stitch_labels(&parent_labels);
-        for label in &inherited {
-            if !all_labels.contains(label) {
-                all_labels.push(label.clone());
-            }
-        }
+        propagate_stitch_labels(&mut all_labels, &parent_labels);
         assert_eq!(all_labels, vec!["stitch:abc123"]);
     }
 
@@ -961,12 +939,7 @@ mod tests {
             "bug".to_string(),
         ];
         let mut all_labels: Vec<String> = vec!["tests".to_string()];
-        let inherited = extract_stitch_labels(&parent_labels);
-        for label in &inherited {
-            if !all_labels.contains(label) {
-                all_labels.push(label.clone());
-            }
-        }
+        propagate_stitch_labels(&mut all_labels, &parent_labels);
         assert_eq!(all_labels, vec!["tests"]);
     }
 }

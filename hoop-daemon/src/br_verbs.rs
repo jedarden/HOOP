@@ -299,6 +299,20 @@ pub fn extract_stitch_labels(labels: &[String]) -> Vec<String> {
     labels.iter().filter(|l| l.starts_with("stitch:")).cloned().collect()
 }
 
+/// Propagate `stitch:*` labels from a parent bead to a new bead's label list.
+///
+/// Implements Hook 4 (stitch label inheritance) for daemon-side bead creation.
+/// Extracts all `stitch:*` labels from `parent_labels` and appends them to
+/// `target_labels`, deduplicating against any already-present labels.
+pub fn propagate_stitch_labels(target_labels: &mut Vec<String>, parent_labels: &[String]) {
+    let inherited = extract_stitch_labels(parent_labels);
+    for label in &inherited {
+        if !target_labels.contains(label) {
+            target_labels.push(label.clone());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -624,5 +638,34 @@ mod tests {
         ];
         let stitch_labels = extract_stitch_labels(&labels);
         assert!(stitch_labels.is_empty());
+    }
+
+    // -----------------------------------------------------------------------
+    // Hook 4: propagate_stitch_labels tests (daemon create_bead)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_propagate_stitch_labels_worker_followup_single() {
+        let parent_labels = vec!["stitch:abc123".to_string(), "urgent".to_string()];
+        let mut target = vec!["follow-up".to_string()];
+        propagate_stitch_labels(&mut target, &parent_labels);
+        assert!(target.contains(&"stitch:abc123".to_string()),
+            "worker-created follow-up bead must inherit parent's stitch label");
+        assert!(target.contains(&"follow-up".to_string()));
+        assert!(!target.contains(&"urgent".to_string()),
+            "non-stitch labels must not propagate");
+    }
+
+    #[test]
+    fn test_propagate_stitch_labels_multiple_stitch_labels() {
+        let parent_labels = vec![
+            "stitch:abc123".to_string(),
+            "stitch:def456".to_string(),
+            "urgent".to_string(),
+        ];
+        let mut target: Vec<String> = vec![];
+        propagate_stitch_labels(&mut target, &parent_labels);
+        assert_eq!(target, vec!["stitch:abc123", "stitch:def456"],
+            "all stitch labels must propagate to follow-up bead");
     }
 }
