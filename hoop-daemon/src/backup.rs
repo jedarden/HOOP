@@ -49,7 +49,7 @@ fn default_retention_days() -> u32 {
 /// S3 credentials resolved from environment variables.
 ///
 /// These are **never** read from config.yml and **never** written to logs.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct BackupCredentials {
     /// From `HOOP_BACKUP_ACCESS_KEY_ID`.
     pub access_key_id: String,
@@ -57,6 +57,16 @@ pub struct BackupCredentials {
     pub secret_access_key: String,
     /// From `HOOP_BACKUP_AGE_KEY` (required only when encryption is enabled).
     pub age_key: Option<String>,
+}
+
+impl std::fmt::Debug for BackupCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BackupCredentials")
+            .field("access_key_id", &format!("{}…{}", &self.access_key_id[..self.access_key_id.len().min(4)], &self.access_key_id[self.access_key_id.len().saturating_sub(4)..]))
+            .field("secret_access_key", &"[REDACTED]")
+            .field("age_key", &self.age_key.as_ref().map(|_| "[REDACTED]"))
+            .finish()
+    }
 }
 
 impl BackupCredentials {
@@ -359,5 +369,19 @@ mod tests {
         std::env::remove_var("HOOP_BACKUP_SECRET_ACCESS_KEY");
         std::env::remove_var("HOOP_BACKUP_AGE_KEY");
         assert!(BackupCredentials::from_env(false).is_none());
+    }
+
+    #[test]
+    fn credentials_debug_redacts_secrets() {
+        let creds = BackupCredentials {
+            access_key_id: "AKIAIOSFODNN7EXAMPLE".into(),
+            secret_access_key: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into(),
+            age_key: Some("AGE-SECRET-KEY-1XYZ".into()),
+        };
+        let debug = format!("{:?}", creds);
+        assert!(!debug.contains("wJalrXUtnFEMI"), "secret_access_key leaked in Debug");
+        assert!(!debug.contains("AGE-SECRET-KEY"), "age_key leaked in Debug");
+        assert!(debug.contains("[REDACTED]"), "expected [REDACTED] placeholder");
+        assert!(debug.contains("AKIA"), "access_key_id prefix should be visible");
     }
 }
