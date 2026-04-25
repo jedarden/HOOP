@@ -9,8 +9,9 @@ import CapacityPanel from './CapacityPanel';
 import StitchesTab from './StitchesTab';
 import FilesTab from './FilesTab';
 import DebugPanel from './DebugPanel';
+import DiffViewer from './DiffViewer';
 
-export type TabId = 'stitches' | 'fleet' | 'graph' | 'conversations' | 'cost' | 'capacity' | 'files' | 'debug';
+export type TabId = 'stitches' | 'fleet' | 'graph' | 'conversations' | 'cost' | 'capacity' | 'files' | 'debug' | 'diff';
 
 interface Tab {
   id: TabId;
@@ -28,6 +29,7 @@ const TABS: Tab[] = [
   { id: 'capacity', label: 'Capacity', description: 'Rate limit and capacity status', keyboardShortcut: '6' },
   { id: 'debug', label: 'Debug', description: 'Per-bead execution step-through', keyboardShortcut: '7' },
   { id: 'files', label: 'Files', description: 'Project file browser', keyboardShortcut: '8' },
+  { id: 'diff', label: 'Diff', description: 'Side-by-side git diff view', keyboardShortcut: '9' },
 ];
 
 export interface ProjectDetailProps {
@@ -102,7 +104,7 @@ export default function ProjectDetail({ projectName, projectPath }: ProjectDetai
     }
 
     // Alt+number to switch tabs
-    if (event.altKey && event.key >= '1' && event.key <= '8') {
+    if (event.altKey && event.key >= '1' && event.key <= '9') {
       event.preventDefault();
       const tabIndex = parseInt(event.key) - 1;
       if (tabIndex < TABS.length) {
@@ -246,12 +248,17 @@ export default function ProjectDetail({ projectName, projectPath }: ProjectDetai
               <DebugPanel projectName={projectName} projectPath={projectPath} />
             </div>
           )}
+          {activeTab === 'diff' && (
+            <div className="diff-viewer-wrap">
+              <DiffViewer projectName={projectName} />
+            </div>
+          )}
         </div>
       </main>
 
       <footer className="project-detail-footer">
         <span className="keyboard-hint">
-          Press <kbd>Alt</kbd> + <kbd>1-8</kbd> to switch tabs, <kbd>Alt</kbd> + <kbd>←</kbd>/<kbd>→</kbd> to navigate
+          Press <kbd>Alt</kbd> + <kbd>1-9</kbd> to switch tabs, <kbd>Alt</kbd> + <kbd>←</kbd>/<kbd>→</kbd> to navigate
         </span>
       </footer>
     </div>
