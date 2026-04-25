@@ -11,21 +11,73 @@ use anyhow::{Context, Result};
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
 pub enum NeedleEvent {
+    /// Worker claimed a bead. `strand` is set when NEEDLE knows the strand at claim time.
     Claim {
         ts: String,
         worker: String,
         bead: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        strand: Option<String>,
     },
+    /// Worker dispatched the bead to a CLI adapter.
+    Dispatch {
+        ts: String,
+        worker: String,
+        bead: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        adapter: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        model: Option<String>,
+    },
+    /// CLI exited successfully; bead is complete.
+    Complete {
+        ts: String,
+        worker: String,
+        bead: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        outcome: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        exit_code: Option<i32>,
+    },
+    /// CLI exited with an error; bead failed.
+    Fail {
+        ts: String,
+        worker: String,
+        bead: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u64>,
+    },
+    /// Worker timed out waiting for the CLI.
+    Timeout {
+        ts: String,
+        worker: String,
+        bead: String,
+    },
+    /// CLI process crashed (non-zero exit / signal).
+    Crash {
+        ts: String,
+        worker: String,
+        bead: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        exit_code: Option<i32>,
+    },
+    /// `br close` was called (bead lifecycle close, distinct from Complete).
     Close {
         ts: String,
         worker: String,
         bead: String,
     },
+    /// Worker released the claim without completing.
     Release {
         ts: String,
         worker: String,
         bead: String,
     },
+    /// Bead metadata was updated.
     Update {
         ts: String,
         worker: String,
@@ -71,35 +123,142 @@ pub struct BeadEventData {
     pub event_type: String,
     pub bead_id: String,
     pub worker: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strand: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub adapter: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 impl BeadEventData {
     /// Convert a NeedleEvent to BeadEventData, returning None for unknown events
     pub fn from_event(event: &NeedleEvent) -> Option<Self> {
         match event {
-            NeedleEvent::Claim { ts, worker, bead } => Some(BeadEventData {
+            NeedleEvent::Claim { ts, worker, bead, strand } => Some(BeadEventData {
                 timestamp: ts.clone(),
                 event_type: "claim".to_string(),
                 bead_id: bead.clone(),
                 worker: worker.clone(),
+                strand: strand.clone(),
+                adapter: None,
+                model: None,
+                outcome: None,
+                duration_ms: None,
+                exit_code: None,
+                error: None,
+            }),
+            NeedleEvent::Dispatch { ts, worker, bead, adapter, model } => Some(BeadEventData {
+                timestamp: ts.clone(),
+                event_type: "dispatch".to_string(),
+                bead_id: bead.clone(),
+                worker: worker.clone(),
+                strand: None,
+                adapter: adapter.clone(),
+                model: model.clone(),
+                outcome: None,
+                duration_ms: None,
+                exit_code: None,
+                error: None,
+            }),
+            NeedleEvent::Complete { ts, worker, bead, outcome, duration_ms, exit_code } => Some(BeadEventData {
+                timestamp: ts.clone(),
+                event_type: "complete".to_string(),
+                bead_id: bead.clone(),
+                worker: worker.clone(),
+                strand: None,
+                adapter: None,
+                model: None,
+                outcome: outcome.clone(),
+                duration_ms: *duration_ms,
+                exit_code: *exit_code,
+                error: None,
+            }),
+            NeedleEvent::Fail { ts, worker, bead, error, duration_ms } => Some(BeadEventData {
+                timestamp: ts.clone(),
+                event_type: "fail".to_string(),
+                bead_id: bead.clone(),
+                worker: worker.clone(),
+                strand: None,
+                adapter: None,
+                model: None,
+                outcome: None,
+                duration_ms: *duration_ms,
+                exit_code: None,
+                error: error.clone(),
+            }),
+            NeedleEvent::Timeout { ts, worker, bead } => Some(BeadEventData {
+                timestamp: ts.clone(),
+                event_type: "timeout".to_string(),
+                bead_id: bead.clone(),
+                worker: worker.clone(),
+                strand: None,
+                adapter: None,
+                model: None,
+                outcome: None,
+                duration_ms: None,
+                exit_code: None,
+                error: None,
+            }),
+            NeedleEvent::Crash { ts, worker, bead, exit_code } => Some(BeadEventData {
+                timestamp: ts.clone(),
+                event_type: "crash".to_string(),
+                bead_id: bead.clone(),
+                worker: worker.clone(),
+                strand: None,
+                adapter: None,
+                model: None,
+                outcome: None,
+                duration_ms: None,
+                exit_code: *exit_code,
+                error: None,
             }),
             NeedleEvent::Close { ts, worker, bead } => Some(BeadEventData {
                 timestamp: ts.clone(),
                 event_type: "close".to_string(),
                 bead_id: bead.clone(),
                 worker: worker.clone(),
+                strand: None,
+                adapter: None,
+                model: None,
+                outcome: None,
+                duration_ms: None,
+                exit_code: None,
+                error: None,
             }),
             NeedleEvent::Release { ts, worker, bead } => Some(BeadEventData {
                 timestamp: ts.clone(),
                 event_type: "release".to_string(),
                 bead_id: bead.clone(),
                 worker: worker.clone(),
+                strand: None,
+                adapter: None,
+                model: None,
+                outcome: None,
+                duration_ms: None,
+                exit_code: None,
+                error: None,
             }),
             NeedleEvent::Update { ts, worker, bead } => Some(BeadEventData {
                 timestamp: ts.clone(),
                 event_type: "update".to_string(),
                 bead_id: bead.clone(),
                 worker: worker.clone(),
+                strand: None,
+                adapter: None,
+                model: None,
+                outcome: None,
+                duration_ms: None,
+                exit_code: None,
+                error: None,
             }),
             NeedleEvent::Unknown => None,
         }

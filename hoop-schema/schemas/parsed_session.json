@@ -24,7 +24,11 @@
     },
     "cwd": {
       "type": "string",
-      "description": "Working directory when session was created"
+      "description": "Working directory when session was created (raw, for display)"
+    },
+    "canonical_cwd": {
+      "type": "string",
+      "description": "Realpath-resolved cwd (for joins and dedup). Empty string if resolution failed."
     },
     "title": {
       "type": "string",

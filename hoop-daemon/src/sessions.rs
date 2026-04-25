@@ -38,6 +38,14 @@ use tracing::{debug, info, warn};
 /// mounts. If canonicalization fails (e.g. path doesn't exist on this host), the
 /// raw path is used as a fallback so sessions from remote machines aren't silently
 /// dropped.
+/// Canonicalize a cwd string for storage in ParsedSession.
+/// Returns the resolved absolute path, or empty string on failure.
+fn resolve_canonical_cwd(cwd: &str) -> String {
+    std::fs::canonicalize(cwd)
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default()
+}
+
 fn cwd_matches_project(cwd: &str, project_path: &Path) -> bool {
     let resolved_cwd = std::fs::canonicalize(cwd).unwrap_or_else(|_| PathBuf::from(cwd));
     let resolved_project = std::fs::canonicalize(project_path).unwrap_or_else(|_| project_path.to_path_buf());
@@ -875,12 +883,15 @@ impl SessionTailer {
             title
         };
 
+        let canonical_cwd = resolve_canonical_cwd(&cwd);
+
         Ok(Some(ParsedSession {
             id,
             session_id,
             provider: "claude".to_string(),
             kind,
             cwd,
+            canonical_cwd: if canonical_cwd.is_empty() { None } else { Some(canonical_cwd) },
             title,
             messages,
             total_usage,
@@ -1113,12 +1124,15 @@ impl SessionTailer {
             title
         };
 
+        let canonical_cwd = resolve_canonical_cwd(&cwd);
+
         Ok(Some(ParsedSession {
             id,
             session_id,
             provider: "codex".to_string(),
             kind,
             cwd,
+            canonical_cwd: if canonical_cwd.is_empty() { None } else { Some(canonical_cwd) },
             title,
             messages,
             total_usage,
@@ -1296,12 +1310,15 @@ impl SessionTailer {
             title
         };
 
+        let canonical_cwd = resolve_canonical_cwd(&cwd);
+
         Ok(Some(ParsedSession {
             id,
             session_id,
             provider: "opencode".to_string(),
             kind,
             cwd,
+            canonical_cwd: if canonical_cwd.is_empty() { None } else { Some(canonical_cwd) },
             title,
             messages,
             total_usage,
@@ -1478,12 +1495,15 @@ impl SessionTailer {
             title
         };
 
+        let canonical_cwd = resolve_canonical_cwd(&cwd);
+
         Ok(Some(ParsedSession {
             id,
             session_id,
             provider: "gemini".to_string(),
             kind,
             cwd,
+            canonical_cwd: if canonical_cwd.is_empty() { None } else { Some(canonical_cwd) },
             title,
             messages,
             total_usage,
@@ -1599,12 +1619,15 @@ impl SessionTailer {
             title
         };
 
+        let canonical_cwd = resolve_canonical_cwd(&cwd);
+
         Ok(Some(ParsedSession {
             id,
             session_id,
             provider: "aider".to_string(),
             kind,
             cwd,
+            canonical_cwd: if canonical_cwd.is_empty() { None } else { Some(canonical_cwd) },
             title,
             messages,
             total_usage,

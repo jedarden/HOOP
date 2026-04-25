@@ -115,7 +115,7 @@ impl ProjectsConfig {
     /// Also detects duplicate canonical paths across projects — same workspace
     /// appearing via different raw paths (symlinks, alt mounts) produces a
     /// warning so the operator can merge or remove the duplicate.
-    pub fn validate(&self) -> Vec<String> {
+    pub fn validate(&self) -> Vec<ConfigError> {
         let mut errors = Vec::new();
 
         // Track (canonical_path -> Vec<(project_name, raw_path)>) for dedup
@@ -125,20 +125,30 @@ impl ProjectsConfig {
         for project in &self.registry.projects {
             for workspace in project.workspace_views() {
                 if !workspace.path.exists() {
-                    errors.push(format!(
-                        "Project '{}': workspace path does not exist: {}",
-                        project.name(),
-                        workspace.path.display()
+                    errors.push(ConfigError::validation(
+                        format!(
+                            "Project '{}': workspace path does not exist: {}",
+                            project.name(),
+                            workspace.path.display()
+                        ),
+                        Some(format!("projects[{}].path", project.name())),
+                        Some("existing directory".to_string()),
+                        Some(workspace.path.display().to_string()),
                     ));
                     continue;
                 }
 
                 let beads_path = workspace.path.join(".beads");
                 if !beads_path.exists() || !beads_path.is_dir() {
-                    errors.push(format!(
-                        "Project '{}': .beads directory not found at: {}",
-                        project.name(),
-                        workspace.path.display()
+                    errors.push(ConfigError::validation(
+                        format!(
+                            "Project '{}': .beads directory not found at: {}",
+                            project.name(),
+                            workspace.path.display()
+                        ),
+                        Some(format!("projects[{}].path", project.name())),
+                        Some("directory containing .beads/".to_string()),
+                        Some(workspace.path.display().to_string()),
                     ));
                 }
 
@@ -175,10 +185,15 @@ impl ProjectsConfig {
                         .iter()
                         .map(|(name, raw)| format!("{} ({})", raw.display(), name))
                         .collect();
-                    errors.push(format!(
-                        "Duplicate canonical path: {} maps to projects: {}",
-                        canonical.display(),
-                        raw_paths.join(", ")
+                    errors.push(ConfigError::validation(
+                        format!(
+                            "Duplicate canonical path: {} maps to projects: {}",
+                            canonical.display(),
+                            raw_paths.join(", ")
+                        ),
+                        None,
+                        None,
+                        Some(canonical.display().to_string()),
                     ));
                 }
             }
@@ -197,16 +212,115 @@ pub struct ConfigError {
     pub line: usize,
     /// Column number where the error occurred (1-indexed)
     pub col: usize,
+    /// Dotted path to the offending field (e.g. "projects[].name")
+    pub field: Option<String>,
+    /// What was expected (e.g. "string", "field present")
+    pub expected: Option<String>,
+    /// What was actually found (e.g. "integer", "missing")
+    pub got: Option<String>,
+}
+
+impl ConfigError {
+    /// Create a semantic validation error with structured details.
+    pub fn validation(message: String, field: Option<String>, expected: Option<String>, got: Option<String>) -> Self {
+        Self {
+            message,
+            line: 0,
+            col: 0,
+            field,
+            expected,
+            got,
+        }
+    }
+}
+
+impl std::fmt::Display for ConfigError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
 }
 
 impl From<YamlError> for ConfigError {
     fn from(err: YamlError) -> Self {
+        let msg = err.to_string();
+        let (field, expected, got) = parse_serde_details(&msg);
         Self {
-            message: err.to_string(),
+            message: msg,
             line: err.location().map(|l| line(&l)).unwrap_or(0),
             col: err.location().map(|l| column(&l)).unwrap_or(0),
+            field,
+            expected,
+            got,
         }
     }
+}
+
+/// Extract structured details from serde error messages.
+fn parse_serde_details(msg: &str) -> (Option<String>, Option<String>, Option<String>) {
+    // Pattern: missing field `name` at line X column Y
+    if let Some(rest) = msg.strip_prefix("missing field `") {
+        let field_end = rest.find('`').unwrap_or(rest.len());
+        let field_name = &rest[..field_end];
+        return (
+            Some(field_name.to_string()),
+            Some("field present".to_string()),
+            Some("missing".to_string()),
+        );
+    }
+
+    // Pattern: unknown field `extra`, expected ...
+    if let Some(rest) = msg.strip_prefix("unknown field `") {
+        let field_end = rest.find('`').unwrap_or(rest.len());
+        let field_name = &rest[..field_end];
+        return (
+            Some(field_name.to_string()),
+            Some("known field".to_string()),
+            Some("unknown field".to_string()),
+        );
+    }
+
+    // Pattern: invalid type: integer `42`, expected a string
+    if let Some(rest) = msg.strip_prefix("invalid type: ") {
+        // rest = "integer `42`, expected a string" or similar
+        if let Some(comma_pos) = rest.find(", expected ") {
+            let got_part = &rest[..comma_pos];
+            // Extract the type word (first word)
+            let got_type = got_part.split_whitespace().next().unwrap_or(got_part);
+            let expected_part = &rest[comma_pos + ", expected ".len()..];
+            // Clean up "a string" -> "string"
+            let expected_clean = expected_part
+                .strip_prefix("a ")
+                .unwrap_or(expected_part)
+                .strip_prefix("an ")
+                .unwrap_or(expected_part)
+                .trim();
+            return (
+                None,
+                Some(expected_clean.to_string()),
+                Some(got_type.to_string()),
+            );
+        }
+    }
+
+    // Pattern: invalid value: ..., expected ...
+    if let Some(rest) = msg.strip_prefix("invalid value: ") {
+        if let Some(comma_pos) = rest.find(", expected ") {
+            let got_part = &rest[..comma_pos];
+            let got_summary = got_part.split_whitespace().next().unwrap_or(got_part);
+            let expected_part = &rest[comma_pos + ", expected ".len()..];
+            let expected_clean = expected_part
+                .strip_prefix("a ")
+                .unwrap_or(expected_part)
+                .trim();
+            return (
+                None,
+                Some(expected_clean.to_string()),
+                Some(got_summary.to_string()),
+            );
+        }
+    }
+
+    (None, None, None)
 }
 
 fn line(loc: &serde_yaml::Location) -> usize {
@@ -526,6 +640,9 @@ impl ProjectsWatcher {
                 message: format!("Failed to read file: {}", e),
                 line: 0,
                 col: 0,
+                field: None,
+                expected: None,
+                got: None,
             })?;
 
         let content_hash = hex::encode(Sha256::digest(contents.as_bytes()));
@@ -639,10 +756,10 @@ projects:
         };
 
         let errors = cfg.validate();
-        let dup_errors: Vec<_> = errors.iter().filter(|e| e.contains("Duplicate canonical path")).collect();
+        let dup_errors: Vec<_> = errors.iter().filter(|e| e.message.contains("Duplicate canonical path")).collect();
         assert_eq!(dup_errors.len(), 1, "should detect exactly one duplicate canonical path, got: {:?}", errors);
-        assert!(dup_errors[0].contains("proj-a"), "should mention proj-a");
-        assert!(dup_errors[0].contains("proj-b"), "should mention proj-b");
+        assert!(dup_errors[0].message.contains("proj-a"), "should mention proj-a");
+        assert!(dup_errors[0].message.contains("proj-b"), "should mention proj-b");
     }
 
     #[test]

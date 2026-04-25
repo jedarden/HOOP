@@ -27,21 +27,60 @@ HOOP tails this file and broadcasts events on the WebSocket.
 
 ```jsonl
 {"ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-abc123","strand":"pluck","event":"claim"}
-{"ts":"2026-04-21T18:52:01Z","worker":"alpha","bead":"bd-abc123","event":"complete","outcome":"success","duration_ms":287104}
+{"ts":"2026-04-21T18:47:33Z","worker":"alpha","bead":"bd-abc123","event":"dispatch","adapter":"claude","model":"claude-opus-4-6"}
+{"ts":"2026-04-21T18:52:01Z","worker":"alpha","bead":"bd-abc123","event":"complete","outcome":"success","duration_ms":287104,"exit_code":0}
+{"ts":"2026-04-21T18:57:00Z","worker":"bravo","bead":"bd-def456","event":"fail","error":"context limit exceeded","duration_ms":90000}
+{"ts":"2026-04-21T19:00:00Z","worker":"bravo","bead":"bd-def456","event":"release"}
+{"ts":"2026-04-21T19:10:00Z","worker":"charlie","bead":"bd-ghi789","event":"timeout"}
+{"ts":"2026-04-21T19:17:00Z","worker":"delta","bead":"bd-jkl012","event":"crash","exit_code":139}
+{"ts":"2026-04-21T19:25:01Z","worker":"alpha","bead":"bd-mno345","event":"close"}
+{"ts":"2026-04-21T19:26:00Z","worker":"alpha","bead":"bd-pqr678","event":"update"}
 ```
 
+Fields by event type:
+
+| event | required | optional |
+|---|---|---|
+| `claim` | — | `strand` |
+| `dispatch` | — | `adapter`, `model` |
+| `complete` | — | `outcome`, `duration_ms`, `exit_code` |
+| `fail` | — | `error`, `duration_ms` |
+| `release` | — | — |
+| `timeout` | — | — |
+| `crash` | — | `exit_code` |
+| `close` | — | — |
+| `update` | — | — |
+
+All events carry `ts` (RFC 3339 UTC), `worker` (NATO id), `bead` (`bd-*`), and `event`.
+
 **NEEDLE change:** one helper `emit_event(worker, bead, event, **fields)` at each
-state transition (claim/dispatch/complete/fail/release/timeout/crash).
+state transition (claim/dispatch/complete/fail/release/timeout/crash/close/update).
 
 ## Hook 3: Worker Heartbeat
 
 Each worker appends a heartbeat line every 10s to `.beads/heartbeats.jsonl`.
 
+Three states — one line per tick:
+
 ```jsonl
-{"ts":"...","worker":"alpha","state":"executing","bead":"bd-abc123","pid":12345}
+{"ts":"2026-04-21T18:42:10Z","worker":"alpha","state":"executing","bead":"bd-abc123","pid":12345,"adapter":"claude"}
+{"ts":"2026-04-21T18:52:05Z","worker":"alpha","state":"idle","last_strand":"pluck"}
+{"ts":"2026-04-21T18:57:05Z","worker":"bravo","state":"knot","reason":"strands exhausted"}
 ```
 
-**NEEDLE change:** one background thread per worker.
+Fields by state:
+
+| state | required | optional |
+|---|---|---|
+| `executing` | `bead`, `pid`, `adapter` | — |
+| `idle` | — | `last_strand` |
+| `knot` | `reason` | — |
+
+All three states carry `ts` (RFC 3339 UTC) and `worker` (NATO id).
+
+HOOP liveness rules: `Live` = PID alive + heartbeat ≤ 20s old; `Hung` = PID alive but stale; `Dead` = PID gone.
+
+**NEEDLE change:** one background thread per worker that emits every 10s.
 
 ## Hook 4: Stitch Label Inheritance
 
