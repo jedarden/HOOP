@@ -69,7 +69,10 @@ pub mod collision_detector;
 pub mod bead_commit_index;
 pub mod api_diff;
 pub mod api_blame;
+pub mod api_screen_capture;
 pub mod net_diff;
+pub mod screen_capture;
+pub mod cost_anomaly;
 
 /// Worker execution state from heartbeats
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -953,6 +956,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_patterns::router())
         .merge(api_diff::router())
         .merge(api_blame::router())
+        .merge(api_screen_capture::router())
         .merge(net_diff::router())
         .route("/api/workers/timeline", get(api_timeline::get_worker_timeline))
         .merge(api_agent::router())
