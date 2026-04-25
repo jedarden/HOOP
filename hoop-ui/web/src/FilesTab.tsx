@@ -1,4 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { CodeViewer as ShikiCodeViewer } from './CodeViewer';
+
+const SHIKI_MAX_BYTES = 50 * 1024;
 
 export interface FilesTabProps {
   projectName: string;
@@ -338,6 +341,124 @@ function FilterBar({ filter, onChange, resultCount, searching }: FilterBarProps)
   );
 }
 
+// ─── Server-side (syntect) code viewer — fallback for files >50 KB ───────────
+
+interface HighlightResult {
+  language: string;
+  line_count: number;
+  truncated: boolean;
+  theme_bg: string;
+  theme_fg: string;
+  lines: string[];
+}
+
+const LINE_HEIGHT = 20; // px — must match .hl-line height in CSS
+
+function ServerCodeViewer({
+  projectName,
+  path,
+  theme,
+}: {
+  projectName: string;
+  path: string;
+  theme: string;
+}) {
+  const [result, setResult] = useState<HighlightResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [containerHeight, setContainerHeight] = useState(400);
+
+  // Observe the container's rendered height so virtual scroll fills correctly.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      setContainerHeight(entries[0].contentRect.height);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    setScrollTop(0);
+    const ctrl = new AbortController();
+    const params = new URLSearchParams({ path, theme });
+    fetch(`/api/projects/${encodeURIComponent(projectName)}/files/content?${params}`, {
+      signal: ctrl.signal,
+    })
+      .then(r => (r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`)))
+      .then((data: HighlightResult) => {
+        setResult(data);
+        setLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === 'AbortError') return;
+        setError(String(err));
+        setLoading(false);
+      });
+    return () => ctrl.abort();
+  }, [projectName, path, theme]);
+
+  const visibleSlice = useMemo(() => {
+    if (!result) return { start: 0, end: 0, paddingTop: 0 };
+    const start = Math.max(0, Math.floor(scrollTop / LINE_HEIGHT) - 5);
+    const visible = Math.ceil(containerHeight / LINE_HEIGHT) + 10;
+    const end = Math.min(start + visible, result.lines.length);
+    return { start, end, paddingTop: start * LINE_HEIGHT };
+  }, [scrollTop, containerHeight, result]);
+
+  if (loading) {
+    return <div className="hl-status">Loading…</div>;
+  }
+  if (error) {
+    return <div className="hl-status hl-status--error">{error}</div>;
+  }
+  if (!result) return null;
+
+  const totalHeight = result.lines.length * LINE_HEIGHT;
+  const { start, end, paddingTop } = visibleSlice;
+
+  return (
+    <div className="hl-wrapper">
+      <div className="hl-toolbar">
+        <span className="hl-lang">{result.language}</span>
+        <span className="hl-linecount">
+          {result.line_count.toLocaleString()} lines
+          {result.truncated && ' (first 50 000 shown)'}
+        </span>
+      </div>
+      <div
+        ref={containerRef}
+        className="hl-container"
+        style={{ backgroundColor: result.theme_bg, color: result.theme_fg }}
+        onScroll={e => setScrollTop((e.currentTarget as HTMLDivElement).scrollTop)}
+      >
+        <div style={{ height: `${totalHeight}px`, position: 'relative' }}>
+          <div style={{ position: 'absolute', top: `${paddingTop}px`, width: '100%' }}>
+            {result.lines.slice(start, end).map((lineHtml, i) => (
+              <div
+                key={start + i}
+                className="hl-line"
+                data-ln={start + i + 1}
+              >
+                <span className="hl-lineno">{start + i + 1}</span>
+                {/* syntect emits only span[style] nodes — no scripts possible */}
+                {/* eslint-disable-next-line react/no-danger */}
+                <span className="hl-code" dangerouslySetInnerHTML={{ __html: lineHtml }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function FilesTab({ projectName, projectPath }: FilesTabProps) {
@@ -348,10 +469,13 @@ export default function FilesTab({ projectName, projectPath }: FilesTabProps) {
   const [childCache, setChildCache] = useState<Map<string, FileEntry[]>>(new Map());
   const [loading, setLoading] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<{ path: string; size: number } | null>(null);
 
   // Filter state — initialised from URL hash
   const [filter, setFilter] = useState<FileFilter>(readFiltersFromHash);
+
+  // Syntax highlight theme — default matches the overall light UI
+  const [hlTheme, setHlTheme] = useState<string>('light');
 
   // Search state
   const [searchResults, setSearchResults] = useState<FileSearchResult[]>([]);
@@ -438,7 +562,9 @@ export default function FilesTab({ projectName, projectPath }: FilesTabProps) {
   );
 
   const handleSelect = useCallback((entry: FileEntry | FileSearchResult) => {
-    setSelectedPath(prev => (prev === entry.path ? null : entry.path));
+    setSelectedFile(prev =>
+      prev?.path === entry.path ? null : { path: entry.path, size: entry.size },
+    );
   }, []);
 
   // ── Search: fetch when filter changes ─────────────────────────────────────
@@ -483,6 +609,14 @@ export default function FilesTab({ projectName, projectPath }: FilesTabProps) {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [filter, activeFilter, projectName]);
+
+  const selectedPath = selectedFile?.path ?? null;
+
+  // Map the theme name to Shiki's 'light' | 'dark' binary.
+  // Light variants get 'light'; everything else (dark, solarized-dark, etc.) maps to 'dark'.
+  const shikiTheme: 'light' | 'dark' = (
+    hlTheme === 'light' || hlTheme === 'solarized-light' || hlTheme === 'ocean-light'
+  ) ? 'light' : 'dark';
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -548,19 +682,45 @@ export default function FilesTab({ projectName, projectPath }: FilesTabProps) {
           </div>
         )}
 
-        {selectedPath && (
+        {selectedFile && (
           <div className="file-preview">
             <div className="file-preview-header">
-              <span className="file-preview-path">{selectedPath}</span>
-              <button className="file-preview-close" onClick={() => setSelectedPath(null)}>
-                ×
-              </button>
+              <span className="file-preview-path">{selectedFile.path}</span>
+              <div className="file-preview-controls">
+                <select
+                  className="hl-theme-select"
+                  value={hlTheme}
+                  onChange={e => setHlTheme(e.target.value)}
+                  title="Highlight theme"
+                >
+                  <option value="light">GitHub Light</option>
+                  <option value="dark">GitHub Dark</option>
+                  <option value="solarized-dark">Solarized Dark</option>
+                  <option value="solarized-light">Solarized Light</option>
+                  <option value="eighties">Eighties Dark</option>
+                  <option value="mocha-dark">Mocha Dark</option>
+                  <option value="ocean-light">Ocean Light</option>
+                </select>
+                <button className="file-preview-close" onClick={() => setSelectedFile(null)}>
+                  ×
+                </button>
+              </div>
             </div>
-            <div className="file-preview-body">
-              <p className="file-preview-placeholder">File preview coming in Phase 3</p>
-              <p className="file-preview-hint">
-                Syntax-highlighted code with line numbers will appear here
-              </p>
+            <div className="file-preview-body file-preview-body--code">
+              {selectedFile.size <= SHIKI_MAX_BYTES ? (
+                <ShikiCodeViewer
+                  projectName={projectName}
+                  filePath={selectedFile.path}
+                  fileSize={selectedFile.size}
+                  theme={shikiTheme}
+                />
+              ) : (
+                <ServerCodeViewer
+                  projectName={projectName}
+                  path={selectedFile.path}
+                  theme={hlTheme}
+                />
+              )}
             </div>
           </div>
         )}
