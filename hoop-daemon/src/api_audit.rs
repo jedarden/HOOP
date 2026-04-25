@@ -70,8 +70,12 @@ impl From<FleetAuditRow> for AuditRow {
             ActionKind::DraftApproved => "draft_approved".to_string(),
             ActionKind::DraftEdited => "draft_edited".to_string(),
             ActionKind::DraftRejected => "draft_rejected".to_string(),
+            ActionKind::DraftOpened => "draft_opened".to_string(),
+            ActionKind::DraftAutosaved => "draft_autosaved".to_string(),
+            ActionKind::DraftAbandoned => "draft_abandoned".to_string(),
             ActionKind::ConfigReloaded => "config_reloaded".to_string(),
             ActionKind::ConfigReloadRejected => "config_reload_rejected".to_string(),
+            ActionKind::WordsRedacted => "words_redacted".to_string(),
         };
 
         let result_str = match row.result {
@@ -125,6 +129,10 @@ async fn query_audit(
         Some("draft_approved") => Some(ActionKind::DraftApproved),
         Some("draft_edited") => Some(ActionKind::DraftEdited),
         Some("draft_rejected") => Some(ActionKind::DraftRejected),
+        Some("draft_opened") => Some(ActionKind::DraftOpened),
+        Some("draft_autosaved") => Some(ActionKind::DraftAutosaved),
+        Some("draft_abandoned") => Some(ActionKind::DraftAbandoned),
+        Some("words_redacted") => Some(ActionKind::WordsRedacted),
         Some(_) => {
             return Err((
                 StatusCode::BAD_REQUEST,

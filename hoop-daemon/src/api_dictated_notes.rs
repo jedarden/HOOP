@@ -4,6 +4,8 @@
 //! - POST   /api/p/:project/dictated-notes       — create a new dictated note
 //! - GET    /api/p/:project/dictated-notes       — list notes for a project
 //! - GET    /api/dictated-notes/:stitch_id       — get a single note
+//! - PATCH  /api/dictated-notes/:stitch_id       — update a note
+//! - POST   /api/dictated-notes/:stitch_id/redact — redact words from note
 //! - GET    /api/dictated-notes/:stitch_id/audio — serve the audio file
 //!
 //! On creation, if no pre-computed transcript is provided, the audio is
@@ -12,8 +14,8 @@
 use crate::dictated_notes::{
     self, CreateNoteRequest, CreateNoteResponse, DictatedNote, TranscriptionStatus,
 };
-use crate::fleet;
-use crate::id_validators::ValidStitchId;
+use crate::fleet::{self, ActionKind, ActionResult};
+use crate::id_validators::{self, ValidStitchId};
 use axum::{
     extract::{Path, State},
     http::{header, StatusCode},
@@ -21,8 +23,9 @@ use axum::{
     routing::{get, patch, post},
     Json, Router,
 };
-use serde::Deserialize;
 use base64::Engine;
+use rusqlite::params;
+use serde::Deserialize;
 use uuid::Uuid;
 
 /// Build the router for dictated note endpoints
@@ -32,6 +35,7 @@ pub fn router() -> Router<crate::DaemonState> {
         .route("/api/p/{project}/dictated-notes", get(list_notes))
         .route("/api/dictated-notes/{stitch_id}", get(get_note))
         .route("/api/dictated-notes/{stitch_id}", patch(update_note))
+        .route("/api/dictated-notes/{stitch_id}/redact", post(redact_words))
         .route("/api/dictated-notes/{stitch_id}/audio", get(get_audio))
 }
 
@@ -114,6 +118,7 @@ async fn create_note(
         audio_filename: req.audio_filename.clone(),
         transcript,
         transcript_words: req.transcript_words.unwrap_or_default(),
+        redacted_words: vec![],
         duration_secs: req.duration_secs,
         language: req.language,
         tags: req.tags.unwrap_or_default(),
@@ -202,6 +207,8 @@ async fn get_note(
 }
 
 /// GET /api/dictated-notes/:stitch_id/audio — serve the audio file
+///
+/// Serves redacted audio if redactions exist, otherwise serves original audio.
 async fn get_audio(
     Path(stitch_id): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
@@ -222,7 +229,23 @@ async fn get_audio(
     let audio_path = dictated_notes::audio_path(&valid_id, &note.audio_filename)
         .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
 
-    let contents = std::fs::read(&audio_path)
+    // Serve redacted audio if redactions exist, otherwise serve original
+    let audio_file_path = if note.redacted_words.is_empty() {
+        audio_path.clone()
+    } else {
+        let redacted_path = crate::audio_redaction::redacted_audio_path(&audio_path);
+        // Generate redacted audio if it doesn't exist
+        if !redacted_path.exists() {
+            crate::audio_redaction::mute_audio_segments(
+                &audio_path,
+                &redacted_path,
+                &note.redacted_words,
+            ).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Audio redaction failed: {}", e)))?;
+        }
+        redacted_path
+    };
+
+    let contents = std::fs::read(&audio_file_path)
         .map_err(|_| (StatusCode::NOT_FOUND, "Audio file not found".to_string()))?;
 
     let mime_type = infer_audio_mime(&note.audio_filename);
@@ -282,6 +305,117 @@ async fn update_note(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Update error: {}", e)))?;
 
     Ok(Json(note))
+}
+
+/// Request body for redacting words from a dictated note
+#[derive(Debug, Deserialize)]
+struct RedactWordsRequest {
+    /// Indices of words to redact (into transcript_words array)
+    word_indices: Vec<usize>,
+}
+
+/// POST /api/dictated-notes/:stitch_id/redact — redact words from a note
+///
+/// Redacts the specified words atomically by:
+/// 1. Checking for duplicates (idempotency - re-redacting same words is a no-op)
+/// 2. Generating a redacted audio file with muted segments
+/// 3. Reconstructing transcript with [REDACTED] placeholders
+/// 4. Updating database with redacted word list and new transcript
+/// 5. Writing an audit log entry for reversible tracking (§18.2)
+///
+/// The operation is atomic: if audio generation fails, no database changes are made.
+/// Original words are preserved in redacted_words for audit trail.
+async fn redact_words(
+    Path(stitch_id): Path<String>,
+    Json(req): Json<RedactWordsRequest>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let valid_id = ValidStitchId::parse(&stitch_id).map_err(id_validators::rejection)?;
+
+    let db_path = fleet::db_path();
+    let conn = rusqlite::Connection::open(&db_path)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e)))?;
+
+    let note = dictated_notes::get_note(&conn, valid_id.as_str())
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Query error: {}", e)))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "Note not found".to_string()))?;
+
+    // Get project for audit logging
+    let project: Option<String> = conn.query_row(
+        "SELECT project FROM stitches WHERE id = ?",
+        params![valid_id.as_str()],
+        |row| row.get(0),
+    ).ok();
+
+    // Get the audio path
+    let audio_path = dictated_notes::audio_path(&valid_id, &note.audio_filename)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Audio path error: {}", e)))?;
+
+    // Perform atomic redaction: validates indices, generates audio, reconstructs transcript
+    let (all_redacted, redacted_transcript) = crate::audio_redaction::atomic_redact_words(
+        &audio_path,
+        &note.transcript_words,
+        &note.redacted_words,
+        &req.word_indices,
+    ).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Audio redaction failed: {}", e)))?;
+
+    // Collect newly redacted words for audit log (those not in existing redacted_words)
+    let existing_indices: std::collections::HashSet<usize> = note.redacted_words
+        .iter()
+        .map(|rw| rw.word_index)
+        .collect();
+    let newly_redacted: Vec<&dictated_notes::RedactedWord> = all_redacted
+        .iter()
+        .filter(|rw| !existing_indices.contains(&rw.word_index))
+        .collect();
+
+    // Build audit args with word indices and original words for reversible tracking
+    let audit_args = serde_json::json!({
+        "word_indices": &req.word_indices,
+        "redacted_words": newly_redacted.iter().map(|rw| {
+            serde_json::json!({
+                "word_index": rw.word_index,
+                "original_word": rw.original_word,
+                "start": rw.start,
+                "end": rw.end,
+            })
+        }).collect::<Vec<_>>(),
+        "audio_filename": &note.audio_filename,
+    });
+
+    // Update note with new redacted list and transcript
+    let updated_note = dictated_notes::DictatedNote {
+        redacted_words: all_redacted.clone(),
+        transcript: redacted_transcript.clone(),
+        ..note
+    };
+
+    dictated_notes::update_note(&conn, &updated_note)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Update error: {}", e)))?;
+
+    // Write audit log entry (§18.2) - reversible only from audit log
+    let _ = fleet::write_audit_row(
+        "operator",
+        ActionKind::WordsRedacted,
+        valid_id.as_str(),
+        project.as_deref(),
+        Some(audit_args.to_string()),
+        ActionResult::Success,
+        None,
+        None,
+        Some(valid_id.as_str()),
+        None,
+    );
+
+    tracing::info!(
+        stitch_id = %valid_id.as_str(),
+        words_redacted = newly_redacted.len(),
+        total_redacted = all_redacted.len(),
+        "Redacted {} words from dictated note ({} total redacted)",
+        newly_redacted.len(),
+        all_redacted.len()
+    );
+
+    Ok(Json(updated_note))
 }
 
 fn infer_audio_mime(filename: &str) -> String {

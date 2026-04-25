@@ -46,6 +46,9 @@ pub struct DictatedNote {
     pub transcript: String,
     /// Word-level timestamps from Whisper
     pub transcript_words: Vec<TranscriptWord>,
+    /// Words that have been redacted from the transcript (with timestamps for audio muting)
+    #[serde(default)]
+    pub redacted_words: Vec<RedactedWord>,
     /// Audio duration in seconds
     pub duration_secs: Option<f64>,
     /// Detected language code
@@ -62,6 +65,24 @@ pub struct TranscriptWord {
     pub word: String,
     pub start: f64,
     pub end: f64,
+}
+
+/// A word that has been redacted from the transcript
+///
+/// Stores metadata about redacted words for audit trail and audio muting.
+/// The word itself is replaced with "[REDACTED]" in the transcript.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RedactedWord {
+    /// Index into the original transcript_words array
+    pub word_index: usize,
+    /// The original word that was redacted (for audit trail)
+    pub original_word: String,
+    /// Start timestamp of the word (for audio muting)
+    pub start: f64,
+    /// End timestamp of the word (for audio muting)
+    pub end: f64,
+    /// When the redaction was performed (ISO 8601)
+    pub redacted_at: String,
 }
 
 /// Request to create a new dictated note
@@ -210,13 +231,15 @@ pub fn insert_note(conn: &Connection, note: &DictatedNote) -> Result<()> {
         .context("Failed to serialize tags")?;
     let status_str = serde_json::to_string(&note.transcription_status)
         .context("Failed to serialize transcription_status")?;
+    let redacted_words_json = serde_json::to_string(&note.redacted_words)
+        .context("Failed to serialize redacted_words")?;
 
     conn.execute(
         r#"
         INSERT INTO dictated_notes (stitch_id, recorded_at, transcribed_at, audio_filename,
                                      transcript, transcript_words, duration_secs, language, tags,
-                                     transcription_status)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                                     transcription_status, redacted_words)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
         "#,
         params![
             note.stitch_id,
@@ -229,6 +252,7 @@ pub fn insert_note(conn: &Connection, note: &DictatedNote) -> Result<()> {
             note.language,
             tags_json,
             status_str,
+            redacted_words_json,
         ],
     )
     .context("Failed to insert dictated_note")?;
@@ -283,7 +307,8 @@ pub fn get_note(conn: &Connection, stitch_id: &str) -> Result<Option<DictatedNot
         r#"
         SELECT stitch_id, recorded_at, transcribed_at, audio_filename,
                transcript, transcript_words, duration_secs, language, tags,
-               COALESCE(transcription_status, '"Pending"')
+               COALESCE(transcription_status, '"Pending"'),
+               COALESCE(redacted_words, '[]')
         FROM dictated_notes
         WHERE stitch_id = ?1
         "#,
@@ -299,6 +324,7 @@ pub fn get_note(conn: &Connection, stitch_id: &str) -> Result<Option<DictatedNot
         let language: Option<String> = row.get(7)?;
         let tags_json: String = row.get(8)?;
         let status_str: String = row.get(9)?;
+        let redacted_words_json: String = row.get(10)?;
 
         let recorded_at = DateTime::parse_from_rfc3339(&recorded_at_str)
             .map(|dt| dt.with_timezone(&Utc))
@@ -312,6 +338,7 @@ pub fn get_note(conn: &Connection, stitch_id: &str) -> Result<Option<DictatedNot
             .unwrap_or_default();
         let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
         let transcription_status = parse_transcription_status(&status_str);
+        let redacted_words: Vec<RedactedWord> = serde_json::from_str(&redacted_words_json).unwrap_or_default();
 
         Ok(DictatedNote {
             stitch_id: stitch_id.to_string(),
@@ -320,6 +347,7 @@ pub fn get_note(conn: &Connection, stitch_id: &str) -> Result<Option<DictatedNot
             audio_filename,
             transcript,
             transcript_words,
+            redacted_words,
             duration_secs,
             language,
             tags,
@@ -414,18 +442,21 @@ pub fn update_note(conn: &Connection, note: &DictatedNote) -> Result<()> {
         .context("Failed to serialize tags")?;
     let status_str = serde_json::to_string(&note.transcription_status)
         .context("Failed to serialize transcription_status")?;
+    let redacted_words_json = serde_json::to_string(&note.redacted_words)
+        .context("Failed to serialize redacted_words")?;
 
     conn.execute(
         r#"
         UPDATE dictated_notes
-        SET transcript = ?1, transcript_words = ?2, tags = ?3, transcription_status = ?4
-        WHERE stitch_id = ?5
+        SET transcript = ?1, transcript_words = ?2, tags = ?3, transcription_status = ?4, redacted_words = ?5
+        WHERE stitch_id = ?6
         "#,
         params![
             note.transcript,
             words_json,
             tags_json,
             status_str,
+            redacted_words_json,
             note.stitch_id,
         ],
     )
@@ -589,6 +620,7 @@ mod tests {
                 start: 0.0,
                 end: 0.5,
             }],
+            redacted_words: vec![],
             duration_secs: Some(3.0),
             language: Some("en".to_string()),
             tags: vec!["test".to_string()],
@@ -640,6 +672,7 @@ mod tests {
                     audio_filename: format!("{}.webm", sid),
                     transcript: format!("Transcript for {}", sid),
                     transcript_words: vec![],
+                    redacted_words: vec![],
                     duration_secs: None,
                     language: None,
                     tags: vec![],
@@ -693,7 +726,8 @@ mod tests {
                 language TEXT,
                 tags TEXT DEFAULT '[]',
                 transcript_words TEXT,
-                transcription_status TEXT NOT NULL DEFAULT '"Pending"'
+                transcription_status TEXT NOT NULL DEFAULT '"Pending"',
+                redacted_words TEXT DEFAULT '[]'
             )
             "#,
             [],

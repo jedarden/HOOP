@@ -21,13 +21,13 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 /// Current schema version
-pub const SCHEMA_VERSION: &str = "1.22.0";
+pub const SCHEMA_VERSION: &str = "1.23.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
 
 /// Genesis hash - all chains start here
-const GENESIS_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
+pub const GENESIS_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 /// Action kind for audit log
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -47,6 +47,8 @@ pub enum ActionKind {
     DraftOpened,
     DraftAutosaved,
     DraftAbandoned,
+    /// Words redacted from a dictated note transcript (§18.2)
+    WordsRedacted,
 }
 
 /// Action result for audit log
@@ -311,6 +313,25 @@ pub fn verify_hash_chain() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Get the final hash from the audit log hash chain.
+///
+/// Returns the hash_self of the most recent action row, or the genesis hash
+/// if the log is empty. This is the integrity anchor for backup manifests.
+pub fn get_final_audit_hash() -> Result<String> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+
+    let result: Option<String> = conn
+        .query_row(
+            "SELECT hash_self FROM actions ORDER BY rowid DESC LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .ok();
+
+    Ok(result.unwrap_or_else(|| GENESIS_HASH.to_string()))
 }
 
 /// Create a row in the `stitches` table and link beads via `stitch_beads`.
@@ -701,6 +722,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v119_to_v120(conn)?;
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
         }
         "1.1.0" => {
             migrate_v11_to_v12(conn)?;
@@ -724,6 +746,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v119_to_v120(conn)?;
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
         }
         "1.2.0" => {
             migrate_v12_to_v13(conn)?;
@@ -746,6 +769,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v119_to_v120(conn)?;
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
         }
         "1.3.0" => {
             migrate_v13_to_v14(conn)?;
@@ -767,6 +791,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v119_to_v120(conn)?;
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
         }
         "1.4.0" => {
             migrate_v14_to_v15(conn)?;
@@ -787,6 +812,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v119_to_v120(conn)?;
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
         }
         "1.5.0" => {
             migrate_v15_to_v16(conn)?;
@@ -806,6 +832,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v119_to_v120(conn)?;
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
         }
         "1.6.0" => {
             migrate_v16_to_v17(conn)?;
@@ -824,6 +851,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v119_to_v120(conn)?;
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
         }
         "1.7.0" => {
             migrate_v17_to_v18(conn)?;
@@ -838,6 +866,10 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v116_to_v117(conn)?;
             migrate_v117_to_v118(conn)?;
             migrate_v118_to_v119(conn)?;
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
         }
         "1.8.0" => {
             migrate_v18_to_v19(conn)?;
@@ -854,6 +886,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v119_to_v120(conn)?;
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
         }
         "1.9.0" => {
             migrate_v19_to_v110(conn)?;
@@ -869,6 +902,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v119_to_v120(conn)?;
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
         }
         "1.10.0" => {
             migrate_v110_to_v111(conn)?;
@@ -883,6 +917,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v119_to_v120(conn)?;
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
         }
         "1.11.0" => {
             migrate_v111_to_v112(conn)?;
@@ -896,6 +931,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v119_to_v120(conn)?;
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
         }
         "1.12.0" => {
             migrate_v112_to_v113(conn)?;
@@ -908,6 +944,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v119_to_v120(conn)?;
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
         }
         "1.13.0" => {
             migrate_v113_to_v114(conn)?;
@@ -919,6 +956,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v119_to_v120(conn)?;
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
         }
         "1.14.0" => {
             migrate_v114_to_v115(conn)?;
@@ -929,6 +967,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v119_to_v120(conn)?;
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
         }
         "1.15.0" => {
             migrate_v115_to_v116(conn)?;
@@ -938,6 +977,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v119_to_v120(conn)?;
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
         }
         "1.16.0" => {
             migrate_v116_to_v117(conn)?;
@@ -946,18 +986,44 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v119_to_v120(conn)?;
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
         }
         "1.17.0" => {
             migrate_v117_to_v118(conn)?;
             migrate_v118_to_v119(conn)?;
-            migrate_v118_to_v119(conn)?;
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
         }
         "1.18.0" => {
             migrate_v118_to_v119(conn)?;
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
+        }
+        "1.19.0" => {
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
+        }
+        "1.20.0" => {
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
+        }
+        "1.21.0" => {
+            migrate_v121_to_v122(conn)?;
+            migrate_v122_to_v123(conn)?;
+        }
+        "1.22.0" => {
+            migrate_v122_to_v123(conn)?;
         }
         _ => {
             return Err(anyhow::anyhow!(
-                "Unsupported schema version: {}. Expected 0.1.0–1.19.0",
+                "Unsupported schema version: {}. Expected 0.1.0–1.23.0",
                 from_version
             ));
         }
@@ -2094,6 +2160,21 @@ fn migrate_v121_to_v122(conn: &mut Connection) -> Result<()> {
     }
 
     update_schema_version(conn, "1.22.0")?;
+    Ok(())
+}
+
+/// Migration 1.22.0 → 1.23.0: Add redacted_words column to dictated_notes
+///
+/// Adds support for tracking redacted words in dictated notes (§18.2).
+/// Each redacted word stores the word index, timestamps for audio muting,
+/// and when the redaction was performed for audit trail purposes.
+fn migrate_v122_to_v123(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.22.0 → 1.23.0: Adding redacted_words column to dictated_notes");
+
+    add_column_if_not_exists(conn, "dictated_notes", "redacted_words", "TEXT DEFAULT '[]'")?;
+
+    info!("redacted_words column added successfully");
+    update_schema_version(conn, "1.23.0")?;
     Ok(())
 }
 
@@ -3919,6 +4000,65 @@ pub fn query_bead_commits_by_sha(sha: &str) -> Result<Vec<BeadCommitRow>> {
         out.push(row?);
     }
     Ok(out)
+}
+
+// ---------------------------------------------------------------------------
+// §19.1 Draft cleanup scheduler
+// ---------------------------------------------------------------------------
+
+/// Start the background scheduler for cleaning up abandoned drafts.
+///
+/// Runs once daily at 3 AM local time and removes abandoned drafts
+/// older than 7 days from the draft_queue table.
+///
+/// Follows the same `tokio::select!` pattern as the morning-brief and
+/// backup schedulers.
+pub fn start_draft_cleanup_scheduler(mut shutdown: tokio::sync::broadcast::Receiver<crate::shutdown::ShutdownPhase>) {
+    tokio::spawn(async move {
+        let mut last_cleanup_date: Option<chrono::NaiveDate> = None;
+        const CLEANUP_HOUR: u32 = 3; // 3 AM
+
+        loop {
+            tokio::select! {
+                _ = shutdown.recv() => {
+                    info!("Draft cleanup scheduler shutting down");
+                    break;
+                }
+                _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
+                    let now = Utc::now();
+                    let current_hour = now.time().hour();
+                    let today = now.date_naive();
+
+                    let should_run = current_hour == CLEANUP_HOUR
+                        && last_cleanup_date.as_ref() != Some(&today);
+
+                    if should_run {
+                        last_cleanup_date = Some(today);
+                        info!("Draft cleanup scheduler: triggering daily cleanup for {}", today);
+
+                        // Run the synchronous cleanup in a blocking task
+                        match tokio::task::spawn_blocking(|| {
+                            cleanup_abandoned_drafts()
+                        }).await {
+                            Ok(Ok(count)) => {
+                                if count > 0 {
+                                    info!("Draft cleanup completed: {} drafts removed", count);
+                                } else {
+                                    info!("Draft cleanup completed: no abandoned drafts to remove");
+                                }
+                            }
+                            Ok(Err(e)) => {
+                                warn!("Draft cleanup failed: {}", e);
+                            }
+                            Err(e) => {
+                                warn!("Draft cleanup task failed to join: {}", e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
 
 #[cfg(test)]
