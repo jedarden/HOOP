@@ -953,6 +953,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_patterns::router())
         .merge(api_diff::router())
         .merge(api_blame::router())
+        .merge(net_diff::router())
         .route("/api/workers/timeline", get(api_timeline::get_worker_timeline))
         .merge(api_agent::router())
         .merge(api_morning_brief::router())
