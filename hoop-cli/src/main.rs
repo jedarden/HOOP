@@ -63,15 +63,9 @@ enum Commands {
         /// Optional project filter
         project: Option<String>,
     },
-    /// Startup binary/env audit
-    Audit {
-        /// Output as JSON
-        #[arg(short, long)]
-        json: bool,
-        /// Skip optional checks (Tailscale, systemd)
-        #[arg(long)]
-        strict: bool,
-    },
+    /// Audit operations
+    #[command(subcommand)]
+    Audit(AuditCommands),
     /// Attach to or start the human-interface agent conversation
     Agent,
     /// CLI shortcut to draft+submit a Stitch
@@ -145,6 +139,25 @@ enum ProjectsCommands {
     },
 }
 
+#[derive(clap::Subcommand, Debug)]
+enum AuditCommands {
+    /// Startup binary/env audit
+    Check {
+        /// Output as JSON
+        #[arg(short, long)]
+        json: bool,
+        /// Skip optional checks (Tailscale, systemd)
+        #[arg(long)]
+        strict: bool,
+    },
+    /// Verify audit log hash chain integrity
+    Verify {
+        /// Output as JSON
+        #[arg(short, long)]
+        json: bool,
+    },
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -189,25 +202,9 @@ async fn main() -> anyhow::Result<()> {
             eprintln!("hoop status: not yet implemented");
             std::process::exit(1);
         }
-        Commands::Audit { json, strict } => {
-            // Load project paths from config if available
-            let project_paths = load_project_paths()?;
-
-            let config = audit::AuditConfig {
-                project_paths,
-                include_optional: !strict,
-                ..Default::default()
-            };
-
-            let report = audit::run_audit(&config);
-
-            if json {
-                println!("{}", serde_json::to_string_pretty(&report)?);
-            } else {
-                print_report(&report);
-            }
-
-            if !report.success {
+        Commands::Audit(cmd) => {
+            if let Err(e) = handle_audit(cmd) {
+                eprintln!("hoop audit: {}", e);
                 std::process::exit(1);
             }
         }
@@ -329,6 +326,63 @@ fn handle_projects(cmd: ProjectsCommands) -> anyhow::Result<()> {
             } else {
                 eprintln!("Project '{}' not found", name);
                 std::process::exit(1);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Handle the `hoop audit` subcommands
+fn handle_audit(cmd: AuditCommands) -> anyhow::Result<()> {
+    match cmd {
+        AuditCommands::Check { json, strict } => {
+            // Load project paths from config if available
+            let project_paths = load_project_paths()?;
+
+            let config = audit::AuditConfig {
+                project_paths,
+                include_optional: !strict,
+                ..Default::default()
+            };
+
+            let report = audit::run_audit(&config);
+
+            if json {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            } else {
+                print_report(&report);
+            }
+
+            if !report.success {
+                std::process::exit(1);
+            }
+        }
+        AuditCommands::Verify { json } => {
+            match fleet::verify_hash_chain() {
+                Ok(()) => {
+                    let final_hash = fleet::get_final_audit_hash()?;
+                    if json {
+                        println!("{}", serde_json::json!({
+                            "status": "ok",
+                            "message": "Audit log hash chain is intact",
+                            "final_hash": final_hash
+                        }));
+                    } else {
+                        println!("Audit log hash chain is intact");
+                        println!("Final hash: {}", final_hash);
+                    }
+                }
+                Err(e) => {
+                    if json {
+                        eprintln!("{}", serde_json::json!({
+                            "status": "error",
+                            "message": e.to_string()
+                        }));
+                    } else {
+                        eprintln!("Hash chain verification failed: {}", e);
+                    }
+                    std::process::exit(1);
+                }
             }
         }
     }

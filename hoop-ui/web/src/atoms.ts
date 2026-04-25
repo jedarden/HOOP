@@ -302,7 +302,7 @@ export const searchPaletteOpenAtom = atom<boolean>(false);
 
 // WebSocket event from backend
 export interface WsEvent {
-  type: 'worker_update' | 'workers_snapshot' | 'beads_snapshot' | 'conversations_snapshot' | 'conversation_update' | 'streaming_content' | 'config_status' | 'projects_snapshot' | 'capacity_snapshot' | 'stitch_created' | 'agent_session';
+  type: 'worker_update' | 'workers_snapshot' | 'beads_snapshot' | 'conversations_snapshot' | 'conversation_update' | 'streaming_content' | 'config_status' | 'projects_snapshot' | 'capacity_snapshot' | 'stitch_created' | 'agent_session' | 'draft_update';
   worker?: WorkerData;
   workers?: WorkerData[];
   beads?: BeadData[];
@@ -314,6 +314,7 @@ export interface WsEvent {
   capacity?: AccountCapacity[];
   stitch_created?: StitchCreatedData;
   agent_session?: AgentSessionEventData;
+  draft_update?: { draft_id: string; updated_at: string };
 }
 
 // Cost bucket from backend aggregation
@@ -502,6 +503,57 @@ export const dictationHotkeyAtom = atom<DictationHotkey>(loadDictationHotkey());
 
 // Active project name — updated by App.tsx when route changes; read by DictationWidget
 export const activeProjectNameAtom = atom<string>('');
+
+// ── Draft persistence types (§19.1 Draft concurrency) ───────────────────────
+
+export type DraftStatus = 'pending' | 'approved' | 'submitted' | 'rejected' | 'edited' | 'abandoned';
+
+export interface DraftRow {
+  id: string;
+  project: string;
+  title: string;
+  kind: string;
+  description: string | null;
+  has_acceptance_criteria: number;
+  priority: number | null;
+  labels: string[];
+  created_by: string;
+  created_at: string;
+  source: string;
+  agent_session_id: string | null;
+  turn_id: string | null;
+  status: DraftStatus;
+  version: number;
+  original_json: string | null;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  rejection_reason: string | null;
+  stitch_id: string | null;
+  preview_json: string | null;
+  opened_by: string | null;
+  opened_at: string | null;
+  last_autosave_at: string | null;
+  abandoned_at: string | null;
+}
+
+// Draft autosave state for UI indicators
+export interface DraftAutosaveState {
+  draftId: string | null;
+  isSaving: boolean;
+  lastSavedAt: string | null;
+  saveError: string | null;
+}
+
+// Current draft form state — shared across stitch/bead forms
+export const draftAutosaveAtom = atom<DraftAutosaveState>({
+  draftId: null,
+  isSaving: false,
+  lastSavedAt: null,
+  saveError: null,
+});
+
+// Draft updates from WebSocket — when another operator edits the same draft
+export const draftUpdateAtom = atom<{ draftId: string; updatedAt: string } | null>(null);
 
 // Atoms for state management
 export const conversationsAtom = atom<Conversation[]>([]);
