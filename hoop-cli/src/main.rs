@@ -4,6 +4,7 @@
 //! single long-lived host that holds many repos, many NEEDLE fleets, and
 //! many native-CLI conversations.
 
+mod new;
 mod projects;
 mod restore;
 
@@ -78,6 +79,9 @@ enum Commands {
     New {
         /// Target project
         project: String,
+        /// Validate and print the payload without submitting to the daemon
+        #[arg(long)]
+        dry_run: bool,
     },
     /// List open Stitches
     #[command(arg_required_else_help = true)]
@@ -211,9 +215,11 @@ async fn main() -> anyhow::Result<()> {
             eprintln!("hoop agent: not yet implemented");
             std::process::exit(1);
         }
-        Commands::New { project: _ } => {
-            eprintln!("hoop new: not yet implemented");
-            std::process::exit(1);
+        Commands::New { project, dry_run } => {
+            if let Err(e) = new::run(&project, dry_run).await {
+                eprintln!("hoop new: {}", e);
+                std::process::exit(1);
+            }
         }
         Commands::Stitch { project: _ } => {
             eprintln!("hoop stitch: not yet implemented");
