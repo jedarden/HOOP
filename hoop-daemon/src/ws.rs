@@ -17,11 +17,90 @@ use chrono::{DateTime, Utc};
 use futures_util::{stream::StreamExt, SinkExt};
 use hoop_schema::{ParsedSession, ParsedSessionKind, ParsedSessionKindVariant1, ParsedSessionKindVariant2, ParsedSessionKindVariant3, ParsedSessionMessagesItem, ParsedSessionMessagesItemUsage};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, warn};
+
+// ---------------------------------------------------------------------------
+// Topic routing (§5.2 Multi-project fan-out, §16.3 WS metrics)
+// ---------------------------------------------------------------------------
+
+/// A validated WS subscription topic.
+///
+/// Two forms are accepted:
+/// - `"global"` — cross-project events
+/// - `"project:<name>"` — events scoped to a single project (name must be non-empty)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WsTopic(String);
+
+impl WsTopic {
+    /// Parse a raw string into a validated topic, returning `None` for
+    /// unrecognised formats.
+    pub fn parse(s: &str) -> Option<Self> {
+        if s == "global" {
+            return Some(Self(s.to_string()));
+        }
+        if let Some(rest) = s.strip_prefix("project:") {
+            if !rest.is_empty() {
+                return Some(Self(s.to_string()));
+            }
+        }
+        None
+    }
+
+    pub fn global() -> Self {
+        Self("global".to_string())
+    }
+
+    pub fn project(name: &str) -> Self {
+        Self(format!("project:{}", name))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Messages a WS client may send to the server.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ClientMessage {
+    Subscribe { topic: String },
+    Unsubscribe { topic: String },
+}
+
+/// Returns `true` if an event tagged with `topic` should be delivered to a
+/// client whose current subscription set is `subscriptions`.
+///
+/// - `topic = None` → unrouted / cross-project event; always deliver.
+/// - `topic = Some(t)` → deliver iff `t ∈ subscriptions`.
+pub fn should_deliver(topic: Option<&str>, subscriptions: &HashSet<String>) -> bool {
+    match topic {
+        None => true,
+        Some(t) => subscriptions.contains(t),
+    }
+}
+
+/// Internal mpsc message: a serialised `WsEvent` tagged with its routing topic
+/// and the instant it was queued (for the `hoop_ws_broadcast_lag_ms` metric).
+struct WsOutMsg {
+    topic: Option<String>,
+    json: String,
+    queued_at: Instant,
+}
+
+impl WsOutMsg {
+    fn new(json: String) -> Self {
+        Self { topic: None, json, queued_at: Instant::now() }
+    }
+
+    fn with_topic(json: String, topic: impl Into<String>) -> Self {
+        Self { topic: Some(topic.into()), json, queued_at: Instant::now() }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // WS connection tracker (§16.8: every WS client in /debug/state)
@@ -496,6 +575,9 @@ pub struct WsEvent {
     pub draft_update: Option<DraftUpdateData>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spawn_ack_alert: Option<crate::worker_ack::SpawnAckAlert>,
+    /// Present only on `init` events; the server-authoritative subscription list.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subscriptions: Option<Vec<String>>,
 }
 
 impl WsEvent {
@@ -519,6 +601,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            subscriptions: None,
         }
     }
 
@@ -542,6 +625,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            subscriptions: None,
         }
     }
 
@@ -565,6 +649,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            subscriptions: None,
         }
     }
 
@@ -588,6 +673,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            subscriptions: None,
         }
     }
 
@@ -612,6 +698,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            subscriptions: None,
         }
     }
 
@@ -636,6 +723,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            subscriptions: None,
         }
     }
 
@@ -659,6 +747,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            subscriptions: None,
         }
     }
 
@@ -682,6 +771,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            subscriptions: None,
         }
     }
 
@@ -705,6 +795,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            subscriptions: None,
         }
     }
 
@@ -728,6 +819,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            subscriptions: None,
         }
     }
 
@@ -751,6 +843,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            subscriptions: None,
         }
     }
 
@@ -774,6 +867,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            subscriptions: None,
         }
     }
 
@@ -797,6 +891,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            subscriptions: None,
         }
     }
 
@@ -820,6 +915,7 @@ impl WsEvent {
             morning_brief: Some(data),
             draft_update: None,
             spawn_ack_alert: None,
+            subscriptions: None,
         }
     }
 
@@ -843,6 +939,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: Some(alert),
+            subscriptions: None,
         }
     }
 
@@ -866,6 +963,34 @@ impl WsEvent {
             morning_brief: None,
             draft_update: Some(data),
             spawn_ack_alert: None,
+            subscriptions: None,
+        }
+    }
+
+    /// Create an `init` event carrying the server-authoritative subscription list.
+    ///
+    /// Clients must wipe their local subscription state and adopt this list on
+    /// receipt (§3, principle "Server is the epoch").
+    pub fn init(subs: Vec<String>) -> Self {
+        Self {
+            event_type: "init".to_string(),
+            worker: None,
+            workers: None,
+            beads: None,
+            conversations: None,
+            conversation: None,
+            streaming: None,
+            projects: None,
+            config_status: None,
+            capacity: None,
+            bead_event: None,
+            bead_events: None,
+            stitch_created: None,
+            agent_session: None,
+            morning_brief: None,
+            draft_update: None,
+            spawn_ack_alert: None,
+            subscriptions: Some(subs),
         }
     }
 }
@@ -1055,11 +1180,28 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
     let mut draft_rx = state.draft_tx.subscribe();
     let mut shutdown_rx = state.shutdown.subscribe();
 
-    // Create an mpsc channel as intermediary: all producer tasks send WsEvent strings here,
-    // and a single forwarder task drains them to the WebSocket sender.
-    let (ws_tx, mut ws_rx) = tokio::sync::mpsc::channel::<String>(256);
+    // Per-connection subscription set.  Starts with "global"; clients may
+    // add/remove project topics mid-connection.  The `init` event tells the
+    // client the authoritative starting state so it can wipe its own cache.
+    let subscriptions: Arc<tokio::sync::RwLock<HashSet<String>>> =
+        Arc::new(tokio::sync::RwLock::new(["global".to_string()].into()));
 
-    // Send initial snapshots
+    // Create an mpsc channel as intermediary: all producer tasks send WsOutMsg
+    // (topic + json + queue timestamp) here, and a single forwarder task
+    // filters by subscription and records hoop_ws_broadcast_lag_ms.
+    let (ws_tx, mut ws_rx) = tokio::sync::mpsc::channel::<WsOutMsg>(256);
+
+    // ── initial handshake ────────────────────────────────────────────────────
+
+    // 1. init — client must wipe its state and adopt this subscription list.
+    let init_subs: Vec<String> = subscriptions.read().await.iter().cloned().collect();
+    if let Ok(json) = serde_json::to_string(&WsEvent::init(init_subs)) {
+        if sender.send(Message::Text(json)).await.is_err() {
+            return;
+        }
+    }
+
+    // 2. Workers snapshot
     let worker_snapshot = registry.snapshot().await;
     if let Ok(json) = serde_json::to_string(&WsEvent::workers_snapshot(worker_snapshot)) {
         if sender.send(Message::Text(json)).await.is_err() {
@@ -1067,7 +1209,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     }
 
-    // Send beads snapshot
+    // 3. Beads snapshot
     let beads = state.beads.read().unwrap().clone();
     let bead_data: Vec<BeadData> = beads.iter().map(bead_to_data).collect();
     if let Ok(json) = serde_json::to_string(&WsEvent::beads_snapshot(bead_data)) {
@@ -1076,7 +1218,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     }
 
-    // Send conversations snapshot
+    // 4. Conversations snapshot
     let convos = registry.conversations_snapshot().await;
     if !convos.is_empty() {
         if let Ok(json) = serde_json::to_string(&WsEvent::conversations_snapshot(convos)) {
@@ -1086,7 +1228,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     }
 
-    // Send projects snapshot
+    // 5. Projects snapshot
     {
         let projects = state.projects.read().unwrap().clone();
         if !projects.is_empty() {
@@ -1098,7 +1240,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     }
 
-    // Send initial config status (valid by default since daemon started successfully)
+    // 6. Initial config status (valid by default since daemon started successfully)
     let initial_config_status = ConfigStatusData {
         valid: true,
         error: None,
@@ -1109,7 +1251,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     }
 
-    // Send initial agent session status if active
+    // 7. Initial agent session status if active
     if let Some(ref mgr) = state.agent_session_manager {
         let status = mgr.status().await;
         if status.active {
@@ -1127,7 +1269,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     }
 
-    // Send latest morning brief snapshot (if one exists)
+    // 8. Latest morning brief snapshot (if one exists)
     if let Ok(Some(brief)) = crate::fleet::get_latest_morning_brief() {
         if let Ok(json) = serde_json::to_string(&WsEvent::morning_brief(MorningBriefData {
             id: brief.id,
@@ -1142,16 +1284,28 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     }
 
-    // Forwarder task: drains ws_rx mpsc → WebSocket sender
+    // ── forwarder task ───────────────────────────────────────────────────────
+    // Drains ws_rx → WebSocket sender, filtering by topic subscription and
+    // recording hoop_ws_broadcast_lag_ms (§16.3).
+    let subs_for_fwd = subscriptions.clone();
     let forwarder_task = tokio::spawn(async move {
-        while let Some(json) = ws_rx.recv().await {
-            if sender.send(Message::Text(json)).await.is_err() {
-                break;
+        let metrics = crate::metrics::metrics();
+        while let Some(msg) = ws_rx.recv().await {
+            let subs = subs_for_fwd.read().await;
+            if should_deliver(msg.topic.as_deref(), &subs) {
+                let lag_ms = msg.queued_at.elapsed().as_secs_f64() * 1000.0;
+                metrics.hoop_ws_broadcast_lag_ms.observe(&[], lag_ms);
+                drop(subs);
+                if sender.send(Message::Text(msg.json)).await.is_err() {
+                    break;
+                }
             }
         }
     });
 
-    // Spawn task to forward monitor events to the WebSocket
+    // ── producer tasks ───────────────────────────────────────────────────────
+
+    // Monitor events (worker heartbeats / liveness changes) — global topic
     let registry_tx = registry.clone();
     let ws_tx_monitor = ws_tx.clone();
     let monitor_task = tokio::spawn(async move {
@@ -1159,7 +1313,6 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
             match event {
                 MonitorEvent::Heartbeat(heartbeat) => {
                     let worker_name = heartbeat.worker.clone();
-                    // Get current liveness for this worker
                     let liveness = registry_tx
                         .workers
                         .read()
@@ -1181,7 +1334,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
 
                     if let Some(w) = worker {
                         if let Ok(json) = serde_json::to_string(&WsEvent::worker_update(w)) {
-                            let _ = ws_tx_monitor.send(json).await;
+                            let _ = ws_tx_monitor.send(WsOutMsg::new(json)).await;
                         }
                     }
                 }
@@ -1225,7 +1378,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
                         .await;
 
                         if let Ok(json) = serde_json::to_string(&WsEvent::worker_update(w)) {
-                            let _ = ws_tx_monitor.send(json).await;
+                            let _ = ws_tx_monitor.send(WsOutMsg::new(json)).await;
                         }
                     }
                 }
@@ -1233,7 +1386,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
                     debug!("Log rotation detected, sending fresh snapshot");
                     let snapshot = registry_tx.snapshot().await;
                     if let Ok(json) = serde_json::to_string(&WsEvent::workers_snapshot(snapshot)) {
-                        let _ = ws_tx_monitor.send(json).await;
+                        let _ = ws_tx_monitor.send(WsOutMsg::new(json)).await;
                     }
                 }
                 MonitorEvent::Error(e) => {
@@ -1243,7 +1396,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     });
 
-    // Spawn task to forward bead events to the WebSocket
+    // Bead updates — global topic (snapshot covers all projects for now)
     let ws_tx_beads = ws_tx.clone();
     let beads_store = state.beads.clone();
     let bead_task = tokio::spawn(async move {
@@ -1251,39 +1404,40 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
             let beads = beads_store.read().unwrap().clone();
             let bead_data: Vec<BeadData> = beads.iter().map(bead_to_data).collect();
             if let Ok(json) = serde_json::to_string(&WsEvent::beads_snapshot(bead_data)) {
-                let _ = ws_tx_beads.send(json).await;
+                let _ = ws_tx_beads.send(WsOutMsg::new(json)).await;
             }
         }
     });
 
-    // Spawn task to forward stitch_created events to the WebSocket
+    // Stitch created — routed to the project topic carried in the event
     let ws_tx_stitch = ws_tx.clone();
     let stitch_task = tokio::spawn(async move {
         while let Ok(stitch_data) = stitch_rx.recv().await {
-            if let Ok(json) = serde_json::to_string(&WsEvent::stitch_created(stitch_data)) {
-                let _ = ws_tx_stitch.send(json).await;
+            if let Ok(json) = serde_json::to_string(&WsEvent::stitch_created(stitch_data.clone())) {
+                let topic = format!("project:{}", stitch_data.project);
+                let _ = ws_tx_stitch.send(WsOutMsg::with_topic(json, topic)).await;
             }
         }
     });
 
-    // Spawn task to forward session events to the WebSocket
+    // Session events placeholder
     let _registry_for_sessions = registry.clone();
     let session_task = tokio::spawn(async move {
         // Session events are handled in lib.rs via the session_tx broadcast;
         // this task is a placeholder for future per-connection session handling.
     });
 
-    // Spawn task to forward config status events to the WebSocket
+    // Config status — global
     let ws_tx_config = ws_tx.clone();
     let config_task = tokio::spawn(async move {
         while let Ok(status) = config_status_rx.recv().await {
             if let Ok(json) = serde_json::to_string(&WsEvent::config_status(status)) {
-                let _ = ws_tx_config.send(json).await;
+                let _ = ws_tx_config.send(WsOutMsg::new(json)).await;
             }
         }
     });
 
-    // Spawn task to forward project status events to the WebSocket
+    // Project status updates — global (snapshot covers all projects)
     let projects_for_update = state.projects.clone();
     let ws_tx_projects = ws_tx.clone();
     let project_task = tokio::spawn(async move {
@@ -1297,19 +1451,19 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
 
             let projects = projects_for_update.read().unwrap().clone();
             if let Ok(json) = serde_json::to_string(&WsEvent::projects_snapshot(projects)) {
-                let _ = ws_tx_projects.send(json).await;
+                let _ = ws_tx_projects.send(WsOutMsg::new(json)).await;
             }
         }
     });
 
-    // Spawn task to forward capacity events to the WebSocket
+    // Capacity — global
     let ws_tx_capacity = ws_tx.clone();
     let capacity_task = tokio::spawn(async move {
         loop {
             match capacity_rx.recv().await {
                 Ok(capacities) => {
                     if let Ok(json) = serde_json::to_string(&WsEvent::capacity_snapshot(capacities)) {
-                        let _ = ws_tx_capacity.send(json).await;
+                        let _ = ws_tx_capacity.send(WsOutMsg::new(json)).await;
                     }
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
@@ -1320,7 +1474,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     });
 
-    // Spawn task to forward agent session events to the WebSocket
+    // Agent session — global
     let ws_tx_agent = ws_tx.clone();
     let agent_session_manager = state.agent_session_manager.clone();
     let agent_task = tokio::spawn(async move {
@@ -1330,7 +1484,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
             match agent_rx.recv().await {
                 Ok(event) => {
                     if let Ok(json) = serde_json::to_string(&WsEvent::agent_session(event)) {
-                        let _ = ws_tx_agent.send(json).await;
+                        let _ = ws_tx_agent.send(WsOutMsg::new(json)).await;
                     }
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
@@ -1341,14 +1495,15 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     });
 
-    // Spawn task to forward draft queue events to the WebSocket
+    // Draft queue — routed to the project topic carried in the event
     let ws_tx_draft = ws_tx.clone();
     let draft_task = tokio::spawn(async move {
         loop {
             match draft_rx.recv().await {
                 Ok(data) => {
-                    if let Ok(json) = serde_json::to_string(&WsEvent::draft_update(data)) {
-                        let _ = ws_tx_draft.send(json).await;
+                    if let Ok(json) = serde_json::to_string(&WsEvent::draft_update(data.clone())) {
+                        let topic = format!("project:{}", data.project);
+                        let _ = ws_tx_draft.send(WsOutMsg::with_topic(json, topic)).await;
                     }
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
@@ -1359,14 +1514,14 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     });
 
-    // Spawn task to forward morning brief events to the WebSocket
+    // Morning brief — global
     let ws_tx_brief = ws_tx.clone();
     let brief_task = tokio::spawn(async move {
         loop {
             match brief_rx.recv().await {
                 Ok(data) => {
                     if let Ok(json) = serde_json::to_string(&WsEvent::morning_brief(data)) {
-                        let _ = ws_tx_brief.send(json).await;
+                        let _ = ws_tx_brief.send(WsOutMsg::new(json)).await;
                     }
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
@@ -1377,7 +1532,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     });
 
-    // Spawn task to forward spawn-ack alerts (§M5) to the WebSocket
+    // Spawn-ack alerts (§M5) — global
     let ws_tx_ack = ws_tx.clone();
     let _ack_task = tokio::spawn(async move {
         let mut ack_rx = state.worker_ack_monitor.subscribe();
@@ -1387,7 +1542,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
                     if let Ok(json) =
                         serde_json::to_string(&WsEvent::spawn_ack_alert_event(alert))
                     {
-                        let _ = ws_tx_ack.send(json).await;
+                        let _ = ws_tx_ack.send(WsOutMsg::new(json)).await;
                     }
                 }
                 Ok(crate::worker_ack::AckEvent::AckReceived(_)) => {
@@ -1401,12 +1556,33 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     });
 
-    // Handle incoming messages (just ping/pong for now)
+    // ── inbound message handler ──────────────────────────────────────────────
+    // Handles subscribe/unsubscribe from the client mid-connection.
+    let subs_for_recv = subscriptions.clone();
     let recv_task = tokio::spawn(async move {
         while let Some(msg) = receiver.next().await {
             match msg {
+                Ok(Message::Text(text)) => {
+                    match serde_json::from_str::<ClientMessage>(&text) {
+                        Ok(ClientMessage::Subscribe { topic }) => {
+                            if WsTopic::parse(&topic).is_some() {
+                                subs_for_recv.write().await.insert(topic);
+                            } else {
+                                debug!("Rejected subscribe to unknown topic: {}", topic);
+                            }
+                        }
+                        Ok(ClientMessage::Unsubscribe { topic }) => {
+                            // global is server-pinned and cannot be removed
+                            if topic != "global" {
+                                subs_for_recv.write().await.remove(&topic);
+                            }
+                        }
+                        Err(_) => {
+                            debug!("Unknown client message: {}", text);
+                        }
+                    }
+                }
                 Ok(Message::Ping(_msg)) => {
-                    // Pong response is handled automatically by axum
                     debug!("Received ping");
                 }
                 Ok(Message::Close(_)) => {
@@ -1454,4 +1630,244 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
     }
 
     debug!("WebSocket connection closed");
+}
+
+// ---------------------------------------------------------------------------
+// Unit tests for WS topic routing (§5.2 Multi-project fan-out, §16.3 WS metrics)
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        should_deliver, ClientMessage, WsEvent, WsTopic,
+    };
+    use std::collections::HashSet;
+
+    // ── WsTopic::parse ───────────────────────────────────────────────────────
+
+    #[test]
+    fn topic_parse_global() {
+        assert_eq!(WsTopic::parse("global"), Some(WsTopic("global".to_string())));
+    }
+
+    #[test]
+    fn topic_parse_project() {
+        assert_eq!(
+            WsTopic::parse("project:my-repo"),
+            Some(WsTopic("project:my-repo".to_string()))
+        );
+    }
+
+    #[test]
+    fn topic_parse_project_with_colons_in_name() {
+        assert_eq!(
+            WsTopic::parse("project:ns:name"),
+            Some(WsTopic("project:ns:name".to_string()))
+        );
+    }
+
+    #[test]
+    fn topic_parse_empty_project_name_rejected() {
+        assert_eq!(WsTopic::parse("project:"), None);
+    }
+
+    #[test]
+    fn topic_parse_unknown_prefix_rejected() {
+        assert_eq!(WsTopic::parse("fleet:alpha"), None);
+        assert_eq!(WsTopic::parse(""), None);
+        assert_eq!(WsTopic::parse("GLOBAL"), None);
+    }
+
+    #[test]
+    fn topic_helpers_match_parse() {
+        assert_eq!(WsTopic::global(), WsTopic::parse("global").unwrap());
+        assert_eq!(
+            WsTopic::project("kalshi"),
+            WsTopic::parse("project:kalshi").unwrap()
+        );
+    }
+
+    #[test]
+    fn topic_as_str_roundtrip() {
+        let t = WsTopic::project("kalshi-weather");
+        assert_eq!(t.as_str(), "project:kalshi-weather");
+    }
+
+    // ── should_deliver ───────────────────────────────────────────────────────
+
+    #[test]
+    fn deliver_none_topic_always_true() {
+        let empty: HashSet<String> = HashSet::new();
+        assert!(should_deliver(None, &empty));
+
+        let subs: HashSet<String> = ["global".to_string()].into();
+        assert!(should_deliver(None, &subs));
+    }
+
+    #[test]
+    fn deliver_global_topic_when_subscribed() {
+        let subs: HashSet<String> = ["global".to_string()].into();
+        assert!(should_deliver(Some("global"), &subs));
+    }
+
+    #[test]
+    fn deliver_global_topic_not_delivered_when_not_subscribed() {
+        let subs: HashSet<String> = ["project:alpha".to_string()].into();
+        assert!(!should_deliver(Some("global"), &subs));
+    }
+
+    #[test]
+    fn deliver_project_topic_when_subscribed() {
+        let subs: HashSet<String> =
+            ["global".to_string(), "project:kalshi".to_string()].into();
+        assert!(should_deliver(Some("project:kalshi"), &subs));
+    }
+
+    #[test]
+    fn deliver_project_topic_not_delivered_when_not_subscribed() {
+        let subs: HashSet<String> = ["global".to_string()].into();
+        assert!(!should_deliver(Some("project:kalshi"), &subs));
+    }
+
+    #[test]
+    fn deliver_project_topic_not_delivered_after_unsubscribe() {
+        let mut subs: HashSet<String> =
+            ["global".to_string(), "project:kalshi".to_string()].into();
+        assert!(should_deliver(Some("project:kalshi"), &subs));
+        subs.remove("project:kalshi");
+        assert!(!should_deliver(Some("project:kalshi"), &subs));
+    }
+
+    #[test]
+    fn deliver_global_subscription_cannot_be_bypassed() {
+        // Simulates trying to unsubscribe from global — the server prevents it,
+        // so this tests the invariant: `global` always in the set on a live conn.
+        let mut subs: HashSet<String> = ["global".to_string()].into();
+        // Attempting to remove global (the server's recv_task refuses this,
+        // but even if the set loses global, project events still only go to
+        // their project topic, not to global subscribers).
+        subs.remove("global");
+        // Without global, a global-routed event is NOT delivered.
+        assert!(!should_deliver(Some("global"), &subs));
+    }
+
+    // ── ClientMessage deserialization ────────────────────────────────────────
+
+    #[test]
+    fn client_message_subscribe_parses() {
+        let json = r#"{"type":"subscribe","topic":"project:kalshi"}"#;
+        let msg: ClientMessage = serde_json::from_str(json).unwrap();
+        match msg {
+            ClientMessage::Subscribe { topic } => assert_eq!(topic, "project:kalshi"),
+            other => panic!("unexpected: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn client_message_unsubscribe_parses() {
+        let json = r#"{"type":"unsubscribe","topic":"project:kalshi"}"#;
+        let msg: ClientMessage = serde_json::from_str(json).unwrap();
+        match msg {
+            ClientMessage::Unsubscribe { topic } => assert_eq!(topic, "project:kalshi"),
+            other => panic!("unexpected: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn client_message_unknown_type_errors() {
+        let json = r#"{"type":"ping"}"#;
+        assert!(serde_json::from_str::<ClientMessage>(json).is_err());
+    }
+
+    #[test]
+    fn client_message_global_subscribe_parses() {
+        let json = r#"{"type":"subscribe","topic":"global"}"#;
+        let msg: ClientMessage = serde_json::from_str(json).unwrap();
+        match msg {
+            ClientMessage::Subscribe { topic } => assert_eq!(topic, "global"),
+            other => panic!("unexpected: {:?}", other),
+        }
+    }
+
+    // ── WsEvent::init ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn init_event_carries_subscriptions() {
+        let subs = vec!["global".to_string(), "project:kalshi".to_string()];
+        let event = WsEvent::init(subs.clone());
+        assert_eq!(event.event_type, "init");
+        let returned = event.subscriptions.unwrap();
+        assert!(returned.contains(&"global".to_string()));
+        assert!(returned.contains(&"project:kalshi".to_string()));
+    }
+
+    #[test]
+    fn init_event_serializes_subscriptions_field() {
+        let event = WsEvent::init(vec!["global".to_string()]);
+        let json = serde_json::to_string(&event).unwrap();
+        let val: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(val["type"], "init");
+        assert!(val["subscriptions"].is_array());
+        assert_eq!(val["subscriptions"][0], "global");
+    }
+
+    #[test]
+    fn non_init_events_omit_subscriptions_field() {
+        let event = WsEvent::projects_snapshot(vec![]);
+        let json = serde_json::to_string(&event).unwrap();
+        let val: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert!(
+            val.get("subscriptions").is_none(),
+            "non-init event must not include subscriptions"
+        );
+    }
+
+    // ── hoop_ws_broadcast_lag_ms metric ──────────────────────────────────────
+
+    #[test]
+    fn broadcast_lag_metric_observed() {
+        let m = crate::metrics::metrics();
+        let snap_before = m.hoop_ws_broadcast_lag_ms.snapshot();
+        let count_before: u64 = snap_before.iter().map(|(_, c, _)| c).sum();
+
+        // Simulate the observation the forwarder task performs.
+        m.hoop_ws_broadcast_lag_ms.observe(&[], 3.7);
+
+        let snap_after = m.hoop_ws_broadcast_lag_ms.snapshot();
+        let count_after: u64 = snap_after.iter().map(|(_, c, _)| c).sum();
+        assert_eq!(count_after, count_before + 1, "observe must increment count");
+
+        let sum_after: f64 = snap_after.iter().map(|(_, _, s)| s).sum();
+        assert!(sum_after > 0.0, "observe must accumulate sum");
+    }
+
+    // ── Fan-out invariant: project-scoped events only reach matching subscribers ──
+
+    #[test]
+    fn project_event_not_delivered_to_global_only_subscriber() {
+        let global_only: HashSet<String> = ["global".to_string()].into();
+        assert!(!should_deliver(Some("project:kalshi"), &global_only));
+        assert!(!should_deliver(Some("project:miroir"), &global_only));
+    }
+
+    #[test]
+    fn project_event_delivered_only_to_matching_project() {
+        let subs: HashSet<String> =
+            ["global".to_string(), "project:kalshi".to_string()].into();
+        assert!(should_deliver(Some("project:kalshi"), &subs));
+        assert!(!should_deliver(Some("project:miroir"), &subs));
+    }
+
+    #[test]
+    fn multiple_project_subscriptions_fan_out_independently() {
+        let subs: HashSet<String> = [
+            "global".to_string(),
+            "project:kalshi".to_string(),
+            "project:miroir".to_string(),
+        ]
+        .into();
+        assert!(should_deliver(Some("project:kalshi"), &subs));
+        assert!(should_deliver(Some("project:miroir"), &subs));
+        assert!(!should_deliver(Some("project:ardenone"), &subs));
+    }
 }

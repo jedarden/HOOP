@@ -2196,6 +2196,351 @@ pub fn restore_and_migrate(db_path: &std::path::Path) -> Result<String> {
     Ok(version)
 }
 
+// ---------------------------------------------------------------------------
+// §4.4 Cross-project state CRUD
+// ---------------------------------------------------------------------------
+
+/// A row from (or for) the `project_status` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectStatusRow {
+    pub project: String,
+    pub open_beads: i64,
+    pub closed_beads: i64,
+    pub stuck_beads: i64,
+    pub worker_count: i64,
+    pub last_event_at: Option<String>,
+    pub last_heartbeat_at: Option<String>,
+    pub updated_at: String,
+}
+
+/// A row from the `runtime_status` VIEW (includes computed `liveness`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuntimeStatusRow {
+    pub project: String,
+    pub open_beads: i64,
+    pub closed_beads: i64,
+    pub stuck_beads: i64,
+    pub worker_count: i64,
+    pub last_event_at: Option<String>,
+    pub last_heartbeat_at: Option<String>,
+    pub updated_at: String,
+    /// "alive" when last_heartbeat_at is within 90 s; "stale" otherwise.
+    pub liveness: String,
+}
+
+/// A row from the `cost_rollup` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CostRollupRow {
+    pub project: String,
+    pub date: String,
+    pub cost_usd: f64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub cache_read_tokens: i64,
+    pub cache_write_tokens: i64,
+    pub updated_at: String,
+}
+
+/// A row from the `capacity_rollup` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CapacityRollupRow {
+    pub account_id: String,
+    pub adapter: String,
+    pub computed_at: String,
+    pub window_5h_pct: f64,
+    pub window_7d_pct: f64,
+    pub tokens_5h: i64,
+    pub tokens_7d: i64,
+    pub cost_7d_usd: f64,
+}
+
+/// A row from the `collision_index` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CollisionIndexEntry {
+    pub bead_id: String,
+    pub project: String,
+    pub worker: Option<String>,
+    pub claimed_at: String,
+    /// Sorted list of file paths touched by the worker holding this bead.
+    pub file_paths: Vec<String>,
+    pub updated_at: String,
+}
+
+/// Upsert a project_status row (INSERT OR REPLACE, replacing previous values).
+pub fn upsert_project_status(row: &ProjectStatusRow) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    conn.execute(
+        r#"INSERT INTO project_status
+           (project, open_beads, closed_beads, stuck_beads, worker_count,
+            last_event_at, last_heartbeat_at, updated_at)
+           VALUES (?1,?2,?3,?4,?5,?6,?7,?8)
+           ON CONFLICT(project) DO UPDATE SET
+               open_beads        = excluded.open_beads,
+               closed_beads      = excluded.closed_beads,
+               stuck_beads       = excluded.stuck_beads,
+               worker_count      = excluded.worker_count,
+               last_event_at     = excluded.last_event_at,
+               last_heartbeat_at = excluded.last_heartbeat_at,
+               updated_at        = excluded.updated_at"#,
+        params![
+            row.project,
+            row.open_beads,
+            row.closed_beads,
+            row.stuck_beads,
+            row.worker_count,
+            row.last_event_at,
+            row.last_heartbeat_at,
+            row.updated_at,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Query all rows from the `runtime_status` VIEW (liveness computed on read).
+pub fn query_runtime_status() -> Result<Vec<RuntimeStatusRow>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    query_runtime_status_conn(&conn)
+}
+
+fn query_runtime_status_conn(conn: &Connection) -> Result<Vec<RuntimeStatusRow>> {
+    let mut stmt = conn.prepare(
+        "SELECT project, open_beads, closed_beads, stuck_beads, worker_count,
+                last_event_at, last_heartbeat_at, updated_at, liveness
+         FROM runtime_status
+         ORDER BY updated_at DESC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(RuntimeStatusRow {
+            project: row.get(0)?,
+            open_beads: row.get(1)?,
+            closed_beads: row.get(2)?,
+            stuck_beads: row.get(3)?,
+            worker_count: row.get(4)?,
+            last_event_at: row.get(5)?,
+            last_heartbeat_at: row.get(6)?,
+            updated_at: row.get(7)?,
+            liveness: row.get(8)?,
+        })
+    })?;
+    rows.collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(|e| anyhow::anyhow!("Failed to query runtime_status: {}", e))
+}
+
+/// Accumulate cost into the `cost_rollup` table for a given (project, date).
+///
+/// Uses an upsert that adds the delta to the existing row rather than
+/// replacing it — preserving the running totals from previous sessions.
+pub fn accumulate_cost_rollup(
+    project: &str,
+    date: &str,
+    cost_usd: f64,
+    input_tokens: i64,
+    output_tokens: i64,
+    cache_read_tokens: i64,
+    cache_write_tokens: i64,
+) -> Result<()> {
+    let updated_at = Utc::now().to_rfc3339();
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    conn.execute(
+        r#"INSERT INTO cost_rollup
+           (project, date, cost_usd, input_tokens, output_tokens,
+            cache_read_tokens, cache_write_tokens, updated_at)
+           VALUES (?1,?2,?3,?4,?5,?6,?7,?8)
+           ON CONFLICT(project, date) DO UPDATE SET
+               cost_usd          = cost_usd          + excluded.cost_usd,
+               input_tokens      = input_tokens      + excluded.input_tokens,
+               output_tokens     = output_tokens     + excluded.output_tokens,
+               cache_read_tokens = cache_read_tokens + excluded.cache_read_tokens,
+               cache_write_tokens= cache_write_tokens+ excluded.cache_write_tokens,
+               updated_at        = excluded.updated_at"#,
+        params![
+            project,
+            date,
+            cost_usd,
+            input_tokens,
+            output_tokens,
+            cache_read_tokens,
+            cache_write_tokens,
+            updated_at,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Query cost_rollup rows within an optional date range (inclusive).
+///
+/// Pass `None` for either bound to leave it open-ended.
+pub fn query_cost_rollup(
+    date_from: Option<&str>,
+    date_to: Option<&str>,
+) -> Result<Vec<CostRollupRow>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let sql = "SELECT project, date, cost_usd, input_tokens, output_tokens,
+                       cache_read_tokens, cache_write_tokens, updated_at
+                FROM cost_rollup
+                WHERE (?1 IS NULL OR date >= ?1)
+                  AND (?2 IS NULL OR date <= ?2)
+                ORDER BY date DESC, project";
+    let mut stmt = conn.prepare(sql)?;
+    let rows = stmt.query_map(params![date_from, date_to], |row| {
+        Ok(CostRollupRow {
+            project: row.get(0)?,
+            date: row.get(1)?,
+            cost_usd: row.get(2)?,
+            input_tokens: row.get(3)?,
+            output_tokens: row.get(4)?,
+            cache_read_tokens: row.get(5)?,
+            cache_write_tokens: row.get(6)?,
+            updated_at: row.get(7)?,
+        })
+    })?;
+    rows.collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(|e| anyhow::anyhow!("Failed to query cost_rollup: {}", e))
+}
+
+/// Upsert a capacity_rollup row (full replacement — snapshots, not accumulators).
+pub fn upsert_capacity_rollup(row: &CapacityRollupRow) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    conn.execute(
+        r#"INSERT INTO capacity_rollup
+           (account_id, adapter, computed_at, window_5h_pct, window_7d_pct,
+            tokens_5h, tokens_7d, cost_7d_usd)
+           VALUES (?1,?2,?3,?4,?5,?6,?7,?8)
+           ON CONFLICT(account_id, adapter) DO UPDATE SET
+               computed_at   = excluded.computed_at,
+               window_5h_pct = excluded.window_5h_pct,
+               window_7d_pct = excluded.window_7d_pct,
+               tokens_5h     = excluded.tokens_5h,
+               tokens_7d     = excluded.tokens_7d,
+               cost_7d_usd   = excluded.cost_7d_usd"#,
+        params![
+            row.account_id,
+            row.adapter,
+            row.computed_at,
+            row.window_5h_pct,
+            row.window_7d_pct,
+            row.tokens_5h,
+            row.tokens_7d,
+            row.cost_7d_usd,
+        ],
+    )?;
+    Ok(())
+}
+
+/// List all capacity_rollup rows ordered by adapter then account_id.
+pub fn query_capacity_rollup() -> Result<Vec<CapacityRollupRow>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let mut stmt = conn.prepare(
+        "SELECT account_id, adapter, computed_at, window_5h_pct, window_7d_pct,
+                tokens_5h, tokens_7d, cost_7d_usd
+         FROM capacity_rollup
+         ORDER BY adapter, account_id",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(CapacityRollupRow {
+            account_id: row.get(0)?,
+            adapter: row.get(1)?,
+            computed_at: row.get(2)?,
+            window_5h_pct: row.get(3)?,
+            window_7d_pct: row.get(4)?,
+            tokens_5h: row.get(5)?,
+            tokens_7d: row.get(6)?,
+            cost_7d_usd: row.get(7)?,
+        })
+    })?;
+    rows.collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(|e| anyhow::anyhow!("Failed to query capacity_rollup: {}", e))
+}
+
+/// Upsert an entry in the `collision_index`.
+///
+/// Call this on every Claim event. `file_paths` grows as touched files are
+/// reported; subsequent upserts replace the file_paths list.
+pub fn upsert_collision_entry(entry: &CollisionIndexEntry) -> Result<()> {
+    let file_paths_json = serde_json::to_string(&entry.file_paths)
+        .unwrap_or_else(|_| "[]".to_string());
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    conn.execute(
+        r#"INSERT INTO collision_index
+           (bead_id, project, worker, claimed_at, file_paths, updated_at)
+           VALUES (?1,?2,?3,?4,?5,?6)
+           ON CONFLICT(bead_id) DO UPDATE SET
+               worker     = excluded.worker,
+               file_paths = excluded.file_paths,
+               updated_at = excluded.updated_at"#,
+        params![
+            entry.bead_id,
+            entry.project,
+            entry.worker,
+            entry.claimed_at,
+            file_paths_json,
+            entry.updated_at,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Remove a bead from the collision_index.
+///
+/// Call this on Complete, Close, Release, or Fail events to free the claim.
+pub fn remove_collision_entry(bead_id: &str) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    conn.execute("DELETE FROM collision_index WHERE bead_id = ?1", params![bead_id])?;
+    Ok(())
+}
+
+/// Find collision_index entries whose file_paths overlap with any of the
+/// given paths.  Returns entries for other beads in the same project that
+/// share at least one file with the candidate set.
+///
+/// `candidate_paths` is the set of files the new bead intends to touch.
+pub fn query_collision_candidates(
+    project: &str,
+    candidate_paths: &[String],
+) -> Result<Vec<CollisionIndexEntry>> {
+    if candidate_paths.is_empty() {
+        return Ok(Vec::new());
+    }
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let mut stmt = conn.prepare(
+        "SELECT bead_id, project, worker, claimed_at, file_paths, updated_at
+         FROM collision_index
+         WHERE project = ?1",
+    )?;
+    let rows = stmt.query_map(params![project], |row| {
+        let fp_json: String = row.get(4)?;
+        let file_paths: Vec<String> =
+            serde_json::from_str(&fp_json).unwrap_or_default();
+        Ok(CollisionIndexEntry {
+            bead_id: row.get(0)?,
+            project: row.get(1)?,
+            worker: row.get(2)?,
+            claimed_at: row.get(3)?,
+            file_paths,
+            updated_at: row.get(5)?,
+        })
+    })?;
+    let all: Vec<CollisionIndexEntry> = rows
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(|e| anyhow::anyhow!("Failed to query collision_index: {}", e))?;
+
+    let candidates: std::collections::HashSet<&str> =
+        candidate_paths.iter().map(|s| s.as_str()).collect();
+    Ok(all
+        .into_iter()
+        .filter(|e| e.file_paths.iter().any(|fp| candidates.contains(fp.as_str())))
+        .collect())
+}
+
 /// Compare two semver strings. Returns true if `a` is strictly newer than `b`.
 fn is_newer_version(a: &str, b: &str) -> bool {
     let parse = |v: &str| -> Vec<u32> {
