@@ -954,6 +954,11 @@ pre {
   color: #666;
 }
 
+.badge-screen-capture {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
 /* Config Error Banner */
 .config-error-banner {
   margin-bottom: 1.5rem;
@@ -4897,6 +4902,110 @@ pre {
   background: linear-gradient(to right, #1976d2, #64b5f6);
   border-radius: 3px;
   pointer-events: none;
+}
+
+/* Video Player */
+.video-player {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.video-player-element {
+  width: 100%;
+  max-height: 420px;
+  border-radius: 6px;
+  background: #000;
+  cursor: pointer;
+  display: block;
+}
+
+.video-progress {
+  /* extends .audio-progress — adds chapter ticks */
+}
+
+.video-chapter-tick {
+  position: absolute;
+  top: 4px;
+  width: 3px;
+  height: 16px;
+  background: rgba(255, 167, 38, 0.85);
+  border-radius: 2px;
+  transform: translateX(-50%);
+  cursor: pointer;
+  z-index: 2;
+  transition: background 0.15s;
+}
+
+.video-chapter-tick--active {
+  background: #ff6f00;
+}
+
+.video-chapter-tick:hover {
+  background: #ff6f00;
+}
+
+/* Chapter markers bar below the video */
+.video-chapters-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.5rem 0;
+}
+
+.video-chapters-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #888;
+}
+
+.video-chapters-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.video-chapter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 14px;
+  background: #f5f5f5;
+  color: #444;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  max-width: 220px;
+}
+
+.video-chapter-btn:hover {
+  background: #e8f0fe;
+  border-color: #1976d2;
+  color: #1976d2;
+}
+
+.video-chapter-btn--active {
+  background: #1976d2;
+  border-color: #1976d2;
+  color: #fff;
+}
+
+.video-chapter-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  opacity: 0.8;
+  flex-shrink: 0;
+}
+
+.video-chapter-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Transcript View */

@@ -227,6 +227,10 @@ export interface AccountCapacity {
   burn_rate_per_min: number;
   forecast_full_5h_min?: number | null;
   forecast_full_7d_min?: number | null;
+  stitch_close_rate_per_min: number;
+  mean_cost_per_stitch_tokens: number;
+  forecast_full_5h_stitch_min?: number | null;
+  forecast_full_7d_stitch_min?: number | null;
   source: string;
   computed_at: string;
 }
@@ -327,7 +331,7 @@ export interface CostBucket {
 }
 
 /** Filter values for the conversation pane — persisted across renders in a Jotai atom. */
-export type ConversationFilter = 'all' | 'fleet' | 'operator' | 'ad-hoc' | 'dictated';
+export type ConversationFilter = 'all' | 'fleet' | 'operator' | 'ad-hoc' | 'dictated' | 'screen-capture';
 
 // Stitch created event from backend WS
 export interface StitchCreatedData {
@@ -375,6 +379,35 @@ export interface BeadEventFromEvents {
   worker: string;
   line_number?: number;
   raw: string;
+}
+
+// Screen capture chapter marker (derived from frame-sample UI-change events)
+export interface FrameSample {
+  timestamp_secs: number;
+  label: string;
+}
+
+// Screen capture summary from project list endpoint
+export interface ScreenCaptureSummary {
+  stitch_id: string;
+  project: string;
+  title: string;
+  recorded_at: string;
+  duration_secs: number | null;
+  chapter_count: number;
+  has_transcript: boolean;
+}
+
+// Full screen capture data (metadata + chapters + transcript)
+export interface ScreenCaptureData {
+  stitch_id: string;
+  title: string;
+  project: string;
+  recorded_at: string;
+  video_url: string;
+  duration_secs: number | null;
+  chapters: FrameSample[];
+  transcript: { text: string; words: TranscriptWord[] } | null;
 }
 
 // Dictated note summary from REST API
@@ -449,6 +482,7 @@ export const configStatusAtom = atom<ConfigStatus>({ valid: true });
 export const capacityAtom = atom<AccountCapacity[]>([]);
 export const costBucketsAtom = atom<CostBucket[]>([]);
 export const dictatedNotesAtom = atom<Map<string, NoteSummary[]>>(new Map()); // project -> notes
+export const screenCapturesAtom = atom<Map<string, ScreenCaptureSummary[]>>(new Map()); // project -> captures
 export const stitchCreatedAtom = atom<StitchCreatedData[]>([]);
 
 // Agent chat atoms

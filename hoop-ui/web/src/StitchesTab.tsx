@@ -1,7 +1,8 @@
-import { useAtomValue, useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom, useAtom } from 'jotai';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { conversationsAtom, streamingActiveIdsAtom, selectedConversationIdAtom, Conversation, dictatedNotesAtom, NoteSummary, DictatedNote } from './atoms';
+import { conversationsAtom, streamingActiveIdsAtom, selectedConversationIdAtom, Conversation, dictatedNotesAtom, NoteSummary, DictatedNote, conversationFilterAtom, ConversationFilter, screenCapturesAtom, ScreenCaptureSummary, ScreenCaptureData } from './atoms';
 import AudioPlayer from './components/AudioPlayer';
+import VideoPlayer from './components/VideoPlayer';
 import { scanForSecrets, getSecretSeverity, truncateSecret } from './components/secretsScanner';
 import BeadDraftForm from './BeadDraftForm';
 import StitchDraftForm from './StitchDraftForm';
@@ -9,12 +10,10 @@ import { TabId } from './ProjectDetail';
 
 const PAGE_SIZE = 50;
 
-type StitchKind = 'operator' | 'dictated' | 'worker' | 'ad-hoc' | 'all';
 type StitchStatus = 'active' | 'awaiting_review' | 'done' | 'all';
 type TranscriptionStatus = 'Pending' | 'Completed' | 'Failed';
 
 interface FilterConfig {
-  kind: StitchKind;
   status: StitchStatus;
   search: string;
 }
@@ -40,6 +39,8 @@ function getKindBadge(kind: string): { label: string; className: string } {
       return { label: 'Dictated', className: 'badge-dictated' };
     case 'ad-hoc':
       return { label: 'Ad-hoc', className: 'badge-ad-hoc' };
+    case 'screen-capture':
+      return { label: 'Screen', className: 'badge-screen-capture' };
     default:
       return { label: kind, className: 'badge-unknown' };
   }
@@ -66,7 +67,7 @@ function TranscriptionStatusBadge({ status }: { status?: TranscriptionStatus }) 
   return <span className={`badge ${config.className}`}>{config.label}</span>;
 }
 
-// Unified stitch item — either a conversation or a dictated note
+// Unified stitch item — conversation, dictated note, or screen capture
 interface StitchItem {
   id: string;
   title: string;
@@ -82,6 +83,8 @@ interface StitchItem {
   isStreaming: boolean;
   // Dictated note fields
   dictatedNote?: NoteSummary;
+  // Screen capture fields
+  screenCapture?: ScreenCaptureSummary;
 }
 
 function DictatedNoteDetail({ note, onUpdate }: { note: NoteSummary; onUpdate: (updated: NoteSummary) => void }) {
@@ -329,6 +332,56 @@ function DictatedNoteDetail({ note, onUpdate }: { note: NoteSummary; onUpdate: (
   );
 }
 
+function ScreenCaptureDetail({ summary }: { summary: ScreenCaptureSummary }) {
+  const [data, setData] = useState<ScreenCaptureData | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    fetch(`/api/screen-capture/${summary.stitch_id}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((d: ScreenCaptureData | null) => {
+        if (mounted && d) setData(d);
+      })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, [summary.stitch_id]);
+
+  return (
+    <div className="dictated-note-detail">
+      <div className="dictated-note-detail-meta">
+        {summary.duration_secs != null && (
+          <span className="meta-item">
+            <span className="meta-label">Duration:</span>
+            <span className="meta-value">{Math.round(summary.duration_secs)}s</span>
+          </span>
+        )}
+        {summary.chapter_count > 0 && (
+          <span className="meta-item">
+            <span className="meta-label">Chapters:</span>
+            <span className="meta-value">{summary.chapter_count}</span>
+          </span>
+        )}
+        <span className="meta-item">
+          <span className="meta-label">Recorded:</span>
+          <span className="meta-value">{new Date(summary.recorded_at).toLocaleString()}</span>
+        </span>
+      </div>
+
+      {data ? (
+        <VideoPlayer
+          videoUrl={data.video_url}
+          chapters={data.chapters}
+          transcript={data.transcript ?? undefined}
+        />
+      ) : (
+        <div className="dictated-note-transcript-preview">
+          <p>Loading video...</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface StitchesTabProps {
   projectName: string;
   projectPath: string;
@@ -342,6 +395,7 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
   const streamingActiveIds = useAtomValue(streamingActiveIdsAtom);
   const setSelectedConversationId = useSetAtom(selectedConversationIdAtom);
   const dictatedNotesMap = useAtomValue(dictatedNotesAtom);
+  const screenCapturesMap = useAtomValue(screenCapturesAtom);
 
   // Fetch dictated notes for this project on mount
   const setDictatedNotes = useSetAtom(dictatedNotesAtom);
@@ -362,6 +416,25 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
     return () => { mounted = false; };
   }, [projectName, setDictatedNotes]);
 
+  // Fetch screen captures for this project on mount
+  const setScreenCaptures = useSetAtom(screenCapturesAtom);
+  useEffect(() => {
+    let mounted = true;
+    fetch(`/api/p/${encodeURIComponent(projectName)}/screen-captures`)
+      .then(r => r.ok ? r.json() : [])
+      .then((captures: ScreenCaptureSummary[]) => {
+        if (mounted) {
+          setScreenCaptures(prev => {
+            const next = new Map(prev);
+            next.set(projectName, captures);
+            return next;
+          });
+        }
+      })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, [projectName, setScreenCaptures]);
+
   // Callback to update a single note in the atom (no page reload)
   const handleNoteUpdate = useCallback((updated: NoteSummary) => {
     setDictatedNotes(prev => {
@@ -373,9 +446,10 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
   }, [projectName, setDictatedNotes]);
 
   const dictatedNotes = dictatedNotesMap.get(projectName) ?? [];
+  const screenCaptures = screenCapturesMap.get(projectName) ?? [];
 
+  const [classificationFilter, setClassificationFilter] = useAtom(conversationFilterAtom);
   const [filter, setFilter] = useState<FilterConfig>({
-    kind: 'all',
     status: 'all',
     search: '',
   });
@@ -427,20 +501,43 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
       });
     }
 
-    // Reddit-post ranking: most recent activity at top
+    // Screen captures from REST API
+    for (const cap of screenCaptures) {
+      items.push({
+        id: cap.stitch_id,
+        title: cap.title,
+        kind: 'screen-capture',
+        status: 'done',
+        createdAt: cap.recorded_at,
+        lastActivityAt: cap.recorded_at,
+        project: cap.project,
+        messageCount: 0,
+        totalTokens: 0,
+        linkedBeads: [],
+        isStreaming: false,
+        screenCapture: cap,
+      });
+    }
+
+    // Most recent activity at top
     return items.sort((a, b) =>
       new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime()
     );
-  }, [conversations, streamingActiveIds, projectName, dictatedNotes]);
+  }, [conversations, streamingActiveIds, projectName, dictatedNotes, screenCaptures]);
 
   // Reset to first page when filter changes
   useEffect(() => {
     setPage(1);
-  }, [filter]);
+  }, [filter, classificationFilter]);
 
   const filteredItems = useMemo(() => {
     return stitchItems.filter(item => {
-      if (filter.kind !== 'all' && item.kind !== filter.kind) return false;
+      if (classificationFilter !== 'all') {
+        const matchesKind = classificationFilter === 'fleet'
+          ? item.kind === 'worker'
+          : item.kind === (classificationFilter as string);
+        if (!matchesKind) return false;
+      }
       if (filter.status !== 'all' && item.status !== filter.status) return false;
       if (filter.search) {
         const q = filter.search.toLowerCase();
@@ -465,7 +562,7 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
       }
       return true;
     });
-  }, [stitchItems, filter]);
+  }, [stitchItems, filter, classificationFilter]);
 
   const visibleItems = useMemo(() => filteredItems.slice(0, page * PAGE_SIZE), [filteredItems, page]);
   const hasMore = visibleItems.length < filteredItems.length;
@@ -600,15 +697,16 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
           />
 
           <select
-            value={filter.kind}
-            onChange={(e) => setFilter(prev => ({ ...prev, kind: e.target.value as StitchKind }))}
+            value={classificationFilter}
+            onChange={(e) => setClassificationFilter(e.target.value as ConversationFilter)}
             className="stitch-filter-select"
           >
-            <option value="all">All Kinds</option>
+            <option value="all">All Classifications</option>
+            <option value="fleet">Fleet (Workers)</option>
             <option value="operator">Operator</option>
-            <option value="worker">Worker</option>
-            <option value="dictated">Dictated</option>
             <option value="ad-hoc">Ad-hoc</option>
+            <option value="dictated">Dictated</option>
+            <option value="screen-capture">Screen</option>
           </select>
 
           <select
@@ -627,10 +725,10 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
       {filteredItems.length === 0 ? (
         <div className="stitches-empty">
           <p>No stitches found</p>
-          {filter.search || filter.kind !== 'all' || filter.status !== 'all' ? (
+          {filter.search || filter.status !== 'all' ? (
             <button
               className="clear-filters-button"
-              onClick={() => setFilter({ kind: 'all', status: 'all', search: '' })}
+              onClick={() => setFilter({ status: 'all', search: '' })}
             >
               Clear filters
             </button>
@@ -678,7 +776,7 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
                     <span className="meta-label">Last activity:</span>
                     <span className="meta-value">{formatTimeAgo(item.lastActivityAt)} ago</span>
                   </span>
-                  {item.kind !== 'dictated' && (
+                  {item.kind !== 'dictated' && item.kind !== 'screen-capture' && (
                     <span className="meta-item">
                       <span className="meta-label">Messages:</span>
                       <span className="meta-value">{item.messageCount}</span>
@@ -692,6 +790,18 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
                   )}
                   {item.kind === 'dictated' && item.dictatedNote && (
                     <TranscriptionStatusBadge status={item.dictatedNote.transcription_status} />
+                  )}
+                  {item.kind === 'screen-capture' && item.screenCapture?.duration_secs != null && (
+                    <span className="meta-item">
+                      <span className="meta-label">Duration:</span>
+                      <span className="meta-value">{Math.round(item.screenCapture.duration_secs)}s</span>
+                    </span>
+                  )}
+                  {item.kind === 'screen-capture' && item.screenCapture && item.screenCapture.chapter_count > 0 && (
+                    <span className="meta-item">
+                      <span className="meta-label">Chapters:</span>
+                      <span className="meta-value">{item.screenCapture.chapter_count}</span>
+                    </span>
                   )}
                   {item.totalTokens > 0 && (
                     <span className="meta-item">
@@ -730,7 +840,19 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
                   </div>
                 )}
 
-                {isSelected && selectedConv && item.kind !== 'dictated' && (
+                {isSelected && item.kind === 'screen-capture' && item.screenCapture && (
+                  <div className="stitch-detail" onClick={(e) => e.stopPropagation()}>
+                    <div className="stitch-detail-header">
+                      <span className="stitch-detail-id">{item.id}</span>
+                      <span className="stitch-detail-created">
+                        Created {formatTimeAgo(item.createdAt)} ago
+                      </span>
+                    </div>
+                    <ScreenCaptureDetail summary={item.screenCapture} />
+                  </div>
+                )}
+
+                {isSelected && selectedConv && item.kind !== 'dictated' && item.kind !== 'screen-capture' && (
                   <div className="stitch-detail" onClick={(e) => e.stopPropagation()}>
                     <div className="stitch-detail-header">
                       <span className="stitch-detail-id">{item.id}</span>
