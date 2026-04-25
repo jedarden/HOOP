@@ -329,6 +329,62 @@ async fn reload_pricing(
     })))
 }
 
+/// Query parameters for the Codex account daily spend endpoint.
+#[derive(Debug, serde::Deserialize)]
+struct CodexSpendQuery {
+    /// Filter to a specific account_id (optional)
+    account_id: Option<String>,
+    /// Start date inclusive, YYYY-MM-DD (optional)
+    date_from: Option<String>,
+    /// End date inclusive, YYYY-MM-DD (optional)
+    date_to: Option<String>,
+}
+
+/// GET /api/cost/codex-accounts — per-account daily spend rows
+async fn get_codex_account_daily_spend(
+    axum::extract::Query(params): axum::extract::Query<CodexSpendQuery>,
+) -> Result<Json<Vec<fleet::CodexAccountDailySpendRow>>, (axum::http::StatusCode, String)> {
+    tokio::task::spawn_blocking(move || {
+        fleet::query_codex_account_daily_spend(
+            params.account_id.as_deref(),
+            params.date_from.as_deref(),
+            params.date_to.as_deref(),
+        )
+    })
+    .await
+    .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .map(Json)
+    .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
+/// Query parameters for the Codex account monthly rollup endpoint.
+#[derive(Debug, serde::Deserialize)]
+struct CodexMonthlyQuery {
+    /// Filter to a specific account_id (optional)
+    account_id: Option<String>,
+    /// Start month inclusive, YYYY-MM (optional)
+    month_from: Option<String>,
+    /// End month inclusive, YYYY-MM (optional)
+    month_to: Option<String>,
+}
+
+/// GET /api/cost/codex-accounts/monthly — per-account monthly spend rollup
+async fn get_codex_account_monthly_rollup(
+    axum::extract::Query(params): axum::extract::Query<CodexMonthlyQuery>,
+) -> Result<Json<Vec<fleet::CodexAccountMonthlyRollupRow>>, (axum::http::StatusCode, String)> {
+    tokio::task::spawn_blocking(move || {
+        fleet::query_codex_account_monthly_rollup(
+            params.account_id.as_deref(),
+            params.month_from.as_deref(),
+            params.month_to.as_deref(),
+        )
+    })
+    .await
+    .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .map(Json)
+    .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
 /// Query parameters for the file browser endpoint.
 #[derive(serde::Deserialize)]
 struct FilesQuery {
@@ -580,6 +636,8 @@ pub fn router() -> Router<DaemonState> {
         .route("/api/cost/buckets", get(get_cost_buckets))
         .route("/api/cost/buckets/:project", get(get_cost_buckets_by_project))
         .route("/api/cost/reload-pricing", post(reload_pricing))
+        .route("/api/cost/codex-accounts", get(get_codex_account_daily_spend))
+        .route("/api/cost/codex-accounts/monthly", get(get_codex_account_monthly_rollup))
         .route("/api/dashboard/cross-project", get(get_cross_project_dashboard))
         .route("/api/fleet/runtime-status", get(get_runtime_status))
         .route("/api/projects/:project/files", get(get_project_files))
@@ -908,6 +966,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         error!("Failed to reconcile runtimes: {}", e);
                     }
 
+                    // Increment success metric (§17.5)
+                    metrics::metrics().hoop_config_reload_success_total.inc();
+
                     // Audit the successful reload (§17.4)
                     let audit_args = projects::ConfigReloadAudit {
                         file: config.path.display().to_string(),
@@ -1131,7 +1192,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                 name: r.project_name.clone(),
                 label: meta.as_ref().map(|m| m.label.clone()).unwrap_or_else(|| r.project_name.clone()),
                 color: meta.as_ref().map(|m| m.color.clone()).unwrap_or_else(|| "#3b82f6".to_string()),
-                path: r.project_path.display().to_string(),
+                path: r.display_path.display().to_string(),
                 degraded: !r.state.is_running(),
                 runtime_state: Some(r.state.to_display_string().to_string()),
                 runtime_error: r.state.error().map(|e| e.to_string()),
@@ -1452,12 +1513,22 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
             let mut interval = tokio::time::interval(Duration::from_secs(60));
             loop {
                 interval.tick().await;
-                let rows = cost_ref.read().unwrap().get_project_date_rollup();
-                for (project, date, cost_usd, input, output, cache_read, cache_write) in rows {
+                let (project_rows, codex_rows) = {
+                    let agg = cost_ref.read().unwrap();
+                    (agg.get_project_date_rollup(), agg.get_codex_account_date_rollup())
+                };
+                for (project, date, cost_usd, input, output, cache_read, cache_write) in project_rows {
                     if let Err(e) = fleet::snapshot_project_cost_row(
                         &project, &date, cost_usd, input, output, cache_read, cache_write,
                     ) {
                         warn!("fleet: snapshot_project_cost_row failed for {}/{}: {}", project, date, e);
+                    }
+                }
+                for (account_id, date, plan_tier, cost_usd, input, output) in codex_rows {
+                    if let Err(e) = fleet::snapshot_codex_account_daily_spend(
+                        &account_id, &date, &plan_tier, cost_usd, input, output,
+                    ) {
+                        warn!("fleet: snapshot_codex_account_daily_spend failed for {}/{}: {}", account_id, date, e);
                     }
                 }
             }

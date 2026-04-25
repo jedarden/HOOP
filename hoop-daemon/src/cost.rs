@@ -39,6 +39,13 @@ impl ModelPricing {
     }
 }
 
+/// Per-plan-tier pricing overrides for an adapter
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+struct PlanTierPricing {
+    #[serde(default)]
+    models: HashMap<String, ModelPricing>,
+}
+
 /// Adapter pricing configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct AdapterPricing {
@@ -46,6 +53,12 @@ struct AdapterPricing {
     models: HashMap<String, ModelPricing>,
     #[serde(default)]
     default_model: Option<String>,
+    /// Optional per-plan-tier pricing overrides (tier_name → model pricing)
+    #[serde(default)]
+    plan_tiers: Option<HashMap<String, PlanTierPricing>>,
+    /// Optional account-to-tier mapping (account_id → tier_name)
+    #[serde(default)]
+    account_tiers: Option<HashMap<String, String>>,
 }
 
 /// Full pricing configuration
@@ -77,6 +90,10 @@ struct CostBucketKey {
     strand: Option<String>,
     /// Fleet (worker/NEEDLE-tagged) or operator (all others)
     classification: String,
+    /// Account identifier (non-empty for Codex; empty for other adapters)
+    account_id: String,
+    /// Plan tier name (e.g. "tier_1", "tier_2", "free"; empty for non-Codex)
+    plan_tier: String,
 }
 
 /// Usage accumulator for aggregation
@@ -170,6 +187,12 @@ impl CostAggregator {
         // Get date from created_at
         let date = session.created_at.date_naive();
 
+        // Extract account_id from file path for Codex sessions
+        let account_id = Self::extract_account_id(&session.file_path, &session.provider);
+
+        // Resolve plan tier for this account
+        let plan_tier = Self::resolve_plan_tier(&account_id, &session.provider, &self.pricing);
+
         // Create bucket key
         let key = CostBucketKey {
             date,
@@ -178,6 +201,8 @@ impl CostAggregator {
             model,
             strand: strand.clone(),
             classification,
+            account_id,
+            plan_tier,
         };
 
         // Add usage to bucket
@@ -227,6 +252,49 @@ impl CostAggregator {
         }
     }
 
+    /// Extract Codex account identifier from the session file path.
+    ///
+    /// Traverses path ancestors looking for a `.codex` or `.codex-<name>` directory.
+    /// Returns "default" for the primary account and the suffix for named accounts.
+    /// Returns empty string for non-Codex providers.
+    pub fn extract_account_id(file_path: &str, provider: &str) -> String {
+        if provider != "codex" {
+            return String::new();
+        }
+        use std::path::Path;
+        for ancestor in Path::new(file_path).ancestors() {
+            if let Some(name) = ancestor.file_name().and_then(|n| n.to_str()) {
+                if name == ".codex" {
+                    return "default".to_string();
+                }
+                if let Some(suffix) = name.strip_prefix(".codex-") {
+                    if !suffix.is_empty() {
+                        return suffix.to_string();
+                    }
+                }
+            }
+        }
+        "default".to_string()
+    }
+
+    /// Resolve the plan tier name for a Codex account from the pricing config.
+    ///
+    /// Uses the `account_tiers` map in the adapter pricing; falls back to "tier_1".
+    /// Returns empty string for non-Codex providers.
+    fn resolve_plan_tier(account_id: &str, provider: &str, pricing: &PricingConfigInternal) -> String {
+        if provider != "codex" || account_id.is_empty() {
+            return String::new();
+        }
+        if let Some(adapter) = pricing.adapters.get(provider) {
+            if let Some(account_tiers) = &adapter.account_tiers {
+                if let Some(tier) = account_tiers.get(account_id) {
+                    return tier.clone();
+                }
+            }
+        }
+        "tier_1".to_string()
+    }
+
     /// Get default model for an adapter
     fn default_model_for_adapter(adapter: &str) -> String {
         match adapter {
@@ -257,21 +325,35 @@ impl CostAggregator {
         }
     }
 
-    /// Calculate cost for a bucket using pricing config
+    /// Calculate cost for a bucket using pricing config.
+    ///
+    /// For Codex buckets with a non-empty plan_tier the plan-tier pricing table
+    /// is consulted first; the regular adapter/model table is used as fallback.
     fn calculate_cost(&self, key: &CostBucketKey, usage: &UsageAccumulator) -> f64 {
-        // Find pricing for adapter/model
         let adapter_pricing = self.pricing.adapters.get(&key.adapter)
-            .or_else(|| {
-                // Fallback to claude adapter pricing
-                self.pricing.adapters.get("claude")
-            });
+            .or_else(|| self.pricing.adapters.get("claude"));
 
         if let Some(adapter) = adapter_pricing {
+            // Plan-tier override path (Codex only)
+            if !key.plan_tier.is_empty() {
+                if let Some(tiers) = &adapter.plan_tiers {
+                    if let Some(tier) = tiers.get(&key.plan_tier) {
+                        if let Some(mp) = tier.models.get(&key.model) {
+                            return Self::apply_pricing(usage, mp);
+                        }
+                        if let Some(default) = &adapter.default_model {
+                            if let Some(mp) = tier.models.get(default) {
+                                return Self::apply_pricing(usage, mp);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Standard per-model pricing
             if let Some(model_pricing) = adapter.models.get(&key.model) {
                 return Self::apply_pricing(usage, model_pricing);
             }
-
-            // Try default model
             if let Some(default) = &adapter.default_model {
                 if let Some(model_pricing) = adapter.models.get(default) {
                     return Self::apply_pricing(usage, model_pricing);
@@ -279,7 +361,6 @@ impl CostAggregator {
             }
         }
 
-        // Fallback to Claude Opus pricing
         warn!("No pricing found for {}/{} using fallback", key.adapter, key.model);
         Self::fallback_pricing(usage)
     }
@@ -325,6 +406,9 @@ impl CostAggregator {
                 adapter: key.adapter.clone(),
                 model: key.model.clone(),
                 strand: key.strand.clone(),
+                classification: key.classification.clone(),
+                account_id: key.account_id.clone(),
+                plan_tier: key.plan_tier.clone(),
                 usage: usage.to_message_usage(),
                 request_count: usage.request_count,
                 cost_usd: self.calculate_cost(key, usage),
@@ -362,6 +446,31 @@ impl CostAggregator {
             .filter(|(key, _)| key.project == project && key.date == today)
             .map(|(key, usage)| self.calculate_cost(key, usage))
             .sum()
+    }
+
+    /// Return per-(account_id, date, plan_tier) Codex spend rows for persisting to fleet.db.
+    ///
+    /// Only includes buckets where adapter == "codex" and account_id is non-empty.
+    /// Returns (account_id, date, plan_tier, cost_usd, input_tokens, output_tokens).
+    pub fn get_codex_account_date_rollup(&self) -> Vec<(String, String, String, f64, i64, i64)> {
+        let mut map: HashMap<(String, String, String), (f64, i64, i64)> = HashMap::new();
+        for (key, usage) in &self.buckets {
+            if key.adapter != "codex" || key.account_id.is_empty() {
+                continue;
+            }
+            let cost = self.calculate_cost(key, usage);
+            let entry = map
+                .entry((key.account_id.clone(), key.date.to_string(), key.plan_tier.clone()))
+                .or_default();
+            entry.0 += cost;
+            entry.1 += usage.input_tokens;
+            entry.2 += usage.output_tokens;
+        }
+        map.into_iter()
+            .map(|((account_id, date, plan_tier), (cost, input, output))| {
+                (account_id, date, plan_tier, cost, input, output)
+            })
+            .collect()
     }
 
     /// Return per-(project, date) cost rollup rows suitable for persisting to fleet.db.
@@ -409,6 +518,10 @@ pub struct CostBucket {
     /// Fleet (worker/NEEDLE-tagged) or operator (all others). Derived from session kind at
     /// aggregation time; never mutated after the session is classified.
     pub classification: String,
+    /// Account identifier — non-empty for Codex sessions, empty for other adapters.
+    pub account_id: String,
+    /// Plan tier name — non-empty for Codex sessions (e.g. "tier_1"), empty for others.
+    pub plan_tier: String,
     pub usage: hoop_schema::MessageUsage,
     pub request_count: i64,
     pub cost_usd: f64,
@@ -462,6 +575,47 @@ adapters:
         input_per_million: 0.5
         output_per_million: 1.5
     default_model: gpt-4-turbo
+    # Plan-tier pricing overrides: consulted before per-model rates when
+    # an account_tier mapping is present for the account_id.
+    plan_tiers:
+      tier_1:
+        models:
+          gpt-4-turbo:
+            input_per_million: 10.0
+            output_per_million: 30.0
+          gpt-4:
+            input_per_million: 30.0
+            output_per_million: 60.0
+          gpt-3.5-turbo:
+            input_per_million: 0.5
+            output_per_million: 1.5
+      tier_2:
+        models:
+          gpt-4-turbo:
+            input_per_million: 8.0
+            output_per_million: 24.0
+          gpt-4:
+            input_per_million: 24.0
+            output_per_million: 48.0
+          gpt-3.5-turbo:
+            input_per_million: 0.4
+            output_per_million: 1.2
+      free:
+        models:
+          gpt-4-turbo:
+            input_per_million: 0.0
+            output_per_million: 0.0
+          gpt-4:
+            input_per_million: 0.0
+            output_per_million: 0.0
+          gpt-3.5-turbo:
+            input_per_million: 0.0
+            output_per_million: 0.0
+    # account_tiers: maps account_id → plan tier name.
+    # Add entries here to override per-account pricing, e.g.:
+    #   myaccount: tier_2
+    #   work: tier_1
+    account_tiers: {}
   gemini:
     models:
       gemini-2.5-pro:
@@ -539,5 +693,158 @@ mod tests {
         let pricing = PricingConfigInternal::default();
         assert!(pricing.adapters.contains_key("claude"));
         assert!(pricing.adapters.contains_key("codex"));
+    }
+
+    #[test]
+    fn test_extract_account_id_non_codex() {
+        assert_eq!(CostAggregator::extract_account_id("/home/user/.codex/sessions/abc.json", "claude"), "");
+        assert_eq!(CostAggregator::extract_account_id("/home/user/.codex-work/sessions/abc.json", "gemini"), "");
+    }
+
+    #[test]
+    fn test_extract_account_id_default() {
+        assert_eq!(
+            CostAggregator::extract_account_id("/home/user/.codex/sessions/abc.json", "codex"),
+            "default"
+        );
+    }
+
+    #[test]
+    fn test_extract_account_id_named() {
+        assert_eq!(
+            CostAggregator::extract_account_id("/home/user/.codex-work/sessions/abc.json", "codex"),
+            "work"
+        );
+        assert_eq!(
+            CostAggregator::extract_account_id("/home/user/.codex-personal/sessions/abc.json", "codex"),
+            "personal"
+        );
+    }
+
+    #[test]
+    fn test_extract_account_id_fallback() {
+        // Path with no .codex directory falls back to "default"
+        assert_eq!(
+            CostAggregator::extract_account_id("/home/user/projects/myrepo/session.json", "codex"),
+            "default"
+        );
+    }
+
+    #[test]
+    fn test_resolve_plan_tier_non_codex() {
+        let pricing = PricingConfigInternal::default();
+        assert_eq!(CostAggregator::resolve_plan_tier("default", "claude", &pricing), "");
+        assert_eq!(CostAggregator::resolve_plan_tier("default", "gemini", &pricing), "");
+    }
+
+    #[test]
+    fn test_resolve_plan_tier_default_fallback() {
+        let pricing = PricingConfigInternal::default();
+        // "default" account has no explicit mapping → falls back to "tier_1"
+        assert_eq!(CostAggregator::resolve_plan_tier("default", "codex", &pricing), "tier_1");
+        assert_eq!(CostAggregator::resolve_plan_tier("unknown_acct", "codex", &pricing), "tier_1");
+    }
+
+    #[test]
+    fn test_resolve_plan_tier_configured() {
+        let yaml = r#"
+adapters:
+  codex:
+    models:
+      gpt-4-turbo:
+        input_per_million: 10.0
+        output_per_million: 30.0
+    account_tiers:
+      work: tier_2
+      personal: free
+"#;
+        let pricing: PricingConfigInternal = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(CostAggregator::resolve_plan_tier("work", "codex", &pricing), "tier_2");
+        assert_eq!(CostAggregator::resolve_plan_tier("personal", "codex", &pricing), "free");
+        assert_eq!(CostAggregator::resolve_plan_tier("other", "codex", &pricing), "tier_1");
+    }
+
+    #[test]
+    fn test_get_codex_account_date_rollup_empty() {
+        let pricing = PricingConfigInternal::default();
+        let agg = CostAggregator {
+            config_path: std::path::PathBuf::from("/dev/null"),
+            pricing,
+            buckets: HashMap::new(),
+        };
+        assert!(agg.get_codex_account_date_rollup().is_empty());
+    }
+
+    #[test]
+    fn test_get_codex_account_date_rollup_excludes_non_codex() {
+        let pricing = PricingConfigInternal::default();
+        let date = chrono::NaiveDate::from_ymd_opt(2026, 4, 24).unwrap();
+        let mut buckets = HashMap::new();
+        buckets.insert(
+            CostBucketKey {
+                date,
+                project: "proj".to_string(),
+                adapter: "claude".to_string(),
+                model: "sonnet".to_string(),
+                strand: None,
+                classification: "operator".to_string(),
+                account_id: String::new(),
+                plan_tier: String::new(),
+            },
+            UsageAccumulator { input_tokens: 1000, output_tokens: 500, ..Default::default() },
+        );
+        let agg = CostAggregator {
+            config_path: std::path::PathBuf::from("/dev/null"),
+            pricing,
+            buckets,
+        };
+        assert!(agg.get_codex_account_date_rollup().is_empty(), "non-codex buckets should be excluded");
+    }
+
+    #[test]
+    fn test_get_codex_account_date_rollup_aggregates_by_account_date_tier() {
+        let pricing = PricingConfigInternal::default();
+        let date = chrono::NaiveDate::from_ymd_opt(2026, 4, 24).unwrap();
+        let mut buckets = HashMap::new();
+        // Two buckets for same (account, date, tier) but different models — should merge
+        buckets.insert(
+            CostBucketKey {
+                date,
+                project: "proj1".to_string(),
+                adapter: "codex".to_string(),
+                model: "gpt-4-turbo".to_string(),
+                strand: None,
+                classification: "operator".to_string(),
+                account_id: "work".to_string(),
+                plan_tier: "tier_2".to_string(),
+            },
+            UsageAccumulator { input_tokens: 100_000, output_tokens: 50_000, request_count: 5, ..Default::default() },
+        );
+        buckets.insert(
+            CostBucketKey {
+                date,
+                project: "proj2".to_string(),
+                adapter: "codex".to_string(),
+                model: "gpt-4".to_string(),
+                strand: None,
+                classification: "fleet".to_string(),
+                account_id: "work".to_string(),
+                plan_tier: "tier_2".to_string(),
+            },
+            UsageAccumulator { input_tokens: 50_000, output_tokens: 25_000, request_count: 2, ..Default::default() },
+        );
+        let agg = CostAggregator {
+            config_path: std::path::PathBuf::from("/dev/null"),
+            pricing,
+            buckets,
+        };
+        let rows = agg.get_codex_account_date_rollup();
+        assert_eq!(rows.len(), 1, "two buckets for same (account, date, tier) should merge into one row");
+        let (account_id, date_str, plan_tier, _cost, input, output) = &rows[0];
+        assert_eq!(account_id, "work");
+        assert_eq!(date_str, "2026-04-24");
+        assert_eq!(plan_tier, "tier_2");
+        assert_eq!(*input, 150_000);
+        assert_eq!(*output, 75_000);
     }
 }

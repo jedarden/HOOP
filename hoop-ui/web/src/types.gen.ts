@@ -308,9 +308,13 @@ export interface ParsedSession {
    */
   kind: Worker | "dictated" | "ad_hoc" | "operator";
   /**
-   * Working directory when session was created
+   * Working directory when session was created (raw, for display)
    */
   cwd: string;
+  /**
+   * Realpath-resolved cwd (for joins and dedup). Empty string if resolution failed.
+   */
+  canonical_cwd?: string;
   /**
    * Session title
    */
@@ -766,6 +770,10 @@ export interface UiState {
   filters?: {
     bead_status?: ("open" | "closed")[];
     stitch_kind?: ("operator" | "dictated" | "worker" | "ad-hoc")[];
+    /**
+     * Persisted conversation-pane filter — fleet vs ad-hoc vs all
+     */
+    conversation_filter?: "all" | "fleet" | "operator" | "ad-hoc" | "dictated";
     show_archived?: boolean;
     [k: string]: unknown;
   };
@@ -1195,6 +1203,10 @@ export interface CostBucket {
    */
   strand: string | null;
   /**
+   * Fleet (NEEDLE worker session) or operator (all others). Set at aggregation time; never mutated.
+   */
+  classification?: "fleet" | "operator";
+  /**
    * Aggregate token usage
    */
   usage: {
@@ -1491,6 +1503,10 @@ export interface Stitch {
    * Pattern ID if this stitch belongs to a pattern
    */
   pattern_id?: string | null;
+  /**
+   * Fleet (worker/NEEDLE-tagged session) or operator (all others). Set at Stitch creation time and never changed.
+   */
+  classification?: "fleet" | "operator";
   schema_version: string;
   [k: string]: unknown;
 }
@@ -1805,5 +1821,73 @@ export interface ProjectConfigStatus {
     col: number;
     [k: string]: unknown;
   };
+  [k: string]: unknown;
+}
+
+
+/**
+ * Per-account daily spend row from codex_account_daily_spend (§6 Phase 2 §10)
+ */
+export interface CodexAccountDailySpendRow {
+  /**
+   * Codex account identifier (e.g. 'default', 'work', 'personal')
+   */
+  account_id: string;
+  /**
+   * Date in YYYY-MM-DD format
+   */
+  date: string;
+  /**
+   * Plan tier name (e.g. 'tier_1', 'tier_2', 'free')
+   */
+  plan_tier: string;
+  /**
+   * Total spend in USD for this account on this date
+   */
+  cost_usd: number;
+  /**
+   * Total input tokens consumed
+   */
+  input_tokens: number;
+  /**
+   * Total output tokens generated
+   */
+  output_tokens: number;
+  /**
+   * RFC-3339 timestamp of last snapshot write
+   */
+  updated_at: string;
+  [k: string]: unknown;
+}
+
+
+/**
+ * Per-account monthly spend rollup aggregated from codex_account_daily_spend (§6 Phase 2 §10)
+ */
+export interface CodexAccountMonthlyRollupRow {
+  /**
+   * Codex account identifier (e.g. 'default', 'work', 'personal')
+   */
+  account_id: string;
+  /**
+   * Month in YYYY-MM format
+   */
+  month: string;
+  /**
+   * Most recent plan tier seen for this account in this month
+   */
+  plan_tier: string;
+  /**
+   * Total spend in USD for this account in this month
+   */
+  cost_usd: number;
+  /**
+   * Total input tokens consumed in this month
+   */
+  input_tokens: number;
+  /**
+   * Total output tokens generated in this month
+   */
+  output_tokens: number;
   [k: string]: unknown;
 }

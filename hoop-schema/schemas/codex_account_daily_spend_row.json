@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/codex_account_daily_spend_row.json",
+  "title": "CodexAccountDailySpendRow",
+  "description": "Per-account daily spend row from codex_account_daily_spend (§6 Phase 2 §10)",
+  "type": "object",
+  "required": ["account_id", "date", "plan_tier", "cost_usd", "input_tokens", "output_tokens", "updated_at"],
+  "properties": {
+    "account_id": {
+      "type": "string",
+      "description": "Codex account identifier (e.g. 'default', 'work', 'personal')"
+    },
+    "date": {
+      "type": "string",
+      "description": "Date in YYYY-MM-DD format"
+    },
+    "plan_tier": {
+      "type": "string",
+      "description": "Plan tier name (e.g. 'tier_1', 'tier_2', 'free')"
+    },
+    "cost_usd": {
+      "type": "number",
+      "description": "Total spend in USD for this account on this date"
+    },
+    "input_tokens": {
+      "type": "integer",
+      "description": "Total input tokens consumed"
+    },
+    "output_tokens": {
+      "type": "integer",
+      "description": "Total output tokens generated"
+    },
+    "updated_at": {
+      "type": "string",
+      "description": "RFC-3339 timestamp of last snapshot write"
+    }
+  },
+  "schema_version": "1.0.0"
+}

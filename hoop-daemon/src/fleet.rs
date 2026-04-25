@@ -21,7 +21,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 /// Current schema version
-pub const SCHEMA_VERSION: &str = "1.14.0";
+pub const SCHEMA_VERSION: &str = "1.15.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -625,6 +625,8 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v112_to_v113(conn)?;
             // Fall through to 1.14.0
             migrate_v113_to_v114(conn)?;
+            // Fall through to 1.15.0
+            migrate_v114_to_v115(conn)?;
         }
         "1.1.0" => {
             migrate_v11_to_v12(conn)?;
@@ -640,6 +642,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
+            migrate_v114_to_v115(conn)?;
         }
         "1.2.0" => {
             migrate_v12_to_v13(conn)?;
@@ -654,6 +657,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
+            migrate_v114_to_v115(conn)?;
         }
         "1.3.0" => {
             migrate_v13_to_v14(conn)?;
@@ -667,6 +671,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
+            migrate_v114_to_v115(conn)?;
         }
         "1.4.0" => {
             migrate_v14_to_v15(conn)?;
@@ -679,6 +684,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
+            migrate_v114_to_v115(conn)?;
         }
         "1.5.0" => {
             migrate_v15_to_v16(conn)?;
@@ -690,6 +696,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
+            migrate_v114_to_v115(conn)?;
         }
         "1.6.0" => {
             migrate_v16_to_v17(conn)?;
@@ -700,6 +707,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
+            migrate_v114_to_v115(conn)?;
         }
         "1.7.0" => {
             migrate_v17_to_v18(conn)?;
@@ -709,6 +717,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
+            migrate_v114_to_v115(conn)?;
         }
         "1.8.0" => {
             migrate_v18_to_v19(conn)?;
@@ -717,6 +726,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
+            migrate_v114_to_v115(conn)?;
         }
         "1.9.0" => {
             migrate_v19_to_v110(conn)?;
@@ -724,31 +734,39 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
+            migrate_v114_to_v115(conn)?;
         }
         "1.10.0" => {
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
+            migrate_v114_to_v115(conn)?;
         }
         "1.11.0" => {
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
+            migrate_v114_to_v115(conn)?;
         }
         "1.12.0" => {
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
+            migrate_v114_to_v115(conn)?;
         }
         "1.13.0" => {
             migrate_v113_to_v114(conn)?;
+            migrate_v114_to_v115(conn)?;
         }
         "1.14.0" => {
-            info!("Already at schema version 1.14.0, no migrations needed");
+            migrate_v114_to_v115(conn)?;
+        }
+        "1.15.0" => {
+            info!("Already at schema version 1.15.0, no migrations needed");
         }
         _ => {
             return Err(anyhow::anyhow!(
-                "Unsupported schema version: {}. Expected 0.1.0–1.13.0",
+                "Unsupported schema version: {}. Expected 0.1.0–1.14.0",
                 from_version
             ));
         }
@@ -1528,6 +1546,37 @@ fn migrate_v113_to_v114(conn: &mut Connection) -> Result<()> {
     )?;
 
     update_schema_version(conn, "1.14.0")?;
+    Ok(())
+}
+
+/// Migration 1.14.0 → 1.15.0: Add codex_account_daily_spend table (§6 Phase 2 §10)
+///
+/// Creates a per-(account_id, date) spend table for Codex sessions, enabling
+/// daily spend buckets and monthly rollups with plan-aware pricing tiers.
+fn migrate_v114_to_v115(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.14.0 → 1.15.0: Adding codex_account_daily_spend table");
+
+    conn.execute(
+        r#"CREATE TABLE IF NOT EXISTS codex_account_daily_spend (
+            account_id     TEXT NOT NULL,
+            date           TEXT NOT NULL,
+            plan_tier      TEXT NOT NULL DEFAULT 'tier_1',
+            cost_usd       REAL NOT NULL DEFAULT 0.0,
+            input_tokens   INTEGER NOT NULL DEFAULT 0,
+            output_tokens  INTEGER NOT NULL DEFAULT 0,
+            updated_at     TEXT NOT NULL,
+            PRIMARY KEY (account_id, date)
+        )"#,
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_codex_acct_spend_date \
+         ON codex_account_daily_spend(date DESC, account_id)",
+        [],
+    )?;
+
+    update_schema_version(conn, "1.15.0")?;
     Ok(())
 }
 
@@ -2438,6 +2487,32 @@ pub struct CapacityRollupRow {
     pub cost_7d_usd: f64,
 }
 
+/// A row from the `codex_account_daily_spend` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodexAccountDailySpendRow {
+    pub account_id: String,
+    pub date: String,
+    pub plan_tier: String,
+    pub cost_usd: f64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub updated_at: String,
+}
+
+/// A monthly rollup row aggregated from `codex_account_daily_spend`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CodexAccountMonthlyRollupRow {
+    /// Account identifier
+    pub account_id: String,
+    /// Month in YYYY-MM format
+    pub month: String,
+    /// Plan tier (most-recently-seen tier for this account/month)
+    pub plan_tier: String,
+    pub cost_usd: f64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+}
+
 /// A row from the `collision_index` table.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CollisionIndexEntry {
@@ -2766,6 +2841,131 @@ fn snapshot_project_cost_row_conn(
         ],
     )?;
     Ok(())
+}
+
+/// Snapshot Codex account daily spend into `codex_account_daily_spend` for a given (account_id, date).
+///
+/// Replaces the existing row with the caller's current totals (snapshot semantics).
+/// The `CostAggregator` owns the authoritative in-memory state and calls this periodically.
+pub fn snapshot_codex_account_daily_spend(
+    account_id: &str,
+    date: &str,
+    plan_tier: &str,
+    cost_usd: f64,
+    input_tokens: i64,
+    output_tokens: i64,
+) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    snapshot_codex_account_daily_spend_conn(&conn, account_id, date, plan_tier, cost_usd, input_tokens, output_tokens)
+}
+
+fn snapshot_codex_account_daily_spend_conn(
+    conn: &Connection,
+    account_id: &str,
+    date: &str,
+    plan_tier: &str,
+    cost_usd: f64,
+    input_tokens: i64,
+    output_tokens: i64,
+) -> Result<()> {
+    let updated_at = Utc::now().to_rfc3339();
+    conn.execute(
+        r#"INSERT OR REPLACE INTO codex_account_daily_spend
+           (account_id, date, plan_tier, cost_usd, input_tokens, output_tokens, updated_at)
+           VALUES (?1,?2,?3,?4,?5,?6,?7)"#,
+        params![account_id, date, plan_tier, cost_usd, input_tokens, output_tokens, updated_at],
+    )?;
+    Ok(())
+}
+
+/// Query `codex_account_daily_spend` rows with optional filters.
+///
+/// All parameters are optional — pass `None` to leave them open-ended.
+pub fn query_codex_account_daily_spend(
+    account_id: Option<&str>,
+    date_from: Option<&str>,
+    date_to: Option<&str>,
+) -> Result<Vec<CodexAccountDailySpendRow>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    query_codex_account_daily_spend_conn(&conn, account_id, date_from, date_to)
+}
+
+fn query_codex_account_daily_spend_conn(
+    conn: &Connection,
+    account_id: Option<&str>,
+    date_from: Option<&str>,
+    date_to: Option<&str>,
+) -> Result<Vec<CodexAccountDailySpendRow>> {
+    let sql = "SELECT account_id, date, plan_tier, cost_usd, input_tokens, output_tokens, updated_at
+               FROM codex_account_daily_spend
+               WHERE (?1 IS NULL OR account_id = ?1)
+                 AND (?2 IS NULL OR date >= ?2)
+                 AND (?3 IS NULL OR date <= ?3)
+               ORDER BY date DESC, account_id";
+    let mut stmt = conn.prepare(sql)?;
+    let rows = stmt.query_map(params![account_id, date_from, date_to], |row| {
+        Ok(CodexAccountDailySpendRow {
+            account_id: row.get(0)?,
+            date: row.get(1)?,
+            plan_tier: row.get(2)?,
+            cost_usd: row.get(3)?,
+            input_tokens: row.get(4)?,
+            output_tokens: row.get(5)?,
+            updated_at: row.get(6)?,
+        })
+    })?;
+    rows.collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(|e| anyhow::anyhow!("Failed to query codex_account_daily_spend: {}", e))
+}
+
+/// Query per-(account_id, month) rollup from `codex_account_daily_spend`.
+///
+/// Groups daily rows by `strftime('%Y-%m', date)`. Pass `None` for open-ended bounds.
+/// Returns rows ordered by month DESC then account_id.
+pub fn query_codex_account_monthly_rollup(
+    account_id: Option<&str>,
+    month_from: Option<&str>,
+    month_to: Option<&str>,
+) -> Result<Vec<CodexAccountMonthlyRollupRow>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    query_codex_account_monthly_rollup_conn(&conn, account_id, month_from, month_to)
+}
+
+fn query_codex_account_monthly_rollup_conn(
+    conn: &Connection,
+    account_id: Option<&str>,
+    month_from: Option<&str>,
+    month_to: Option<&str>,
+) -> Result<Vec<CodexAccountMonthlyRollupRow>> {
+    // plan_tier: take the most recent tier seen for each (account_id, month) pair
+    let sql = "SELECT account_id,
+                      strftime('%Y-%m', date) AS month,
+                      plan_tier,
+                      SUM(cost_usd) AS cost_usd,
+                      SUM(input_tokens) AS input_tokens,
+                      SUM(output_tokens) AS output_tokens
+               FROM codex_account_daily_spend
+               WHERE (?1 IS NULL OR account_id = ?1)
+                 AND (?2 IS NULL OR strftime('%Y-%m', date) >= ?2)
+                 AND (?3 IS NULL OR strftime('%Y-%m', date) <= ?3)
+               GROUP BY account_id, strftime('%Y-%m', date), plan_tier
+               ORDER BY month DESC, account_id";
+    let mut stmt = conn.prepare(sql)?;
+    let rows = stmt.query_map(params![account_id, month_from, month_to], |row| {
+        Ok(CodexAccountMonthlyRollupRow {
+            account_id: row.get(0)?,
+            month: row.get(1)?,
+            plan_tier: row.get(2)?,
+            cost_usd: row.get(3)?,
+            input_tokens: row.get(4)?,
+            output_tokens: row.get(5)?,
+        })
+    })?;
+    rows.collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(|e| anyhow::anyhow!("Failed to query codex account monthly rollup: {}", e))
 }
 
 /// Upsert a capacity_rollup row (full replacement — snapshots, not accumulators).
@@ -4767,6 +4967,143 @@ mod tests {
         )?;
         assert_eq!(hits2.len(), 1);
         assert_eq!(hits2[0].bead_id, "bead-P2");
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // §6 Phase 2 §10 — codex_account_daily_spend CRUD tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_codex_account_daily_spend_table_created() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='codex_account_daily_spend'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(count, 1, "codex_account_daily_spend table should exist");
+        Ok(())
+    }
+
+    #[test]
+    fn test_codex_account_daily_spend_snapshot_and_query() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-04-24", "tier_1", 1.50, 100_000, 50_000)?;
+
+        let rows = query_codex_account_daily_spend_conn(&conn, None, None, None)?;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].account_id, "default");
+        assert_eq!(rows[0].date, "2026-04-24");
+        assert_eq!(rows[0].plan_tier, "tier_1");
+        assert!((rows[0].cost_usd - 1.50).abs() < 1e-9);
+        assert_eq!(rows[0].input_tokens, 100_000);
+        assert_eq!(rows[0].output_tokens, 50_000);
+        Ok(())
+    }
+
+    #[test]
+    fn test_codex_account_daily_spend_snapshot_replaces() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        snapshot_codex_account_daily_spend_conn(&conn, "work", "2026-04-24", "tier_2", 1.00, 80_000, 40_000)?;
+        // Overwrite with updated totals
+        snapshot_codex_account_daily_spend_conn(&conn, "work", "2026-04-24", "tier_2", 2.00, 160_000, 80_000)?;
+
+        let rows = query_codex_account_daily_spend_conn(&conn, Some("work"), None, None)?;
+        assert_eq!(rows.len(), 1, "snapshot should replace, not accumulate");
+        assert!((rows[0].cost_usd - 2.00).abs() < 1e-9);
+        assert_eq!(rows[0].input_tokens, 160_000);
+        Ok(())
+    }
+
+    #[test]
+    fn test_codex_account_daily_spend_date_range_filter() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-04-01", "tier_1", 0.10, 1000, 500)?;
+        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-04-15", "tier_1", 0.20, 2000, 1000)?;
+        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-04-24", "tier_1", 0.30, 3000, 1500)?;
+
+        let all = query_codex_account_daily_spend_conn(&conn, None, None, None)?;
+        assert_eq!(all.len(), 3);
+
+        let mid = query_codex_account_daily_spend_conn(&conn, None, Some("2026-04-10"), Some("2026-04-20"))?;
+        assert_eq!(mid.len(), 1);
+        assert_eq!(mid[0].date, "2026-04-15");
+
+        let from = query_codex_account_daily_spend_conn(&conn, None, Some("2026-04-15"), None)?;
+        assert_eq!(from.len(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn test_codex_account_daily_spend_account_filter() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-04-24", "tier_1", 1.00, 10000, 5000)?;
+        snapshot_codex_account_daily_spend_conn(&conn, "work", "2026-04-24", "tier_2", 2.00, 20000, 10000)?;
+        snapshot_codex_account_daily_spend_conn(&conn, "personal", "2026-04-24", "free", 0.00, 5000, 2500)?;
+
+        let all = query_codex_account_daily_spend_conn(&conn, None, None, None)?;
+        assert_eq!(all.len(), 3);
+
+        let work_only = query_codex_account_daily_spend_conn(&conn, Some("work"), None, None)?;
+        assert_eq!(work_only.len(), 1);
+        assert_eq!(work_only[0].account_id, "work");
+        assert_eq!(work_only[0].plan_tier, "tier_2");
+        Ok(())
+    }
+
+    #[test]
+    fn test_codex_account_monthly_rollup() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        // April data for "default" (tier_1)
+        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-04-01", "tier_1", 0.50, 5000, 2500)?;
+        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-04-15", "tier_1", 0.75, 7500, 3750)?;
+        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-04-24", "tier_1", 1.00, 10000, 5000)?;
+        // March data for "default"
+        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-03-31", "tier_1", 0.25, 2500, 1250)?;
+        // April data for "work" (tier_2)
+        snapshot_codex_account_daily_spend_conn(&conn, "work", "2026-04-20", "tier_2", 2.00, 20000, 10000)?;
+
+        let all = query_codex_account_monthly_rollup_conn(&conn, None, None, None)?;
+        // Expect: default/2026-04, default/2026-03, work/2026-04
+        assert_eq!(all.len(), 3);
+
+        // default April should aggregate 3 days
+        let default_april = all.iter().find(|r| r.account_id == "default" && r.month == "2026-04").unwrap();
+        assert!((default_april.cost_usd - 2.25).abs() < 1e-9);
+        assert_eq!(default_april.input_tokens, 22500);
+        assert_eq!(default_april.output_tokens, 11250);
+
+        // default March should have one row
+        let default_march = all.iter().find(|r| r.account_id == "default" && r.month == "2026-03").unwrap();
+        assert!((default_march.cost_usd - 0.25).abs() < 1e-9);
+
+        // work April
+        let work_april = all.iter().find(|r| r.account_id == "work" && r.month == "2026-04").unwrap();
+        assert_eq!(work_april.plan_tier, "tier_2");
+        assert!((work_april.cost_usd - 2.00).abs() < 1e-9);
+        Ok(())
+    }
+
+    #[test]
+    fn test_codex_account_monthly_rollup_month_filter() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-02-15", "tier_1", 0.10, 1000, 500)?;
+        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-03-15", "tier_1", 0.20, 2000, 1000)?;
+        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-04-15", "tier_1", 0.30, 3000, 1500)?;
+
+        let only_march_onward = query_codex_account_monthly_rollup_conn(&conn, None, Some("2026-03"), None)?;
+        assert_eq!(only_march_onward.len(), 2);
+
+        let only_march = query_codex_account_monthly_rollup_conn(&conn, None, Some("2026-03"), Some("2026-03"))?;
+        assert_eq!(only_march.len(), 1);
+        assert_eq!(only_march[0].month, "2026-03");
         Ok(())
     }
 }

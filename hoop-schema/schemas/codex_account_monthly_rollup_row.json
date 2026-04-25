@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/codex_account_monthly_rollup_row.json",
+  "title": "CodexAccountMonthlyRollupRow",
+  "description": "Per-account monthly spend rollup aggregated from codex_account_daily_spend (§6 Phase 2 §10)",
+  "type": "object",
+  "required": ["account_id", "month", "plan_tier", "cost_usd", "input_tokens", "output_tokens"],
+  "properties": {
+    "account_id": {
+      "type": "string",
+      "description": "Codex account identifier (e.g. 'default', 'work', 'personal')"
+    },
+    "month": {
+      "type": "string",
+      "description": "Month in YYYY-MM format"
+    },
+    "plan_tier": {
+      "type": "string",
+      "description": "Most recent plan tier seen for this account in this month"
+    },
+    "cost_usd": {
+      "type": "number",
+      "description": "Total spend in USD for this account in this month"
+    },
+    "input_tokens": {
+      "type": "integer",
+      "description": "Total input tokens consumed in this month"
+    },
+    "output_tokens": {
+      "type": "integer",
+      "description": "Total output tokens generated in this month"
+    }
+  },
+  "schema_version": "1.0.0"
+}

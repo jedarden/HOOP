@@ -26,6 +26,11 @@
       "type": ["string", "null"],
       "description": "Strand name (pluck, explore, etc.), null if not applicable"
     },
+    "classification": {
+      "type": "string",
+      "enum": ["fleet", "operator"],
+      "description": "Fleet (NEEDLE worker session) or operator (all others). Set at aggregation time; never mutated."
+    },
     "usage": {
       "$ref": "message_usage.json",
       "description": "Aggregate token usage"

@@ -58,6 +58,12 @@
             "enum": ["operator", "dictated", "worker", "ad-hoc"]
           }
         },
+        "conversation_filter": {
+          "type": "string",
+          "enum": ["all", "fleet", "operator", "ad-hoc", "dictated"],
+          "default": "all",
+          "description": "Persisted conversation-pane filter — fleet vs ad-hoc vs all"
+        },
         "show_archived": {
           "type": "boolean",
           "default": false
