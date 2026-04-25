@@ -62,6 +62,7 @@ pub mod vector_index;
 pub mod morning_brief;
 pub mod api_morning_brief;
 pub mod redaction;
+pub mod worker_ack;
 
 /// Worker execution state from heartbeats
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -242,6 +243,8 @@ pub struct DaemonState {
     pub resolved_config: Arc<ResolvedConfig>,
     /// Per-connection WS client registry for /debug/state (§16.8)
     pub ws_connection_tracker: Arc<ws::WsConnectionTracker>,
+    /// Spawn-ack monitor — verifies workers wrote ~/.hoop/workers/<name>.ack (§M5)
+    pub worker_ack_monitor: Arc<worker_ack::WorkerAckMonitor>,
 }
 
 /// Health check endpoint handler — returns 200 if the process is responsive.
@@ -598,6 +601,12 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     heartbeat_monitor.start()?;
     let heartbeat_tx = heartbeat_monitor.sender();
 
+    // Initialize worker spawn-ack monitor (§M5)
+    let mut worker_ack_monitor = worker_ack::WorkerAckMonitor::new()?;
+    worker_ack_monitor.start()?;
+    let worker_ack_monitor = Arc::new(worker_ack_monitor);
+    info!("Worker ack monitor started");
+
     // Initialize session event broadcast channel
     let (session_tx, _) = broadcast::channel::<sessions::SessionEvent>(256);
 
@@ -833,12 +842,15 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
 
     // Spawn task to process heartbeat events and update registry
     let registry_clone = worker_registry.clone();
+    let ack_monitor_clone = worker_ack_monitor.clone();
     tokio::spawn(async move {
         use heartbeats::MonitorEvent;
         let mut rx = registry_clone.subscribe();
         while let Ok(event) = rx.recv().await {
             match event {
                 MonitorEvent::Heartbeat(hb) => {
+                    // Notify ack monitor so it can track first-seen and fire §M5 alerts.
+                    ack_monitor_clone.on_heartbeat(&hb.worker, hb.ts);
                     let liveness = registry_clone
                         .snapshot()
                         .await
@@ -1049,6 +1061,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         draft_tx: broadcast::channel::<ws::DraftUpdateData>(64).0,
         resolved_config,
         ws_connection_tracker: Arc::new(ws::WsConnectionTracker::new()),
+        worker_ack_monitor,
     };
 
     // Forward project runtime status updates to shared store and broadcast

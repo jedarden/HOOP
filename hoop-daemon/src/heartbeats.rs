@@ -412,7 +412,7 @@ impl HeartbeatMonitor {
     /// Returns `None` for empty/quarantined lines, `Some(hb)` on success.
     /// Additional validation failures (bad timestamp, invalid worker name) also
     /// quarantine the line.
-    fn parse_heartbeat_line(line: &str, source: &crate::parse_jsonl_safe::LineSource) -> Option<WorkerHeartbeat> {
+    pub fn parse_heartbeat_line(line: &str, source: &crate::parse_jsonl_safe::LineSource) -> Option<WorkerHeartbeat> {
         #[derive(Debug, Deserialize)]
         struct HeartbeatRaw {
             ts: String,

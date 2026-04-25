@@ -372,6 +372,15 @@ pub struct ConfigErrorData {
     pub line: usize,
     /// Column number where the error occurred (1-indexed)
     pub col: usize,
+    /// Dotted path to the offending field (e.g. "projects[].name")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub field: Option<String>,
+    /// What was expected (e.g. "string", "field present")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expected: Option<String>,
+    /// What was actually found (e.g. "integer", "missing")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub got: Option<String>,
 }
 
 /// Configuration status
@@ -485,6 +494,8 @@ pub struct WsEvent {
     pub morning_brief: Option<MorningBriefData>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub draft_update: Option<DraftUpdateData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spawn_ack_alert: Option<crate::worker_ack::SpawnAckAlert>,
 }
 
 impl WsEvent {
@@ -507,6 +518,7 @@ impl WsEvent {
             agent_session: None,
             morning_brief: None,
             draft_update: None,
+            spawn_ack_alert: None,
         }
     }
 
@@ -529,6 +541,7 @@ impl WsEvent {
             agent_session: None,
             morning_brief: None,
             draft_update: None,
+            spawn_ack_alert: None,
         }
     }
 
@@ -551,6 +564,7 @@ impl WsEvent {
             agent_session: None,
             morning_brief: None,
             draft_update: None,
+            spawn_ack_alert: None,
         }
     }
 
@@ -573,6 +587,7 @@ impl WsEvent {
             agent_session: None,
             morning_brief: None,
             draft_update: None,
+            spawn_ack_alert: None,
         }
     }
 
@@ -596,6 +611,7 @@ impl WsEvent {
             agent_session: None,
             morning_brief: None,
             draft_update: None,
+            spawn_ack_alert: None,
         }
     }
 
@@ -619,6 +635,7 @@ impl WsEvent {
             agent_session: None,
             morning_brief: None,
             draft_update: None,
+            spawn_ack_alert: None,
         }
     }
 
@@ -641,6 +658,7 @@ impl WsEvent {
             agent_session: None,
             morning_brief: None,
             draft_update: None,
+            spawn_ack_alert: None,
         }
     }
 
@@ -663,6 +681,7 @@ impl WsEvent {
             agent_session: None,
             morning_brief: None,
             draft_update: None,
+            spawn_ack_alert: None,
         }
     }
 
@@ -685,6 +704,7 @@ impl WsEvent {
             agent_session: None,
             morning_brief: None,
             draft_update: None,
+            spawn_ack_alert: None,
         }
     }
 
@@ -707,6 +727,7 @@ impl WsEvent {
             agent_session: None,
             morning_brief: None,
             draft_update: None,
+            spawn_ack_alert: None,
         }
     }
 
@@ -729,6 +750,7 @@ impl WsEvent {
             agent_session: None,
             morning_brief: None,
             draft_update: None,
+            spawn_ack_alert: None,
         }
     }
 
@@ -751,6 +773,7 @@ impl WsEvent {
             agent_session: None,
             morning_brief: None,
             draft_update: None,
+            spawn_ack_alert: None,
         }
     }
 
@@ -773,6 +796,7 @@ impl WsEvent {
             agent_session: Some(event),
             morning_brief: None,
             draft_update: None,
+            spawn_ack_alert: None,
         }
     }
 
@@ -795,6 +819,30 @@ impl WsEvent {
             agent_session: None,
             morning_brief: Some(data),
             draft_update: None,
+            spawn_ack_alert: None,
+        }
+    }
+
+    /// Create a spawn_ack_alert event for a missing-ack condition (§M5)
+    pub fn spawn_ack_alert_event(alert: crate::worker_ack::SpawnAckAlert) -> Self {
+        Self {
+            event_type: "spawn_ack_alert".to_string(),
+            worker: None,
+            workers: None,
+            beads: None,
+            conversations: None,
+            conversation: None,
+            streaming: None,
+            projects: None,
+            config_status: None,
+            capacity: None,
+            bead_event: None,
+            bead_events: None,
+            stitch_created: None,
+            agent_session: None,
+            morning_brief: None,
+            draft_update: None,
+            spawn_ack_alert: Some(alert),
         }
     }
 
@@ -817,6 +865,7 @@ impl WsEvent {
             agent_session: None,
             morning_brief: None,
             draft_update: Some(data),
+            spawn_ack_alert: None,
         }
     }
 }
@@ -1322,6 +1371,30 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
                     debug!("Morning brief broadcast lagged by {}, continuing", n);
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+
+    // Spawn task to forward spawn-ack alerts (§M5) to the WebSocket
+    let ws_tx_ack = ws_tx.clone();
+    let _ack_task = tokio::spawn(async move {
+        let mut ack_rx = state.worker_ack_monitor.subscribe();
+        loop {
+            match ack_rx.recv().await {
+                Ok(crate::worker_ack::AckEvent::MissingAck(alert)) => {
+                    if let Ok(json) =
+                        serde_json::to_string(&WsEvent::spawn_ack_alert_event(alert))
+                    {
+                        let _ = ws_tx_ack.send(json).await;
+                    }
+                }
+                Ok(crate::worker_ack::AckEvent::AckReceived(_)) => {
+                    // Ack receipt is informational; no WS event needed.
+                }
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    debug!("Ack monitor broadcast lagged by {}, continuing", n);
                 }
                 Err(broadcast::error::RecvError::Closed) => break,
             }

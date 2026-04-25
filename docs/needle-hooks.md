@@ -129,7 +129,80 @@ Daemon-only tests (REST API integration):
 - `test_stitch_label_inheritance_no_duplicates` — duplicate labels not added twice
 - `test_stitch_label_inheritance_no_stitch_labels` — non-stitch parent leaves labels unchanged
 
+## Hook 5: Spawn Ack (§M5)
+
+Every NEEDLE worker must write a spawn-ack file at boot to prove it started
+successfully.  HOOP verifies the ack within a 10-second grace window; absence
+triggers a `MissingAck` alert surfaced on the WebSocket and in metrics.
+
+### Why
+
+`tmux send-keys` can silently truncate payloads longer than ~255 bytes.  The
+spawn command appears to succeed while the worker never actually starts.
+Heartbeats alone cannot catch this: a non-started worker emits no heartbeats,
+so HOOP would simply see silence — with no way to distinguish "not yet started"
+from "spawn failed".  The ack provides a positive confirmation of startup.
+
+### Ack file
+
+- **Location:** `~/.hoop/workers/<worker-name>.ack`
+- **Format:** single JSON object, one line:
+
+```json
+{"worker":"alpha","ts":"2026-04-24T10:00:00Z","pid":12345}
+```
+
+### NEEDLE boot hook
+
+Run this at the very start of each worker's boot sequence (before the heartbeat
+loop begins):
+
+```sh
+mkdir -p ~/.hoop/workers
+printf '{"worker":"%s","ts":"%s","pid":%d}\n' \
+    "$NEEDLE_WORKER" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$" \
+    > ~/.hoop/workers/${NEEDLE_WORKER}.ack.tmp
+mv ~/.hoop/workers/${NEEDLE_WORKER}.ack.tmp \
+   ~/.hoop/workers/${NEEDLE_WORKER}.ack
+```
+
+The `.tmp` + rename pattern ensures HOOP never reads a partial file.
+
+### HOOP side
+
+`WorkerAckMonitor` (`hoop-daemon/src/worker_ack.rs`) watches
+`~/.hoop/workers/` for `.ack` files using the `notify` crate.
+
+- **Pre-existing acks** are loaded on daemon startup (handles daemon restarts
+  where workers are already running).
+- **Grace window:** 10 seconds from the worker's first observed heartbeat.
+- **Missing-ack alert:** if a worker heartbeats for ≥ 10 s with no ack file,
+  HOOP emits a `spawn_ack_alert` WebSocket event and increments
+  `hoop_worker_spawn_missing_ack_total`.
+- **Alert message:** `"Worker 'X' has been heartbeating for Ns but has no
+  spawn ack at ~/.hoop/workers/X.ack — boot hook may be missing (§M5)"`
+
+### Validation
+
+HOOP validates that the worker name in the JSON matches the filename stem.
+Files that fail to parse or have a name mismatch are skipped with a `WARN` log.
+
+### Test coverage
+
+Unit tests live in `hoop-daemon/src/worker_ack.rs`:
+
+- `test_is_ack_file_positive` / `_negative` — extension filtering
+- `test_parse_ack_valid` — happy path parse
+- `test_parse_ack_trailing_newline` — tolerates trailing newline
+- `test_parse_ack_name_mismatch` — rejects mismatched worker name
+- `test_parse_ack_invalid_json` — rejects malformed JSON
+- `test_on_heartbeat_records_first_seen` — first heartbeat timestamp recorded
+- `test_scan_existing_loads_ack` — pre-existing ack loaded on startup
+- `test_get_all_acks_empty` — empty state
+- `test_ack_received_clears_alert` — ack received after heartbeat updates state
+
 ## Plan Reference
 
 - §1.6: NEEDLE tag format and dispatch hooks
 - §6 Phase 2 deliverable 14: stitch label propagation on worker create
+- §M5: Silent tmux-orphan channels — spawn verification via ack file

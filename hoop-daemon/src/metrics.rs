@@ -453,6 +453,22 @@ pub struct Metrics {
 
     /// JSONL lines quarantined due to parse failures, labelled by source tag.
     pub hoop_jsonl_quarantined_lines_total: LabeledCounter,
+
+    // ── §M5 Worker Spawn Ack ──────────────────────────────────────────────────
+
+    /// Spawn-ack files received from NEEDLE workers on boot (§M5).
+    pub hoop_worker_acks_seen_total: Counter,
+
+    /// Workers that exceeded the ack grace window with no ack file (§M5).
+    pub hoop_worker_spawn_missing_ack_total: Counter,
+
+    // ── §17.5 Config hot-reload ───────────────────────────────────────────────
+
+    /// Config reload attempts that were rejected due to validation failure (§17.5).
+    pub hoop_config_reload_rejected_total: Counter,
+
+    /// Config reload attempts that applied successfully (§17.5).
+    pub hoop_config_reload_success_total: Counter,
 }
 
 impl Metrics {
@@ -505,6 +521,12 @@ impl Metrics {
             hoop_stitches_created_per_day: Gauge::new(),
 
             hoop_jsonl_quarantined_lines_total: LabeledCounter::new(&["source"]),
+
+            hoop_worker_acks_seen_total: Counter::new(),
+            hoop_worker_spawn_missing_ack_total: Counter::new(),
+
+            hoop_config_reload_rejected_total: Counter::new(),
+            hoop_config_reload_success_total: Counter::new(),
         }
     }
 
@@ -790,6 +812,20 @@ impl Metrics {
             "JSONL lines quarantined due to parse failures, labelled by source tag.",
             self.hoop_jsonl_quarantined_lines_total.label_names,
             &self.hoop_jsonl_quarantined_lines_total.snapshot(),
+        );
+
+        // ── §M5 Worker Spawn Ack ─────────────────────────────────────────────
+        write_counter(
+            &mut out,
+            "hoop_worker_acks_seen_total",
+            "Spawn-ack files received from NEEDLE workers on boot (§M5).",
+            self.hoop_worker_acks_seen_total.get(),
+        );
+        write_counter(
+            &mut out,
+            "hoop_worker_spawn_missing_ack_total",
+            "Workers that exceeded the ack grace window with no ack file (§M5).",
+            self.hoop_worker_spawn_missing_ack_total.get(),
         );
 
         out
