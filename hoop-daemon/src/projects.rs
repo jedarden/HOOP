@@ -5,7 +5,10 @@
 
 use anyhow::{Context, Result};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use serde::{Deserialize, Serialize};
 use serde_yaml::Error as YamlError;
+use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -24,6 +27,8 @@ pub struct ProjectsConfig {
     pub canonical_cache: std::collections::HashMap<(String, PathBuf), PathBuf>,
     /// Path to the projects.yaml file
     pub path: PathBuf,
+    /// SHA-256 hex digest of the raw file contents at load time
+    pub content_hash: String,
 }
 
 impl ProjectsConfig {
@@ -36,16 +41,18 @@ impl ProjectsConfig {
     /// Load from a specific path
     pub fn load_from(path: &Path) -> Result<Self> {
         if !path.exists() {
-            // Return empty registry if file doesn't exist
             return Ok(Self {
                 registry: hoop_schema::ProjectsRegistry::default(),
                 canonical_cache: std::collections::HashMap::new(),
                 path: path.to_path_buf(),
+                content_hash: String::new(),
             });
         }
 
         let contents = fs::read_to_string(path)
             .context("Failed to read projects.yaml")?;
+
+        let content_hash = hex::encode(Sha256::digest(contents.as_bytes()));
 
         let registry: hoop_schema::ProjectsRegistry = serde_yaml::from_str(&contents)
             .context("Failed to parse projects.yaml")?;
@@ -56,6 +63,7 @@ impl ProjectsConfig {
             registry,
             canonical_cache,
             path: path.to_path_buf(),
+            content_hash,
         })
     }
 
@@ -213,9 +221,100 @@ fn column(loc: &serde_yaml::Location) -> usize {
 #[derive(Debug, Clone)]
 pub enum ProjectsEvent {
     /// Configuration was reloaded successfully
-    ConfigReloaded { config: ProjectsConfig },
+    ConfigReloaded {
+        config: ProjectsConfig,
+        /// Hash of the previous config file contents
+        prev_hash: String,
+        /// List of keys that changed between old and new config
+        delta_keys: Vec<String>,
+    },
     /// Configuration failed to parse
-    ConfigError { error: ConfigError },
+    ConfigError {
+        error: ConfigError,
+        /// Hash of the previous (last-good) config file contents
+        prev_hash: String,
+    },
+}
+
+/// Audit payload for config reload events
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfigReloadAudit {
+    pub file: String,
+    pub prev_hash: String,
+    pub new_hash: String,
+    pub delta_keys: Vec<String>,
+    pub actor: String,
+}
+
+/// Audit payload for rejected config reload events
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConfigReloadRejectedAudit {
+    pub file: String,
+    pub prev_hash: String,
+    pub error: String,
+    pub actor: String,
+}
+
+/// Compute the delta between two project registries.
+///
+/// Returns a sorted list of human-readable delta keys describing what changed.
+pub fn compute_delta(old: &hoop_schema::ProjectsRegistry, new: &hoop_schema::ProjectsRegistry) -> Vec<String> {
+    let mut deltas = Vec::new();
+
+    let old_map: BTreeMap<&str, &hoop_schema::ProjectsRegistryProjectsItem> = old
+        .projects
+        .iter()
+        .map(|p| (p.name(), p))
+        .collect();
+    let new_map: BTreeMap<&str, &hoop_schema::ProjectsRegistryProjectsItem> = new
+        .projects
+        .iter()
+        .map(|p| (p.name(), p))
+        .collect();
+
+    // Projects removed
+    for name in old_map.keys() {
+        if !new_map.contains_key(name) {
+            deltas.push(format!("-project:{}", name));
+        }
+    }
+
+    // Projects added
+    for name in new_map.keys() {
+        if !old_map.contains_key(name) {
+            deltas.push(format!("+project:{}", name));
+        }
+    }
+
+    // Projects that exist in both — compare fields
+    for (name, new_proj) in &new_map {
+        if let Some(old_proj) = old_map.get(name) {
+            let old_views = old_proj.workspace_views();
+            let new_views = new_proj.workspace_views();
+
+            let old_paths: Vec<_> = old_views.iter().map(|v| v.path.display().to_string()).collect();
+            let new_paths: Vec<_> = new_views.iter().map(|v| v.path.display().to_string()).collect();
+            if old_paths != new_paths {
+                deltas.push(format!("~project:{}.paths", name));
+            }
+
+            let old_roles: Vec<_> = old_views.iter().map(|v| v.role.clone()).collect();
+            let new_roles: Vec<_> = new_views.iter().map(|v| v.role.clone()).collect();
+            if old_roles != new_roles {
+                deltas.push(format!("~project:{}.roles", name));
+            }
+
+            if old_proj.label() != new_proj.label() {
+                deltas.push(format!("~project:{}.label", name));
+            }
+            if old_proj.color() != new_proj.color() {
+                deltas.push(format!("~project:{}.color", name));
+            }
+        }
+    }
+
+    deltas.sort();
+    deltas
 }
 
 /// Projects configuration watcher
@@ -366,6 +465,12 @@ impl ProjectsWatcher {
     ) {
         debug!("Reloading projects configuration from {}", path.display());
 
+        // Capture prev_hash and old registry before reload
+        let (prev_hash, old_registry) = {
+            let cfg = config.lock().await;
+            (cfg.content_hash.clone(), cfg.registry.clone())
+        };
+
         let result = Self::do_reload(path, config.clone()).await;
 
         match result {
@@ -376,14 +481,26 @@ impl ProjectsWatcher {
                     warn!("Projects configuration validation error: {}", error);
                 }
 
+                let delta_keys = compute_delta(&old_registry, &new_config.registry);
+                let new_hash = new_config.content_hash.clone();
+
                 let _ = event_tx.send(ProjectsEvent::ConfigReloaded {
                     config: new_config,
+                    prev_hash: prev_hash.clone(),
+                    delta_keys,
                 });
-                info!("Projects configuration reloaded successfully");
+                info!(
+                    "Projects configuration reloaded successfully ({} → {})",
+                    &prev_hash[..8.min(prev_hash.len())],
+                    &new_hash[..8.min(new_hash.len())],
+                );
             }
             Err(error) => {
                 let msg = error.message.clone();
-                let _ = event_tx.send(ProjectsEvent::ConfigError { error });
+                let _ = event_tx.send(ProjectsEvent::ConfigError {
+                    error,
+                    prev_hash,
+                });
                 warn!("Projects configuration failed to load: {}", msg);
             }
         }
@@ -394,11 +511,11 @@ impl ProjectsWatcher {
         config: Arc<Mutex<ProjectsConfig>>,
     ) -> Result<ProjectsConfig, ConfigError> {
         if !path.exists() {
-            // File was deleted, return empty config
             let new_config = ProjectsConfig {
                 registry: hoop_schema::ProjectsRegistry::default(),
                 canonical_cache: std::collections::HashMap::new(),
                 path: path.to_path_buf(),
+                content_hash: String::new(),
             };
             *config.lock().await = new_config.clone();
             return Ok(new_config);
@@ -411,6 +528,8 @@ impl ProjectsWatcher {
                 col: 0,
             })?;
 
+        let content_hash = hex::encode(Sha256::digest(contents.as_bytes()));
+
         let registry: hoop_schema::ProjectsRegistry = serde_yaml::from_str(&contents)
             .map_err(ConfigError::from)?;
 
@@ -420,6 +539,7 @@ impl ProjectsWatcher {
             registry,
             canonical_cache,
             path: path.to_path_buf(),
+            content_hash,
         };
 
         *config.lock().await = new_config.clone();
@@ -470,6 +590,7 @@ projects:
             registry: hoop_schema::ProjectsRegistry::default(),
             canonical_cache: std::collections::HashMap::new(),
             path: PathBuf::from("/nonexistent/projects.yaml"),
+            content_hash: String::new(),
         };
 
         assert!(cfg.all_workspace_paths().is_empty());
@@ -514,6 +635,7 @@ projects:
             registry,
             canonical_cache: std::collections::HashMap::new(),
             path: PathBuf::from("/tmp/test-projects.yaml"),
+            content_hash: String::new(),
         };
 
         let errors = cfg.validate();
@@ -579,6 +701,7 @@ projects:
             registry,
             canonical_cache,
             path: PathBuf::from("/tmp/test.yaml"),
+            content_hash: String::new(),
         };
 
         let resolved = cfg.canonical_for("test-proj", &repo);
@@ -591,6 +714,7 @@ projects:
             registry: hoop_schema::ProjectsRegistry::default(),
             canonical_cache: std::collections::HashMap::new(),
             path: PathBuf::from("/tmp/test.yaml"),
+            content_hash: String::new(),
         };
 
         let raw = PathBuf::from("/nonexistent/path");

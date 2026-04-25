@@ -36,6 +36,8 @@ pub enum ActionKind {
     BeadCreated,
     StitchCreated,
     ConfigChanged,
+    ConfigReloaded,
+    ConfigReloadRejected,
     ProjectAdded,
     ProjectRemoved,
     DraftCreated,

@@ -64,6 +64,7 @@ pub mod redaction;
 
 /// Worker execution state from heartbeats
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "state", rename_all = "lowercase")]
 pub enum WorkerState {
     /// Worker is executing a bead
     Executing {
@@ -153,11 +154,9 @@ use axum::{
 };
 use hoop_schema::{HealthResponse, ReadinessResponse, DegradedProject};
 use hoop_ui::AssetsHandler;
-use sha2::Sha256;
 use shutdown::{DbCheckpointHandle, ShutdownCoordinator, SocketCleanupHandle};
 use std::sync::Arc;
 use std::{
-    collections::HashMap,
     fs,
     net::SocketAddr,
     os::unix::fs::PermissionsExt,
@@ -383,19 +382,6 @@ async fn get_capacity(
     Json(meter.compute())
 }
 
-/// /debug/state — resolved config with attribution for every key (§17.2).
-///
-/// Returns the full `ResolvedConfig` where each key carries:
-/// - `value`: the effective value
-/// - `source`: which layer won (`cli_flag`, `env_var`, `config_yml`, `default`)
-/// - `resolved_from`: human-readable attribution string
-async fn get_debug_state(
-    axum::extract::State(state): axum::extract::State<DaemonState>,
-) -> Json<serde_json::Value> {
-    let map = state.resolved_config.to_debug_map();
-    Json(serde_json::Value::Object(map.into_iter().map(|(k, v)| (k, v)).collect()))
-}
-
 /// Build the daemon router with all endpoints
 pub fn router() -> Router<DaemonState> {
     Router::new()
@@ -410,7 +396,6 @@ pub fn router() -> Router<DaemonState> {
         .route("/api/projects/:project/files", get(get_project_files))
         .route("/api/attachments/:attachment_type/:id/:filename", get(api_attachments::serve_attachment))
         .route("/ws", get(ws::ws_handler))
-        .route("/debug/state", get(get_debug_state))
         .merge(api_uploads::router())
         .merge(api_dictated_notes::router())
         .merge(api_transcription::router())
@@ -721,19 +706,73 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         let mut rx = projects_watcher.subscribe();
         while let Ok(event) = rx.recv().await {
             match event {
-                projects::ProjectsEvent::ConfigReloaded { config } => {
+                projects::ProjectsEvent::ConfigReloaded { config, prev_hash, delta_keys } => {
                     info!("Projects configuration reloaded, reconciling runtimes");
                     if let Err(e) = supervisor_for_reconcile.reconcile(&config).await {
                         error!("Failed to reconcile runtimes: {}", e);
                     }
+
+                    // Audit the successful reload (§17.4)
+                    let audit_args = projects::ConfigReloadAudit {
+                        file: config.path.display().to_string(),
+                        prev_hash: prev_hash.clone(),
+                        new_hash: config.content_hash.clone(),
+                        delta_keys: delta_keys.clone(),
+                        actor: "system:hot-reload".to_string(),
+                    };
+                    if let Ok(args_json) = serde_json::to_string(&audit_args) {
+                        if let Err(e) = fleet::write_audit_row(
+                            "system:hot-reload",
+                            fleet::ActionKind::ConfigReloaded,
+                            &config.path.display().to_string(),
+                            None,
+                            Some(args_json),
+                            fleet::ActionResult::Success,
+                            None,
+                            None,
+                            None,
+                            None,
+                        ) {
+                            warn!("Failed to write config_reloaded audit row: {}", e);
+                        }
+                    }
+
                     // Broadcast valid config status
                     let _ = config_tx_for_reload.send(ws::ConfigStatusData {
                         valid: true,
                         error: None,
                     });
                 }
-                projects::ProjectsEvent::ConfigError { error } => {
+                projects::ProjectsEvent::ConfigError { error, prev_hash } => {
                     warn!("Projects configuration error: {}", error.message);
+
+                    // Audit the rejected reload (§17.4)
+                    let registry_path = projects::ProjectsConfig::load()
+                        .map(|c| c.path.display().to_string())
+                        .unwrap_or_else(|_| "~/.hoop/projects.yaml".to_string());
+                    let audit_args = projects::ConfigReloadRejectedAudit {
+                        file: registry_path,
+                        prev_hash: prev_hash.clone(),
+                        error: error.message.clone(),
+                        actor: "system:hot-reload".to_string(),
+                    };
+                    if let Ok(args_json) = serde_json::to_string(&audit_args) {
+                        if let Err(e) = fleet::write_audit_row(
+                            "system:hot-reload",
+                            fleet::ActionKind::ConfigReloadRejected,
+                            &audit_args.file,
+                            None,
+                            Some(args_json),
+                            fleet::ActionResult::Failure,
+                            Some(error.message.clone()),
+                            None,
+                            None,
+                            None,
+                        ) {
+                            warn!("Failed to write config_reload_rejected audit row: {}", e);
+                        }
+                    }
+
                     // Broadcast config error
                     let _ = config_tx_for_reload.send(ws::ConfigStatusData {
                         valid: false,

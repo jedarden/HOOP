@@ -70,6 +70,8 @@ impl From<FleetAuditRow> for AuditRow {
             ActionKind::DraftApproved => "draft_approved".to_string(),
             ActionKind::DraftEdited => "draft_edited".to_string(),
             ActionKind::DraftRejected => "draft_rejected".to_string(),
+            ActionKind::ConfigReloaded => "config_reloaded".to_string(),
+            ActionKind::ConfigReloadRejected => "config_reload_rejected".to_string(),
         };
 
         let result_str = match row.result {
@@ -115,6 +117,8 @@ async fn query_audit(
         Some("bead_created") => Some(ActionKind::BeadCreated),
         Some("stitch_created") => Some(ActionKind::StitchCreated),
         Some("config_changed") => Some(ActionKind::ConfigChanged),
+        Some("config_reloaded") => Some(ActionKind::ConfigReloaded),
+        Some("config_reload_rejected") => Some(ActionKind::ConfigReloadRejected),
         Some("project_added") => Some(ActionKind::ProjectAdded),
         Some("project_removed") => Some(ActionKind::ProjectRemoved),
         Some(_) => {
