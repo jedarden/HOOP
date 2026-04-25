@@ -57,6 +57,8 @@ pub struct CreateDraftRequest {
     pub source: String,
     /// Optional agent session ID
     pub agent_session_id: Option<String>,
+    /// Optional turn ID for tracking which agent turn created this draft
+    pub turn_id: Option<String>,
     /// If true, bypass the dedup check and create anyway
     #[serde(default)]
     pub force_create: bool,
