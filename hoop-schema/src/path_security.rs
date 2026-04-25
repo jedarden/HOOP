@@ -216,4 +216,195 @@ mod tests {
             assert!(result.is_err(), "symlink escaping allowlist must be rejected");
         }
     }
+
+    // ── Path-traversal attack vectors (§13, §K2) ──────────────────────────────────
+    //
+    // 10 attack vectors covering ID-level rejection, path-level rejection, and
+    // symlink-based escapes.  Every vector must be rejected — either by the ID
+    // validator (before path construction) or by canonicalize_and_check.
+
+    use crate::id_validators::{
+        validate_bead_id, validate_stitch_id, validate_worker_name, validate_project_name,
+    };
+
+    /// Vector 1: Basic directory traversal via `../` in bead ID.
+    ///
+    /// An attacker sends `../etc/passwd` as a bead_id hoping the server will
+    /// construct a path like `<workspace>/.beads/attachments/../../etc/passwd`.
+    /// Rejected at ID validation (contains `/` and leading `.`).
+    #[test]
+    fn attack_vector_1_basic_traversal_in_bead_id() {
+        assert!(validate_bead_id("../etc/passwd").is_err());
+        assert!(validate_bead_id("../../tmp/evil").is_err());
+    }
+
+    /// Vector 2: Absolute path injection as stitch ID.
+    ///
+    /// An attacker sends `/etc/shadow` or an absolute path as a stitch_id.
+    /// Rejected at ID validation (not a valid UUID format).
+    #[test]
+    fn attack_vector_2_absolute_path_as_stitch_id() {
+        assert!(validate_stitch_id("/etc/shadow").is_err());
+        assert!(validate_stitch_id("/tmp/malicious").is_err());
+    }
+
+    /// Vector 3: Null byte injection in worker name.
+    ///
+    /// Null bytes can truncate strings in C library calls or confuse path
+    /// parsers.  Rejected at ID validation (contains `\0`).
+    #[test]
+    fn attack_vector_3_null_byte_in_worker_name() {
+        assert!(validate_worker_name("alpha\x00beta").is_err());
+        assert!(validate_worker_name("valid\x00/../../etc").is_err());
+    }
+
+    /// Vector 4: URL-encoded traversal in bead ID.
+    ///
+    /// An attacker sends `%2e%2e%2f%2e%2e%2f` (URL-encoded `../../`) hoping
+    /// it will be decoded after validation.  Rejected at ID validation
+    /// (contains `%` which is not in the allowed character set).
+    #[test]
+    fn attack_vector_4_url_encoded_traversal_in_bead_id() {
+        assert!(validate_bead_id("%2e%2e%2f%2e%2e%2fetc%2fpasswd").is_err());
+        assert!(validate_bead_id("..%2F..%2Fetc").is_err());
+    }
+
+    /// Vector 5: Backslash traversal in project name.
+    ///
+    /// On mixed-OS environments, backslashes might be interpreted as path
+    /// separators.  Rejected at ID validation (`\` not in allowed chars).
+    #[test]
+    fn attack_vector_5_backslash_traversal_in_project_name() {
+        assert!(validate_project_name("..\\..\\etc").is_err());
+        assert!(validate_project_name("project\\..\\..\\etc").is_err());
+    }
+
+    /// Vector 6: Symlink escape from within workspace via bead attachment path.
+    ///
+    /// An attacker creates a symlink inside the workspace pointing outside,
+    /// then requests a path through it.  canonicalize resolves the symlink
+    /// and the allowlist prefix-check rejects the resolved target.
+    #[test]
+    fn attack_vector_6_symlink_escape_from_workspace() {
+        let tmp = setup_workspace();
+        let al = PathAllowlist::for_workspace(tmp.path()).unwrap();
+
+        // Symlink: workspace/.beads/attachments/escape -> /tmp
+        let link = tmp.path().join(".beads").join("attachments").join("escape");
+        let _ = std::os::unix::fs::symlink("/tmp", &link);
+
+        if link.exists() {
+            // The symlink itself resolves to /tmp which is outside the workspace
+            let result = canonicalize_and_check(&link, &al);
+            assert!(result.is_err(), "symlink to /tmp must be rejected");
+
+            // A file "inside" the symlink directory is also outside
+            let file_through_link = link.join("evil.txt");
+            // The file may not exist, so canonicalize would fail — either way rejected
+            let result = canonicalize_and_check(&file_through_link, &al);
+            assert!(result.is_err(), "path through escaping symlink must be rejected");
+        }
+    }
+
+    /// Vector 7: Deeply nested symlink chain.
+    ///
+    /// An attacker creates a chain of symlinks: a -> b -> c -> /tmp.
+    /// canonicalize follows the entire chain and the allowlist rejects the
+    /// final target.
+    #[test]
+    fn attack_vector_7_nested_symlink_chain() {
+        let tmp = setup_workspace();
+        let al = PathAllowlist::for_workspace(tmp.path()).unwrap();
+
+        let attach = tmp.path().join(".beads").join("attachments");
+
+        // chain: link3 -> link2 -> link1 -> /tmp
+        let link1 = attach.join("link1");
+        let link2 = attach.join("link2");
+        let link3 = attach.join("link3");
+
+        let _ = std::os::unix::fs::symlink("/tmp", &link1);
+        let _ = std::os::unix::fs::symlink(&link1, &link2);
+        let _ = std::os::unix::fs::symlink(&link2, &link3);
+
+        if link3.exists() {
+            let result = canonicalize_and_check(&link3, &al);
+            assert!(result.is_err(), "nested symlink chain escaping allowlist must be rejected");
+        }
+    }
+
+    /// Vector 8: Leading dash and dot tricks in bead/project IDs.
+    ///
+    /// Leading `-` could cause argument injection in subprocess calls.
+    /// Leading `.` could create hidden files or reference parent dirs.
+    /// Rejected at ID validation.
+    #[test]
+    fn attack_vector_8_leading_dash_and_dot() {
+        assert!(validate_bead_id("-rf").is_err());
+        assert!(validate_bead_id(".hidden").is_err());
+        assert!(validate_project_name("-evil").is_err());
+        assert!(validate_project_name(".env").is_err());
+        assert!(validate_bead_id("..").is_err());
+        assert!(validate_project_name("..").is_err());
+    }
+
+    /// Vector 9: Overlong ID to overflow buffers or bypass checks.
+    ///
+    /// Sending a bead_id longer than 256 chars or worker_name longer than
+    /// 64 chars.  Rejected at ID validation (length limits).
+    #[test]
+    fn attack_vector_9_overlong_id() {
+        assert!(validate_bead_id(&"a".repeat(257)).is_err());
+        assert!(validate_worker_name(&"a".repeat(65)).is_err());
+        assert!(validate_project_name(&"a".repeat(129)).is_err());
+    }
+
+    /// Vector 10: Path that resolves outside allowlist after join + canonicalize.
+    ///
+    /// Simulates an attacker controlling part of a path (e.g. a filename)
+    /// that contains `..` components.  The ID-level validator catches the
+    /// slash, but we also verify the allowlist catches it if a path somehow
+    /// reaches canonicalize_and_check with `..` components.
+    #[test]
+    fn attack_vector_10_path_resolves_outside_via_dotdot() {
+        let tmp = setup_workspace();
+        let al = PathAllowlist::for_workspace(tmp.path()).unwrap();
+
+        // Even though the ID validators prevent `..` in IDs, defense-in-depth:
+        // verify that canonicalize_and_check rejects a hand-crafted path with
+        // `..` components that would escape the workspace.
+        let escape_path = tmp.path().join(".beads").join("attachments")
+            .join("..").join("..").join("..").join("tmp");
+
+        // This canonicalizes to /tmp which is outside the workspace
+        if std::path::Path::new("/tmp").exists() {
+            let result = canonicalize_and_check(&escape_path, &al);
+            assert!(
+                result.is_err(),
+                "path with .. components escaping workspace must be rejected"
+            );
+        }
+    }
+
+    /// Meta-test: all 10 attack vectors are rejected by the combined
+    /// ID validation + canonicalize pipeline.
+    #[test]
+    fn all_attack_vectors_rejected() {
+        // Vector 1: basic traversal
+        assert!(validate_bead_id("../etc/passwd").is_err());
+        // Vector 2: absolute path as UUID
+        assert!(validate_stitch_id("/etc/shadow").is_err());
+        // Vector 3: null byte
+        assert!(validate_worker_name("alpha\x00beta").is_err());
+        // Vector 4: URL-encoded traversal
+        assert!(validate_bead_id("%2e%2e%2f").is_err());
+        // Vector 5: backslash
+        assert!(validate_project_name("a\\..\\b").is_err());
+        // Vector 6-7: symlink escapes tested above (require filesystem)
+        // Vector 8: leading dash/dot
+        assert!(validate_bead_id("-rf").is_err());
+        // Vector 9: overlong
+        assert!(validate_bead_id(&"x".repeat(300)).is_err());
+        // Vector 10: dot-dot components (path-level, tested above)
+    }
 }

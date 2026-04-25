@@ -74,6 +74,14 @@ pub struct AccountCapacity {
     pub forecast_full_5h_min: Option<f64>,
     /// Forecast: minutes until 7d utilization hits 100% at current burn rate
     pub forecast_full_7d_min: Option<f64>,
+    /// Stitch close rate: completed worker sessions per minute (2h window)
+    pub stitch_close_rate_per_min: f64,
+    /// Mean cost per stitch: average cost-equivalent tokens per completed session
+    pub mean_cost_per_stitch_tokens: f64,
+    /// Forecast: minutes until 5h limit at stitch-projected burn rate
+    pub forecast_full_5h_stitch_min: Option<f64>,
+    /// Forecast: minutes until 7d limit at stitch-projected burn rate
+    pub forecast_full_7d_stitch_min: Option<f64>,
     /// Source of the data ("api_cache" or "jsonl_estimate")
     pub source: String,
     /// When this data was computed
@@ -133,7 +141,16 @@ struct ParsedTurn {
     cache_write_tokens: u64,
     #[allow(dead_code)]
     model: Option<String>,
+    /// Session identifier for grouping turns into stitches
+    session_id: Option<String>,
 }
+
+/// Minimum age in seconds before a session is considered complete (ended).
+/// Sessions with a last turn older than this are treated as done.
+const SESSION_COMPLETE_SECS: i64 = 300; // 5 minutes
+
+/// Window for computing stitch close rate and mean cost (seconds)
+const STITCH_WINDOW_SECS: i64 = 7200; // 2 hours
 
 impl ParsedTurn {
     /// Cost-equivalent token count for utilization estimation.
@@ -363,6 +380,58 @@ impl CapacityMeter {
             0.0
         };
 
+        // Stitch-based burn rate: group turns by session_id, identify completed
+        // sessions (last turn > SESSION_COMPLETE_SECS old), and compute:
+        //   stitch_close_rate = completions in last STITCH_WINDOW_SECS / window_minutes
+        //   mean_cost_per_stitch = average cost-equivalent tokens of those sessions
+        let (stitch_close_rate_per_min, mean_cost_per_stitch_tokens) = {
+            let complete_cutoff = now - Duration::seconds(SESSION_COMPLETE_SECS);
+            let stitch_window_cutoff = now - Duration::seconds(STITCH_WINDOW_SECS);
+
+            // Accumulate per-session stats keyed by session_id
+            let mut session_last_ts: HashMap<String, DateTime<Utc>> = HashMap::new();
+            let mut session_cost: HashMap<String, u64> = HashMap::new();
+
+            for turn in &turns {
+                let sid = match &turn.session_id {
+                    Some(id) if !id.is_empty() => id.clone(),
+                    _ => continue, // skip turns without session IDs
+                };
+                let weighted = turn.cost_equivalent_tokens();
+                let last = session_last_ts.entry(sid.clone()).or_insert(turn.ts);
+                if turn.ts > *last {
+                    *last = turn.ts;
+                }
+                *session_cost.entry(sid).or_insert(0) += weighted;
+            }
+
+            // Collect sessions that completed within the stitch window
+            let mut completion_costs: Vec<u64> = Vec::new();
+            for (sid, last_ts) in &session_last_ts {
+                // Session is complete if its last turn is older than SESSION_COMPLETE_SECS
+                // and within the STITCH_WINDOW_SECS lookback period
+                if *last_ts < complete_cutoff && *last_ts > stitch_window_cutoff {
+                    let cost = *session_cost.get(sid).unwrap_or(&0);
+                    if cost > 0 {
+                        completion_costs.push(cost);
+                    }
+                }
+            }
+
+            let window_minutes = STITCH_WINDOW_SECS as f64 / 60.0;
+            let rate = if !completion_costs.is_empty() {
+                completion_costs.len() as f64 / window_minutes
+            } else {
+                0.0
+            };
+            let mean = if !completion_costs.is_empty() {
+                completion_costs.iter().sum::<u64>() as f64 / completion_costs.len() as f64
+            } else {
+                0.0
+            };
+            (rate, mean)
+        };
+
         // Determine utilization: prefer cached API, fall back to JSONL estimate
         let (util_5h, util_7d, resets_5h, resets_7d, model_windows, source) =
             if let Some(ref cached) = cached {
@@ -419,9 +488,32 @@ impl CapacityMeter {
             };
 
         let limits = get_plan_limits(&plan_type, &rate_limit_tier);
+
+        // Remaining capacity in JSONL-weighted token units.
+        //
+        // When the API cache supplies an exact utilization % and we have a non-zero
+        // JSONL token count for the same window, we can derive remaining capacity
+        // without relying on the hardcoded plan limits:
+        //
+        //   remaining = tokens_used_JSONL × (100 − util%) / util%
+        //
+        // This identity holds regardless of the JSONL/API token-weighting ratio
+        // (both remaining and burn_rate end up in the same JSONL units, so the
+        // ratio cancels in the ETA division). It is the most accurate path when
+        // API cache is fresh.  Falls back to plan-limit estimates otherwise.
+        let remaining_5h = if source == "api_cache" && util_5h > 0.0 && tokens_5h > 0 {
+            tokens_5h as f64 * (100.0 - util_5h) / util_5h
+        } else {
+            limits.tokens_5h as f64 * (1.0 - util_5h / 100.0)
+        };
+        let remaining_7d = if source == "api_cache" && util_7d > 0.0 && tokens_7d > 0 {
+            tokens_7d as f64 * (100.0 - util_7d) / util_7d
+        } else {
+            limits.tokens_7d as f64 * (1.0 - util_7d / 100.0)
+        };
+
         let forecast_full_5h = if burn_rate_per_min > 0.0 && util_5h < 100.0 {
-            let remaining = limits.tokens_5h as f64 * (1.0 - util_5h / 100.0);
-            Some(remaining / burn_rate_per_min)
+            Some(remaining_5h / burn_rate_per_min)
         } else if util_5h >= 100.0 {
             Some(0.0)
         } else {
@@ -429,8 +521,24 @@ impl CapacityMeter {
         };
 
         let forecast_full_7d = if burn_rate_per_min > 0.0 && util_7d < 100.0 {
-            let remaining = limits.tokens_7d as f64 * (1.0 - util_7d / 100.0);
-            Some(remaining / burn_rate_per_min)
+            Some(remaining_7d / burn_rate_per_min)
+        } else if util_7d >= 100.0 {
+            Some(0.0)
+        } else {
+            None
+        };
+
+        // Stitch-projected forecasts
+        let stitch_burn_rate = stitch_close_rate_per_min * mean_cost_per_stitch_tokens;
+        let forecast_full_5h_stitch = if stitch_burn_rate > 0.0 && util_5h < 100.0 {
+            Some(remaining_5h / stitch_burn_rate)
+        } else if util_5h >= 100.0 {
+            Some(0.0)
+        } else {
+            None
+        };
+        let forecast_full_7d_stitch = if stitch_burn_rate > 0.0 && util_7d < 100.0 {
+            Some(remaining_7d / stitch_burn_rate)
         } else if util_7d >= 100.0 {
             Some(0.0)
         } else {
@@ -454,6 +562,10 @@ impl CapacityMeter {
             burn_rate_per_min,
             forecast_full_5h_min: forecast_full_5h,
             forecast_full_7d_min: forecast_full_7d,
+            stitch_close_rate_per_min,
+            mean_cost_per_stitch_tokens,
+            forecast_full_5h_stitch_min: forecast_full_5h_stitch,
+            forecast_full_7d_stitch_min: forecast_full_7d_stitch,
             source,
             computed_at: now,
         })
@@ -627,6 +739,11 @@ impl CapacityMeter {
                 continue;
             }
 
+            let session_id = entry.get("sessionId")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string());
+
             turns.push(ParsedTurn {
                 ts,
                 input_tokens,
@@ -638,16 +755,22 @@ impl CapacityMeter {
                 } else {
                     Some(model.to_string())
                 },
+                session_id,
             });
         }
 
         Ok(())
     }
 
-    /// Start a background refresh loop
+    /// Start a background refresh loop.
+    ///
+    /// `trigger_rx` is an optional broadcast receiver that causes an immediate
+    /// recompute on any received message (used to react to bead close events).
+    /// The timer always fires at `refresh_interval_secs` regardless.
     pub fn spawn_refresh_loop(
         config: CapacityMeterConfig,
         tx: tokio::sync::broadcast::Sender<Vec<AccountCapacity>>,
+        mut trigger_rx: Option<tokio::sync::broadcast::Receiver<()>>,
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             let meter = CapacityMeter::new(config);
@@ -655,7 +778,19 @@ impl CapacityMeter {
             let mut tick = tokio::time::interval(interval);
 
             loop {
-                tick.tick().await;
+                if let Some(ref mut rx) = trigger_rx {
+                    tokio::select! {
+                        _ = tick.tick() => {}
+                        result = rx.recv() => {
+                            match result {
+                                Ok(_) | Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                                Err(tokio::sync::broadcast::error::RecvError::Closed) => return,
+                            }
+                        }
+                    }
+                } else {
+                    tick.tick().await;
+                }
                 let capacities = meter.compute();
                 if !capacities.is_empty() {
                     let _ = tx.send(capacities);
@@ -728,6 +863,7 @@ mod tests {
             cache_read_tokens: 5000,
             cache_write_tokens: 500,
             model: None,
+            session_id: None,
         };
         let weighted = turn.cost_equivalent_tokens();
         // Expected: 1000 + 5000*0.1 + 500*0.25 + 300*5.0
@@ -1052,6 +1188,78 @@ mod tests {
         let in_7d: Vec<_> = turns.iter().filter(|t| t.ts > cutoff_7d).collect();
 
         assert_eq!(in_7d.len(), 1, "Exactly 7d-ago should be excluded, 6d23h included");
+    }
+
+    #[test]
+    fn test_calibrated_remaining_formula() {
+        // When API cache gives util_5h = 40% and JSONL counts tokens_5h = 400_000,
+        // the derived remaining = 400_000 * 60 / 40 = 600_000 (same JSONL units).
+        // This is exact regardless of JSONL/API weighting ratio.
+        let dir = TempDir::new().unwrap();
+
+        let cache_dir = dir.path().join("cache").join("claude-usage");
+        fs::create_dir_all(&cache_dir).unwrap();
+        fs::write(
+            cache_dir.join("usage.json"),
+            r#"{"five_hour":{"utilization":40.0,"resets_at":"2026-04-26T02:00:00Z"},"seven_day":{"utilization":20.0,"resets_at":"2026-04-28T19:00:00Z"}}"#,
+        )
+        .unwrap();
+
+        let claude_dir = dir.path().join(".claude");
+        fs::create_dir_all(&claude_dir).unwrap();
+        fs::write(
+            claude_dir.join(".credentials.json"),
+            r#"{"claudeAiOauth":{"subscriptionType":"max","rateLimitTier":"default_claude_max_20x"}}"#,
+        )
+        .unwrap();
+
+        // Write recent JSONL turns so we get burn_rate > 0 and stitch data
+        let projects_dir = claude_dir.join("projects");
+        fs::create_dir_all(&projects_dir).unwrap();
+        let now = Utc::now();
+        let mut f = fs::File::create(projects_dir.join("test.jsonl")).unwrap();
+        // 3 turns in last 30 min, each ~1000 cost-equivalent tokens
+        // burn_rate ≈ (3 * 1000) / 60 ≈ 50/min
+        for i in 0..3 {
+            let ts = (now - Duration::minutes(10 * (i + 1))).to_rfc3339();
+            // input=800, output=40 → weighted = 800 + 40*5 = 1000
+            writeln!(f, "{}", make_assistant_jsonl(&ts, 800, 40, 0, 0, "claude-sonnet-4-6")).unwrap();
+        }
+
+        let config = CapacityMeterConfig {
+            account_dirs: vec![claude_dir],
+            refresh_interval_secs: 60,
+            cache_max_age_secs: 600,
+            cache_base_dir: Some(dir.path().join("cache")),
+        };
+
+        let meter = CapacityMeter::new(config);
+        let accounts = meter.compute();
+        assert_eq!(accounts.len(), 1);
+        let acct = &accounts[0];
+
+        assert_eq!(acct.source, "api_cache");
+        assert!((acct.utilization_5h - 40.0).abs() < 0.01);
+
+        // With calibrated formula: remaining_5h = tokens_5h * 60 / 40
+        // ETA = remaining_5h / burn_rate_per_min
+        // burn_rate > 0 so forecast should be Some
+        assert!(acct.forecast_full_5h_min.is_some(), "Should have a 5h token forecast");
+        let eta_5h = acct.forecast_full_5h_min.unwrap();
+        assert!(eta_5h > 0.0, "ETA should be positive: {}", eta_5h);
+
+        // Verify the calibrated remaining is proportional to tokens_5h:
+        // remaining = tokens_5h * (100 - 40) / 40 = tokens_5h * 1.5
+        // ETA = tokens_5h * 1.5 / burn_rate
+        // cross-check: remaining / burn_rate = ETA
+        if acct.burn_rate_per_min > 0.0 {
+            let expected_remaining = acct.tokens_5h as f64 * (100.0 - 40.0) / 40.0;
+            let expected_eta = expected_remaining / acct.burn_rate_per_min;
+            assert!(
+                (eta_5h - expected_eta).abs() < 0.1,
+                "ETA mismatch: got {}, expected {} (calibrated formula)", eta_5h, expected_eta
+            );
+        }
     }
 
     #[test]

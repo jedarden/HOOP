@@ -36,6 +36,20 @@ function formatForecast(minutes: number | null | undefined): string {
   return `~${Math.floor(minutes / 1440)}d`;
 }
 
+function saturationAbsoluteTime(computedAt: string, minutesFromNow: number): string {
+  try {
+    const sat = new Date(new Date(computedAt).getTime() + minutesFromNow * 60000);
+    const now = new Date();
+    const timeStr = sat.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    const diffDays = Math.round((sat.getTime() - now.getTime()) / 86400000);
+    if (diffDays <= 0) return timeStr;
+    if (diffDays === 1) return `tomorrow ${timeStr}`;
+    return sat.toLocaleDateString([], { weekday: 'short' }) + ' ' + timeStr;
+  } catch {
+    return '?';
+  }
+}
+
 function formatResetsAt(iso?: string | null): string {
   if (!iso) return '';
   try {
@@ -134,7 +148,8 @@ function CapacityRow({ account, activeWorkers }: CapacityRowProps) {
               className={`meter-fill utilization-${level5h}`}
               style={{ width: `${Math.min(account.utilization_5h, 100)}%` }}
             />
-            {account.forecast_full_5h_min != null && account.forecast_full_5h_min < 300 && (
+            {(account.forecast_full_5h_stitch_min != null && account.forecast_full_5h_stitch_min < 300) ||
+             (account.forecast_full_5h_min != null && account.forecast_full_5h_min < 300) ? (
               <div
                 className="meter-forecast-arrow"
                 style={{
@@ -142,21 +157,36 @@ function CapacityRow({ account, activeWorkers }: CapacityRowProps) {
                 }}
                 onMouseEnter={(e) => handleMouseEnter(e, (
                   <div className="tooltip-content">
+                    {account.forecast_full_5h_stitch_min != null && (
+                      <div className="tooltip-row">
+                        <span>Stitch ETA:</span>
+                        <strong>{formatForecast(account.forecast_full_5h_stitch_min)}</strong>
+                      </div>
+                    )}
+                    {account.stitch_close_rate_per_min > 0 && (
+                      <div className="tooltip-row">
+                        <span>Close rate:</span>
+                        <strong>{account.stitch_close_rate_per_min.toFixed(2)}/min</strong>
+                      </div>
+                    )}
+                    <div className="tooltip-divider" />
                     <div className="tooltip-row">
-                      <span>Burn rate:</span>
+                      <span>Token burn:</span>
                       <strong>{formatNumber(account.burn_rate_per_min)}/min</strong>
                     </div>
-                    <div className="tooltip-row">
-                      <span>Full in:</span>
-                      <strong>{formatForecast(account.forecast_full_5h_min)}</strong>
-                    </div>
+                    {account.forecast_full_5h_min != null && (
+                      <div className="tooltip-row">
+                        <span>Token ETA:</span>
+                        <strong>{formatForecast(account.forecast_full_5h_min)}</strong>
+                      </div>
+                    )}
                   </div>
                 ))}
                 onMouseLeave={handleMouseLeave}
               >
                 ▼
               </div>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -177,13 +207,21 @@ function CapacityRow({ account, activeWorkers }: CapacityRowProps) {
                     <span>Turns:</span>
                     <strong>{account.turns_7d}</strong>
                   </div>
-                  {account.forecast_full_7d_min != null && (
+                  {(account.forecast_full_7d_stitch_min != null || account.forecast_full_7d_min != null) && (
                     <>
                       <div className="tooltip-divider" />
-                      <div className="tooltip-row">
-                        <span>Full in:</span>
-                        <strong>{formatForecast(account.forecast_full_7d_min)}</strong>
-                      </div>
+                      {account.forecast_full_7d_stitch_min != null && (
+                        <div className="tooltip-row">
+                          <span>Stitch ETA:</span>
+                          <strong>{formatForecast(account.forecast_full_7d_stitch_min)}</strong>
+                        </div>
+                      )}
+                      {account.forecast_full_7d_min != null && (
+                        <div className="tooltip-row">
+                          <span>Token ETA:</span>
+                          <strong>{formatForecast(account.forecast_full_7d_min)}</strong>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -198,7 +236,8 @@ function CapacityRow({ account, activeWorkers }: CapacityRowProps) {
               className={`meter-fill utilization-${level7d}`}
               style={{ width: `${Math.min(account.utilization_7d, 100)}%` }}
             />
-            {account.forecast_full_7d_min != null && account.forecast_full_7d_min < 1440 && (
+            {(account.forecast_full_7d_stitch_min != null && account.forecast_full_7d_stitch_min < 1440) ||
+             (account.forecast_full_7d_min != null && account.forecast_full_7d_min < 1440) ? (
               <div
                 className="meter-forecast-arrow"
                 style={{
@@ -206,27 +245,59 @@ function CapacityRow({ account, activeWorkers }: CapacityRowProps) {
                 }}
                 onMouseEnter={(e) => handleMouseEnter(e, (
                   <div className="tooltip-content">
-                    <div className="tooltip-row">
-                      <span>Full in:</span>
-                      <strong>{formatForecast(account.forecast_full_7d_min)}</strong>
-                    </div>
+                    {account.forecast_full_7d_stitch_min != null && (
+                      <div className="tooltip-row">
+                        <span>Stitch ETA:</span>
+                        <strong>{formatForecast(account.forecast_full_7d_stitch_min)}</strong>
+                      </div>
+                    )}
+                    {account.forecast_full_7d_min != null && (
+                      <div className="tooltip-row">
+                        <span>Token ETA:</span>
+                        <strong>{formatForecast(account.forecast_full_7d_min)}</strong>
+                      </div>
+                    )}
                   </div>
                 ))}
                 onMouseLeave={handleMouseLeave}
               >
                 ▼
               </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
 
-      {/* Forecast text */}
-      {account.forecast_full_5h_min != null && account.forecast_full_5h_min < 60 && (
-        <div className="capacity-forecast-text">
-          5h limit in {formatForecast(account.forecast_full_5h_min)} at current burn ({formatNumber(account.burn_rate_per_min)}/min)
-        </div>
-      )}
+      {/* Forecast ETA — stitch rate preferred, token burn as fallback.
+          5h: shown when window saturates within its 5h duration (< 300 min).
+          7d: shown when saturation is within the next 24h (< 1440 min). */}
+      {(() => {
+        const eta5h = account.forecast_full_5h_stitch_min ?? account.forecast_full_5h_min;
+        const eta7d = account.forecast_full_7d_stitch_min ?? account.forecast_full_7d_min;
+        const use5hStitch = account.forecast_full_5h_stitch_min != null;
+        const use7dStitch = account.forecast_full_7d_stitch_min != null;
+        const show5h = eta5h != null && eta5h > 0 && eta5h < 300;
+        const show7d = eta7d != null && eta7d > 0 && eta7d < 1440;
+        if (!show5h && !show7d) return null;
+        return (
+          <>
+            {show5h && (
+              <div className={`capacity-forecast-text${use5hStitch ? ' capacity-forecast-stitch' : ''}`}>
+                5h full at ~{saturationAbsoluteTime(account.computed_at, eta5h!)}
+                {' '}({formatForecast(eta5h)})
+                {use5hStitch && account.stitch_close_rate_per_min > 0 &&
+                  ` · ${account.stitch_close_rate_per_min.toFixed(2)}/min`}
+              </div>
+            )}
+            {show7d && (
+              <div className={`capacity-forecast-text${use7dStitch ? ' capacity-forecast-stitch' : ''}`}>
+                7d full at ~{saturationAbsoluteTime(account.computed_at, eta7d!)}
+                {' '}({formatForecast(eta7d)})
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* Floating tooltip */}
       {tooltip.show && (

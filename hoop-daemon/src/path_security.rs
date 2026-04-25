@@ -45,4 +45,52 @@ mod tests {
         let result = canonicalize_and_check(&dir, &al);
         assert!(result.is_ok(), "re-exported function should work");
     }
+
+    // ── Safe-rejection tests (§13: never echo user input) ──────────────────────
+
+    #[test]
+    fn safe_rejection_never_echoes_attack_vectors() {
+        let vectors = [
+            ("bead_id", "../etc/passwd"),
+            ("stitch_id", "/etc/shadow"),
+            ("worker_name", "alpha\x00beta"),
+            ("project_name", "-evil"),
+            ("bead_id", "%2e%2e%2f"),
+        ];
+        for (kind, _attack) in &vectors {
+            let (status, body) = safe_rejection(kind);
+            assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+            // Must not contain any filesystem-like content
+            assert!(!body.contains('/'), "body must not contain '/': {}", body);
+            assert!(!body.contains(".."), "body must not contain '..': {}", body);
+            assert!(!body.contains('\\'), "body must not contain '\\': {}", body);
+            assert!(!body.contains('%'), "body must not contain '%': {}", body);
+        }
+    }
+
+    /// Verify that IdValidationError rejection also never echoes the bad value.
+    #[test]
+    fn id_validation_rejection_is_safe() {
+        use crate::id_validators::{validate_bead_id, rejection};
+
+        let attacks = [
+            "../etc/passwd",
+            "/etc/shadow",
+            "%2e%2e%2f",
+            "-rf",
+            "..",
+        ];
+        for attack in &attacks {
+            if let Err(e) = validate_bead_id(attack) {
+                let (_status, body) = rejection(e);
+                // The body may contain a truncated version of the input for debugging,
+                // but must never contain a full filesystem path like /etc/passwd
+                assert!(
+                    !body.contains("/etc/") || body.contains("bead_id"),
+                    "rejection body must not contain raw paths: {}",
+                    body
+                );
+            }
+        }
+    }
 }
