@@ -537,6 +537,25 @@ pub struct DraftUpdateData {
     pub rejection_reason: Option<String>,
 }
 
+/// Collision alert emitted when two live workers have edited overlapping file paths (§6 P2 d12)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CollisionAlertData {
+    /// Stable UUID identifying this alert (deduped per daemon session)
+    pub alert_id: String,
+    /// ISO 8601 timestamp of detection
+    pub detected_at: String,
+    /// Alphabetically-earlier worker name
+    pub worker_a: String,
+    /// Bead being executed by worker_a
+    pub bead_a: String,
+    /// Alphabetically-later worker name
+    pub worker_b: String,
+    /// Bead being executed by worker_b
+    pub bead_b: String,
+    /// Sorted list of file paths touched by both workers
+    pub overlapping_files: Vec<String>,
+}
+
 /// WebSocket event sent to clients
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -575,6 +594,8 @@ pub struct WsEvent {
     pub draft_update: Option<DraftUpdateData>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spawn_ack_alert: Option<crate::worker_ack::SpawnAckAlert>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub collision_alert: Option<CollisionAlertData>,
     /// Present only on `init` events; the server-authoritative subscription list.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subscriptions: Option<Vec<String>>,
@@ -601,6 +622,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            collision_alert: None,
             subscriptions: None,
         }
     }
@@ -625,6 +647,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            collision_alert: None,
             subscriptions: None,
         }
     }
@@ -649,6 +672,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            collision_alert: None,
             subscriptions: None,
         }
     }
@@ -673,6 +697,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            collision_alert: None,
             subscriptions: None,
         }
     }
@@ -698,6 +723,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            collision_alert: None,
             subscriptions: None,
         }
     }
@@ -723,6 +749,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            collision_alert: None,
             subscriptions: None,
         }
     }
@@ -747,6 +774,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            collision_alert: None,
             subscriptions: None,
         }
     }
@@ -771,6 +799,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            collision_alert: None,
             subscriptions: None,
         }
     }
@@ -795,6 +824,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            collision_alert: None,
             subscriptions: None,
         }
     }
@@ -819,6 +849,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            collision_alert: None,
             subscriptions: None,
         }
     }
@@ -843,6 +874,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            collision_alert: None,
             subscriptions: None,
         }
     }
@@ -867,6 +899,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            collision_alert: None,
             subscriptions: None,
         }
     }
@@ -891,6 +924,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            collision_alert: None,
             subscriptions: None,
         }
     }
@@ -915,6 +949,7 @@ impl WsEvent {
             morning_brief: Some(data),
             draft_update: None,
             spawn_ack_alert: None,
+            collision_alert: None,
             subscriptions: None,
         }
     }
@@ -939,6 +974,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: Some(alert),
+            collision_alert: None,
             subscriptions: None,
         }
     }
@@ -963,6 +999,32 @@ impl WsEvent {
             morning_brief: None,
             draft_update: Some(data),
             spawn_ack_alert: None,
+            collision_alert: None,
+            subscriptions: None,
+        }
+    }
+
+    /// Create a collision alert event (§6 Phase 2, deliverable 12)
+    pub fn collision_alert_event(data: CollisionAlertData) -> Self {
+        Self {
+            event_type: "collision_alert".to_string(),
+            worker: None,
+            workers: None,
+            beads: None,
+            conversations: None,
+            conversation: None,
+            streaming: None,
+            projects: None,
+            config_status: None,
+            capacity: None,
+            bead_event: None,
+            bead_events: None,
+            stitch_created: None,
+            agent_session: None,
+            morning_brief: None,
+            draft_update: None,
+            spawn_ack_alert: None,
+            collision_alert: Some(data),
             subscriptions: None,
         }
     }
@@ -990,6 +1052,7 @@ impl WsEvent {
             morning_brief: None,
             draft_update: None,
             spawn_ack_alert: None,
+            collision_alert: None,
             subscriptions: Some(subs),
         }
     }
@@ -1178,6 +1241,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
     let mut capacity_rx = state.capacity_tx.subscribe();
     let mut brief_rx = state.brief_tx.subscribe();
     let mut draft_rx = state.draft_tx.subscribe();
+    let mut collision_rx = state.collision_alert_tx.subscribe();
     let mut shutdown_rx = state.shutdown.subscribe();
 
     // Per-connection subscription set.  Starts with "global"; clients may
@@ -1532,6 +1596,24 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     });
 
+    // Collision alerts — global
+    let ws_tx_collision = ws_tx.clone();
+    let collision_task = tokio::spawn(async move {
+        loop {
+            match collision_rx.recv().await {
+                Ok(data) => {
+                    if let Ok(json) = serde_json::to_string(&WsEvent::collision_alert_event(data)) {
+                        let _ = ws_tx_collision.send(WsOutMsg::new(json)).await;
+                    }
+                }
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    debug!("Collision alert broadcast lagged by {}, continuing", n);
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+
     // Spawn-ack alerts (§M5) — global
     let ws_tx_ack = ws_tx.clone();
     let _ack_task = tokio::spawn(async move {
@@ -1625,6 +1707,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         _ = agent_task => {},
         _ = brief_task => {},
         _ = draft_task => {},
+        _ = collision_task => {},
         _ = recv_task => {},
         _ = shutdown_task => {},
     }

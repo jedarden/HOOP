@@ -828,6 +828,20 @@ impl Metrics {
             self.hoop_worker_spawn_missing_ack_total.get(),
         );
 
+        // ── §17.5 Config hot-reload ──────────────────────────────────────────
+        write_counter(
+            &mut out,
+            "hoop_config_reload_rejected_total",
+            "Config reload attempts rejected due to validation failure (§17.5).",
+            self.hoop_config_reload_rejected_total.get(),
+        );
+        write_counter(
+            &mut out,
+            "hoop_config_reload_success_total",
+            "Config reload attempts that applied successfully (§17.5).",
+            self.hoop_config_reload_success_total.get(),
+        );
+
         out
     }
 

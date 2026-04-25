@@ -637,6 +637,11 @@ impl ProjectsWatcher {
         Ok(())
     }
 
+    /// Hot-reload with validate-before-apply + rollback (§17.5).
+    ///
+    /// Pipeline: schema-validate → semantic-validate → apply.
+    /// On any failure the previous valid config stays in place and a
+    /// `ConfigError` event is emitted with structured details.
     async fn reload_config(
         path: &Path,
         event_tx: tokio::sync::broadcast::Sender<ProjectsEvent>,
@@ -650,54 +655,81 @@ impl ProjectsWatcher {
             (cfg.content_hash.clone(), cfg.registry.clone())
         };
 
-        let result = Self::do_reload(path, config.clone()).await;
+        // ── Phase 1: schema-validate (parse YAML into typed structure) ───────
+        let parse_result = Self::parse_config(path).await;
 
-        match result {
-            Ok(new_config) => {
-                // Validate the new configuration
-                let errors = new_config.validate();
-                for error in &errors {
-                    warn!("Projects configuration validation error: {}", error);
-                }
-
-                let delta_keys = compute_delta(&old_registry, &new_config.registry);
-                let new_hash = new_config.content_hash.clone();
-
-                let _ = event_tx.send(ProjectsEvent::ConfigReloaded {
-                    config: new_config,
-                    prev_hash: prev_hash.clone(),
-                    delta_keys,
-                });
-                info!(
-                    "Projects configuration reloaded successfully ({} → {})",
-                    &prev_hash[..8.min(prev_hash.len())],
-                    &new_hash[..8.min(new_hash.len())],
-                );
-            }
+        let mut new_config = match parse_result {
+            Ok(cfg) => cfg,
             Err(error) => {
                 let msg = error.message.clone();
                 let _ = event_tx.send(ProjectsEvent::ConfigError {
                     error,
                     prev_hash,
                 });
-                warn!("Projects configuration failed to load: {}", msg);
+                warn!("Projects configuration rejected (schema): {}", msg);
+                return;
             }
+        };
+
+        // ── Phase 2: semantic validation (paths, .beads, dedup) ─────────────
+        let validation_errors = new_config.validate();
+        if !validation_errors.is_empty() {
+            // Collect all errors into a single structured ConfigError
+            let first_error = validation_errors.first().unwrap().clone();
+            let all_messages: Vec<String> = validation_errors.iter().map(|e| e.message.clone()).collect();
+            let combined = ConfigError {
+                message: all_messages.join("; "),
+                line: first_error.line,
+                col: first_error.col,
+                field: first_error.field,
+                expected: first_error.expected,
+                got: first_error.got,
+            };
+            let msg = combined.message.clone();
+            let _ = event_tx.send(ProjectsEvent::ConfigError {
+                error: combined,
+                prev_hash,
+            });
+            warn!("Projects configuration rejected (semantic): {}", msg);
+            return;
         }
+
+        // ── Phase 3: apply (store new config) ───────────────────────────────
+        // Backfill canonical paths — only after validation passes
+        if ProjectsConfig::backfill_canonical_paths(&mut new_config.registry) {
+            if let Err(e) = ProjectsConfig::write_back(path, &new_config.registry) {
+                warn!("Failed to backfill canonical paths on reload: {}", e);
+            }
+            new_config.canonical_cache = ProjectsConfig::build_canonical_cache(&new_config.registry);
+        }
+
+        *config.lock().await = new_config.clone();
+
+        let delta_keys = compute_delta(&old_registry, &new_config.registry);
+        let new_hash = new_config.content_hash.clone();
+
+        let _ = event_tx.send(ProjectsEvent::ConfigReloaded {
+            config: new_config,
+            prev_hash: prev_hash.clone(),
+            delta_keys,
+        });
+        info!(
+            "Projects configuration reloaded successfully ({} → {})",
+            &prev_hash[..8.min(prev_hash.len())],
+            &new_hash[..8.min(new_hash.len())],
+        );
     }
 
-    async fn do_reload(
-        path: &Path,
-        config: Arc<Mutex<ProjectsConfig>>,
-    ) -> Result<ProjectsConfig, ConfigError> {
+    /// Parse the config file without mutating shared state.
+    /// Returns the parsed config on success or a structured error on failure.
+    async fn parse_config(path: &Path) -> Result<ProjectsConfig, ConfigError> {
         if !path.exists() {
-            let new_config = ProjectsConfig {
+            return Ok(ProjectsConfig {
                 registry: hoop_schema::ProjectsRegistry::default(),
                 canonical_cache: std::collections::HashMap::new(),
                 path: path.to_path_buf(),
                 content_hash: String::new(),
-            };
-            *config.lock().await = new_config.clone();
-            return Ok(new_config);
+            });
         }
 
         let contents = fs::read_to_string(path)
@@ -712,26 +744,17 @@ impl ProjectsWatcher {
 
         let content_hash = hex::encode(Sha256::digest(contents.as_bytes()));
 
-        let mut registry: hoop_schema::ProjectsRegistry = serde_yaml::from_str(&contents)
+        let registry: hoop_schema::ProjectsRegistry = serde_yaml::from_str(&contents)
             .map_err(ConfigError::from)?;
-
-        if ProjectsConfig::backfill_canonical_paths(&mut registry) {
-            if let Err(e) = ProjectsConfig::write_back(path, &registry) {
-                warn!("Failed to backfill canonical paths on reload: {}", e);
-            }
-        }
 
         let canonical_cache = ProjectsConfig::build_canonical_cache(&registry);
 
-        let new_config = ProjectsConfig {
+        Ok(ProjectsConfig {
             registry,
             canonical_cache,
             path: path.to_path_buf(),
             content_hash,
-        };
-
-        *config.lock().await = new_config.clone();
-        Ok(new_config)
+        })
     }
 }
 
@@ -907,5 +930,263 @@ projects:
 
         let raw = PathBuf::from("/nonexistent/path");
         assert_eq!(cfg.canonical_for("no-proj", &raw), raw);
+    }
+
+    // ── §17.5 Integration Tests: hot-reload validate-before-apply + rollback ──
+
+    /// Helper: create a temp directory with a valid projects.yaml and .beads dirs.
+    fn setup_valid_project(tmp: &tempfile::TempDir, name: &str) -> PathBuf {
+        let repo = tmp.path().join(name);
+        fs::create_dir_all(repo.join(".beads")).expect("mkdir .beads");
+        repo
+    }
+
+    /// Write a valid projects.yaml with one project pointing at `repo`.
+    fn write_valid_config(path: &Path, name: &str, repo: &Path) {
+        let yaml = format!(
+            "projects:\n  - name: {}\n    path: {}\n",
+            name,
+            repo.display()
+        );
+        fs::write(path, yaml).expect("write config");
+    }
+
+    /// Write an invalid YAML file (broken syntax).
+    fn write_invalid_yaml(path: &Path) {
+        fs::write(path, "projects:\n  - name: good\n    path: /exists\n  {\n")
+            .expect("write invalid yaml");
+    }
+
+    /// Write a YAML with a schema-level error (unknown field type).
+    fn write_schema_invalid(path: &Path) {
+        fs::write(path, "projects:\n  - name: test\n    path: 42\n")
+            .expect("write schema-invalid yaml");
+    }
+
+    /// Write a YAML that parses but fails semantic validation (nonexistent path).
+    fn write_semantic_invalid(path: &Path) {
+        let yaml = "projects:\n  - name: ghost\n    path: /nonexistent/path/xyz\n";
+        fs::write(path, yaml).expect("write semantic-invalid yaml");
+    }
+
+    /// Integration test: edit-to-invalid-then-fix cycle preserves state (§17.5 acceptance).
+    ///
+    /// Cycle:
+    /// 1. Start with valid config (project "alpha")
+    /// 2. Write invalid YAML → verify old config kept + error event emitted
+    /// 3. Write schema-invalid YAML → verify old config still kept + error event
+    /// 4. Write valid config (project "beta") → verify new config applied + success event
+    #[tokio::test]
+    async fn test_edit_invalid_then_fix_cycle() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let config_path = tmp.path().join("projects.yaml");
+
+        // Phase 0: seed a valid config with project "alpha"
+        let alpha = setup_valid_project(&tmp, "alpha-repo");
+        write_valid_config(&config_path, "alpha", &alpha);
+
+        let initial = ProjectsConfig::load_from(&config_path).expect("initial load");
+        assert_eq!(initial.registry.projects.len(), 1);
+        assert_eq!(initial.registry.projects[0].name(), "alpha");
+        let initial_hash = initial.content_hash.clone();
+
+        // Build the in-memory state that reload_config expects
+        let shared_config = Arc::new(Mutex::new(initial));
+        let (event_tx, _) = tokio::sync::broadcast::channel::<ProjectsEvent>(64);
+
+        // Subscribe BEFORE reload so we don't miss the broadcast
+        let mut rx = event_tx.subscribe();
+
+        // ── Phase 1: write broken YAML → reject, keep "alpha" ────────────────
+        write_invalid_yaml(&config_path);
+        ProjectsWatcher::reload_config(&config_path, event_tx.clone(), shared_config.clone()).await;
+
+        match rx.try_recv() {
+            Ok(ProjectsEvent::ConfigError { error, prev_hash }) => {
+                assert!(!error.message.is_empty(), "error should have a message");
+                assert_eq!(prev_hash, initial_hash, "prev_hash should be the initial hash");
+                assert!(error.line > 0, "parse error should report a line number");
+            }
+            other => panic!("expected ConfigError, got {:?}", other),
+        }
+
+        // Verify old config is still in place
+        {
+            let cfg = shared_config.lock().await;
+            assert_eq!(cfg.registry.projects.len(), 1);
+            assert_eq!(cfg.registry.projects[0].name(), "alpha");
+            assert_eq!(cfg.content_hash, initial_hash, "hash should not change on rejection");
+        }
+
+        // ── Phase 2: write schema-invalid YAML → reject again ────────────────
+        write_schema_invalid(&config_path);
+        ProjectsWatcher::reload_config(&config_path, event_tx.clone(), shared_config.clone()).await;
+
+        match rx.try_recv() {
+            Ok(ProjectsEvent::ConfigError { error, .. }) => {
+                assert!(!error.message.is_empty());
+                assert!(
+                    error.field.is_some() || error.expected.is_some() || error.got.is_some(),
+                    "schema error should have structured details"
+                );
+            }
+            other => panic!("expected ConfigError, got {:?}", other),
+        }
+
+        // Config should still be "alpha"
+        {
+            let cfg = shared_config.lock().await;
+            assert_eq!(cfg.registry.projects[0].name(), "alpha");
+        }
+
+        // ── Phase 3: write valid config with project "beta" → accept ─────────
+        let beta = setup_valid_project(&tmp, "beta-repo");
+        write_valid_config(&config_path, "beta", &beta);
+        ProjectsWatcher::reload_config(&config_path, event_tx.clone(), shared_config.clone()).await;
+
+        match rx.try_recv() {
+            Ok(ProjectsEvent::ConfigReloaded { config, prev_hash, delta_keys }) => {
+                assert_eq!(config.registry.projects.len(), 1);
+                assert_eq!(config.registry.projects[0].name(), "beta");
+                assert_eq!(prev_hash, initial_hash);
+                assert!(delta_keys.iter().any(|d| d.contains("-project:alpha")), "should show alpha removed");
+                assert!(delta_keys.iter().any(|d| d.contains("+project:beta")), "should show beta added");
+            }
+            other => panic!("expected ConfigReloaded, got {:?}", other),
+        }
+
+        // Config should now be "beta"
+        {
+            let cfg = shared_config.lock().await;
+            assert_eq!(cfg.registry.projects[0].name(), "beta");
+        }
+    }
+
+    /// Integration test: semantic validation rejection (nonexistent workspace path).
+    #[tokio::test]
+    async fn test_semantic_validation_rejects_nonexistent_path() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let config_path = tmp.path().join("projects.yaml");
+
+        // Seed valid config
+        let real = setup_valid_project(&tmp, "real");
+        write_valid_config(&config_path, "real-project", &real);
+        let initial = ProjectsConfig::load_from(&config_path).expect("load");
+        let shared_config = Arc::new(Mutex::new(initial));
+        let (event_tx, _) = tokio::sync::broadcast::channel::<ProjectsEvent>(64);
+
+        // Subscribe before reload
+        let mut rx = event_tx.subscribe();
+
+        // Write config pointing at nonexistent path
+        write_semantic_invalid(&config_path);
+        ProjectsWatcher::reload_config(&config_path, event_tx.clone(), shared_config.clone()).await;
+
+        match rx.try_recv() {
+            Ok(ProjectsEvent::ConfigError { error, .. }) => {
+                assert!(
+                    error.message.contains("does not exist") || error.message.contains("not found"),
+                    "semantic error should mention missing path: {}",
+                    error.message
+                );
+                assert!(
+                    error.field.is_some(),
+                    "should identify the problematic field"
+                );
+            }
+            other => panic!("expected ConfigError, got {:?}", other),
+        }
+
+        // Old config preserved
+        let cfg = shared_config.lock().await;
+        assert_eq!(cfg.registry.projects[0].name(), "real-project");
+    }
+
+    /// Schema violation details: field + expected-vs-got surface correctly.
+    #[test]
+    fn test_schema_violation_surfaces_field_line_expected_got() {
+        // Missing required field — typify generates untagged enums, so the
+        // error may report at the "projects" level rather than individual field.
+        let yaml = "projects:\n  - path: /tmp/test\n";
+        let result: std::result::Result<hoop_schema::ProjectsRegistry, _> = serde_yaml::from_str(yaml);
+        assert!(result.is_err());
+        let err = ConfigError::from(result.unwrap_err());
+
+        // The error message should be non-empty and include line info
+        assert!(!err.message.is_empty(), "should have an error message");
+        // Structured details should be populated (exact field name varies by typify output)
+        assert!(
+            err.field.is_some() || err.expected.is_some() || err.got.is_some(),
+            "schema error should have at least one structured detail: field={:?} expected={:?} got={:?}",
+            err.field, err.expected, err.got
+        );
+
+        // Wrong type for a workspace path
+        let yaml2 = "projects:\n  - name: 42\n    path: /tmp/test\n";
+        let _result2: std::result::Result<hoop_schema::ProjectsRegistry, _> = serde_yaml::from_str(yaml2);
+        // name=42 may parse as untagged enum variant (typify) — verify ConfigError surfaces for genuinely broken YAML
+        let yaml3 = "projects:\n  - name: test\n    workspaces:\n      - path: 123\n";
+        let result3: std::result::Result<hoop_schema::ProjectsRegistry, _> = serde_yaml::from_str(yaml3);
+        assert!(result3.is_err(), "path=123 should fail parse");
+        let err3 = ConfigError::from(result3.unwrap_err());
+        // Typify untagged enums produce "data did not match any variant" errors
+        assert!(
+            err3.message.contains("invalid")
+                || err3.message.contains("mismatch")
+                || err3.message.contains("did not match"),
+            "type error should mention invalid/mismatch/no match: {}",
+            err3.message
+        );
+        // Should have line info
+        assert!(err3.line > 0 || err3.col > 0, "should report location");
+    }
+
+    /// Integration test: config.yml (HoopConfig) hot-reload schema rejection.
+    #[test]
+    fn test_hoop_config_bad_schema_rejected() {
+        // Valid minimal HoopConfig
+        let valid = r#"{"schema_version": "1.0.0"}"#;
+        let parsed: hoop_schema::HoopConfig = serde_json::from_str(valid).expect("minimal config should parse");
+        let serialized = serde_json::to_string(&parsed).expect("serialize");
+        assert!(serialized.contains("1.0.0"), "schema_version should round-trip");
+
+        // Invalid schema_version format
+        let bad_version = r#"{"schema_version": "not-a-version"}"#;
+        let result: std::result::Result<hoop_schema::HoopConfig, _> = serde_json::from_str(bad_version);
+        assert!(result.is_err(), "bad schema_version should be rejected");
+
+        // Unknown field in nested section
+        let unknown_field = r#"{"schema_version": "1.0.0", "agent": {"adapter": "unknown_adapter"}}"#;
+        let result2: std::result::Result<hoop_schema::HoopConfig, _> = serde_json::from_str(unknown_field);
+        assert!(result2.is_err(), "unknown adapter enum value should be rejected");
+    }
+
+    /// Integration test: write same content → no delta keys (no-op reload).
+    #[tokio::test]
+    async fn test_reload_identical_content_no_delta() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let config_path = tmp.path().join("projects.yaml");
+        let repo = setup_valid_project(&tmp, "repo");
+
+        write_valid_config(&config_path, "same-project", &repo);
+        let initial = ProjectsConfig::load_from(&config_path).expect("load");
+        let initial_hash = initial.content_hash.clone();
+        let shared_config = Arc::new(Mutex::new(initial));
+        let (event_tx, _) = tokio::sync::broadcast::channel::<ProjectsEvent>(64);
+
+        // Subscribe before reload
+        let mut rx = event_tx.subscribe();
+
+        // Re-write identical content (same hash, should still fire event but with empty deltas)
+        write_valid_config(&config_path, "same-project", &repo);
+        ProjectsWatcher::reload_config(&config_path, event_tx.clone(), shared_config.clone()).await;
+
+        match rx.try_recv() {
+            Ok(ProjectsEvent::ConfigReloaded { delta_keys, prev_hash, .. }) => {
+                assert!(delta_keys.is_empty(), "no keys should change on identical reload");
+                assert_eq!(prev_hash, initial_hash);
+            }
+            other => panic!("expected ConfigReloaded, got {:?}", other),
+        }
     }
 }

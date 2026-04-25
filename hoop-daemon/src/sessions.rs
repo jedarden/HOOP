@@ -287,8 +287,46 @@ impl SessionAdapter for CodexAdapter {
     }
 }
 
-/// OpenCode adapter - parses OpenCode sessions with per-message tokens and cost
+/// OpenCode adapter - parses OpenCode tree-based storage with per-message tokens and cost
+///
+/// Storage layout:
+/// ```text
+/// ~/.local/share/opencode/storage/
+///   session/<projectId>/<sessionId>.json   → {id, projectId, messageIds}
+///   message/<sessionId>/<msgId>.json       → {id, sessionId, role, createdAt, partIds, tokens, cost}
+///   part/<msgId>/<partId>.json             → {id, messageId, type, text}
+/// ```
+///
+/// Falls back to legacy `~/.opencode/sessions/*.jsonl` for older installations.
 struct OpenCodeAdapter;
+
+impl OpenCodeAdapter {
+    /// Resolve the OpenCode XDG data directory.
+    fn xdg_data_dir() -> PathBuf {
+        if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
+            if !xdg.is_empty() {
+                return PathBuf::from(xdg);
+            }
+        }
+        dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(".local")
+            .join("share")
+    }
+
+    /// Primary storage root: `~/.local/share/opencode/`
+    fn storage_dir() -> PathBuf {
+        Self::xdg_data_dir().join("opencode")
+    }
+
+    /// Legacy directory: `~/.opencode/sessions/`
+    fn legacy_session_dir() -> PathBuf {
+        dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(".opencode")
+            .join("sessions")
+    }
+}
 
 impl SessionAdapter for OpenCodeAdapter {
     fn name(&self) -> AdapterName {
@@ -296,21 +334,64 @@ impl SessionAdapter for OpenCodeAdapter {
     }
 
     fn default_session_dir(&self) -> PathBuf {
-        let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-        home.push(".opencode");
-        home.push("sessions");
-        home
+        Self::storage_dir()
     }
 
     fn discover_sessions(&self, _project_path: Option<&Path>) -> Vec<DiscoveredFile> {
         let mut discovered = Vec::new();
-        let dir = self.default_session_dir();
-        let _ = SessionTailer::scan_directory_recursive(&dir, &mut discovered);
+        let storage = Self::storage_dir();
+        let session_dir = storage.join("storage").join("session");
+
+        // Primary: tree-based storage/session/**/*.json
+        if session_dir.exists() {
+            let _ = Self::scan_directory_recursive_json(&session_dir, &mut discovered);
+        }
+
+        // Legacy fallback: ~/.opencode/sessions/*.jsonl
+        let legacy = Self::legacy_session_dir();
+        if legacy.exists() {
+            let _ = SessionTailer::scan_directory_recursive(&legacy, &mut discovered);
+        }
+
         discovered
     }
 
     fn parse_session_file(&self, path: &Path, project_path: Option<&Path>) -> Result<Option<ParsedSession>> {
-        SessionTailer::parse_opencode_session_file(path, project_path)
+        if path.extension().map(|e| e == "json").unwrap_or(false) {
+            SessionTailer::parse_opencode_tree_session(path, project_path)
+        } else {
+            SessionTailer::parse_opencode_session_file(path, project_path)
+        }
+    }
+}
+
+impl OpenCodeAdapter {
+    /// Scan directory for `.json` files (tree-based sessions).
+    fn scan_directory_recursive_json(
+        dir: &Path,
+        discovered: &mut Vec<DiscoveredFile>,
+    ) -> Result<()> {
+        if !dir.exists() {
+            return Ok(());
+        }
+        let entries = fs::read_dir(dir)
+            .with_context(|| format!("Failed to read directory {}", dir.display()))?;
+        for entry in entries {
+            let entry = entry?;
+            let path = entry.path();
+            let metadata = entry.metadata()?;
+            if metadata.is_dir() {
+                Self::scan_directory_recursive_json(&path, discovered)?;
+            } else if path.extension().map(|e| e == "json").unwrap_or(false) {
+                let mtime = metadata.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                discovered.push(DiscoveredFile {
+                    path,
+                    mtime,
+                    size: metadata.len(),
+                });
+            }
+        }
+        Ok(())
     }
 }
 
@@ -1143,7 +1224,268 @@ impl SessionTailer {
         }))
     }
 
-    /// Parse an OpenCode session file (OpenCode format with tokens and cost)
+    /// Parse an OpenCode tree-based session (storage/session/message/part layout).
+    ///
+    /// The session file lives at `storage/session/<projectId>/<sessionId>.json` and contains
+    /// `{id, projectId, messageIds}`.  Messages and parts are loaded from sibling directories.
+    fn parse_opencode_tree_session(
+        session_path: &Path,
+        project_path: Option<&Path>,
+    ) -> Result<Option<ParsedSession>> {
+        // Derive storage root from session path: storage/session/<projectId>/<sessionId>.json
+        // Walk up: sessionId → projectId → session → storage
+        let storage_root = session_path
+            .parent() // <projectId>/
+            .and_then(|p| p.parent()) // session/
+            .and_then(|p| p.parent()) // storage/
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| OpenCodeAdapter::storage_dir().join("storage"));
+
+        let session_data: serde_json::Value = {
+            let raw = fs::read(session_path)
+                .with_context(|| format!("Failed to read session file {}", session_path.display()))?;
+            serde_json::from_slice(&raw)
+                .with_context(|| format!("Failed to parse session JSON {}", session_path.display()))?
+        };
+
+        let session_id = session_data
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or_else(|| {
+                session_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("unknown")
+            })
+            .to_string();
+
+        let message_ids = session_data
+            .get("messageIds")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        // Derive cwd from session path: storage/session/<projectId>/...
+        let project_dir_id = session_path
+            .parent()
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+        let cwd = if project_dir_id.is_empty() {
+            String::new()
+        } else {
+            // Heuristic: project dir often encodes the project path
+            String::new()
+        };
+
+        let mut messages = Vec::new();
+        let mut total_usage = ParsedSessionTotalUsage {
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+        };
+        let mut first_prompt_hash = String::new();
+        let mut first_user_content: Option<String> = None;
+        let mut start_time: Option<DateTime<Utc>> = None;
+        let mut end_time: Option<DateTime<Utc>> = None;
+
+        let message_dir = storage_root.join("message").join(&session_id);
+
+        for msg_id in &message_ids {
+            let msg_path = message_dir.join(format!("{}.json", msg_id));
+            let msg_data = match fs::read_to_string(&msg_path) {
+                Ok(raw) => match serde_json::from_str::<serde_json::Value>(&raw) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                },
+                Err(_) => continue,
+            };
+
+            let role = msg_data
+                .get("role")
+                .and_then(|v| v.as_str())
+                .unwrap_or("user")
+                .to_string();
+
+            let timestamp = msg_data
+                .get("createdAt")
+                .and_then(|v| v.as_str())
+                .and_then(|s| s.parse().ok());
+
+            if start_time.is_none() {
+                start_time = timestamp;
+            }
+            end_time = timestamp;
+
+            // Per-message tokens
+            let usage = if let Some(tokens) = msg_data.get("tokens") {
+                let input = tokens.get("input").and_then(|v| v.as_u64()).unwrap_or(0) as i64;
+                let output = tokens.get("output").and_then(|v| v.as_u64()).unwrap_or(0) as i64;
+                let cache_read = tokens
+                    .get("cache_read")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as i64;
+                let cache_write = tokens
+                    .get("cache_write")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0) as i64;
+                Some(ParsedSessionMessagesItemUsage {
+                    input_tokens: input,
+                    output_tokens: output,
+                    cache_read_tokens: cache_read,
+                    cache_write_tokens: cache_write,
+                })
+            } else {
+                None
+            };
+
+            if let Some(u) = &usage {
+                total_usage.input_tokens += u.input_tokens;
+                total_usage.output_tokens += u.output_tokens;
+                total_usage.cache_read_tokens += u.cache_read_tokens;
+                total_usage.cache_write_tokens += u.cache_write_tokens;
+            }
+
+            // Per-message cost (parsed but accumulated into total for downstream use)
+            let _cost: Option<f64> = msg_data
+                .get("cost")
+                .and_then(|v| v.as_f64());
+
+            // Load parts to assemble content
+            let part_ids = msg_data
+                .get("partIds")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
+
+            let part_dir = storage_root.join("part").join(msg_id);
+            let mut content_parts = Vec::new();
+            for part_id in &part_ids {
+                let part_path = part_dir.join(format!("{}.json", part_id));
+                if let Ok(raw) = fs::read_to_string(&part_path) {
+                    if let Ok(part_data) = serde_json::from_str::<serde_json::Value>(&raw) {
+                        let part_type = part_data
+                            .get("type")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("text");
+                        if part_type == "text" {
+                            if let Some(text) = part_data.get("text").and_then(|v| v.as_str()) {
+                                content_parts.push(serde_json::json!({
+                                    "type": "text",
+                                    "text": text
+                                }));
+                            }
+                        } else if part_type == "tool-call" || part_type == "tool_use" {
+                            let tool_name = part_data
+                                .get("toolName")
+                                .or_else(|| part_data.get("name"))
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("unknown");
+                            let input = part_data.get("input").cloned().unwrap_or(serde_json::Value::Null);
+                            content_parts.push(serde_json::json!({
+                                "type": "tool_use",
+                                "name": tool_name,
+                                "input": input
+                            }));
+                        } else if part_type == "tool-result" || part_type == "tool_result" {
+                            let output = part_data
+                                .get("text")
+                                .or_else(|| part_data.get("output"))
+                                .cloned()
+                                .unwrap_or(serde_json::Value::Null);
+                            content_parts.push(serde_json::json!({
+                                "type": "tool_result",
+                                "content": output
+                            }));
+                        }
+                    }
+                }
+            }
+
+            let content = if content_parts.is_empty() {
+                // Fallback: try top-level content/text field
+                msg_data
+                    .get("content")
+                    .cloned()
+                    .or_else(|| msg_data.get("text").cloned())
+                    .unwrap_or(serde_json::Value::Null)
+            } else if content_parts.len() == 1 {
+                content_parts.into_iter().next().unwrap()
+            } else {
+                serde_json::Value::Array(content_parts)
+            };
+
+            // First-prompt capture for session binding
+            if role == "user" && first_prompt_hash.is_empty() {
+                first_prompt_hash = Self::hash_content(&content);
+                first_user_content = extract_text_content(&content);
+            }
+
+            messages.push(ParsedSessionMessagesItem {
+                role,
+                content,
+                usage,
+                timestamp,
+            });
+        }
+
+        if let Some(project_path) = project_path {
+            if !cwd.is_empty() && !cwd_matches_project(&cwd, project_path) {
+                return Ok(None);
+            }
+        }
+
+        // Derive title from first user message
+        let title = first_user_content
+            .as_deref()
+            .map(|s| s.chars().take(50).collect::<String>())
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "(Untitled)".to_string());
+
+        let tag_result = tag_join::resolve(&title, first_user_content.as_deref());
+        let kind = tag_result.kind;
+
+        let id = if session_id.is_empty() {
+            uuid::Uuid::new_v4().to_string()
+        } else {
+            session_id.clone()
+        };
+
+        let created_at = start_time.unwrap_or_else(Utc::now);
+        let updated_at = end_time.unwrap_or(created_at);
+        let canonical_cwd = resolve_canonical_cwd(&cwd);
+
+        Ok(Some(ParsedSession {
+            id,
+            session_id,
+            provider: "opencode".to_string(),
+            kind,
+            cwd,
+            canonical_cwd: if canonical_cwd.is_empty() {
+                None
+            } else {
+                Some(canonical_cwd)
+            },
+            title,
+            messages,
+            total_usage,
+            created_at,
+            updated_at,
+            complete: false,
+            file_path: session_path.display().to_string(),
+        }))
+    }
+
+    /// Parse a legacy OpenCode session file (flat NDJSON with tokens and cost)
     fn parse_opencode_session_file(
         path: &Path,
         project_path: Option<&Path>,
@@ -2020,5 +2362,277 @@ mod tests {
             cwd_matches_project(&cwd_via_link, &canonical),
             "CWD via symlink subdir must match canonical project"
         );
+    }
+
+    // ── OpenCode tree-based session parser tests ───────────────────────────
+
+    fn setup_opencode_tree(tmp: &tempfile::TempDir) -> PathBuf {
+        let storage = tmp.path().join("storage");
+        let project_id = "proj-001";
+        let session_id = "sess-abc";
+        let msg_id = "msg-001";
+        let part_id_text = "part-txt";
+        let part_id_tool = "part-tool";
+
+        // session/<projectId>/<sessionId>.json
+        let session_dir = storage.join("session").join(project_id);
+        fs::create_dir_all(&session_dir).expect("mkdir session");
+        let session_json = serde_json::json!({
+            "id": session_id,
+            "projectId": project_id,
+            "messageIds": [msg_id]
+        });
+        fs::write(
+            session_dir.join(format!("{}.json", session_id)),
+            serde_json::to_string_pretty(&session_json).unwrap(),
+        )
+        .expect("write session");
+
+        // message/<sessionId>/<msgId>.json
+        let msg_dir = storage.join("message").join(session_id);
+        fs::create_dir_all(&msg_dir).expect("mkdir message");
+        let msg_json = serde_json::json!({
+            "id": msg_id,
+            "sessionId": session_id,
+            "role": "user",
+            "createdAt": "2025-06-15T10:30:00Z",
+            "partIds": [part_id_text, part_id_tool],
+            "tokens": {
+                "input": 150,
+                "output": 80,
+                "cache_read": 20,
+                "cache_write": 5
+            },
+            "cost": 0.0042
+        });
+        fs::write(
+            msg_dir.join(format!("{}.json", msg_id)),
+            serde_json::to_string_pretty(&msg_json).unwrap(),
+        )
+        .expect("write message");
+
+        // part/<msgId>/<partId>.json
+        let part_dir = storage.join("part").join(msg_id);
+        fs::create_dir_all(&part_dir).expect("mkdir part");
+
+        let text_part = serde_json::json!({
+            "id": part_id_text,
+            "messageId": msg_id,
+            "type": "text",
+            "text": "[needle:alpha:bd-test123:pluck] Implement the widget"
+        });
+        fs::write(
+            part_dir.join(format!("{}.json", part_id_text)),
+            serde_json::to_string_pretty(&text_part).unwrap(),
+        )
+        .expect("write text part");
+
+        let tool_part = serde_json::json!({
+            "id": part_id_tool,
+            "messageId": msg_id,
+            "type": "tool-call",
+            "toolName": "Read",
+            "input": {"file_path": "/some/file.rs"}
+        });
+        fs::write(
+            part_dir.join(format!("{}.json", part_id_tool)),
+            serde_json::to_string_pretty(&tool_part).unwrap(),
+        )
+        .expect("write tool part");
+
+        session_dir.join(format!("{}.json", session_id))
+    }
+
+    #[test]
+    fn opencode_tree_session_parses_tokens_and_cost() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let session_path = setup_opencode_tree(&tmp);
+
+        let result = SessionTailer::parse_opencode_tree_session(&session_path, None)
+            .expect("parse should not error")
+            .expect("should produce a session");
+
+        assert_eq!(result.provider, "opencode");
+        assert_eq!(result.session_id, "sess-abc");
+        assert_eq!(result.messages.len(), 1);
+
+        let msg = &result.messages[0];
+        assert_eq!(msg.role, "user");
+        let usage = msg.usage.as_ref().expect("message should have usage");
+        assert_eq!(usage.input_tokens, 150);
+        assert_eq!(usage.output_tokens, 80);
+        assert_eq!(usage.cache_read_tokens, 20);
+        assert_eq!(usage.cache_write_tokens, 5);
+
+        // Total usage matches per-message
+        assert_eq!(result.total_usage.input_tokens, 150);
+        assert_eq!(result.total_usage.output_tokens, 80);
+        assert_eq!(result.total_usage.cache_read_tokens, 20);
+        assert_eq!(result.total_usage.cache_write_tokens, 5);
+    }
+
+    #[test]
+    fn opencode_tree_session_title_from_first_user_message() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let session_path = setup_opencode_tree(&tmp);
+
+        let result = SessionTailer::parse_opencode_tree_session(&session_path, None)
+            .expect("parse")
+            .expect("session");
+
+        assert_eq!(result.title, "[needle:alpha:bd-test123:pluck] Implement the widg");
+    }
+
+    #[test]
+    fn opencode_tree_session_binding_via_tag_join() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let session_path = setup_opencode_tree(&tmp);
+
+        let result = SessionTailer::parse_opencode_tree_session(&session_path, None)
+            .expect("parse")
+            .expect("session");
+
+        match result.kind {
+            ParsedSessionKind::Variant0 { worker, bead, strand } => {
+                assert_eq!(worker, "alpha");
+                assert_eq!(bead, "bd-test123");
+                assert_eq!(strand.as_deref(), Some("pluck"));
+            }
+            other => panic!("Expected Worker kind, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn opencode_tree_session_assembles_parts() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let session_path = setup_opencode_tree(&tmp);
+
+        let result = SessionTailer::parse_opencode_tree_session(&session_path, None)
+            .expect("parse")
+            .expect("session");
+
+        let msg = &result.messages[0];
+        // Content should be an array of 2 parts (text + tool_use)
+        let arr = msg.content.as_array().expect("content should be array for multi-part");
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr[0]["type"], "text");
+        assert_eq!(arr[1]["type"], "tool_use");
+        assert_eq!(arr[1]["name"], "Read");
+    }
+
+    #[test]
+    fn opencode_tree_session_timestamps() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let session_path = setup_opencode_tree(&tmp);
+
+        let result = SessionTailer::parse_opencode_tree_session(&session_path, None)
+            .expect("parse")
+            .expect("session");
+
+        assert_eq!(
+            result.created_at.to_rfc3339(),
+            "2025-06-15T10:30:00+00:00"
+        );
+        assert_eq!(
+            result.updated_at.to_rfc3339(),
+            "2025-06-15T10:30:00+00:00"
+        );
+    }
+
+    #[test]
+    fn opencode_tree_empty_session_returns_none() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let storage = tmp.path().join("storage");
+        let session_dir = storage.join("session").join("empty-proj");
+        fs::create_dir_all(&session_dir).expect("mkdir");
+
+        let session_json = serde_json::json!({
+            "id": "empty-sess",
+            "messageIds": []
+        });
+        let path = session_dir.join("empty-sess.json");
+        fs::write(&path, serde_json::to_string(&session_json).unwrap()).expect("write");
+
+        let result = SessionTailer::parse_opencode_tree_session(&path, None)
+            .expect("parse should not error")
+            .expect("should produce a session");
+        assert!(result.messages.is_empty());
+        assert_eq!(result.title, "(Untitled)");
+    }
+
+    #[test]
+    fn opencode_tree_missing_message_files_skipped_gracefully() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let storage = tmp.path().join("storage");
+        let session_dir = storage.join("session").join("proj-missing");
+        fs::create_dir_all(&session_dir).expect("mkdir");
+
+        // Session references a message that doesn't exist on disk
+        let session_json = serde_json::json!({
+            "id": "sess-missing",
+            "messageIds": ["ghost-msg"]
+        });
+        let path = session_dir.join("sess-missing.json");
+        fs::write(&path, serde_json::to_string(&session_json).unwrap()).expect("write");
+
+        let result = SessionTailer::parse_opencode_tree_session(&path, None)
+            .expect("parse should not error")
+            .expect("should produce a session");
+        assert!(result.messages.is_empty());
+    }
+
+    #[test]
+    fn opencode_tree_tool_result_part() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let storage = tmp.path().join("storage");
+        let session_id = "sess-toolres";
+        let msg_id = "msg-tr";
+
+        let session_dir = storage.join("session").join("proj-tr");
+        fs::create_dir_all(&session_dir).expect("mkdir");
+        fs::write(
+            session_dir.join("sess-toolres.json"),
+            serde_json::json!({"id": session_id, "messageIds": [msg_id]}).to_string(),
+        )
+        .expect("write session");
+
+        let msg_dir = storage.join("message").join(session_id);
+        fs::create_dir_all(&msg_dir).expect("mkdir");
+        fs::write(
+            msg_dir.join(format!("{}.json", msg_id)),
+            serde_json::json!({
+                "id": msg_id,
+                "role": "assistant",
+                "createdAt": "2025-07-01T00:00:00Z",
+                "partIds": ["p-tr"],
+                "tokens": {"input": 200, "output": 50, "cache_read": 0, "cache_write": 0}
+            })
+            .to_string(),
+        )
+        .expect("write msg");
+
+        let part_dir = storage.join("part").join(msg_id);
+        fs::create_dir_all(&part_dir).expect("mkdir");
+        fs::write(
+            part_dir.join("p-tr.json"),
+            serde_json::json!({
+                "id": "p-tr",
+                "type": "tool-result",
+                "text": "file contents here"
+            })
+            .to_string(),
+        )
+        .expect("write part");
+
+        let path = session_dir.join("sess-toolres.json");
+        let result = SessionTailer::parse_opencode_tree_session(&path, None)
+            .expect("parse")
+            .expect("session");
+
+        let msg = &result.messages[0];
+        let content = &msg.content;
+        assert_eq!(content["type"], "tool_result");
+        assert_eq!(content["content"], "file contents here");
+        assert_eq!(msg.usage.as_ref().unwrap().input_tokens, 200);
     }
 }

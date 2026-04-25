@@ -63,6 +63,7 @@ pub mod morning_brief;
 pub mod api_morning_brief;
 pub mod redaction;
 pub mod worker_ack;
+pub mod collision_detector;
 
 /// Worker execution state from heartbeats
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -248,6 +249,8 @@ pub struct DaemonState {
     pub ws_connection_tracker: Arc<ws::WsConnectionTracker>,
     /// Spawn-ack monitor — verifies workers wrote ~/.hoop/workers/<name>.ack (§M5)
     pub worker_ack_monitor: Arc<worker_ack::WorkerAckMonitor>,
+    /// Broadcast channel for collision alert events (§6 Phase 2, deliverable 12)
+    pub collision_alert_tx: broadcast::Sender<ws::CollisionAlertData>,
 }
 
 /// Health check endpoint handler — returns 200 if the process is responsive.
@@ -872,8 +875,30 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     let (capacity_tx, _) = broadcast::channel::<Vec<capacity::AccountCapacity>>(64);
     let capacity_meter_config = capacity::CapacityMeterConfig::default();
     let account_count = capacity_meter_config.account_dirs.len();
-    capacity::CapacityMeter::spawn_refresh_loop(capacity_meter_config, capacity_tx.clone());
+    // Trigger channel: bead close events wake the capacity meter immediately
+    let (capacity_trigger_tx, capacity_trigger_rx) = broadcast::channel::<()>(256);
+    capacity::CapacityMeter::spawn_refresh_loop(
+        capacity_meter_config,
+        capacity_tx.clone(),
+        Some(capacity_trigger_rx),
+    );
     info!("Capacity meter refresh loop started ({} account(s))", account_count);
+
+    // Forward bead close events → capacity trigger for immediate recompute
+    {
+        let mut bead_close_rx = bead_tx.subscribe();
+        let cap_trig = capacity_trigger_tx.clone();
+        tokio::spawn(async move {
+            loop {
+                match bead_close_rx.recv().await {
+                    Ok(bead) if bead.status == "closed" => { let _ = cap_trig.send(()); }
+                    Ok(_) => {}
+                    Err(broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        });
+    }
 
     // Initialize cost aggregator
     let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
@@ -1192,7 +1217,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                 name: r.project_name.clone(),
                 label: meta.as_ref().map(|m| m.label.clone()).unwrap_or_else(|| r.project_name.clone()),
                 color: meta.as_ref().map(|m| m.color.clone()).unwrap_or_else(|| "#3b82f6".to_string()),
-                path: r.display_path.display().to_string(),
+                path: r.project_path.display().to_string(),
                 degraded: !r.state.is_running(),
                 runtime_state: Some(r.state.to_display_string().to_string()),
                 runtime_error: r.state.error().map(|e| e.to_string()),
@@ -1321,6 +1346,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         resolved_config,
         ws_connection_tracker: Arc::new(ws::WsConnectionTracker::new()),
         worker_ack_monitor,
+        collision_alert_tx: broadcast::channel::<ws::CollisionAlertData>(64).0,
     };
 
     // Forward project runtime status updates to shared store and broadcast
@@ -1550,6 +1576,10 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         tokens_5h: cap.tokens_5h as i64,
                         tokens_7d: cap.tokens_7d as i64,
                         cost_7d_usd: 0.0,
+                        stitch_close_rate_per_min: cap.stitch_close_rate_per_min,
+                        mean_cost_per_stitch_tokens: cap.mean_cost_per_stitch_tokens,
+                        forecast_5h_stitch_min: cap.forecast_full_5h_stitch_min,
+                        forecast_7d_stitch_min: cap.forecast_full_7d_stitch_min,
                     };
                     if let Err(e) = fleet::upsert_capacity_rollup(&row) {
                         warn!("fleet: upsert_capacity_rollup failed for {}: {}", cap.account_id, e);
