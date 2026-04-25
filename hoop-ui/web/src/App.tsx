@@ -13,6 +13,7 @@ import WorkerTimeline from './WorkerTimeline';
 import AuditPanel from './AuditPanel';
 import { SearchPalette } from './SearchPalette';
 import CrossProjectDashboard from './CrossProjectDashboard';
+import PatternsView from './PatternsView';
 
 type Route =
   | { view: 'overview' }
@@ -20,7 +21,8 @@ type Route =
   | { view: 'fleet' }
   | { view: 'timeline' }
   | { view: 'audit' }
-  | { view: 'dashboard' };
+  | { view: 'dashboard' }
+  | { view: 'patterns'; patternId?: string };
 
 function ConfigBanner({ error }: { error: { message: string; line: number; col: number; field?: string; expected?: string; got?: string } }) {
   return (
@@ -38,12 +40,19 @@ function ConfigBanner({ error }: { error: { message: string; line: number; col: 
 }
 
 function parseHash(hash: string): Route {
-  const path = hash.replace(/^#\/?/, '');
+  const withoutPrefix = hash.replace(/^#\/?/, '');
+  // Strip any ?filter=... query params embedded in the hash (used by FilesTab).
+  const [path] = withoutPrefix.split('?', 2);
   if (!path) return { view: 'overview' };
   if (path === 'fleet') return { view: 'fleet' };
   if (path === 'timeline') return { view: 'timeline' };
   if (path === 'audit') return { view: 'audit' };
   if (path === 'dashboard') return { view: 'dashboard' };
+  if (path === 'patterns') return { view: 'patterns' };
+  if (path.startsWith('patterns/')) {
+    const patternId = path.slice('patterns/'.length);
+    if (patternId) return { view: 'patterns', patternId };
+  }
   return { view: 'project', name: path };
 }
 
@@ -95,6 +104,38 @@ export default function App() {
     window.location.hash = `#/${name}`;
   }, []);
 
+  // Patterns view — list and detail
+  if (route.view === 'patterns') {
+    return (
+      <>
+        <div className="app app-project-detail">
+          {configStatus.error && <ConfigBanner error={configStatus.error} />}
+          <header className="app-header-mini">
+            <div className="header-top">
+              <div className="header-nav">
+                <a href="#/" className="back-link">&larr; All Projects</a>
+                <a href="#/dashboard" className="header-nav-link">Dashboard</a>
+                <a href="#/fleet" className="header-nav-link">Fleet</a>
+                <a href="#/audit" className="header-nav-link">Audit</a>
+              </div>
+              <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
+                <span className="indicator-dot" />
+                {wsConnected ? 'Connected' : 'Connecting...'}
+              </div>
+            </div>
+          </header>
+          <main>
+            <PatternsView
+              patternId={route.patternId}
+              projectCards={projectCards}
+            />
+          </main>
+        </div>
+        <SearchPalette />
+      </>
+    );
+  }
+
   // Cross-project dashboard view
   if (route.view === 'dashboard') {
     return (
@@ -105,6 +146,7 @@ export default function App() {
             <div className="header-top">
               <div className="header-nav">
                 <a href="#/" className="back-link">&larr; All Projects</a>
+                <a href="#/patterns" className="header-nav-link">Patterns</a>
                 <a href="#/fleet" className="header-nav-link">Fleet</a>
                 <a href="#/timeline" className="header-nav-link">Timeline</a>
                 <a href="#/audit" className="header-nav-link">Audit</a>

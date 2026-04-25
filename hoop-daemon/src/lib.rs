@@ -61,9 +61,11 @@ pub mod embedding;
 pub mod vector_index;
 pub mod morning_brief;
 pub mod api_morning_brief;
+pub mod api_patterns;
 pub mod redaction;
 pub mod worker_ack;
 pub mod collision_detector;
+pub mod bead_commit_index;
 
 /// Worker execution state from heartbeats
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -429,6 +431,67 @@ async fn get_project_files(
     Ok(Json(entries))
 }
 
+/// Query parameters for the file search endpoint.
+#[derive(serde::Deserialize)]
+struct FileSearchQuery {
+    /// Extension filter: "rs", "ts,tsx", "*.{ts,tsx}", etc.
+    ext: Option<String>,
+    /// Git ref; only files changed since this ref are returned (e.g. "HEAD~3").
+    modified_since: Option<String>,
+    /// Ripgrep content pattern.
+    grep: Option<String>,
+}
+
+/// Search files in a project using extension, modified-since, and/or grep filters.
+async fn search_project_files(
+    axum::extract::Path(project): axum::extract::Path<String>,
+    axum::extract::Query(params): axum::extract::Query<FileSearchQuery>,
+    axum::extract::State(state): axum::extract::State<DaemonState>,
+) -> Result<Json<Vec<files::FileSearchResult>>, axum::http::StatusCode> {
+    if id_validators::validate_project_name(&project).is_err() {
+        return Err(axum::http::StatusCode::BAD_REQUEST);
+    }
+
+    let project_root = {
+        let projects = state.projects.read().unwrap();
+        projects
+            .iter()
+            .find(|p| p.name == project)
+            .map(|p| std::path::PathBuf::from(&p.path))
+            .ok_or(axum::http::StatusCode::NOT_FOUND)?
+    };
+
+    let ext_exts = params
+        .ext
+        .as_deref()
+        .map(files::parse_ext_patterns)
+        .unwrap_or_default();
+
+    let modified_since = params.modified_since.clone();
+    let grep = params.grep.clone();
+
+    // Validate modified_since ref (no shell metacharacters).
+    if let Some(ref r) = modified_since {
+        if r.contains(|c: char| matches!(c, ';' | '|' | '&' | '$' | '`' | '\n')) {
+            return Err(axum::http::StatusCode::BAD_REQUEST);
+        }
+    }
+
+    let results = tokio::task::spawn_blocking(move || {
+        files::search_files(
+            &project_root,
+            &ext_exts,
+            modified_since.as_deref(),
+            grep.as_deref(),
+        )
+    })
+    .await
+    .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
+    .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    Ok(Json(results))
+}
+
 /// Get bead events for a specific bead (from events.jsonl)
 async fn get_bead_events(
     axum::extract::Path(bead_id): axum::extract::Path<String>,
@@ -628,6 +691,34 @@ async fn get_runtime_status() -> Result<Json<Vec<fleet::RuntimeStatusRow>>, (axu
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
 }
 
+/// Query parameters for the bead-commits index endpoint.
+#[derive(serde::Deserialize)]
+struct BeadCommitsQuery {
+    /// Filter by bead_id (e.g. `?bead_id=hoop-ttb.3.35`)
+    bead_id: Option<String>,
+    /// Filter by commit SHA (e.g. `?sha=abc123`)
+    sha: Option<String>,
+}
+
+/// GET /api/bead-commits — query the bead-to-commit index by bead_id or sha.
+async fn get_bead_commits(
+    axum::extract::Query(params): axum::extract::Query<BeadCommitsQuery>,
+) -> Result<Json<Vec<fleet::BeadCommitRow>>, (axum::http::StatusCode, String)> {
+    tokio::task::spawn_blocking(move || {
+        if let Some(bead_id) = params.bead_id {
+            fleet::query_bead_commits_by_bead_id(&bead_id)
+        } else if let Some(sha) = params.sha {
+            fleet::query_bead_commits_by_sha(&sha)
+        } else {
+            Err(anyhow::anyhow!("Requires ?bead_id= or ?sha= query parameter"))
+        }
+    })
+    .await
+    .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .map(Json)
+    .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))
+}
+
 /// Build the daemon router with all endpoints
 pub fn router() -> Router<DaemonState> {
     Router::new()
@@ -643,7 +734,9 @@ pub fn router() -> Router<DaemonState> {
         .route("/api/cost/codex-accounts/monthly", get(get_codex_account_monthly_rollup))
         .route("/api/dashboard/cross-project", get(get_cross_project_dashboard))
         .route("/api/fleet/runtime-status", get(get_runtime_status))
+        .route("/api/bead-commits", get(get_bead_commits))
         .route("/api/projects/:project/files", get(get_project_files))
+        .route("/api/projects/:project/files/search", get(search_project_files))
         .route("/api/attachments/:attachment_type/:id/:filename", get(api_attachments::serve_attachment))
         .route("/ws", get(ws::ws_handler))
         .merge(api_uploads::router())
@@ -656,6 +749,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_preview::router())
         .merge(api_stitch_decompose::router())
         .merge(api_stitch_read::router())
+        .merge(api_patterns::router())
         .route("/api/workers/timeline", get(api_timeline::get_worker_timeline))
         .merge(api_agent::router())
         .merge(api_morning_brief::router())
@@ -976,6 +1070,16 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     let initial_config = projects_watcher.config().await;
     if let Err(e) = supervisor.reconcile(&initial_config).await {
         warn!("Initial project reconcile failed: {}", e);
+    }
+
+    // Spawn bead-to-commit indexer (full walk on startup, incremental every 30s)
+    {
+        let workspace_paths: Vec<String> = initial_config
+            .all_workspace_paths()
+            .into_iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect();
+        bead_commit_index::spawn_indexer(workspace_paths);
     }
 
     // Spawn task to handle projects config changes

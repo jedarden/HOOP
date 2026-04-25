@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export interface FilesTabProps {
   projectName: string;
@@ -14,6 +14,28 @@ interface FileEntry {
   size: number;
   mtime: number;
   git_status: GitStatus;
+}
+
+interface GrepMatch {
+  line_number: number;
+  line: string;
+  match_start: number;
+  match_end: number;
+}
+
+interface FileSearchResult {
+  path: string;
+  name: string;
+  size: number;
+  mtime: number;
+  git_status: GitStatus;
+  grep_match: GrepMatch | null;
+}
+
+interface FileFilter {
+  ext: string;
+  modifiedSince: string;
+  grep: string;
 }
 
 function formatSize(bytes: number): string {
@@ -44,6 +66,38 @@ const GIT_STATUS_BADGE: Record<GitStatus, { label: string; color: string } | nul
   renamed: { label: 'R', color: '#4285f4' },
   dirty: { label: '~', color: '#f9ab00' },
 };
+
+// ─── URL filter persistence ───────────────────────────────────────────────────
+
+function readFiltersFromHash(): FileFilter {
+  const hash = window.location.hash.replace(/^#\/?/, '');
+  const qIdx = hash.indexOf('?');
+  if (qIdx === -1) return { ext: '', modifiedSince: '', grep: '' };
+  const params = new URLSearchParams(hash.slice(qIdx + 1));
+  return {
+    ext: params.get('ext') ?? '',
+    modifiedSince: params.get('modified_since') ?? '',
+    grep: params.get('grep') ?? '',
+  };
+}
+
+function writeFiltersToHash(filters: FileFilter): void {
+  const hash = window.location.hash.replace(/^#\/?/, '');
+  const pathPart = hash.split('?')[0];
+  const params = new URLSearchParams();
+  if (filters.ext) params.set('ext', filters.ext);
+  if (filters.modifiedSince) params.set('modified_since', filters.modifiedSince);
+  if (filters.grep) params.set('grep', filters.grep);
+  const qs = params.toString();
+  const newHash = `#/${pathPart}${qs ? `?${qs}` : ''}`;
+  window.history.replaceState(null, '', newHash);
+}
+
+function hasActiveFilter(f: FileFilter): boolean {
+  return Boolean(f.ext || f.modifiedSince || f.grep);
+}
+
+// ─── Tree node (unchanged tree view) ─────────────────────────────────────────
 
 interface TreeNodeProps {
   entry: FileEntry;
@@ -134,19 +188,194 @@ function TreeNode({
   );
 }
 
+// ─── Search result row ────────────────────────────────────────────────────────
+
+function SearchResultRow({
+  result,
+  isSelected,
+  onSelect,
+}: {
+  result: FileSearchResult;
+  isSelected: boolean;
+  onSelect: (r: FileSearchResult) => void;
+}) {
+  const badge = GIT_STATUS_BADGE[result.git_status];
+  const gm = result.grep_match;
+
+  // Highlight the match inside the line.
+  let lineNode: React.ReactNode = null;
+  if (gm) {
+    const { line, match_start, match_end } = gm;
+    // Truncate long lines, keeping context around the match.
+    const MAX_CHARS = 120;
+    let displayLine = line;
+    let adjustedStart = match_start;
+    let adjustedEnd = match_end;
+    if (line.length > MAX_CHARS) {
+      const contextBefore = 30;
+      const sliceStart = Math.max(0, match_start - contextBefore);
+      displayLine = (sliceStart > 0 ? '…' : '') + line.slice(sliceStart, sliceStart + MAX_CHARS);
+      adjustedStart = match_start - sliceStart + (sliceStart > 0 ? 1 : 0);
+      adjustedEnd = match_end - sliceStart + (sliceStart > 0 ? 1 : 0);
+      if (sliceStart + MAX_CHARS < line.length) displayLine += '…';
+    }
+
+    lineNode = (
+      <span className="file-grep-line">
+        <span className="file-grep-lineno">{gm.line_number}</span>
+        <span className="file-grep-text">
+          {displayLine.slice(0, adjustedStart)}
+          <mark className="file-grep-mark">{displayLine.slice(adjustedStart, adjustedEnd)}</mark>
+          {displayLine.slice(adjustedEnd)}
+        </span>
+      </span>
+    );
+  }
+
+  return (
+    <div
+      className={`file-search-row${isSelected ? ' selected' : ''}`}
+      onClick={() => onSelect(result)}
+      title={result.path}
+    >
+      <div className="file-search-top">
+        <span className="file-icon">📄</span>
+        <span className="file-search-path">{result.path}</span>
+        {badge && (
+          <span className="file-git-badge" style={{ color: badge.color }} title={result.git_status}>
+            {badge.label}
+          </span>
+        )}
+        <span className="file-meta">
+          {formatMtime(result.mtime)}
+          {result.size > 0 && <span className="file-size">{formatSize(result.size)}</span>}
+        </span>
+      </div>
+      {lineNode && <div className="file-search-match">{lineNode}</div>}
+    </div>
+  );
+}
+
+// ─── Filter bar ───────────────────────────────────────────────────────────────
+
+interface FilterBarProps {
+  filter: FileFilter;
+  onChange: (f: FileFilter) => void;
+  resultCount: number | null;
+  searching: boolean;
+}
+
+const MODIFIED_SINCE_SUGGESTIONS = ['HEAD~1', 'HEAD~3', 'HEAD~5', 'HEAD~10', 'HEAD~20', 'main', 'master'];
+
+function FilterBar({ filter, onChange, resultCount, searching }: FilterBarProps) {
+  const active = hasActiveFilter(filter);
+
+  return (
+    <div className={`files-filter-bar${active ? ' active' : ''}`}>
+      <div className="files-filter-inputs">
+        <div className="files-filter-field">
+          <label className="files-filter-label" htmlFor="ff-ext">ext</label>
+          <input
+            id="ff-ext"
+            className="files-filter-input"
+            type="text"
+            placeholder="*.rs  or  *.{ts,tsx}"
+            value={filter.ext}
+            onChange={e => onChange({ ...filter, ext: e.target.value })}
+            spellCheck={false}
+          />
+        </div>
+
+        <div className="files-filter-field">
+          <label className="files-filter-label" htmlFor="ff-since">since</label>
+          <input
+            id="ff-since"
+            className="files-filter-input"
+            type="text"
+            placeholder="HEAD~N or ref"
+            list="modified-since-suggestions"
+            value={filter.modifiedSince}
+            onChange={e => onChange({ ...filter, modifiedSince: e.target.value })}
+            spellCheck={false}
+          />
+          <datalist id="modified-since-suggestions">
+            {MODIFIED_SINCE_SUGGESTIONS.map(s => (
+              <option key={s} value={s} />
+            ))}
+          </datalist>
+        </div>
+
+        <div className="files-filter-field files-filter-field--grep">
+          <label className="files-filter-label" htmlFor="ff-grep">grep</label>
+          <input
+            id="ff-grep"
+            className="files-filter-input"
+            type="text"
+            placeholder="regex pattern"
+            value={filter.grep}
+            onChange={e => onChange({ ...filter, grep: e.target.value })}
+            spellCheck={false}
+          />
+        </div>
+      </div>
+
+      <div className="files-filter-status">
+        {searching && <span className="files-filter-spinner">⋯</span>}
+        {!searching && resultCount !== null && (
+          <span className="files-filter-count">{resultCount} file{resultCount !== 1 ? 's' : ''}</span>
+        )}
+        {active && (
+          <button
+            className="files-filter-clear"
+            onClick={() => onChange({ ext: '', modifiedSince: '', grep: '' })}
+            title="Clear all filters"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 export default function FilesTab({ projectName, projectPath }: FilesTabProps) {
+  // Tree state
   const [rootEntries, setRootEntries] = useState<FileEntry[]>([]);
   const [rootLoading, setRootLoading] = useState(true);
   const [rootError, setRootError] = useState<string | null>(null);
-
-  // Entries fetched for each expanded directory path
   const [childCache, setChildCache] = useState<Map<string, FileEntry[]>>(new Map());
-  // Directories currently being expanded (loading children)
   const [loading, setLoading] = useState<Set<string>>(new Set());
-  // Directories that have been expanded (show children)
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
+  // Filter state — initialised from URL hash
+  const [filter, setFilter] = useState<FileFilter>(readFiltersFromHash);
+
+  // Search state
+  const [searchResults, setSearchResults] = useState<FileSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  const searchAbortRef = useRef<AbortController | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const activeFilter = hasActiveFilter(filter);
+
+  // ── Sync filter → URL ──────────────────────────────────────────────────────
+  useEffect(() => {
+    writeFiltersToHash(filter);
+  }, [filter]);
+
+  // ── Sync URL hash changes → filter (back/forward nav) ─────────────────────
+  useEffect(() => {
+    const handler = () => setFilter(readFiltersFromHash());
+    window.addEventListener('hashchange', handler);
+    return () => window.removeEventListener('hashchange', handler);
+  }, []);
+
+  // ── Tree: fetch root ───────────────────────────────────────────────────────
   const fetchDir = useCallback(
     async (relPath: string): Promise<FileEntry[]> => {
       const url = `/api/projects/${encodeURIComponent(projectName)}/files${relPath ? `?path=${encodeURIComponent(relPath)}` : ''}`;
@@ -157,7 +386,6 @@ export default function FilesTab({ projectName, projectPath }: FilesTabProps) {
     [projectName],
   );
 
-  // Load root on mount
   useEffect(() => {
     setRootLoading(true);
     setRootError(null);
@@ -185,13 +413,11 @@ export default function FilesTab({ projectName, projectPath }: FilesTabProps) {
         return;
       }
 
-      // Already cached — just expand
       if (childCache.has(entry.path)) {
         setExpanded(prev => new Set(prev).add(entry.path));
         return;
       }
 
-      // Fetch children
       setLoading(prev => new Set(prev).add(entry.path));
       setExpanded(prev => new Set(prev).add(entry.path));
 
@@ -211,10 +437,54 @@ export default function FilesTab({ projectName, projectPath }: FilesTabProps) {
     [expanded, childCache, fetchDir],
   );
 
-  const handleSelect = useCallback((entry: FileEntry) => {
+  const handleSelect = useCallback((entry: FileEntry | FileSearchResult) => {
     setSelectedPath(prev => (prev === entry.path ? null : entry.path));
   }, []);
 
+  // ── Search: fetch when filter changes ─────────────────────────────────────
+  useEffect(() => {
+    if (!activeFilter) {
+      setSearchResults([]);
+      setSearchError(null);
+      setSearching(false);
+      return;
+    }
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(async () => {
+      if (searchAbortRef.current) searchAbortRef.current.abort();
+      const abort = new AbortController();
+      searchAbortRef.current = abort;
+
+      setSearching(true);
+      setSearchError(null);
+
+      try {
+        const params = new URLSearchParams();
+        if (filter.ext) params.set('ext', filter.ext);
+        if (filter.modifiedSince) params.set('modified_since', filter.modifiedSince);
+        if (filter.grep) params.set('grep', filter.grep);
+
+        const url = `/api/projects/${encodeURIComponent(projectName)}/files/search?${params}`;
+        const res = await fetch(url, { signal: abort.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data: FileSearchResult[] = await res.json();
+        setSearchResults(data);
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === 'AbortError') return;
+        setSearchError(String(err));
+      } finally {
+        if (!abort.signal.aborted) setSearching(false);
+      }
+    }, 300);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [filter, activeFilter, projectName]);
+
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="files-tab">
       <div className="files-header">
@@ -222,34 +492,61 @@ export default function FilesTab({ projectName, projectPath }: FilesTabProps) {
         <p className="files-path">{projectPath}</p>
       </div>
 
+      <FilterBar
+        filter={filter}
+        onChange={setFilter}
+        resultCount={activeFilter ? searchResults.length : null}
+        searching={searching}
+      />
+
       <div className="files-content">
-        <div className="file-tree">
-          {rootLoading && (
-            <div className="file-tree-loading" style={{ padding: '1rem' }}>
-              Loading…
-            </div>
-          )}
-          {rootError && (
-            <div className="file-tree-error" style={{ padding: '1rem' }}>
-              {rootError}
-            </div>
-          )}
-          {!rootLoading &&
-            !rootError &&
-            rootEntries.map(entry => (
-              <TreeNode
-                key={entry.path}
-                entry={entry}
-                depth={0}
-                expanded={expanded}
-                loading={loading}
-                childCache={childCache}
-                onToggle={handleToggle}
+        {activeFilter ? (
+          // ── Search / flat results view ──────────────────────────────────
+          <div className="file-search-results">
+            {searching && searchResults.length === 0 && (
+              <div className="file-tree-loading" style={{ padding: '1rem' }}>Searching…</div>
+            )}
+            {searchError && (
+              <div className="file-tree-error" style={{ padding: '1rem' }}>{searchError}</div>
+            )}
+            {!searching && !searchError && searchResults.length === 0 && (
+              <div className="file-search-empty">No files match the current filters.</div>
+            )}
+            {searchResults.map(r => (
+              <SearchResultRow
+                key={r.path}
+                result={r}
+                isSelected={selectedPath === r.path}
                 onSelect={handleSelect}
-                selectedPath={selectedPath}
               />
             ))}
-        </div>
+          </div>
+        ) : (
+          // ── Tree view (default) ─────────────────────────────────────────
+          <div className="file-tree">
+            {rootLoading && (
+              <div className="file-tree-loading" style={{ padding: '1rem' }}>Loading…</div>
+            )}
+            {rootError && (
+              <div className="file-tree-error" style={{ padding: '1rem' }}>{rootError}</div>
+            )}
+            {!rootLoading &&
+              !rootError &&
+              rootEntries.map(entry => (
+                <TreeNode
+                  key={entry.path}
+                  entry={entry}
+                  depth={0}
+                  expanded={expanded}
+                  loading={loading}
+                  childCache={childCache}
+                  onToggle={handleToggle}
+                  onSelect={handleSelect}
+                  selectedPath={selectedPath}
+                />
+              ))}
+          </div>
+        )}
 
         {selectedPath && (
           <div className="file-preview">

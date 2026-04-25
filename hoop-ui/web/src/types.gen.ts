@@ -1525,9 +1525,13 @@ export interface StitchBead {
    */
   bead_id: string;
   /**
-   * Workspace path
+   * Raw workspace path (display-only)
    */
   workspace: string;
+  /**
+   * Realpath-resolved workspace path (for joins and dedup)
+   */
+  canonical_workspace?: string;
   /**
    * Relationship type
    */
@@ -1821,73 +1825,5 @@ export interface ProjectConfigStatus {
     col: number;
     [k: string]: unknown;
   };
-  [k: string]: unknown;
-}
-
-
-/**
- * Per-account daily spend row from codex_account_daily_spend (§6 Phase 2 §10)
- */
-export interface CodexAccountDailySpendRow {
-  /**
-   * Codex account identifier (e.g. 'default', 'work', 'personal')
-   */
-  account_id: string;
-  /**
-   * Date in YYYY-MM-DD format
-   */
-  date: string;
-  /**
-   * Plan tier name (e.g. 'tier_1', 'tier_2', 'free')
-   */
-  plan_tier: string;
-  /**
-   * Total spend in USD for this account on this date
-   */
-  cost_usd: number;
-  /**
-   * Total input tokens consumed
-   */
-  input_tokens: number;
-  /**
-   * Total output tokens generated
-   */
-  output_tokens: number;
-  /**
-   * RFC-3339 timestamp of last snapshot write
-   */
-  updated_at: string;
-  [k: string]: unknown;
-}
-
-
-/**
- * Per-account monthly spend rollup aggregated from codex_account_daily_spend (§6 Phase 2 §10)
- */
-export interface CodexAccountMonthlyRollupRow {
-  /**
-   * Codex account identifier (e.g. 'default', 'work', 'personal')
-   */
-  account_id: string;
-  /**
-   * Month in YYYY-MM format
-   */
-  month: string;
-  /**
-   * Most recent plan tier seen for this account in this month
-   */
-  plan_tier: string;
-  /**
-   * Total spend in USD for this account in this month
-   */
-  cost_usd: number;
-  /**
-   * Total input tokens consumed in this month
-   */
-  input_tokens: number;
-  /**
-   * Total output tokens generated in this month
-   */
-  output_tokens: number;
   [k: string]: unknown;
 }
