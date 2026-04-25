@@ -1,5 +1,13 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { CodeViewer as ShikiCodeViewer } from './CodeViewer';
+import { ImageViewer } from './ImageViewer';
+
+const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']);
+
+function isImagePath(p: string): boolean {
+  const ext = p.split('.').pop()?.toLowerCase() ?? '';
+  return IMAGE_EXTENSIONS.has(ext);
+}
 
 const SHIKI_MAX_BYTES = 50 * 1024;
 
@@ -687,27 +695,34 @@ export default function FilesTab({ projectName, projectPath }: FilesTabProps) {
             <div className="file-preview-header">
               <span className="file-preview-path">{selectedFile.path}</span>
               <div className="file-preview-controls">
-                <select
-                  className="hl-theme-select"
-                  value={hlTheme}
-                  onChange={e => setHlTheme(e.target.value)}
-                  title="Highlight theme"
-                >
-                  <option value="light">GitHub Light</option>
-                  <option value="dark">GitHub Dark</option>
-                  <option value="solarized-dark">Solarized Dark</option>
-                  <option value="solarized-light">Solarized Light</option>
-                  <option value="eighties">Eighties Dark</option>
-                  <option value="mocha-dark">Mocha Dark</option>
-                  <option value="ocean-light">Ocean Light</option>
-                </select>
+                {!isImagePath(selectedFile.path) && (
+                  <select
+                    className="hl-theme-select"
+                    value={hlTheme}
+                    onChange={e => setHlTheme(e.target.value)}
+                    title="Highlight theme"
+                  >
+                    <option value="light">GitHub Light</option>
+                    <option value="dark">GitHub Dark</option>
+                    <option value="solarized-dark">Solarized Dark</option>
+                    <option value="solarized-light">Solarized Light</option>
+                    <option value="eighties">Eighties Dark</option>
+                    <option value="mocha-dark">Mocha Dark</option>
+                    <option value="ocean-light">Ocean Light</option>
+                  </select>
+                )}
                 <button className="file-preview-close" onClick={() => setSelectedFile(null)}>
                   ×
                 </button>
               </div>
             </div>
-            <div className="file-preview-body file-preview-body--code">
-              {selectedFile.size <= SHIKI_MAX_BYTES ? (
+            <div className={`file-preview-body${isImagePath(selectedFile.path) ? ' file-preview-body--image' : ' file-preview-body--code'}`}>
+              {isImagePath(selectedFile.path) ? (
+                <ImageViewer
+                  projectName={projectName}
+                  path={selectedFile.path}
+                />
+              ) : selectedFile.size <= SHIKI_MAX_BYTES ? (
                 <ShikiCodeViewer
                   projectName={projectName}
                   filePath={selectedFile.path}

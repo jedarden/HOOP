@@ -2887,6 +2887,123 @@ pre {
   justify-content: flex-start;
 }
 
+.file-preview-body--image {
+  padding: 0;
+  overflow: hidden;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+/* ── Image viewer ────────────────────────────────────────────────────────── */
+
+.image-viewer {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.image-viewer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  background: #f5f5f5;
+  border-bottom: 1px solid #e0e0e0;
+  flex-shrink: 0;
+}
+
+.image-viewer-btn {
+  background: none;
+  border: 1px solid #d0d0d0;
+  border-radius: 3px;
+  padding: 0.1rem 0.45rem;
+  cursor: pointer;
+  color: #444;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.image-viewer-btn:hover {
+  background: #e8e8e8;
+  border-color: #bbb;
+}
+
+.image-viewer-btn--fullscreen {
+  font-size: 0.9rem;
+}
+
+.image-viewer-zoom-label {
+  min-width: 4ch;
+  text-align: center;
+  font-size: 0.75rem;
+  font-family: 'SF Mono', 'Monaco', monospace;
+  color: #555;
+}
+
+.image-viewer-sep {
+  flex: 1;
+}
+
+/* Checkerboard background signals transparency */
+.image-viewer-canvas {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background-color: #aaa;
+  background-image:
+    linear-gradient(45deg, #888 25%, transparent 25%),
+    linear-gradient(-45deg, #888 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #888 75%),
+    linear-gradient(-45deg, transparent 75%, #888 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+  user-select: none;
+}
+
+.image-viewer-canvas img {
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
+.image-viewer-status {
+  position: absolute;
+  color: #fff;
+  font-size: 0.875rem;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+}
+
+.image-viewer-status--error {
+  background: rgba(180, 0, 0, 0.6);
+}
+
+/* Full-viewport overlay */
+.image-viewer-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+}
+
+.image-viewer-fullscreen-img {
+  max-width: 98vw;
+  max-height: 98vh;
+  object-fit: contain;
+  image-orientation: none;
+  display: block;
+}
+
 /* Syntax highlight viewer */
 .hl-wrapper {
   display: flex;

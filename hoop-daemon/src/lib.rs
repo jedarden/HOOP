@@ -63,9 +63,11 @@ pub mod morning_brief;
 pub mod api_morning_brief;
 pub mod api_patterns;
 pub mod redaction;
+pub mod syntax_highlight;
 pub mod worker_ack;
 pub mod collision_detector;
 pub mod bead_commit_index;
+pub mod api_diff;
 
 /// Worker execution state from heartbeats
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -492,6 +494,202 @@ async fn search_project_files(
     Ok(Json(results))
 }
 
+/// Query parameters for the file content / syntax-highlight endpoint.
+#[derive(serde::Deserialize)]
+struct FileContentQuery {
+    /// Relative path from the project root (required).
+    path: String,
+    /// Theme alias: dark | light | solarized-dark | solarized-light | eighties | mocha-dark | ocean-light
+    theme: Option<String>,
+    /// If true, return raw text/plain content (≤50 KB) instead of highlighted JSON.
+    raw: Option<bool>,
+    /// If true, return raw binary bytes with MIME-type detection (for images ≤50 MB).
+    image: Option<bool>,
+}
+
+/// Return file content — either raw text/plain (≤50 KB, `?raw=true`) or
+/// syntect-highlighted JSON.  The raw mode is used by the client-side Shiki
+/// highlighter; the JSON mode is kept for legacy / server-rendered callers.
+async fn get_file_content(
+    axum::extract::Path(project): axum::extract::Path<String>,
+    axum::extract::Query(params): axum::extract::Query<FileContentQuery>,
+    axum::extract::State(state): axum::extract::State<DaemonState>,
+) -> Result<axum::response::Response, (axum::http::StatusCode, String)> {
+    if id_validators::validate_project_name(&project).is_err() {
+        return Err((axum::http::StatusCode::BAD_REQUEST, "invalid project name".into()));
+    }
+
+    let project_root = {
+        let projects = state.projects.read().unwrap();
+        projects
+            .iter()
+            .find(|p| p.name == project)
+            .map(|p| std::path::PathBuf::from(&p.path))
+            .ok_or((axum::http::StatusCode::NOT_FOUND, "project not found".into()))?
+    };
+
+    let rel_path = params.path;
+    if !files::is_safe_rel_path(&rel_path) {
+        return Err((axum::http::StatusCode::FORBIDDEN, "unsafe path".into()));
+    }
+
+    let want_raw = params.raw.unwrap_or(false);
+    let want_image = params.image.unwrap_or(false);
+    let theme = params.theme.unwrap_or_else(|| "dark".to_owned());
+
+    if want_image {
+        // Binary image mode: stream raw bytes with detected MIME type (≤50 MB).
+        // Path security and metadata are resolved in a blocking task; the file is
+        // then streamed asynchronously so large images (10 MB+) are delivered
+        // progressively without buffering the whole file in server memory.
+        const IMAGE_MAX: u64 = 50 * 1024 * 1024;
+        let (abs_path, file_size, mime) =
+            tokio::task::spawn_blocking(move || -> anyhow::Result<(std::path::PathBuf, u64, &'static str)> {
+                use crate::path_security::{canonicalize_and_check, PathAllowlist};
+                let allowlist = PathAllowlist::for_workspace(&project_root)
+                    .map_err(|e| anyhow::anyhow!("workspace allowlist: {e}"))?;
+                let abs_path = canonicalize_and_check(&project_root.join(&rel_path), &allowlist)
+                    .map_err(|e| anyhow::anyhow!("path traversal: {e}"))?;
+                if !abs_path.is_file() {
+                    anyhow::bail!("not a file");
+                }
+                let meta = std::fs::metadata(&abs_path)?;
+                let file_size = meta.len();
+                if file_size > IMAGE_MAX {
+                    anyhow::bail!("image too large (>50 MB)");
+                }
+                let mime = match abs_path
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_lowercase()
+                    .as_str()
+                {
+                    "jpg" | "jpeg" => "image/jpeg",
+                    "png" => "image/png",
+                    "gif" => "image/gif",
+                    "webp" => "image/webp",
+                    "svg" | "svgz" => "image/svg+xml",
+                    "bmp" => "image/bmp",
+                    "ico" => "image/x-icon",
+                    _ => "application/octet-stream",
+                };
+                Ok((abs_path, file_size, mime))
+            })
+            .await
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+            .map_err(|e| {
+                let msg = e.to_string();
+                let status = if msg.contains("not a file") || msg.contains("not found") {
+                    axum::http::StatusCode::NOT_FOUND
+                } else if msg.contains("too large") {
+                    axum::http::StatusCode::PAYLOAD_TOO_LARGE
+                } else {
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR
+                };
+                (status, msg)
+            })?;
+
+        let file = tokio::fs::File::open(&abs_path)
+            .await
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let stream = tokio_util::io::ReaderStream::new(file);
+
+        return Ok(axum::response::Response::builder()
+            .header("Content-Type", mime)
+            .header("Content-Length", file_size.to_string())
+            .header("Cache-Control", "private, max-age=60")
+            .header("Accept-Ranges", "bytes")
+            .body(axum::body::Body::from_stream(stream))
+            .unwrap());
+    }
+
+    if want_raw {
+        // Raw mode: return plain UTF-8 text, capped at 50 KB.
+        const RAW_MAX: u64 = 50 * 1024;
+        let content = tokio::task::spawn_blocking(move || -> anyhow::Result<String> {
+            use crate::path_security::{canonicalize_and_check, PathAllowlist};
+            let allowlist = PathAllowlist::for_workspace(&project_root)
+                .map_err(|e| anyhow::anyhow!("workspace allowlist: {e}"))?;
+            let abs_path = canonicalize_and_check(&project_root.join(&rel_path), &allowlist)
+                .map_err(|e| anyhow::anyhow!("path traversal: {e}"))?;
+            if !abs_path.is_file() {
+                anyhow::bail!("not a file");
+            }
+            let meta = std::fs::metadata(&abs_path)?;
+            if meta.len() > RAW_MAX {
+                anyhow::bail!("file too large for raw mode (>50 KB)");
+            }
+            std::fs::read_to_string(&abs_path).map_err(|e| anyhow::anyhow!("read: {e}"))
+        })
+        .await
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(|e| {
+            let msg = e.to_string();
+            let status = if msg.contains("not a file") || msg.contains("not found") {
+                axum::http::StatusCode::NOT_FOUND
+            } else if msg.contains("too large") {
+                axum::http::StatusCode::PAYLOAD_TOO_LARGE
+            } else {
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            };
+            (status, msg)
+        })?;
+
+        return Ok(axum::response::Response::builder()
+            .header("Content-Type", "text/plain; charset=utf-8")
+            .body(axum::body::Body::from(content))
+            .unwrap());
+    }
+
+    // Highlighted JSON mode (syntect — server-side, legacy).
+    let result = tokio::task::spawn_blocking(move || -> anyhow::Result<syntax_highlight::HighlightResult> {
+        use crate::path_security::{canonicalize_and_check, PathAllowlist};
+
+        let allowlist = PathAllowlist::for_workspace(&project_root)
+            .map_err(|e| anyhow::anyhow!("workspace allowlist: {e}"))?;
+        let abs_path = project_root.join(&rel_path);
+        let abs_path = canonicalize_and_check(&abs_path, &allowlist)
+            .map_err(|e| anyhow::anyhow!("path traversal: {e}"))?;
+
+        if !abs_path.is_file() {
+            anyhow::bail!("not a file");
+        }
+
+        let meta = std::fs::metadata(&abs_path)?;
+        if meta.len() > 100 * 1024 * 1024 {
+            anyhow::bail!("file too large (>100 MB)");
+        }
+
+        let content = std::fs::read_to_string(&abs_path)
+            .map_err(|e| anyhow::anyhow!("read: {e}"))?;
+
+        let filename = abs_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown");
+
+        syntax_highlight::highlight_content(&content, filename, &theme)
+    })
+    .await
+    .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .map_err(|e| {
+        let msg = e.to_string();
+        if msg.contains("not a file") || msg.contains("not found") {
+            (axum::http::StatusCode::NOT_FOUND, msg)
+        } else {
+            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, msg)
+        }
+    })?;
+
+    let body = serde_json::to_string(&result)
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(axum::response::Response::builder()
+        .header("Content-Type", "application/json")
+        .body(axum::body::Body::from(body))
+        .unwrap())
+}
+
 /// Get bead events for a specific bead (from events.jsonl)
 async fn get_bead_events(
     axum::extract::Path(bead_id): axum::extract::Path<String>,
@@ -737,6 +935,7 @@ pub fn router() -> Router<DaemonState> {
         .route("/api/bead-commits", get(get_bead_commits))
         .route("/api/projects/:project/files", get(get_project_files))
         .route("/api/projects/:project/files/search", get(search_project_files))
+        .route("/api/projects/:project/files/content", get(get_file_content))
         .route("/api/attachments/:attachment_type/:id/:filename", get(api_attachments::serve_attachment))
         .route("/ws", get(ws::ws_handler))
         .merge(api_uploads::router())
@@ -750,6 +949,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_stitch_decompose::router())
         .merge(api_stitch_read::router())
         .merge(api_patterns::router())
+        .merge(api_diff::router())
         .route("/api/workers/timeline", get(api_timeline::get_worker_timeline))
         .merge(api_agent::router())
         .merge(api_morning_brief::router())
