@@ -100,6 +100,8 @@ fn categorize_path(path: &str) -> &'static str {
         "/api/dictated-notes"
     } else if path.starts_with("/api/attachments") {
         "/api/attachments"
+    } else if path.starts_with("/api/diagnostics") {
+        "/api/diagnostics"
     } else if path.starts_with("/assets") {
         "/assets"
     } else {
@@ -513,10 +515,54 @@ fn sha256_hex(input: &str) -> String {
 // Router
 // ---------------------------------------------------------------------------
 
+/// Response for GET /api/diagnostics/unknown-events
+#[derive(Serialize)]
+struct UnknownEventsResponse {
+    total_count: u64,
+    samples: Vec<metrics::UnknownEventSample>,
+    labeled_totals: Vec<LabeledEntry>,
+    daemon_version: String,
+    schema_version: String,
+}
+
+#[derive(Serialize)]
+struct LabeledEntry {
+    adapter: String,
+    event_kind: String,
+    count: u64,
+}
+
+async fn get_unknown_events() -> Json<UnknownEventsResponse> {
+    let m = metrics::metrics();
+    let samples = m.unknown_event_snapshot();
+    let labeled = m.hoop_unknown_event_labeled_total.snapshot();
+    let labeled_totals = labeled
+        .into_iter()
+        .filter_map(|(labels, count)| {
+            let adapter = labels.first().map(|s| s.as_str()).unwrap_or("unknown");
+            let event_kind = labels.get(1).map(|s| s.as_str()).unwrap_or("unknown");
+            Some(LabeledEntry {
+                adapter: adapter.to_string(),
+                event_kind: event_kind.to_string(),
+                count,
+            })
+        })
+        .collect();
+
+    Json(UnknownEventsResponse {
+        total_count: m.hoop_unknown_event_total.get(),
+        samples,
+        labeled_totals,
+        daemon_version: env!("CARGO_PKG_VERSION").to_string(),
+        schema_version: hoop_schema::version::SCHEMA_VERSION.to_string(),
+    })
+}
+
 pub fn router() -> Router<DaemonState> {
     Router::new()
         .route("/metrics", get(get_metrics))
         .route("/debug/state", get(debug_state))
+        .route("/api/diagnostics/unknown-events", get(get_unknown_events))
 }
 
 // ---------------------------------------------------------------------------
