@@ -19,6 +19,7 @@ fn create_test_project(name: &str, path: PathBuf) -> ProjectsRegistryProjectsIte
     ProjectsRegistryProjectsItem::Variant0 {
         name: name.to_string(),
         path: path.to_string_lossy().into_owned(),
+        canonical_path: None,
         label: None,
         color: None,
     }
@@ -56,6 +57,8 @@ async fn test_panic_isolation_between_projects() {
     let _config = ProjectsConfig {
         registry: registry.clone(),
         path: PathBuf::from("/test/projects.yaml"),
+        canonical_cache: std::collections::HashMap::new(),
+        content_hash: String::new(),
     };
 
     // Note: This test requires a working supervisor setup

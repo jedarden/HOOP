@@ -11,6 +11,7 @@
 
 use anyhow::{Context, Result};
 use crate::id_validators::{ValidBeadId, ValidStitchId, ValidUploadId};
+use crate::path_security::{canonicalize_and_check, PathAllowlist};
 use sha2::{Digest, Sha256};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -76,21 +77,29 @@ impl Default for UploadConfig {
 #[derive(Debug, Clone)]
 pub struct UploadRegistry {
     config: UploadConfig,
+    allowlist: PathAllowlist,
 }
 
 impl UploadRegistry {
     pub fn new(config: UploadConfig) -> Result<Self> {
-        fs::create_dir_all(&config.uploads_dir)
-            .context("failed to create uploads directory")?;
-        Ok(Self { config })
+        let allowlist = PathAllowlist::for_uploads(&config.uploads_dir)?;
+        Ok(Self { config, allowlist })
     }
 
-    /// Get directory for a specific upload.
+    /// Get the raw (un-canonicalized) directory path for an upload.
+    fn upload_dir_raw(&self, upload_id: &ValidUploadId) -> PathBuf {
+        self.config.uploads_dir.join(upload_id.as_str())
+    }
+
+    /// Get directory for a specific upload, validated against the allowlist.
     ///
-    /// The `ValidUploadId` newtype guarantees the ID is a valid lowercase UUID,
-    /// so no additional validation is needed before path join.
+    /// The `ValidUploadId` newtype (Layer 1) blocks traversal characters in the
+    /// ID itself.  This method adds Layer 2: canonicalize + prefix-match against
+    /// the pre-computed uploads allowlist, catching symlink escapes.
     fn upload_dir(&self, upload_id: &ValidUploadId) -> Result<PathBuf> {
-        Ok(self.config.uploads_dir.join(upload_id.as_str()))
+        let path = self.upload_dir_raw(upload_id);
+        canonicalize_and_check(&path, &self.allowlist)
+            .context("upload directory failed path validation")
     }
 
     /// Get metadata file path for an upload
@@ -149,9 +158,12 @@ impl UploadRegistry {
         let upload_id_str = Uuid::new_v4().to_string();
         let upload_id = ValidUploadId::parse(&upload_id_str)
             .context("generated invalid upload ID")?;
-        let upload_dir = self.upload_dir(&upload_id)?;
+        let upload_dir = self.upload_dir_raw(&upload_id);
         fs::create_dir_all(&upload_dir)
             .context("failed to create upload directory")?;
+        // Layer 2: canonicalize + allowlist check after directory creation
+        canonicalize_and_check(&upload_dir, &self.allowlist)
+            .context("upload directory failed path validation")?;
 
         let now = chrono::Utc::now();
         let meta = UploadMetadata {

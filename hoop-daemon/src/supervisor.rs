@@ -269,11 +269,18 @@ impl ProjectSupervisor {
         // Build map of existing projects
         let existing: std::collections::HashSet<String> = runtimes.keys().cloned().collect();
 
-        // Build map of desired projects using canonical paths for joins
+        // Build map of desired projects using canonical paths for joins.
+        // Uses canonical_for() which resolves via fs::canonicalize (not just
+        // the stored canonical_path field, which may be absent in legacy YAML).
         let mut desired: HashMap<String, Vec<PathBuf>> = HashMap::new();
         for project in &config.registry.projects {
-            let paths: Vec<PathBuf> = project.all_canonical_paths().collect();
-            desired.insert(project.name().to_string(), paths);
+            let name = project.name();
+            let paths: Vec<PathBuf> = project
+                .workspace_views()
+                .iter()
+                .map(|v| config.canonical_for(name, &v.path))
+                .collect();
+            desired.insert(name.to_string(), paths);
         }
 
         // Remove runtimes that are no longer in config

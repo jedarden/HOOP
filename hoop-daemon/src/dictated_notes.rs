@@ -13,6 +13,7 @@
 //! 6. Appears in project stitch list by `last_activity_at`
 
 use crate::id_validators::ValidStitchId;
+use crate::path_security::{canonicalize_and_check, PathAllowlist};
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
@@ -173,12 +174,21 @@ pub fn store_audio(
 ///
 /// Accepts a `ValidStitchId` to enforce compile-time proof that the ID has been
 /// validated before reaching any filesystem path construction.
+/// Applies realpath canonicalization + allowlist prefix-check (§13, §K2) to
+/// catch symlink escapes, matching the pattern in `attachments::stitch_attachment_dir`.
 pub fn stitch_attachment_dir(stitch_id: &ValidStitchId) -> Result<PathBuf> {
-    let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    home.push(".hoop");
-    home.push("attachments");
-    home.push(stitch_id.as_str());
-    Ok(home)
+    let allowlist = PathAllowlist::for_stitch_attachments()
+        .context("failed to build path allowlist for stitch attachments")?;
+
+    let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
+    let dir = home.join(".hoop").join("attachments").join(stitch_id.as_str());
+    std::fs::create_dir_all(&dir)
+        .with_context(|| format!("failed to create attachment dir: {}", dir.display()))?;
+
+    let canonical = canonicalize_and_check(&dir, &allowlist)
+        .map_err(|_| anyhow::anyhow!("path traversal detected for stitch id"))?;
+
+    Ok(canonical)
 }
 
 /// Get the full path to an audio file for a stitch.
