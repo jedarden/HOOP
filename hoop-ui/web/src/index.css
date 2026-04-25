@@ -3149,6 +3149,108 @@ pre {
   box-sizing: border-box;
 }
 
+/* ─── Stitch-provenance blame overlay ──────────────────────────────────────── */
+
+/* Blame toggle button in file preview header */
+.blame-toggle {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid #c7d2fe;
+  border-radius: 3px;
+  background: #f5f7ff;
+  color: #4f46e5;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s, color 0.1s;
+}
+
+.blame-toggle:hover {
+  background: #e0e7ff;
+}
+
+.blame-toggle--active {
+  background: #4f46e5;
+  color: #fff;
+  border-color: #4f46e5;
+}
+
+.blame-toggle--active:hover {
+  background: #4338ca;
+}
+
+/* Blame cell: sits before the line number in both viewers */
+.blame-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4ch;
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  user-select: none;
+  cursor: default;
+}
+
+/* Stitch-attributed line: purple dot, clickable */
+.blame-cell--stitch {
+  color: #7c3aed;
+  cursor: pointer;
+  font-size: 0.55rem;
+}
+
+.blame-cell--stitch:hover {
+  color: #4f46e5;
+}
+
+/* Git-only line: muted separator, not interactive */
+.blame-cell--git {
+  color: #c0c0c0;
+  font-size: 0.55rem;
+}
+
+/* Empty cell (no blame data loaded) — reserves space so layout is stable */
+.blame-cell--empty {
+  width: 1.4ch;
+}
+
+/* hl-container with blame mode adds a little space for the blame column */
+.hl-container--blame .hl-line {
+  /* blame cell already included in the flex row */
+}
+
+/* ── Shiki blame-mode line-by-line renderer ─────────────────────────────── */
+
+.code-viewer-blame-lines {
+  overflow: auto;
+  height: 100%;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+.code-viewer-blame-line {
+  display: flex;
+  align-items: baseline;
+  min-height: 1.5em;
+}
+
+.code-viewer-blame-lineno {
+  display: inline-block;
+  width: 4ch;
+  min-width: 3ch;
+  text-align: right;
+  padding-right: 0.75rem;
+  padding-left: 0.25rem;
+  color: #6272a4;
+  opacity: 0.6;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.code-viewer-blame-code {
+  flex: 1;
+}
+
 /* Files filter bar */
 .files-filter-bar {
   display: flex;
@@ -9553,4 +9655,323 @@ pre {
     min-width: 80px;
     padding: 0.625rem 0.875rem;
   }
+}
+
+/* ─── Stitch Net-Diff ─────────────────────────────────────────────────────── */
+
+.nd-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Fira Code', 'Cascadia Code', 'Consolas', 'Monaco', monospace;
+  font-size: 12.5px;
+}
+
+/* Narrative bar */
+.nd-narrative {
+  background: #f0f6ff;
+  border-bottom: 1px solid #c8dcf5;
+  padding: 0.5rem 1rem;
+  flex-shrink: 0;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 13px;
+}
+
+.nd-narrative-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.nd-narrative-badge {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #1565c0;
+  background: #dbeafe;
+  padding: 1px 7px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.nd-narrative-text {
+  color: #333;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nd-narrative-expand {
+  font-size: 12px;
+  color: #1565c0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.nd-narrative-expand:hover { text-decoration: underline; }
+
+.nd-narrative-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.nd-narrative-count {
+  font-size: 12px;
+  color: #666;
+}
+
+.nd-narrative-list {
+  margin: 0.5rem 0 0 0;
+  padding: 0 0 0 1.4rem;
+  list-style: disc;
+}
+
+.nd-narrative-item {
+  font-size: 12.5px;
+  color: #444;
+  padding: 1px 0;
+}
+
+/* Layout: file tree + diff panel */
+.nd-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Collapsible file tree */
+.nd-file-tree {
+  width: 240px;
+  min-width: 240px;
+  border-right: 1px solid #d0d0d0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fafafa;
+  transition: width 0.15s ease, min-width 0.15s ease;
+}
+
+.nd-file-tree--collapsed {
+  width: 28px;
+  min-width: 28px;
+}
+
+.nd-file-tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid #e0e0e0;
+  background: #f0f0f0;
+  flex-shrink: 0;
+  gap: 0.25rem;
+  min-height: 30px;
+}
+
+.nd-file-tree-title {
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #555;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nd-file-tree-toggle {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  color: #555;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.nd-file-tree-toggle:hover { background: #e8e8e8; }
+
+.nd-file-tree-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0.25rem 0;
+}
+
+.nd-tree-dir {
+  display: flex;
+  flex-direction: column;
+}
+
+.nd-tree-dir-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #555;
+  text-align: left;
+}
+
+.nd-tree-dir-btn:hover { background: #ebebeb; }
+
+.nd-tree-chevron {
+  font-size: 10px;
+  width: 10px;
+  flex-shrink: 0;
+  color: #888;
+}
+
+.nd-tree-dir-name {
+  color: #555;
+  font-weight: 500;
+}
+
+.nd-tree-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #333;
+  text-align: left;
+  gap: 4px;
+}
+
+.nd-tree-file:hover { background: #ebebeb; }
+
+.nd-tree-file--selected {
+  background: #e8f0fe;
+  color: #1565c0;
+}
+
+.nd-tree-file--selected:hover { background: #dce7fb; }
+
+.nd-tree-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nd-tree-file-stats {
+  display: flex;
+  gap: 3px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+/* Diff panel */
+.nd-diff-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.nd-diff-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  background: #f0f0f0;
+  border-bottom: 1px solid #d0d0d0;
+  flex-shrink: 0;
+}
+
+.nd-diff-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.nd-diff-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.nd-diff-file-path {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 350px;
+  min-width: 0;
+}
+
+.nd-diff-body {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Mobile degradation (§21) */
+.nd-mobile-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 2rem;
+  text-align: center;
+  font-family: Inter, system-ui, sans-serif;
+  color: #555;
+}
+
+.nd-mobile-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.nd-mobile-message h3 {
+  font-size: 1.25rem;
+  color: #333;
+  margin: 0 0 0.5rem;
+}
+
+.nd-mobile-message p {
+  font-size: 0.9rem;
+  color: #777;
+  margin: 0;
+  max-width: 280px;
 }

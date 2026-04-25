@@ -10,8 +10,9 @@ import StitchesTab from './StitchesTab';
 import FilesTab from './FilesTab';
 import DebugPanel from './DebugPanel';
 import DiffViewer from './DiffViewer';
+import StitchNetDiff from './StitchNetDiff';
 
-export type TabId = 'stitches' | 'fleet' | 'graph' | 'conversations' | 'cost' | 'capacity' | 'files' | 'debug' | 'diff';
+export type TabId = 'stitches' | 'fleet' | 'graph' | 'conversations' | 'cost' | 'capacity' | 'files' | 'debug' | 'diff' | 'net-diff';
 
 interface Tab {
   id: TabId;
@@ -30,6 +31,7 @@ const TABS: Tab[] = [
   { id: 'debug', label: 'Debug', description: 'Per-bead execution step-through', keyboardShortcut: '7' },
   { id: 'files', label: 'Files', description: 'Project file browser', keyboardShortcut: '8' },
   { id: 'diff', label: 'Diff', description: 'Side-by-side git diff view', keyboardShortcut: '9' },
+  { id: 'net-diff', label: 'Net-Diff', description: 'PR-like stitch net-diff review', keyboardShortcut: '0' },
 ];
 
 export interface ProjectDetailProps {
@@ -103,10 +105,10 @@ export default function ProjectDetail({ projectName, projectPath }: ProjectDetai
       return;
     }
 
-    // Alt+number to switch tabs
-    if (event.altKey && event.key >= '1' && event.key <= '9') {
+    // Alt+number to switch tabs (1–9 for tabs 1–9, 0 for tab 10)
+    if (event.altKey && (event.key >= '1' && event.key <= '9' || event.key === '0')) {
       event.preventDefault();
-      const tabIndex = parseInt(event.key) - 1;
+      const tabIndex = event.key === '0' ? 9 : parseInt(event.key) - 1;
       if (tabIndex < TABS.length) {
         setActiveTab(TABS[tabIndex].id);
       }
@@ -251,6 +253,15 @@ export default function ProjectDetail({ projectName, projectPath }: ProjectDetai
           {activeTab === 'diff' && (
             <div className="diff-viewer-wrap">
               <DiffViewer projectName={projectName} />
+            </div>
+          )}
+          {activeTab === 'net-diff' && (
+            <div className="diff-viewer-wrap">
+              <StitchNetDiff
+                projectName={projectName}
+                projectPath={projectPath}
+                conversations={projectConversations}
+              />
             </div>
           )}
         </div>
