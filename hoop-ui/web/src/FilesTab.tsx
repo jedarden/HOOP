@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { CodeViewer as ShikiCodeViewer } from './CodeViewer';
 import { ImageViewer } from './ImageViewer';
+import type { TabId } from './ProjectDetail';
 
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']);
 
@@ -14,6 +15,7 @@ const SHIKI_MAX_BYTES = 50 * 1024;
 export interface FilesTabProps {
   projectName: string;
   projectPath: string;
+  onSwitchTab?: (tab: TabId) => void;
 }
 
 type GitStatus = 'clean' | 'modified' | 'added' | 'deleted' | 'untracked' | 'renamed' | 'dirty';
@@ -47,6 +49,60 @@ interface FileFilter {
   ext: string;
   modifiedSince: string;
   grep: string;
+}
+
+// ─── Blame types ──────────────────────────────────────────────────────────────
+
+export interface BlameLine {
+  line_no: number;
+  sha: string;
+  author: string;
+  ts: string;
+  summary: string;
+  bead_id?: string;
+  stitch_id?: string;
+  stitch_title?: string;
+}
+
+export type BlameMap = Map<number, BlameLine>;
+
+// ─── Blame cell component ─────────────────────────────────────────────────────
+
+interface BlameCellProps {
+  blame: BlameLine | undefined;
+  onStitchClick?: (stitchId: string) => void;
+}
+
+function BlameCell({ blame, onStitchClick }: BlameCellProps) {
+  if (!blame) {
+    return <span className="blame-cell blame-cell--empty" />;
+  }
+  if (blame.stitch_id) {
+    const tooltip = `${blame.stitch_title ?? blame.bead_id ?? blame.stitch_id}\n${blame.summary}\n${blame.author}`;
+    return (
+      <span
+        className="blame-cell blame-cell--stitch"
+        title={tooltip}
+        onClick={() => onStitchClick?.(blame.stitch_id!)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => e.key === 'Enter' && onStitchClick?.(blame.stitch_id!)}
+        aria-label={`Stitch: ${blame.stitch_title}`}
+      >
+        ●
+      </span>
+    );
+  }
+  // Git blame only — show a faint indicator with author info
+  const shortSha = blame.sha.slice(0, 7);
+  return (
+    <span
+      className="blame-cell blame-cell--git"
+      title={`${blame.author} · ${shortSha}\n${blame.summary}`}
+    >
+      ·
+    </span>
+  );
 }
 
 function formatSize(bytes: number): string {
@@ -362,15 +418,21 @@ interface HighlightResult {
 
 const LINE_HEIGHT = 20; // px — must match .hl-line height in CSS
 
+interface ServerCodeViewerProps {
+  projectName: string;
+  path: string;
+  theme: string;
+  blameMap?: BlameMap;
+  onStitchClick?: (stitchId: string) => void;
+}
+
 function ServerCodeViewer({
   projectName,
   path,
   theme,
-}: {
-  projectName: string;
-  path: string;
-  theme: string;
-}) {
+  blameMap,
+  onStitchClick,
+}: ServerCodeViewerProps) {
   const [result, setResult] = useState<HighlightResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -430,6 +492,7 @@ function ServerCodeViewer({
 
   const totalHeight = result.lines.length * LINE_HEIGHT;
   const { start, end, paddingTop } = visibleSlice;
+  const showBlame = Boolean(blameMap);
 
   return (
     <div className="hl-wrapper">
@@ -442,24 +505,29 @@ function ServerCodeViewer({
       </div>
       <div
         ref={containerRef}
-        className="hl-container"
+        className={`hl-container${showBlame ? ' hl-container--blame' : ''}`}
         style={{ backgroundColor: result.theme_bg, color: result.theme_fg }}
         onScroll={e => setScrollTop((e.currentTarget as HTMLDivElement).scrollTop)}
       >
         <div style={{ height: `${totalHeight}px`, position: 'relative' }}>
           <div style={{ position: 'absolute', top: `${paddingTop}px`, width: '100%' }}>
-            {result.lines.slice(start, end).map((lineHtml, i) => (
-              <div
-                key={start + i}
-                className="hl-line"
-                data-ln={start + i + 1}
-              >
-                <span className="hl-lineno">{start + i + 1}</span>
-                {/* syntect emits only span[style] nodes — no scripts possible */}
-                {/* eslint-disable-next-line react/no-danger */}
-                <span className="hl-code" dangerouslySetInnerHTML={{ __html: lineHtml }} />
-              </div>
-            ))}
+            {result.lines.slice(start, end).map((lineHtml, i) => {
+              const lineNo = start + i + 1;
+              return (
+                <div key={lineNo} className="hl-line" data-ln={lineNo}>
+                  {showBlame && (
+                    <BlameCell
+                      blame={blameMap!.get(lineNo)}
+                      onStitchClick={onStitchClick}
+                    />
+                  )}
+                  <span className="hl-lineno">{lineNo}</span>
+                  {/* syntect emits only span[style] nodes — no scripts possible */}
+                  {/* eslint-disable-next-line react/no-danger */}
+                  <span className="hl-code" dangerouslySetInnerHTML={{ __html: lineHtml }} />
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -467,9 +535,54 @@ function ServerCodeViewer({
   );
 }
 
+// ─── Blame data hook ──────────────────────────────────────────────────────────
+
+function useBlameFetch(
+  projectName: string,
+  filePath: string | null,
+  enabled: boolean,
+): { blameMap: BlameMap | null; loading: boolean; error: string | null } {
+  const [blameMap, setBlameMap] = useState<BlameMap | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!enabled || !filePath) {
+      setBlameMap(null);
+      setError(null);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setBlameMap(null);
+    const ctrl = new AbortController();
+    const params = new URLSearchParams({ path: filePath });
+    fetch(`/api/projects/${encodeURIComponent(projectName)}/files/blame?${params}`, {
+      signal: ctrl.signal,
+    })
+      .then(r => (r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`)))
+      .then((lines: BlameLine[]) => {
+        const map: BlameMap = new Map();
+        for (const line of lines) {
+          map.set(line.line_no, line);
+        }
+        setBlameMap(map);
+        setLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === 'AbortError') return;
+        setError(String(err));
+        setLoading(false);
+      });
+    return () => ctrl.abort();
+  }, [projectName, filePath, enabled]);
+
+  return { blameMap, loading, error };
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function FilesTab({ projectName, projectPath }: FilesTabProps) {
+export default function FilesTab({ projectName, projectPath, onSwitchTab }: FilesTabProps) {
   // Tree state
   const [rootEntries, setRootEntries] = useState<FileEntry[]>([]);
   const [rootLoading, setRootLoading] = useState(true);
@@ -485,6 +598,9 @@ export default function FilesTab({ projectName, projectPath }: FilesTabProps) {
   // Syntax highlight theme — default matches the overall light UI
   const [hlTheme, setHlTheme] = useState<string>('light');
 
+  // Blame mode state
+  const [blameEnabled, setBlameEnabled] = useState(false);
+
   // Search state
   const [searchResults, setSearchResults] = useState<FileSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -494,6 +610,13 @@ export default function FilesTab({ projectName, projectPath }: FilesTabProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const activeFilter = hasActiveFilter(filter);
+
+  // Blame data — fetched when blameEnabled and a non-image file is selected.
+  const { blameMap, loading: blameLoading } = useBlameFetch(
+    projectName,
+    blameEnabled && selectedFile && !isImagePath(selectedFile.path) ? selectedFile.path : null,
+    blameEnabled,
+  );
 
   // ── Sync filter → URL ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -573,6 +696,8 @@ export default function FilesTab({ projectName, projectPath }: FilesTabProps) {
     setSelectedFile(prev =>
       prev?.path === entry.path ? null : { path: entry.path, size: entry.size },
     );
+    // Reset blame mode when switching files
+    setBlameEnabled(false);
   }, []);
 
   // ── Search: fetch when filter changes ─────────────────────────────────────
@@ -625,6 +750,11 @@ export default function FilesTab({ projectName, projectPath }: FilesTabProps) {
   const shikiTheme: 'light' | 'dark' = (
     hlTheme === 'light' || hlTheme === 'solarized-light' || hlTheme === 'ocean-light'
   ) ? 'light' : 'dark';
+
+  // Handler for stitch click — switches to stitches tab.
+  const handleStitchClick = useCallback((_stitchId: string) => {
+    onSwitchTab?.('stitches');
+  }, [onSwitchTab]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -696,20 +826,31 @@ export default function FilesTab({ projectName, projectPath }: FilesTabProps) {
               <span className="file-preview-path">{selectedFile.path}</span>
               <div className="file-preview-controls">
                 {!isImagePath(selectedFile.path) && (
-                  <select
-                    className="hl-theme-select"
-                    value={hlTheme}
-                    onChange={e => setHlTheme(e.target.value)}
-                    title="Highlight theme"
-                  >
-                    <option value="light">GitHub Light</option>
-                    <option value="dark">GitHub Dark</option>
-                    <option value="solarized-dark">Solarized Dark</option>
-                    <option value="solarized-light">Solarized Light</option>
-                    <option value="eighties">Eighties Dark</option>
-                    <option value="mocha-dark">Mocha Dark</option>
-                    <option value="ocean-light">Ocean Light</option>
-                  </select>
+                  <>
+                    <button
+                      className={`blame-toggle${blameEnabled ? ' blame-toggle--active' : ''}`}
+                      onClick={() => setBlameEnabled(v => !v)}
+                      title={blameEnabled ? 'Hide Stitch attribution' : 'Show Stitch attribution (git blame)'}
+                    >
+                      {blameEnabled
+                        ? (blameLoading ? '⋯ blame' : '● blame')
+                        : '○ blame'}
+                    </button>
+                    <select
+                      className="hl-theme-select"
+                      value={hlTheme}
+                      onChange={e => setHlTheme(e.target.value)}
+                      title="Highlight theme"
+                    >
+                      <option value="light">GitHub Light</option>
+                      <option value="dark">GitHub Dark</option>
+                      <option value="solarized-dark">Solarized Dark</option>
+                      <option value="solarized-light">Solarized Light</option>
+                      <option value="eighties">Eighties Dark</option>
+                      <option value="mocha-dark">Mocha Dark</option>
+                      <option value="ocean-light">Ocean Light</option>
+                    </select>
+                  </>
                 )}
                 <button className="file-preview-close" onClick={() => setSelectedFile(null)}>
                   ×
@@ -728,12 +869,16 @@ export default function FilesTab({ projectName, projectPath }: FilesTabProps) {
                   filePath={selectedFile.path}
                   fileSize={selectedFile.size}
                   theme={shikiTheme}
+                  blameMap={blameEnabled ? blameMap ?? undefined : undefined}
+                  onStitchClick={handleStitchClick}
                 />
               ) : (
                 <ServerCodeViewer
                   projectName={projectName}
                   path={selectedFile.path}
                   theme={hlTheme}
+                  blameMap={blameEnabled ? blameMap ?? undefined : undefined}
+                  onStitchClick={handleStitchClick}
                 />
               )}
             </div>
