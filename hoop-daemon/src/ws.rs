@@ -1357,8 +1357,8 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         while let Some(msg) = ws_rx.recv().await {
             let subs = subs_for_fwd.read().await;
             if should_deliver(msg.topic.as_deref(), &subs) {
-                let lag_ms = msg.queued_at.elapsed().as_secs_f64() * 1000.0;
-                metrics.hoop_ws_broadcast_lag_ms.observe(&[], lag_ms);
+                let lag_seconds = msg.queued_at.elapsed().as_secs_f64();
+                metrics.hoop_ws_broadcast_lag_seconds.observe(&[], lag_seconds);
                 drop(subs);
                 if sender.send(Message::Text(msg.json)).await.is_err() {
                     break;
@@ -1905,23 +1905,24 @@ mod tests {
         );
     }
 
-    // ── hoop_ws_broadcast_lag_ms metric ──────────────────────────────────────
+    // ── hoop_ws_broadcast_lag_seconds metric ─────────────────────────────────
 
     #[test]
     fn broadcast_lag_metric_observed() {
         let m = crate::metrics::metrics();
-        let snap_before = m.hoop_ws_broadcast_lag_ms.snapshot();
-        let count_before: u64 = snap_before.iter().map(|(_, c, _)| c).sum();
+        let snap_before = m.hoop_ws_broadcast_lag_seconds.snapshot();
+        let count_before: u64 = snap_before.iter().map(|(_, c, _, _, _, _)| c).sum();
 
-        // Simulate the observation the forwarder task performs.
-        m.hoop_ws_broadcast_lag_ms.observe(&[], 3.7);
+        // Simulate the observation the forwarder task performs (in seconds).
+        m.hoop_ws_broadcast_lag_seconds.observe(&[], 0.0037);
 
-        let snap_after = m.hoop_ws_broadcast_lag_ms.snapshot();
-        let count_after: u64 = snap_after.iter().map(|(_, c, _)| c).sum();
+        let snap_after = m.hoop_ws_broadcast_lag_seconds.snapshot();
+        let count_after: u64 = snap_after.iter().map(|(_, c, _, _, _, _)| c).sum();
         assert_eq!(count_after, count_before + 1, "observe must increment count");
 
-        let sum_after: f64 = snap_after.iter().map(|(_, _, s)| s).sum();
-        assert!(sum_after > 0.0, "observe must accumulate sum");
+        // Check that percentiles are available
+        let p50 = snap_after.first().and_then(|(_, _, _, p50, _, _)| *p50);
+        assert!(p50.is_some(), "observe must compute p50 percentile");
     }
 
     // ── Fan-out invariant: project-scoped events only reach matching subscribers ──

@@ -501,8 +501,8 @@ pub struct Metrics {
 
     // ── §16.3 WebSocket & HTTP ─────────────────────────────────────────────
 
-    /// WebSocket broadcast round-trip lag (milliseconds histogram).
-    pub hoop_ws_broadcast_lag_ms: LabeledHistogram,
+    /// WebSocket broadcast round-trip lag in seconds (p50/p95/p99 percentiles).
+    pub hoop_ws_broadcast_lag_seconds: LabeledHistogramPercentiles,
     /// HTTP request totals by route template and HTTP status code.
     pub hoop_http_requests_total: LabeledCounter,
     /// HTTP request duration in milliseconds, by route template.
@@ -607,7 +607,7 @@ impl Metrics {
             hoop_unknown_event_labeled_total: LabeledCounter::new(&["adapter", "event_kind"]),
             hoop_event_parse_errors_total: LabeledCounter::new(&["adapter"]),
 
-            hoop_ws_broadcast_lag_ms: LabeledHistogram::new(&[]),
+            hoop_ws_broadcast_lag_seconds: LabeledHistogramPercentiles::new(&[]),
             hoop_http_requests_total: LabeledCounter::new(&["route", "status"]),
             hoop_http_request_duration_ms: LabeledHistogram::new(&["route"]),
 
@@ -749,12 +749,12 @@ impl Metrics {
         );
 
         // ── §16.3 WebSocket & HTTP ──────────────────────────────────────────
-        write_labeled_histogram(
+        write_labeled_histogram_percentiles(
             &mut out,
-            "hoop_ws_broadcast_lag_ms",
-            "WebSocket broadcast round-trip lag in milliseconds.",
-            self.hoop_ws_broadcast_lag_ms.label_names,
-            &self.hoop_ws_broadcast_lag_ms.snapshot(),
+            "hoop_ws_broadcast_lag_seconds",
+            "WebSocket broadcast round-trip lag in seconds (p50/p95/p99).",
+            self.hoop_ws_broadcast_lag_seconds.label_names,
+            &self.hoop_ws_broadcast_lag_seconds.snapshot(),
         );
         write_labeled_counter(
             &mut out,
