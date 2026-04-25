@@ -148,6 +148,49 @@ pub struct DedupStatsResponse {
 }
 
 // ---------------------------------------------------------------------------
+// §19.1 Draft concurrency types
+// ---------------------------------------------------------------------------
+
+/// Request to open a draft form
+#[derive(Debug, Deserialize)]
+pub struct OpenDraftRequest {
+    pub project: String,
+}
+
+/// Response after opening a draft
+#[derive(Debug, Serialize)]
+pub struct OpenDraftResponse {
+    pub draft_id: String,
+    pub status: String,
+    pub opened_at: String,
+}
+
+/// Request to autosave draft content
+#[derive(Debug, Deserialize)]
+pub struct AutosaveDraftRequest {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub kind: Option<String>,
+    pub priority: Option<i64>,
+    pub labels: Option<Vec<String>>,
+}
+
+/// Response after autosaving a draft
+#[derive(Debug, Serialize)]
+pub struct AutosaveDraftResponse {
+    pub draft_id: String,
+    pub last_autosave_at: String,
+}
+
+/// Response after abandoning a draft
+#[derive(Debug, Serialize)]
+pub struct AbandonDraftResponse {
+    pub draft_id: String,
+    pub status: String,
+    pub abandoned_at: String,
+}
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 
@@ -159,6 +202,9 @@ pub fn router() -> Router<crate::DaemonState> {
         .route("/api/drafts/{draft_id}/approve", post(approve_draft))
         .route("/api/drafts/{draft_id}/edit", post(edit_draft))
         .route("/api/drafts/{draft_id}/reject", post(reject_draft))
+        .route("/api/drafts/{draft_id}/open", post(open_draft))
+        .route("/api/drafts/{draft_id}/autosave", post(autosave_draft))
+        .route("/api/drafts/{draft_id}/abandon", post(abandon_draft))
         .route("/api/dedup/stats", get(get_dedup_stats))
         .route("/api/dedup/false-positive", post(report_false_positive))
 }
@@ -277,6 +323,7 @@ async fn create_draft(
         created_at: now.clone(),
         source: if req.source.is_empty() { "chat".to_string() } else { req.source.clone() },
         agent_session_id: req.agent_session_id.clone(),
+        turn_id: req.turn_id.clone(),
         status: "pending".to_string(),
         version: 1,
         original_json: None,
@@ -285,6 +332,11 @@ async fn create_draft(
         rejection_reason: None,
         stitch_id: None,
         preview_json: None,
+        // §19.1 Draft concurrency fields
+        opened_by: Some(actor.clone()),
+        opened_at: Some(now.clone()),
+        last_autosave_at: None,
+        abandoned_at: None,
     };
 
     // Insert the draft into the queue
@@ -661,6 +713,166 @@ async fn reject_draft(
         draft_id,
         status: "rejected".to_string(),
         reason: req.reason,
+    }))
+}
+
+// ---------------------------------------------------------------------------
+// §19.1 Draft concurrency handlers
+// ---------------------------------------------------------------------------
+
+/// POST /api/drafts/{draft_id}/open — open a draft form (§19.1 Draft concurrency)
+///
+/// Creates or updates a draft with opened_by/opened_at tracking.
+/// When the operator opens the draft form, this endpoint is called to
+/// ensure the draft is persisted server-side immediately. If a draft
+/// with this ID already exists (e.g., was autosaved before), it updates
+/// the opened_by/opened_at fields and clears any abandoned_at.
+async fn open_draft(
+    Path(draft_id): Path<String>,
+    State(_state): State<crate::DaemonState>,
+    connect_info: Option<ConnectInfo<SocketAddr>>,
+    Json(req): Json<OpenDraftRequest>,
+) -> Result<Json<OpenDraftResponse>, (StatusCode, String)> {
+    crate::id_validators::validate_draft_id(&draft_id)
+        .map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_project_name(&req.project).map_err(crate::id_validators::rejection)?;
+
+    let actor = resolve_actor(connect_info.map(|ci| ci.0));
+    let now = chrono::Utc::now().to_rfc3339();
+
+    fleet::open_draft(&draft_id, &req.project, &actor)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Audit: draft opened
+    if let Err(e) = fleet::write_audit_row(
+        &actor,
+        fleet::ActionKind::DraftOpened,
+        &draft_id,
+        Some(&req.project),
+        None,
+        fleet::ActionResult::Success,
+        None,
+        Some("operator"),
+        None,
+        None,
+    ) {
+        warn!("Failed to write DraftOpened audit row: {}", e);
+    }
+
+    info!("Draft {} opened by {} in project '{}'", draft_id, actor, req.project);
+
+    Ok(Json(OpenDraftResponse {
+        draft_id,
+        status: "pending".to_string(),
+        opened_at: now,
+    }))
+}
+
+/// POST /api/drafts/{draft_id}/autosave — autosave draft content (§19.1 Draft concurrency)
+///
+/// Autosaves draft fields every 5 seconds or on field change.
+/// Updates title, description, kind, priority, labels, and last_autosave_at.
+/// Does not increment version (only manual edits via /edit increment version).
+async fn autosave_draft(
+    Path(draft_id): Path<String>,
+    State(state): State<crate::DaemonState>,
+    Json(req): Json<AutosaveDraftRequest>,
+) -> Result<Json<AutosaveDraftResponse>, (StatusCode, String)> {
+    crate::id_validators::validate_draft_id(&draft_id)
+        .map_err(crate::id_validators::rejection)?;
+
+    // Verify draft exists
+    let _draft = fleet::get_draft(&draft_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Draft '{}' not found", draft_id)))?;
+
+    let now = chrono::Utc::now().to_rfc3339();
+
+    fleet::autosave_draft(
+        &draft_id,
+        req.title.as_deref(),
+        req.description.as_deref(),
+        req.kind.as_deref(),
+        req.priority,
+        req.labels.as_deref(),
+    )
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Emit draft_update WS event for real-time collaboration
+    let _ = state.draft_tx.send(crate::ws::DraftUpdateData {
+        draft_id: draft_id.clone(),
+        project: "".to_string(), // Will be filled by listener
+        title: req.title.unwrap_or_default(),
+        kind: req.kind.unwrap_or_default(),
+        status: "pending".to_string(),
+        action: "autosaved".to_string(),
+        actor: "".to_string(),
+        created_by: "".to_string(),
+        version: 0,
+        rejection_reason: None,
+    });
+
+    Ok(Json(AutosaveDraftResponse {
+        draft_id,
+        last_autosave_at: now,
+    }))
+}
+
+/// POST /api/drafts/{draft_id}/abandon — abandon a draft (§19.1 Draft concurrency)
+///
+/// Marks a draft as abandoned when the form closes without submit.
+/// Sets abandoned_at timestamp. Drafts are retained for 7 days before cleanup.
+async fn abandon_draft(
+    Path(draft_id): Path<String>,
+    State(_state): State<crate::DaemonState>,
+    connect_info: Option<ConnectInfo<SocketAddr>>,
+) -> Result<Json<AbandonDraftResponse>, (StatusCode, String)> {
+    crate::id_validators::validate_draft_id(&draft_id)
+        .map_err(crate::id_validators::rejection)?;
+
+    // Verify draft exists and is in an abandonable state
+    let draft = fleet::get_draft(&draft_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Draft '{}' not found", draft_id)))?;
+
+    if draft.status == "submitted" || draft.status == "approved" || draft.status == "rejected" {
+        return Err((
+            StatusCode::CONFLICT,
+            format!("Draft '{}' is in status '{}', cannot be abandoned", draft_id, draft.status),
+        ));
+    }
+
+    let actor = resolve_actor(connect_info.map(|ci| ci.0));
+    let now = chrono::Utc::now().to_rfc3339();
+
+    fleet::abandon_draft(&draft_id)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Audit: draft abandoned
+    if let Err(e) = fleet::write_audit_row(
+        &actor,
+        fleet::ActionKind::DraftAbandoned,
+        &draft_id,
+        Some(&draft.project),
+        Some(serde_json::json!({
+            "title": draft.title,
+            "kind": draft.kind,
+        }).to_string()),
+        fleet::ActionResult::Success,
+        None,
+        Some("operator"),
+        None,
+        None,
+    ) {
+        warn!("Failed to write DraftAbandoned audit row: {}", e);
+    }
+
+    info!("Draft {} abandoned by {}", draft_id, actor);
+
+    Ok(Json(AbandonDraftResponse {
+        draft_id,
+        status: "abandoned".to_string(),
+        abandoned_at: now,
     }))
 }
 
