@@ -21,7 +21,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 /// Current schema version
-pub const SCHEMA_VERSION: &str = "1.15.0";
+pub const SCHEMA_VERSION: &str = "1.18.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -337,12 +337,15 @@ pub fn create_stitch(
     )?;
 
     for (bead_id, workspace) in bead_ids {
+        let canonical_ws = std::fs::canonicalize(workspace)
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default();
         conn.execute(
             r#"
-            INSERT INTO stitch_beads (stitch_id, bead_id, workspace, relationship)
-            VALUES (?, ?, ?, 'created-here')
+            INSERT INTO stitch_beads (stitch_id, bead_id, workspace, canonical_workspace, relationship)
+            VALUES (?, ?, ?, ?, 'created-here')
             "#,
-            params![stitch_id, bead_id, workspace],
+            params![stitch_id, bead_id, workspace, canonical_ws],
         )?;
     }
 
@@ -627,6 +630,10 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v113_to_v114(conn)?;
             // Fall through to 1.15.0
             migrate_v114_to_v115(conn)?;
+            // Fall through to 1.16.0
+            migrate_v115_to_v116(conn)?;
+            migrate_v116_to_v117(conn)?;
+            migrate_v117_to_v118(conn)?;
         }
         "1.1.0" => {
             migrate_v11_to_v12(conn)?;
@@ -643,6 +650,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
             migrate_v114_to_v115(conn)?;
+            migrate_v115_to_v116(conn)?;
+            migrate_v116_to_v117(conn)?;
+            migrate_v117_to_v118(conn)?;
         }
         "1.2.0" => {
             migrate_v12_to_v13(conn)?;
@@ -658,6 +668,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
             migrate_v114_to_v115(conn)?;
+            migrate_v115_to_v116(conn)?;
+            migrate_v116_to_v117(conn)?;
+            migrate_v117_to_v118(conn)?;
         }
         "1.3.0" => {
             migrate_v13_to_v14(conn)?;
@@ -672,6 +685,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
             migrate_v114_to_v115(conn)?;
+            migrate_v115_to_v116(conn)?;
+            migrate_v116_to_v117(conn)?;
+            migrate_v117_to_v118(conn)?;
         }
         "1.4.0" => {
             migrate_v14_to_v15(conn)?;
@@ -685,6 +701,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
             migrate_v114_to_v115(conn)?;
+            migrate_v115_to_v116(conn)?;
+            migrate_v116_to_v117(conn)?;
+            migrate_v117_to_v118(conn)?;
         }
         "1.5.0" => {
             migrate_v15_to_v16(conn)?;
@@ -697,6 +716,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
             migrate_v114_to_v115(conn)?;
+            migrate_v115_to_v116(conn)?;
+            migrate_v116_to_v117(conn)?;
+            migrate_v117_to_v118(conn)?;
         }
         "1.6.0" => {
             migrate_v16_to_v17(conn)?;
@@ -708,6 +730,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
             migrate_v114_to_v115(conn)?;
+            migrate_v115_to_v116(conn)?;
+            migrate_v116_to_v117(conn)?;
+            migrate_v117_to_v118(conn)?;
         }
         "1.7.0" => {
             migrate_v17_to_v18(conn)?;
@@ -718,6 +743,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
             migrate_v114_to_v115(conn)?;
+            migrate_v115_to_v116(conn)?;
+            migrate_v116_to_v117(conn)?;
+            migrate_v117_to_v118(conn)?;
         }
         "1.8.0" => {
             migrate_v18_to_v19(conn)?;
@@ -727,6 +755,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
             migrate_v114_to_v115(conn)?;
+            migrate_v115_to_v116(conn)?;
+            migrate_v116_to_v117(conn)?;
+            migrate_v117_to_v118(conn)?;
         }
         "1.9.0" => {
             migrate_v19_to_v110(conn)?;
@@ -735,6 +766,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
             migrate_v114_to_v115(conn)?;
+            migrate_v115_to_v116(conn)?;
+            migrate_v116_to_v117(conn)?;
+            migrate_v117_to_v118(conn)?;
         }
         "1.10.0" => {
             migrate_v110_to_v111(conn)?;
@@ -742,31 +776,58 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
             migrate_v114_to_v115(conn)?;
+            migrate_v115_to_v116(conn)?;
+            migrate_v116_to_v117(conn)?;
+            migrate_v117_to_v118(conn)?;
         }
         "1.11.0" => {
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
             migrate_v114_to_v115(conn)?;
+            migrate_v115_to_v116(conn)?;
+            migrate_v116_to_v117(conn)?;
+            migrate_v117_to_v118(conn)?;
         }
         "1.12.0" => {
             migrate_v112_to_v113(conn)?;
             migrate_v113_to_v114(conn)?;
             migrate_v114_to_v115(conn)?;
+            migrate_v115_to_v116(conn)?;
+            migrate_v116_to_v117(conn)?;
+            migrate_v117_to_v118(conn)?;
         }
         "1.13.0" => {
             migrate_v113_to_v114(conn)?;
             migrate_v114_to_v115(conn)?;
+            migrate_v115_to_v116(conn)?;
+            migrate_v116_to_v117(conn)?;
+            migrate_v117_to_v118(conn)?;
         }
         "1.14.0" => {
             migrate_v114_to_v115(conn)?;
+            migrate_v115_to_v116(conn)?;
+            migrate_v116_to_v117(conn)?;
+            migrate_v117_to_v118(conn)?;
         }
         "1.15.0" => {
-            info!("Already at schema version 1.15.0, no migrations needed");
+            migrate_v115_to_v116(conn)?;
+            migrate_v116_to_v117(conn)?;
+            migrate_v117_to_v118(conn)?;
+        }
+        "1.16.0" => {
+            migrate_v116_to_v117(conn)?;
+            migrate_v117_to_v118(conn)?;
+        }
+        "1.17.0" => {
+            migrate_v117_to_v118(conn)?;
+        }
+        "1.18.0" => {
+            info!("Already at schema version 1.18.0, no migrations needed");
         }
         _ => {
             return Err(anyhow::anyhow!(
-                "Unsupported schema version: {}. Expected 0.1.0–1.14.0",
+                "Unsupported schema version: {}. Expected 0.1.0–1.18.0",
                 from_version
             ));
         }
@@ -847,6 +908,7 @@ fn migrate_v01_to_v11(conn: &mut Connection) -> Result<()> {
             stitch_id TEXT NOT NULL REFERENCES stitches(id) ON DELETE CASCADE,
             bead_id TEXT NOT NULL,
             workspace TEXT NOT NULL,
+            canonical_workspace TEXT NOT NULL DEFAULT '',
             relationship TEXT NOT NULL CHECK(relationship IN ('created-here', 'executing', 'referenced')),
             PRIMARY KEY (stitch_id, bead_id)
         )
@@ -1577,6 +1639,74 @@ fn migrate_v114_to_v115(conn: &mut Connection) -> Result<()> {
     )?;
 
     update_schema_version(conn, "1.15.0")?;
+    Ok(())
+}
+
+/// Migration 1.15.0 → 1.16.0: Add stitch-based forecast columns to capacity_rollup
+///
+/// Adds four columns that store the burn-rate forecast derived from the stitch
+/// close rate (completed worker sessions per minute) and mean cost per stitch.
+/// These power the window-saturation ETA displayed in the Capacity widget.
+fn migrate_v115_to_v116(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.15.0 → 1.16.0: Adding stitch forecast columns to capacity_rollup");
+
+    add_column_if_not_exists(conn, "capacity_rollup", "stitch_close_rate_per_min",   "REAL NOT NULL DEFAULT 0.0")?;
+    add_column_if_not_exists(conn, "capacity_rollup", "mean_cost_per_stitch_tokens", "REAL NOT NULL DEFAULT 0.0")?;
+    add_column_if_not_exists(conn, "capacity_rollup", "forecast_5h_stitch_min",      "REAL")?;
+    add_column_if_not_exists(conn, "capacity_rollup", "forecast_7d_stitch_min",      "REAL")?;
+
+    update_schema_version(conn, "1.16.0")?;
+    Ok(())
+}
+
+fn migrate_v116_to_v117(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.16.0 → 1.17.0: Adding canonical_workspace to stitch_beads");
+
+    add_column_if_not_exists(conn, "stitch_beads", "canonical_workspace", "TEXT NOT NULL DEFAULT ''")?;
+
+    update_schema_version(conn, "1.17.0")?;
+    Ok(())
+}
+
+/// Migration 1.17.0 → 1.18.0: Add bead-to-commit index tables
+///
+/// Creates two tables that back the bead-to-commit indexer (§6 Phase 2 #2):
+/// - `bead_commits`: indexed by bead_id or sha, one row per (sha, workspace) pair
+/// - `bead_commit_cursor`: per-workspace HEAD SHA cursor for incremental walks
+fn migrate_v117_to_v118(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.17.0 → 1.18.0: Adding bead_commits index tables");
+
+    conn.execute(
+        r#"CREATE TABLE IF NOT EXISTS bead_commits (
+            bead_id   TEXT NOT NULL,
+            workspace TEXT NOT NULL,
+            sha       TEXT NOT NULL,
+            ts        TEXT NOT NULL,
+            PRIMARY KEY (sha, workspace)
+        )"#,
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_bead_commits_bead_id ON bead_commits(bead_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_bead_commits_sha ON bead_commits(sha)",
+        [],
+    )?;
+
+    conn.execute(
+        r#"CREATE TABLE IF NOT EXISTS bead_commit_cursor (
+            workspace  TEXT PRIMARY KEY NOT NULL,
+            head_sha   TEXT NOT NULL,
+            indexed_at TEXT NOT NULL
+        )"#,
+        [],
+    )?;
+
+    update_schema_version(conn, "1.18.0")?;
     Ok(())
 }
 
@@ -2485,6 +2615,14 @@ pub struct CapacityRollupRow {
     pub tokens_5h: i64,
     pub tokens_7d: i64,
     pub cost_7d_usd: f64,
+    /// Stitch close rate: completed worker sessions per minute (2h window)
+    pub stitch_close_rate_per_min: f64,
+    /// Mean cost per stitch: average cost-equivalent tokens per completed session
+    pub mean_cost_per_stitch_tokens: f64,
+    /// Forecast: minutes until 5h limit at stitch-projected burn rate
+    pub forecast_5h_stitch_min: Option<f64>,
+    /// Forecast: minutes until 7d limit at stitch-projected burn rate
+    pub forecast_7d_stitch_min: Option<f64>,
 }
 
 /// A row from the `codex_account_daily_spend` table.
@@ -2979,15 +3117,21 @@ fn upsert_capacity_rollup_conn(conn: &Connection, row: &CapacityRollupRow) -> Re
     conn.execute(
         r#"INSERT INTO capacity_rollup
            (account_id, adapter, computed_at, window_5h_pct, window_7d_pct,
-            tokens_5h, tokens_7d, cost_7d_usd)
-           VALUES (?1,?2,?3,?4,?5,?6,?7,?8)
+            tokens_5h, tokens_7d, cost_7d_usd,
+            stitch_close_rate_per_min, mean_cost_per_stitch_tokens,
+            forecast_5h_stitch_min, forecast_7d_stitch_min)
+           VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)
            ON CONFLICT(account_id, adapter) DO UPDATE SET
-               computed_at   = excluded.computed_at,
-               window_5h_pct = excluded.window_5h_pct,
-               window_7d_pct = excluded.window_7d_pct,
-               tokens_5h     = excluded.tokens_5h,
-               tokens_7d     = excluded.tokens_7d,
-               cost_7d_usd   = excluded.cost_7d_usd"#,
+               computed_at                 = excluded.computed_at,
+               window_5h_pct               = excluded.window_5h_pct,
+               window_7d_pct               = excluded.window_7d_pct,
+               tokens_5h                   = excluded.tokens_5h,
+               tokens_7d                   = excluded.tokens_7d,
+               cost_7d_usd                 = excluded.cost_7d_usd,
+               stitch_close_rate_per_min   = excluded.stitch_close_rate_per_min,
+               mean_cost_per_stitch_tokens = excluded.mean_cost_per_stitch_tokens,
+               forecast_5h_stitch_min      = excluded.forecast_5h_stitch_min,
+               forecast_7d_stitch_min      = excluded.forecast_7d_stitch_min"#,
         params![
             row.account_id,
             row.adapter,
@@ -2997,6 +3141,10 @@ fn upsert_capacity_rollup_conn(conn: &Connection, row: &CapacityRollupRow) -> Re
             row.tokens_5h,
             row.tokens_7d,
             row.cost_7d_usd,
+            row.stitch_close_rate_per_min,
+            row.mean_cost_per_stitch_tokens,
+            row.forecast_5h_stitch_min,
+            row.forecast_7d_stitch_min,
         ],
     )?;
     Ok(())
@@ -3012,7 +3160,9 @@ pub fn query_capacity_rollup() -> Result<Vec<CapacityRollupRow>> {
 fn query_capacity_rollup_conn(conn: &Connection) -> Result<Vec<CapacityRollupRow>> {
     let mut stmt = conn.prepare(
         "SELECT account_id, adapter, computed_at, window_5h_pct, window_7d_pct,
-                tokens_5h, tokens_7d, cost_7d_usd
+                tokens_5h, tokens_7d, cost_7d_usd,
+                stitch_close_rate_per_min, mean_cost_per_stitch_tokens,
+                forecast_5h_stitch_min, forecast_7d_stitch_min
          FROM capacity_rollup
          ORDER BY adapter, account_id",
     )?;
@@ -3026,6 +3176,10 @@ fn query_capacity_rollup_conn(conn: &Connection) -> Result<Vec<CapacityRollupRow
             tokens_5h: row.get(5)?,
             tokens_7d: row.get(6)?,
             cost_7d_usd: row.get(7)?,
+            stitch_close_rate_per_min: row.get(8)?,
+            mean_cost_per_stitch_tokens: row.get(9)?,
+            forecast_5h_stitch_min: row.get(10)?,
+            forecast_7d_stitch_min: row.get(11)?,
         })
     })?;
     rows.collect::<std::result::Result<Vec<_>, _>>()
@@ -3151,6 +3305,61 @@ fn is_newer_version(a: &str, b: &str) -> bool {
         }
     }
     false
+}
+
+// ---------------------------------------------------------------------------
+// bead_commits CRUD
+// ---------------------------------------------------------------------------
+
+/// A row from the `bead_commits` table.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BeadCommitRow {
+    pub bead_id: String,
+    pub workspace: String,
+    pub sha: String,
+    pub ts: String,
+}
+
+/// Query bead_commits by bead_id, ordered newest-first.
+pub fn query_bead_commits_by_bead_id(bead_id: &str) -> Result<Vec<BeadCommitRow>> {
+    let conn = Connection::open(db_path())?;
+    let mut stmt = conn.prepare(
+        "SELECT bead_id, workspace, sha, ts FROM bead_commits WHERE bead_id = ?1 ORDER BY ts DESC",
+    )?;
+    let rows = stmt.query_map(params![bead_id], |row| {
+        Ok(BeadCommitRow {
+            bead_id: row.get(0)?,
+            workspace: row.get(1)?,
+            sha: row.get(2)?,
+            ts: row.get(3)?,
+        })
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
+/// Query bead_commits by sha, ordered newest-first.
+pub fn query_bead_commits_by_sha(sha: &str) -> Result<Vec<BeadCommitRow>> {
+    let conn = Connection::open(db_path())?;
+    let mut stmt = conn.prepare(
+        "SELECT bead_id, workspace, sha, ts FROM bead_commits WHERE sha = ?1 ORDER BY ts DESC",
+    )?;
+    let rows = stmt.query_map(params![sha], |row| {
+        Ok(BeadCommitRow {
+            bead_id: row.get(0)?,
+            workspace: row.get(1)?,
+            sha: row.get(2)?,
+            ts: row.get(3)?,
+        })
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -3365,10 +3574,10 @@ mod tests {
         // Insert a stitch_bead with valid stitch_id should succeed
         conn.execute(
             r#"
-            INSERT INTO stitch_beads (stitch_id, bead_id, workspace, relationship)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO stitch_beads (stitch_id, bead_id, workspace, canonical_workspace, relationship)
+            VALUES (?, ?, ?, ?, ?)
             "#,
-            params![stitch_id, "bd-test", "/tmp/test", "created-here"],
+            params![stitch_id, "bd-test", "/tmp/test", "/tmp/test", "created-here"],
         )?;
 
         // Insert stitch_links with valid stitch_ids should succeed
@@ -3451,20 +3660,20 @@ mod tests {
         for rel in ["created-here", "executing", "referenced"] {
             conn.execute(
                 r#"
-                INSERT INTO stitch_beads (stitch_id, bead_id, workspace, relationship)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO stitch_beads (stitch_id, bead_id, workspace, canonical_workspace, relationship)
+                VALUES (?, ?, ?, ?, ?)
                 "#,
-                params![stitch_id, format!("bd-{}", rel), "/tmp/test", rel],
+                params![stitch_id, format!("bd-{}", rel), "/tmp/test", "/tmp/test", rel],
             )?;
         }
 
         // Invalid relationship should fail
         let result = conn.execute(
             r#"
-            INSERT INTO stitch_beads (stitch_id, bead_id, workspace, relationship)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO stitch_beads (stitch_id, bead_id, workspace, canonical_workspace, relationship)
+            VALUES (?, ?, ?, ?, ?)
             "#,
-            params![stitch_id, "bd-invalid", "/tmp/test", "invalid_rel"],
+            params![stitch_id, "bd-invalid", "/tmp/test", "/tmp/test", "invalid_rel"],
         );
         assert!(result.is_err(), "CHECK constraint should reject invalid relationship");
 
@@ -4688,6 +4897,10 @@ mod tests {
             tokens_5h: 4_250_000,
             tokens_7d: 30_000_000,
             cost_7d_usd: 45.00,
+            stitch_close_rate_per_min: 0.05,
+            mean_cost_per_stitch_tokens: 50_000.0,
+            forecast_5h_stitch_min: Some(120.0),
+            forecast_7d_stitch_min: Some(1440.0),
         };
         upsert_capacity_rollup_conn(&conn, &row)?;
 
@@ -4715,6 +4928,10 @@ mod tests {
             tokens_5h: 4_250_000,
             tokens_7d: 30_000_000,
             cost_7d_usd: 45.00,
+            stitch_close_rate_per_min: 0.0,
+            mean_cost_per_stitch_tokens: 0.0,
+            forecast_5h_stitch_min: None,
+            forecast_7d_stitch_min: None,
         };
         upsert_capacity_rollup_conn(&conn, &row1)?;
 
@@ -4727,6 +4944,10 @@ mod tests {
             tokens_5h: 5_500_000,
             tokens_7d: 32_000_000,
             cost_7d_usd: 50.00,
+            stitch_close_rate_per_min: 0.0,
+            mean_cost_per_stitch_tokens: 0.0,
+            forecast_5h_stitch_min: None,
+            forecast_7d_stitch_min: None,
         };
         upsert_capacity_rollup_conn(&conn, &row2)?;
 
@@ -4751,6 +4972,10 @@ mod tests {
                 tokens_5h: 1_000_000,
                 tokens_7d: 7_000_000,
                 cost_7d_usd: 10.0,
+                stitch_close_rate_per_min: 0.0,
+                mean_cost_per_stitch_tokens: 0.0,
+                forecast_5h_stitch_min: None,
+                forecast_7d_stitch_min: None,
             },
             CapacityRollupRow {
                 account_id: "acct-002".to_string(),
@@ -4761,6 +4986,10 @@ mod tests {
                 tokens_5h: 2_000_000,
                 tokens_7d: 14_000_000,
                 cost_7d_usd: 20.0,
+                stitch_close_rate_per_min: 0.0,
+                mean_cost_per_stitch_tokens: 0.0,
+                forecast_5h_stitch_min: None,
+                forecast_7d_stitch_min: None,
             },
             CapacityRollupRow {
                 account_id: "acct-003".to_string(),
@@ -4771,6 +5000,10 @@ mod tests {
                 tokens_5h: 3_000_000,
                 tokens_7d: 21_000_000,
                 cost_7d_usd: 30.0,
+                stitch_close_rate_per_min: 0.0,
+                mean_cost_per_stitch_tokens: 0.0,
+                forecast_5h_stitch_min: None,
+                forecast_7d_stitch_min: None,
             },
         ];
         for r in &rows_in {
@@ -5104,6 +5337,67 @@ mod tests {
         let only_march = query_codex_account_monthly_rollup_conn(&conn, None, Some("2026-03"), Some("2026-03"))?;
         assert_eq!(only_march.len(), 1);
         assert_eq!(only_march[0].month, "2026-03");
+        Ok(())
+    }
+
+    // ── Canonical workspace symlink fixtures ────────────────────────────────
+
+    #[test]
+    fn test_create_stitch_stores_canonical_workspace_through_symlink() -> Result<()> {
+        let temp_db = NamedTempFile::new()?;
+        let db_path = temp_db.path().to_path_buf();
+
+        // Build a fresh DB at the env-override path
+        {
+            let mut conn = Connection::open(&db_path)?;
+            create_schema(&mut conn)?;
+            run_migrations(&mut conn, "0.1.0")?;
+        }
+
+        // Create a real workspace and a symlink alias
+        let tmp = tempfile::tempdir()?;
+        let real_ws = tmp.path().join("real-workspace");
+        std::fs::create_dir_all(&real_ws)?;
+        let link_ws = tmp.path().join("link-workspace");
+        std::os::unix::fs::symlink(&real_ws, &link_ws)?;
+
+        let canonical = std::fs::canonicalize(&real_ws)?;
+
+        let stitch_id = Uuid::new_v4().to_string();
+
+        // Point fleet at our temp DB
+        std::env::set_var("_HOOP_FLEET_DB_PATH", &db_path);
+        let result = create_stitch(
+            &stitch_id,
+            "test-project",
+            "operator",
+            "Symlink workspace test",
+            "user",
+            &[("bd-symlink-001", link_ws.to_str().unwrap())],
+            "auto",
+        );
+        std::env::remove_var("_HOOP_FLEET_DB_PATH");
+        result?;
+
+        // Verify both raw (symlink) and canonical (real) are stored
+        let conn = Connection::open(&db_path)?;
+        let (raw_ws, canon_ws): (String, String) = conn.query_row(
+            "SELECT workspace, canonical_workspace FROM stitch_beads WHERE bead_id = 'bd-symlink-001'",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+
+        assert_eq!(
+            raw_ws,
+            link_ws.to_str().unwrap(),
+            "raw workspace should be the symlink path"
+        );
+        assert_eq!(
+            canon_ws,
+            canonical.to_str().unwrap(),
+            "canonical_workspace should resolve through symlink"
+        );
+
         Ok(())
     }
 }
