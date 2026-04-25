@@ -131,11 +131,14 @@ export default function OverviewPage({ onNavigateProject }: { onNavigateProject:
   return (
     <div className="app">
       {configStatus.error && (
-        <div className="config-error-banner">
+        <div className="config-error-banner" role="alert">
           <div className="banner-content">
             <strong>Configuration Error</strong>
             <span className="banner-message">{configStatus.error.message}</span>
-            <span className="banner-location">Line {configStatus.error.line}, Column {configStatus.error.col}</span>
+            {configStatus.error.field && <span className="banner-field">Field: {configStatus.error.field}</span>}
+            {configStatus.error.expected && <span className="banner-expected">Expected: {configStatus.error.expected}</span>}
+            {configStatus.error.got && <span className="banner-got">Got: {configStatus.error.got}</span>}
+            {configStatus.error.line > 0 && <span className="banner-location">Line {configStatus.error.line}, Column {configStatus.error.col}</span>}
           </div>
         </div>
       )}
@@ -187,7 +190,10 @@ export default function OverviewPage({ onNavigateProject }: { onNavigateProject:
         <section className="projects-section">
           <div className="section-header-row">
             <h2>Fleet</h2>
-            <a href="#/fleet" className="section-header-link">Live worker map &rarr;</a>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <a href="#/fleet" className="section-header-link">Live worker map &rarr;</a>
+              <a href="#/timeline" className="section-header-link">Worker timeline &rarr;</a>
+            </div>
           </div>
           {!projectsReceived ? (
             <div className="fleet-loading">

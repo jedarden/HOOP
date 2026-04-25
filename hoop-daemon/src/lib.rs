@@ -22,6 +22,7 @@ pub mod api_metrics;
 pub mod api_preview;
 pub mod api_stitch_decompose;
 pub mod api_stitch_read;
+pub mod api_timeline;
 pub mod api_transcription;
 pub mod api_uploads;
 pub mod attachments;
@@ -406,6 +407,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_preview::router())
         .merge(api_stitch_decompose::router())
         .merge(api_stitch_read::router())
+        .route("/api/workers/timeline", get(api_timeline::get_worker_timeline))
         .merge(api_agent::router())
         .merge(api_morning_brief::router())
         .merge(api_metrics::router())
@@ -746,6 +748,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                 projects::ProjectsEvent::ConfigError { error, prev_hash } => {
                     warn!("Projects configuration error: {}", error.message);
 
+                    // Increment rejection metric (§17.5)
+                    metrics::metrics().hoop_config_reload_rejected_total.inc();
+
                     // Audit the rejected reload (§17.4)
                     let registry_path = projects::ProjectsConfig::load()
                         .map(|c| c.path.display().to_string())
@@ -773,13 +778,16 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         }
                     }
 
-                    // Broadcast config error
+                    // Broadcast config error with structured details (§17.5)
                     let _ = config_tx_for_reload.send(ws::ConfigStatusData {
                         valid: false,
                         error: Some(ws::ConfigErrorData {
                             message: error.message.clone(),
                             line: error.line,
                             col: error.col,
+                            field: error.field.clone(),
+                            expected: error.expected.clone(),
+                            got: error.got.clone(),
                         }),
                     });
                 }
