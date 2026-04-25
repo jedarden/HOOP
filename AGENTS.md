@@ -11,6 +11,7 @@ HOOP does **not** steer NEEDLE workers (no launch / stop / kill / signal / relea
 ## Current repository state
 
 - `docs/plan/plan.md` — canonical implementation plan. Read this first; it is always authoritative over anything else.
+- `docs/operations.md` — systemd service management, logs, upgrades, backup, and disaster recovery runbooks.
 - `docs/notes/` — prior-art research:
   - `reference-feature-inventory.md`
   - `architecture-patterns.md`
