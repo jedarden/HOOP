@@ -108,7 +108,7 @@ fn parse_hunk_range(s: &str) -> (u32, u32) {
     }
 }
 
-fn parse_diff_output(output: &str, max_lines: usize) -> (Vec<FileDiff>, bool) {
+pub fn parse_diff_output(output: &str, max_lines: usize) -> (Vec<FileDiff>, bool) {
     let mut files: Vec<FileDiff> = Vec::new();
     let mut truncated = false;
 

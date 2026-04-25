@@ -68,6 +68,8 @@ pub mod worker_ack;
 pub mod collision_detector;
 pub mod bead_commit_index;
 pub mod api_diff;
+pub mod api_blame;
+pub mod net_diff;
 
 /// Worker execution state from heartbeats
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -950,6 +952,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_stitch_read::router())
         .merge(api_patterns::router())
         .merge(api_diff::router())
+        .merge(api_blame::router())
         .route("/api/workers/timeline", get(api_timeline::get_worker_timeline))
         .merge(api_agent::router())
         .merge(api_morning_brief::router())
