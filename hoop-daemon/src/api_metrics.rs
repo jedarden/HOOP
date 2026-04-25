@@ -519,7 +519,6 @@ fn sha256_hex(input: &str) -> String {
 #[derive(Serialize)]
 struct UnknownEventsResponse {
     total_count: u64,
-    samples: Vec<metrics::UnknownEventSample>,
     labeled_totals: Vec<LabeledEntry>,
     daemon_version: String,
     schema_version: String,
@@ -534,7 +533,6 @@ struct LabeledEntry {
 
 async fn get_unknown_events() -> Json<UnknownEventsResponse> {
     let m = metrics::metrics();
-    let samples = m.unknown_event_snapshot();
     let labeled = m.hoop_unknown_event_labeled_total.snapshot();
     let labeled_totals = labeled
         .into_iter()
@@ -551,7 +549,6 @@ async fn get_unknown_events() -> Json<UnknownEventsResponse> {
 
     Json(UnknownEventsResponse {
         total_count: m.hoop_unknown_event_total.get(),
-        samples,
         labeled_totals,
         daemon_version: env!("CARGO_PKG_VERSION").to_string(),
         schema_version: hoop_schema::version::SCHEMA_VERSION.to_string(),
