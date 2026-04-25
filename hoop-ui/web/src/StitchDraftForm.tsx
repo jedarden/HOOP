@@ -241,6 +241,7 @@ interface AttachmentItem {
   status: 'pending' | 'uploading' | 'complete' | 'error';
   progress: number;
   error?: string;
+  previewUrl?: string;
 }
 
 function AttachmentPicker({ attachments, onAdd, onRemove }: {
@@ -266,6 +267,13 @@ function AttachmentPicker({ attachments, onAdd, onRemove }: {
         <ul className="bdf-attachment-list">
           {attachments.map(a => (
             <li key={a.id} className={`bdf-attachment-item bdf-attachment-${a.status}`}>
+              {a.previewUrl && (
+                <img
+                  src={a.previewUrl}
+                  alt={a.file.name}
+                  className="bdf-attachment-preview"
+                />
+              )}
               <span className="bdf-attachment-name">{a.file.name}</span>
               <span className="bdf-attachment-size">{formatBytes(a.file.size)}</span>
               {a.status === 'uploading' && (
@@ -676,6 +684,16 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
   const [availableBeads, setAvailableBeads] = useState<BeadSummary[]>([]);
   const [loadingBeads, setLoadingBeads] = useState(false);
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  // Keep a ref to attachments for cleanup on unmount without stale closure
+  const attachmentsRef = useRef<AttachmentItem[]>([]);
+  useEffect(() => { attachmentsRef.current = attachments; }, [attachments]);
+  useEffect(() => {
+    return () => {
+      attachmentsRef.current.forEach(a => { if (a.previewUrl) URL.revokeObjectURL(a.previewUrl); });
+    };
+  }, []);;
 
   // Decomposition preview state
   const [decomposeGraph, setDecomposeGraph] = useState<BeadGraph | null>(null);
@@ -893,19 +911,59 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
     setForm(f => ({ ...f, dependencies: f.dependencies.filter(d => d.id !== id) }));
   }, []);
 
-  const handleAttachmentAdd = useCallback((files: FileList) => {
-    const newItems: AttachmentItem[] = Array.from(files).map(f => ({
+  const addFiles = useCallback((files: File[]) => {
+    const newItems: AttachmentItem[] = files.map(f => ({
       file: f,
       id: `${f.name}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       status: 'pending' as const,
       progress: 0,
+      previewUrl: f.type.startsWith('image/') ? URL.createObjectURL(f) : undefined,
     }));
     setAttachments(prev => [...prev, ...newItems]);
   }, []);
 
+  const handleAttachmentAdd = useCallback((files: FileList) => {
+    addFiles(Array.from(files));
+  }, [addFiles]);
+
   const handleAttachmentRemove = useCallback((id: string) => {
-    setAttachments(prev => prev.filter(a => a.id !== id));
+    setAttachments(prev => {
+      const item = prev.find(a => a.id === id);
+      if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      return prev.filter(a => a.id !== id);
+    });
   }, []);
+
+  const handleFormPaste = useCallback((e: React.ClipboardEvent<HTMLFormElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imageFiles: File[] = [];
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) imageFiles.push(new File([file], file.name || `image-${Date.now()}.png`, { type: file.type }));
+      }
+    }
+    if (imageFiles.length > 0) addFiles(imageFiles);
+  }, [addFiles]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) addFiles(files);
+  }, [addFiles]);
 
   const markdownHtml = useMemo(() => renderMarkdown(form.description), [form.description]);
 
@@ -1042,7 +1100,15 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
           <button className="bead-draft-close" onClick={onClose} aria-label="Close form">×</button>
         </div>
 
-        <form onSubmit={handleSubmit} className="bead-draft-form" noValidate>
+        <form
+          onSubmit={handleSubmit}
+          className={`bead-draft-form${isDragOver ? ' bdf-drag-over' : ''}`}
+          onPaste={handleFormPaste}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          noValidate
+        >
           {/* Target project */}
           <div className="bdf-field">
             <label className="bdf-label" htmlFor="sdf-project">
