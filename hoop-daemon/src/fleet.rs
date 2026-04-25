@@ -21,7 +21,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 /// Current schema version
-pub const SCHEMA_VERSION: &str = "1.13.0";
+pub const SCHEMA_VERSION: &str = "1.14.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -312,8 +312,9 @@ pub fn verify_hash_chain() -> Result<()> {
 
 /// Create a row in the `stitches` table and link beads via `stitch_beads`.
 ///
-/// The `kind` must be one of the CHECK-constrained values: operator, dictated, worker, ad-hoc.
-/// For stitch submit from the form, `kind` is always `"operator"`.
+/// The `kind` must be one of: operator, dictated, worker, ad-hoc.
+/// The `classification` must be one of: fleet, operator.
+/// Convention: `kind = "worker"` → `classification = "fleet"`; all others → `"operator"`.
 pub fn create_stitch(
     stitch_id: &str,
     project: &str,
@@ -321,6 +322,7 @@ pub fn create_stitch(
     title: &str,
     created_by: &str,
     bead_ids: &[(&str, &str)], // (bead_id, workspace)
+    classification: &str,
 ) -> Result<()> {
     let path = db_path();
     let conn = Connection::open(&path)?;
@@ -328,10 +330,10 @@ pub fn create_stitch(
 
     conn.execute(
         r#"
-        INSERT INTO stitches (id, project, kind, title, created_by, created_at, last_activity_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO stitches (id, project, kind, title, created_by, created_at, last_activity_at, classification)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         "#,
-        params![stitch_id, project, kind, title, created_by, now, now],
+        params![stitch_id, project, kind, title, created_by, now, now, classification],
     )?;
 
     for (bead_id, workspace) in bead_ids {
@@ -621,6 +623,8 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v111_to_v112(conn)?;
             // Fall through to 1.13.0
             migrate_v112_to_v113(conn)?;
+            // Fall through to 1.14.0
+            migrate_v113_to_v114(conn)?;
         }
         "1.1.0" => {
             migrate_v11_to_v12(conn)?;
@@ -635,6 +639,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
+            migrate_v113_to_v114(conn)?;
         }
         "1.2.0" => {
             migrate_v12_to_v13(conn)?;
@@ -648,6 +653,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
+            migrate_v113_to_v114(conn)?;
         }
         "1.3.0" => {
             migrate_v13_to_v14(conn)?;
@@ -660,6 +666,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
+            migrate_v113_to_v114(conn)?;
         }
         "1.4.0" => {
             migrate_v14_to_v15(conn)?;
@@ -671,6 +678,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
+            migrate_v113_to_v114(conn)?;
         }
         "1.5.0" => {
             migrate_v15_to_v16(conn)?;
@@ -681,6 +689,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
+            migrate_v113_to_v114(conn)?;
         }
         "1.6.0" => {
             migrate_v16_to_v17(conn)?;
@@ -690,6 +699,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
+            migrate_v113_to_v114(conn)?;
         }
         "1.7.0" => {
             migrate_v17_to_v18(conn)?;
@@ -698,6 +708,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
+            migrate_v113_to_v114(conn)?;
         }
         "1.8.0" => {
             migrate_v18_to_v19(conn)?;
@@ -705,31 +716,39 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
+            migrate_v113_to_v114(conn)?;
         }
         "1.9.0" => {
             migrate_v19_to_v110(conn)?;
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
+            migrate_v113_to_v114(conn)?;
         }
         "1.10.0" => {
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
+            migrate_v113_to_v114(conn)?;
         }
         "1.11.0" => {
             migrate_v111_to_v112(conn)?;
             migrate_v112_to_v113(conn)?;
+            migrate_v113_to_v114(conn)?;
         }
         "1.12.0" => {
             migrate_v112_to_v113(conn)?;
+            migrate_v113_to_v114(conn)?;
         }
         "1.13.0" => {
-            info!("Already at schema version 1.13.0, no migrations needed");
+            migrate_v113_to_v114(conn)?;
+        }
+        "1.14.0" => {
+            info!("Already at schema version 1.14.0, no migrations needed");
         }
         _ => {
             return Err(anyhow::anyhow!(
-                "Unsupported schema version: {}. Expected 0.1.0–1.12.0",
+                "Unsupported schema version: {}. Expected 0.1.0–1.13.0",
                 from_version
             ));
         }
@@ -1479,6 +1498,36 @@ fn migrate_v112_to_v113(conn: &mut Connection) -> Result<()> {
     )?;
 
     update_schema_version(conn, "1.13.0")?;
+    Ok(())
+}
+
+/// Migration 1.13.0 → 1.14.0: Add classification column to stitches table
+///
+/// Adds `classification TEXT NOT NULL DEFAULT 'operator' CHECK(...)` to the
+/// stitches table so every Stitch carries its fleet-vs-operator classification.
+/// Backfills existing rows: `kind = 'worker'` → `'fleet'`, all others → `'operator'`.
+fn migrate_v113_to_v114(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.13.0 → 1.14.0: Adding classification column to stitches");
+
+    add_column_if_not_exists(
+        conn,
+        "stitches",
+        "classification",
+        "TEXT NOT NULL DEFAULT 'operator'",
+    )?;
+
+    // Backfill: worker-kind stitches are fleet, everything else is operator
+    conn.execute(
+        "UPDATE stitches SET classification = 'fleet' WHERE kind = 'worker'",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_stitches_classification ON stitches(classification)",
+        [],
+    )?;
+
+    update_schema_version(conn, "1.14.0")?;
     Ok(())
 }
 
@@ -2465,6 +2514,96 @@ fn query_runtime_status_conn(conn: &Connection) -> Result<Vec<RuntimeStatusRow>>
     })?;
     rows.collect::<std::result::Result<Vec<_>, _>>()
         .map_err(|e| anyhow::anyhow!("Failed to query runtime_status: {}", e))
+}
+
+/// Upsert bead/worker counts for a project while preserving event/heartbeat timestamps.
+///
+/// Unlike `upsert_project_status` (full replace), this function only writes the
+/// numeric count columns.  The `last_event_at` and `last_heartbeat_at` columns,
+/// which are advanced by the event-tailer and heartbeat task respectively, are
+/// left unchanged on conflict.
+pub fn upsert_project_status_counts(row: &ProjectStatusRow) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    upsert_project_status_counts_conn(&conn, row)
+}
+
+fn upsert_project_status_counts_conn(conn: &Connection, row: &ProjectStatusRow) -> Result<()> {
+    conn.execute(
+        r#"INSERT INTO project_status
+           (project, open_beads, closed_beads, stuck_beads, worker_count, updated_at)
+           VALUES (?1,?2,?3,?4,?5,?6)
+           ON CONFLICT(project) DO UPDATE SET
+               open_beads   = excluded.open_beads,
+               closed_beads = excluded.closed_beads,
+               stuck_beads  = excluded.stuck_beads,
+               worker_count = excluded.worker_count,
+               updated_at   = excluded.updated_at"#,
+        params![
+            row.project,
+            row.open_beads,
+            row.closed_beads,
+            row.stuck_beads,
+            row.worker_count,
+            row.updated_at,
+        ],
+    )?;
+    Ok(())
+}
+
+/// Update only `last_event_at` for a project row, creating it if absent.
+///
+/// Only advances the timestamp — if `ts` is older than the stored value the
+/// row is left unchanged (guards against out-of-order replay).
+pub fn touch_project_event_at(project: &str, ts: &str) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    touch_project_event_at_conn(&conn, project, ts)
+}
+
+fn touch_project_event_at_conn(conn: &Connection, project: &str, ts: &str) -> Result<()> {
+    let updated_at = Utc::now().to_rfc3339();
+    conn.execute(
+        r#"INSERT INTO project_status (project, last_event_at, updated_at)
+           VALUES (?1, ?2, ?3)
+           ON CONFLICT(project) DO UPDATE SET
+               last_event_at = CASE
+                   WHEN project_status.last_event_at IS NULL
+                        OR excluded.last_event_at > project_status.last_event_at
+                   THEN excluded.last_event_at
+                   ELSE project_status.last_event_at
+               END,
+               updated_at = excluded.updated_at"#,
+        params![project, ts, updated_at],
+    )?;
+    Ok(())
+}
+
+/// Update only `last_heartbeat_at` for a project row, creating it if absent.
+///
+/// Only advances the timestamp — older values are ignored.
+pub fn touch_project_heartbeat_at(project: &str, ts: &str) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    touch_project_heartbeat_at_conn(&conn, project, ts)
+}
+
+fn touch_project_heartbeat_at_conn(conn: &Connection, project: &str, ts: &str) -> Result<()> {
+    let updated_at = Utc::now().to_rfc3339();
+    conn.execute(
+        r#"INSERT INTO project_status (project, last_heartbeat_at, updated_at)
+           VALUES (?1, ?2, ?3)
+           ON CONFLICT(project) DO UPDATE SET
+               last_heartbeat_at = CASE
+                   WHEN project_status.last_heartbeat_at IS NULL
+                        OR excluded.last_heartbeat_at > project_status.last_heartbeat_at
+                   THEN excluded.last_heartbeat_at
+                   ELSE project_status.last_heartbeat_at
+               END,
+               updated_at = excluded.updated_at"#,
+        params![project, ts, updated_at],
+    )?;
+    Ok(())
 }
 
 /// Accumulate cost into the `cost_rollup` table for a given (project, date).

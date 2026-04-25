@@ -560,6 +560,15 @@ async fn get_cross_project_dashboard(
     })
 }
 
+/// GET /api/fleet/runtime-status — cross-project runtime status with liveness derived on read.
+async fn get_runtime_status() -> Result<Json<Vec<fleet::RuntimeStatusRow>>, (axum::http::StatusCode, String)> {
+    tokio::task::spawn_blocking(fleet::query_runtime_status)
+        .await
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map(Json)
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+}
+
 /// Build the daemon router with all endpoints
 pub fn router() -> Router<DaemonState> {
     Router::new()
@@ -572,6 +581,7 @@ pub fn router() -> Router<DaemonState> {
         .route("/api/cost/buckets/:project", get(get_cost_buckets_by_project))
         .route("/api/cost/reload-pricing", post(reload_pricing))
         .route("/api/dashboard/cross-project", get(get_cross_project_dashboard))
+        .route("/api/fleet/runtime-status", get(get_runtime_status))
         .route("/api/projects/:project/files", get(get_project_files))
         .route("/api/attachments/:attachment_type/:id/:filename", get(api_attachments::serve_attachment))
         .route("/ws", get(ws::ws_handler))
@@ -1018,6 +1028,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     // Spawn task to process heartbeat events and update registry
     let registry_clone = worker_registry.clone();
     let ack_monitor_clone = worker_ack_monitor.clone();
+    let beads_for_hb = beads.clone();
     tokio::spawn(async move {
         use heartbeats::MonitorEvent;
         let mut rx = registry_clone.subscribe();
@@ -1033,6 +1044,18 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         .find(|w| w.worker == hb.worker)
                         .map(|w| w.liveness)
                         .unwrap_or(heartbeats::WorkerLiveness::Dead);
+                    // Advance last_heartbeat_at for the project this worker is executing
+                    if let WorkerState::Executing { ref bead, .. } = hb.state {
+                        let proj = {
+                            let guard = beads_for_hb.read().unwrap();
+                            guard.iter().find(|b| b.id == *bead).map(|b| b.project.clone())
+                        };
+                        if let Some(ref p) = proj {
+                            if let Err(e) = fleet::touch_project_heartbeat_at(p, &hb.ts.to_rfc3339()) {
+                                warn!("fleet: touch_project_heartbeat_at failed: {}", e);
+                            }
+                        }
+                    }
                     registry_clone.update_worker(hb, liveness).await;
                 }
                 MonitorEvent::LivenessChange(t) => {
@@ -1374,6 +1397,38 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                     })
                     .collect();
 
+                // Flush project_status to fleet.db (§4.4)
+                {
+                    let now = chrono::Utc::now().to_rfc3339();
+                    for r in &runtime_statuses {
+                        let open_beads = all_beads.iter()
+                            .filter(|b| b.project == r.project_name && b.status == BeadStatus::Open)
+                            .count() as i64;
+                        let closed_beads = all_beads.iter()
+                            .filter(|b| b.project == r.project_name && b.status != BeadStatus::Open)
+                            .count() as i64;
+                        let stuck_beads = workers.iter()
+                            .filter(|w| matches!(w.state, ws::WorkerDisplayState::Knot { .. }))
+                            .count() as i64;
+                        let worker_count = workers.len() as i64;
+                        let row = fleet::ProjectStatusRow {
+                            project: r.project_name.clone(),
+                            open_beads,
+                            closed_beads,
+                            stuck_beads,
+                            worker_count,
+                            last_event_at: None,
+                            last_heartbeat_at: None,
+                            updated_at: now.clone(),
+                        };
+                        // Partial upsert: only write bead/worker counts; preserve
+                        // last_event_at and last_heartbeat_at that the event tailer set.
+                        if let Err(e) = fleet::upsert_project_status_counts(&row) {
+                            warn!("fleet: upsert_project_status_counts failed: {}", e);
+                        }
+                    }
+                }
+
                 // Rebuild vector index every 30s (6th tick of the 5s interval)
                 vindex_counter += 1;
                 if vindex_counter >= 6 {
@@ -1385,6 +1440,49 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                 *projects_ref.write().unwrap() = new_cards.clone();
                 for card in new_cards {
                     let _ = status_ref.send(card);
+                }
+            }
+        });
+    }
+
+    // Periodic cost_rollup snapshot to fleet.db (every 60 s) — §4.4
+    {
+        let cost_ref = cost_aggregator.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(60));
+            loop {
+                interval.tick().await;
+                let rows = cost_ref.read().unwrap().get_project_date_rollup();
+                for (project, date, cost_usd, input, output, cache_read, cache_write) in rows {
+                    if let Err(e) = fleet::snapshot_project_cost_row(
+                        &project, &date, cost_usd, input, output, cache_read, cache_write,
+                    ) {
+                        warn!("fleet: snapshot_project_cost_row failed for {}/{}: {}", project, date, e);
+                    }
+                }
+            }
+        });
+    }
+
+    // Capacity rollup → fleet.db: persist every capacity refresh broadcast (§4.4)
+    {
+        let mut cap_rx = state.capacity_tx.subscribe();
+        tokio::spawn(async move {
+            while let Ok(capacities) = cap_rx.recv().await {
+                for cap in &capacities {
+                    let row = fleet::CapacityRollupRow {
+                        account_id: cap.account_id.clone(),
+                        adapter: cap.adapter.clone(),
+                        computed_at: cap.computed_at.to_rfc3339(),
+                        window_5h_pct: cap.utilization_5h,
+                        window_7d_pct: cap.utilization_7d,
+                        tokens_5h: cap.tokens_5h as i64,
+                        tokens_7d: cap.tokens_7d as i64,
+                        cost_7d_usd: 0.0,
+                    };
+                    if let Err(e) = fleet::upsert_capacity_rollup(&row) {
+                        warn!("fleet: upsert_capacity_rollup failed for {}: {}", cap.account_id, e);
+                    }
                 }
             }
         });

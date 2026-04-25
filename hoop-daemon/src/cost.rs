@@ -75,6 +75,8 @@ struct CostBucketKey {
     model: String,
     /// Strand name (null if not applicable)
     strand: Option<String>,
+    /// Fleet (worker/NEEDLE-tagged) or operator (all others)
+    classification: String,
 }
 
 /// Usage accumulator for aggregation
@@ -162,6 +164,9 @@ impl CostAggregator {
         // Extract strand from session kind
         let strand = Self::extract_strand(&session.kind);
 
+        // Derive fleet/operator classification from session kind
+        let classification = Self::extract_classification(&session.kind);
+
         // Get date from created_at
         let date = session.created_at.date_naive();
 
@@ -172,6 +177,7 @@ impl CostAggregator {
             adapter: session.provider.clone(),
             model,
             strand: strand.clone(),
+            classification,
         };
 
         // Add usage to bucket
@@ -239,6 +245,15 @@ impl CostAggregator {
             strand.clone()
         } else {
             None
+        }
+    }
+
+    /// Derive fleet/operator classification from session kind.
+    /// Worker sessions (Variant0 = needle-tagged) are "fleet"; all others are "operator".
+    fn extract_classification(kind: &ParsedSessionKind) -> String {
+        match kind {
+            ParsedSessionKind::Variant0 { .. } => "fleet".to_string(),
+            _ => "operator".to_string(),
         }
     }
 
@@ -349,6 +364,29 @@ impl CostAggregator {
             .sum()
     }
 
+    /// Return per-(project, date) cost rollup rows suitable for persisting to fleet.db.
+    ///
+    /// Aggregates all in-memory buckets by (project, date), summing tokens and cost.
+    pub fn get_project_date_rollup(&self) -> Vec<(String, String, f64, i64, i64, i64, i64)> {
+        let mut map: HashMap<(String, String), (f64, i64, i64, i64, i64)> = HashMap::new();
+        for (key, usage) in &self.buckets {
+            let cost = self.calculate_cost(key, usage);
+            let entry = map
+                .entry((key.project.clone(), key.date.to_string()))
+                .or_default();
+            entry.0 += cost;
+            entry.1 += usage.input_tokens;
+            entry.2 += usage.output_tokens;
+            entry.3 += usage.cache_read_tokens;
+            entry.4 += usage.cache_write_tokens;
+        }
+        map.into_iter()
+            .map(|((project, date), (cost, input, output, cache_read, cache_write))| {
+                (project, date, cost, input, output, cache_read, cache_write)
+            })
+            .collect()
+    }
+
     /// Clear all buckets (e.g., for daily reset)
     pub fn clear(&mut self) {
         self.buckets.clear();
@@ -368,6 +406,9 @@ pub struct CostBucket {
     pub adapter: String,
     pub model: String,
     pub strand: Option<String>,
+    /// Fleet (worker/NEEDLE-tagged) or operator (all others). Derived from session kind at
+    /// aggregation time; never mutated after the session is classified.
+    pub classification: String,
     pub usage: hoop_schema::MessageUsage,
     pub request_count: i64,
     pub cost_usd: f64,

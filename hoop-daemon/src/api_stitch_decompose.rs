@@ -568,6 +568,7 @@ pub async fn submit_stitch_internal(
         &req.title,
         actor,
         &bead_links,
+        "operator",
     ) {
         warn!("Failed to persist stitch row for {}: {}", stitch_id, e);
     }

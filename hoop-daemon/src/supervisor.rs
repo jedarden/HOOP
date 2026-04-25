@@ -194,6 +194,7 @@ impl ProjectSupervisor {
         // Subscribe to event tailer events and forward to worker registry
         let mut event_rx = event_tailer.subscribe();
         let worker_registry = self.worker_registry.clone();
+        let beads = self.beads.clone();
 
         tokio::spawn(async move {
             while let Ok(event) = event_rx.recv().await {
@@ -210,10 +211,9 @@ impl ProjectSupervisor {
                                 raw: parsed.raw.clone(),
                             };
                             worker_registry.add_bead_event(ws_event).await;
-
-                            // Also broadcast to WebSocket clients via a dedicated channel
-                            // For now, we'll rely on periodic snapshots
                         }
+                        // Update fleet.db cross-project tables from this event
+                        update_fleet_from_event(&parsed.event, &beads);
                     }
                     TailerEvent::Rotated => {
                         debug!("Event log rotated");
@@ -768,6 +768,85 @@ impl ProjectSupervisor {
 
         info!("Project runtime shut down: {}", project_name);
         Ok(())
+    }
+}
+
+/// Look up the project name for a given bead ID from the shared beads store.
+fn lookup_project_for_bead(
+    bead_id: &str,
+    beads: &Arc<std::sync::RwLock<Vec<Bead>>>,
+) -> Option<String> {
+    let guard = beads.read().unwrap();
+    guard.iter().find(|b| b.id == bead_id).map(|b| b.project.clone())
+}
+
+/// Update fleet.db cross-project tables on receipt of a NEEDLE event.
+///
+/// - `Claim`  → upsert collision_index entry + touch project last_event_at
+/// - terminal events (Complete/Close/Release/Fail/Timeout/Crash)
+///            → remove collision_index entry + touch project last_event_at
+/// - other events → touch project last_event_at only
+fn update_fleet_from_event(
+    event: &crate::events::NeedleEvent,
+    beads: &Arc<std::sync::RwLock<Vec<Bead>>>,
+) {
+    use crate::events::NeedleEvent;
+    use crate::fleet;
+
+    // Extract (ts, worker, bead_id) from the event — all known variants carry these.
+    let (ts, worker, bead_id) = match event {
+        NeedleEvent::Claim { ts, worker, bead, .. }
+        | NeedleEvent::Dispatch { ts, worker, bead, .. }
+        | NeedleEvent::Complete { ts, worker, bead, .. }
+        | NeedleEvent::Fail { ts, worker, bead, .. }
+        | NeedleEvent::Timeout { ts, worker, bead, .. }
+        | NeedleEvent::Crash { ts, worker, bead, .. }
+        | NeedleEvent::Close { ts, worker, bead, .. }
+        | NeedleEvent::Release { ts, worker, bead, .. }
+        | NeedleEvent::Update { ts, worker, bead, .. } => (ts.as_str(), worker.as_str(), bead.as_str()),
+        NeedleEvent::Unknown => return,
+    };
+
+    // Resolve project from in-memory bead store
+    let project = lookup_project_for_bead(bead_id, beads);
+
+    match event {
+        NeedleEvent::Claim { .. } => {
+            // Register in collision index so concurrent-work detection can fire
+            if let Some(ref proj) = project {
+                let now = chrono::Utc::now().to_rfc3339();
+                let entry = fleet::CollisionIndexEntry {
+                    bead_id: bead_id.to_string(),
+                    project: proj.clone(),
+                    worker: Some(worker.to_string()),
+                    claimed_at: ts.to_string(),
+                    file_paths: vec![],
+                    updated_at: now,
+                };
+                if let Err(e) = fleet::upsert_collision_entry(&entry) {
+                    warn!("fleet: upsert_collision_entry failed for {}: {}", bead_id, e);
+                }
+            }
+        }
+        NeedleEvent::Complete { .. }
+        | NeedleEvent::Close { .. }
+        | NeedleEvent::Release { .. }
+        | NeedleEvent::Fail { .. }
+        | NeedleEvent::Timeout { .. }
+        | NeedleEvent::Crash { .. } => {
+            // Free the collision index entry — bead is no longer active
+            if let Err(e) = fleet::remove_collision_entry(bead_id) {
+                warn!("fleet: remove_collision_entry failed for {}: {}", bead_id, e);
+            }
+        }
+        _ => {}
+    }
+
+    // Advance last_event_at for the project (best-effort; warns on failure)
+    if let Some(ref proj) = project {
+        if let Err(e) = fleet::touch_project_event_at(proj, ts) {
+            warn!("fleet: touch_project_event_at failed for {}: {}", proj, e);
+        }
     }
 }
 

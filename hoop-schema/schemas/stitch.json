@@ -77,6 +77,11 @@
       "type": ["string", "null"],
       "description": "Pattern ID if this stitch belongs to a pattern"
     },
+    "classification": {
+      "type": "string",
+      "enum": ["fleet", "operator"],
+      "description": "Fleet (worker/NEEDLE-tagged session) or operator (all others). Set at Stitch creation time and never changed."
+    },
     "schema_version": {
       "type": "string",
       "pattern": "^\\d+\\.\\d+\\.\\d+$"
