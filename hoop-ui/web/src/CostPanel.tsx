@@ -1,6 +1,6 @@
 import { useAtomValue } from 'jotai';
 import { useState, useMemo, useEffect } from 'react';
-import { conversationsAtom, Conversation } from './atoms';
+import { conversationsAtom, capacityAtom, Conversation, type AccountCapacity } from './atoms';
 
 interface CostPanelProps {
   projectName: string;
@@ -31,6 +31,8 @@ interface CostBucket {
   adapter: string;
   model: string;
   strand: string | null;
+  /** "fleet" (NEEDLE worker session) or "operator" (all others). Set at aggregation time. */
+  classification: string;
   usage: {
     input_tokens: number;
     output_tokens: number;
@@ -39,6 +41,11 @@ interface CostBucket {
   };
   request_count: number;
   cost_usd: number;
+}
+
+interface ClassificationSplit {
+  fleet: number;
+  operator: number;
 }
 
 function formatCurrency(amount: number): string {
@@ -65,9 +72,81 @@ const FALLBACK_PRICING: Record<string, { input: number; output: number }> = {
   'gpt-3.5-turbo': { input: 0.5 / 1000000, output: 1.5 / 1000000 },
 };
 
+function rlLevel(utilization: number): 'low' | 'medium' | 'high' | 'critical' {
+  if (utilization >= 90) return 'critical';
+  if (utilization >= 80) return 'high';
+  if (utilization >= 60) return 'medium';
+  return 'low';
+}
+
+function rlColor(level: string): string {
+  switch (level) {
+    case 'critical': return '#ea4335';
+    case 'high': return '#fbbc04';
+    case 'medium': return '#f9ab00';
+    default: return '#34a853';
+  }
+}
+
+function rlResetsIn(iso?: string | null): string {
+  if (!iso) return '';
+  const diffMin = (new Date(iso).getTime() - Date.now()) / 60000;
+  if (diffMin <= 0) return '';
+  if (diffMin < 60) return `resets in ~${Math.floor(diffMin)}m`;
+  if (diffMin < 1440) return `resets in ~${Math.floor(diffMin / 60)}h`;
+  return `resets in ~${Math.floor(diffMin / 1440)}d`;
+}
+
+function RateLimitWindowRow({ account }: { account: AccountCapacity }) {
+  const windows = [
+    { label: '5h', utilization: account.utilization_5h, tokens: account.tokens_5h, resetsAt: account.resets_at_5h },
+    { label: '7d', utilization: account.utilization_7d, tokens: account.tokens_7d, resetsAt: account.resets_at_7d },
+  ] as const;
+
+  return (
+    <div className="rl-row">
+      <div className="rl-row-account">
+        {account.account_id}
+        <span className="rl-row-plan"> · {account.plan_type}</span>
+      </div>
+      <div className="rl-row-meters">
+        {windows.map(w => {
+          const pct = Math.min(w.utilization, 100);
+          const level = rlLevel(w.utilization);
+          const nearLimit = w.utilization >= 80;
+          const resetText = rlResetsIn(w.resetsAt);
+          return (
+            <div key={w.label} className="rl-meter">
+              <div className="rl-meter-label">
+                <span className="rl-meter-window">{w.label}</span>
+                <span className={`rl-meter-pct rl-meter-pct--${level}`}>
+                  {w.utilization.toFixed(0)}%
+                  {nearLimit && <span className="rl-near-limit-badge">!</span>}
+                </span>
+              </div>
+              <div className="rl-bar">
+                <div
+                  className={`rl-bar-fill${nearLimit ? ' rl-bar-fill--near-limit' : ''}`}
+                  style={{ width: `${pct}%`, background: rlColor(level) }}
+                  title={`${formatNumber(w.tokens)} weighted tokens`}
+                />
+                <div className="rl-bar-zone" />
+                <div className="rl-bar-threshold" />
+              </div>
+              {resetText && <div className="rl-reset-text">{resetText}</div>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function CostPanel({ projectName, conversations: conversationsProp }: CostPanelProps) {
   const globalConversations = useAtomValue(conversationsAtom);
   const conversations = conversationsProp ?? globalConversations;
+  const allCapacity = useAtomValue(capacityAtom);
+  const claudeCapacity = allCapacity.filter(a => a.adapter === 'claude');
   const [apiBuckets, setApiBuckets] = useState<CostBucket[] | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -219,6 +298,40 @@ export default function CostPanel({ projectName, conversations: conversationsPro
     return ranges;
   }, [apiBuckets, conversations]);
 
+  // Fleet vs operator cost split derived from backend classification field
+  const classificationSplit = useMemo((): ClassificationSplit => {
+    if (!apiBuckets || apiBuckets.length === 0) {
+      // Client-side fallback: classify by conversation kind
+      const fleet = conversations
+        .filter(c => c.kind === 'worker')
+        .reduce((sum, c) => {
+          const pricingKey = c.provider.toLowerCase();
+          const pricing = FALLBACK_PRICING[pricingKey] || FALLBACK_PRICING['gpt-3.5-turbo'];
+          const input = Math.floor(c.total_tokens * 0.7);
+          const output = Math.ceil(c.total_tokens * 0.3);
+          return sum + input * pricing.input + output * pricing.output;
+        }, 0);
+      const operator = conversations
+        .filter(c => c.kind !== 'worker')
+        .reduce((sum, c) => {
+          const pricingKey = c.provider.toLowerCase();
+          const pricing = FALLBACK_PRICING[pricingKey] || FALLBACK_PRICING['gpt-3.5-turbo'];
+          const input = Math.floor(c.total_tokens * 0.7);
+          const output = Math.ceil(c.total_tokens * 0.3);
+          return sum + input * pricing.input + output * pricing.output;
+        }, 0);
+      return { fleet, operator };
+    }
+    return apiBuckets.reduce(
+      (acc, b) => {
+        if (b.classification === 'fleet') acc.fleet += b.cost_usd;
+        else acc.operator += b.cost_usd;
+        return acc;
+      },
+      { fleet: 0, operator: 0 } as ClassificationSplit,
+    );
+  }, [apiBuckets, conversations]);
+
   const totalCost = costByAdapter.reduce((sum, b) => sum + b.totalCost, 0);
   const totalTokens = costByAdapter.reduce((sum, b) => sum + b.totalTokens, 0);
   const dataSource = apiBuckets ? 'server' : 'estimated';
@@ -255,6 +368,18 @@ export default function CostPanel({ projectName, conversations: conversationsPro
             ))}
           </div>
         </section>
+
+        {/* Claude Rate Limit Windows */}
+        {claudeCapacity.length > 0 && (
+          <section className="cost-section">
+            <h4>Claude Rate Limit Windows</h4>
+            <div className="rl-list">
+              {claudeCapacity.map(account => (
+                <RateLimitWindowRow key={account.account_id} account={account} />
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Adapter Breakdown */}
         <section className="cost-section">
@@ -296,6 +421,39 @@ export default function CostPanel({ projectName, conversations: conversationsPro
           )}
         </section>
 
+        {/* Fleet vs Operator Split */}
+        <section className="cost-section">
+          <h4>Fleet vs Ad-hoc Cost</h4>
+          <div className="cost-classification-split">
+            {(['fleet', 'operator'] as const).map(cls => {
+              const cost = classificationSplit[cls];
+              const splitTotal = classificationSplit.fleet + classificationSplit.operator;
+              const pct = splitTotal > 0 ? (cost / splitTotal) * 100 : 0;
+              return (
+                <div key={cls} className="cost-classification-item">
+                  <div className="cost-classification-header">
+                    <span className={`badge badge-${cls === 'fleet' ? 'fleet' : 'operator'} badge-sm`}>
+                      {cls === 'fleet' ? 'Fleet (NEEDLE workers)' : 'Ad-hoc / Operator'}
+                    </span>
+                    <span className="adapter-cost">{formatCurrency(cost)}</span>
+                  </div>
+                  <div className="cost-breakdown-details">
+                    <div className="cost-bar">
+                      <div
+                        className={`cost-bar-fill cost-bar-${cls}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <div className="cost-breakdown-stats">
+                      <span>{pct.toFixed(1)}% of total</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
         {/* Notes */}
         <section className="cost-section">
           <h4>Cost Analysis Notes</h4>
@@ -310,9 +468,6 @@ export default function CostPanel({ projectName, conversations: conversationsPro
                 <strong>Source:</strong> Server-side cost data from backend pricing configuration.
               </p>
             )}
-            <p className="cost-note">
-              Rate limit windows (5h/7d for Claude) are shown in the Capacity panel.
-            </p>
           </div>
         </section>
       </div>

@@ -2122,6 +2122,131 @@ pre {
   color: #333;
 }
 
+/* Rate limit window overlay (inside cost panel) */
+.rl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.rl-row {
+  padding: 0.625rem 0.75rem;
+  background: #f8f9fa;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+}
+
+.rl-row-account {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #444;
+  margin-bottom: 0.5rem;
+}
+
+.rl-row-plan {
+  font-weight: 400;
+  color: #888;
+}
+
+.rl-row-meters {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.rl-meter {
+  flex: 1;
+  min-width: 0;
+}
+
+.rl-meter-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.rl-meter-window {
+  font-weight: 600;
+  color: #666;
+}
+
+.rl-meter-pct {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.rl-meter-pct--low    { color: #34a853; }
+.rl-meter-pct--medium { color: #f9ab00; }
+.rl-meter-pct--high   { color: #fbbc04; }
+.rl-meter-pct--critical { color: #ea4335; }
+
+.rl-near-limit-badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #fbbc04;
+  animation: rl-blink 1.4s infinite;
+}
+
+.rl-meter-pct--critical .rl-near-limit-badge {
+  color: #ea4335;
+}
+
+@keyframes rl-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+.rl-bar {
+  position: relative;
+  height: 10px;
+  background: rgba(25, 118, 210, 0.07);
+  border-radius: 5px;
+  overflow: visible;
+}
+
+.rl-bar-fill {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.3s ease;
+}
+
+.rl-bar-fill--near-limit {
+  box-shadow: 0 0 4px rgba(251, 188, 4, 0.6);
+}
+
+/* Semi-transparent warning zone: 80%–100% */
+.rl-bar-zone {
+  position: absolute;
+  top: 0;
+  left: 80%;
+  right: 0;
+  height: 100%;
+  background: rgba(251, 188, 4, 0.15);
+  border-radius: 0 5px 5px 0;
+  pointer-events: none;
+}
+
+/* 80% threshold marker */
+.rl-bar-threshold {
+  position: absolute;
+  top: -2px;
+  left: 80%;
+  width: 1.5px;
+  height: calc(100% + 4px);
+  background: rgba(249, 171, 0, 0.75);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.rl-reset-text {
+  font-size: 0.685rem;
+  color: #999;
+  margin-top: 0.2rem;
+}
+
 /* Capacity Panel */
 .capacity-panel {
   padding: 1.5rem 2rem;
