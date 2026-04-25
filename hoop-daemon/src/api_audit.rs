@@ -121,6 +121,10 @@ async fn query_audit(
         Some("config_reload_rejected") => Some(ActionKind::ConfigReloadRejected),
         Some("project_added") => Some(ActionKind::ProjectAdded),
         Some("project_removed") => Some(ActionKind::ProjectRemoved),
+        Some("draft_created") => Some(ActionKind::DraftCreated),
+        Some("draft_approved") => Some(ActionKind::DraftApproved),
+        Some("draft_edited") => Some(ActionKind::DraftEdited),
+        Some("draft_rejected") => Some(ActionKind::DraftRejected),
         Some(_) => {
             return Err((
                 StatusCode::BAD_REQUEST,
