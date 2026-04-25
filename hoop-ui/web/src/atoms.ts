@@ -191,6 +191,7 @@ export interface BeadData {
   updated_at: string;
   created_by: string;
   dependencies: string[];
+  project: string;
 }
 
 // Config error details (§17.5)
@@ -318,10 +319,15 @@ export interface CostBucket {
   adapter: string;
   model: string;
   strand: string | null;
+  /** "fleet" (NEEDLE worker session) or "operator" (all others). Set at aggregation time. */
+  classification: string;
   usage: MessageUsage;
   request_count: number;
   cost_usd: number;
 }
+
+/** Filter values for the conversation pane — persisted across renders in a Jotai atom. */
+export type ConversationFilter = 'all' | 'fleet' | 'operator' | 'ad-hoc' | 'dictated';
 
 // Stitch created event from backend WS
 export interface StitchCreatedData {
@@ -429,6 +435,8 @@ export interface CrossProjectDashboardData {
 // Atoms for state management
 export const conversationsAtom = atom<Conversation[]>([]);
 export const selectedConversationIdAtom = atom<string | null>(null);
+/** Per-operator conversation filter — persists across re-mounts within the session. */
+export const conversationFilterAtom = atom<ConversationFilter>('all');
 export const projectsAtom = atom<Project[]>([]);
 export const projectCardsAtom = atom<ProjectCardData[]>([]);
 export const projectsReceivedAtom = atom<boolean>(false);
