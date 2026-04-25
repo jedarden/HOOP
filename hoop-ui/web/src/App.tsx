@@ -1,6 +1,6 @@
-import { useAtom, useAtomValue } from 'jotai';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useState, useEffect, useCallback } from 'react';
-import { wsConnectedAtom, configStatusAtom, projectCardsAtom, ProjectCardData } from './atoms';
+import { wsConnectedAtom, configStatusAtom, projectCardsAtom, searchPaletteOpenAtom, ProjectCardData } from './atoms';
 import { useWebSocket } from './useWebSocket';
 import OverviewPage from './OverviewPage';
 import ProjectDetail from './ProjectDetail';
@@ -10,12 +10,15 @@ import ConversationPane from './ConversationPane';
 import CapacityPanel from './CapacityPanel';
 import AgentChatPane from './AgentChatPane';
 import WorkerTimeline from './WorkerTimeline';
+import AuditPanel from './AuditPanel';
+import { SearchPalette } from './SearchPalette';
 
 type Route =
   | { view: 'overview' }
   | { view: 'project'; name: string }
   | { view: 'fleet' }
-  | { view: 'timeline' };
+  | { view: 'timeline' }
+  | { view: 'audit' };
 
 function ConfigBanner({ error }: { error: { message: string; line: number; col: number; field?: string; expected?: string; got?: string } }) {
   return (
@@ -37,6 +40,7 @@ function parseHash(hash: string): Route {
   if (!path) return { view: 'overview' };
   if (path === 'fleet') return { view: 'fleet' };
   if (path === 'timeline') return { view: 'timeline' };
+  if (path === 'audit') return { view: 'audit' };
   return { view: 'project', name: path };
 }
 
@@ -45,8 +49,21 @@ export default function App() {
   const [configStatus] = useAtom(configStatusAtom);
   const projectCards = useAtomValue(projectCardsAtom);
   const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
+  const setSearchOpen = useSetAtom(searchPaletteOpenAtom);
 
   useWebSocket();
+
+  // cmd-K (or ctrl-K) opens the search palette
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setSearchOpen(open => !open);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [setSearchOpen]);
 
   // Hash-based routing
   useEffect(() => {
@@ -73,58 +90,98 @@ export default function App() {
 
   // Overview — home route
   if (route.view === 'overview') {
-    return <OverviewPage onNavigateProject={navigateToProject} />;
+    return (
+      <>
+        <OverviewPage onNavigateProject={navigateToProject} />
+        <SearchPalette />
+      </>
+    );
   }
 
   // Timeline view — per-worker Gantt (hoop-ttb.2.16)
   if (route.view === 'timeline') {
     return (
-      <div className="app app-project-detail">
-        {configStatus.error && <ConfigBanner error={configStatus.error} />}
-        <header className="app-header-mini">
-          <div className="header-top">
-            <div className="header-nav">
-              <a href="#/" className="back-link">&larr; All Projects</a>
-              <a href="#/fleet" className="back-link">Fleet</a>
+      <>
+        <div className="app app-project-detail">
+          {configStatus.error && <ConfigBanner error={configStatus.error} />}
+          <header className="app-header-mini">
+            <div className="header-top">
+              <div className="header-nav">
+                <a href="#/" className="back-link">&larr; All Projects</a>
+                <a href="#/fleet" className="header-nav-link">Fleet</a>
+                <a href="#/audit" className="header-nav-link">Audit Log &rarr;</a>
+              </div>
+              <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
+                <span className="indicator-dot" />
+                {wsConnected ? 'Connected' : 'Connecting...'}
+              </div>
             </div>
-            <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
-              <span className="indicator-dot" />
-              {wsConnected ? 'Connected' : 'Connecting...'}
+          </header>
+          <main>
+            <WorkerTimeline />
+          </main>
+        </div>
+        <SearchPalette />
+      </>
+    );
+  }
+
+  // Audit log view (hoop-ttb.2.18)
+  if (route.view === 'audit') {
+    return (
+      <>
+        <div className="app app-project-detail">
+          {configStatus.error && <ConfigBanner error={configStatus.error} />}
+          <header className="app-header-mini">
+            <div className="header-top">
+              <div className="header-nav">
+                <a href="#/" className="back-link">&larr; All Projects</a>
+                <a href="#/fleet" className="header-nav-link">Fleet</a>
+              </div>
+              <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
+                <span className="indicator-dot" />
+                {wsConnected ? 'Connected' : 'Connecting...'}
+              </div>
             </div>
-          </div>
-        </header>
-        <main>
-          <WorkerTimeline />
-        </main>
-      </div>
+          </header>
+          <main>
+            <AuditPanel />
+          </main>
+        </div>
+        <SearchPalette />
+      </>
     );
   }
 
   // Fleet view — live worker layout (hoop-ttb.3.7)
   if (route.view === 'fleet') {
     return (
-      <div className="app app-project-detail">
-        {configStatus.error && <ConfigBanner error={configStatus.error} />}
-        <header className="app-header-mini">
-          <div className="header-top">
-            <div className="header-nav">
-              <a href="#/" className="back-link">&larr; All Projects</a>
-              <a href="#/timeline" className="header-nav-link">Worker Timeline &rarr;</a>
+      <>
+        <div className="app app-project-detail">
+          {configStatus.error && <ConfigBanner error={configStatus.error} />}
+          <header className="app-header-mini">
+            <div className="header-top">
+              <div className="header-nav">
+                <a href="#/" className="back-link">&larr; All Projects</a>
+                <a href="#/timeline" className="header-nav-link">Worker Timeline &rarr;</a>
+                <a href="#/audit" className="header-nav-link">Audit Log &rarr;</a>
+              </div>
+              <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
+                <span className="indicator-dot" />
+                {wsConnected ? 'Connected' : 'Connecting...'}
+              </div>
             </div>
-            <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
-              <span className="indicator-dot" />
-              {wsConnected ? 'Connected' : 'Connecting...'}
-            </div>
-          </div>
-        </header>
-        <main>
-          <FleetMap />
-          <BeadList />
-          <ConversationPane />
-          <AgentChatPane />
-          <CapacityPanel projectName="" />
-        </main>
-      </div>
+          </header>
+          <main>
+            <FleetMap />
+            <BeadList />
+            <ConversationPane />
+            <AgentChatPane />
+            <CapacityPanel projectName="" />
+          </main>
+        </div>
+        <SearchPalette />
+      </>
     );
   }
 
@@ -132,41 +189,47 @@ export default function App() {
   const card = projectCards.find(p => p.name === route.name);
   if (!card) {
     return (
-      <div className="app">
+      <>
+        <div className="app">
+          <header className="app-header-mini">
+            <div className="header-top">
+              <a href="#/" className="back-link">&larr; All Projects</a>
+              <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
+                <span className="indicator-dot" />
+                {wsConnected ? 'Connected' : 'Connecting...'}
+              </div>
+            </div>
+          </header>
+          <main>
+            <div className="fleet-empty">Project "{route.name}" not found</div>
+          </main>
+        </div>
+        <SearchPalette />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="app app-project-detail">
+        {configStatus.error && <ConfigBanner error={configStatus.error} />}
         <header className="app-header-mini">
           <div className="header-top">
-            <a href="#/" className="back-link">&larr; All Projects</a>
+            <a href="#/" className="back-link" onClick={(e) => { e.preventDefault(); window.location.hash = ''; }}>
+              &larr; All Projects
+            </a>
             <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
               <span className="indicator-dot" />
               {wsConnected ? 'Connected' : 'Connecting...'}
             </div>
           </div>
         </header>
-        <main>
-          <div className="fleet-empty">Project "{route.name}" not found</div>
-        </main>
+        <ProjectDetail
+          projectName={card.name}
+          projectPath={card.path}
+        />
       </div>
-    );
-  }
-
-  return (
-    <div className="app app-project-detail">
-      {configStatus.error && <ConfigBanner error={configStatus.error} />}
-      <header className="app-header-mini">
-        <div className="header-top">
-          <a href="#/" className="back-link" onClick={(e) => { e.preventDefault(); window.location.hash = ''; }}>
-            &larr; All Projects
-          </a>
-          <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
-            <span className="indicator-dot" />
-            {wsConnected ? 'Connected' : 'Connecting...'}
-          </div>
-        </div>
-      </header>
-      <ProjectDetail
-        projectName={card.name}
-        projectPath={card.path}
-      />
-    </div>
+      <SearchPalette />
+    </>
   );
 }

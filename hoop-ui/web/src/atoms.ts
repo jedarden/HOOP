@@ -193,11 +193,14 @@ export interface BeadData {
   dependencies: string[];
 }
 
-// Config error details
+// Config error details (§17.5)
 export interface ConfigError {
   message: string;
   line: number;
   col: number;
+  field?: string;
+  expected?: string;
+  got?: string;
 }
 
 // Config status from backend
@@ -289,6 +292,9 @@ export interface AgentChatScope {
   projects: string[];
 }
 
+// Search palette open/closed state (cmd-K)
+export const searchPaletteOpenAtom = atom<boolean>(false);
+
 // WebSocket event from backend
 export interface WsEvent {
   type: 'worker_update' | 'workers_snapshot' | 'beads_snapshot' | 'conversations_snapshot' | 'conversation_update' | 'streaming_content' | 'config_status' | 'projects_snapshot' | 'capacity_snapshot' | 'stitch_created' | 'agent_session';
@@ -326,6 +332,33 @@ export interface StitchCreatedData {
   source: string;
   actor: string;
   created_at: string;
+}
+
+// Audit log row from fleet.db actions table (§4.5, §13)
+export interface AuditRow {
+  id: string;
+  ts: string;
+  actor: string;
+  type: string;
+  target: string;
+  project: string | null;
+  args: Record<string, unknown> | null;
+  result: string;
+  error: string | null;
+  schema_version: string;
+}
+
+// Response from GET /api/audit
+export interface AuditResponse {
+  audit_rows: AuditRow[];
+  total_count: number;
+}
+
+// Response from GET /api/audit/verify
+export interface HashChainVerifyResponse {
+  valid: boolean;
+  message: string;
+  row_count: number;
 }
 
 // Bead event from events.jsonl for debug panel
