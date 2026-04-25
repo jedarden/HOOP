@@ -726,6 +726,7 @@ async fn run_brief_turn(
             created_at: now.clone(),
             source: "morning_brief".to_string(),
             agent_session_id: None,
+            turn_id: None,
             status: "pending".to_string(),
             version: 1,
             original_json: None,
@@ -734,6 +735,11 @@ async fn run_brief_turn(
             rejection_reason: None,
             stitch_id: None,
             preview_json: None,
+            // §19.1 Draft concurrency fields
+            opened_by: None,
+            opened_at: None,
+            last_autosave_at: None,
+            abandoned_at: None,
         };
         match fleet::insert_draft(&row) {
             Ok(()) => draft_ids.push(draft_id),
