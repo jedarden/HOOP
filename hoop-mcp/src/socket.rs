@@ -49,9 +49,31 @@ pub async fn run_socket_server(config: SocketConfig) -> Result<()> {
 
     // Set socket permissions: user read/write only (0o600)
     // This ensures only the same user can connect (§13 security)
-    fs::set_permissions(socket_path, fs::Permissions::from_mode(0o600))?;
+    let expected_mode = 0o600;
+    fs::set_permissions(socket_path, fs::Permissions::from_mode(expected_mode))
+        .map_err(|e| {
+            // Clean failure: remove socket if mode set fails
+            let _ = fs::remove_file(socket_path);
+            anyhow::anyhow!("failed to set socket mode 0{:o}: {}. Socket removed for security.", expected_mode, e)
+        })?;
 
-    info!("MCP socket listening at {}", socket_path.display());
+    // Verify the mode was set correctly (startup verification)
+    let metadata = fs::metadata(socket_path)?;
+    let actual_mode = metadata.permissions().mode() & 0o777;
+    if actual_mode != expected_mode {
+        // Clean failure: remove socket if verification fails
+        let _ = fs::remove_file(socket_path);
+        return Err(anyhow::anyhow!(
+            "socket mode verification failed: expected 0{:o}, got 0{:o}. Socket removed for security.",
+            expected_mode, actual_mode
+        ));
+    }
+
+    info!(
+        "MCP socket listening at {} (mode 0{:o}, same-user only, no TCP)",
+        socket_path.display(),
+        actual_mode
+    );
 
     // Handle shutdown signals
     let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())?;

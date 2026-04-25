@@ -42,6 +42,17 @@ pub fn forbidden_worker_steering_error(tool_name: &str) -> String {
     )
 }
 
+/// Turn context read from ~/.hoop/agent-turn-context.json
+#[derive(Debug, serde::Deserialize)]
+struct TurnContext {
+    session_id: String,
+    turn_id: String,
+    #[serde(skip)]
+    adapter: String,
+    #[serde(skip)]
+    model: String,
+}
+
 /// MCP server state
 pub struct McpServerState {
     pub audit_log: AuditLog,
@@ -1108,6 +1119,10 @@ impl McpServerState {
     /// The daemon performs deduplication checking before creating the draft.
     /// If a duplicate is detected, a 409 CONFLICT response is returned.
     /// This ensures agents never silently create duplicate work (§3.10 read-first principle).
+    ///
+    /// Reads turn context from ~/.hoop/agent-turn-context.json to include
+    /// agent session and turn ID in the draft for audit trail purposes
+    /// (§6 Phase 5 deliverable 8).
     fn create_stitch_via_daemon(
         &self,
         project: &str,
@@ -1116,8 +1131,18 @@ impl McpServerState {
         kind: &str,
         priority: Option<i64>,
     ) -> Result<Value, String> {
+        // Read turn context if available (for agent audit trail)
+        let (agent_session_id, turn_id) = match self.read_turn_context() {
+            Ok(Some(ctx)) => (Some(ctx.session_id), Some(ctx.turn_id)),
+            Ok(None) => (None, None),
+            Err(e) => {
+                tracing::warn!("Failed to read turn context: {}", e);
+                (None, None)
+            }
+        };
+
         // Build the request body matching CreateDraftRequest
-        let request_body = json!({
+        let mut request_body = json!({
             "project": project,
             "title": title,
             "kind": kind,
@@ -1126,6 +1151,8 @@ impl McpServerState {
             "priority": priority,
             "labels": [],
             "source": "agent",
+            "agent_session_id": agent_session_id,
+            "turn_id": turn_id,
         });
 
         // Call the daemon's draft API
@@ -1158,6 +1185,29 @@ impl McpServerState {
             .map_err(|e| format!("Failed to parse daemon response: {}", e))?;
 
         Ok(response_json)
+    }
+
+    /// Read the current turn context from ~/.hoop/agent-turn-context.json.
+    ///
+    /// Returns None if the file doesn't exist (e.g., no active turn or
+    /// the daemon hasn't written it yet).
+    fn read_turn_context(&self) -> Result<Option<TurnContext>, String> {
+        let mut path = dirs::home_dir()
+            .ok_or_else(|| "Cannot determine home directory".to_string())?;
+        path.push(".hoop");
+        path.push("agent-turn-context.json");
+
+        if !path.exists() {
+            return Ok(None);
+        }
+
+        let contents = fs::read_to_string(&path)
+            .map_err(|e| format!("Failed to read turn context file: {}", e))?;
+
+        let ctx: TurnContext = serde_json::from_str(&contents)
+            .map_err(|e| format!("Failed to parse turn context JSON: {}", e))?;
+
+        Ok(Some(ctx))
     }
 }
 
