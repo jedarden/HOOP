@@ -4,7 +4,9 @@ import {
   workersAtom,
   beadsAtom,
   conversationsAtom,
-  streamingContentAtom,
+  setStreamingContentAction,
+  clearStreamingContentAction,
+  clearAllStreamingAction,
   wsConnectedAtom,
   configStatusAtom,
   projectCardsAtom,
@@ -25,7 +27,9 @@ export function useWebSocket() {
   const setWorkers = useSetAtom(workersAtom);
   const setBeads = useSetAtom(beadsAtom);
   const setConversations = useSetAtom(conversationsAtom);
-  const setStreamingContent = useSetAtom(streamingContentAtom);
+  const dispatchSetStreaming = useSetAtom(setStreamingContentAction);
+  const dispatchClearStreaming = useSetAtom(clearStreamingContentAction);
+  const dispatchClearAllStreaming = useSetAtom(clearAllStreamingAction);
   const setConnected = useSetAtom(wsConnectedAtom);
   const setConfigStatus = useSetAtom(configStatusAtom);
   const setProjectCards = useSetAtom(projectCardsAtom);
@@ -89,8 +93,14 @@ export function useWebSocket() {
           } else if (data.type === 'beads_snapshot' && data.beads) {
             setBeads(data.beads);
           } else if (data.type === 'conversations_snapshot' && data.conversations) {
+            // Clear all streaming buffers before accepting the authoritative snapshot.
+            // This prevents stale partial tokens from persisting across reconnects.
+            dispatchClearAllStreaming();
             setConversations(data.conversations);
           } else if (data.type === 'conversation_update' && data.conversation) {
+            // Clear this conversation's streaming buffer — the authoritative message
+            // is now in the committed store. Buffer must not outlive its turn.
+            dispatchClearStreaming(data.conversation.id);
             setConversations((prev) => {
               const idx = prev.findIndex((c) => c.id === data.conversation!.id);
               if (idx >= 0) {
@@ -101,14 +111,9 @@ export function useWebSocket() {
               return [...prev, data.conversation!];
             });
           } else if (data.type === 'streaming_content' && data.streaming) {
-            setStreamingContent((prev) => {
-              const next = new Map(prev);
-              next.set(data.streaming!.conversation_id, {
-                conversation_id: data.streaming!.conversation_id,
-                content: data.streaming!.content,
-                timestamp: data.streaming!.timestamp,
-              });
-              return next;
+            dispatchSetStreaming({
+              conversationId: data.streaming.conversation_id,
+              content: data.streaming.content,
             });
           } else if (data.type === 'config_status' && data.config_status) {
             setConfigStatus(data.config_status);
@@ -239,6 +244,13 @@ export function useWebSocket() {
         console.log('WebSocket disconnected, reconnecting...');
         setConnected(false);
         wsRef.current = null;
+        // Clear all streaming buffers on disconnect — partial tokens must not
+        // persist into the committed store when the connection is re-established.
+        dispatchClearAllStreaming();
+        // Clear agent inflight so partial turns don't linger in the UI.
+        // Committed messages are never at risk (they are only written on turn_complete).
+        inflightRef.current = null;
+        setAgentInflight(null);
         reconnectTimeoutRef.current = setTimeout(() => {
           if (mounted) connect();
         }, 2000);
@@ -258,5 +270,5 @@ export function useWebSocket() {
       }
       wsRef.current?.close();
     };
-  }, [setWorkers, setBeads, setConversations, setStreamingContent, setConnected, setConfigStatus, setProjectCards, setProjectsReceived, setCapacity, setStitchCreated, setAgentSessionStatus, setAgentInflight, setAgentChatMessages]);
+  }, [setWorkers, setBeads, setConversations, dispatchSetStreaming, dispatchClearStreaming, dispatchClearAllStreaming, setConnected, setConfigStatus, setProjectCards, setProjectsReceived, setCapacity, setStitchCreated, setAgentSessionStatus, setAgentInflight, setAgentChatMessages]);
 }

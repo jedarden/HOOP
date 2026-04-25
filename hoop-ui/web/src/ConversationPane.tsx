@@ -2,7 +2,7 @@ import { useAtom, useAtomValue } from 'jotai';
 import { useState, useMemo } from 'react';
 import {
   conversationsAtom,
-  streamingContentAtom,
+  streamingContentFamily,
   selectedConversationIdAtom,
   workersAtom,
   beadsAtom,
@@ -84,7 +84,10 @@ function MessageBubble({ message }: { message: SessionMessage }) {
 function ConversationView({ conversation }: { conversation: Conversation }) {
   const workers = useAtomValue(workersAtom);
   const beads = useAtomValue(beadsAtom);
-  const [streamingContent] = useAtom(streamingContentAtom);
+  // Per-conversation atom: only re-renders this view when THIS conversation streams.
+  // Token deltas on other conversations don't cause re-renders here.
+  // eslint-disable-next-line deprecation/deprecation
+  const streamingText = useAtomValue(streamingContentFamily(conversation.id));
 
   const badge = getSessionKindBadge(conversation.kind, conversation.worker_metadata);
   const adapterModel = conversation.worker_metadata
@@ -143,14 +146,14 @@ function ConversationView({ conversation }: { conversation: Conversation }) {
             message={message}
           />
         ))}
-        {streamingContent.has(conversation.id) && (
+        {streamingText.length > 0 && (
           <div className="message-bubble message-assistant streaming">
             <div className="message-header">
               <span className="message-role">Assistant</span>
               <span className="message-time">now</span>
             </div>
             <div className="message-content">
-              <pre className="message-text">{formatContent(streamingContent.get(conversation.id)!.content)}</pre>
+              <pre className="message-text">{streamingText}</pre>
               <span className="streaming-indicator">▋</span>
             </div>
           </div>

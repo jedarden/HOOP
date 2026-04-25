@@ -940,9 +940,13 @@ export type ProjectEntry =
        */
       name: string;
       /**
-       * Absolute path to the workspace (single-workspace shorthand)
+       * Raw workspace path as provided by the operator (display-only)
        */
       path: string;
+      /**
+       * Realpath-resolved absolute path used for joins and dedup
+       */
+      canonical_path?: string;
       /**
        * Optional label
        */
@@ -996,9 +1000,13 @@ export interface ProjectsRegistry {
          */
         name: string;
         /**
-         * Absolute path to the workspace (single-workspace shorthand)
+         * Raw workspace path as provided by the operator (display-only)
          */
         path: string;
+        /**
+         * Realpath-resolved absolute path used for joins and dedup
+         */
+        canonical_path?: string;
         /**
          * Optional label
          */

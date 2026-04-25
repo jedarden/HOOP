@@ -1,6 +1,6 @@
 import { useAtomValue, useSetAtom } from 'jotai';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { conversationsAtom, streamingContentAtom, selectedConversationIdAtom, Conversation, dictatedNotesAtom, NoteSummary, DictatedNote } from './atoms';
+import { conversationsAtom, streamingActiveIdsAtom, selectedConversationIdAtom, Conversation, dictatedNotesAtom, NoteSummary, DictatedNote } from './atoms';
 import AudioPlayer from './components/AudioPlayer';
 import { scanForSecrets, getSecretSeverity, truncateSecret } from './components/secretsScanner';
 import BeadDraftForm from './BeadDraftForm';
@@ -339,7 +339,7 @@ interface StitchesTabProps {
 export default function StitchesTab({ projectName, projectPath: _projectPath, conversations: conversationsProp, onSwitchTab }: StitchesTabProps) {
   const globalConversations = useAtomValue(conversationsAtom);
   const conversations = conversationsProp ?? globalConversations;
-  const streamingContent = useAtomValue(streamingContentAtom);
+  const streamingActiveIds = useAtomValue(streamingActiveIdsAtom);
   const setSelectedConversationId = useSetAtom(selectedConversationIdAtom);
   const dictatedNotesMap = useAtomValue(dictatedNotesAtom);
 
@@ -405,7 +405,7 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
         totalTokens: conv.total_tokens,
         linkedBeads: conv.worker_metadata?.bead ? [conv.worker_metadata.bead] : [],
         workerMetadata: conv.worker_metadata,
-        isStreaming: streamingContent.has(conv.id),
+        isStreaming: streamingActiveIds.has(conv.id),
       });
     }
 
@@ -431,7 +431,7 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
     return items.sort((a, b) =>
       new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime()
     );
-  }, [conversations, streamingContent, projectName, dictatedNotes]);
+  }, [conversations, streamingActiveIds, projectName, dictatedNotes]);
 
   // Reset to first page when filter changes
   useEffect(() => {

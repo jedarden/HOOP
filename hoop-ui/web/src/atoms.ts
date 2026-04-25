@@ -1,4 +1,5 @@
 import { atom } from 'jotai';
+import { atomFamily } from 'jotai/utils';
 
 // Session classification types
 export type SessionKind =
@@ -75,12 +76,59 @@ export interface Conversation {
   dictated_note?: DictatedNote | null;
 }
 
-// In-flight streaming content (separate atom for isolation)
-export interface StreamingContent {
-  conversation_id: string;
-  content: string;
-  timestamp: number;
-}
+// atomFamily keyed by conversation_id — each conversation has its own isolated atom.
+// Token deltas on one conversation never trigger re-renders in other conversation views.
+// Buffers are cleared on conversation_update (authoritative broadcast) or WS disconnect.
+// (jotai/utils atomFamily is deprecated in v2 in favor of jotai-family; still correct for v2.x)
+// eslint-disable-next-line deprecation/deprecation
+export const streamingContentFamily = atomFamily(
+  (_conversationId: string) => atom<string>('')
+);
+
+// Tracks which conversation IDs currently have non-empty streaming buffers.
+// Allows clearAllStreamingAction to sweep only active entries.
+export const streamingActiveIdsAtom = atom<ReadonlySet<string>>(new Set<string>());
+
+// Write-only action: set streaming content for one conversation
+export const setStreamingContentAction = atom(
+  null,
+  (_get, set, { conversationId, content }: { conversationId: string; content: string }) => {
+    set(streamingContentFamily(conversationId), content);
+    set(streamingActiveIdsAtom, (prev) => {
+      if (prev.has(conversationId)) return prev;
+      const next = new Set(prev);
+      next.add(conversationId);
+      return next;
+    });
+  }
+);
+
+// Write-only action: clear one conversation's buffer when the authoritative broadcast arrives
+export const clearStreamingContentAction = atom(
+  null,
+  (_get, set, conversationId: string) => {
+    set(streamingContentFamily(conversationId), '');
+    set(streamingActiveIdsAtom, (prev) => {
+      if (!prev.has(conversationId)) return prev;
+      const next = new Set(prev);
+      next.delete(conversationId);
+      return next;
+    });
+  }
+);
+
+// Write-only action: clear all streaming buffers (WS disconnect or conversations_snapshot)
+export const clearAllStreamingAction = atom(
+  null,
+  (get, set) => {
+    const ids = get(streamingActiveIdsAtom);
+    if (ids.size === 0) return;
+    for (const id of ids) {
+      set(streamingContentFamily(id), '');
+    }
+    set(streamingActiveIdsAtom, new Set<string>());
+  }
+);
 
 // Legacy interfaces for compatibility
 export interface Project {
@@ -312,7 +360,6 @@ export interface NoteSummary {
 
 // Atoms for state management
 export const conversationsAtom = atom<Conversation[]>([]);
-export const streamingContentAtom = atom<Map<string, StreamingContent>>(new Map());
 export const selectedConversationIdAtom = atom<string | null>(null);
 export const projectsAtom = atom<Project[]>([]);
 export const projectCardsAtom = atom<ProjectCardData[]>([]);
