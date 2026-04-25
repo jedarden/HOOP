@@ -13,6 +13,7 @@ pub mod attachment_sync;
 pub mod backup;
 pub mod backup_pipeline;
 pub mod config_resolver;
+pub mod config_watcher;
 pub mod api_attachments;
 pub mod api_audit;
 pub mod api_beads;
@@ -65,13 +66,15 @@ pub mod api_patterns;
 pub mod redaction;
 pub mod syntax_highlight;
 pub mod worker_ack;
-pub mod collision_detector;
+// TODO: Uncomment when collision_detector is complete
+// pub mod collision_detector;
 pub mod bead_commit_index;
 pub mod api_diff;
 pub mod api_blame;
 pub mod api_screen_capture;
 pub mod net_diff;
 pub mod screen_capture;
+pub mod observer;
 pub mod cost_anomaly;
 
 /// Worker execution state from heartbeats
@@ -169,6 +172,7 @@ use axum::{
 };
 use hoop_schema::{HealthResponse, ReadinessResponse, DegradedProject};
 use hoop_ui::AssetsHandler;
+use sha2::{Digest, Sha256};
 use shutdown::{DbCheckpointHandle, ShutdownCoordinator, SocketCleanupHandle};
 use std::sync::Arc;
 use std::{
@@ -197,6 +201,10 @@ pub struct Config {
     pub control_socket_path: PathBuf,
     /// Allow br version mismatch (dev override for --allow-br-mismatch)
     pub allow_br_mismatch: bool,
+    /// Observer mode: read-only attach to primary daemon
+    pub observer_mode: bool,
+    /// Primary daemon address for observer mode
+    pub primary_addr: SocketAddr,
 }
 
 impl Default for Config {
@@ -207,6 +215,8 @@ impl Default for Config {
             bind_addr: SocketAddr::from(([127, 0, 0, 1], 3000)),
             control_socket_path: home.join("control.sock"),
             allow_br_mismatch: false,
+            observer_mode: false,
+            primary_addr: SocketAddr::from(([127, 0, 0, 1], 3000)),
         }
     }
 }
@@ -1091,6 +1101,13 @@ async fn run_control_socket(
 ///
 /// This function blocks until the server is shut down.
 pub async fn serve(config: Config) -> anyhow::Result<()> {
+    // Observer mode: run read-only attach to primary daemon
+    if config.observer_mode {
+        // TODO: Uncomment when observer is complete
+        // return observer::serve_observer(config).await;
+        return Err(anyhow::anyhow!("Observer mode is not yet implemented"));
+    }
+
     log_rotation::init_logging();
 
     // Resolve full config with attribution (§17.2)
@@ -1105,7 +1122,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         },
         allow_br_mismatch: if config.allow_br_mismatch { Some(true) } else { None },
     };
-    let resolved_config = Arc::new(config_resolver::resolve(cli_overrides));
+    let resolved_config = Arc::new(config_resolver::resolve(cli_overrides.clone()));
     info!("Config precedence resolver initialized (§17.2)");
 
     // Install panic hook that records hoop_panics_total metric before aborting.
@@ -1372,6 +1389,113 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
 
                     // Broadcast config error with structured details (§17.5)
                     let _ = config_tx_for_reload.send(ws::ConfigStatusData {
+                        valid: false,
+                        error: Some(ws::ConfigErrorData {
+                            message: error.message.clone(),
+                            line: error.line,
+                            col: error.col,
+                            field: error.field.clone(),
+                            expected: error.expected.clone(),
+                            got: error.got.clone(),
+                        }),
+                    });
+                }
+            }
+        }
+    });
+
+    // Start config.yml watcher (§17)
+    let mut config_watcher = config_watcher::ConfigWatcher::new(cli_overrides)?;
+    config_watcher.start()?;
+
+    // Spawn task to handle config.yml changes
+    let config_tx_for_config = config_status_tx.clone();
+    tokio::spawn(async move {
+        let mut rx = config_watcher.subscribe();
+        while let Ok(event) = rx.recv().await {
+            match event {
+                config_watcher::ConfigEvent::ConfigReloaded { config, prev_hash } => {
+                    info!("config.yml reloaded successfully");
+                    // Note: config.yml changes don't trigger runtime reconcile
+                    // because they only affect defaults for new sessions
+
+                    // Increment success metric (§17.5)
+                    metrics::metrics().hoop_config_reload_success_total.inc();
+
+                    // Audit the successful reload (§17.4)
+                    let config_path = dirs::home_dir()
+                        .unwrap_or_else(|| PathBuf::from("."))
+                        .join(".hoop")
+                        .join("config.yml");
+                    let audit_args = config_watcher::ConfigReloadAudit {
+                        file: config_path.display().to_string(),
+                        prev_hash: prev_hash.clone(),
+                        new_hash: hex::encode(Sha256::digest(
+                            std::fs::read_to_string(&config_path)
+                                .unwrap_or_default()
+                                .as_bytes()
+                        )),
+                        actor: "system:hot-reload".to_string(),
+                    };
+                    if let Ok(args_json) = serde_json::to_string(&audit_args) {
+                        if let Err(e) = fleet::write_audit_row(
+                            "system:hot-reload",
+                            fleet::ActionKind::ConfigReloaded,
+                            &audit_args.file,
+                            None,
+                            Some(args_json),
+                            fleet::ActionResult::Success,
+                            None,
+                            None,
+                            None,
+                            None,
+                        ) {
+                            warn!("Failed to write config.yml reload audit row: {}", e);
+                        }
+                    }
+
+                    // Broadcast valid config status
+                    let _ = config_tx_for_config.send(ws::ConfigStatusData {
+                        valid: true,
+                        error: None,
+                    });
+                }
+                config_watcher::ConfigEvent::ConfigError { error, prev_hash } => {
+                    warn!("config.yml error: {}", error.message);
+
+                    // Increment rejection metric (§17.5)
+                    metrics::metrics().hoop_config_reload_rejected_total.inc();
+
+                    // Audit the rejected reload (§17.4)
+                    let config_path = dirs::home_dir()
+                        .unwrap_or_else(|| PathBuf::from("."))
+                        .join(".hoop")
+                        .join("config.yml");
+                    let audit_args = config_watcher::ConfigReloadRejectedAudit {
+                        file: config_path.display().to_string(),
+                        prev_hash: prev_hash.clone(),
+                        error: error.message.clone(),
+                        actor: "system:hot-reload".to_string(),
+                    };
+                    if let Ok(args_json) = serde_json::to_string(&audit_args) {
+                        if let Err(e) = fleet::write_audit_row(
+                            "system:hot-reload",
+                            fleet::ActionKind::ConfigReloadRejected,
+                            &audit_args.file,
+                            None,
+                            Some(args_json),
+                            fleet::ActionResult::Failure,
+                            Some(error.message.clone()),
+                            None,
+                            None,
+                            None,
+                        ) {
+                            warn!("Failed to write config.yml reject audit row: {}", e);
+                        }
+                    }
+
+                    // Broadcast config error with structured details (§17.5)
+                    let _ = config_tx_for_config.send(ws::ConfigStatusData {
                         valid: false,
                         error: Some(ws::ConfigErrorData {
                             message: error.message.clone(),

@@ -21,7 +21,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 /// Current schema version
-pub const SCHEMA_VERSION: &str = "1.18.0";
+pub const SCHEMA_VERSION: &str = "1.22.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -44,6 +44,9 @@ pub enum ActionKind {
     DraftApproved,
     DraftEdited,
     DraftRejected,
+    DraftOpened,
+    DraftAutosaved,
+    DraftAbandoned,
 }
 
 /// Action result for audit log
@@ -324,17 +327,71 @@ pub fn create_stitch(
     bead_ids: &[(&str, &str)], // (bead_id, workspace)
     classification: &str,
 ) -> Result<()> {
+    create_stitch_with_audit(
+        stitch_id,
+        project,
+        kind,
+        title,
+        created_by,
+        bead_ids,
+        classification,
+        None,  // created_by_actor
+        None,  // created_by_session_id
+        None,  // created_by_adapter
+        None,  // created_by_model
+        None,  // turn_id
+    )
+}
+
+/// Create a stitch with full audit trail metadata.
+///
+/// This variant of create_stitch accepts audit fields for tracking agent-originated
+/// stitches. When a stitch is created from an agent-drafted stitch, these fields
+/// enable full reconstruction back to the agent session and turn that created it.
+pub fn create_stitch_with_audit(
+    stitch_id: &str,
+    project: &str,
+    kind: &str,
+    title: &str,
+    created_by: &str,
+    bead_ids: &[(&str, &str)], // (bead_id, workspace)
+    classification: &str,
+    created_by_actor: Option<&str>,
+    created_by_session_id: Option<&str>,
+    created_by_adapter: Option<&str>,
+    created_by_model: Option<&str>,
+    turn_id: Option<&str>,
+) -> Result<()> {
     let path = db_path();
     let conn = Connection::open(&path)?;
     let now = Utc::now().to_rfc3339();
 
     conn.execute(
         r#"
-        INSERT INTO stitches (id, project, kind, title, created_by, created_at, last_activity_at, classification)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO stitches (id, project, kind, title, created_by, created_at, last_activity_at, classification,
+                             created_by_actor, created_by_session_id, created_by_adapter, created_by_model)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
-        params![stitch_id, project, kind, title, created_by, now, now, classification],
+        params![stitch_id, project, kind, title, created_by, now, now, classification,
+                created_by_actor, created_by_session_id, created_by_adapter, created_by_model],
     )?;
+
+    // Store turn_id in stitch_messages as a system note if provided
+    if let Some(tid) = turn_id {
+        conn.execute(
+            r#"
+            INSERT INTO stitch_messages (id, stitch_id, role, content, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            "#,
+            params![
+                Uuid::new_v4().to_string(),
+                stitch_id,
+                "system",
+                format!("[Audit: Turn {}]", tid),
+                now,
+            ],
+        )?;
+    }
 
     for (bead_id, workspace) in bead_ids {
         let canonical_ws = std::fs::canonicalize(workspace)
@@ -578,6 +635,12 @@ pub fn get_schema_version(conn: &Connection) -> Result<String> {
     .map_err(|e| anyhow::anyhow!("Failed to get schema version: {}", e))
 }
 
+/// Get schema version from a database file path (for CLI version command)
+pub fn get_schema_version_from_db(path: &std::path::Path) -> Result<String> {
+    let conn = Connection::open(path)?;
+    get_schema_version(&conn)
+}
+
 /// Compute SHA-256 hash
 fn sha256(data: &[u8]) -> Vec<u8> {
     let mut hasher = Sha256::new();
@@ -634,6 +697,10 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v115_to_v116(conn)?;
             migrate_v116_to_v117(conn)?;
             migrate_v117_to_v118(conn)?;
+            migrate_v118_to_v119(conn)?;
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
         }
         "1.1.0" => {
             migrate_v11_to_v12(conn)?;
@@ -653,6 +720,10 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v115_to_v116(conn)?;
             migrate_v116_to_v117(conn)?;
             migrate_v117_to_v118(conn)?;
+            migrate_v118_to_v119(conn)?;
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
         }
         "1.2.0" => {
             migrate_v12_to_v13(conn)?;
@@ -671,6 +742,10 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v115_to_v116(conn)?;
             migrate_v116_to_v117(conn)?;
             migrate_v117_to_v118(conn)?;
+            migrate_v118_to_v119(conn)?;
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
         }
         "1.3.0" => {
             migrate_v13_to_v14(conn)?;
@@ -688,6 +763,10 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v115_to_v116(conn)?;
             migrate_v116_to_v117(conn)?;
             migrate_v117_to_v118(conn)?;
+            migrate_v118_to_v119(conn)?;
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
         }
         "1.4.0" => {
             migrate_v14_to_v15(conn)?;
@@ -704,6 +783,10 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v115_to_v116(conn)?;
             migrate_v116_to_v117(conn)?;
             migrate_v117_to_v118(conn)?;
+            migrate_v118_to_v119(conn)?;
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
         }
         "1.5.0" => {
             migrate_v15_to_v16(conn)?;
@@ -719,6 +802,10 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v115_to_v116(conn)?;
             migrate_v116_to_v117(conn)?;
             migrate_v117_to_v118(conn)?;
+            migrate_v118_to_v119(conn)?;
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
         }
         "1.6.0" => {
             migrate_v16_to_v17(conn)?;
@@ -733,6 +820,10 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v115_to_v116(conn)?;
             migrate_v116_to_v117(conn)?;
             migrate_v117_to_v118(conn)?;
+            migrate_v118_to_v119(conn)?;
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
         }
         "1.7.0" => {
             migrate_v17_to_v18(conn)?;
@@ -746,6 +837,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v115_to_v116(conn)?;
             migrate_v116_to_v117(conn)?;
             migrate_v117_to_v118(conn)?;
+            migrate_v118_to_v119(conn)?;
         }
         "1.8.0" => {
             migrate_v18_to_v19(conn)?;
@@ -758,6 +850,10 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v115_to_v116(conn)?;
             migrate_v116_to_v117(conn)?;
             migrate_v117_to_v118(conn)?;
+            migrate_v118_to_v119(conn)?;
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
         }
         "1.9.0" => {
             migrate_v19_to_v110(conn)?;
@@ -769,6 +865,10 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v115_to_v116(conn)?;
             migrate_v116_to_v117(conn)?;
             migrate_v117_to_v118(conn)?;
+            migrate_v118_to_v119(conn)?;
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
         }
         "1.10.0" => {
             migrate_v110_to_v111(conn)?;
@@ -779,6 +879,10 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v115_to_v116(conn)?;
             migrate_v116_to_v117(conn)?;
             migrate_v117_to_v118(conn)?;
+            migrate_v118_to_v119(conn)?;
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
         }
         "1.11.0" => {
             migrate_v111_to_v112(conn)?;
@@ -788,6 +892,10 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v115_to_v116(conn)?;
             migrate_v116_to_v117(conn)?;
             migrate_v117_to_v118(conn)?;
+            migrate_v118_to_v119(conn)?;
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
         }
         "1.12.0" => {
             migrate_v112_to_v113(conn)?;
@@ -796,6 +904,10 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v115_to_v116(conn)?;
             migrate_v116_to_v117(conn)?;
             migrate_v117_to_v118(conn)?;
+            migrate_v118_to_v119(conn)?;
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
         }
         "1.13.0" => {
             migrate_v113_to_v114(conn)?;
@@ -803,31 +915,49 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v115_to_v116(conn)?;
             migrate_v116_to_v117(conn)?;
             migrate_v117_to_v118(conn)?;
+            migrate_v118_to_v119(conn)?;
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
         }
         "1.14.0" => {
             migrate_v114_to_v115(conn)?;
             migrate_v115_to_v116(conn)?;
             migrate_v116_to_v117(conn)?;
             migrate_v117_to_v118(conn)?;
+            migrate_v118_to_v119(conn)?;
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
         }
         "1.15.0" => {
             migrate_v115_to_v116(conn)?;
             migrate_v116_to_v117(conn)?;
             migrate_v117_to_v118(conn)?;
+            migrate_v118_to_v119(conn)?;
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
         }
         "1.16.0" => {
             migrate_v116_to_v117(conn)?;
             migrate_v117_to_v118(conn)?;
+            migrate_v118_to_v119(conn)?;
+            migrate_v119_to_v120(conn)?;
+            migrate_v120_to_v121(conn)?;
+            migrate_v121_to_v122(conn)?;
         }
         "1.17.0" => {
             migrate_v117_to_v118(conn)?;
+            migrate_v118_to_v119(conn)?;
+            migrate_v118_to_v119(conn)?;
         }
         "1.18.0" => {
-            info!("Already at schema version 1.18.0, no migrations needed");
+            migrate_v118_to_v119(conn)?;
         }
         _ => {
             return Err(anyhow::anyhow!(
-                "Unsupported schema version: {}. Expected 0.1.0–1.18.0",
+                "Unsupported schema version: {}. Expected 0.1.0–1.19.0",
                 from_version
             ));
         }
@@ -847,6 +977,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
 /// All tables include proper indexes for Reddit-post ranking queries
 /// and foreign key constraints for referential integrity.
 fn migrate_v01_to_v11(conn: &mut Connection) -> Result<()> {
+    let start = std::time::Instant::now();
     info!("Running migration 0.1.0 → 1.1.0: Adding Stitch service tables");
 
     // Create stitches table
@@ -967,6 +1098,12 @@ fn migrate_v01_to_v11(conn: &mut Connection) -> Result<()> {
 
     info!("Stitch service tables created successfully");
     update_schema_version(conn, "1.1.0")?;
+    let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
+    info!("Migration 0.1.0 → 1.1.0 completed in {:.2} ms", elapsed_ms);
+    crate::metrics::metrics().hoop_schema_migration_duration_ms.observe(
+        &["0.1.0", "1.1.0"],
+        elapsed_ms,
+    );
     Ok(())
 }
 
@@ -1719,6 +1856,247 @@ fn update_schema_version(conn: &mut Connection, version: &str) -> Result<()> {
     Ok(())
 }
 
+/// Wrapper to run a migration with duration logging
+fn run_migration_with_duration<F>(
+    conn: &mut Connection,
+    from_version: &str,
+    to_version: &str,
+    description: &str,
+    f: F,
+) -> Result<()>
+where
+    F: FnOnce(&mut Connection) -> Result<()>,
+{
+    let start = std::time::Instant::now();
+    info!("Running migration {} → {}: {}", from_version, to_version, description);
+    let result = f(conn);
+    let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
+    match &result {
+        Ok(()) => {
+            info!(
+                "Migration {} → {} completed in {:.2} ms",
+                from_version, to_version, elapsed_ms
+            );
+        }
+        Err(e) => {
+            warn!(
+                "Migration {} → {} failed after {:.2} ms: {}",
+                from_version, to_version, elapsed_ms, e
+            );
+        }
+    }
+    // Record migration duration metric
+    crate::metrics::metrics().hoop_schema_migration_duration_ms.observe(
+        &[from_version, to_version],
+        elapsed_ms,
+    );
+    result
+}
+
+/// Macro to wrap a migration function call with duration logging
+macro_rules! migrate {
+    ($conn:expr, $func:ident, $from:expr, $to:expr, $desc:expr) => {{
+        let start = std::time::Instant::now();
+        info!("Running migration {} → {}: {}", $from, $to, $desc);
+        let result = $func($conn);
+        let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
+        match &result {
+            Ok(()) => {
+                info!(
+                    "Migration {} → {} completed in {:.2} ms",
+                    $from, $to, elapsed_ms
+                );
+            }
+            Err(e) => {
+                warn!(
+                    "Migration {} → {} failed after {:.2} ms: {}",
+                    $from, $to, elapsed_ms, e
+                );
+            }
+        }
+        // Record migration duration metric
+        crate::metrics::metrics().hoop_schema_migration_duration_ms.observe(
+            &[$from, $to],
+            elapsed_ms,
+        );
+        result
+    }};
+}
+
+/// Migration 1.18.0 → 1.19.0: Add turn_id to draft_queue
+///
+/// Adds turn_id column to draft_queue table for tracking which agent turn
+/// created a draft. This enables reconstructing any drafted Stitch back to
+/// its origin chat turn per §6 Phase 5 deliverable 8.
+fn migrate_v118_to_v119(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.18.0 → 1.19.0: Adding turn_id to draft_queue");
+
+    add_column_if_not_exists(conn, "draft_queue", "turn_id", "TEXT")?;
+
+    // Create index for querying drafts by turn
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_draft_queue_turn_id ON draft_queue(turn_id)",
+        [],
+    )?;
+
+    update_schema_version(conn, "1.19.0")?;
+    Ok(())
+}
+
+/// Migration 1.19.0 → 1.20.0: Add audit fields to stitches table
+///
+/// Adds audit metadata fields to stitches table for tracking agent-originated
+/// stitches. This enables full audit trail reconstruction from any stitch back
+/// to the agent session and turn that created it.
+fn migrate_v119_to_v120(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.19.0 → 1.20.0: Adding audit fields to stitches");
+
+    add_column_if_not_exists(conn, "stitches", "created_by_actor", "TEXT")?;
+    add_column_if_not_exists(conn, "stitches", "created_by_session_id", "TEXT")?;
+    add_column_if_not_exists(conn, "stitches", "created_by_adapter", "TEXT")?;
+    add_column_if_not_exists(conn, "stitches", "created_by_model", "TEXT")?;
+    add_column_if_not_exists(conn, "stitches", "turn_count", "INTEGER DEFAULT 0")?;
+    add_column_if_not_exists(conn, "stitches", "total_cost_usd", "REAL DEFAULT 0.0")?;
+    add_column_if_not_exists(conn, "stitches", "total_tokens", "INTEGER DEFAULT 0")?;
+
+    // Create index for querying stitches by session
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_stitches_session_id ON stitches(created_by_session_id)",
+        [],
+    )?;
+
+    update_schema_version(conn, "1.20.0")?;
+    Ok(())
+}
+
+/// Migration 1.20.0 → 1.21.0: Add turn_id to stitches table
+///
+/// Adds turn_id column to stitches table for tracking which agent turn
+/// created a stitch. This completes the audit trail for agent-originated
+/// stitches per §6 Phase 5 deliverable 8.
+fn migrate_v120_to_v121(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.20.0 → 1.21.0: Adding turn_id to stitches");
+
+    add_column_if_not_exists(conn, "stitches", "turn_id", "TEXT")?;
+
+    // Create index for querying stitches by turn
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_stitches_turn_id ON stitches(turn_id)",
+        [],
+    )?;
+
+    update_schema_version(conn, "1.21.0")?;
+    Ok(())
+}
+
+/// Migration 1.21.0 → 1.22.0: Add draft persistence fields for §19.1
+///
+/// Adds fields to support server-persisted drafts:
+/// - 'abandoned' status for drafts closed without submit
+/// - opened_by, opened_at for tracking who opened a draft form
+/// - last_autosave_at for autosave tracking
+/// - abandoned_at for retention cleanup (7d)
+fn migrate_v121_to_v122(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.21.0 → 1.22.0: Adding draft persistence fields for §19.1");
+
+    add_column_if_not_exists(conn, "draft_queue", "opened_by", "TEXT")?;
+    add_column_if_not_exists(conn, "draft_queue", "opened_at", "TEXT")?;
+    add_column_if_not_exists(conn, "draft_queue", "last_autosave_at", "TEXT")?;
+    add_column_if_not_exists(conn, "draft_queue", "abandoned_at", "TEXT")?;
+
+    // Update the status check constraint to include 'abandoned'
+    // SQLite doesn't support ALTER CONSTRAINT, so we need to recreate the table
+    let schema = conn.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='draft_queue'")?.query_row([], |row| {
+        row.get::<_, String>(0)
+    })?;
+
+    // Only recreate if the old constraint exists (without 'abandoned')
+    if schema.contains("CHECK(status IN ('pending', 'approved', 'submitted', 'rejected', 'edited'))") {
+        conn.execute(
+            r#"
+            CREATE TABLE draft_queue_new (
+                id TEXT PRIMARY KEY NOT NULL,
+                project TEXT NOT NULL,
+                title TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                description TEXT,
+                has_acceptance_criteria INTEGER NOT NULL DEFAULT 0,
+                priority INTEGER,
+                labels TEXT DEFAULT '[]',
+                created_by TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'agent',
+                agent_session_id TEXT,
+                turn_id TEXT,
+                status TEXT NOT NULL DEFAULT 'pending'
+                    CHECK(status IN ('pending', 'approved', 'submitted', 'rejected', 'edited', 'abandoned')),
+                version INTEGER NOT NULL DEFAULT 1,
+                original_json TEXT,
+                resolved_by TEXT,
+                resolved_at TEXT,
+                rejection_reason TEXT,
+                stitch_id TEXT,
+                preview_json TEXT,
+                opened_by TEXT,
+                opened_at TEXT,
+                last_autosave_at TEXT,
+                abandoned_at TEXT
+            )
+            "#,
+            [],
+        )?;
+
+        // Copy data from old table to new table
+        conn.execute(
+            r#"
+            INSERT INTO draft_queue_new
+                (id, project, title, kind, description, has_acceptance_criteria,
+                 priority, labels, created_by, created_at, source, agent_session_id,
+                 turn_id, status, version, original_json, resolved_by, resolved_at,
+                 rejection_reason, stitch_id, preview_json, opened_by, opened_at,
+                 last_autosave_at, abandoned_at)
+            SELECT
+                id, project, title, kind, description, has_acceptance_criteria,
+                priority, labels, created_by, created_at, source, agent_session_id,
+                turn_id, status, version, original_json, resolved_by, resolved_at,
+                rejection_reason, stitch_id, preview_json, opened_by, opened_at,
+                last_autosave_at, abandoned_at
+            FROM draft_queue
+            "#,
+            [],
+        )?;
+
+        // Drop old table and rename new table
+        conn.execute("DROP TABLE draft_queue", [])?;
+        conn.execute("ALTER TABLE draft_queue_new RENAME TO draft_queue", [])?;
+
+        // Recreate indexes
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_draft_queue_status ON draft_queue(status)",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_draft_queue_project ON draft_queue(project)",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_draft_queue_created_at ON draft_queue(created_at DESC)",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_draft_queue_turn_id ON draft_queue(turn_id)",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_draft_queue_abandoned_at ON draft_queue(abandoned_at)",
+            [],
+        )?;
+    }
+
+    update_schema_version(conn, "1.22.0")?;
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // §20.1 Major-upgrade gate
 // ---------------------------------------------------------------------------
@@ -1893,6 +2271,44 @@ pub fn load_active_agent_session() -> Result<Option<AgentSessionRow>> {
     }
 }
 
+/// Load an agent session by adapter_session_id (for audit trail reconstruction).
+pub fn load_agent_session_by_adapter_id(adapter_session_id: &str) -> Result<Option<AgentSessionRow>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let mut stmt = conn.prepare(
+        "SELECT id, adapter_session_id, adapter, model, status, stitch_id,
+                cost_usd, input_tokens, output_tokens, turn_count,
+                has_started_session, created_at, last_activity_at, archived_at, archived_reason
+         FROM agent_sessions
+         WHERE adapter_session_id = ?1
+         ORDER BY created_at DESC LIMIT 1",
+    )?;
+    let row = stmt.query_row(params![adapter_session_id], |row| {
+        Ok(AgentSessionRow {
+            id: row.get(0)?,
+            adapter_session_id: row.get(1)?,
+            adapter: row.get(2)?,
+            model: row.get(3)?,
+            status: row.get(4)?,
+            stitch_id: row.get(5)?,
+            cost_usd: row.get(6)?,
+            input_tokens: row.get(7)?,
+            output_tokens: row.get(8)?,
+            turn_count: row.get(9)?,
+            has_started_session: row.get(10)?,
+            created_at: row.get(11)?,
+            last_activity_at: row.get(12)?,
+            archived_at: row.get(13)?,
+            archived_reason: row.get(14)?,
+        })
+    });
+    match row {
+        Ok(r) => Ok(Some(r)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(anyhow::anyhow!("Failed to load agent session by adapter_id: {}", e)),
+    }
+}
+
 /// Accumulate cost and tokens after a completed turn.
 pub fn update_agent_session_usage(
     session_id: &str,
@@ -2006,6 +2422,7 @@ pub struct DraftRow {
     pub created_at: String,
     pub source: String,
     pub agent_session_id: Option<String>,
+    pub turn_id: Option<String>,
     pub status: String,
     pub version: i64,
     pub original_json: Option<String>,
@@ -2014,6 +2431,11 @@ pub struct DraftRow {
     pub rejection_reason: Option<String>,
     pub stitch_id: Option<String>,
     pub preview_json: Option<String>,
+    // §19.1 Draft concurrency fields
+    pub opened_by: Option<String>,
+    pub opened_at: Option<String>,
+    pub last_autosave_at: Option<String>,
+    pub abandoned_at: Option<String>,
 }
 
 /// Insert a new draft into the queue.
@@ -2025,9 +2447,10 @@ pub fn insert_draft(row: &DraftRow) -> Result<()> {
         r#"INSERT INTO draft_queue
            (id, project, title, kind, description, has_acceptance_criteria,
             priority, labels, created_by, created_at, source, agent_session_id,
-            status, version, original_json, resolved_by, resolved_at,
-            rejection_reason, stitch_id, preview_json)
-           VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20)"#,
+            turn_id, status, version, original_json, resolved_by, resolved_at,
+            rejection_reason, stitch_id, preview_json, opened_by, opened_at,
+            last_autosave_at, abandoned_at)
+           VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25)"#,
         params![
             row.id,
             row.project,
@@ -2041,6 +2464,7 @@ pub fn insert_draft(row: &DraftRow) -> Result<()> {
             row.created_at,
             row.source,
             row.agent_session_id,
+            row.turn_id,
             row.status,
             row.version,
             row.original_json,
@@ -2049,6 +2473,10 @@ pub fn insert_draft(row: &DraftRow) -> Result<()> {
             row.rejection_reason,
             row.stitch_id,
             row.preview_json,
+            row.opened_by,
+            row.opened_at,
+            row.last_autosave_at,
+            row.abandoned_at,
         ],
     )?;
     Ok(())
@@ -2061,8 +2489,9 @@ pub fn get_draft(draft_id: &str) -> Result<Option<DraftRow>> {
     let row = conn.query_row(
         r#"SELECT id, project, title, kind, description, has_acceptance_criteria,
                   priority, labels, created_by, created_at, source, agent_session_id,
-                  status, version, original_json, resolved_by, resolved_at,
-                  rejection_reason, stitch_id, preview_json
+                  turn_id, status, version, original_json, resolved_by, resolved_at,
+                  rejection_reason, stitch_id, preview_json, opened_by, opened_at,
+                  last_autosave_at, abandoned_at
            FROM draft_queue WHERE id = ?1"#,
         [draft_id],
         read_draft_row,
@@ -2085,8 +2514,9 @@ pub fn list_drafts(
     let mut sql = String::from(
         r#"SELECT id, project, title, kind, description, has_acceptance_criteria,
                   priority, labels, created_by, created_at, source, agent_session_id,
-                  status, version, original_json, resolved_by, resolved_at,
-                  rejection_reason, stitch_id, preview_json
+                  turn_id, status, version, original_json, resolved_by, resolved_at,
+                  rejection_reason, stitch_id, preview_json, opened_by, opened_at,
+                  last_autosave_at, abandoned_at
            FROM draft_queue WHERE 1=1"#,
     );
     let mut p: Vec<String> = Vec::new();
@@ -2198,15 +2628,144 @@ fn read_draft_row(row: &rusqlite::Row<'_>) -> std::result::Result<DraftRow, rusq
         created_at: row.get(9)?,
         source: row.get(10)?,
         agent_session_id: row.get(11)?,
-        status: row.get(12)?,
-        version: row.get(13)?,
-        original_json: row.get(14)?,
-        resolved_by: row.get(15)?,
-        resolved_at: row.get(16)?,
-        rejection_reason: row.get(17)?,
-        stitch_id: row.get(18)?,
-        preview_json: row.get(19)?,
+        turn_id: row.get(12)?,
+        status: row.get(13)?,
+        version: row.get(14)?,
+        original_json: row.get(15)?,
+        resolved_by: row.get(16)?,
+        resolved_at: row.get(17)?,
+        rejection_reason: row.get(18)?,
+        stitch_id: row.get(19)?,
+        preview_json: row.get(20)?,
+        opened_by: row.get(21)?,
+        opened_at: row.get(22)?,
+        last_autosave_at: row.get(23)?,
+        abandoned_at: row.get(24)?,
     })
+}
+
+// ---------------------------------------------------------------------------
+// §19.1 Draft concurrency functions
+// ---------------------------------------------------------------------------
+
+/// Open a draft form - creates or updates a draft with opened_by/opened_at.
+///
+/// This is called when the operator opens the draft form in the UI.
+/// If a draft with this ID already exists (e.g., was autosaved before),
+/// it updates the opened_by/opened_at fields. Otherwise creates a new draft.
+pub fn open_draft(
+    draft_id: &str,
+    project: &str,
+    opened_by: &str,
+) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let now = Utc::now().to_rfc3339();
+
+    // Check if draft exists
+    let exists: bool = conn.query_row(
+        "SELECT COUNT(*) FROM draft_queue WHERE id = ?1",
+        [draft_id],
+        |row| row.get::<_, i64>(0).map(|c| c > 0),
+    )?;
+
+    if exists {
+        // Update existing draft's opened tracking
+        conn.execute(
+            "UPDATE draft_queue SET opened_by = ?1, opened_at = ?2, abandoned_at = NULL WHERE id = ?3",
+            params![opened_by, now, draft_id],
+        )?;
+    } else {
+        // Create new draft with opened tracking - minimal fields
+        conn.execute(
+            r#"INSERT INTO draft_queue
+               (id, project, title, kind, description, has_acceptance_criteria,
+                priority, labels, created_by, created_at, source, status,
+                version, opened_by, opened_at)
+               VALUES (?1, ?2, '', '', NULL, 0, NULL, '[]', ?3, ?4, 'form', 'pending', 1, ?5, ?6)"#,
+            params![draft_id, project, opened_by, now, opened_by, now],
+        )?;
+    }
+
+    Ok(())
+}
+
+/// Autosave draft content - updates fields and last_autosave_at.
+///
+/// Called every 5s or on field change. Updates title, description, kind,
+/// priority, labels, and last_autosave_at. Does not increment version
+/// (only manual edits increment version).
+pub fn autosave_draft(
+    draft_id: &str,
+    title: Option<&str>,
+    description: Option<&str>,
+    kind: Option<&str>,
+    priority: Option<i64>,
+    labels: Option<&[String]>,
+) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let now = Utc::now().to_rfc3339();
+
+    if let Some(t) = title {
+        conn.execute("UPDATE draft_queue SET title = ?1 WHERE id = ?2", params![t, draft_id])?;
+    }
+    if let Some(d) = description {
+        conn.execute("UPDATE draft_queue SET description = ?1 WHERE id = ?2", params![d, draft_id])?;
+    }
+    if let Some(k) = kind {
+        conn.execute("UPDATE draft_queue SET kind = ?1 WHERE id = ?2", params![k, draft_id])?;
+    }
+    if let Some(p) = priority {
+        conn.execute("UPDATE draft_queue SET priority = ?1 WHERE id = ?2", params![p, draft_id])?;
+    }
+    if let Some(l) = labels {
+        let labels_json = serde_json::to_string(l)?;
+        conn.execute("UPDATE draft_queue SET labels = ?1 WHERE id = ?2", params![labels_json, draft_id])?;
+    }
+
+    conn.execute(
+        "UPDATE draft_queue SET last_autosave_at = ?1 WHERE id = ?2",
+        params![now, draft_id],
+    )?;
+
+    Ok(())
+}
+
+/// Abandon a draft - marks it as abandoned when form closes without submit.
+///
+/// Sets abandoned_at timestamp. Drafts are retained for 7 days before cleanup.
+pub fn abandon_draft(draft_id: &str) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let now = Utc::now().to_rfc3339();
+
+    conn.execute(
+        "UPDATE draft_queue SET status = 'abandoned', abandoned_at = ?1 WHERE id = ?2",
+        params![now, draft_id],
+    )?;
+
+    Ok(())
+}
+
+/// Clean up abandoned drafts older than 7 days.
+///
+/// Should be called periodically (e.g., daily) to remove stale abandoned drafts.
+pub fn cleanup_abandoned_drafts() -> Result<usize> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let cutoff = Utc::now() - chrono::Duration::days(7);
+
+    let deleted = conn.execute(
+        "DELETE FROM draft_queue WHERE status = 'abandoned' AND abandoned_at < ?1",
+        params![cutoff.to_rfc3339()],
+    )?;
+
+    if deleted > 0 {
+        info!("Cleaned up {} abandoned drafts older than 7 days", deleted);
+    }
+
+    Ok(deleted)
 }
 
 // ---------------------------------------------------------------------------
