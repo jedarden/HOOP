@@ -592,19 +592,13 @@ impl AgentAdapter for AnthropicApiAdapter {
         &self,
         session: &AgentSession,
         prompt: &str,
-        _attachments: Vec<Attachment>,
+        attachments: Vec<Attachment>,
     ) -> Result<EventStream> {
         let model = &session.model;
         let api_key = &self.api_key;
 
-        // Append user message to history.
-        {
-            let mut history = session.history.lock().await;
-            history.push(HistoryMessage {
-                role: "user".into(),
-                content: prompt.into(),
-            });
-        }
+        // Build multimodal user content (plain string if no attachments).
+        let user_content = build_anthropic_user_content(prompt, &attachments);
 
         let mut body = serde_json::json!({
             "model": model,
@@ -612,24 +606,25 @@ impl AgentAdapter for AnthropicApiAdapter {
             "stream": true,
         });
 
-        // Set system prompt if present.
         if let Some(ref sp) = session.system_prompt {
             body["system"] = serde_json::json!(sp);
         }
 
-        // Replay full conversation history.
+        // Build messages: previous history as plain text + current turn (multimodal).
         {
             let history = session.history.lock().await;
-            let messages: Vec<serde_json::Value> = history
+            let mut messages: Vec<serde_json::Value> = history
                 .iter()
-                .map(|m| {
-                    serde_json::json!({
-                        "role": m.role,
-                        "content": m.content,
-                    })
-                })
+                .map(|m| serde_json::json!({ "role": m.role, "content": m.content }))
                 .collect();
+            messages.push(serde_json::json!({ "role": "user", "content": user_content }));
             body["messages"] = serde_json::json!(messages);
+        }
+
+        // Store text-only version in history so future replays remain lightweight.
+        {
+            let mut history = session.history.lock().await;
+            history.push(HistoryMessage { role: "user".into(), content: prompt.into() });
         }
 
         let client = reqwest_like_client();
@@ -648,7 +643,6 @@ impl AgentAdapter for AnthropicApiAdapter {
             return Err(anyhow::anyhow!("Anthropic API error {}: {}", status, text));
         }
 
-        // Wrap the stream to track assistant responses
         let session_history = session.history.clone();
         let tracked_stream = track_assistant_response(parse_sse_response(response), session_history).await;
 
@@ -656,7 +650,6 @@ impl AgentAdapter for AnthropicApiAdapter {
     }
 
     async fn close_session(&self, _session: &AgentSession) -> Result<()> {
-        // No server-side state to clean up for the API adapter.
         Ok(())
     }
 }
@@ -710,20 +703,14 @@ impl AgentAdapter for ZaiGlmAdapter {
         &self,
         session: &AgentSession,
         prompt: &str,
-        _attachments: Vec<Attachment>,
+        attachments: Vec<Attachment>,
     ) -> Result<EventStream> {
         let model = &session.model;
         let api_key = &self.api_key;
         let url = format!("{}/v1/chat/completions", self.base_url.trim_end_matches('/'));
 
-        // Append user message to history.
-        {
-            let mut history = session.history.lock().await;
-            history.push(HistoryMessage {
-                role: "user".into(),
-                content: prompt.into(),
-            });
-        }
+        // Build multimodal user content (plain string if no attachments).
+        let user_content = build_openai_user_content(prompt, &attachments);
 
         let mut body = serde_json::json!({
             "model": model,
@@ -731,27 +718,24 @@ impl AgentAdapter for ZaiGlmAdapter {
             "stream": true,
         });
 
-        // Set system prompt if present.
-        if let Some(ref sp) = session.system_prompt {
-            body["messages"] = serde_json::json!([
-                {"role": "system", "content": sp},
-            ]);
-        }
-
-        // Replay full conversation history.
+        // Build messages: system prompt + previous history + current multimodal turn.
         {
             let history = session.history.lock().await;
-            let mut messages = Vec::new();
-            if let Some(msgs) = body.get("messages").and_then(|m| m.as_array()) {
-                messages = msgs.clone();
+            let mut messages: Vec<serde_json::Value> = Vec::new();
+            if let Some(ref sp) = session.system_prompt {
+                messages.push(serde_json::json!({ "role": "system", "content": sp }));
             }
             for m in history.iter() {
-                messages.push(serde_json::json!({
-                    "role": m.role,
-                    "content": m.content,
-                }));
+                messages.push(serde_json::json!({ "role": m.role, "content": m.content }));
             }
+            messages.push(serde_json::json!({ "role": "user", "content": user_content }));
             body["messages"] = serde_json::json!(messages);
+        }
+
+        // Store text-only version in history so future replays remain lightweight.
+        {
+            let mut history = session.history.lock().await;
+            history.push(HistoryMessage { role: "user".into(), content: prompt.into() });
         }
 
         let client = reqwest_like_client();
@@ -769,7 +753,6 @@ impl AgentAdapter for ZaiGlmAdapter {
             return Err(anyhow::anyhow!("ZAI API error {}: {}", status, text));
         }
 
-        // Parse SSE stream into AgentEvents (OpenAI-compatible format)
         let session_history = session.history.clone();
         let tracked_stream = track_assistant_response(parse_openai_sse_response(response), session_history).await;
 
@@ -1078,6 +1061,114 @@ impl AgentAdapter for GeminiAdapter {
 /// the real implementation will use `reqwest` when added to Cargo.toml.
 fn reqwest_like_client() -> reqwest::Client {
     reqwest::Client::new()
+}
+
+/// Build the user-turn content for the Anthropic Messages API.
+///
+/// Returns a plain string if there are no attachments. Returns an array of
+/// typed content blocks when attachments are present: image/pdf blocks for
+/// binary media, and text blocks for UTF-8 files.
+fn build_anthropic_user_content(prompt: &str, attachments: &[Attachment]) -> serde_json::Value {
+    if attachments.is_empty() {
+        return serde_json::json!(prompt);
+    }
+
+    let mut parts: Vec<serde_json::Value> = Vec::new();
+
+    for att in attachments {
+        match att {
+            Attachment::Inline { name, content, mime } => {
+                if mime.starts_with("image/") {
+                    parts.push(serde_json::json!({
+                        "type": "image",
+                        "source": { "type": "base64", "media_type": mime, "data": content }
+                    }));
+                } else if mime == "application/pdf" {
+                    parts.push(serde_json::json!({
+                        "type": "document",
+                        "source": { "type": "base64", "media_type": "application/pdf", "data": content }
+                    }));
+                } else {
+                    // Text-based file — decode and embed verbatim.
+                    use base64::Engine as _;
+                    if let Ok(raw) = base64::engine::general_purpose::STANDARD.decode(content) {
+                        if let Ok(text) = String::from_utf8(raw) {
+                            parts.push(serde_json::json!({
+                                "type": "text",
+                                "text": format!("<attachment name=\"{}\">\n{}\n</attachment>", name, text)
+                            }));
+                        }
+                    }
+                }
+            }
+            Attachment::File { path } => {
+                parts.push(serde_json::json!({
+                    "type": "text",
+                    "text": format!("[File attachment: {}]", path)
+                }));
+            }
+            Attachment::Url { url } => {
+                parts.push(serde_json::json!({
+                    "type": "text",
+                    "text": format!("[URL attachment: {}]", url)
+                }));
+            }
+        }
+    }
+
+    parts.push(serde_json::json!({ "type": "text", "text": prompt }));
+    serde_json::json!(parts)
+}
+
+/// Build the user-turn content for OpenAI-compatible chat completions.
+///
+/// Images are embedded as data-URI `image_url` blocks. Text/binary files are
+/// decoded and embedded as text blocks. PDF is not natively supported by most
+/// OpenAI-compatible endpoints, so it falls back to a text notice.
+fn build_openai_user_content(prompt: &str, attachments: &[Attachment]) -> serde_json::Value {
+    if attachments.is_empty() {
+        return serde_json::json!(prompt);
+    }
+
+    let mut parts: Vec<serde_json::Value> = Vec::new();
+
+    for att in attachments {
+        match att {
+            Attachment::Inline { name, content, mime } => {
+                if mime.starts_with("image/") {
+                    parts.push(serde_json::json!({
+                        "type": "image_url",
+                        "image_url": { "url": format!("data:{};base64,{}", mime, content) }
+                    }));
+                } else {
+                    use base64::Engine as _;
+                    if let Ok(raw) = base64::engine::general_purpose::STANDARD.decode(content) {
+                        if let Ok(text) = String::from_utf8(raw) {
+                            parts.push(serde_json::json!({
+                                "type": "text",
+                                "text": format!("<attachment name=\"{}\">\n{}\n</attachment>", name, text)
+                            }));
+                        }
+                    }
+                }
+            }
+            Attachment::File { path } => {
+                parts.push(serde_json::json!({
+                    "type": "text",
+                    "text": format!("[File attachment: {}]", path)
+                }));
+            }
+            Attachment::Url { url } => {
+                parts.push(serde_json::json!({
+                    "type": "text",
+                    "text": format!("[URL attachment: {}]", url)
+                }));
+            }
+        }
+    }
+
+    parts.push(serde_json::json!({ "type": "text", "text": prompt }));
+    serde_json::json!(parts)
 }
 
 /// Parse an Anthropic SSE response into AgentEvent stream.

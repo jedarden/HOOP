@@ -139,9 +139,20 @@ async fn switch_adapter(
     }
 }
 
+/// Inline attachment sent with a turn (base64-encoded file content).
+#[derive(Debug, Deserialize)]
+struct TurnAttachment {
+    name: String,
+    /// Base64-encoded file content.
+    content: String,
+    mime: String,
+}
+
 #[derive(Debug, Deserialize)]
 struct TurnRequest {
     prompt: String,
+    #[serde(default)]
+    attachments: Vec<TurnAttachment>,
 }
 
 /// POST /api/agent/turn
@@ -162,7 +173,17 @@ async fn send_turn(
         return Err(axum::http::StatusCode::SERVICE_UNAVAILABLE);
     }
 
-    match mgr.send_turn(req.prompt, vec![]).await {
+    let attachments: Vec<crate::agent_adapter::Attachment> = req
+        .attachments
+        .into_iter()
+        .map(|a| crate::agent_adapter::Attachment::Inline {
+            name: a.name,
+            content: a.content,
+            mime: a.mime,
+        })
+        .collect();
+
+    match mgr.send_turn(req.prompt, attachments).await {
         Ok(mut stream) => {
             use futures_util::StreamExt;
             // Consume the stream, processing each event.

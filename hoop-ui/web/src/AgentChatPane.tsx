@@ -14,12 +14,38 @@ interface PendingAttachment {
   id: string;
   name: string;
   size: number;
+  file?: File;
+  previewUrl?: string;
 }
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Per-adapter upload size caps enforced at the UI layer.
+const ADAPTER_CAPS: Record<string, { maxFileSizeBytes: number; maxTotalBytes: number }> = {
+  anthropic: { maxFileSizeBytes: 5 * 1024 * 1024,  maxTotalBytes: 20 * 1024 * 1024 },
+  zai:       { maxFileSizeBytes: 20 * 1024 * 1024, maxTotalBytes: 20 * 1024 * 1024 },
+  gemini:    { maxFileSizeBytes: 20 * 1024 * 1024, maxTotalBytes: 20 * 1024 * 1024 },
+  claude:    { maxFileSizeBytes: 50 * 1024 * 1024, maxTotalBytes: 100 * 1024 * 1024 },
+  codex:     { maxFileSizeBytes: 50 * 1024 * 1024, maxTotalBytes: 100 * 1024 * 1024 },
+  opencode:  { maxFileSizeBytes: 50 * 1024 * 1024, maxTotalBytes: 100 * 1024 * 1024 },
+};
+
+function getAdapterCap(adapter: string | null) {
+  const key = (adapter ?? 'claude').toLowerCase();
+  return ADAPTER_CAPS[key] ?? ADAPTER_CAPS.claude;
+}
+
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(',')[1]);
+    reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+    reader.readAsDataURL(file);
+  });
 }
 
 function ToolCallBubble({ toolCall }: { toolCall: AgentToolCallInProgress }) {
@@ -107,10 +133,20 @@ export default function AgentChatPane() {
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Cleanup object URLs on unmount
+  const attachmentsRef = useRef<PendingAttachment[]>([]);
+  useEffect(() => { attachmentsRef.current = attachments; }, [attachments]);
+  useEffect(() => {
+    return () => {
+      attachmentsRef.current.forEach(a => { if (a.previewUrl) URL.revokeObjectURL(a.previewUrl); });
+    };
+  }, []);
 
   // Fetch initial agent status on mount
   useEffect(() => {
@@ -159,6 +195,23 @@ export default function AgentChatPane() {
 
     setSendError(null);
 
+    // Encode pending attachments as base64 before clearing state.
+    let encodedAttachments: { name: string; content: string; mime: string }[] = [];
+    if (attachments.length > 0) {
+      try {
+        encodedAttachments = await Promise.all(
+          attachments.map(async (a) => ({
+            name: a.name,
+            content: await readFileAsBase64(a.file!),
+            mime: a.file?.type || 'application/octet-stream',
+          }))
+        );
+      } catch (err) {
+        setSendError(`Failed to read attachment: ${err instanceof Error ? err.message : String(err)}`);
+        return;
+      }
+    }
+
     const userMsg: AgentChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -176,7 +229,10 @@ export default function AgentChatPane() {
       const r = await fetch('/api/agent/turn', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: text }),
+        body: JSON.stringify({
+          prompt: text,
+          ...(encodedAttachments.length > 0 && { attachments: encodedAttachments }),
+        }),
       });
       if (!r.ok) {
         const body = await r.text().catch(() => '');
@@ -202,16 +258,108 @@ export default function AgentChatPane() {
 
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
-    setAttachments((prev) => [
-      ...prev,
-      ...files.map((f) => ({ id: crypto.randomUUID(), name: f.name, size: f.size })),
-    ]);
+    const cap = getAdapterCap(agentStatus?.adapter ?? null);
+    const oversized = files.filter(f => f.size > cap.maxFileSizeBytes);
+    if (oversized.length > 0) {
+      setSendError(`File too large: ${oversized.map(f => f.name).join(', ')} (max ${formatBytes(cap.maxFileSizeBytes)} per file for ${agentStatus?.adapter ?? 'claude'} adapter)`);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+    setAttachments((prev) => {
+      const next = [
+        ...prev,
+        ...files.map((f) => ({
+          id: crypto.randomUUID(),
+          name: f.name,
+          size: f.size,
+          file: f,
+          previewUrl: f.type.startsWith('image/') ? URL.createObjectURL(f) : undefined,
+        })),
+      ];
+      const totalSize = next.reduce((s, a) => s + a.size, 0);
+      if (totalSize > cap.maxTotalBytes) {
+        setSendError(`Total attachments exceed ${formatBytes(cap.maxTotalBytes)} limit for ${agentStatus?.adapter ?? 'claude'} adapter`);
+        return prev;
+      }
+      return next;
+    });
     if (fileInputRef.current) fileInputRef.current.value = '';
-  }, []);
+  }, [agentStatus?.adapter]);
 
   const removeAttachment = useCallback((id: string) => {
-    setAttachments((prev) => prev.filter((a) => a.id !== id));
+    setAttachments((prev) => {
+      const item = prev.find(a => a.id === id);
+      if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      return prev.filter((a) => a.id !== id);
+    });
   }, []);
+
+  const handleTextareaPaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imageFiles: File[] = [];
+    for (const item of Array.from(items)) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) imageFiles.push(new File([file], file.name || `image-${Date.now()}.png`, { type: file.type }));
+      }
+    }
+    if (imageFiles.length > 0) {
+      e.preventDefault();
+      setAttachments((prev) => [
+        ...prev,
+        ...imageFiles.map((f) => ({
+          id: crypto.randomUUID(),
+          name: f.name,
+          size: f.size,
+          file: f,
+          previewUrl: URL.createObjectURL(f),
+        })),
+      ]);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+    const cap = getAdapterCap(agentStatus?.adapter ?? null);
+    const oversized = files.filter(f => f.size > cap.maxFileSizeBytes);
+    if (oversized.length > 0) {
+      setSendError(`File too large: ${oversized.map(f => f.name).join(', ')} (max ${formatBytes(cap.maxFileSizeBytes)} per file)`);
+      return;
+    }
+    setAttachments((prev) => {
+      const next = [
+        ...prev,
+        ...files.map((f) => ({
+          id: crypto.randomUUID(),
+          name: f.name,
+          size: f.size,
+          file: f,
+          previewUrl: f.type.startsWith('image/') ? URL.createObjectURL(f) : undefined,
+        })),
+      ];
+      const totalSize = next.reduce((s, a) => s + a.size, 0);
+      if (totalSize > cap.maxTotalBytes) {
+        setSendError(`Total attachments exceed ${formatBytes(cap.maxTotalBytes)} limit`);
+        return prev;
+      }
+      return next;
+    });
+  }, [agentStatus?.adapter]);
 
   const toggleProjectScope = useCallback((name: string) => {
     setScope((prev) => ({
@@ -363,12 +511,21 @@ export default function AgentChatPane() {
       )}
 
       {/* Input area */}
-      <div className="acp-input-area">
+      <div
+        className={`acp-input-area${isDragOver ? ' acp-drag-over' : ''}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         {attachments.length > 0 && (
           <div className="acp-attachments" role="list" aria-label="Pending attachments">
             {attachments.map((a) => (
               <div key={a.id} className="acp-attachment-chip" role="listitem">
-                <span className="acp-attachment-icon" aria-hidden="true">📎</span>
+                {a.previewUrl ? (
+                  <img src={a.previewUrl} alt={a.name} className="acp-attachment-preview" />
+                ) : (
+                  <span className="acp-attachment-icon" aria-hidden="true">📎</span>
+                )}
                 <span className="acp-attachment-name">{a.name}</span>
                 <span className="acp-attachment-size">{formatBytes(a.size)}</span>
                 <button
@@ -423,6 +580,7 @@ export default function AgentChatPane() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handleTextareaPaste}
             placeholder={
               isActive
                 ? 'Message the agent… (Enter to send, Shift+Enter for new line)'
