@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useSetAtom } from 'jotai';
 import { CodeViewer as ShikiCodeViewer } from './CodeViewer';
 import { ImageViewer } from './ImageViewer';
 import type { TabId } from './ProjectDetail';
+import { fileAttachContextAtom } from './atoms';
 
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']);
 
@@ -164,7 +166,7 @@ function hasActiveFilter(f: FileFilter): boolean {
   return Boolean(f.ext || f.modifiedSince || f.grep);
 }
 
-// ─── Tree node (unchanged tree view) ─────────────────────────────────────────
+// ─── Tree node ────────────────────────────────────────────────────────────────
 
 interface TreeNodeProps {
   entry: FileEntry;
@@ -175,6 +177,8 @@ interface TreeNodeProps {
   onToggle: (entry: FileEntry) => void;
   onSelect: (entry: FileEntry) => void;
   selectedPath: string | null;
+  projectName: string;
+  onContextMenuRequest: (entry: FileEntry, x: number, y: number) => void;
 }
 
 function TreeNode({
@@ -186,6 +190,8 @@ function TreeNode({
   onToggle,
   onSelect,
   selectedPath,
+  projectName,
+  onContextMenuRequest,
 }: TreeNodeProps) {
   const isExpanded = expanded.has(entry.path);
   const isLoading = loading.has(entry.path);
@@ -200,15 +206,32 @@ function TreeNode({
     }
   };
 
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
+    e.dataTransfer.setData('application/hoop-file-path', entry.path);
+    e.dataTransfer.setData('application/hoop-project-name', projectName);
+    e.dataTransfer.effectAllowed = 'copy';
+  };
+
+  const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!entry.is_dir) {
+      e.preventDefault();
+      e.stopPropagation();
+      onContextMenuRequest(entry, e.clientX, e.clientY);
+    }
+  };
+
   const children = childCache.get(entry.path) ?? [];
 
   return (
     <div>
       <div
-        className={`file-tree-node${isSelected ? ' selected' : ''}`}
+        className={`file-tree-node${isSelected ? ' selected' : ''}${!entry.is_dir ? ' file-tree-node--draggable' : ''}`}
         style={{ paddingLeft: `${depth * 16 + 8}px` }}
         onClick={handleClick}
         title={entry.path}
+        draggable={!entry.is_dir}
+        onDragStart={!entry.is_dir ? handleDragStart : undefined}
+        onContextMenu={handleContextMenu}
       >
         <span className="file-expand-icon">
           {entry.is_dir ? (isLoading ? '⋯' : isExpanded ? '▼' : '▶') : ''}
@@ -246,6 +269,8 @@ function TreeNode({
                 onToggle={onToggle}
                 onSelect={onSelect}
                 selectedPath={selectedPath}
+                projectName={projectName}
+                onContextMenuRequest={onContextMenuRequest}
               />
             ))
           )}
@@ -261,13 +286,37 @@ function SearchResultRow({
   result,
   isSelected,
   onSelect,
+  projectName,
+  onContextMenuRequest,
 }: {
   result: FileSearchResult;
   isSelected: boolean;
   onSelect: (r: FileSearchResult) => void;
+  projectName: string;
+  onContextMenuRequest: (entry: FileEntry, x: number, y: number) => void;
 }) {
   const badge = GIT_STATUS_BADGE[result.git_status];
   const gm = result.grep_match;
+
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
+    e.dataTransfer.setData('application/hoop-file-path', result.path);
+    e.dataTransfer.setData('application/hoop-project-name', projectName);
+    e.dataTransfer.effectAllowed = 'copy';
+  };
+
+  const handleContextMenu = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const entry: FileEntry = {
+      name: result.name,
+      path: result.path,
+      is_dir: false,
+      size: result.size,
+      mtime: result.mtime,
+      git_status: result.git_status,
+    };
+    onContextMenuRequest(entry, e.clientX, e.clientY);
+  };
 
   // Highlight the match inside the line.
   let lineNode: React.ReactNode = null;
@@ -301,9 +350,12 @@ function SearchResultRow({
 
   return (
     <div
-      className={`file-search-row${isSelected ? ' selected' : ''}`}
+      className={`file-search-row file-tree-node--draggable${isSelected ? ' selected' : ''}`}
       onClick={() => onSelect(result)}
       title={result.path}
+      draggable
+      onDragStart={handleDragStart}
+      onContextMenu={handleContextMenu}
     >
       <div className="file-search-top">
         <span className="file-icon">📄</span>

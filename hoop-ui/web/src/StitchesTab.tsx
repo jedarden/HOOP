@@ -1,6 +1,6 @@
 import { useAtomValue, useSetAtom, useAtom } from 'jotai';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { conversationsAtom, streamingActiveIdsAtom, selectedConversationIdAtom, Conversation, dictatedNotesAtom, NoteSummary, DictatedNote, conversationFilterAtom, ConversationFilter, screenCapturesAtom, ScreenCaptureSummary, ScreenCaptureData } from './atoms';
+import { conversationsAtom, streamingActiveIdsAtom, selectedConversationIdAtom, Conversation, dictatedNotesAtom, NoteSummary, DictatedNote, conversationFilterAtom, ConversationFilter, screenCapturesAtom, ScreenCaptureSummary, ScreenCaptureData, fileNavigationAtom } from './atoms';
 import AudioPlayer from './components/AudioPlayer';
 import VideoPlayer from './components/VideoPlayer';
 import { scanForSecrets, getSecretSeverity, truncateSecret } from './components/secretsScanner';
@@ -382,6 +382,108 @@ function ScreenCaptureDetail({ summary }: { summary: ScreenCaptureSummary }) {
   );
 }
 
+// ─── Net-diff types (local) ───────────────────────────────────────────────────
+
+interface NetDiffFile {
+  old_path: string;
+  new_path: string;
+  is_new: boolean;
+  is_deleted: boolean;
+  added: number;
+  removed: number;
+}
+
+interface NetDiffWorkspace {
+  workspace: string;
+  commit_shas: string[];
+  ref_range: string;
+  files: NetDiffFile[];
+  total_added: number;
+  total_removed: number;
+}
+
+interface NetDiffResponse {
+  workspaces: NetDiffWorkspace[];
+  total_added: number;
+  total_removed: number;
+  truncated: boolean;
+  bead_count: number;
+  commit_count: number;
+}
+
+// ─── TouchedFilesPanel ────────────────────────────────────────────────────────
+
+interface TouchedFilesPanelProps {
+  stitchId: string;
+  onFileClick: (filePath: string, refRange: string) => void;
+}
+
+function TouchedFilesPanel({ stitchId, onFileClick }: TouchedFilesPanelProps) {
+  const [netDiff, setNetDiff] = useState<NetDiffResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    fetch(`/api/stitches/${encodeURIComponent(stitchId)}/net-diff`)
+      .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
+      .then((data: NetDiffResponse) => {
+        if (mounted) { setNetDiff(data); setLoading(false); }
+      })
+      .catch(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
+  }, [stitchId]);
+
+  if (loading) return <div className="touched-files-loading">Loading touched files…</div>;
+  if (!netDiff) return null;
+
+  const allFiles: Array<{ filePath: string; added: number; removed: number; refRange: string }> = [];
+  for (const ws of netDiff.workspaces) {
+    for (const f of ws.files) {
+      const filePath = f.new_path || f.old_path;
+      if (filePath) allFiles.push({ filePath, added: f.added, removed: f.removed, refRange: ws.ref_range });
+    }
+  }
+
+  if (allFiles.length === 0) return null;
+
+  return (
+    <div className="touched-files-panel">
+      <div className="touched-files-header">
+        <span className="touched-files-title">Files touched</span>
+        <div className="touched-files-summary">
+          <span>{allFiles.length} file{allFiles.length !== 1 ? 's' : ''}</span>
+          {netDiff.total_added > 0 && <span className="diff-stat-add">+{netDiff.total_added}</span>}
+          {netDiff.total_removed > 0 && <span className="diff-stat-rem">-{netDiff.total_removed}</span>}
+          {netDiff.truncated && <span className="touched-files-truncated">(truncated)</span>}
+        </div>
+      </div>
+      <div className="touched-files-list">
+        {allFiles.map(({ filePath, added, removed, refRange }) => (
+          <div
+            key={filePath}
+            className="touched-file-row"
+            onClick={(e) => { e.stopPropagation(); onFileClick(filePath, refRange); }}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && onFileClick(filePath, refRange)}
+          >
+            <span className="touched-file-icon">📄</span>
+            <span className="touched-file-path">{filePath}</span>
+            <div className="touched-file-stats">
+              {added > 0 && <span className="diff-stat-add">+{added}</span>}
+              {removed > 0 && <span className="diff-stat-rem">-{removed}</span>}
+            </div>
+            <span className="touched-file-arrow">→</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── StitchesTab ──────────────────────────────────────────────────────────────
+
 interface StitchesTabProps {
   projectName: string;
   projectPath: string;
@@ -394,6 +496,7 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
   const conversations = conversationsProp ?? globalConversations;
   const streamingActiveIds = useAtomValue(streamingActiveIdsAtom);
   const setSelectedConversationId = useSetAtom(selectedConversationIdAtom);
+  const setFileNavigation = useSetAtom(fileNavigationAtom);
   const dictatedNotesMap = useAtomValue(dictatedNotesAtom);
   const screenCapturesMap = useAtomValue(screenCapturesAtom);
 
@@ -883,6 +986,13 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
                         <p className="stitch-detail-truncated">No messages yet</p>
                       )}
                     </div>
+                    <TouchedFilesPanel
+                      stitchId={item.id}
+                      onFileClick={(filePath, refRange) => {
+                        setFileNavigation({ projectName, filePath, refRange });
+                        onSwitchTab?.('files');
+                      }}
+                    />
                   </div>
                 )}
               </div>

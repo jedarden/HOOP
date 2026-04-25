@@ -1,6 +1,6 @@
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useState, useEffect, useCallback } from 'react';
-import { wsConnectedAtom, configStatusAtom, projectCardsAtom, searchPaletteOpenAtom, ProjectCardData } from './atoms';
+import { wsConnectedAtom, configStatusAtom, projectCardsAtom, searchPaletteOpenAtom, activeProjectNameAtom, ProjectCardData } from './atoms';
 import { useWebSocket } from './useWebSocket';
 import OverviewPage from './OverviewPage';
 import ProjectDetail from './ProjectDetail';
@@ -14,6 +14,7 @@ import AuditPanel from './AuditPanel';
 import { SearchPalette } from './SearchPalette';
 import CrossProjectDashboard from './CrossProjectDashboard';
 import PatternsView from './PatternsView';
+import { DictationWidget } from './components/DictationWidget';
 
 type Route =
   | { view: 'overview' }
@@ -62,6 +63,7 @@ export default function App() {
   const projectCards = useAtomValue(projectCardsAtom);
   const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
   const setSearchOpen = useSetAtom(searchPaletteOpenAtom);
+  const setActiveProject = useSetAtom(activeProjectNameAtom);
 
   useWebSocket();
 
@@ -86,15 +88,16 @@ export default function App() {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // Notify daemon of active project
+  // Notify daemon of active project and update dictation context
   useEffect(() => {
     const project = route.view === 'project' ? route.name : '';
+    setActiveProject(project);
     fetch('/api/ui/active-project', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ project }),
     }).catch(() => { /* best-effort */ });
-  }, [route]);
+  }, [route, setActiveProject]);
 
   const navigateToProject = useCallback((card: ProjectCardData) => {
     window.location.hash = `#/${card.name}`;
@@ -132,6 +135,7 @@ export default function App() {
           </main>
         </div>
         <SearchPalette />
+        <DictationWidget />
       </>
     );
   }
@@ -165,6 +169,7 @@ export default function App() {
           </main>
         </div>
         <SearchPalette />
+        <DictationWidget />
       </>
     );
   }
@@ -175,6 +180,7 @@ export default function App() {
       <>
         <OverviewPage onNavigateProject={navigateToProject} />
         <SearchPalette />
+        <DictationWidget />
       </>
     );
   }
@@ -203,6 +209,7 @@ export default function App() {
           </main>
         </div>
         <SearchPalette />
+        <DictationWidget />
       </>
     );
   }
@@ -230,6 +237,7 @@ export default function App() {
           </main>
         </div>
         <SearchPalette />
+        <DictationWidget />
       </>
     );
   }
@@ -262,6 +270,7 @@ export default function App() {
           </main>
         </div>
         <SearchPalette />
+        <DictationWidget />
       </>
     );
   }
@@ -286,6 +295,7 @@ export default function App() {
           </main>
         </div>
         <SearchPalette />
+        <DictationWidget />
       </>
     );
   }
@@ -311,6 +321,7 @@ export default function App() {
         />
       </div>
       <SearchPalette />
+      <DictationWidget />
     </>
   );
 }

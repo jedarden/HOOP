@@ -465,6 +465,44 @@ export interface CrossProjectDashboardData {
   longest_running_stitches: LongestRunningStitch[];
 }
 
+// File navigation request — set by StitchesTab when user clicks a touched file;
+// consumed by FilesTab on mount to open a diff view at the stitch's commit range.
+export interface FileNavigation {
+  projectName: string;
+  filePath: string;
+  /** "SHA1^..SHA2" — before/after range from bead_commits net-diff */
+  refRange: string;
+}
+export const fileNavigationAtom = atom<FileNavigation | null>(null);
+
+// Dictation hotkey config
+export interface DictationHotkey {
+  key: string;
+  meta: boolean;
+  ctrl: boolean;
+  shift: boolean;
+  alt: boolean;
+}
+
+const DICTATION_HOTKEY_STORAGE_KEY = 'hoop_dictation_hotkey';
+
+function loadDictationHotkey(): DictationHotkey {
+  try {
+    const stored = localStorage.getItem(DICTATION_HOTKEY_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as DictationHotkey;
+      if (parsed.key && typeof parsed.meta === 'boolean') return parsed;
+    }
+  } catch {}
+  return { key: 'd', meta: true, ctrl: false, shift: true, alt: false };
+}
+
+export { DICTATION_HOTKEY_STORAGE_KEY };
+export const dictationHotkeyAtom = atom<DictationHotkey>(loadDictationHotkey());
+
+// Active project name — updated by App.tsx when route changes; read by DictationWidget
+export const activeProjectNameAtom = atom<string>('');
+
 // Atoms for state management
 export const conversationsAtom = atom<Conversation[]>([]);
 export const selectedConversationIdAtom = atom<string | null>(null);
@@ -484,6 +522,16 @@ export const costBucketsAtom = atom<CostBucket[]>([]);
 export const dictatedNotesAtom = atom<Map<string, NoteSummary[]>>(new Map()); // project -> notes
 export const screenCapturesAtom = atom<Map<string, ScreenCaptureSummary[]>>(new Map()); // project -> captures
 export const stitchCreatedAtom = atom<StitchCreatedData[]>([]);
+
+// File attach context — set by the file-tree context menu to pipe a file
+// into whichever draft form is currently open (or will open next).
+export interface FileAttachContext {
+  projectName: string;
+  path: string;
+  /** Monotonically-increasing sequence number so the same file can be added twice. */
+  seq: number;
+}
+export const fileAttachContextAtom = atom<FileAttachContext | null>(null);
 
 // Agent chat atoms
 export const agentSessionStatusAtom = atom<AgentSessionStatus | null>(null);

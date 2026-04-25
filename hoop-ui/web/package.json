@@ -15,7 +15,8 @@
   "dependencies": {
     "jotai": "^2.10.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "shiki": "^4.0.2"
   },
   "devDependencies": {
     "@types/react": "^19.0.2",
