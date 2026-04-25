@@ -98,6 +98,9 @@ pub struct Bead {
     pub updated_at: chrono::DateTime<chrono::Utc>,
     pub created_by: String,
     pub dependencies: Vec<String>,
+    /// Project name assigned by HOOP at load time — not stored in issues.jsonl
+    #[serde(skip_deserializing, default)]
+    pub project: String,
 }
 
 /// Bead status
@@ -386,6 +389,177 @@ async fn get_capacity(
     Json(meter.compute())
 }
 
+/// Spend aggregated by project for the cross-project dashboard
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ProjectSpend {
+    pub project: String,
+    pub cost_usd: f64,
+}
+
+/// Spend aggregated by adapter for the cross-project dashboard
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AdapterSpend {
+    pub adapter: String,
+    pub cost_usd: f64,
+}
+
+/// Worker count aggregated by project for the cross-project dashboard
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ProjectWorkers {
+    pub project: String,
+    pub worker_count: usize,
+}
+
+/// Longest-running active stitch (open bead) entry
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct LongestRunningStitch {
+    pub project: String,
+    pub bead_id: String,
+    pub title: String,
+    pub created_at: String,
+    pub duration_secs: i64,
+}
+
+/// Response for the cross-project dashboard endpoint
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CrossProjectDashboardResponse {
+    /// The requested range key ("today" | "week" | "month")
+    pub range: String,
+    /// Human-readable label for the range
+    pub range_label: String,
+    /// Total spend across all projects and adapters for this range (USD)
+    pub total_spend_usd: f64,
+    /// Spend broken down by project, descending
+    pub spend_by_project: Vec<ProjectSpend>,
+    /// Spend broken down by adapter, descending
+    pub spend_by_adapter: Vec<AdapterSpend>,
+    /// Total active workers across all projects
+    pub total_workers: usize,
+    /// Worker counts per project
+    pub workers_by_project: Vec<ProjectWorkers>,
+    /// Up to 10 longest-running open beads, descending by duration
+    pub longest_running_stitches: Vec<LongestRunningStitch>,
+}
+
+/// Query parameters for the cross-project dashboard
+#[derive(Debug, serde::Deserialize)]
+struct CrossProjectDashboardQuery {
+    /// "today" | "week" | "month" (default: "today")
+    #[serde(default = "default_range")]
+    range: String,
+}
+
+fn default_range() -> String {
+    "today".to_string()
+}
+
+/// Cross-project dashboard endpoint — aggregates spend, workers, and longest-running stitches
+async fn get_cross_project_dashboard(
+    axum::extract::Query(params): axum::extract::Query<CrossProjectDashboardQuery>,
+    axum::extract::State(state): axum::extract::State<DaemonState>,
+) -> Json<CrossProjectDashboardResponse> {
+    use chrono::{Utc, Duration, Datelike};
+
+    let now = Utc::now();
+    let today = now.date_naive();
+
+    let (start_date, range_label) = match params.range.as_str() {
+        "week" => (today - Duration::days(6), "Last 7 days"),
+        "month" => {
+            let month_start = chrono::NaiveDate::from_ymd_opt(today.year(), today.month(), 1)
+                .unwrap_or(today);
+            (month_start, "This month")
+        }
+        _ => (today, "Today"),
+    };
+    let range_key = match params.range.as_str() {
+        "week" => "week",
+        "month" => "month",
+        _ => "today",
+    };
+
+    // --- Cost aggregation ---
+    let buckets = {
+        let aggregator = state.cost_aggregator.read().unwrap();
+        aggregator.get_buckets_by_date_range(start_date, today)
+    };
+
+    let mut by_project: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+    let mut by_adapter: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+    let mut total_spend = 0.0f64;
+
+    for bucket in &buckets {
+        *by_project.entry(bucket.project.clone()).or_default() += bucket.cost_usd;
+        *by_adapter.entry(bucket.adapter.clone()).or_default() += bucket.cost_usd;
+        total_spend += bucket.cost_usd;
+    }
+
+    let mut spend_by_project: Vec<ProjectSpend> = by_project
+        .into_iter()
+        .map(|(project, cost_usd)| ProjectSpend { project, cost_usd })
+        .collect();
+    spend_by_project.sort_by(|a, b| b.cost_usd.partial_cmp(&a.cost_usd).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut spend_by_adapter: Vec<AdapterSpend> = by_adapter
+        .into_iter()
+        .map(|(adapter, cost_usd)| AdapterSpend { adapter, cost_usd })
+        .collect();
+    spend_by_adapter.sort_by(|a, b| b.cost_usd.partial_cmp(&a.cost_usd).unwrap_or(std::cmp::Ordering::Equal));
+
+    // --- Worker counts per project ---
+    let project_cards = state.projects.read().unwrap().clone();
+    let total_workers: usize = project_cards.iter().map(|c| c.worker_count).sum();
+    let mut workers_by_project: Vec<ProjectWorkers> = project_cards
+        .iter()
+        .filter(|c| c.worker_count > 0)
+        .map(|c| ProjectWorkers {
+            project: c.name.clone(),
+            worker_count: c.worker_count,
+        })
+        .collect();
+    workers_by_project.sort_by(|a, b| b.worker_count.cmp(&a.worker_count));
+
+    // --- Longest-running stitches (open beads sorted by age) ---
+    let beads_guard = state.beads.read().unwrap();
+    let mut open_beads: Vec<&Bead> = beads_guard
+        .iter()
+        .filter(|b| b.status == BeadStatus::Open)
+        .collect();
+    // Sort oldest first (longest running)
+    open_beads.sort_by_key(|b| b.created_at);
+
+    let longest_running_stitches: Vec<LongestRunningStitch> = open_beads
+        .iter()
+        .take(10)
+        .map(|b| {
+            let duration_secs = (now - b.created_at).num_seconds().max(0);
+            LongestRunningStitch {
+                // project is tagged at load time by the supervisor
+                project: if b.project.is_empty() {
+                    project_cards.first().map(|c| c.name.clone()).unwrap_or_else(|| "unknown".to_string())
+                } else {
+                    b.project.clone()
+                },
+                bead_id: b.id.clone(),
+                title: b.title.clone(),
+                created_at: b.created_at.to_rfc3339(),
+                duration_secs,
+            }
+        })
+        .collect();
+
+    Json(CrossProjectDashboardResponse {
+        range: range_key.to_string(),
+        range_label: range_label.to_string(),
+        total_spend_usd: total_spend,
+        spend_by_project,
+        spend_by_adapter,
+        total_workers,
+        workers_by_project,
+        longest_running_stitches,
+    })
+}
+
 /// Build the daemon router with all endpoints
 pub fn router() -> Router<DaemonState> {
     Router::new()
@@ -397,6 +571,7 @@ pub fn router() -> Router<DaemonState> {
         .route("/api/cost/buckets", get(get_cost_buckets))
         .route("/api/cost/buckets/:project", get(get_cost_buckets_by_project))
         .route("/api/cost/reload-pricing", post(reload_pricing))
+        .route("/api/dashboard/cross-project", get(get_cross_project_dashboard))
         .route("/api/projects/:project/files", get(get_project_files))
         .route("/api/attachments/:attachment_type/:id/:filename", get(api_attachments::serve_attachment))
         .route("/ws", get(ws::ws_handler))
@@ -1319,4 +1494,157 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     info!("HOOP daemon shut down gracefully");
 
     Ok(())
+}
+
+#[cfg(test)]
+mod dashboard_tests {
+    use super::*;
+    use chrono::Utc;
+
+    fn make_bead(id: &str, title: &str, status: BeadStatus, project: &str, created_ago_secs: i64) -> Bead {
+        let created_at = Utc::now() - chrono::Duration::seconds(created_ago_secs);
+        Bead {
+            id: id.to_string(),
+            title: title.to_string(),
+            description: None,
+            status,
+            priority: 0,
+            issue_type: BeadType::Task,
+            created_at,
+            updated_at: created_at,
+            created_by: "test".to_string(),
+            dependencies: vec![],
+            project: project.to_string(),
+        }
+    }
+
+    #[test]
+    fn test_longest_running_stitches_ordering() {
+        let now = Utc::now();
+        let beads = vec![
+            make_bead("bd-001", "Short task", BeadStatus::Open, "proj-a", 60),
+            make_bead("bd-002", "Long task", BeadStatus::Open, "proj-b", 3600),
+            make_bead("bd-003", "Medium task", BeadStatus::Open, "proj-a", 600),
+            make_bead("bd-004", "Closed task", BeadStatus::Closed, "proj-b", 7200),
+        ];
+
+        let mut open_beads: Vec<&Bead> = beads.iter().filter(|b| b.status == BeadStatus::Open).collect();
+        open_beads.sort_by_key(|b| b.created_at);
+
+        assert_eq!(open_beads.len(), 3);
+        // Oldest (longest-running) first
+        assert_eq!(open_beads[0].id, "bd-002");
+        assert_eq!(open_beads[1].id, "bd-003");
+        assert_eq!(open_beads[2].id, "bd-001");
+
+        // Verify durations are positive
+        for b in &open_beads {
+            let dur = (now - b.created_at).num_seconds().max(0);
+            assert!(dur > 0, "duration should be positive for open bead {}", b.id);
+        }
+    }
+
+    #[test]
+    fn test_longest_running_top_10_cap() {
+        let beads: Vec<Bead> = (0..15)
+            .map(|i| make_bead(&format!("bd-{:03}", i), &format!("task {}", i), BeadStatus::Open, "proj", (i as i64 + 1) * 60))
+            .collect();
+
+        let mut open_beads: Vec<&Bead> = beads.iter().filter(|b| b.status == BeadStatus::Open).collect();
+        open_beads.sort_by_key(|b| b.created_at);
+
+        let top10: Vec<_> = open_beads.iter().take(10).collect();
+        assert_eq!(top10.len(), 10);
+        // All should be open
+        for b in top10 {
+            assert_eq!(b.status, BeadStatus::Open);
+        }
+    }
+
+    #[test]
+    fn test_project_spend_sorted_descending() {
+        let mut by_project: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+        by_project.insert("alpha".to_string(), 1.50);
+        by_project.insert("beta".to_string(), 5.00);
+        by_project.insert("gamma".to_string(), 0.25);
+
+        let mut spend: Vec<ProjectSpend> = by_project
+            .into_iter()
+            .map(|(project, cost_usd)| ProjectSpend { project, cost_usd })
+            .collect();
+        spend.sort_by(|a, b| b.cost_usd.partial_cmp(&a.cost_usd).unwrap_or(std::cmp::Ordering::Equal));
+
+        assert_eq!(spend[0].project, "beta");
+        assert_eq!(spend[1].project, "alpha");
+        assert_eq!(spend[2].project, "gamma");
+    }
+
+    #[test]
+    fn test_adapter_spend_sorted_descending() {
+        let mut by_adapter: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+        by_adapter.insert("claude".to_string(), 3.00);
+        by_adapter.insert("codex".to_string(), 7.50);
+
+        let mut spend: Vec<AdapterSpend> = by_adapter
+            .into_iter()
+            .map(|(adapter, cost_usd)| AdapterSpend { adapter, cost_usd })
+            .collect();
+        spend.sort_by(|a, b| b.cost_usd.partial_cmp(&a.cost_usd).unwrap_or(std::cmp::Ordering::Equal));
+
+        assert_eq!(spend[0].adapter, "codex");
+        assert_eq!(spend[1].adapter, "claude");
+    }
+
+    #[test]
+    fn test_range_label_today() {
+        let label = match "today" {
+            "week" => "Last 7 days",
+            "month" => "This month",
+            _ => "Today",
+        };
+        assert_eq!(label, "Today");
+    }
+
+    #[test]
+    fn test_range_label_week() {
+        let label = match "week" {
+            "week" => "Last 7 days",
+            "month" => "This month",
+            _ => "Today",
+        };
+        assert_eq!(label, "Last 7 days");
+    }
+
+    #[test]
+    fn test_range_label_month() {
+        let label = match "month" {
+            "week" => "Last 7 days",
+            "month" => "This month",
+            _ => "Today",
+        };
+        assert_eq!(label, "This month");
+    }
+
+    #[test]
+    fn test_total_spend_aggregation() {
+        let mut by_project: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+        by_project.insert("alpha".to_string(), 1.50);
+        by_project.insert("beta".to_string(), 5.00);
+        by_project.insert("gamma".to_string(), 0.25);
+
+        let total: f64 = by_project.values().sum();
+        assert!((total - 6.75).abs() < 1e-9, "total should be 6.75, got {}", total);
+    }
+
+    #[test]
+    fn test_closed_beads_excluded_from_longest_running() {
+        let beads = vec![
+            make_bead("bd-open", "Open", BeadStatus::Open, "proj", 300),
+            make_bead("bd-closed", "Closed", BeadStatus::Closed, "proj", 9999),
+        ];
+
+        let open: Vec<&Bead> = beads.iter().filter(|b| b.status == BeadStatus::Open).collect();
+        assert_eq!(open.len(), 1);
+        assert_eq!(open[0].id, "bd-open");
+    }
 }

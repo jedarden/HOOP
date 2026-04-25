@@ -21,7 +21,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 /// Current schema version
-pub const SCHEMA_VERSION: &str = "1.12.0";
+pub const SCHEMA_VERSION: &str = "1.13.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -619,6 +619,8 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v110_to_v111(conn)?;
             // Fall through to 1.12.0
             migrate_v111_to_v112(conn)?;
+            // Fall through to 1.13.0
+            migrate_v112_to_v113(conn)?;
         }
         "1.1.0" => {
             migrate_v11_to_v12(conn)?;
@@ -632,6 +634,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v19_to_v110(conn)?;
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
+            migrate_v112_to_v113(conn)?;
         }
         "1.2.0" => {
             migrate_v12_to_v13(conn)?;
@@ -644,6 +647,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v19_to_v110(conn)?;
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
+            migrate_v112_to_v113(conn)?;
         }
         "1.3.0" => {
             migrate_v13_to_v14(conn)?;
@@ -655,6 +659,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v19_to_v110(conn)?;
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
+            migrate_v112_to_v113(conn)?;
         }
         "1.4.0" => {
             migrate_v14_to_v15(conn)?;
@@ -665,6 +670,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v19_to_v110(conn)?;
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
+            migrate_v112_to_v113(conn)?;
         }
         "1.5.0" => {
             migrate_v15_to_v16(conn)?;
@@ -674,6 +680,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v19_to_v110(conn)?;
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
+            migrate_v112_to_v113(conn)?;
         }
         "1.6.0" => {
             migrate_v16_to_v17(conn)?;
@@ -682,6 +689,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v19_to_v110(conn)?;
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
+            migrate_v112_to_v113(conn)?;
         }
         "1.7.0" => {
             migrate_v17_to_v18(conn)?;
@@ -689,31 +697,39 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v19_to_v110(conn)?;
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
+            migrate_v112_to_v113(conn)?;
         }
         "1.8.0" => {
             migrate_v18_to_v19(conn)?;
             migrate_v19_to_v110(conn)?;
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
+            migrate_v112_to_v113(conn)?;
         }
         "1.9.0" => {
             migrate_v19_to_v110(conn)?;
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
+            migrate_v112_to_v113(conn)?;
         }
         "1.10.0" => {
             migrate_v110_to_v111(conn)?;
             migrate_v111_to_v112(conn)?;
+            migrate_v112_to_v113(conn)?;
         }
         "1.11.0" => {
             migrate_v111_to_v112(conn)?;
+            migrate_v112_to_v113(conn)?;
         }
         "1.12.0" => {
-            info!("Already at schema version 1.12.0, no migrations needed");
+            migrate_v112_to_v113(conn)?;
+        }
+        "1.13.0" => {
+            info!("Already at schema version 1.13.0, no migrations needed");
         }
         _ => {
             return Err(anyhow::anyhow!(
-                "Unsupported schema version: {}. Expected 0.1.0–1.11.0",
+                "Unsupported schema version: {}. Expected 0.1.0–1.12.0",
                 from_version
             ));
         }
@@ -1344,6 +1360,125 @@ fn migrate_v111_to_v112(conn: &mut Connection) -> Result<()> {
     add_column_if_not_exists(conn, "agent_sessions", "has_started_session", "INTEGER NOT NULL DEFAULT 0")?;
 
     update_schema_version(conn, "1.12.0")?;
+    Ok(())
+}
+
+/// Migration 1.12.0 → 1.13.0: Add cross-project state tables (§4.4)
+///
+/// Creates the global state layer used by all projects:
+/// - project_status: per-project bead/worker counts updated from supervisor events
+/// - cost_rollup: per-(project, date) accumulated token costs
+/// - capacity_rollup: per-(account_id, adapter) capacity window snapshots
+/// - collision_index: per-bead file-path claims for concurrent-work safety
+/// - runtime_status: VIEW over project_status with liveness derived on read
+fn migrate_v112_to_v113(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.12.0 → 1.13.0: Adding cross-project state tables");
+
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS project_status (
+            project          TEXT PRIMARY KEY NOT NULL,
+            open_beads       INTEGER NOT NULL DEFAULT 0,
+            closed_beads     INTEGER NOT NULL DEFAULT 0,
+            stuck_beads      INTEGER NOT NULL DEFAULT 0,
+            worker_count     INTEGER NOT NULL DEFAULT 0,
+            last_event_at    TEXT,
+            last_heartbeat_at TEXT,
+            updated_at       TEXT NOT NULL
+        )
+        "#,
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_project_status_updated_at ON project_status(updated_at DESC)",
+        [],
+    )?;
+
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS cost_rollup (
+            project            TEXT NOT NULL,
+            date               TEXT NOT NULL,
+            cost_usd           REAL NOT NULL DEFAULT 0.0,
+            input_tokens       INTEGER NOT NULL DEFAULT 0,
+            output_tokens      INTEGER NOT NULL DEFAULT 0,
+            cache_read_tokens  INTEGER NOT NULL DEFAULT 0,
+            cache_write_tokens INTEGER NOT NULL DEFAULT 0,
+            updated_at         TEXT NOT NULL,
+            PRIMARY KEY (project, date)
+        )
+        "#,
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cost_rollup_date ON cost_rollup(date DESC, project)",
+        [],
+    )?;
+
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS capacity_rollup (
+            account_id    TEXT NOT NULL,
+            adapter       TEXT NOT NULL,
+            computed_at   TEXT NOT NULL,
+            window_5h_pct REAL NOT NULL DEFAULT 0.0,
+            window_7d_pct REAL NOT NULL DEFAULT 0.0,
+            tokens_5h     INTEGER NOT NULL DEFAULT 0,
+            tokens_7d     INTEGER NOT NULL DEFAULT 0,
+            cost_7d_usd   REAL NOT NULL DEFAULT 0.0,
+            PRIMARY KEY (account_id, adapter)
+        )
+        "#,
+        [],
+    )?;
+
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS collision_index (
+            bead_id    TEXT PRIMARY KEY NOT NULL,
+            project    TEXT NOT NULL,
+            worker     TEXT,
+            claimed_at TEXT NOT NULL,
+            file_paths TEXT NOT NULL DEFAULT '[]',
+            updated_at TEXT NOT NULL
+        )
+        "#,
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_collision_index_project ON collision_index(project)",
+        [],
+    )?;
+
+    // runtime_status VIEW: liveness is derived on read — "alive" when last_heartbeat_at
+    // is within the past 90 seconds, "stale" otherwise. Never persisted.
+    conn.execute(
+        r#"
+        CREATE VIEW IF NOT EXISTS runtime_status AS
+        SELECT
+            project,
+            open_beads,
+            closed_beads,
+            stuck_beads,
+            worker_count,
+            last_event_at,
+            last_heartbeat_at,
+            updated_at,
+            CASE
+                WHEN last_heartbeat_at IS NOT NULL
+                 AND (julianday('now') - julianday(last_heartbeat_at)) * 86400.0 <= 90.0
+                THEN 'alive'
+                ELSE 'stale'
+            END AS liveness
+        FROM project_status
+        "#,
+        [],
+    )?;
+
+    update_schema_version(conn, "1.13.0")?;
     Ok(())
 }
 
@@ -2270,6 +2405,10 @@ pub struct CollisionIndexEntry {
 pub fn upsert_project_status(row: &ProjectStatusRow) -> Result<()> {
     let path = db_path();
     let conn = Connection::open(&path)?;
+    upsert_project_status_conn(&conn, row)
+}
+
+fn upsert_project_status_conn(conn: &Connection, row: &ProjectStatusRow) -> Result<()> {
     conn.execute(
         r#"INSERT INTO project_status
            (project, open_beads, closed_beads, stuck_beads, worker_count,
@@ -2341,9 +2480,31 @@ pub fn accumulate_cost_rollup(
     cache_read_tokens: i64,
     cache_write_tokens: i64,
 ) -> Result<()> {
-    let updated_at = Utc::now().to_rfc3339();
     let path = db_path();
     let conn = Connection::open(&path)?;
+    accumulate_cost_rollup_conn(
+        &conn,
+        project,
+        date,
+        cost_usd,
+        input_tokens,
+        output_tokens,
+        cache_read_tokens,
+        cache_write_tokens,
+    )
+}
+
+fn accumulate_cost_rollup_conn(
+    conn: &Connection,
+    project: &str,
+    date: &str,
+    cost_usd: f64,
+    input_tokens: i64,
+    output_tokens: i64,
+    cache_read_tokens: i64,
+    cache_write_tokens: i64,
+) -> Result<()> {
+    let updated_at = Utc::now().to_rfc3339();
     conn.execute(
         r#"INSERT INTO cost_rollup
            (project, date, cost_usd, input_tokens, output_tokens,
@@ -2379,6 +2540,14 @@ pub fn query_cost_rollup(
 ) -> Result<Vec<CostRollupRow>> {
     let path = db_path();
     let conn = Connection::open(&path)?;
+    query_cost_rollup_conn(&conn, date_from, date_to)
+}
+
+fn query_cost_rollup_conn(
+    conn: &Connection,
+    date_from: Option<&str>,
+    date_to: Option<&str>,
+) -> Result<Vec<CostRollupRow>> {
     let sql = "SELECT project, date, cost_usd, input_tokens, output_tokens,
                        cache_read_tokens, cache_write_tokens, updated_at
                 FROM cost_rollup
@@ -2402,10 +2571,72 @@ pub fn query_cost_rollup(
         .map_err(|e| anyhow::anyhow!("Failed to query cost_rollup: {}", e))
 }
 
+/// Snapshot current cost totals into the `cost_rollup` table for a given (project, date).
+///
+/// Unlike `accumulate_cost_rollup` (which adds deltas), this function replaces the row
+/// with the caller's current total. Use this when the caller owns an authoritative
+/// in-memory accumulator and wants to persist a consistent point-in-time snapshot.
+pub fn snapshot_project_cost_row(
+    project: &str,
+    date: &str,
+    cost_usd: f64,
+    input_tokens: i64,
+    output_tokens: i64,
+    cache_read_tokens: i64,
+    cache_write_tokens: i64,
+) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    snapshot_project_cost_row_conn(
+        &conn,
+        project,
+        date,
+        cost_usd,
+        input_tokens,
+        output_tokens,
+        cache_read_tokens,
+        cache_write_tokens,
+    )
+}
+
+fn snapshot_project_cost_row_conn(
+    conn: &Connection,
+    project: &str,
+    date: &str,
+    cost_usd: f64,
+    input_tokens: i64,
+    output_tokens: i64,
+    cache_read_tokens: i64,
+    cache_write_tokens: i64,
+) -> Result<()> {
+    let updated_at = Utc::now().to_rfc3339();
+    conn.execute(
+        r#"INSERT OR REPLACE INTO cost_rollup
+           (project, date, cost_usd, input_tokens, output_tokens,
+            cache_read_tokens, cache_write_tokens, updated_at)
+           VALUES (?1,?2,?3,?4,?5,?6,?7,?8)"#,
+        params![
+            project,
+            date,
+            cost_usd,
+            input_tokens,
+            output_tokens,
+            cache_read_tokens,
+            cache_write_tokens,
+            updated_at,
+        ],
+    )?;
+    Ok(())
+}
+
 /// Upsert a capacity_rollup row (full replacement — snapshots, not accumulators).
 pub fn upsert_capacity_rollup(row: &CapacityRollupRow) -> Result<()> {
     let path = db_path();
     let conn = Connection::open(&path)?;
+    upsert_capacity_rollup_conn(&conn, row)
+}
+
+fn upsert_capacity_rollup_conn(conn: &Connection, row: &CapacityRollupRow) -> Result<()> {
     conn.execute(
         r#"INSERT INTO capacity_rollup
            (account_id, adapter, computed_at, window_5h_pct, window_7d_pct,
@@ -2436,6 +2667,10 @@ pub fn upsert_capacity_rollup(row: &CapacityRollupRow) -> Result<()> {
 pub fn query_capacity_rollup() -> Result<Vec<CapacityRollupRow>> {
     let path = db_path();
     let conn = Connection::open(&path)?;
+    query_capacity_rollup_conn(&conn)
+}
+
+fn query_capacity_rollup_conn(conn: &Connection) -> Result<Vec<CapacityRollupRow>> {
     let mut stmt = conn.prepare(
         "SELECT account_id, adapter, computed_at, window_5h_pct, window_7d_pct,
                 tokens_5h, tokens_7d, cost_7d_usd
@@ -2463,10 +2698,14 @@ pub fn query_capacity_rollup() -> Result<Vec<CapacityRollupRow>> {
 /// Call this on every Claim event. `file_paths` grows as touched files are
 /// reported; subsequent upserts replace the file_paths list.
 pub fn upsert_collision_entry(entry: &CollisionIndexEntry) -> Result<()> {
-    let file_paths_json = serde_json::to_string(&entry.file_paths)
-        .unwrap_or_else(|_| "[]".to_string());
     let path = db_path();
     let conn = Connection::open(&path)?;
+    upsert_collision_entry_conn(&conn, entry)
+}
+
+fn upsert_collision_entry_conn(conn: &Connection, entry: &CollisionIndexEntry) -> Result<()> {
+    let file_paths_json = serde_json::to_string(&entry.file_paths)
+        .unwrap_or_else(|_| "[]".to_string());
     conn.execute(
         r#"INSERT INTO collision_index
            (bead_id, project, worker, claimed_at, file_paths, updated_at)
@@ -2493,6 +2732,10 @@ pub fn upsert_collision_entry(entry: &CollisionIndexEntry) -> Result<()> {
 pub fn remove_collision_entry(bead_id: &str) -> Result<()> {
     let path = db_path();
     let conn = Connection::open(&path)?;
+    remove_collision_entry_conn(&conn, bead_id)
+}
+
+fn remove_collision_entry_conn(conn: &Connection, bead_id: &str) -> Result<()> {
     conn.execute("DELETE FROM collision_index WHERE bead_id = ?1", params![bead_id])?;
     Ok(())
 }
@@ -2511,6 +2754,14 @@ pub fn query_collision_candidates(
     }
     let path = db_path();
     let conn = Connection::open(&path)?;
+    query_collision_candidates_conn(&conn, project, candidate_paths)
+}
+
+fn query_collision_candidates_conn(
+    conn: &Connection,
+    project: &str,
+    candidate_paths: &[String],
+) -> Result<Vec<CollisionIndexEntry>> {
     let mut stmt = conn.prepare(
         "SELECT bead_id, project, worker, claimed_at, file_paths, updated_at
          FROM collision_index
@@ -3779,6 +4030,604 @@ mod tests {
             "err: {}",
             err
         );
+        Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // §4.4 Cross-project state tests
+    // -----------------------------------------------------------------------
+
+    fn setup_db() -> Result<(NamedTempFile, Connection)> {
+        let temp_file = NamedTempFile::new()?;
+        let mut conn = Connection::open(temp_file.path())?;
+        create_schema(&mut conn)?;
+        run_migrations(&mut conn, "0.1.0")?;
+        Ok((temp_file, conn))
+    }
+
+    #[test]
+    fn test_cross_project_state_tables_created() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        for table in ["project_status", "cost_rollup", "capacity_rollup", "collision_index"] {
+            let count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = ?",
+                [table],
+                |row| row.get(0),
+            )?;
+            assert_eq!(count, 1, "table {} should exist after migration", table);
+        }
+        let view_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='view' AND name = 'runtime_status'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(view_count, 1, "runtime_status VIEW should exist");
+        Ok(())
+    }
+
+    #[test]
+    fn test_project_status_upsert_and_query() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        let row = ProjectStatusRow {
+            project: "proj-alpha".to_string(),
+            open_beads: 5,
+            closed_beads: 10,
+            stuck_beads: 1,
+            worker_count: 2,
+            last_event_at: Some("2026-04-24T10:00:00Z".to_string()),
+            last_heartbeat_at: None,
+            updated_at: "2026-04-24T10:00:00Z".to_string(),
+        };
+        upsert_project_status_conn(&conn, &row)?;
+
+        let rows = query_runtime_status_conn(&conn)?;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].project, "proj-alpha");
+        assert_eq!(rows[0].open_beads, 5);
+        assert_eq!(rows[0].closed_beads, 10);
+        assert_eq!(rows[0].stuck_beads, 1);
+        assert_eq!(rows[0].worker_count, 2);
+        assert_eq!(rows[0].liveness, "stale"); // no heartbeat → stale
+        Ok(())
+    }
+
+    #[test]
+    fn test_project_status_upsert_replaces_existing() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        let ts = "2026-04-24T10:00:00Z".to_string();
+        let row1 = ProjectStatusRow {
+            project: "proj-beta".to_string(),
+            open_beads: 3,
+            closed_beads: 7,
+            stuck_beads: 0,
+            worker_count: 1,
+            last_event_at: Some(ts.clone()),
+            last_heartbeat_at: None,
+            updated_at: ts.clone(),
+        };
+        upsert_project_status_conn(&conn, &row1)?;
+
+        let row2 = ProjectStatusRow {
+            project: "proj-beta".to_string(),
+            open_beads: 1,
+            closed_beads: 9,
+            stuck_beads: 2,
+            worker_count: 3,
+            last_event_at: Some(ts.clone()),
+            last_heartbeat_at: None,
+            updated_at: ts,
+        };
+        upsert_project_status_conn(&conn, &row2)?;
+
+        let rows = query_runtime_status_conn(&conn)?;
+        assert_eq!(rows.len(), 1, "upsert should not create a duplicate row");
+        assert_eq!(rows[0].open_beads, 1);
+        assert_eq!(rows[0].closed_beads, 9);
+        assert_eq!(rows[0].stuck_beads, 2);
+        assert_eq!(rows[0].worker_count, 3);
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_status_liveness_alive() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        let now = Utc::now().to_rfc3339();
+        let row = ProjectStatusRow {
+            project: "proj-live".to_string(),
+            open_beads: 1,
+            closed_beads: 0,
+            stuck_beads: 0,
+            worker_count: 1,
+            last_event_at: None,
+            last_heartbeat_at: Some(now.clone()),
+            updated_at: now,
+        };
+        upsert_project_status_conn(&conn, &row)?;
+
+        let rows = query_runtime_status_conn(&conn)?;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].liveness, "alive", "recent heartbeat should be alive");
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_status_liveness_stale_old_heartbeat() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        // 5 minutes ago — beyond the 90 s threshold
+        let stale_ts = (Utc::now() - chrono::Duration::seconds(300)).to_rfc3339();
+        let row = ProjectStatusRow {
+            project: "proj-stale".to_string(),
+            open_beads: 2,
+            closed_beads: 0,
+            stuck_beads: 0,
+            worker_count: 0,
+            last_event_at: None,
+            last_heartbeat_at: Some(stale_ts.clone()),
+            updated_at: stale_ts,
+        };
+        upsert_project_status_conn(&conn, &row)?;
+
+        let rows = query_runtime_status_conn(&conn)?;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].liveness, "stale", "old heartbeat should be stale");
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_status_liveness_stale_no_heartbeat() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        let row = ProjectStatusRow {
+            project: "proj-no-hb".to_string(),
+            open_beads: 0,
+            closed_beads: 5,
+            stuck_beads: 0,
+            worker_count: 0,
+            last_event_at: None,
+            last_heartbeat_at: None,
+            updated_at: "2026-04-24T10:00:00Z".to_string(),
+        };
+        upsert_project_status_conn(&conn, &row)?;
+
+        let rows = query_runtime_status_conn(&conn)?;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].liveness, "stale", "missing heartbeat should be stale");
+        Ok(())
+    }
+
+    #[test]
+    fn test_runtime_status_not_persisted_as_column() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        // liveness must not exist as a column in project_status — it is VIEW-derived only
+        let col_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('project_status') WHERE name = 'liveness'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(col_count, 0, "liveness must not be a stored column");
+        Ok(())
+    }
+
+    #[test]
+    fn test_cost_rollup_accumulation() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        let project = "proj-cost";
+        let date = "2026-04-24";
+
+        // Three separate delta accumulations
+        accumulate_cost_rollup_conn(&conn, project, date, 0.10, 1000, 500, 200, 100)?;
+        accumulate_cost_rollup_conn(&conn, project, date, 0.05, 500, 250, 100, 50)?;
+        accumulate_cost_rollup_conn(&conn, project, date, 0.08, 800, 400, 150, 75)?;
+
+        let rows = query_cost_rollup_conn(&conn, None, None)?;
+        assert_eq!(rows.len(), 1);
+        let r = &rows[0];
+        assert_eq!(r.project, project);
+        assert_eq!(r.date, date);
+        assert_eq!(r.input_tokens, 2300);
+        assert_eq!(r.output_tokens, 1150);
+        assert_eq!(r.cache_read_tokens, 450);
+        assert_eq!(r.cache_write_tokens, 225);
+        assert!(
+            (r.cost_usd - 0.23).abs() < 1e-9,
+            "cost_usd should accumulate exactly: got {}",
+            r.cost_usd
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_cost_rollup_global_sum_within_2pct() -> Result<()> {
+        // The global cost rollup (summed over all projects) must be within ±2% of
+        // the arithmetic sum of individual per-project inputs.
+        let (_f, conn) = setup_db()?;
+
+        let date = "2026-04-24";
+        let inputs: &[(&str, f64, i64, i64)] = &[
+            ("proj-a", 1.234_567, 12345, 6000),
+            ("proj-b", 0.876_543, 8765, 4000),
+            ("proj-c", 2.345_678, 23456, 11000),
+            ("proj-d", 0.112_233, 1122, 500),
+        ];
+
+        // Simulate multiple partial sessions per project
+        for (proj, cost, input_tok, output_tok) in inputs {
+            for chunk in 1..=4u32 {
+                let frac = *cost / 4.0;
+                accumulate_cost_rollup_conn(
+                    &conn,
+                    proj,
+                    date,
+                    frac,
+                    input_tok / 4,
+                    output_tok / 4,
+                    (chunk * 100) as i64,
+                    (chunk * 50) as i64,
+                )?;
+            }
+        }
+
+        let rows = query_cost_rollup_conn(&conn, None, None)?;
+        let global_total: f64 = rows.iter().map(|r| r.cost_usd).sum();
+        let expected_total: f64 = inputs.iter().map(|(_, c, _, _)| c).sum();
+
+        let tolerance = expected_total * 0.02;
+        assert!(
+            (global_total - expected_total).abs() <= tolerance,
+            "global={:.6} expected={:.6} diff={:.6} tolerance={:.6}",
+            global_total,
+            expected_total,
+            (global_total - expected_total).abs(),
+            tolerance
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_cost_rollup_snapshot_replaces_accumulated() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        let project = "proj-snap";
+        let date = "2026-04-24";
+
+        // Accumulate deltas first
+        accumulate_cost_rollup_conn(&conn, project, date, 0.50, 5000, 2500, 1000, 500)?;
+        accumulate_cost_rollup_conn(&conn, project, date, 0.25, 2500, 1250, 500, 250)?;
+
+        // Snapshot replaces with authoritative total
+        snapshot_project_cost_row_conn(&conn, project, date, 1.00, 10000, 5000, 2000, 1000)?;
+
+        let rows = query_cost_rollup_conn(&conn, None, None)?;
+        assert_eq!(rows.len(), 1);
+        assert!(
+            (rows[0].cost_usd - 1.00).abs() < 1e-9,
+            "snapshot should replace cost_usd: got {}",
+            rows[0].cost_usd
+        );
+        assert_eq!(rows[0].input_tokens, 10000, "snapshot should replace input_tokens");
+        assert_eq!(rows[0].output_tokens, 5000);
+        Ok(())
+    }
+
+    #[test]
+    fn test_cost_rollup_date_range_filter() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        accumulate_cost_rollup_conn(&conn, "proj", "2026-04-22", 0.10, 100, 50, 20, 10)?;
+        accumulate_cost_rollup_conn(&conn, "proj", "2026-04-23", 0.20, 200, 100, 40, 20)?;
+        accumulate_cost_rollup_conn(&conn, "proj", "2026-04-24", 0.30, 300, 150, 60, 30)?;
+
+        let all = query_cost_rollup_conn(&conn, None, None)?;
+        assert_eq!(all.len(), 3);
+
+        let two_days = query_cost_rollup_conn(&conn, Some("2026-04-23"), Some("2026-04-24"))?;
+        assert_eq!(two_days.len(), 2);
+
+        let one_day = query_cost_rollup_conn(&conn, Some("2026-04-23"), Some("2026-04-23"))?;
+        assert_eq!(one_day.len(), 1);
+        assert_eq!(one_day[0].date, "2026-04-23");
+        Ok(())
+    }
+
+    #[test]
+    fn test_capacity_rollup_upsert_and_query() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        let row = CapacityRollupRow {
+            account_id: "acct-001".to_string(),
+            adapter: "anthropic".to_string(),
+            computed_at: "2026-04-24T10:00:00Z".to_string(),
+            window_5h_pct: 42.5,
+            window_7d_pct: 18.3,
+            tokens_5h: 4_250_000,
+            tokens_7d: 30_000_000,
+            cost_7d_usd: 45.00,
+        };
+        upsert_capacity_rollup_conn(&conn, &row)?;
+
+        let rows = query_capacity_rollup_conn(&conn)?;
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].account_id, "acct-001");
+        assert_eq!(rows[0].adapter, "anthropic");
+        assert!((rows[0].window_5h_pct - 42.5).abs() < 1e-6);
+        assert!((rows[0].window_7d_pct - 18.3).abs() < 1e-6);
+        assert_eq!(rows[0].tokens_5h, 4_250_000);
+        assert!((rows[0].cost_7d_usd - 45.00).abs() < 1e-6);
+        Ok(())
+    }
+
+    #[test]
+    fn test_capacity_rollup_upsert_replaces() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        let row1 = CapacityRollupRow {
+            account_id: "acct-001".to_string(),
+            adapter: "anthropic".to_string(),
+            computed_at: "2026-04-24T10:00:00Z".to_string(),
+            window_5h_pct: 42.5,
+            window_7d_pct: 18.3,
+            tokens_5h: 4_250_000,
+            tokens_7d: 30_000_000,
+            cost_7d_usd: 45.00,
+        };
+        upsert_capacity_rollup_conn(&conn, &row1)?;
+
+        let row2 = CapacityRollupRow {
+            account_id: "acct-001".to_string(),
+            adapter: "anthropic".to_string(),
+            computed_at: "2026-04-24T11:00:00Z".to_string(),
+            window_5h_pct: 55.0,
+            window_7d_pct: 20.0,
+            tokens_5h: 5_500_000,
+            tokens_7d: 32_000_000,
+            cost_7d_usd: 50.00,
+        };
+        upsert_capacity_rollup_conn(&conn, &row2)?;
+
+        let rows = query_capacity_rollup_conn(&conn)?;
+        assert_eq!(rows.len(), 1, "upsert should not create a duplicate row");
+        assert!((rows[0].window_5h_pct - 55.0).abs() < 1e-6, "should have updated value");
+        assert_eq!(rows[0].computed_at, "2026-04-24T11:00:00Z");
+        Ok(())
+    }
+
+    #[test]
+    fn test_capacity_rollup_multiple_accounts() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        let rows_in = [
+            CapacityRollupRow {
+                account_id: "acct-001".to_string(),
+                adapter: "anthropic".to_string(),
+                computed_at: "2026-04-24T10:00:00Z".to_string(),
+                window_5h_pct: 10.0,
+                window_7d_pct: 5.0,
+                tokens_5h: 1_000_000,
+                tokens_7d: 7_000_000,
+                cost_7d_usd: 10.0,
+            },
+            CapacityRollupRow {
+                account_id: "acct-002".to_string(),
+                adapter: "anthropic".to_string(),
+                computed_at: "2026-04-24T10:00:00Z".to_string(),
+                window_5h_pct: 20.0,
+                window_7d_pct: 10.0,
+                tokens_5h: 2_000_000,
+                tokens_7d: 14_000_000,
+                cost_7d_usd: 20.0,
+            },
+            CapacityRollupRow {
+                account_id: "acct-003".to_string(),
+                adapter: "openai".to_string(),
+                computed_at: "2026-04-24T10:00:00Z".to_string(),
+                window_5h_pct: 30.0,
+                window_7d_pct: 15.0,
+                tokens_5h: 3_000_000,
+                tokens_7d: 21_000_000,
+                cost_7d_usd: 30.0,
+            },
+        ];
+        for r in &rows_in {
+            upsert_capacity_rollup_conn(&conn, r)?;
+        }
+
+        let rows = query_capacity_rollup_conn(&conn)?;
+        assert_eq!(rows.len(), 3);
+        // Ordered by adapter then account_id: anthropic/acct-001, anthropic/acct-002, openai/acct-003
+        assert_eq!(rows[0].adapter, "anthropic");
+        assert_eq!(rows[0].account_id, "acct-001");
+        assert_eq!(rows[2].adapter, "openai");
+        Ok(())
+    }
+
+    #[test]
+    fn test_collision_index_upsert_and_remove() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        let ts = "2026-04-24T09:00:00Z".to_string();
+        let entry = CollisionIndexEntry {
+            bead_id: "bead-001".to_string(),
+            project: "proj-x".to_string(),
+            worker: Some("worker-abc".to_string()),
+            claimed_at: ts.clone(),
+            file_paths: vec!["src/main.rs".to_string(), "src/lib.rs".to_string()],
+            updated_at: ts,
+        };
+        upsert_collision_entry_conn(&conn, &entry)?;
+
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM collision_index WHERE bead_id = 'bead-001'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(count, 1, "entry should be inserted");
+
+        remove_collision_entry_conn(&conn, "bead-001")?;
+
+        let count2: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM collision_index WHERE bead_id = 'bead-001'",
+            [],
+            |row| row.get(0),
+        )?;
+        assert_eq!(count2, 0, "entry should be removed");
+        Ok(())
+    }
+
+    #[test]
+    fn test_collision_index_file_paths_roundtrip() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        let ts = "2026-04-24T09:00:00Z".to_string();
+        let paths = vec![
+            "src/api/beads.rs".to_string(),
+            "src/fleet.rs".to_string(),
+            "Cargo.toml".to_string(),
+        ];
+        let entry = CollisionIndexEntry {
+            bead_id: "bead-fp".to_string(),
+            project: "proj-x".to_string(),
+            worker: None,
+            claimed_at: ts.clone(),
+            file_paths: paths.clone(),
+            updated_at: ts,
+        };
+        upsert_collision_entry_conn(&conn, &entry)?;
+
+        let candidates = query_collision_candidates_conn(&conn, "proj-x", &paths)?;
+        assert_eq!(candidates.len(), 1);
+        let mut stored = candidates[0].file_paths.clone();
+        stored.sort();
+        let mut expected = paths.clone();
+        expected.sort();
+        assert_eq!(stored, expected, "file_paths should round-trip correctly");
+        Ok(())
+    }
+
+    #[test]
+    fn test_collision_candidates_overlap_detection() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        let ts = "2026-04-24T09:00:00Z".to_string();
+        // bead-A claims src/main.rs + src/lib.rs in proj-x
+        upsert_collision_entry_conn(
+            &conn,
+            &CollisionIndexEntry {
+                bead_id: "bead-A".to_string(),
+                project: "proj-x".to_string(),
+                worker: None,
+                claimed_at: ts.clone(),
+                file_paths: vec!["src/main.rs".to_string(), "src/lib.rs".to_string()],
+                updated_at: ts.clone(),
+            },
+        )?;
+        // bead-B claims Cargo.toml in proj-x
+        upsert_collision_entry_conn(
+            &conn,
+            &CollisionIndexEntry {
+                bead_id: "bead-B".to_string(),
+                project: "proj-x".to_string(),
+                worker: None,
+                claimed_at: ts.clone(),
+                file_paths: vec!["Cargo.toml".to_string()],
+                updated_at: ts.clone(),
+            },
+        )?;
+        // bead-C is in a different project — must never collide with proj-x queries
+        upsert_collision_entry_conn(
+            &conn,
+            &CollisionIndexEntry {
+                bead_id: "bead-C".to_string(),
+                project: "proj-y".to_string(),
+                worker: None,
+                claimed_at: ts.clone(),
+                file_paths: vec!["src/main.rs".to_string()],
+                updated_at: ts,
+            },
+        )?;
+
+        // Overlap with src/lib.rs → bead-A only
+        let hits = query_collision_candidates_conn(
+            &conn,
+            "proj-x",
+            &["src/lib.rs".to_string()],
+        )?;
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].bead_id, "bead-A");
+
+        // Overlap with Cargo.toml → bead-B only
+        let hits2 = query_collision_candidates_conn(
+            &conn,
+            "proj-x",
+            &["Cargo.toml".to_string()],
+        )?;
+        assert_eq!(hits2.len(), 1);
+        assert_eq!(hits2[0].bead_id, "bead-B");
+
+        // Overlap with src/main.rs in proj-x → bead-A only (bead-C is proj-y)
+        let hits3 = query_collision_candidates_conn(
+            &conn,
+            "proj-x",
+            &["src/main.rs".to_string()],
+        )?;
+        assert_eq!(hits3.len(), 1);
+        assert_eq!(hits3[0].bead_id, "bead-A");
+
+        // No overlap
+        let no_hits = query_collision_candidates_conn(
+            &conn,
+            "proj-x",
+            &["README.md".to_string()],
+        )?;
+        assert!(no_hits.is_empty(), "unrelated file should not match");
+
+        // Empty candidates slice → always empty (public API short-circuits, _conn filters cleanly)
+        let empty = query_collision_candidates_conn(&conn, "proj-x", &[])?;
+        assert!(empty.is_empty(), "empty candidates should produce no hits");
+        Ok(())
+    }
+
+    #[test]
+    fn test_collision_candidates_cross_project_isolation() -> Result<()> {
+        let (_f, conn) = setup_db()?;
+
+        let ts = "2026-04-24T09:00:00Z".to_string();
+        // Same file in two different projects — should not cross-contaminate
+        for (bead, proj) in [("bead-P1", "proj-1"), ("bead-P2", "proj-2")] {
+            upsert_collision_entry_conn(
+                &conn,
+                &CollisionIndexEntry {
+                    bead_id: bead.to_string(),
+                    project: proj.to_string(),
+                    worker: None,
+                    claimed_at: ts.clone(),
+                    file_paths: vec!["shared/common.rs".to_string()],
+                    updated_at: ts.clone(),
+                },
+            )?;
+        }
+
+        let hits1 = query_collision_candidates_conn(
+            &conn,
+            "proj-1",
+            &["shared/common.rs".to_string()],
+        )?;
+        assert_eq!(hits1.len(), 1);
+        assert_eq!(hits1[0].bead_id, "bead-P1");
+
+        let hits2 = query_collision_candidates_conn(
+            &conn,
+            "proj-2",
+            &["shared/common.rs".to_string()],
+        )?;
+        assert_eq!(hits2.len(), 1);
+        assert_eq!(hits2[0].bead_id, "bead-P2");
         Ok(())
     }
 }

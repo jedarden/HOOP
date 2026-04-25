@@ -191,6 +191,7 @@ export default function OverviewPage({ onNavigateProject }: { onNavigateProject:
           <div className="section-header-row">
             <h2>Fleet</h2>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <a href="#/dashboard" className="section-header-link">Cross-project dashboard &rarr;</a>
               <a href="#/fleet" className="section-header-link">Live worker map &rarr;</a>
               <a href="#/timeline" className="section-header-link">Worker timeline &rarr;</a>
             </div>

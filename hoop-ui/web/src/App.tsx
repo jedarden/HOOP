@@ -12,13 +12,15 @@ import AgentChatPane from './AgentChatPane';
 import WorkerTimeline from './WorkerTimeline';
 import AuditPanel from './AuditPanel';
 import { SearchPalette } from './SearchPalette';
+import CrossProjectDashboard from './CrossProjectDashboard';
 
 type Route =
   | { view: 'overview' }
   | { view: 'project'; name: string }
   | { view: 'fleet' }
   | { view: 'timeline' }
-  | { view: 'audit' };
+  | { view: 'audit' }
+  | { view: 'dashboard' };
 
 function ConfigBanner({ error }: { error: { message: string; line: number; col: number; field?: string; expected?: string; got?: string } }) {
   return (
@@ -41,6 +43,7 @@ function parseHash(hash: string): Route {
   if (path === 'fleet') return { view: 'fleet' };
   if (path === 'timeline') return { view: 'timeline' };
   if (path === 'audit') return { view: 'audit' };
+  if (path === 'dashboard') return { view: 'dashboard' };
   return { view: 'project', name: path };
 }
 
@@ -87,6 +90,42 @@ export default function App() {
   const navigateToProject = useCallback((card: ProjectCardData) => {
     window.location.hash = `#/${card.name}`;
   }, []);
+
+  const navigateToProjectByName = useCallback((name: string) => {
+    window.location.hash = `#/${name}`;
+  }, []);
+
+  // Cross-project dashboard view
+  if (route.view === 'dashboard') {
+    return (
+      <>
+        <div className="app app-project-detail">
+          {configStatus.error && <ConfigBanner error={configStatus.error} />}
+          <header className="app-header-mini">
+            <div className="header-top">
+              <div className="header-nav">
+                <a href="#/" className="back-link">&larr; All Projects</a>
+                <a href="#/fleet" className="header-nav-link">Fleet</a>
+                <a href="#/timeline" className="header-nav-link">Timeline</a>
+                <a href="#/audit" className="header-nav-link">Audit</a>
+              </div>
+              <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
+                <span className="indicator-dot" />
+                {wsConnected ? 'Connected' : 'Connecting...'}
+              </div>
+            </div>
+          </header>
+          <main>
+            <CrossProjectDashboard
+              projectCards={projectCards}
+              onNavigateProject={navigateToProjectByName}
+            />
+          </main>
+        </div>
+        <SearchPalette />
+      </>
+    );
+  }
 
   // Overview — home route
   if (route.view === 'overview') {

@@ -617,13 +617,19 @@ impl ProjectSupervisor {
             let workspace_clone = workspace.clone();
             let beads_clone = beads.clone();
             let bead_tx_clone = bead_tx.clone();
-            let _project_name_clone = project_name.clone();
+            let project_name_clone = project_name.clone();
             let error_tx_clone = error_tx.clone();
 
             tokio::spawn(async move {
                 while let Ok(event) = rx.recv().await {
                     match event {
                         BeadEvent::BeadsUpdated { beads: new_beads } => {
+                            // Tag each bead with the project name before merging
+                            let new_beads: Vec<Bead> = new_beads
+                                .into_iter()
+                                .map(|mut b| { b.project = project_name_clone.clone(); b })
+                                .collect();
+
                             // Update shared beads store
                             let mut all_beads = beads_clone.write().unwrap().clone();
                             let workspace_bead_ids: std::collections::HashSet<String> = new_beads

@@ -7519,3 +7519,396 @@ pre {
   .audit-th-args { display: none; }
   .audit-td-args { display: none; }
 }
+
+/* ─── Cross-Project Dashboard (hoop-ttb.3.9) ────────────────────────────── */
+
+.cpd-page {
+  padding: 1.5rem 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.cpd-header {
+  margin-bottom: 1.5rem;
+}
+
+.cpd-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.cpd-title-row h2 {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 600;
+  color: #213547;
+}
+
+/* Time-range selector tabs */
+.cpd-range-tabs {
+  display: flex;
+  gap: 0.25rem;
+  background: #f0f0f0;
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.cpd-range-tab {
+  padding: 0.3125rem 0.875rem;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #555;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.cpd-range-tab:hover {
+  background: #e4e4e4;
+  color: #213547;
+}
+
+.cpd-range-tab-active {
+  background: #fff;
+  color: #213547;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+
+/* Loading bar */
+.cpd-loading-bar {
+  height: 2px;
+  background: linear-gradient(90deg, #3b82f6 0%, #93c5fd 50%, #3b82f6 100%);
+  background-size: 200% 100%;
+  animation: cpd-shimmer 1.2s linear infinite;
+  border-radius: 1px;
+}
+
+@keyframes cpd-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.cpd-error {
+  padding: 0.625rem 0.875rem;
+  background: #fce8e6;
+  color: #c0392b;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  margin-top: 0.5rem;
+}
+
+/* KPI strip */
+.cpd-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.cpd-kpi {
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.cpd-kpi-value {
+  font-size: 1.625rem;
+  font-weight: 700;
+  color: #213547;
+  line-height: 1;
+}
+
+.cpd-kpi-label {
+  font-size: 0.75rem;
+  color: #777;
+  font-weight: 500;
+}
+
+/* Two-column grid for sections */
+.cpd-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.cpd-section {
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+
+.cpd-section-wide {
+  grid-column: 1 / -1;
+}
+
+.cpd-section h3 {
+  margin: 0 0 1rem 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #444;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cpd-empty {
+  margin: 0;
+  color: #aaa;
+  font-size: 0.875rem;
+}
+
+/* List rows (spend by project, spend by adapter, workers) */
+.cpd-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cpd-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  cursor: default;
+}
+
+.cpd-clickable {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.cpd-clickable:hover {
+  background: #f5f7ff;
+}
+
+.cpd-clickable:hover .cpd-list-link-hint {
+  opacity: 1;
+}
+
+.cpd-list-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.cpd-list-name {
+  font-size: 0.875rem;
+  color: #213547;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cpd-list-link-hint {
+  font-size: 0.75rem;
+  color: #3b82f6;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.cpd-list-right {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex-shrink: 0;
+}
+
+.cpd-list-value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #213547;
+  min-width: 3.5rem;
+  text-align: right;
+}
+
+.cpd-list-label-sm {
+  font-size: 0.75rem;
+  color: #999;
+}
+
+/* Bar chart */
+.cpd-bar-track {
+  width: 100px;
+  height: 6px;
+  background: #f0f0f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.cpd-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* Adapter badge */
+.cpd-adapter-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #555;
+  background: #f0f0f0;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+/* Worker count */
+.cpd-worker-count {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #213547;
+}
+
+/* Color dot (matches project color from config) */
+.cpd-color-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cpd-color-dot-sm {
+  width: 8px;
+  height: 8px;
+}
+
+/* Longest-running stitches list */
+.cpd-stitches-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cpd-stitch-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.cpd-stitch-row:hover {
+  background: #f5f7ff;
+}
+
+.cpd-stitch-row:hover .cpd-list-link-hint {
+  opacity: 1;
+}
+
+.cpd-stitch-duration {
+  flex-shrink: 0;
+  min-width: 3.5rem;
+  display: flex;
+  align-items: center;
+  padding-top: 0.125rem;
+}
+
+.cpd-stitch-age {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #d97706;
+  font-variant-numeric: tabular-nums;
+}
+
+.cpd-stitch-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.cpd-stitch-title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #213547;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cpd-stitch-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex-wrap: wrap;
+}
+
+.cpd-stitch-project {
+  display: flex;
+  align-items: center;
+  gap: 0.3125rem;
+  font-size: 0.75rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.cpd-stitch-id {
+  font-size: 0.6875rem;
+  color: #999;
+  font-family: 'Courier New', monospace;
+}
+
+/* Responsive: stack columns on narrow viewports */
+@media (max-width: 900px) {
+  .cpd-page {
+    padding: 1rem 1rem;
+  }
+
+  .cpd-kpis {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .cpd-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cpd-section-wide {
+    grid-column: auto;
+  }
+
+  .cpd-bar-track {
+    width: 60px;
+  }
+}
+
+@media (max-width: 480px) {
+  .cpd-kpis {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.625rem;
+  }
+
+  .cpd-kpi-value {
+    font-size: 1.25rem;
+  }
+
+  .cpd-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

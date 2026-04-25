@@ -391,6 +391,41 @@ export interface NoteSummary {
   transcription_status: 'Pending' | 'Completed' | 'Failed';
 }
 
+// Cross-project dashboard types
+export interface ProjectSpend {
+  project: string;
+  cost_usd: number;
+}
+
+export interface AdapterSpend {
+  adapter: string;
+  cost_usd: number;
+}
+
+export interface ProjectWorkers {
+  project: string;
+  worker_count: number;
+}
+
+export interface LongestRunningStitch {
+  project: string;
+  bead_id: string;
+  title: string;
+  created_at: string;
+  duration_secs: number;
+}
+
+export interface CrossProjectDashboardData {
+  range: string;
+  range_label: string;
+  total_spend_usd: number;
+  spend_by_project: ProjectSpend[];
+  spend_by_adapter: AdapterSpend[];
+  total_workers: number;
+  workers_by_project: ProjectWorkers[];
+  longest_running_stitches: LongestRunningStitch[];
+}
+
 // Atoms for state management
 export const conversationsAtom = atom<Conversation[]>([]);
 export const selectedConversationIdAtom = atom<string | null>(null);

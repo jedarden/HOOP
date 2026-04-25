@@ -54,8 +54,14 @@ impl ProjectsConfig {
 
         let content_hash = hex::encode(Sha256::digest(contents.as_bytes()));
 
-        let registry: hoop_schema::ProjectsRegistry = serde_yaml::from_str(&contents)
+        let mut registry: hoop_schema::ProjectsRegistry = serde_yaml::from_str(&contents)
             .context("Failed to parse projects.yaml")?;
+
+        // Auto-populate canonical_path on any entry missing it, and persist.
+        let backfilled = Self::backfill_canonical_paths(&mut registry);
+        if backfilled {
+            Self::write_back(path, &registry)?;
+        }
 
         let canonical_cache = Self::build_canonical_cache(&registry);
 
@@ -65,6 +71,49 @@ impl ProjectsConfig {
             path: path.to_path_buf(),
             content_hash,
         })
+    }
+
+    /// Auto-populate `canonical_path` on every workspace entry that lacks it.
+    ///
+    /// Returns `true` if any entry was updated (caller should persist).
+    /// Failures to resolve are silently skipped — remote-host paths may not exist locally.
+    fn backfill_canonical_paths(registry: &mut hoop_schema::ProjectsRegistry) -> bool {
+        let mut changed = false;
+        for project in &mut registry.projects {
+            match project {
+                hoop_schema::ProjectsRegistryProjectsItem::Variant0 {
+                    path, canonical_path, ..
+                } => {
+                    if canonical_path.is_none() {
+                        if let Ok(resolved) = fs::canonicalize(path) {
+                            *canonical_path = Some(resolved.to_string_lossy().to_string());
+                            changed = true;
+                        }
+                    }
+                }
+                hoop_schema::ProjectsRegistryProjectsItem::Variant1 { workspaces, .. } => {
+                    for ws in workspaces {
+                        if ws.canonical_path.is_none() {
+                            if let Ok(resolved) = fs::canonicalize(&ws.path) {
+                                ws.canonical_path = Some(resolved.to_string_lossy().to_string());
+                                changed = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        changed
+    }
+
+    /// Serialize the registry back to the YAML file.
+    fn write_back(path: &Path, registry: &hoop_schema::ProjectsRegistry) -> Result<()> {
+        let yaml = serde_yaml::to_string(registry)
+            .context("Failed to serialize projects.yaml")?;
+        fs::write(path, yaml)
+            .context("Failed to write projects.yaml")?;
+        info!("Backfilled canonical_path entries in {}", path.display());
+        Ok(())
     }
 
     /// Resolve canonical paths for all workspace entries.
@@ -318,6 +367,22 @@ fn parse_serde_details(msg: &str) -> (Option<String>, Option<String>, Option<Str
                 Some(got_summary.to_string()),
             );
         }
+    }
+
+    // Pattern: <path>: data did not match any variant of untagged enum <type>
+    // This occurs when typify-generated untagged enums can't match any variant.
+    if let Some(pos) = msg.find("data did not match any variant of untagged enum ") {
+        let field_path = msg[..pos].trim_end_matches(": ").trim();
+        let enum_name_start = pos + "data did not match any variant of untagged enum ".len();
+        let enum_name = msg[enum_name_start..]
+            .split_whitespace()
+            .next()
+            .unwrap_or("enum");
+        return (
+            if field_path.is_empty() { None } else { Some(field_path.to_string()) },
+            Some(format!("valid variant of {}", enum_name)),
+            Some("no matching variant".to_string()),
+        );
     }
 
     (None, None, None)
@@ -647,8 +712,14 @@ impl ProjectsWatcher {
 
         let content_hash = hex::encode(Sha256::digest(contents.as_bytes()));
 
-        let registry: hoop_schema::ProjectsRegistry = serde_yaml::from_str(&contents)
+        let mut registry: hoop_schema::ProjectsRegistry = serde_yaml::from_str(&contents)
             .map_err(ConfigError::from)?;
+
+        if ProjectsConfig::backfill_canonical_paths(&mut registry) {
+            if let Err(e) = ProjectsConfig::write_back(path, &registry) {
+                warn!("Failed to backfill canonical paths on reload: {}", e);
+            }
+        }
 
         let canonical_cache = ProjectsConfig::build_canonical_cache(&registry);
 
