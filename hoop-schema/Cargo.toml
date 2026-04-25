@@ -10,6 +10,10 @@ chrono = { workspace = true }
 uuid = { version = "1", features = ["v4", "serde"] }
 regress = "0.10"
 regex = "1"
+dirs = "5.0"
+
+[dev-dependencies]
+tempfile = "3"
 
 [build-dependencies]
 typify = "0.2"

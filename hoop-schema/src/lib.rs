@@ -18,6 +18,7 @@
 //! - **TypeScript**: Generated via json-schema-to-typescript → `hoop-ui/web/src/types.gen.ts`
 
 pub mod id_validators;
+pub mod path_security;
 
 pub mod version {
     /// Current schema version following SemVer (X.Y.Z)

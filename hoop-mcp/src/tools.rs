@@ -89,6 +89,9 @@ impl McpServerState {
     }
 
     /// Load projects from ~/.hoop/projects.yaml
+    ///
+    /// Uses `canonical_path` when available (for correct joins via resolved realpath),
+    /// falling back to raw `path` for legacy entries that lack the field.
     fn load_projects() -> Result<HashMap<String, String>> {
         let mut path = dirs::home_dir()
             .ok_or_else(|| anyhow!("Cannot determine home directory"))?;
@@ -108,8 +111,13 @@ impl McpServerState {
             for project in project_list {
                 if let Some(name) = project.get("name").and_then(|n| n.as_str()) {
                     // Try shorthand single-workspace form
+                    // Prefer canonical_path for joins; fall back to raw path
                     if let Some(p) = project.get("path").and_then(|p| p.as_str()) {
-                        projects.insert(name.to_string(), p.to_string());
+                        let resolved = project
+                            .get("canonical_path")
+                            .and_then(|cp| cp.as_str())
+                            .unwrap_or(p);
+                        projects.insert(name.to_string(), resolved.to_string());
                         continue;
                     }
                     // Try multi-workspace form (use primary workspace)
@@ -117,7 +125,12 @@ impl McpServerState {
                         for ws in workspaces {
                             if let Some(role) = ws.get("role").and_then(|r| r.as_str()) {
                                 if role == "primary" {
-                                    if let Some(p) = ws.get("path").and_then(|p| p.as_str()) {
+                                    // Prefer canonical_path for joins; fall back to raw path
+                                    let resolved = ws
+                                        .get("canonical_path")
+                                        .and_then(|cp| cp.as_str())
+                                        .or_else(|| ws.get("path").and_then(|p| p.as_str()));
+                                    if let Some(p) = resolved {
                                         projects.insert(name.to_string(), p.to_string());
                                         break;
                                     }
@@ -369,17 +382,14 @@ impl McpServerState {
 
         let project_path = self.require_project(project)?;
 
+        // Path-traversal hardening (§13, §K2): canonicalize + allowlist check
+        let allowlist = hoop_schema::path_security::PathAllowlist::for_workspace(
+            PathBuf::from(project_path).as_path()
+        ).map_err(|e| format!("Project path error: {}", e))?;
+
         let full_path = PathBuf::from(project_path).join(file_path);
-
-        // Security check: ensure path is within project
-        let canonical = full_path.canonicalize()
-            .map_err(|e| format!("Path error: {}", e))?;
-        let canonical_project = PathBuf::from(project_path).canonicalize()
-            .map_err(|e| format!("Project path error: {}", e))?;
-
-        if !canonical.starts_with(&canonical_project) {
-            return Err("Path traversal detected".to_string());
-        }
+        let canonical = hoop_schema::path_security::canonicalize_and_check(&full_path, &allowlist)
+            .map_err(|_| "Invalid path parameter".to_string())?;
 
         let content = fs::read_to_string(&canonical)
             .map_err(|e| format!("Failed to read file: {}", e))?;
@@ -420,6 +430,12 @@ impl McpServerState {
 
         let project = args.get("project")
             .and_then(|v| v.as_str());
+
+        // Validate project format when provided
+        if let Some(proj) = project {
+            crate::id_validators::validate_project_name(proj)
+                .map_err(|e| format!("project: {}", e))?;
+        }
 
         let results = self.search_conversations_in_db(query, project)
             .map_err(|e| format!("Search error: {}", e))?;
@@ -488,9 +504,8 @@ impl McpServerState {
         let priority = args.get("priority")
             .and_then(|v| v.as_i64());
 
-        // Validate project exists
-        let _project_path = self.projects.get(project)
-            .ok_or(format!("Project '{}' not found", project))?;
+        // Validate project format and existence
+        let _project_path = self.require_project(project)?;
 
         // Call the daemon's draft API which performs deduplication check
         let result = self.create_stitch_via_daemon(project, title, description, kind, priority)
@@ -553,8 +568,7 @@ impl McpServerState {
                 .map_err(|e| format!("parent_bead_id: {}", e))?;
         }
 
-        let project_path = self.projects.get(project)
-            .ok_or(format!("Project '{}' not found", project))?;
+        let project_path = self.require_project(project)?;
 
         // Build label list
         let mut all_labels = labels;
@@ -911,16 +925,15 @@ impl McpServerState {
         let path_arg = args.get("path")
             .and_then(|v| v.as_str());
 
+        // Path-traversal hardening (§13, §K2): canonicalize + allowlist check
+        let allowlist = hoop_schema::path_security::PathAllowlist::for_workspace(
+            PathBuf::from(project_path).as_path()
+        ).map_err(|e| format!("Project path error: {}", e))?;
+
         let base_path = if let Some(p) = path_arg {
             let full = PathBuf::from(project_path).join(p);
-            // Path traversal guard (§13): canonicalize and verify containment
-            let canonical = full.canonicalize()
-                .map_err(|e| format!("Path error: {}", e))?;
-            let canonical_project = PathBuf::from(project_path).canonicalize()
-                .map_err(|e| format!("Project path error: {}", e))?;
-            if !canonical.starts_with(&canonical_project) {
-                return Err("Path traversal detected".to_string());
-            }
+            let canonical = hoop_schema::path_security::canonicalize_and_check(&full, &allowlist)
+                .map_err(|_| "Invalid path parameter".to_string())?;
             canonical
         } else {
             PathBuf::from(project_path)
