@@ -453,12 +453,12 @@ impl VectorIndex {
     /// This is called after a full rebuild or when the model changes.
     pub fn save_to_db(&self) -> Result<(), String> {
         let db_path = db_path();
-        let conn =
+        let mut conn =
             Connection::open(&db_path).map_err(|e| format!("Failed to open fleet.db: {}", e))?;
 
         // Begin transaction for atomic write
         let tx = conn
-            .untransaction()
+            .transaction()
             .map_err(|e| format!("Failed to begin transaction: {}", e))?;
 
         // Clear existing entries

@@ -10,7 +10,7 @@
 
 use crate::attachment_sync;
 use crate::backup::{BackupCredentials, BackupFileConfig};
-use crate::fleet;
+use crate::fleet::{self, ActionKind, ActionResult};
 use crate::id_validators::{validate_bead_id, validate_stitch_id};
 use crate::metrics;
 use crate::path_security::{canonicalize_and_check, PathAllowlist};
@@ -21,6 +21,7 @@ use chrono::{Datelike, Timelike, Utc};
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{error, info, warn};
 
@@ -32,6 +33,7 @@ const MAX_BACKOFF_SECS: u64 = 60;
 
 // ── Pipeline entry point ─────────────────────────────────────────────
 
+#[derive(Debug)]
 pub struct BackupPipeline {
     config: BackupFileConfig,
     credentials: BackupCredentials,
@@ -45,10 +47,15 @@ impl BackupPipeline {
         }
     }
 
+    /// Manually trigger a backup run (called via API endpoint).
+    pub async fn trigger(&self) -> Result<()> {
+        self.run_snapshot().await.map(|_| ())
+    }
+
     /// Spawn a background scheduler that checks the cron schedule every 60 s.
     ///
     /// Follows the same `tokio::select!` pattern as the morning-brief scheduler.
-    pub fn start_scheduler(self, mut shutdown: broadcast::Receiver<ShutdownPhase>) {
+    pub fn start_scheduler(self: Arc<Self>, mut shutdown: broadcast::Receiver<ShutdownPhase>) {
         tokio::spawn(async move {
             let schedule = CronSchedule::parse(&self.config.schedule);
             let mut last_run_date: Option<chrono::NaiveDate> = None;
@@ -91,6 +98,38 @@ impl BackupPipeline {
     async fn run_snapshot(&self) -> Result<u64> {
         let start = std::time::Instant::now();
         let snapshot_id = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+
+        // Write BackupStarted audit row
+        let start_args = serde_json::json!({
+            "snapshot_id": snapshot_id,
+        }).to_string();
+        if let Err(e) = fleet::write_audit_row(
+            "backup",
+            ActionKind::BackupStarted,
+            &format!("snapshot:{}", snapshot_id),
+            None,
+            Some(start_args),
+            ActionResult::Success,
+            None,
+            None,
+            None,
+            None,
+        ) {
+            warn!("Failed to write backup_started audit row: {}", e);
+        }
+
+        // Run the snapshot and handle any failure
+        match self.run_snapshot_inner(&snapshot_id).await {
+            Ok(size) => Ok(size),
+            Err(e) => {
+                self.write_backup_failed(&snapshot_id, &e.to_string());
+                Err(e)
+            }
+        }
+    }
+
+    async fn run_snapshot_inner(&self, snapshot_id: &str) -> Result<u64> {
+        let start = std::time::Instant::now();
 
         // 1. VACUUM INTO temp snapshot
         let snapshot_path = self.vacuum_into()?;
@@ -144,7 +183,7 @@ impl BackupPipeline {
 
         // 6. Incremental attachment sync
         let attachments_key =
-            if let Err(e) = self.sync_attachments_with_snapshot(&snapshot_id).await {
+            if let Err(e) = self.sync_attachments_with_snapshot(snapshot_id).await {
                 warn!("Attachment sync failed (fleet.db backup succeeded): {}", e);
                 None
             } else {
@@ -157,7 +196,7 @@ impl BackupPipeline {
 
         // 7. Build and upload manifest (LAST — after all pieces)
         let manifest = SnapshotManifest {
-            snapshot_id: snapshot_id.clone(),
+            snapshot_id: snapshot_id.to_string(),
             created_at: Utc::now().to_rfc3339(),
             schema_version: fleet::SCHEMA_VERSION.to_string(),
             fleet_db_key: fleet_db_key.clone(),
@@ -194,6 +233,27 @@ impl BackupPipeline {
         m.hoop_backup_last_size_bytes.set(file_size as i64);
         m.hoop_backup_run_duration_seconds
             .observe(elapsed.as_secs_f64());
+
+        // Write BackupFinished audit row
+        let finish_args = serde_json::json!({
+            "snapshot_id": snapshot_id,
+            "size": file_size,
+            "duration_secs": elapsed.as_secs_f64(),
+        }).to_string();
+        if let Err(e) = fleet::write_audit_row(
+            "backup",
+            ActionKind::BackupFinished,
+            &format!("snapshot:{}", snapshot_id),
+            None,
+            Some(finish_args),
+            ActionResult::Success,
+            None,
+            None,
+            None,
+            None,
+        ) {
+            warn!("Failed to write backup_finished audit row: {}", e);
+        }
 
         info!(
             "Backup snapshot completed: {} bytes in {:.1}s (snapshot_id={})",
@@ -335,6 +395,28 @@ impl BackupPipeline {
             )
         } else {
             bail!("unknown attachment key prefix: {}", key)
+        }
+    }
+
+    /// Write a BackupFailed audit row with the given snapshot_id and error message.
+    fn write_backup_failed(&self, snapshot_id: &str, error_msg: &str) {
+        let failed_args = serde_json::json!({
+            "snapshot_id": snapshot_id,
+            "error": error_msg,
+        }).to_string();
+        if let Err(e) = fleet::write_audit_row(
+            "backup",
+            ActionKind::BackupFailed,
+            &format!("snapshot:{}", snapshot_id),
+            None,
+            Some(failed_args),
+            ActionResult::Failure,
+            Some(error_msg.to_string()),
+            None,
+            None,
+            None,
+        ) {
+            warn!("Failed to write backup_failed audit row: {}", e);
         }
     }
 

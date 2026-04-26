@@ -3,7 +3,7 @@
 //! Broadcasts worker state changes, heartbeats, and liveness transitions
 //! to connected web UI clients.
 
-use crate::heartbeats::{MonitorEvent, WorkerHeartbeat, WorkerLiveness};
+use crate::heartbeats::{LivenessTransition, MonitorEvent, WorkerHeartbeat, WorkerLiveness};
 use crate::sessions::SessionEvent;
 use crate::{Bead, DaemonState, WorkerState};
 use axum::{
@@ -709,6 +709,8 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: None,
+            pattern_saved_query_synced: None,
+            stuck_alert: None,
             subscriptions: None,
         }
     }
@@ -735,6 +737,8 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: None,
+            pattern_saved_query_synced: None,
+            stuck_alert: None,
             subscriptions: None,
         }
     }
@@ -761,6 +765,8 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: None,
+            pattern_saved_query_synced: None,
+            stuck_alert: None,
             subscriptions: None,
         }
     }
@@ -787,6 +793,8 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: None,
+            pattern_saved_query_synced: None,
+            stuck_alert: None,
             subscriptions: None,
         }
     }
@@ -814,6 +822,8 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: None,
+            pattern_saved_query_synced: None,
+            stuck_alert: None,
             subscriptions: None,
         }
     }
@@ -841,6 +851,8 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: None,
+            pattern_saved_query_synced: None,
+            stuck_alert: None,
             subscriptions: None,
         }
     }
@@ -867,6 +879,8 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: None,
+            pattern_saved_query_synced: None,
+            stuck_alert: None,
             subscriptions: None,
         }
     }
@@ -893,6 +907,8 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: None,
+            pattern_saved_query_synced: None,
+            stuck_alert: None,
             subscriptions: None,
         }
     }
@@ -919,6 +935,8 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: None,
+            pattern_saved_query_synced: None,
+            stuck_alert: None,
             subscriptions: None,
         }
     }
@@ -945,6 +963,8 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: None,
+            pattern_saved_query_synced: None,
+            stuck_alert: None,
             subscriptions: None,
         }
     }
@@ -971,6 +991,8 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: None,
+            pattern_saved_query_synced: None,
+            stuck_alert: None,
             subscriptions: None,
         }
     }
@@ -997,6 +1019,8 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: None,
+            pattern_saved_query_synced: None,
+            stuck_alert: None,
             subscriptions: None,
         }
     }
@@ -1023,6 +1047,8 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: None,
+            pattern_saved_query_synced: None,
+            stuck_alert: None,
             subscriptions: None,
         }
     }
@@ -1049,6 +1075,8 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: None,
+            pattern_saved_query_synced: None,
+            stuck_alert: None,
             subscriptions: None,
         }
     }
@@ -1075,6 +1103,8 @@ impl WsEvent {
             spawn_ack_alert: Some(alert),
             collision_alert: None,
             bead_created_by_hoop: None,
+            pattern_saved_query_synced: None,
+            stuck_alert: None,
             subscriptions: None,
         }
     }
@@ -1101,6 +1131,8 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: None,
+            pattern_saved_query_synced: None,
+            stuck_alert: None,
             subscriptions: None,
         }
     }
@@ -1127,6 +1159,8 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: Some(data),
             bead_created_by_hoop: None,
+            pattern_saved_query_synced: None,
+            stuck_alert: None,
             subscriptions: None,
         }
     }
@@ -1153,6 +1187,7 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: Some(data),
+            pattern_saved_query_synced: None,
             stuck_alert: None,
             subscriptions: None,
         }
@@ -1180,6 +1215,7 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: None,
+            pattern_saved_query_synced: None,
             stuck_alert: Some(alert),
             subscriptions: None,
         }
@@ -1210,6 +1246,7 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: None,
+            pattern_saved_query_synced: None,
             stuck_alert: None,
             subscriptions: Some(subs),
         }
@@ -1550,11 +1587,17 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
     // Monitor events (worker heartbeats / liveness changes) — global topic
     let registry_tx = registry.clone();
     let ws_tx_monitor = ws_tx.clone();
+    let stuck_detector = state.stuck_detector.clone();
     let monitor_task = tokio::spawn(async move {
         while let Ok(event) = monitor_rx.recv().await {
             match event {
                 MonitorEvent::Heartbeat(heartbeat) => {
                     let worker_name = heartbeat.worker.clone();
+                    let heartbeat_ts = heartbeat.ts;
+
+                    // Update stuck detector with heartbeat (§C1, hoop-ttb.3.25)
+                    stuck_detector.lock().unwrap().on_heartbeat(&worker_name, heartbeat_ts);
+
                     let liveness = registry_tx
                         .workers
                         .read()
@@ -1581,12 +1624,23 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
                     }
                 }
                 MonitorEvent::LivenessChange(transition) => {
+                    let worker_name = transition.worker.clone();
+                    let transition_ts = Utc::now();
+
+                    // Update stuck detector with liveness transition (§C1, hoop-ttb.3.25)
+                    stuck_detector.lock().unwrap().on_heartbeat_state_transition(
+                        &worker_name,
+                        transition_ts,
+                        transition.old_state,
+                        transition.new_state,
+                    );
+
                     let worker = registry_tx
                         .workers
                         .read()
                         .await
                         .iter()
-                        .find(|w| w.worker == transition.worker)
+                        .find(|w| w.worker == worker_name)
                         .cloned();
 
                     if let Some(mut w) = worker {
