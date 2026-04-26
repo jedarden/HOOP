@@ -1010,6 +1010,69 @@ pre {
   border-radius: 3px;
 }
 
+/* Config Restart Banner (§17.4) */
+.config-restart-banner {
+  margin-bottom: 1.5rem;
+  border: 2px solid #f9ab00;
+  border-radius: 8px;
+  background: #fef7e0;
+  animation: slideDown 0.3s ease-out;
+}
+
+.config-restart-banner .banner-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+}
+
+.config-restart-banner .banner-content strong {
+  color: #b06000;
+}
+
+.config-restart-banner .restart-changes-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  list-style: disc;
+}
+
+.config-restart-banner .restart-changes-list li {
+  font-size: 0.875rem;
+  color: #333;
+  margin-bottom: 0.25rem;
+}
+
+.config-restart-banner .restart-changes-list code {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 0.125rem 0.375rem;
+  border-radius: 3px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  color: #b06000;
+}
+
+.config-restart-banner .old-value {
+  color: #c5221f;
+  font-weight: 500;
+}
+
+.config-restart-banner .new-value {
+  color: #137333;
+  font-weight: 500;
+}
+
+.config-restart-banner .banner-instruction {
+  font-size: 0.875rem;
+  color: #666;
+}
+
+.config-restart-banner .banner-instruction code {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 0.125rem 0.375rem;
+  border-radius: 3px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  color: #b06000;
+}
+
 /* Responsive for conversation pane */
 @media (max-width: 1024px) {
   .conversation-pane {

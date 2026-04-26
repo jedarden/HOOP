@@ -2,11 +2,23 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://hoop.dev/schemas/hoop_config.json",
   "title": "HoopConfig",
-  "description": "HOOP daemon configuration from config.yml",
+  "description": "HOOP daemon configuration from config.yml. See §17.4 for hot-reload semantics.",
   "type": "object",
   "required": ["schema_version"],
   "additionalProperties": false,
   "properties": {
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Server configuration. Keys marked restart_required require daemon restart to take effect (§17.4).",
+      "properties": {
+        "bind_addr": {
+          "type": "string",
+          "description": "Socket address for the HTTP server (default: 127.0.0.1:3000). REQUIRES RESTART - socket binding is established at daemon startup (§17.4).",
+          "restart_required": true
+        }
+      }
+    },
     "schema_version": {
       "type": "string",
       "pattern": "^\\d+\\.\\d+\\.\\d+$",
@@ -61,7 +73,9 @@
         },
         "port": {
           "type": "integer",
-          "default": 9091
+          "default": 9091,
+          "description": "Metrics server port (default: 9091). REQUIRES RESTART when metrics.enabled=true - server binding is established at daemon startup (§17.4).",
+          "restart_required": true
         }
       }
     },
