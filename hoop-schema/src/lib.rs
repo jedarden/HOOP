@@ -405,6 +405,7 @@ mod tests {
             worker_metadata: None,
             parent_stitch_id: None,
             pattern_id: None,
+            classification: Some(StitchClassification::Operator),
             schema_version: StitchSchemaVersion("1.0.0".to_string()),
         }
     );
@@ -551,8 +552,14 @@ mod tests {
                 detection_threshold: Some(0.8),
                 auto_archive_after_days: 30,
             }),
+            // redaction (§18.5)
+            redaction: None,
             // pricing (beyond §17.3, but part of config)
             pricing: None,
+            // server (required)
+            server: Some(HoopConfigServer {
+                bind_addr: Some("127.0.0.1:3000".to_string()),
+            }),
             // schema_version (required)
             schema_version: sv(),
         };
@@ -587,7 +594,9 @@ mod tests {
             metrics: None,
             audit: None,
             reflection: None,
+            redaction: None,
             pricing: None,
+            server: None,
         };
 
         let json = serde_json::to_string(&original).expect("serialize");
@@ -631,6 +640,7 @@ mod tests {
             updated_at: ts,
             created_by: "user".to_string(),
             dependencies: vec![],
+            labels: vec![],
             schema_version: BeadSchemaVersion("1.0.0".to_string()),
         });
 
@@ -685,7 +695,9 @@ mod tests {
             metrics: None,
             audit: None,
             reflection: None,
+            redaction: None,
             pricing: None,
+            server: None,
         });
 
         // Pattern
@@ -757,6 +769,7 @@ mod tests {
             worker_metadata: None,
             parent_stitch_id: None,
             pattern_id: None,
+            classification: Some(StitchClassification::Operator),
             schema_version: StitchSchemaVersion("1.0.0".to_string()),
         });
 
