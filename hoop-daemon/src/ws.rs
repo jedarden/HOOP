@@ -2044,6 +2044,7 @@ mod tests {
         "bead_event",
         "bead_events",
         "stitch_created",
+        "bead_created_by_hoop",
         "agent_session",
         "morning_brief",
         "spawn_ack_alert",
