@@ -1954,4 +1954,46 @@ mod tests {
         assert!(should_deliver(Some("project:miroir"), &subs));
         assert!(!should_deliver(Some("project:ardenone"), &subs));
     }
+
+    // ── Schema convention: no `_updated` event types ───────────────────────────
+
+    /// All WebSocket event type names used by the daemon.
+    ///
+    /// IMPORTANT: Per the architecture-patterns convention (docs/notes/architecture-patterns.md),
+    /// mutations reuse `_created` events with full authoritative state — we never emit separate
+    /// `X_updated` event types. This prevents event-type explosion and eliminates merge bugs
+    /// where clients need separate reducers for create vs update.
+    const ALL_WS_EVENT_TYPES: &[&str] = &[
+        "worker_update",
+        "workers_snapshot",
+        "beads_snapshot",
+        "conversations_snapshot",
+        "conversation_update",
+        "streaming_content",
+        "projects_snapshot",
+        "config_status",
+        "capacity_snapshot",
+        "bead_event",
+        "bead_events",
+        "stitch_created",
+        "agent_session",
+        "morning_brief",
+        "spawn_ack_alert",
+        "draft_update",
+        "collision_alert",
+        "init",
+    ];
+
+    #[test]
+    fn ws_event_types_never_end_with_updated() {
+        for event_type in ALL_WS_EVENT_TYPES {
+            assert!(
+                !event_type.ends_with("_updated"),
+                "WS event type '{event_type}' ends with '_updated'. \
+                Per architecture-patterns convention, mutations should reuse the corresponding \
+                '_created' event with full authoritative state. This prevents event-type \
+                explosion and eliminates client-side merge bugs.",
+            );
+        }
+    }
 }
