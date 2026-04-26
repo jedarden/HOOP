@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/script_manifest.json",
+  "title": "ScriptManifest",
+  "description": "Manifest for operator-invoked and event-triggered scripts (§22.3). Scripts are single executable files in ~/.hoop/scripts/<name> with optional manifest.yml metadata.",
+  "type": "object",
+  "required": ["name"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Script name (must match the executable filename)"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of what the script does"
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["global", "project"],
+      "default": "global",
+      "description": "Visibility scope: 'global' scripts appear everywhere, 'project' scripts only on matching projects"
+    },
+    "projects": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "List of project names where this script is available (only used when scope=project)"
+    },
+    "timeout_secs": {
+      "type": "integer",
+      "default": 300,
+      "description": "Execution timeout in seconds (default: 300 = 5 minutes)"
+    },
+    "arguments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "description": "Argument name" },
+          "description": { "type": "string", "description": "What this argument does" },
+          "required": { "type": "boolean", "default": false },
+          "default": { "description": "Default value if not provided" }
+        }
+      },
+      "description": "Optional argument schema for UI prompts"
+    },
+    "schedule": {
+      "type": "string",
+      "description": "Cron schedule for automatic execution (5-field format: min hour dom month dow). Example: '0 4 * * *' for daily at 4 AM."
+    },
+    "overlap_policy": {
+      "type": "string",
+      "enum": ["skip", "queue", "parallel"],
+      "default": "skip",
+      "description": "How to handle overlapping executions: 'skip' (default) skips if previous run is still active, 'queue' waits for previous run to finish, 'parallel' allows concurrent runs"
+    },
+    "on": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["event"],
+        "properties": {
+          "event": {
+            "type": "string",
+            "description": "Event pattern to match (glob pattern, e.g., 'stitch.*', 'bead.closed')"
+          },
+          "project": {
+            "type": "string",
+            "description": "Project name filter (exact match or glob)"
+          },
+          "kind": {
+            "type": "string",
+            "description": "Kind filter (exact match)"
+          },
+          "adapter": {
+            "type": "string",
+            "description": "Adapter filter (exact match)"
+          },
+          "result": {
+            "type": "string",
+            "enum": ["success", "failure"],
+            "description": "Result filter (success or failure)"
+          }
+        }
+      },
+      "description": "Event subscriptions - when matching events fire, this script runs with event JSON on stdin"
+    }
+  }
+}

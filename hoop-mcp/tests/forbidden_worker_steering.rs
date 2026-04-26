@@ -102,7 +102,7 @@ fn test_runtime_guard_rejects_all_forbidden_verbs() {
     use serde_json::Map;
 
     // Create a minimal server state (audit log path may not exist, but we only test call_tool)
-    let state = McpServerState::new("test-actor".to_string())
+    let mut state = McpServerState::new("test-actor".to_string())
         .expect("Failed to create McpServerState for test");
 
     for verb in FORBIDDEN_WORKER_STEERING_VERBS {
@@ -135,7 +135,7 @@ fn test_runtime_guard_allows_legitimate_tools() {
     use serde_json::{json, Map};
 
     // Create a minimal server state
-    let state = McpServerState::new("test-actor".to_string())
+    let mut state = McpServerState::new("test-actor".to_string())
         .expect("Failed to create McpServerState for test");
 
     // escalate_to_operator doesn't require project context
