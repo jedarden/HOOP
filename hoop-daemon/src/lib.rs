@@ -13,6 +13,7 @@ pub mod api_agent;
 pub mod api_backup;
 pub mod api_attachments;
 pub mod api_audit;
+pub mod auth;
 pub mod api_beads;
 pub mod api_config;
 pub mod api_conversations;
@@ -1301,6 +1302,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     if config.observer_mode {
         return observer::serve_observer(config).await;
     }
+
+    // Track startup time for <5s restart requirement (§6 Phase 6 deliverable 6)
+    let startup_start = std::time::Instant::now();
 
     log_rotation::init_logging();
 
@@ -2935,6 +2939,16 @@ Note: This is an automated synthesis from voice dictation."#,
         .with_state(state.clone())
         .into_make_service_with_connect_info::<std::net::SocketAddr>();
 
+    // Record startup duration - daemon is now ready to accept connections
+    let startup_elapsed = startup_start.elapsed().as_secs_f64();
+    crate::metrics::metrics()
+        .hoop_startup_duration_seconds
+        .observe(startup_elapsed);
+    info!(
+        "HOOP daemon startup completed in {:.2}s (<5s target)",
+        startup_elapsed
+    );
+
     info!("HOOP daemon listening on {}", config.bind_addr);
 
     let listener = tokio::net::TcpListener::bind(config.bind_addr).await?;
@@ -3323,7 +3337,7 @@ async fn find_stitch_for_bead(bead_id: &str) -> Option<String> {
 fn check_and_emit_stitch_beads_closed(
     stitch_id: &str,
     beads: &[Bead],
-) -> Result<()> {
+) -> anyhow::Result<()> {
     use rusqlite::Connection;
 
     let db_path = std::path::PathBuf::from(
@@ -3400,7 +3414,7 @@ fn check_and_emit_stitch_beads_closed(
 /// notification to the agent.
 fn check_and_emit_convoy_complete(
     stitch_id: &str,
-) -> Result<()> {
+) -> anyhow::Result<()> {
     use rusqlite::Connection;
 
     let db_path = std::path::PathBuf::from(
@@ -3509,7 +3523,7 @@ fn check_and_emit_convoy_complete(
 ///
 /// This function should be called periodically to check if account utilization
 /// has exceeded the threshold (default 80%) over a 5-hour sliding window.
-fn check_and_emit_capacity_alert() -> Result<()> {
+fn check_and_emit_capacity_alert() -> anyhow::Result<()> {
     use rusqlite::Connection;
 
     let db_path = std::path::PathBuf::from(
