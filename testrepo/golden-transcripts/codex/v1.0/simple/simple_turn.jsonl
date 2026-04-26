@@ -1,3 +1,3 @@
 {"type":"content_block_delta","delta":{"text":"I can help with that request."}}
 {"type":"content_block_delta","delta":{"text":" What would you like me to do?"}}
-{"type":"message_end","finish_reason":"stop"}
+{"type":"message_stop"}

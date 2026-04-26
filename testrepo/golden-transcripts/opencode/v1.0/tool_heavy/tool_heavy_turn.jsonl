@@ -1,11 +1,11 @@
-{"event":"content","content":"I'll examine the project structure for you."}
-{"event":"tool","id":"t1","name":"browse","input":{"path":"."}}
-{"event":"tool_result","id":"t1","output":["Cargo.toml","src/","tests/"]}
-{"event":"content","content":"Let me check the main file."}
-{"event":"tool","id":"t2","name":"read","input":{"file":"src/lib.rs"}}
-{"event":"tool_result","id":"t2","output":"pub fn hello() -> String { \"Hello\".to_string() }"}
-{"event":"content","content":"Now checking the test file."}
-{"event":"tool","id":"t3","name":"read","input":{"file":"tests/lib.rs"}}
-{"event":"tool_result","id":"t3","output":"#[test]\nfn test_hello() { assert_eq!(hello(), \"Hello\"); }"}
-{"event":"content","content":"The project looks well-structured."}
-{"event":"done","reason":"stop"}
+{"type":"content_block_delta","delta":{"text":"I'll examine the project structure for you."}}
+{"type":"tool_use","id":"t1","name":"browse","input":{"path":"."}}
+{"type":"tool_result","id":"t1","output":"Cargo.toml\nsrc/\ntests/","is_error":false}
+{"type":"content_block_delta","delta":{"text":"Let me check the main file."}}
+{"type":"tool_use","id":"t2","name":"read_file","input":{"file":"src/lib.rs"}}
+{"type":"tool_result","id":"t2","output":"pub fn hello() -> String { \"Hello\".to_string() }","is_error":false}
+{"type":"content_block_delta","delta":{"text":"Now checking the test file."}}
+{"type":"tool_use","id":"t3","name":"read_file","input":{"file":"tests/lib.rs"}}
+{"type":"tool_result","id":"t3","output":"#[test]\nfn test_hello() { assert_eq!(hello(), \"Hello\"); }","is_error":false}
+{"type":"content_block_delta","delta":{"text":"The project looks well-structured."}}
+{"type":"message_stop"}

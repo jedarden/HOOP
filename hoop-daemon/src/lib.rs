@@ -6,9 +6,12 @@
 
 pub mod adb_dictate;
 pub mod agent_adapter;
+pub mod atomic_write;
 pub mod agent_context;
 pub mod agent_session;
 pub mod api_agent;
+pub mod api_config;
+pub mod api_conversations;
 pub mod attachment_sync;
 pub mod audio_redaction;
 pub mod backup;
@@ -44,6 +47,7 @@ pub mod log_rotation;
 pub mod metrics;
 pub mod parse_jsonl_safe;
 pub mod path_security;
+pub mod pattern_query_evaluator;
 pub mod projects;
 pub mod sessions;
 pub mod shutdown;
@@ -66,20 +70,25 @@ pub mod morning_brief;
 pub mod api_morning_brief;
 pub mod api_patterns;
 pub mod redaction;
+pub mod redaction_policy;
 pub mod syntax_highlight;
 pub mod worker_ack;
 // TODO: Uncomment when collision_detector is complete
 // pub mod collision_detector;
 pub mod bead_commit_index;
 pub mod api_diff;
+pub mod api_fix_patterns;
 pub mod api_blame;
 pub mod api_screen_capture;
 pub mod api_orphans;
 pub mod orphan_beads;
 pub mod net_diff;
 pub mod screen_capture;
-pub mod observer;
+// TODO: Uncomment when observer is complete
+// pub mod observer;
 pub mod cost_anomaly;
+pub mod fix_patterns;
+pub mod stitch_percentile_index;
 
 /// Worker execution state from heartbeats
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -274,6 +283,10 @@ pub struct DaemonState {
     pub worker_ack_monitor: Arc<worker_ack::WorkerAckMonitor>,
     /// Broadcast channel for collision alert events (§6 Phase 2, deliverable 12)
     pub collision_alert_tx: broadcast::Sender<ws::CollisionAlertData>,
+    /// Broadcast channel for pattern saved query synced events (§4.7)
+    pub pattern_tx: broadcast::Sender<ws::PatternSavedQuerySyncedData>,
+    /// Per-project redaction policy resolver (§18.5)
+    pub redaction_policy_state: Arc<tokio::sync::RwLock<redaction_policy::RedactionPolicyState>>,
 }
 
 /// Health check endpoint handler — returns 200 if the process is responsive.
@@ -962,6 +975,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_transcription::router())
         .merge(adb_dictate::router())
         .merge(api_audit::router())
+        .merge(api_conversations::router())
         .merge(api_beads::router())
         .merge(api_draft_queue::router())
         .merge(api_preview::router())
@@ -973,11 +987,13 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_blame::router())
         .merge(api_screen_capture::router())
         .merge(api_orphans::router())
+        .merge(api_fix_patterns::router())
         .merge(net_diff::router())
         .route("/api/workers/timeline", get(api_timeline::get_worker_timeline))
         .merge(api_agent::router())
         .merge(api_morning_brief::router())
         .merge(api_metrics::router())
+        .merge(api_config::router())
         .nest_service("/assets", AssetsHandler::router())
         .fallback_service(AssetsHandler::router())
         .layer(TraceLayer::new_for_http())
@@ -1225,6 +1241,31 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         });
     }
 
+    // Update percentile index on bead close events
+    {
+        let mut bead_close_rx = bead_tx.subscribe();
+        tokio::spawn(async move {
+            loop {
+                match bead_close_rx.recv().await {
+                    Ok(bead) if bead.status == "closed" => {
+                        // Check if this bead belongs to a Stitch and update the index
+                        if let Some(stitch_id) = find_stitch_for_bead(&bead.id).await {
+                            tokio::task::spawn_blocking(move || {
+                                if let Err(e) = crate::stitch_percentile_index::update_on_stitch_close(&stitch_id) {
+                                    tracing::debug!("Failed to update percentile index for stitch {}: {}", stitch_id, e);
+                                }
+                            }).await.ok();
+                        }
+                    }
+                    Ok(_) => {}
+                    Err(broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        });
+        info!("Percentile index updater started (listens to bead close events)");
+    }
+
     // Initialize cost aggregator
     let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     home.push(".hoop");
@@ -1420,7 +1461,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         let mut rx = config_watcher.subscribe();
         while let Ok(event) = rx.recv().await {
             match event {
-                config_watcher::ConfigEvent::ConfigReloaded { config, prev_hash } => {
+                config_watcher::ConfigEvent::ConfigReloaded { config: _, prev_hash } => {
                     info!("config.yml reloaded successfully");
                     // Note: config.yml changes don't trigger runtime reconcile
                     // because they only affect defaults for new sessions
@@ -1707,6 +1748,80 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
 
     // Initialize morning brief broadcast channel and runner
     let (brief_tx, _) = broadcast::channel::<ws::MorningBriefData>(64);
+
+    // Initialize pattern saved query synced broadcast channel (§4.7)
+    let (pattern_tx, _) = broadcast::channel::<ws::PatternSavedQuerySyncedData>(64);
+
+    // Load HoopConfig from config.yml for redaction policy state (§18.5)
+    async fn load_hoop_config_for_redaction() -> hoop_schema::HoopConfig {
+        let fallback_config = hoop_schema::HoopConfig {
+            schema_version: hoop_schema::HoopConfigSchemaVersion::default(),
+            agent: None,
+            projects_file: None,
+            backup: None,
+            ui: None,
+            voice: None,
+            agent_extensions: None,
+            metrics: None,
+            audit: None,
+            reflection: None,
+            pricing: None,
+            redaction: None,
+            server: None,
+        };
+
+        tokio::task::spawn_blocking(|| {
+            use std::path::PathBuf;
+
+            let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+            let config_path = home.join(".hoop").join("config.yml");
+
+            let minimal_config = hoop_schema::HoopConfig {
+                schema_version: hoop_schema::HoopConfigSchemaVersion::default(),
+                agent: None,
+                projects_file: None,
+                backup: None,
+                ui: None,
+                voice: None,
+                agent_extensions: None,
+                metrics: None,
+                audit: None,
+                reflection: None,
+                pricing: None,
+                redaction: None,
+                server: None,
+            };
+
+            if !config_path.exists() {
+                tracing::debug!("config.yml not found, using minimal config for redaction policy");
+                return minimal_config;
+            }
+
+            match std::fs::read_to_string(&config_path) {
+                Ok(contents) => {
+                    match serde_yaml::from_str::<hoop_schema::HoopConfig>(&contents) {
+                        Ok(config) => config,
+                        Err(e) => {
+                            tracing::warn!("Failed to parse config.yml for redaction policy: {}, using minimal config", e);
+                            minimal_config
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to read config.yml for redaction policy: {}, using minimal config", e);
+                    minimal_config
+                }
+            }
+        }).await.unwrap_or(fallback_config)
+    }
+
+    // Initialize redaction policy state (§18.5)
+    let hoop_config = load_hoop_config_for_redaction().await;
+    let redaction_policy_state = Arc::new(tokio::sync::RwLock::new(
+        redaction_policy::RedactionPolicyState::new(&hoop_config, initial_config.registry.clone())
+    ));
+    info!("Redaction policy state initialized");
+
     let morning_brief_runner = match &agent_session_manager {
         Some(mgr) => {
             let config = morning_brief::MorningBriefConfig::default();
@@ -1789,6 +1904,8 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         ws_connection_tracker: Arc::new(ws::WsConnectionTracker::new()),
         worker_ack_monitor,
         collision_alert_tx: broadcast::channel::<ws::CollisionAlertData>(64).0,
+        pattern_tx,
+        redaction_policy_state,
     };
 
     // Forward project runtime status updates to shared store and broadcast
@@ -1881,8 +1998,8 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     // Orphan bead count updater: update metrics on stitch/bead events
     {
         let projects_ref = state.projects.clone();
-        let mut stitch_rx = stitch_tx.subscribe();
-        let mut bead_rx = bead_tx.subscribe();
+        let mut stitch_rx = state.stitch_tx.subscribe();
+        let mut bead_rx = state.bead_tx.subscribe();
 
         tokio::spawn(async move {
             loop {
@@ -2321,4 +2438,84 @@ mod dashboard_tests {
         assert_eq!(open.len(), 1);
         assert_eq!(open[0].id, "bd-open");
     }
+}
+
+/// Load HoopConfig from config.yml for redaction policy state.
+///
+/// Returns the parsed HoopConfig or a minimal config if the file doesn't exist
+/// or fails to parse. This is used during daemon initialization.
+async fn load_hoop_config() -> Option<hoop_schema::HoopConfig> {
+    tokio::task::spawn_blocking(|| {
+        use std::path::PathBuf;
+
+        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        let config_path = home.join(".hoop").join("config.yml");
+
+        let minimal_config = hoop_schema::HoopConfig {
+            schema_version: hoop_schema::HoopConfigSchemaVersion::default(),
+            agent: None,
+            projects_file: None,
+            backup: None,
+            ui: None,
+            voice: None,
+            agent_extensions: None,
+            metrics: None,
+            audit: None,
+            reflection: None,
+            pricing: None,
+            redaction: None,
+            server: None,
+        };
+
+        if !config_path.exists() {
+            tracing::debug!("config.yml not found, using minimal config for redaction policy");
+            return Some(minimal_config);
+        }
+
+        match std::fs::read_to_string(&config_path) {
+            Ok(contents) => {
+                match serde_yaml::from_str::<hoop_schema::HoopConfig>(&contents) {
+                    Ok(config) => Some(config),
+                    Err(e) => {
+                        tracing::warn!("Failed to parse config.yml for redaction policy: {}, using minimal config", e);
+                        Some(minimal_config)
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Failed to read config.yml for redaction policy: {}, using minimal config", e);
+                Some(minimal_config)
+            }
+        }
+    }).await.ok().flatten()
+}
+
+/// Find the Stitch ID for a given bead ID.
+///
+/// Queries fleet.db to find which Stitch (if any) a bead belongs to.
+/// Returns None if the bead is not linked to any Stitch.
+async fn find_stitch_for_bead(bead_id: &str) -> Option<String> {
+    let bead_id = bead_id.to_string();
+    tokio::task::spawn_blocking(move || {
+        use rusqlite::Connection;
+
+        let db_path = std::path::PathBuf::from(
+            dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
+        ).join(".hoop").join("fleet.db");
+
+        if !db_path.exists() {
+            return None;
+        }
+
+        let conn = Connection::open(&db_path).ok()?;
+
+        conn.query_row(
+            "SELECT stitch_id FROM stitch_beads WHERE bead_id = ?1 LIMIT 1",
+            rusqlite::params![&bead_id],
+            |row| row.get(0),
+        ).ok()
+    })
+    .await
+    .ok()
+    .flatten()
 }

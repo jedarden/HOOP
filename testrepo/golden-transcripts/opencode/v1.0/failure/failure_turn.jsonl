@@ -1,1 +1,1 @@
-{"event":"error","error":"Context length exceeded. Please reduce input size."}
+{"type":"error","error":{"type":"context_length_exceeded","message":"Context length exceeded. Please reduce input size."}}

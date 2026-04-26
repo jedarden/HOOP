@@ -8,17 +8,72 @@
 //! - Bucket size and similarity threshold tuned
 //! - Index rebuilds on schema change
 //! - Preview query <50ms
+//!
+//! ## Bucket Design
+//!
+//! The index groups Stitches into similarity buckets based on:
+//!
+//! - **Title tokens**: First 5 unique tokens (case-insensitive, alphanumeric only)
+//!   - This captures the core topic while allowing for minor variations
+//!   - Hashed for efficient database lookup
+//!
+//! - **Body length**: 5 buckets (Empty, Short ≤100, Medium ≤500, Long ≤2000, VeryLong >2000)
+//!   - Body length correlates with task complexity
+//!   - Buckets are sized based on typical task description lengths
+//!
+//! - **Labels**: Exact match on sorted unique labels (hashed)
+//!   - Labels indicate domain/area (e.g., "backend", "urgent", "security")
+//!   - Stitches with different labels are placed in different buckets
+//!
+//! - **Attachments**: 3 buckets (None, One, Multiple)
+//!   - Attachment count correlates with task complexity
+//!
+//! ## Query Strategy
+//!
+//! 1. **Exact match**: Query by all 4 dimensions for highest precision
+//! 2. **Fuzzy fallback**: If no exact match, query by title_tokens_hash + body_length_bucket only
+//!    - This allows finding similar tasks even with different labels/attachments
+//!    - Provides reasonable estimates while maintaining specificity
+//!
+//! ## Similarity Threshold
+//!
+//! The implicit similarity threshold is determined by the bucket granularity:
+//! - Title: Must share ≥1 of the first 5 tokens for exact match
+//! - Body: Must be in the same length bucket
+//! - Labels: Must have identical label set for exact match
+//! - Attachments: Must be in the same count bucket
+//!
+//! The fuzzy fallback relaxes the labels and attachments constraints, providing
+//! a lower similarity threshold that still maintains reasonable specificity.
 
 use anyhow::Result;
 use chrono::Utc;
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
 use crate::similarity::tokenize;
 
-/// Bucket ID for grouping similar Stitches
+// ---------------------------------------------------------------------------
+// Tunable parameters for bucket granularity
+// ---------------------------------------------------------------------------
+
+/// Number of unique title tokens to consider for bucketing.
+/// Higher values create more specific buckets, lower values create broader buckets.
+const TITLE_TOKEN_BUCKET_SIZE: usize = 5;
+
+/// Minimum number of samples in a bucket to return predictions.
+/// Buckets with fewer samples are considered too sparse for reliable estimates.
+const MIN_SAMPLES_FOR_PREDICTION: usize = 3;
+
+/// Stitch must be inactive for this many seconds before being indexed.
+/// This ensures the Stitch is fully closed before we compute its final metrics.
+const STITCH_CLOSED_THRESHOLD_SECONDS: i64 = 300;
+
+// ---------------------------------------------------------------------------
+// Bucket ID for grouping similar Stitches
+// ---------------------------------------------------------------------------
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BucketId {
     /// Hash of title token set (for similarity grouping)
@@ -39,9 +94,9 @@ impl BucketId {
         labels: &[String],
         attachments_count: usize,
     ) -> Self {
-        // Hash title tokens (first 5 unique tokens for bucketing)
+        // Hash title tokens (first TITLE_TOKEN_BUCKET_SIZE unique tokens for bucketing)
         let title_tokens: std::collections::HashSet<_> =
-            tokenize(title).into_iter().take(5).collect();
+            tokenize(title).into_iter().take(TITLE_TOKEN_BUCKET_SIZE).collect();
         let title_tokens_hash = {
             let mut tokens: Vec<_> = title_tokens.iter().cloned().collect();
             tokens.sort();
