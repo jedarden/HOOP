@@ -43,6 +43,26 @@ When two sources of truth update the same entity (live WS stream + 5s disk polle
 3. **Bootstrap interceptor on the poller.** When the poller finds a new file, check if its session-id is already aliased to a live in-memory id. If so, merge; don't create a duplicate.
 4. **Streaming is a different map than committed messages.** Token deltas go to `streamingContent`; committed messages come from the poller. A message is "real" only when the poller has seen it.
 
+## Epoch-sync: client rebuilds on every WS reconnect (§B2)
+
+**The pattern.** On every WebSocket (re)connect, the client receives an `init` event from the server. The client responds by wiping its entire atom store and rebuilding it from the subsequent snapshot events (`workers_snapshot`, `beads_snapshot`, `conversations_snapshot`, etc.). Only two categories of data survive the wipe: (a) optimistic stubs representing un-sent client mutations, and (b) committed agent chat messages (which are authoritative historical records).
+
+**Why it works.** The server is always the source of truth. If a client is disconnected while server state changes, the client must not retain stale data. The `init` event is the epoch boundary — everything before it is discarded, everything after it is adopted. This eliminates an entire class of stale-state bugs where disconnected clients show obsolete data.
+
+**Survivors of the wipe:**
+- **Optimistic stubs** (`optimisticStubsAtom`): Pending mutations that the client created but hasn't sent to the server yet. These represent user intent that hasn't been acknowledged, so they must survive reconnect to be retried or discarded by the user.
+- **Committed agent messages** (`agentChatMessagesAtom`): Historical chat messages that were finalized via `turn_complete`. These are never stale — they're immutable records of past turns.
+
+**Cleared on wipe:**
+- `workersAtom`, `beadsAtom`, `conversationsAtom`, `projectCardsAtom`, `capacityAtom`, `stitchCreatedAtom`, `agentSessionStatusAtom`, `agentInflightAtom`, `stuckAlertsAtom`, `configStatusAtom`
+- All streaming buffers (`streamingContentFamily`)
+
+**Implementation notes:**
+- The `init` event handler in `useWebSocket.ts` performs the wipe.
+- Subsequent snapshot events rebuild the store.
+- Integration test `epochSync.test.ts` verifies: disconnect → mutate server state → reconnect → stale rows gone.
+- This pattern is enforced by tests; violation is caught by CI.
+
 **HOOP adaptation.** HOOP has *fewer* reconciliation problems than the reference because the bead queue is authoritative — NEEDLE owns that path, nobody else writes to it. But:
 
 - Native CLI session files are still written behind HOOP's back (every Claude/Codex/OpenCode/Gemini invocation writes its own session log). The interceptor pattern applies to *that* source.
@@ -121,6 +141,7 @@ On startup, resolve every configured binary and report availability. If anything
 - **Streaming in a separate map.** Never re-render the world on a token delta.
 - **Binary audit at boot.** Fail visible, not at first use.
 - **Bounded-concurrency progressive discovery.** Never eager-load all session transcripts.
+- **Epoch-sync on reconnect.** Client wipes and rebuilds from server's `init` payload. Only un-sent optimistic stubs survive.
 
 ## Patterns to explicitly reject
 
