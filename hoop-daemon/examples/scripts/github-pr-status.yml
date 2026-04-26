@@ -1,0 +1,15 @@
+name: github-pr-status
+description: Check GitHub PR status from the command line or event triggers (external integration example)
+scope: global
+timeout_secs: 30
+arguments:
+  - name: repo
+    description: Repository in owner/repo format (e.g., jedarden/NEEDLE)
+    required: true
+  - name: pr_number
+    description: Pull request number
+    required: true
+# Example: Trigger on bead close to check related PR status
+# on:
+#   - event: "close"
+#     project: "*"

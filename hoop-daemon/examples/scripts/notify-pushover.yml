@@ -1,0 +1,17 @@
+name: notify-pushover
+description: Send Pushover notifications for important events (external integration example)
+scope: global
+timeout_secs: 30
+arguments:
+  - name: message
+    description: The notification message to send
+    required: true
+  - name: title
+    description: Optional notification title
+    required: false
+    default: "HOOP Notification"
+# Example: Trigger on bead failures
+# on:
+#   - event: "fail"
+#     result: "failure"
+#     project: "*"  # All projects

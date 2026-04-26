@@ -1,0 +1,244 @@
+#!/usr/bin/env python3
+"""
+github-pr-status — Example HOOP script for checking GitHub PR status
+
+This script demonstrates the external integration escape hatch pattern (§22.3).
+It queries the GitHub API for pull request status and returns information.
+
+Setup:
+1. Create a GitHub personal access token: https://github.com/settings/tokens
+2. Set GITHUB_TOKEN environment variable
+3. Copy this script to ~/.hoop/scripts/github-pr-status
+4. Make it executable: chmod +x ~/.hoop/scripts/github-pr-status
+
+Usage:
+  hoop script run github-pr-status owner/repo 123
+  hoop script run github-pr-status jedarden/NEEDLE 42
+
+When triggered by events, the script can extract PR info from bead descriptions
+that follow conventions like "Fixes #123" or "Closes owner/repo#456".
+"""
+
+import os
+import sys
+import json
+from urllib import request
+from urllib.error import URLError, HTTPError
+
+
+def load_env_from_file():
+    """Load environment from ~/.hoop/scripts/.env if it exists."""
+    env_file = os.path.expanduser("~/.hoop/scripts/.env")
+    try:
+        with open(env_file, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    os.environ.setdefault(key.strip(), value.strip())
+    except FileNotFoundError:
+        pass
+
+
+def get_pr_status(owner, repo, pr_number):
+    """Get PR status from GitHub API."""
+    load_env_from_file()
+
+    token = os.getenv("GITHUB_TOKEN")
+    if not token:
+        print("Error: GITHUB_TOKEN environment variable must be set.", file=sys.stderr)
+        print("Create a token at https://github.com/settings/tokens", file=sys.stderr)
+        sys.exit(1)
+
+    # Query PR details with reviews and status checks
+    query = """
+    query($owner: String!, $repo: String!, $pr: Int!) {
+        repository(owner: $owner, name: $repo) {
+            pullRequest(number: $pr) {
+                number
+                title
+                state
+                isDraft
+                mergeable
+                merged
+                headRefName
+                baseRefName
+                url
+                author {
+                    login
+                }
+                createdAt
+                closedAt
+                mergedAt
+                reviews(first: 10) {
+                    nodes {
+                        state
+                        author {
+                            login
+                        }
+                        submittedAt
+                    }
+                }
+                commits(last: 1) {
+                    nodes {
+                        commit {
+                            statusCheckRollup {
+                                state
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    """
+
+    endpoint = "https://api.github.com/graphql"
+    data = {
+        "query": query,
+        "variables": {"owner": owner, "repo": repo, "pr": pr_number},
+    }
+
+    try:
+        req = request.Request(
+            endpoint,
+            data=json.dumps(data).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}",
+            },
+        )
+        with request.urlopen(req) as response:
+            result = json.loads(response.read().decode("utf-8"))
+
+            if "errors" in result:
+                for error in result["errors"]:
+                    print(f"GitHub API error: {error.get('message', 'Unknown error')}", file=sys.stderr)
+                return None
+
+            return result["data"]["repository"]["pullRequest"]
+
+    except HTTPError as e:
+        print(f"HTTP error: {e.code} - {e.reason}", file=sys.stderr)
+        return None
+    except URLError as e:
+        print(f"Network error: {e}", file=sys.stderr)
+        return None
+
+
+def format_pr_status(pr):
+    """Format PR status for human-readable output."""
+    if not pr:
+        return "Pull request not found"
+
+    lines = []
+    lines.append(f"PR #{pr['number']}: {pr['title']}")
+    lines.append(f"  URL: {pr['url']}")
+    lines.append(f"  Author: {pr['author']['login']}")
+    lines.append(f"  Branch: {pr['headRefName']} -> {pr['baseRefName']}")
+
+    if pr['merged']:
+        lines.append(f"  Status: MERGED at {pr['mergedAt']}")
+    elif pr['state'] == 'CLOSED':
+        lines.append(f"  Status: CLOSED at {pr['closedAt']}")
+    elif pr['isDraft']:
+        lines.append("  Status: DRAFT")
+    else:
+        mergeable = pr.get('mergeable', 'UNKNOWN')
+        lines.append(f"  Status: OPEN (mergeable: {mergeable})")
+
+    # Show reviews
+    if pr['reviews']['nodes']:
+        lines.append("  Reviews:")
+        for review in pr['reviews']['nodes']:
+            lines.append(f"    - {review['author']['login']}: {review['state'].upper()} @ {review['submittedAt']}")
+
+    # Show status checks
+    try:
+        commit = pr['commits']['nodes'][0]['commit']
+        if commit.get('statusCheckRollup'):
+            check_state = commit['statusCheckRollup']['state']
+            lines.append(f"  Checks: {check_state.upper()}")
+    except (KeyError, IndexError, TypeError):
+        pass
+
+    return "\n".join(lines)
+
+
+def parse_pr_reference(text):
+    """Parse PR reference from text like 'owner/repo#123' or '#123'."""
+    import re
+
+    # Match owner/repo#123
+    match = re.search(r'([-\w]+)/([-\w]+)#(\d+)', text)
+    if match:
+        return match.group(1), match.group(2), int(match.group(3))
+
+    # Match #123
+    match = re.search(r'#(\d+)', text)
+    if match:
+        return None, None, int(match.group(1))
+
+    return None, None, None
+
+
+def main():
+    # Parse command line arguments
+    if len(sys.argv) >= 3:
+        # Explicit owner/repo and PR number
+        repo_arg = sys.argv[1]
+        pr_number = int(sys.argv[2])
+
+        if "/" in repo_arg:
+            owner, repo = repo_arg.split("/", 1)
+        else:
+            print("Error: First argument must be 'owner/repo' when PR number is provided", file=sys.stderr)
+            sys.exit(1)
+    else:
+        # Try to parse from stdin or environment
+        if not sys.stdin.isatty():
+            stdin_data = sys.stdin.read().strip()
+            if stdin_data:
+                # Try parsing as event JSON
+                try:
+                    event = json.loads(stdin_data)
+                    # Look for PR reference in bead description or title
+                    title = event.get("title", "")
+                    description = event.get("description", "")
+                    combined = f"{title} {description}"
+
+                    owner, repo, pr_number = parse_pr_reference(combined)
+                    if not pr_number:
+                        print("Error: No PR reference found in event", file=sys.stderr)
+                        sys.exit(1)
+
+                    # Default to this repo if not specified
+                    if not owner:
+                        owner = os.getenv("GITHUB_DEFAULT_OWNER", "jedarden")
+                        repo = os.getenv("GITHUB_DEFAULT_REPO", "HOOP")
+                except json.JSONDecodeError:
+                    # Try parsing as plain text
+                    owner, repo, pr_number = parse_pr_reference(stdin_data)
+                    if not pr_number:
+                        print("Error: No PR reference found", file=sys.stderr)
+                        sys.exit(1)
+                    if not owner:
+                        owner = os.getenv("GITHUB_DEFAULT_OWNER", "jedarden")
+                        repo = os.getenv("GITHUB_DEFAULT_REPO", "HOOP")
+            else:
+                print("Usage: github-pr-status owner/repo <pr_number>", file=sys.stderr)
+                sys.exit(1)
+        else:
+            print("Usage: github-pr-status owner/repo <pr_number>", file=sys.stderr)
+            sys.exit(1)
+
+    pr = get_pr_status(owner, repo, pr_number)
+    if pr:
+        print(format_pr_status(pr))
+        sys.exit(0)
+    else:
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

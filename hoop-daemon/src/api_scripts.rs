@@ -556,8 +556,8 @@ async fn get_script(
 async fn run_script(
     State(state): State<DaemonState>,
     AxumPath(name): AxumPath<String>,
-    Json(req): Json<ScriptRunRequest>,
     connect_info: Option<ConnectInfo<SocketAddr>>,
+    Json(req): Json<ScriptRunRequest>,
 ) -> Result<Json<ScriptRunResponse>, (axum::http::StatusCode, String)> {
     let scripts_dir_str = state
         .resolved_config

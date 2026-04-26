@@ -785,6 +785,10 @@ fn estimate_cost(
             // GLM pricing placeholder (per 1M tokens)
             (2.0, 8.0, 0.5, 4.0)
         }
+        AdapterKind::Aider => {
+            // Aider uses OpenAI pricing (per 1M tokens)
+            (5.0, 15.0, 0.0, 0.0)
+        }
         AdapterKind::Codex | AdapterKind::OpenCode | AdapterKind::Gemini => (0.0, 0.0, 0.0, 0.0),
     };
 
