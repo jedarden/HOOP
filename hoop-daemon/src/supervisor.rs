@@ -154,6 +154,8 @@ pub struct ProjectSupervisor {
     vector_index: Arc<std::sync::RwLock<crate::vector_index::VectorIndex>>,
     /// Scripts directory for event-triggered scripts
     scripts_dir: PathBuf,
+    /// Stuck detector for worker health monitoring (§C1, hoop-ttb.3.25)
+    stuck_detector: Arc<std::sync::Mutex<crate::stuck_detector::StuckDetector>>,
 }
 
 impl std::fmt::Debug for ProjectSupervisor {
@@ -175,6 +177,7 @@ impl ProjectSupervisor {
         cost_aggregator: Arc<std::sync::RwLock<CostAggregator>>,
         vector_index: Arc<std::sync::RwLock<crate::vector_index::VectorIndex>>,
         scripts_dir: PathBuf,
+        stuck_detector: Arc<std::sync::Mutex<crate::stuck_detector::StuckDetector>>,
     ) -> Self {
         let (status_tx, _) = broadcast::channel(64);
 
@@ -190,6 +193,7 @@ impl ProjectSupervisor {
             cost_aggregator,
             vector_index,
             scripts_dir,
+            stuck_detector,
         }
     }
 
@@ -215,11 +219,42 @@ impl ProjectSupervisor {
         let worker_registry = self.worker_registry.clone();
         let beads = self.beads.clone();
         let scripts_dir = self.scripts_dir.clone();
+        let stuck_detector = self.stuck_detector.clone();
 
         tokio::spawn(async move {
             while let Ok(event) = event_rx.recv().await {
                 match event {
                     TailerEvent::Event(parsed) => {
+                        // Update stuck detector with worker lifecycle events (§C1, hoop-ttb.3.25)
+                        match &parsed.event {
+                            crate::events::NeedleEvent::Dispatch { ts, worker, bead, adapter, .. } => {
+                                // Worker started executing a bead
+                                if let Ok(started_at) = ts.parse::<chrono::DateTime<chrono::Utc>>() {
+                                    stuck_detector.lock().unwrap().on_worker_started(
+                                        worker,
+                                        bead,
+                                        adapter.as_deref(),
+                                        started_at,
+                                    );
+                                }
+                            }
+                            crate::events::NeedleEvent::Complete { worker, .. }
+                            | crate::events::NeedleEvent::Fail { worker, .. }
+                            | crate::events::NeedleEvent::Timeout { worker, .. }
+                            | crate::events::NeedleEvent::Crash { worker, .. }
+                            | crate::events::NeedleEvent::Close { worker, .. }
+                            | crate::events::NeedleEvent::Release { worker, .. } => {
+                                // Worker completed (terminal events)
+                                stuck_detector.lock().unwrap().on_worker_complete(worker);
+                            }
+                            _ => {
+                                // Any other event counts as activity
+                                if let Some(bead_event) = BeadEventData::from_event(&parsed.event) {
+                                    stuck_detector.lock().unwrap().on_worker_event(&bead_event.worker, false);
+                                }
+                            }
+                        }
+
                         // Convert to BeadEventData and add to registry
                         if let Some(bead_event) = BeadEventData::from_event(&parsed.event) {
                             let ws_event = crate::ws::BeadEventData {

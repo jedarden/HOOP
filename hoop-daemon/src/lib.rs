@@ -1439,6 +1439,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         cost_aggregator.clone(),
         vector_index.clone(),
         scripts_dir,
+        stuck_detector.clone(),
     ));
 
     // Start global event tailer (for bead claim/close/release/update events)
@@ -1747,7 +1748,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         .map(|w| w.liveness)
                         .unwrap_or(heartbeats::WorkerLiveness::Dead);
                     // Advance last_heartbeat_at for the project this worker is executing
-                    if let WorkerState::Executing { ref bead, adapter, .. } = hb.state {
+                    if let WorkerState::Executing { ref bead, ref adapter, .. } = hb.state {
                         // Track worker started for stuck detection (on bead switch)
                         let worker_name = hb.worker.clone();
                         let bead_id = bead.clone();
@@ -1985,6 +1986,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
             reflection: None,
             pricing: None,
             server: None,
+            stuck_detector: None,
         };
 
         tokio::task::spawn_blocking(|| {
@@ -2006,6 +2008,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                 reflection: None,
                 pricing: None,
                 server: None,
+                stuck_detector: None,
             };
 
             if !config_path.exists() {
@@ -2850,8 +2853,8 @@ async fn load_hoop_config() -> Option<hoop_schema::HoopConfig> {
             audit: None,
             reflection: None,
             pricing: None,
-            redaction: None,
             server: None,
+            stuck_detector: None,
         };
 
         if !config_path.exists() {

@@ -9,7 +9,7 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Datelike, Timelike, Utc};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use sha2::Digest;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
