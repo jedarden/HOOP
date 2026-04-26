@@ -209,7 +209,7 @@ impl AdapterKind {
             }
             Self::Aider => {
                 // Aider is a CLI adapter similar to Codex
-                let mut args = vec!["-p".to_string(), prompt.to_string()];
+                let args = vec!["-p".to_string(), prompt.to_string()];
                 Some(args)
             }
             Self::Anthropic | Self::Zai => None,
@@ -393,6 +393,44 @@ pub fn load_adapter_config() -> AgentAdapterConfig {
     AgentAdapterConfig::default()
 }
 
+/// Load the system prompt budget bytes from config.yml agent section.
+///
+/// Returns the configured value or 4096 (4KB default) if not set.
+/// Set to 0 to disable the size gate.
+pub fn load_system_prompt_budget_bytes() -> u32 {
+    let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+    let config_path = home.join(".hoop").join("config.yml");
+
+    if !config_path.exists() {
+        return 4096;
+    }
+
+    match std::fs::read_to_string(&config_path) {
+        Ok(contents) => {
+            match serde_yaml::from_str::<serde_yaml::Value>(&contents) {
+                Ok(root) => {
+                    if let Some(agent) = root.get("agent") {
+                        if let Some(budget) = agent.get("system_prompt_budget_bytes") {
+                            if let Some(value) = budget.as_u64() {
+                                tracing::info!("Loaded system_prompt_budget_bytes: {}", value);
+                                return value as u32;
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to parse config.yml: {}, using default budget", e);
+                }
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Failed to read config.yml: {}, using default budget", e);
+        }
+    }
+
+    4096
+}
+
 // ---------------------------------------------------------------------------
 // ClaudeCodeAdapter — shells out to the `claude` CLI
 // ---------------------------------------------------------------------------
@@ -502,6 +540,9 @@ impl AgentAdapter for ClaudeCodeAdapter {
 }
 
 /// Parse a single NDJSON line from `claude --output-format stream-json` into an AgentEvent.
+///
+/// All text content is stripped of ANSI escape sequences before being emitted
+/// in events (§F4: ANSI/terminal control sequences leak into parsed text).
 pub fn parse_claude_stream_line(line: &str) -> Result<AgentEvent> {
     let val: serde_json::Value = serde_json::from_str(line)?;
 
@@ -509,14 +550,14 @@ pub fn parse_claude_stream_line(line: &str) -> Result<AgentEvent> {
 
     match event_type {
         "assistant" | "content_block_start" | "content_block_delta" => {
-            // Text delta
+            // Text delta - strip ANSI sequences
             if let Some(text) = val.get("text").and_then(|v| v.as_str()) {
-                return Ok(AgentEvent::TextDelta { text: text.to_string() });
+                return Ok(AgentEvent::TextDelta { text: crate::ansi_strip::strip_ansi(text) });
             }
             // Sometimes text is nested under delta
             if let Some(delta) = val.get("delta") {
                 if let Some(text) = delta.get("text").and_then(|v| v.as_str()) {
-                    return Ok(AgentEvent::TextDelta { text: text.to_string() });
+                    return Ok(AgentEvent::TextDelta { text: crate::ansi_strip::strip_ansi(text) });
                 }
             }
             Ok(AgentEvent::TextDelta { text: String::new() })
@@ -1390,9 +1431,8 @@ fn anthropic_sse_to_event(val: &serde_json::Value) -> Result<AgentEvent> {
             let text = delta
                 .and_then(|d| d.get("text"))
                 .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            Ok(AgentEvent::TextDelta { text })
+                .unwrap_or("");
+            Ok(AgentEvent::TextDelta { text: crate::ansi_strip::strip_ansi(text) })
         }
         "content_block_start" => {
             if let Some(cb) = val.get("content_block") {
@@ -1460,9 +1500,9 @@ fn openai_sse_to_event(val: &serde_json::Value) -> Result<AgentEvent> {
             }
         }
 
-        // Text content delta
+        // Text content delta - strip ANSI sequences
         if let Some(content) = delta.and_then(|d| d.get("content")).and_then(|v| v.as_str()) {
-            return Ok(AgentEvent::TextDelta { text: content.to_string() });
+            return Ok(AgentEvent::TextDelta { text: crate::ansi_strip::strip_ansi(content) });
         }
 
         // Finish reason
