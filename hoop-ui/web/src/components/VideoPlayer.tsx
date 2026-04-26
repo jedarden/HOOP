@@ -109,6 +109,7 @@ export default function VideoPlayer({ videoUrl, chapters = [], transcript }: Vid
         ref={videoRef}
         src={videoUrl}
         preload="metadata"
+        playsInline
         className="video-player-element"
         onClick={togglePlayPause}
       />
