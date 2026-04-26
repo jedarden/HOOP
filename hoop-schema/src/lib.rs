@@ -366,6 +366,7 @@ mod tests {
             conversation: None,
             streaming: None,
             config_status: None,
+            bead_created_by_hoop: None,
         }
     );
 
@@ -513,6 +514,11 @@ mod tests {
                 model: Some("opus".to_string()),
                 rate_limit_requests_per_minute: Some(60),
                 cost_cap_per_session_usd: Some(10.0),
+                idle_timeout_secs: 180,
+                max_runtime_secs: 3600,
+                content_seen_grace_secs: 600,
+                heartbeat_transition_threshold_secs: 300,
+                retry_threshold: 3,
             }),
             // §17.3 §2: projects_file
             projects_file: Some("~/.hoop/projects.yaml".to_string()),
@@ -560,8 +566,10 @@ mod tests {
                 detection_threshold: Some(0.8),
                 auto_archive_after_days: 30,
             }),
-            // redaction (§18.5)
-            redaction: None,
+            // stuck_detector (§C1, hoop-ttb.3.25)
+            stuck_detector: None,
+            // morning_brief (marquee #10, Phase 5)
+            morning_brief: None,
             // pricing (beyond §17.3, but part of config)
             pricing: None,
             // server (required)
@@ -602,7 +610,8 @@ mod tests {
             metrics: None,
             audit: None,
             reflection: None,
-            redaction: None,
+            stuck_detector: None,
+            morning_brief: None,
             pricing: None,
             server: None,
         };
@@ -647,7 +656,6 @@ mod tests {
             updated_at: ts,
             created_by: "user".to_string(),
             dependencies: vec![],
-            labels: vec![],
             schema_version: BeadSchemaVersion("1.0.0".to_string()),
         });
 
@@ -687,6 +695,8 @@ mod tests {
             duration_secs: None,
             language: None,
             tags: vec![],
+            redacted_words: vec![],
+            transcription_status: None,
             schema_version: DictatedNoteSchemaVersion("1.0.0".to_string()),
         });
 
@@ -702,7 +712,8 @@ mod tests {
             metrics: None,
             audit: None,
             reflection: None,
-            redaction: None,
+            stuck_detector: None,
+            morning_brief: None,
             pricing: None,
             server: None,
         });
@@ -785,6 +796,7 @@ mod tests {
             stitch_id: Uuid::new_v4(),
             bead_id: "hoop-ttb.1".to_string(),
             workspace: "/home/user/project".to_string(),
+            canonical_workspace: None,
             relationship: StitchBeadRelationship::CreatedHere,
             linked_at: None,
             schema_version: StitchBeadSchemaVersion("1.0.0".to_string()),
