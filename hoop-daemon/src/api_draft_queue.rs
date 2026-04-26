@@ -533,6 +533,28 @@ async fn approve_draft(
     )
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    // Create bidirectional link from new stitch to original dictated note (if applicable)
+    if draft.source.starts_with("dictated-note:") {
+        let original_note_stitch_id = draft.source.strip_prefix("dictated-note:").unwrap_or_default();
+        if !original_note_stitch_id.is_empty() {
+            let db_path = fleet::db_path();
+            if let Ok(conn) = rusqlite::Connection::open_with_flags(
+                &db_path,
+                rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+            ) {
+                // Create link from new stitch back to dictated note
+                if let Err(e) = conn.execute(
+                    "INSERT INTO stitch_links (from_stitch, to_stitch, kind) VALUES (?1, ?2, ?3)",
+                    [&submit_result.stitch_id, original_note_stitch_id, "references"],
+                ) {
+                    warn!("Failed to create bidirectional link from {} to {}: {}", submit_result.stitch_id, original_note_stitch_id, e);
+                } else {
+                    info!("Created bidirectional link: {} -> {}", submit_result.stitch_id, original_note_stitch_id);
+                }
+            }
+        }
+    }
+
     // Audit: draft submitted
     if let Err(e) = fleet::write_audit_row(
         &actor,
@@ -1009,7 +1031,7 @@ async fn get_dedup_stats(
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn resolve_project_path(
+pub fn resolve_project_path(
     project: &str,
     state: &crate::DaemonState,
 ) -> Result<std::path::PathBuf, (StatusCode, String)> {

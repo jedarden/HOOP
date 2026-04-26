@@ -25,7 +25,7 @@ use axum::{
 };
 use base64::Engine;
 use rusqlite::params;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Build the router for dictated note endpoints
@@ -37,6 +37,8 @@ pub fn router() -> Router<crate::DaemonState> {
         .route("/api/dictated-notes/{stitch_id}", patch(update_note))
         .route("/api/dictated-notes/{stitch_id}/redact", post(redact_words))
         .route("/api/dictated-notes/{stitch_id}/audio", get(get_audio))
+        .route("/api/dictated-notes/{stitch_id}/synthesize", post(synthesize_draft))
+        .route("/api/dictated-notes/{stitch_id}/draft", post(create_draft_from_note))
 }
 
 /// POST /api/p/:project/dictated-notes — create a new dictated note
@@ -529,6 +531,401 @@ async fn redact_words(
     );
 
     Ok(Json(updated_note))
+}
+
+/// Request to synthesize a title and body from a dictated note transcript
+#[derive(Debug, Deserialize)]
+struct SynthesizeRequest {
+    /// Optional override for the stitch kind (defaults to "task")
+    #[serde(default)]
+    kind: Option<String>,
+}
+
+/// Response with synthesized title and body
+#[derive(Debug, Serialize)]
+struct SynthesizeResponse {
+    /// Synthesized title (max 280 chars)
+    pub title: String,
+    /// Synthesized body/description
+    pub body: String,
+    /// Inferred stitch kind
+    pub kind: String,
+    /// Whether this looks like a fix, task, or investigation
+    pub confidence: String,
+}
+
+/// POST /api/dictated-notes/:stitch_id/synthesize — synthesize title + body from transcript
+///
+/// Uses the agent session to generate a concise title and structured body
+/// from the transcript. This is called after transcription completes to
+/// propose a Stitch draft.
+async fn synthesize_draft(
+    Path(stitch_id): Path<String>,
+    State(state): State<crate::DaemonState>,
+    Json(req): Json<SynthesizeRequest>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let valid_id = ValidStitchId::parse(&stitch_id).map_err(crate::id_validators::rejection)?;
+
+    let db_path = fleet::db_path();
+    let conn = rusqlite::Connection::open(&db_path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("DB error: {}", e),
+        )
+    })?;
+
+    let note = dictated_notes::get_note(&conn, valid_id.as_str()).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Query error: {}", e),
+        )
+    })?
+    .ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            "Note not found".to_string(),
+        )
+    })?;
+
+    // Check if transcription is complete
+    if note.transcription_status != dictated_notes::TranscriptionStatus::Completed {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!(
+                "Note transcription is not complete (status: {:?}). Wait for transcription to finish.",
+                note.transcription_status
+            ),
+        ));
+    }
+
+    // Use agent session to synthesize title and body
+    let mgr = state
+        .agent_session_manager
+        .as_ref()
+        .ok_or_else(|| {
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Agent session manager not available".to_string(),
+            )
+        })?;
+
+    // Build synthesis prompt
+    let synthesis_prompt = format!(
+        r#"Analyze the following voice transcript and synthesize a concise Stitch title and body.
+
+Transcript:
+{}
+
+Requirements:
+1. Title: Maximum 280 characters, capture the core intent
+2. Body: Structured markdown with:
+   - Brief context (what triggered this)
+   - Key points or action items
+   - Any relevant details mentioned
+3. Infer the kind: "fix" (bug/error), "task" (feature/work), or "investigation" (needs research)
+4. Output ONLY valid JSON matching this schema:
+   {{"title": "...", "body": "...", "kind": "fix|task|investigation", "confidence": "high|medium|low"}}
+
+Be concise and actionable. Focus on what needs to be done."#,
+        note.transcript
+    );
+
+    // Send turn to agent and collect response
+    let mut stream = mgr.send_turn(synthesis_prompt, vec![]).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to send synthesis request: {}", e),
+        )
+    })?;
+
+    // Collect the full response
+    let mut full_response = String::new();
+    use futures_util::StreamExt;
+    while let Some(item) = stream.next().await {
+        match item {
+            Ok(crate::agent_adapter::AgentEvent::TextDelta { text }) => {
+                full_response.push_str(&text);
+            }
+            Ok(crate::agent_adapter::AgentEvent::TurnComplete { .. }) => break,
+            Ok(crate::agent_adapter::AgentEvent::Error { message }) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Agent error during synthesis: {}", message),
+                ));
+            }
+            Err(e) => {
+                tracing::warn!("Agent stream error: {}", e);
+                break;
+            }
+            _ => {}
+        }
+    }
+
+    // Parse JSON response from agent
+    let response_text = full_response.trim();
+
+    // Try to extract JSON from the response (agent may wrap it in markdown)
+    let json_str = if let Some(start) = response_text.find('{') {
+        if let Some(end) = response_text.rfind('}') {
+            &response_text[start..=end]
+        } else {
+            response_text
+        }
+    } else {
+        response_text
+    };
+
+    let parsed: serde_json::Value = serde_json::from_str(json_str).map_err(|e| {
+        tracing::warn!("Failed to parse agent JSON response: {}, raw: {}", e, json_str);
+        // Fallback to derived title
+        serde_json::json!({
+            "title": dictated_notes::derive_title(&note.transcript),
+            "body": note.transcript.clone(),
+            "kind": req.kind.unwrap_or_else(|| "task".to_string()),
+            "confidence": "low"
+        })
+    })?;
+
+    let title = parsed["title"]
+        .as_str()
+        .unwrap_or_else(|| dictated_notes::derive_title(&note.transcript).as_str())
+        .to_string();
+    let body = parsed["body"]
+        .as_str()
+        .unwrap_or_else(|| note.transcript.as_str())
+        .to_string();
+    let kind = parsed["kind"]
+        .as_str()
+        .unwrap_or_else(|| req.kind.as_deref().unwrap_or("task"))
+        .to_string();
+    let confidence = parsed["confidence"]
+        .as_str()
+        .unwrap_or("low")
+        .to_string();
+
+    // Validate and truncate title
+    let title = if title.len() > 280 {
+        format!("{}…", &title[..279])
+    } else {
+        title
+    };
+
+    tracing::info!(
+        "Synthesized draft from note {}: kind={}, confidence={}",
+        stitch_id,
+        kind,
+        confidence
+    );
+
+    // Store synthesis result in dictated_notes for reference
+    let synthesis_json = serde_json::json!({
+        "title": title,
+        "body": body,
+        "kind": kind,
+        "confidence": confidence
+    });
+    if let Err(e) = dictated_notes::update_synthesis_result(&conn, &stitch_id, &synthesis_json.to_string()) {
+        tracing::warn!("Failed to store synthesis_result for {}: {}", stitch_id, e);
+    }
+
+    Ok(Json(SynthesizeResponse {
+        title,
+        body,
+        kind,
+        confidence,
+    }))
+}
+
+/// POST /api/dictated-notes/:stitch_id/draft — create a Stitch draft from a dictated note
+///
+/// Creates a draft in the draft queue using the synthesized or provided title/body.
+/// The note and draft are linked bidirectionally for reference.
+async fn create_draft_from_note(
+    Path(stitch_id): Path<String>,
+    State(state): State<crate::DaemonState>,
+    Json(req): Json<SynthesizeRequest>,
+) -> Result<Json<crate::api_draft_queue::CreateDraftResponse>, (StatusCode, String)> {
+    let valid_id = ValidStitchId::parse(&stitch_id).map_err(crate::id_validators::rejection)?;
+
+    let db_path = fleet::db_path();
+    let conn = rusqlite::Connection::open(&db_path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("DB error: {}", e),
+        )
+    })?;
+
+    let note = dictated_notes::get_note(&conn, valid_id.as_str()).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Query error: {}", e),
+        )
+    })?
+    .ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            "Note not found".to_string(),
+        )
+    })?;
+
+    // Get the project from the stitch
+    let project: String = conn
+        .query_row(
+            "SELECT project FROM stitches WHERE id = ?1",
+            [&stitch_id],
+            |row| row.get(0),
+        )
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to get project: {}", e),
+            )
+        })?;
+
+    // Check if transcription is complete
+    if note.transcription_status != dictated_notes::TranscriptionStatus::Completed {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!(
+                "Note transcription is not complete (status: {:?})",
+                note.transcription_status
+            ),
+        ));
+    }
+
+    // First synthesize to get title/body
+    let synthesis = synthesize_draft(
+        Path(stitch_id.clone()),
+        State(state.clone()),
+        Json(req.clone()),
+    )
+    .await?;
+
+    // Create the draft using the draft queue API logic
+    let draft_req = crate::api_draft_queue::CreateDraftRequest {
+        project: project.clone(),
+        title: synthesis.title.clone(),
+        kind: synthesis.kind.clone(),
+        description: Some(synthesis.body.clone()),
+        has_acceptance_criteria: Some(false),
+        priority: Some(2),
+        labels: Some(vec!["voice-capture".to_string(), "from-dictation".to_string()]),
+        source: format!("dictated-note:{}", stitch_id),
+        agent_session_id: None,
+        turn_id: None,
+        force_create: false,
+    };
+
+    // Resolve project path for validation
+    let _project_path = crate::api_draft_queue::resolve_project_path(&project, &state)?;
+
+    // Validate the stitch kind
+    crate::api_stitch_decompose::validate_stitch_kind(&draft_req.kind, draft_req.has_acceptance_criteria.unwrap_or(false))?;
+
+    // Dedup check
+    let index = state.vector_index.read().unwrap();
+    let matches = index.check_duplicate(&draft_req.title, draft_req.description.as_deref());
+    if !matches.is_empty() {
+        let best = &matches[0];
+        let message = format!(
+            "this looks like `{}/{}`, which is in progress. Continue that, add this as a child, or proceed as new?",
+            best.item.project, best.item.id
+        );
+        return Err((StatusCode::CONFLICT, message));
+    }
+
+    let actor = crate::api_stitch_decompose::resolve_actor(None);
+    let now = chrono::Utc::now().to_rfc3339();
+    let draft_id = format!("draft-{}", uuid::Uuid::new_v4());
+
+    // Build the draft row
+    let draft_row = fleet::DraftRow {
+        id: draft_id.clone(),
+        project: draft_req.project.clone(),
+        title: draft_req.title.clone(),
+        kind: draft_req.kind.clone(),
+        description: draft_req.description.clone(),
+        has_acceptance_criteria: draft_req.has_acceptance_criteria.unwrap_or(false),
+        priority: draft_req.priority,
+        labels: draft_req.labels.clone().unwrap_or_default(),
+        created_by: actor.clone(),
+        created_at: now.clone(),
+        source: draft_req.source.clone(),
+        agent_session_id: draft_req.agent_session_id.clone(),
+        turn_id: draft_req.turn_id.clone(),
+        status: "pending".to_string(),
+        version: 1,
+        original_json: None,
+        resolved_by: None,
+        resolved_at: None,
+        rejection_reason: None,
+        stitch_id: None,
+        preview_json: None,
+        opened_by: Some(actor.clone()),
+        opened_at: Some(now.clone()),
+        last_autosave_at: None,
+        abandoned_at: None,
+    };
+
+    // Insert the draft into the queue
+    fleet::insert_draft(&draft_row)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Update dictated_note with draft_id (bidirectional link)
+    if let Err(e) = dictated_notes::update_draft_id(&conn, &stitch_id, &draft_id) {
+        tracing::warn!("Failed to update draft_id for dictated note {}: {}", stitch_id, e);
+    }
+
+    // Audit: draft created from dictated note
+    if let Err(e) = fleet::write_audit_row(
+        &actor,
+        fleet::ActionKind::DraftCreated,
+        &draft_id,
+        Some(&project),
+        Some(
+            serde_json::json!({
+                "title": draft_req.title,
+                "kind": draft_req.kind,
+                "source": draft_req.source,
+                "from_note": stitch_id,
+            })
+            .to_string(),
+        ),
+        fleet::ActionResult::Success,
+        None,
+        Some("dictated-note"),
+        None,
+        None,
+    ) {
+        tracing::warn!("Failed to write DraftCreated audit row: {}", e);
+    }
+
+    tracing::info!(
+        "Draft {} created from dictated note {} in project '{}': {}",
+        draft_id,
+        stitch_id,
+        project,
+        draft_req.title
+    );
+
+    // Emit draft_update WS event
+    let _ = state.draft_tx.send(crate::ws::DraftUpdateData {
+        draft_id: draft_id.clone(),
+        project: project.clone(),
+        title: draft_req.title.clone(),
+        kind: draft_req.kind.clone(),
+        status: "pending".to_string(),
+        action: "created".to_string(),
+        actor: actor.clone(),
+        created_by: actor,
+        version: 1,
+        rejection_reason: None,
+    });
+
+    Ok(Json(crate::api_draft_queue::CreateDraftResponse {
+        draft_id,
+        status: "pending".to_string(),
+    }))
 }
 
 fn infer_audio_mime(filename: &str) -> String {

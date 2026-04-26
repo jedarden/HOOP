@@ -57,6 +57,12 @@ pub struct DictatedNote {
     pub tags: Vec<String>,
     /// Whether transcription is pending, completed, or failed
     pub transcription_status: TranscriptionStatus,
+    /// Agent synthesis result (JSON string with title, body, kind, confidence)
+    #[serde(default)]
+    pub synthesis_result: Option<String>,
+    /// ID of the draft created from this note (for bidirectional linking)
+    #[serde(default)]
+    pub draft_id: Option<String>,
 }
 
 /// A single word with timing from Whisper
@@ -244,8 +250,8 @@ pub fn insert_note(conn: &Connection, note: &DictatedNote) -> Result<()> {
         r#"
         INSERT INTO dictated_notes (stitch_id, recorded_at, transcribed_at, audio_filename,
                                      transcript, transcript_words, duration_secs, language, tags,
-                                     transcription_status, redacted_words)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                                     transcription_status, redacted_words, synthesis_result, draft_id)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
         "#,
         params![
             note.stitch_id,
@@ -259,6 +265,8 @@ pub fn insert_note(conn: &Connection, note: &DictatedNote) -> Result<()> {
             tags_json,
             status_str,
             redacted_words_json,
+            note.synthesis_result,
+            note.draft_id,
         ],
     )
     .context("Failed to insert dictated_note")?;
@@ -314,7 +322,8 @@ pub fn get_note(conn: &Connection, stitch_id: &str) -> Result<Option<DictatedNot
         SELECT stitch_id, recorded_at, transcribed_at, audio_filename,
                transcript, transcript_words, duration_secs, language, tags,
                COALESCE(transcription_status, '"Pending"'),
-               COALESCE(redacted_words, '[]')
+               COALESCE(redacted_words, '[]'),
+               synthesis_result, draft_id
         FROM dictated_notes
         WHERE stitch_id = ?1
         "#,
@@ -331,6 +340,8 @@ pub fn get_note(conn: &Connection, stitch_id: &str) -> Result<Option<DictatedNot
         let tags_json: String = row.get(8)?;
         let status_str: String = row.get(9)?;
         let redacted_words_json: String = row.get(10)?;
+        let synthesis_result: Option<String> = row.get(11)?;
+        let draft_id: Option<String> = row.get(12)?;
 
         let recorded_at = DateTime::parse_from_rfc3339(&recorded_at_str)
             .map(|dt| dt.with_timezone(&Utc))
@@ -371,6 +382,8 @@ pub fn get_note(conn: &Connection, stitch_id: &str) -> Result<Option<DictatedNot
             language,
             tags,
             transcription_status,
+            synthesis_result,
+            draft_id,
         })
     });
 
@@ -504,6 +517,26 @@ pub fn update_note(conn: &Connection, note: &DictatedNote) -> Result<()> {
     )
     .context("Failed to update dictated_note")?;
 
+    Ok(())
+}
+
+/// Update the synthesis_result for a dictated note
+pub fn update_synthesis_result(conn: &Connection, stitch_id: &str, synthesis_result: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE dictated_notes SET synthesis_result = ?1 WHERE stitch_id = ?2",
+        params![synthesis_result, stitch_id],
+    )
+    .context("Failed to update synthesis_result")?;
+    Ok(())
+}
+
+/// Update the draft_id for a dictated note (bidirectional link)
+pub fn update_draft_id(conn: &Connection, stitch_id: &str, draft_id: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE dictated_notes SET draft_id = ?1 WHERE stitch_id = ?2",
+        params![draft_id, stitch_id],
+    )
+    .context("Failed to update draft_id")?;
     Ok(())
 }
 
