@@ -291,8 +291,20 @@ impl From<YamlError> for ConfigError {
     fn from(err: YamlError) -> Self {
         let msg = err.to_string();
         let (field, expected, got) = parse_serde_details(&msg);
+
+        // Build enhanced message with structured details
+        let enhanced_msg = if let (Some(f), Some(exp), Some(g)) = (&field, &expected, &got) {
+            format!("{} (field: {}, expected: {}, got: {})", msg, f, exp, g)
+        } else if let (Some(f), Some(exp)) = (&field, &expected) {
+            format!("{} (field: {}, expected: {})", msg, f, exp)
+        } else if let Some(f) = &field {
+            format!("{} (field: {})", msg, f)
+        } else {
+            msg.clone()
+        };
+
         Self {
-            message: msg,
+            message: enhanced_msg,
             line: err.location().map(|l| line(&l)).unwrap_or(0),
             col: err.location().map(|l| column(&l)).unwrap_or(0),
             field,

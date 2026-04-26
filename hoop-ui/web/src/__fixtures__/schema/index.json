@@ -1,0 +1,32 @@
+{
+  "audit_row": {
+    "file": "audit_row.json"
+  },
+  "bead": {
+    "file": "bead.json"
+  },
+  "bead_data": {
+    "file": "bead_data.json"
+  },
+  "conversation_data": {
+    "file": "conversation_data.json"
+  },
+  "hoop_config_minimal": {
+    "file": "hoop_config_minimal.json"
+  },
+  "pattern": {
+    "file": "pattern.json"
+  },
+  "projects_registry": {
+    "file": "projects_registry.json"
+  },
+  "stitch": {
+    "file": "stitch.json"
+  },
+  "worker_data": {
+    "file": "worker_data.json"
+  },
+  "ws_event": {
+    "file": "ws_event.json"
+  }
+}

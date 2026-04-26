@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useSetAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { CodeViewer as ShikiCodeViewer } from './CodeViewer';
 import { ImageViewer } from './ImageViewer';
 import type { TabId } from './ProjectDetail';
-import { fileAttachContextAtom } from './atoms';
+import { fileNavigationAtom } from './atoms';
 
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']);
 
@@ -632,9 +632,279 @@ function useBlameFetch(
   return { blameMap, loading, error };
 }
 
+// ─── Stitch file diff viewer ─────────────────────────────────────────────────────
+
+interface StitchFileDiffViewerProps {
+  projectName: string;
+  filePath: string;
+  /** ref_range from net-diff, e.g. "abc123^..def456" */
+  refRange: string;
+}
+
+/**
+ * Types for the diff API response.
+ */
+interface DiffLine {
+  kind: 'context' | 'add' | 'remove';
+  content: string;
+  old_lineno: number | null;
+  new_lineno: number | null;
+}
+
+interface DiffHunk {
+  old_start: number;
+  old_count: number;
+  new_start: number;
+  new_count: number;
+  header: string;
+  lines: DiffLine[];
+}
+
+interface FileDiff {
+  old_path: string;
+  new_path: string;
+  is_new: boolean;
+  is_deleted: boolean;
+  is_binary: boolean;
+  added: number;
+  removed: number;
+  hunks: DiffHunk[];
+}
+
+interface DiffResponse {
+  files: FileDiff[];
+  total_added: number;
+  total_removed: number;
+  truncated: boolean;
+  ref_range: string;
+}
+
+/**
+ * Parses a git ref range like "abc123^..def456" into ref and ref2.
+ * The format is "<left>^..<right>" where left^ is the parent of the oldest commit
+ * and right is the newest commit.
+ */
+function parseRefRange(refRange: string): { ref: string; ref2: string } | null {
+  const match = refRange.match(/^(.+)\.\.(.+)$/);
+  if (!match) return null;
+  return { ref: match[1], ref2: match[2] };
+}
+
+/**
+ * Simple diff line renderer.
+ */
+function DiffLineView({ line }: { line: DiffLine }) {
+  return (
+    <div className={`diff-row diff-line diff-line--${line.kind}`}>
+      <span className="diff-lineno diff-lineno-old">
+        {line.old_lineno ?? ''}
+      </span>
+      <span className="diff-lineno diff-lineno-new">
+        {line.new_lineno ?? ''}
+      </span>
+      <span className="diff-line-marker">
+        {line.kind === 'add' ? '+' : line.kind === 'remove' ? '-' : ' '}
+      </span>
+      <span className="diff-line-content">{line.content}</span>
+    </div>
+  );
+}
+
+/**
+ * Shows a diff for a specific file as it was changed by a Stitch's linked beads.
+ * Uses the ref_range from bead_commits net-diff to show before/after the changes.
+ */
+function StitchFileDiffViewer({ projectName, filePath, refRange }: StitchFileDiffViewerProps) {
+  const [diff, setDiff] = useState<DiffResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<'unified' | 'split'>('unified');
+
+  const parsed = useMemo(() => parseRefRange(refRange), [refRange]);
+
+  useEffect(() => {
+    if (!parsed) {
+      setError('Invalid ref range format');
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setDiff(null);
+
+    const params = new URLSearchParams({
+      ref: parsed.ref,
+      ref2: parsed.ref2,
+      file: filePath,
+    });
+
+    fetch(`/api/projects/${encodeURIComponent(projectName)}/diff?${params}`)
+      .then(r => r.ok ? r.json() : Promise.reject(`HTTP ${r.status}`))
+      .then((data: DiffResponse) => {
+        setDiff(data);
+        setLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (err instanceof Error && err.name === 'AbortError') return;
+        setError(String(err));
+        setLoading(false);
+      });
+  }, [projectName, filePath, parsed]);
+
+  if (!parsed) {
+    return (
+      <div className="diff-error">
+        Invalid ref range format: {refRange}
+      </div>
+    );
+  }
+
+  if (loading) {
+    return <div className="diff-loading">Loading diff…</div>;
+  }
+
+  if (error) {
+    return <div className="diff-error">{error}</div>;
+  }
+
+  if (!diff || diff.files.length === 0) {
+    return <div className="diff-empty">No changes found for this file in the stitch</div>;
+  }
+
+  // Find the specific file's diff (there should only be one since we filter by file)
+  const fileDiff = diff.files[0];
+
+  if (fileDiff.is_binary) {
+    return <div className="diff-binary-notice">Binary file — diff not shown</div>;
+  }
+
+  if (fileDiff.hunks.length === 0) {
+    return <div className="diff-empty-notice">No changes</div>;
+  }
+
+  const shortRef = (s: string) => s.slice(0, 7);
+
+  return (
+    <div className="stitch-file-diff">
+      <div className="diff-toolbar">
+        <div className="diff-toolbar-left">
+          <span className="diff-title">
+            <span className="diff-file-title">{filePath}</span>
+            <span className="diff-stats">
+              <span className="diff-stat-add">+{fileDiff.added}</span>
+              <span className="diff-stat-rem">-{fileDiff.removed}</span>
+            </span>
+          </span>
+          <span className="diff-ref-range">
+            {shortRef(parsed.ref)}…{shortRef(parsed.ref2)}
+          </span>
+        </div>
+        <div className="diff-toolbar-right">
+          <div className="diff-view-toggle" role="group" aria-label="View mode">
+            <button
+              className={`diff-toggle-btn${mode === 'unified' ? ' active' : ''}`}
+              onClick={() => setMode('unified')}
+              title="Unified view"
+            >
+              Unified
+            </button>
+            <button
+              className={`diff-toggle-btn${mode === 'split' ? ' active' : ''}`}
+              onClick={() => setMode('split')}
+              title="Split view"
+            >
+              Split
+            </button>
+          </div>
+        </div>
+      </div>
+      <div className="diff-body">
+        {mode === 'unified' ? (
+          fileDiff.hunks.map((hunk, hi) => (
+            <div key={hi}>
+              <div className="diff-row diff-hunk-header">{hunk.header}</div>
+              {hunk.lines.map((line, li) => (
+                <DiffLineView key={`${hi}-${li}`} line={line} />
+              ))}
+            </div>
+          ))
+        ) : (
+          // Split view
+          fileDiff.hunks.map((hunk, hi) => {
+            const rows: Array<{ left: DiffLine | null; right: DiffLine | null }> = [];
+            let removes: DiffLine[] = [];
+            let adds: DiffLine[] = [];
+
+            const flush = () => {
+              const n = Math.max(removes.length, adds.length);
+              for (let i = 0; i < n; i++) {
+                rows.push({
+                  left: removes[i] ?? null,
+                  right: adds[i] ?? null,
+                });
+              }
+              removes = [];
+              adds = [];
+            };
+
+            for (const line of hunk.lines) {
+              if (line.kind === 'context') {
+                flush();
+                rows.push({ left: line, right: line });
+              } else if (line.kind === 'remove') {
+                removes.push(line);
+              } else {
+                adds.push(line);
+              }
+            }
+            flush();
+
+            return (
+              <div key={hi}>
+                <div className="diff-row diff-hunk-header">{hunk.header}</div>
+                {rows.map((row, ri) => (
+                  <div key={`${hi}-${ri}`} className="diff-row diff-split-row">
+                    <div className={`diff-split-cell diff-split-cell--left${row.left ? ` diff-line--${row.left.kind}` : ' diff-split-empty'}`}>
+                      {row.left && (
+                        <>
+                          <span className="diff-lineno">{row.left.old_lineno ?? ''}</span>
+                          <span className="diff-line-marker">
+                            {row.left.kind === 'remove' ? '-' : ' '}
+                          </span>
+                          <span className="diff-line-content">{row.left.content}</span>
+                        </>
+                      )}
+                    </div>
+                    <div className={`diff-split-cell diff-split-cell--right${row.right ? ` diff-line--${row.right.kind}` : ' diff-split-empty'}`}>
+                      {row.right && (
+                        <>
+                          <span className="diff-lineno">{row.right.new_lineno ?? ''}</span>
+                          <span className="diff-line-marker">
+                            {row.right.kind === 'add' ? '+' : ' '}
+                          </span>
+                          <span className="diff-line-content">{row.right.content}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function FilesTab({ projectName, projectPath, onSwitchTab }: FilesTabProps) {
+  // File navigation from stitch detail page (bead commits)
+  const fileNavigation = useAtomValue(fileNavigationAtom);
+  const setFileNavigation = useSetAtom(fileNavigationAtom);
+
   // Tree state
   const [rootEntries, setRootEntries] = useState<FileEntry[]>([]);
   const [rootLoading, setRootLoading] = useState(true);
@@ -643,6 +913,9 @@ export default function FilesTab({ projectName, projectPath, onSwitchTab }: File
   const [loading, setLoading] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedFile, setSelectedFile] = useState<{ path: string; size: number } | null>(null);
+
+  // Diff view state — when navigating from a stitch, show diff instead of file content
+  const [showDiffView, setShowDiffView] = useState(false);
 
   // Filter state — initialised from URL hash
   const [filter, setFilter] = useState<FileFilter>(readFiltersFromHash);
@@ -681,6 +954,34 @@ export default function FilesTab({ projectName, projectPath, onSwitchTab }: File
     window.addEventListener('hashchange', handler);
     return () => window.removeEventListener('hashchange', handler);
   }, []);
+
+  // ── Handle file navigation from stitch detail page ─────────────────────────
+  useEffect(() => {
+    if (!fileNavigation) return;
+    // Only handle navigation for this project
+    if (fileNavigation.projectName !== projectName) return;
+
+    // Find the file in the tree to get its size
+    const findFileInTree = (entries: FileEntry[], targetPath: string): FileEntry | null => {
+      for (const entry of entries) {
+        if (!entry.is_dir && entry.path === targetPath) return entry;
+        if (entry.is_dir && childCache.has(entry.path)) {
+          const found = findFileInTree(childCache.get(entry.path)!, targetPath);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+
+    const fileEntry = findFileInTree(rootEntries, fileNavigation.filePath);
+    if (fileEntry) {
+      setSelectedFile({ path: fileEntry.path, size: fileEntry.size });
+      setShowDiffView(true);
+    }
+
+    // Clear navigation state after consuming
+    setFileNavigation(null);
+  }, [fileNavigation, rootEntries, childCache, projectName, setFileNavigation]);
 
   // ── Tree: fetch root ───────────────────────────────────────────────────────
   const fetchDir = useCallback(
@@ -748,8 +1049,15 @@ export default function FilesTab({ projectName, projectPath, onSwitchTab }: File
     setSelectedFile(prev =>
       prev?.path === entry.path ? null : { path: entry.path, size: entry.size },
     );
-    // Reset blame mode when switching files
+    // Reset blame mode and diff view when switching files manually
     setBlameEnabled(false);
+    setShowDiffView(false);
+  }, []);
+
+  // Stub handler for context menu requests (file attach functionality)
+  const handleContextMenuRequest = useCallback((_entry: FileEntry, _x: number, _y: number) => {
+    // Context menu functionality would go here
+    // Currently a stub to satisfy the TreeNode and SearchResultRow prop requirements
   }, []);
 
   // ── Search: fetch when filter changes ─────────────────────────────────────
@@ -842,6 +1150,8 @@ export default function FilesTab({ projectName, projectPath, onSwitchTab }: File
                 result={r}
                 isSelected={selectedPath === r.path}
                 onSelect={handleSelect}
+                projectName={projectName}
+                onContextMenuRequest={handleContextMenuRequest}
               />
             ))}
           </div>
@@ -867,6 +1177,8 @@ export default function FilesTab({ projectName, projectPath, onSwitchTab }: File
                   onToggle={handleToggle}
                   onSelect={handleSelect}
                   selectedPath={selectedPath}
+                  projectName={projectName}
+                  onContextMenuRequest={handleContextMenuRequest}
                 />
               ))}
           </div>
@@ -879,29 +1191,42 @@ export default function FilesTab({ projectName, projectPath, onSwitchTab }: File
               <div className="file-preview-controls">
                 {!isImagePath(selectedFile.path) && (
                   <>
+                    {/* Toggle between diff view and file content view */}
+                    {fileNavigation && fileNavigation.refRange && (
+                      <button
+                        className={`view-mode-toggle${showDiffView ? ' view-mode-toggle--diff' : ''}`}
+                        onClick={() => setShowDiffView(v => !v)}
+                        title={showDiffView ? 'Show file content' : 'Show diff from stitch'}
+                      >
+                        {showDiffView ? '📄 content' : '📊 diff'}
+                      </button>
+                    )}
                     <button
                       className={`blame-toggle${blameEnabled ? ' blame-toggle--active' : ''}`}
                       onClick={() => setBlameEnabled(v => !v)}
                       title={blameEnabled ? 'Hide Stitch attribution' : 'Show Stitch attribution (git blame)'}
+                      disabled={showDiffView}
                     >
                       {blameEnabled
                         ? (blameLoading ? '⋯ blame' : '● blame')
                         : '○ blame'}
                     </button>
-                    <select
-                      className="hl-theme-select"
-                      value={hlTheme}
-                      onChange={e => setHlTheme(e.target.value)}
-                      title="Highlight theme"
-                    >
-                      <option value="light">GitHub Light</option>
-                      <option value="dark">GitHub Dark</option>
-                      <option value="solarized-dark">Solarized Dark</option>
-                      <option value="solarized-light">Solarized Light</option>
-                      <option value="eighties">Eighties Dark</option>
-                      <option value="mocha-dark">Mocha Dark</option>
-                      <option value="ocean-light">Ocean Light</option>
-                    </select>
+                    {!showDiffView && (
+                      <select
+                        className="hl-theme-select"
+                        value={hlTheme}
+                        onChange={e => setHlTheme(e.target.value)}
+                        title="Highlight theme"
+                      >
+                        <option value="light">GitHub Light</option>
+                        <option value="dark">GitHub Dark</option>
+                        <option value="solarized-dark">Solarized Dark</option>
+                        <option value="solarized-light">Solarized Light</option>
+                        <option value="eighties">Eighties Dark</option>
+                        <option value="mocha-dark">Mocha Dark</option>
+                        <option value="ocean-light">Ocean Light</option>
+                      </select>
+                    )}
                   </>
                 )}
                 <button className="file-preview-close" onClick={() => setSelectedFile(null)}>
@@ -914,6 +1239,13 @@ export default function FilesTab({ projectName, projectPath, onSwitchTab }: File
                 <ImageViewer
                   projectName={projectName}
                   path={selectedFile.path}
+                />
+              ) : showDiffView && fileNavigation && fileNavigation.refRange ? (
+                // Show diff view when navigating from stitch detail
+                <StitchFileDiffViewer
+                  projectName={projectName}
+                  filePath={selectedFile.path}
+                  refRange={fileNavigation.refRange}
                 />
               ) : selectedFile.size <= SHIKI_MAX_BYTES ? (
                 <ShikiCodeViewer

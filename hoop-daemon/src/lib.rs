@@ -54,6 +54,7 @@ pub mod id_validators;
 pub mod identity;
 pub mod log_rotation;
 pub mod metrics;
+pub mod migrations;
 pub mod morning_brief;
 pub mod mutation_handler;
 pub mod parse_jsonl_safe;
@@ -259,6 +260,8 @@ pub struct DaemonState {
     pub project_metadata:
         Arc<std::sync::RwLock<std::collections::HashMap<String, ProjectMetadata>>>,
     pub config_status_tx: broadcast::Sender<ws::ConfigStatusData>,
+    /// Current config status state (persisted for new WS clients and restart recovery)
+    pub config_status: Arc<std::sync::RwLock<ws::ConfigStatusData>>,
     pub project_status_tx: broadcast::Sender<ws::ProjectCardData>,
     pub capacity_tx: broadcast::Sender<Vec<capacity::AccountCapacity>>,
     pub cost_aggregator: Arc<std::sync::RwLock<cost::CostAggregator>>,
@@ -302,6 +305,8 @@ pub struct DaemonState {
     pub template_library: template_library::TemplateStore,
     /// Identity cache for Tailscale whois lookups (§13 Security)
     pub identity_cache: Arc<identity::IdentityCache>,
+    /// Role resolver for RBAC (maps Tailscale identities to viewer/drafter roles)
+    pub role_resolver: Arc<auth::RoleResolver>,
 }
 
 /// Health check endpoint handler — returns 200 if the process is responsive.
@@ -1394,6 +1399,12 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     // Initialize config status broadcast channel
     let (config_status_tx, _) = broadcast::channel::<ws::ConfigStatusData>(64);
 
+    // Initialize persistent config status state (start with valid, will be updated by watchers)
+    let config_status = Arc::new(std::sync::RwLock::new(ws::ConfigStatusData {
+        valid: true,
+        error: None,
+    }));
+
     // Initialize project status broadcast channel
     let (project_status_tx, _) = broadcast::channel::<ws::ProjectCardData>(64);
 
@@ -1620,6 +1631,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     // Spawn task to handle projects config changes
     let supervisor_for_reconcile = supervisor.clone();
     let config_tx_for_reload = config_status_tx.clone();
+    let config_status_for_reload = config_status.clone();
     tokio::spawn(async move {
         let mut rx = projects_watcher.subscribe();
         while let Ok(event) = rx.recv().await {
@@ -1662,11 +1674,13 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         }
                     }
 
-                    // Broadcast valid config status
-                    let _ = config_tx_for_reload.send(ws::ConfigStatusData {
+                    // Broadcast valid config status and persist state
+                    let status = ws::ConfigStatusData {
                         valid: true,
                         error: None,
-                    });
+                    };
+                    *config_status_for_reload.write().unwrap() = status.clone();
+                    let _ = config_tx_for_reload.send(status);
                 }
                 projects::ProjectsEvent::ConfigError { error, prev_hash } => {
                     warn!("Projects configuration error: {}", error.message);
@@ -1701,8 +1715,8 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         }
                     }
 
-                    // Broadcast config error with structured details (§17.5)
-                    let _ = config_tx_for_reload.send(ws::ConfigStatusData {
+                    // Broadcast config error with structured details and persist state (§17.5)
+                    let status = ws::ConfigStatusData {
                         valid: false,
                         error: Some(ws::ConfigErrorData {
                             message: error.message.clone(),
@@ -1712,7 +1726,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                             expected: error.expected.clone(),
                             got: error.got.clone(),
                         }),
-                    });
+                    };
+                    *config_status_for_reload.write().unwrap() = status.clone();
+                    let _ = config_tx_for_reload.send(status);
                 }
             }
         }
@@ -2437,6 +2453,11 @@ Note: This is an automated synthesis from voice dictation."#,
     script_scheduler.clone().start_scheduler(sched_shutdown);
     info!("Script scheduler started");
 
+    // Start draft cleanup scheduler (§19.1) — removes abandoned drafts > 7 days old
+    let draft_cleanup_shutdown = shutdown_coordinator.subscribe();
+    fleet::start_draft_cleanup_scheduler(draft_cleanup_shutdown);
+    info!("Draft cleanup scheduler started");
+
     // Initialize template library (§22)
     let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     home.push(".hoop");
@@ -2479,6 +2500,9 @@ Note: This is an automated synthesis from voice dictation."#,
     let beads_for_rebuild = beads.clone();
     let initial_projects_for_rebuild = initial_projects.clone();
 
+    // Create shared identity cache for whois lookups (cached per IP, 5-min TTL)
+    let identity_cache = Arc::new(identity::IdentityCache::new());
+
     let state = DaemonState {
         config: config.clone(),
         started_at: Instant::now(),
@@ -2491,6 +2515,7 @@ Note: This is an automated synthesis from voice dictation."#,
         projects: Arc::new(std::sync::RwLock::new(initial_projects)),
         project_metadata: project_metadata.clone(),
         config_status_tx,
+        config_status,
         project_status_tx,
         capacity_tx,
         cost_aggregator: cost_aggregator.clone(),
@@ -2513,7 +2538,11 @@ Note: This is an automated synthesis from voice dictation."#,
         stuck_detector,
         backup_runner,
         template_library,
-        identity_cache: Arc::new(identity::IdentityCache::new()),
+        identity_cache: identity_cache.clone(),
+        role_resolver: Arc::new(
+            auth::RoleResolver::new(resolved_config.roles.value.clone())
+                .with_identity_cache(identity_cache),
+        ),
     };
 
     // Forward project runtime status updates to shared store and broadcast

@@ -72,9 +72,15 @@ pub enum AgentSessionEvent {
         output: serde_json::Value,
         is_error: bool,
     },
+    /// A turn started with a unique turn_id for audit trail.
+    TurnStarted {
+        session_id: String,
+        turn_id: String,
+    },
     /// A turn completed.
     TurnComplete {
         session_id: String,
+        turn_id: String,
         cost_usd: f64,
         input_tokens: i64,
         output_tokens: i64,
@@ -92,6 +98,8 @@ struct Inner {
     session: Option<AgentSession>,
     db_row_id: Option<String>,
     config: AgentAdapterConfig,
+    /// Current turn ID for audit trail - set when a turn starts
+    current_turn_id: Option<String>,
 }
 
 impl std::fmt::Debug for Inner {
@@ -433,7 +441,7 @@ impl AgentSessionManager {
         prompt: String,
         attachments: Vec<Attachment>,
     ) -> Result<EventStream> {
-        let inner = self.inner.lock().await;
+        let mut inner = self.inner.lock().await;
         if !self.enabled.load(std::sync::atomic::Ordering::Relaxed) {
             return Err(anyhow::anyhow!("Agent is disabled"));
         }
@@ -443,6 +451,21 @@ impl AgentSessionManager {
             .ok_or_else(|| anyhow::anyhow!("No active agent session"))?
             .clone();
         let adapter = &inner.adapter;
+
+        // Generate a unique turn_id for this turn (audit trail)
+        let turn_id = format!("turn-{}", uuid::Uuid::new_v4());
+        inner.current_turn_id = Some(turn_id.clone());
+
+        // Emit TurnStarted event with turn_id
+        let session_id = session.id.0.clone();
+        drop(inner); // Release lock before sending event
+        let _ = self.event_tx.send(AgentSessionEvent::TurnStarted {
+            session_id: session_id.clone(),
+            turn_id: turn_id.clone(),
+        });
+
+        // Re-acquire lock for the rest of the function
+        let inner = self.inner.lock().await;
 
         let start = std::time::Instant::now();
         let stream = adapter.send_turn(&session, &prompt, attachments).await?;
@@ -549,12 +572,21 @@ impl AgentSessionManager {
                         usage.output_tokens as i64,
                         cost,
                     );
+
+                    // Get the current turn_id for this turn
+                    let turn_id = inner.current_turn_id.clone()
+                        .unwrap_or_else(|| format!("turn-unknown-{}", uuid::Uuid::new_v4()));
+
                     let _ = self.event_tx.send(AgentSessionEvent::TurnComplete {
                         session_id: session_id.clone(),
+                        turn_id,
                         cost_usd: cost,
                         input_tokens: usage.input_tokens as i64,
                         output_tokens: usage.output_tokens as i64,
                     });
+
+                    // Clear the current turn_id after turn completes
+                    inner.current_turn_id = None;
                 }
             }
             AgentEvent::Error { message } => {
@@ -710,6 +742,15 @@ impl AgentSessionManager {
     /// Get the event sender (for wiring into the WS forwarder).
     pub fn event_sender(&self) -> broadcast::Sender<AgentSessionEvent> {
         self.event_tx.clone()
+    }
+
+    /// Get the current turn_id for the active turn (if any).
+    ///
+    /// Returns None if no turn is currently in progress. This is used by
+    /// draft creation to include the turn_id in audit args for traceability.
+    pub async fn current_turn_id(&self) -> Option<String> {
+        let inner = self.inner.lock().await;
+        inner.current_turn_id.clone()
     }
 }
 

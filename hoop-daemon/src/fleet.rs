@@ -21,7 +21,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 /// Current schema version
-pub const SCHEMA_VERSION: &str = "1.24.0";
+pub const SCHEMA_VERSION: &str = "1.25.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -67,6 +67,8 @@ pub enum ActionKind {
     RestoreFailed,
     /// Schema migration from_version → to_version (duration_ms, rows_touched in args_json)
     SchemaMigrated,
+    /// Reflection Ledger rule injected into agent session (§4.7)
+    ReflectionInjected,
 }
 
 /// Action result for audit log
@@ -479,14 +481,14 @@ pub fn create_stitch_with_audit(
     conn.execute(
         r#"
         INSERT INTO stitches (id, project, kind, title, created_by, created_at, last_activity_at, classification,
-                             created_by_actor, created_by_session_id, created_by_adapter, created_by_model)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             created_by_actor, created_by_session_id, created_by_adapter, created_by_model, turn_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
         params![stitch_id, project, kind, title, created_by, now, now, classification,
-                created_by_actor, created_by_session_id, created_by_adapter, created_by_model],
+                created_by_actor, created_by_session_id, created_by_adapter, created_by_model, turn_id],
     )?;
 
-    // Store turn_id in stitch_messages as a system note if provided
+    // Store turn_id in stitch_messages as a system note if provided (for UI display)
     if let Some(tid) = turn_id {
         conn.execute(
             r#"
@@ -780,7 +782,7 @@ fn hex_encode(data: Vec<u8>) -> String {
 /// Records {kind: schema_migrated, from, to, duration_ms, rows_touched} for
 /// every schema migration. This is the most consequential mutation HOOP performs
 /// on fleet.db, and the audit trail must answer "when did we go to version X?"
-fn write_schema_migration_audit(
+pub fn write_schema_migration_audit(
     from_version: &str,
     to_version: &str,
     duration_ms: f64,
@@ -2144,7 +2146,7 @@ fn migrate_v117_to_v118(conn: &mut Connection) -> Result<()> {
 }
 
 /// Update the schema version in the metadata table
-fn update_schema_version(conn: &mut Connection, version: &str) -> Result<()> {
+pub fn update_schema_version(conn: &mut Connection, version: &str) -> Result<()> {
     conn.execute(
         "UPDATE metadata SET value = ? WHERE key = 'schema_version'",
         [version],
@@ -2416,6 +2418,48 @@ fn migrate_v123_to_v124(conn: &mut Connection) -> Result<()> {
 
     info!("vector_index table created successfully");
     update_schema_version(conn, "1.24.0")?;
+    Ok(())
+}
+
+/// Migration 1.24.0 → 1.25.0: Add agent_turns table for audit trail
+///
+/// Creates a table to track each turn in an agent session, enabling
+/// reconstruction of any drafted Stitch back to its origin chat turn
+/// (§6 Phase 5 deliverable 8).
+fn migrate_v124_to_v125(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.24.0 → 1.25.0: Adding agent_turns table for audit trail");
+
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS agent_turns (
+            id TEXT PRIMARY KEY NOT NULL,
+            session_id TEXT NOT NULL REFERENCES agent_sessions(id) ON DELETE CASCADE,
+            turn_number INTEGER NOT NULL,
+            prompt TEXT NOT NULL,
+            adapter TEXT NOT NULL,
+            model TEXT NOT NULL,
+            input_tokens INTEGER DEFAULT 0,
+            output_tokens INTEGER DEFAULT 0,
+            cost_usd REAL DEFAULT 0.0,
+            started_at TEXT NOT NULL,
+            completed_at TEXT,
+            error TEXT,
+            draft_ids TEXT DEFAULT '[]'
+        )
+        "#,
+        [],
+    )?;
+
+    // Index for querying turns by session
+    conn.execute(
+        r#"
+        CREATE INDEX IF NOT EXISTS idx_agent_turns_session_id ON agent_turns(session_id, turn_number)
+        "#,
+        [],
+    )?;
+
+    info!("agent_turns table created with indexes");
+    update_schema_version(conn, "1.25.0")?;
     Ok(())
 }
 
@@ -3229,6 +3273,92 @@ pub fn list_approved_reflection_entries(
     for row in rows {
         result.push(row?);
     }
+    Ok(result)
+}
+
+/// Build reflection rules string for injection into agent system prompt.
+///
+/// For each approved rule injected, writes an audit row with
+/// `{kind: reflection_injected, rule_id, session_id, turn_index}` and
+/// atomically updates `rule.last_applied + applied_count`.
+///
+/// # Arguments
+/// * `session_id` - The fleet.db session ID for audit tracking (§4.7)
+/// * `turn_index` - The turn number within the session (0 for session spawn)
+///
+/// # Returns
+/// A formatted string containing all approved reflection rules, or an empty
+/// string if no rules exist.
+pub fn build_reflection_rules_with_audit(
+    session_id: &str,
+    turn_index: u64,
+) -> Result<String> {
+    let entries = list_approved_reflection_entries(None)?;
+    if entries.is_empty() {
+        return Ok(String::new());
+    }
+
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let now = Utc::now().to_rfc3339();
+
+    let mut rules = Vec::new();
+    for entry in &entries {
+        // Build the rule string for the system prompt
+        let scope_display = if entry.scope == "global" {
+            "global".to_string()
+        } else if entry.scope.starts_with("project:") {
+            entry.scope.replace("project:", "project ")
+        } else if entry.scope.starts_with("pattern:") {
+            entry.scope.replace("pattern:", "pattern ")
+        } else {
+            entry.scope.clone()
+        };
+        rules.push(format!("- [{}] {}", scope_display, entry.rule));
+
+        // Write audit row for this injection
+        let args_json = serde_json::json!({
+            "rule_id": entry.id,
+            "session_id": session_id,
+            "turn_index": turn_index,
+            "scope": entry.scope,
+            "rule": entry.rule,
+        })
+        .to_string();
+
+        let _ = write_audit_row(
+            "hoop:agent",
+            ActionKind::ReflectionInjected,
+            &entry.id,
+            None,
+            Some(args_json),
+            ActionResult::Success,
+            None,
+            None,
+            None,
+            None,
+        );
+
+        // Atomically update last_applied and applied_count
+        conn.execute(
+            r#"
+            UPDATE reflection_ledger
+            SET last_applied = ?1,
+                applied_count = applied_count + 1
+            WHERE id = ?2
+            "#,
+            params![now, &entry.id],
+        )
+        .map_err(|e| anyhow::anyhow!("Failed to update reflection_ledger: {}", e))?;
+    }
+
+    let mut result = String::from("## Reflection Ledger\n");
+    result.push_str("The following rules have been learned from operator behavior:\n\n");
+    for rule in rules {
+        result.push_str(&rule);
+        result.push('\n');
+    }
+
     Ok(result)
 }
 
@@ -4385,6 +4515,77 @@ pub fn start_draft_cleanup_scheduler(
             }
         }
     });
+}
+
+/// Query operator stitch messages for reflection detection.
+///
+/// Returns messages from operator-kind Stitches within the time window,
+/// respecting limits on stitches to scan and messages per stitch.
+pub fn query_operator_stitch_messages(
+    cutoff: &str,
+    max_stitches: usize,
+    max_messages_per_stitch: usize,
+) -> Result<Vec<crate::reflection_detector::OperatorMessage>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT
+            sm.stitch_id,
+            sm.role,
+            json_extract(sm.content, '$.text') as content
+        FROM stitch_messages sm
+        JOIN stitches s ON s.id = sm.stitch_id
+        WHERE s.kind = 'operator'
+          AND s.classification = 'operator'
+          AND sm.role = 'user'
+          AND sm.ts >= ?1
+        ORDER BY sm.ts DESC
+        LIMIT ?2
+        "#,
+    )?;
+
+    let rows = stmt.query_map(params![cutoff, max_stitches * max_messages_per_stitch], |row| {
+        Ok(crate::reflection_detector::OperatorMessage {
+            stitch_id: row.get(0)?,
+            role: row.get(1)?,
+            content: row.get::<_, String>(2).unwrap_or_default(),
+        })
+    })?;
+
+    let mut messages = Vec::new();
+    for row in rows {
+        messages.push(row?);
+    }
+
+    Ok(messages)
+}
+
+/// Propose a new reflection entry in the ledger.
+///
+/// Creates a new row with status='proposed' that can be approved/rejected by the operator.
+/// Returns the ID of the newly created entry.
+pub fn propose_reflection_entry(
+    rule: &str,
+    reason: &str,
+    scope: &str,
+    source_stitches: &[String],
+) -> Result<String> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+
+    let id = Uuid::new_v4().to_string();
+    let source_stitches_json = serde_json::to_string(source_stitches)?;
+    let now = Utc::now().to_rfc3339();
+
+    conn.execute(
+        r#"INSERT INTO reflection_ledger (id, scope, rule, reason, source_stitches, status, created_at, applied_count)
+           VALUES (?1, ?2, ?3, ?4, ?5, 'proposed', ?6, 0)"#,
+        params![id, scope, rule, reason, source_stitches_json, now],
+    )?;
+
+    Ok(id)
 }
 
 #[cfg(test)]

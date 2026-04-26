@@ -179,7 +179,7 @@ projects:
 
     // Fleet notifications should be present (even if empty in test)
     assert!(
-        index.fleet_notifications.len() <= hoop_daemon::fleet_notifications::RING_SIZE,
+        index.notifications.len() <= hoop_daemon::fleet_notifications::RING_SIZE,
         "Fleet notifications in context should not exceed RING_SIZE"
     );
 }

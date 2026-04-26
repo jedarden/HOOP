@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/template_field.json",
+  "title": "TemplateField",
+  "description": "A field definition in a stitch template. Fields define user inputs that are substituted into the template body.",
+  "type": "object",
+  "required": ["key", "label", "required"],
+  "properties": {
+    "key": {
+      "type": "string",
+      "description": "Machine key used in {{key}} placeholders for substitution"
+    },
+    "label": {
+      "type": "string",
+      "description": "Human-readable label for the form input"
+    },
+    "required": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the field is required"
+    },
+    "placeholder": {
+      "type": ["string", "null"],
+      "description": "Placeholder text for the input field"
+    },
+    "default": {
+      "type": ["string", "null"],
+      "description": "Default value for the field"
+    }
+  },
+  "schema_version": "1.0.0"
+}

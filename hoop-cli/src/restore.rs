@@ -401,6 +401,25 @@ pub async fn run_restore(from_uri: &str) -> Result<()> {
             println!("Migrated schema {} -> {}", pre_version, current);
         }
 
+        // 11. Verify audit hash chain integrity against manifest
+        if let Some(ref expected_hash) = manifest.final_audit_hash {
+            println!("Verifying audit hash chain ...");
+            hoop_daemon::fleet::verify_hash_chain()
+                .context("Audit hash chain verification failed - database may be tampered")?;
+
+            let actual_hash = hoop_daemon::fleet::get_final_audit_hash()
+                .context("Failed to get final audit hash from restored database")?;
+
+            if actual_hash != *expected_hash {
+                bail!(
+                    "Audit hash mismatch: manifest has {} but restored database has {}. \
+                     This indicates the audit log was tampered with after the backup was taken.",
+                    expected_hash, actual_hash
+                );
+            }
+            println!("Audit hash chain verified (final: {})", actual_hash);
+        }
+
         Ok(())
     }
     .await;

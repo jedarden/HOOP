@@ -4,7 +4,7 @@
   "title": "AuditRow",
   "description": "Audit log entry for every write HOOP performs",
   "type": "object",
-  "required": ["id", "ts", "actor", "kind", "target", "result", "schema_version"],
+  "required": ["id", "ts", "actor", "kind", "target", "result", "hash_prev", "hash_self"],
   "properties": {
     "id": {
       "type": "string",
@@ -41,6 +41,16 @@
     "error": {
       "type": ["string", "null"],
       "description": "Error message if result is not success"
+    },
+    "hash_prev": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 hash of the previous audit row (64 hex chars, genesis row is all zeros)"
+    },
+    "hash_self": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 hash of this audit row's content (64 hex chars)"
     },
     "schema_version": {
       "type": "string",

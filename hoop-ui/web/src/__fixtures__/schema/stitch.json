@@ -1,0 +1,11 @@
+{
+  "archived": false,
+  "classification": "operator",
+  "created_at": "2024-01-01T00:00:00Z",
+  "created_by": "user",
+  "id": "01234567-89ab-cdef-0123-456789abcdef",
+  "kind": "operator",
+  "project": "test-project",
+  "schema_version": "1.0.0",
+  "title": "Test stitch"
+}

@@ -9840,6 +9840,37 @@ body.wt-tour-active {
   word-break: break-all;
 }
 
+.audit-agent-meta {
+  margin-left: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.audit-agent-model {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 0.7rem;
+  color: #666;
+  background: #f5f5f5;
+  padding: 0.1rem 0.375rem;
+  border-radius: 3px;
+}
+
+.audit-turn-link {
+  font-size: 0.7rem;
+  color: #1976d2;
+  text-decoration: none;
+  padding: 0.1rem 0.375rem;
+  border-radius: 3px;
+  background: #e8f0fe;
+  transition: background 0.15s ease;
+}
+
+.audit-turn-link:hover {
+  background: #d2e3fc;
+  text-decoration: underline;
+}
+
 .audit-kind-badge {
   display: inline-block;
   padding: 0.125rem 0.5rem;

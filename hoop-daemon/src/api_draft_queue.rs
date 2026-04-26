@@ -382,7 +382,7 @@ async fn create_draft(
     // Build audit args with agent metadata for traceability
     let audit_args_json = if let Some(ref session_id) = req.agent_session_id {
         // Load agent session to get adapter and model info
-        let agent_info = fleet::load_agent_session_by_id(session_id)
+        let agent_info = fleet::load_agent_session_by_adapter_id(session_id)
             .ok()
             .flatten()
             .map(|session| {
@@ -572,7 +572,7 @@ async fn approve_draft(
     // Extract agent metadata from draft for audit trail
     let agent_metadata = if let Some(ref session_id) = draft.agent_session_id {
         // Query the agent_sessions table to get adapter and model
-        match fleet::load_agent_session_by_id(session_id) {
+        match fleet::load_agent_session_by_adapter_id(session_id) {
             Ok(Some(session)) => Some(crate::api_stitch_decompose::AgentMetadata {
                 session_id: session.id.clone(),
                 adapter: session.adapter,

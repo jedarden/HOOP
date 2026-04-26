@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/stitch_template.json",
+  "title": "StitchTemplate",
+  "description": "A reusable stitch template for creating beads with default values and field substitutions",
+  "type": "object",
+  "required": ["name", "description", "scope", "fields", "body"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Unique template name (filename without .md, or explicit name in frontmatter)"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of what the template is for"
+    },
+    "scope": {
+      "type": "string",
+      "description": "Template scope: 'global' for ~/.hoop/templates, project name for <project>/.hoop/templates"
+    },
+    "kind": {
+      "type": ["string", "null"],
+      "description": "Default stitch kind (task, fix, investigation, genesis, review)"
+    },
+    "priority": {
+      "type": ["integer", "null"],
+      "description": "Default priority (0-4, higher is more urgent)"
+    },
+    "labels": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Default labels to apply"
+    },
+    "default_beads": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Default dependencies (bead IDs)"
+    },
+    "fields": {
+      "type": "array",
+      "items": {
+        "$ref": "template_field.json"
+      },
+      "default": [],
+      "description": "Field definitions that surface as form inputs"
+    },
+    "body": {
+      "type": "string",
+      "description": "Template body with {{field}} placeholders for substitution"
+    }
+  },
+  "schema_version": "1.0.0"
+}

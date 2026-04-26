@@ -59,6 +59,8 @@ const schemaOrder = [
   'reflection_ledger.json',
   'config_error.json',
   'project_config_status.json',
+  'template_field.json',
+  'stitch_template.json',
 ];
 
 /**

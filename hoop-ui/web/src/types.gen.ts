@@ -1452,6 +1452,20 @@ export interface HoopConfig {
       };
     };
   };
+  morning_brief?: {
+    /**
+     * How many hours back to look for overnight activity (default: 24, max: 168/7 days)
+     */
+    window_hours?: number;
+    /**
+     * Hour of day (0-23) to auto-run the brief in local time (default: 7 = 7 AM)
+     */
+    schedule_hour?: number;
+    /**
+     * Whether the scheduled auto-run is enabled (default: true)
+     */
+    auto_run_enabled?: boolean;
+  };
   /**
    * Stuck detector configuration for monitoring worker health (§C1)
    */
@@ -1518,9 +1532,17 @@ export interface AuditRow {
    */
   error?: string | null;
   /**
+   * SHA-256 hash of the previous audit row (64 hex chars, genesis row is all zeros)
+   */
+  hash_prev: string;
+  /**
+   * SHA-256 hash of this audit row's content (64 hex chars)
+   */
+  hash_self: string;
+  /**
    * Schema version at time of action
    */
-  schema_version: string;
+  schema_version?: string;
   [k: string]: unknown;
 }
 
@@ -1625,9 +1647,13 @@ export interface StitchBead {
    */
   bead_id: string;
   /**
-   * Workspace path
+   * Workspace path (raw, for display)
    */
   workspace: string;
+  /**
+   * Realpath-resolved workspace path (for joins and dedup)
+   */
+  canonical_workspace?: string;
   /**
    * Relationship type
    */
@@ -1921,5 +1947,99 @@ export interface ProjectConfigStatus {
     col: number;
     [k: string]: unknown;
   };
+  [k: string]: unknown;
+}
+
+
+/**
+ * A field definition in a stitch template. Fields define user inputs that are substituted into the template body.
+ */
+export interface TemplateField {
+  /**
+   * Machine key used in {{key}} placeholders for substitution
+   */
+  key: string;
+  /**
+   * Human-readable label for the form input
+   */
+  label: string;
+  /**
+   * Whether the field is required
+   */
+  required: boolean;
+  /**
+   * Placeholder text for the input field
+   */
+  placeholder?: string | null;
+  /**
+   * Default value for the field
+   */
+  default?: string | null;
+  [k: string]: unknown;
+}
+
+
+/**
+ * A reusable stitch template for creating beads with default values and field substitutions
+ */
+export interface StitchTemplate {
+  /**
+   * Unique template name (filename without .md, or explicit name in frontmatter)
+   */
+  name: string;
+  /**
+   * Human-readable description of what the template is for
+   */
+  description: string;
+  /**
+   * Template scope: 'global' for ~/.hoop/templates, project name for <project>/.hoop/templates
+   */
+  scope: string;
+  /**
+   * Default stitch kind (task, fix, investigation, genesis, review)
+   */
+  kind?: string | null;
+  /**
+   * Default priority (0-4, higher is more urgent)
+   */
+  priority?: number | null;
+  /**
+   * Default labels to apply
+   */
+  labels?: string[];
+  /**
+   * Default dependencies (bead IDs)
+   */
+  default_beads?: string[];
+  /**
+   * Field definitions that surface as form inputs
+   */
+  fields: {
+    /**
+     * Machine key used in {{key}} placeholders for substitution
+     */
+    key: string;
+    /**
+     * Human-readable label for the form input
+     */
+    label: string;
+    /**
+     * Whether the field is required
+     */
+    required: boolean;
+    /**
+     * Placeholder text for the input field
+     */
+    placeholder?: string | null;
+    /**
+     * Default value for the field
+     */
+    default?: string | null;
+    [k: string]: unknown;
+  }[];
+  /**
+   * Template body with {{field}} placeholders for substitution
+   */
+  body: string;
   [k: string]: unknown;
 }

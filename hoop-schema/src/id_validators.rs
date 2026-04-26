@@ -525,16 +525,6 @@ fn truncate_for_display(s: &str, max: usize) -> String {
     }
 }
 
-/// Convert an ID validation error into an HTTP 400 response.
-///
-/// This function is used by API handlers to return safe error messages
-/// that never echo the raw user input or filesystem path (§13).
-///
-/// Returns a tuple of `(StatusCode, String)` suitable for axum error responses.
-pub fn rejection(err: IdValidationError) -> (http::StatusCode, String) {
-    (http::StatusCode::BAD_REQUEST, err.to_string())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

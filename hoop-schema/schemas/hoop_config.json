@@ -114,6 +114,9 @@
     "pricing": {
       "$ref": "pricing_config.json"
     },
+    "morning_brief": {
+      "$ref": "morning_brief_config.json"
+    },
     "stuck_detector": {
       "type": "object",
       "additionalProperties": false,

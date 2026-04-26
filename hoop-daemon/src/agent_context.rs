@@ -3,20 +3,33 @@
 //! Principle §3.12: Eager context overflows windows on long sessions + costs money
 //! for data that might never be relevant. This module builds a thin index (~4KB token
 //! budget) containing only project names, recent activity summary, open Stitch titles,
-//! and active alerts. Full bead bodies, file contents, and conversation transcripts
-//! are fetched on demand via MCP tools.
+//! active alerts, and fleet notifications. Full bead bodies, file contents, and
+//! conversation transcripts are fetched on demand via MCP tools.
 //!
 //! ## Architecture
 //!
 //! - `ContextIndex`: Thin index injected into system prompt (<4KB tokens)
 //! - `ContextBudget`: Watchdog that emits warning at 75% window usage
-//! - `build_context_index()`: Queries fleet.db and projects.yaml for index data
+//! - `build_context_index()`: Queries fleet.db, projects.yaml, and notification ring
+//!
+//! ## Fleet notifications
+//!
+//! The agent receives the last 20 fleet notifications automatically in its context,
+//! without any tool call required. This provides real-time awareness of:
+//! - Stitch bead closures
+//! - Convoy completions
+//! - Capacity alerts
+//! - Beads created via HOOP
+//!
+//! Notifications are delivered within 5s of the triggering event via the broadcast
+//! channel in `fleet_notifications::notifications()`.
 //!
 //! ## Acceptance criteria
 //!
 //! - System prompt <4KB token budget
 //! - All detail retrievable via tools (MCP server tools)
 //! - Context-budget watchdog emits warning at 75% window usage
+//! - Fleet notifications delivered in <5s (ring buffer + broadcast)
 //! - Test: agent successfully answers "what happened today?" using only tool calls
 
 use anyhow::Result;
@@ -41,8 +54,8 @@ const CONTEXT_BUDGET_WARNING_THRESHOLD: f64 = 0.75;
 /// Thin index injected into agent's system prompt.
 ///
 /// Contains only project names, recent activity summary (last N closed Stitches
-/// with titles), open Stitch titles, and active alerts. Full details are fetched
-/// via MCP tools on demand.
+/// with titles), open Stitch titles, active alerts, and recent fleet notifications.
+/// Full details are fetched via MCP tools on demand.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContextIndex {
     /// Current timestamp for the index
@@ -55,6 +68,8 @@ pub struct ContextIndex {
     pub open_stitches: Vec<OpenStitchEntry>,
     /// Active alerts (system warnings, errors)
     pub alerts: Vec<AlertEntry>,
+    /// Recent fleet notifications (last 20 from ring)
+    pub notifications: Vec<NotificationEntry>,
 }
 
 /// Project entry in the index (name only, not full path)
@@ -111,6 +126,18 @@ pub enum AlertLevel {
     Info,
 }
 
+/// Fleet notification entry (from ring buffer)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NotificationEntry {
+    pub id: String,
+    pub ts: String,
+    pub kind: String,
+    pub project: Option<String>,
+    pub summary: String,
+    /// Truncated details (first 200 chars) to keep token budget low
+    pub details_preview: String,
+}
+
 /// Context budget watchdog
 ///
 /// Tracks token usage and emits warnings when approaching the context window limit.
@@ -139,7 +166,7 @@ impl Default for ContextBudget {
 // ---------------------------------------------------------------------------
 
 impl ContextIndex {
-    /// Build the thin context index from fleet.db and projects.yaml
+    /// Build the thin context index from fleet.db, projects.yaml, and notification ring
     pub fn build(projects_config: &serde_yaml::Value) -> Result<Self> {
         let conn = Connection::open(crate::fleet::db_path())?;
 
@@ -155,12 +182,16 @@ impl ContextIndex {
         // Query active alerts
         let alerts = Self::query_alerts(&conn)?;
 
+        // Load recent fleet notifications from ring (last 20)
+        let notifications = Self::load_notifications();
+
         Ok(Self {
             generated_at: Utc::now().to_rfc3339(),
             projects,
             recent_activity,
             open_stitches,
             alerts,
+            notifications,
         })
     }
 
@@ -179,6 +210,7 @@ impl ContextIndex {
             },
             open_stitches: vec![],
             alerts: vec![],
+            notifications: vec![],
         }
     }
 
@@ -258,6 +290,26 @@ impl ContextIndex {
                     ));
                 } else {
                     prompt.push_str(&format!("- [{}]: {}\n", level_str, alert.message));
+                }
+            }
+            prompt.push('\n');
+        }
+
+        // Fleet Notifications (last 20)
+        if !self.notifications.is_empty() {
+            prompt.push_str("## Fleet Notifications (Last 20)\n");
+            for notif in &self.notifications {
+                let ts_short = notif.ts.split('T').next().unwrap_or(&notif.ts);
+                if let Some(ref project) = notif.project {
+                    prompt.push_str(&format!(
+                        "- [{}] [{}] {}: {}\n",
+                        ts_short, notif.kind, project, notif.summary
+                    ));
+                } else {
+                    prompt.push_str(&format!(
+                        "- [{}] [{}]: {}\n",
+                        ts_short, notif.kind, notif.summary
+                    ));
                 }
             }
             prompt.push('\n');
@@ -410,6 +462,37 @@ impl ContextIndex {
         }
 
         Ok(alerts)
+    }
+
+    /// Load fleet notifications from the global ring buffer
+    fn load_notifications() -> Vec<NotificationEntry> {
+        use crate::fleet_notifications;
+        let ring = fleet_notifications::notifications();
+        let snapshot = ring.snapshot();
+
+        snapshot
+            .into_iter()
+            .map(|n| {
+                let details_json = serde_json::to_string(&n.details).unwrap_or_default();
+                let details_preview = if details_json.len() > 200 {
+                    format!("{}...", &details_json[..200])
+                } else {
+                    details_json
+                };
+
+                NotificationEntry {
+                    id: n.id,
+                    ts: n.ts,
+                    kind: serde_json::to_string(&n.kind)
+                        .unwrap_or_default()
+                        .trim_matches('"')
+                        .to_string(),
+                    project: n.project,
+                    summary: n.summary,
+                    details_preview,
+                }
+            })
+            .collect()
     }
 }
 
@@ -605,5 +688,82 @@ projects:
         // Even empty index has some overhead
         assert!(count > 0);
         assert!(count < 1000); // Should be well under 4KB
+    }
+
+    #[test]
+    fn test_notification_entry_serialization() {
+        let notif = NotificationEntry {
+            id: "notif-123".to_string(),
+            ts: "2026-04-26T10:00:00Z".to_string(),
+            kind: "stitch_beads_closed".to_string(),
+            project: Some("test-project".to_string()),
+            summary: "All beads closed".to_string(),
+            details_preview: "{\"stitch_id\":\"st-abc\"}".to_string(),
+        };
+
+        let json = serde_json::to_string(&notif).unwrap();
+        assert!(json.contains("\"stitch_beads_closed\""));
+        assert!(json.contains("All beads closed"));
+        assert!(json.contains("test-project"));
+    }
+
+    #[test]
+    fn test_system_prompt_includes_notifications() {
+        let yaml = serde_yaml::from_str("projects: []").unwrap();
+        let mut index = ContextIndex::build_for_test(&yaml);
+
+        // Add a test notification
+        index.notifications.push(NotificationEntry {
+            id: "notif-1".to_string(),
+            ts: "2026-04-26T10:00:00Z".to_string(),
+            kind: "stitch_beads_closed".to_string(),
+            project: Some("hoop".to_string()),
+            summary: "Stitch 'Fix auth bug' beads closed".to_string(),
+            details_preview: "{\"stitch_id\":\"st-123\"}".to_string(),
+        });
+
+        let prompt = index.to_system_prompt();
+
+        // Verify notifications section is present
+        assert!(prompt.contains("## Fleet Notifications"));
+        assert!(prompt.contains("stitch_beads_closed"));
+        assert!(prompt.contains("Stitch 'Fix auth bug' beads closed"));
+        assert!(prompt.contains("2026-04-26"));
+    }
+
+    #[test]
+    fn test_system_prompt_no_notifications_when_empty() {
+        let yaml = serde_yaml::from_str("projects: []").unwrap();
+        let index = ContextIndex::build_for_test(&yaml);
+
+        // notifications is empty
+        assert!(index.notifications.is_empty());
+
+        let prompt = index.to_system_prompt();
+
+        // Notifications section should not appear
+        assert!(!prompt.contains("## Fleet Notifications"));
+    }
+
+    #[test]
+    fn test_details_preview_truncates_long_json() {
+        let long_json = "{\"a\":".to_string() + &"x".repeat(300) + "}";
+
+        let notif = NotificationEntry {
+            id: "notif-1".to_string(),
+            ts: "2026-04-26T10:00:00Z".to_string(),
+            kind: "test".to_string(),
+            project: None,
+            summary: "Test".to_string(),
+            details_preview: if long_json.len() > 200 {
+                format!("{}...", &long_json[..200])
+            } else {
+                long_json.clone()
+            },
+        };
+
+        // Should be truncated to ~203 chars (200 + "...")
+        assert!(notif.details_preview.len() <= 203);
+        assert!(notif.details_preview.ends_with("..."));
     }
 }

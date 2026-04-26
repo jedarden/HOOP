@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useAtomValue } from 'jotai';
-import { projectCardsAtom, beadsAtom, BeadData } from './atoms';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { projectCardsAtom, beadsAtom, BeadData, draftAutosaveAtom, draftUpdateAtom, TemplateValues, type StitchTemplate } from './atoms';
 import { UploadManager, formatBytes } from './components/UploadManager';
+import TemplatePicker from './TemplatePicker';
 
 // Stitch kind — determines decomposition behavior
 export type StitchKind = 'task' | 'fix' | 'investigation' | 'genesis' | 'review';
@@ -198,6 +199,12 @@ function inlineFmt(s: string): string {
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/`(.+?)`/g, '<code>$1</code>')
     .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2">$1</a>');
+}
+
+// ── Template field substitution (§22 Extensibility) ────────────────────────
+
+function substituteTemplate(body: string, values: TemplateValues): string {
+  return body.replace(/\{\{(\w+)\}\}/g, (_, key) => values[key] || `{{${key}}}`);
 }
 
 // ── Label chip input ──────────────────────────────────────────────────────
@@ -707,6 +714,10 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
+  // Template state (§22 Extensibility)
+  const [selectedTemplate, setSelectedTemplate] = useState<StitchTemplate | null>(null);
+  const [templateValues, setTemplateValues] = useState<TemplateValues>({});
+
   // Projects that have a valid path (workspaces exist)
   const validProjects = useMemo(
     () => allProjects.filter(p => p.path && !p.degraded),
@@ -715,6 +726,143 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
 
   const selectedProjectData = validProjects.find(p => p.name === selectedProject);
   const projectHasWorkspace = Boolean(selectedProjectData);
+
+  // ── Draft persistence (§19.1 Draft concurrency) ─────────────────────────────
+
+  const setDraftAutosave = useSetAtom(draftAutosaveAtom);
+  const draftUpdate = useAtomValue(draftUpdateAtom);
+
+  // Generate and track draft ID for this form instance
+  const draftIdRef = useRef<string | null>(null);
+  const hasSubmittedRef = useRef(false);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Open a draft when the form first mounts or project changes
+  useEffect(() => {
+    if (!selectedProject) return;
+
+    // Generate a draft ID if we don't have one yet
+    if (!draftIdRef.current) {
+      draftIdRef.current = `draft-${crypto.randomUUID()}`;
+    }
+
+    const draftId = draftIdRef.current;
+
+    // Call the open endpoint to create/update the draft
+    fetch(`/api/drafts/${encodeURIComponent(draftId)}/open`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project: selectedProject }),
+    }).catch(err => {
+      console.error('Failed to open draft:', err);
+      setDraftAutosave(prev => ({ ...prev, saveError: 'Failed to open draft' }));
+    });
+
+    // Reset submitted state when form opens
+    hasSubmittedRef.current = false;
+  }, [selectedProject, setDraftAutosave]);
+
+  // Autosave every 5 seconds
+  useEffect(() => {
+    if (!draftIdRef.current || !selectedProject) return;
+
+    const scheduleAutosave = () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = setTimeout(() => {
+        performAutosave();
+        scheduleAutosave(); // Reschedule
+      }, 5000);
+    };
+
+    scheduleAutosave();
+
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, [form, selectedProject]); // Re-run when form or project changes
+
+  // Autosave on field change (debounced)
+  useEffect(() => {
+    if (!draftIdRef.current) return;
+
+    const timeoutId = setTimeout(() => {
+      performAutosave();
+    }, 1000); // 1 second debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [form.title, form.description, form.kind, form.priority, form.labels]);
+
+  // Perform autosave request
+  const performAutosave = useCallback(() => {
+    const draftId = draftIdRef.current;
+    if (!draftId || !selectedProject) return;
+
+    // Only autosave if there's meaningful content
+    if (!form.title.trim() && !form.description.trim()) return;
+
+    setDraftAutosave(prev => ({ ...prev, isSaving: true, saveError: null }));
+
+    const priority = form.priority !== '' ? parseInt(form.priority, 10) : inferredPriority;
+
+    fetch(`/api/drafts/${encodeURIComponent(draftId)}/autosave`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: form.title.trim() || undefined,
+        description: form.description.trim() || undefined,
+        kind: form.kind,
+        priority: form.priority !== '' ? priority : undefined,
+        labels: form.labels.length > 0 ? form.labels : undefined,
+      }),
+    })
+      .then(res => {
+        if (!res.ok) throw new Error(`Autosave failed: ${res.status}`);
+        return res.json();
+      })
+      .then((data: { last_autosave_at: string }) => {
+        setDraftAutosave(prev => ({
+          ...prev,
+          isSaving: false,
+          lastSavedAt: data.last_autosave_at,
+          saveError: null,
+        }));
+      })
+      .catch(err => {
+        console.error('Autosave error:', err);
+        setDraftAutosave(prev => ({
+          ...prev,
+          isSaving: false,
+          saveError: err.message,
+        }));
+      });
+  }, [form, selectedProject, inferredPriority, setDraftAutosave]);
+
+  // Handle draft updates from WebSocket (concurrent edits)
+  useEffect(() => {
+    if (!draftUpdate || !draftIdRef.current) return;
+    if (draftUpdate.draftId !== draftIdRef.current) return;
+
+    // Another operator edited this draft - show a notification
+    console.log('Draft was updated by another operator at:', draftUpdate.updatedAt);
+    // In a full implementation, we'd show a toast notification and potentially reload
+  }, [draftUpdate]);
+
+  // Abandon draft when form closes without submit
+  useEffect(() => {
+    return () => {
+      const draftId = draftIdRef.current;
+      if (draftId && !hasSubmittedRef.current) {
+        // Form is closing without submit - abandon the draft
+        fetch(`/api/drafts/${encodeURIComponent(draftId)}/abandon`, {
+          method: 'POST',
+        }).catch(err => {
+          console.error('Failed to abandon draft:', err);
+        });
+      }
+    };
+  }, []);
+
+  // ── End draft persistence ─────────────────────────────────────────────────────
 
   // Fetch open beads for the dep picker when project changes
   useEffect(() => {
@@ -965,7 +1113,44 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
     if (files.length > 0) addFiles(files);
   }, [addFiles]);
 
+  // ── Template selection handler (§22 Extensibility) ────────────────────────
+  const handleTemplateSelect = useCallback((template: StitchTemplate | null) => {
+    setSelectedTemplate(template);
+    if (template) {
+      setForm(f => ({
+        ...f,
+        kind: (template.kind as StitchKind) || f.kind,
+        priority: template.priority !== null ? String(template.priority) : f.priority,
+        labels: template.labels.length > 0 ? [...template.labels] : f.labels,
+      }));
+    }
+  }, []);
+
+  // Update description when template values change (if template is selected)
+  useEffect(() => {
+    if (selectedTemplate) {
+      setForm(f => ({
+        ...f,
+        description: substituteTemplate(selectedTemplate.body, templateValues),
+      }));
+    }
+  }, [selectedTemplate, templateValues]);
+
   const markdownHtml = useMemo(() => renderMarkdown(form.description), [form.description]);
+
+  // ── Close handler (abandon draft if not submitted) ────────────────────────
+  const handleClose = useCallback(() => {
+    const draftId = draftIdRef.current;
+    if (draftId && !hasSubmittedRef.current) {
+      // Abandon the draft before closing
+      fetch(`/api/drafts/${encodeURIComponent(draftId)}/abandon`, {
+        method: 'POST',
+      }).catch(err => {
+        console.error('Failed to abandon draft:', err);
+      });
+    }
+    onClose();
+  }, [onClose]);
 
   // ── Submit handler ────────────────────────────────────────────────────
 
@@ -977,6 +1162,9 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
 
     try {
       const priority = form.priority !== '' ? parseInt(form.priority, 10) : inferredPriority;
+
+      // Mark that we're submitting - don't abandon the draft
+      hasSubmittedRef.current = true;
 
       if (isDecomposable(form.kind)) {
         // Multi-bead stitch via decomposition
@@ -1097,7 +1285,7 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
       <div className="bead-draft-form-panel stitch-draft-panel">
         <div className="bead-draft-header">
           <h2 className="bead-draft-title">New Stitch</h2>
-          <button className="bead-draft-close" onClick={onClose} aria-label="Close form">×</button>
+          <button className="bead-draft-close" onClick={handleClose} aria-label="Close form">×</button>
         </div>
 
         <form
@@ -1132,6 +1320,16 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
               <p className="bdf-error-msg">This project has no valid workspace — cannot create stitches.</p>
             )}
           </div>
+
+          {/* Template picker (§22 Extensibility) */}
+          {selectedProject && (
+            <TemplatePicker
+              projectName={selectedProject}
+              onTemplateSelect={handleTemplateSelect}
+              onValuesChange={setTemplateValues}
+              selectedTemplate={selectedTemplate}
+            />
+          )}
 
           {/* Title */}
           <div className="bdf-field">
@@ -1276,7 +1474,7 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
                   <button
                     type="button"
                     className="bdf-btn-dedup bdf-btn-dedup-continue"
-                    onClick={onClose}
+                    onClick={handleClose}
                   >
                     Continue that
                   </button>
@@ -1396,7 +1594,7 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
             <button
               type="button"
               className="bdf-btn-cancel"
-              onClick={onClose}
+              onClick={handleClose}
               disabled={isSubmitting}
             >
               Cancel

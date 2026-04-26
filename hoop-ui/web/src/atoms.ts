@@ -791,3 +791,13 @@ export function getAdapterAndModel(workers: WorkerData[], workerName: string): {
   }
   return { adapter: 'cli', model: null };
 }
+
+// ── Template library (§22 Extensibility) ───────────────────────────────────────
+
+// Template field values — keyed by field key
+export interface TemplateValues {
+  [key: string]: string;
+}
+
+// Template library cache — fetched from /api/p/{project}/templates
+export const templatesAtom = atom<import('./types.gen').StitchTemplate[]>([]);

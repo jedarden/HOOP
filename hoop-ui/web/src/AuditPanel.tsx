@@ -45,6 +45,21 @@ function kindLabel(kind: string): string {
   return found ? found.label : kind;
 }
 
+/// Parse agent actor string "hoop:agent:<session-id>" into components
+function parseAgentActor(actor: string): { session_id: string } | null {
+  const match = actor.match(/^hoop:agent:(.+)$/);
+  if (match) {
+    return { session_id: match[1] };
+  }
+  return null;
+}
+
+/// Generate a URL to the agent chat turn for a given turn_id
+function getTurnUrl(sessionId: string, turnId: string): string {
+  // Navigate to the agent chat pane with the specific turn highlighted
+  return `/agent?session=${sessionId}&turn=${turnId}`;
+}
+
 function resultBadgeClass(result: string): string {
   switch (result) {
     case 'success': return 'audit-result-success';
@@ -310,6 +325,39 @@ export default function AuditPanel() {
                   </td>
                   <td className="audit-td audit-td-actor">
                     <span className="audit-actor">{row.actor}</span>
+                    {(() => {
+                      const agentInfo = parseAgentActor(row.actor);
+                      if (!agentInfo) return null;
+
+                      // Extract agent metadata from args if available
+                      const agentAdapter = row.args?.agent_adapter as string | undefined;
+                      const agentModel = row.args?.agent_model as string | undefined;
+                      const turnId = row.args?.turn_id as string | undefined;
+
+                      return (
+                        <span className="audit-agent-meta">
+                          {agentAdapter && agentModel && (
+                            <span className="audit-agent-model" title={`${agentAdapter} adapter, ${agentModel} model`}>
+                              ({agentAdapter}/{agentModel})
+                            </span>
+                          )}
+                          {turnId && (
+                            <a
+                              href={getTurnUrl(agentInfo.session_id, turnId)}
+                              className="audit-turn-link"
+                              title={`View turn ${turnId} in agent chat`}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                // Navigate to agent chat pane with the turn
+                                window.location.href = getTurnUrl(agentInfo.session_id, turnId);
+                              }}
+                            >
+                              Turn ↗
+                            </a>
+                          )}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="audit-td audit-td-action">
                     <span className="audit-kind-badge">{kindLabel(row.type)}</span>

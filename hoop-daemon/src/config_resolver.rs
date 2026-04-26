@@ -213,12 +213,27 @@ impl ConfigError {
         }
     }
 
-    /// Create an error from a YAML parse failure
+    /// Create an error from a YAML parse failure with enhanced details (§17.5).
+    ///
+    /// Extracts structured error information including field path, expected type,
+    /// and actual value from serde_yaml error messages for display in UI banners.
     pub fn from_yaml(err: &serde_yaml::Error) -> Self {
         let msg = err.to_string();
         let (field, expected, got) = parse_serde_yaml_details(&msg);
+
+        // Build enhanced message with structured details
+        let enhanced_msg = if let (Some(f), Some(exp), Some(g)) = (&field, &expected, &got) {
+            format!("{} (field: {}, expected: {}, got: {})", msg, f, exp, g)
+        } else if let (Some(f), Some(exp)) = (&field, &expected) {
+            format!("{} (field: {}, expected: {})", msg, f, exp)
+        } else if let Some(f) = &field {
+            format!("{} (field: {})", msg, f)
+        } else {
+            msg.clone()
+        };
+
         Self {
-            message: msg.clone(),
+            message: enhanced_msg,
             line: err.location().map(|l| line(&l)).unwrap_or(0),
             col: err.location().map(|l| column(&l)).unwrap_or(0),
             field,
@@ -237,6 +252,9 @@ impl std::fmt::Display for ConfigError {
 impl std::error::Error for ConfigError {}
 
 /// Extract structured details from serde_yaml error messages.
+///
+/// Parses common error patterns to provide field-specific error information
+/// for hot-reload validation (§17.5). Returns (field, expected, got).
 fn parse_serde_yaml_details(msg: &str) -> (Option<String>, Option<String>, Option<String>) {
     // Pattern: missing field `name` at line X column Y
     if let Some(rest) = msg.strip_prefix("missing field `") {
@@ -260,18 +278,86 @@ fn parse_serde_yaml_details(msg: &str) -> (Option<String>, Option<String>, Optio
         );
     }
 
-    // Pattern: invalid type
-    if let Some(idx) = msg.find("invalid type") {
+    // Pattern: invalid type: string <timestamp>, expected u32 at line X column Y
+    // Pattern: invalid type: string "abc", expected a number at ...
+    if msg.contains("invalid type") {
+        // Extract expected type
+        let expected = if msg.contains("expected u8") || msg.contains("expected u16") || msg.contains("expected u32") || msg.contains("expected u64") || msg.contains("expected usize") {
+            Some("integer".to_string())
+        } else if msg.contains("expected i8") || msg.contains("expected i16") || msg.contains("expected i32") || msg.contains("expected i64") || msg.contains("expected isize") {
+            Some("integer".to_string())
+        } else if msg.contains("expected f32") || msg.contains("expected f64") {
+            Some("number".to_string())
+        } else if msg.contains("expected bool") {
+            Some("boolean".to_string())
+        } else if msg.contains("expected string") || msg.contains("expected str") {
+            Some("string".to_string())
+        } else if let Some(idx) = msg.find("expected ") {
+            let rest = &msg[idx + 9..];
+            let end_idx = rest.find(|c| c == ',' || c == ' ').unwrap_or(rest.len());
+            Some(rest[..end_idx].to_string())
+        } else {
+            None
+        };
+
+        // Extract actual type
+        let got = if msg.contains("string \"") {
+            Some("string".to_string())
+        } else if msg.contains("null") {
+            Some("null".to_string())
+        } else if msg.contains("boolean") {
+            Some("boolean".to_string())
+        } else if let Some(idx) = msg.find("invalid type: ") {
+            let rest = &msg[idx + 13..];
+            if let Some(end_idx) = rest.find(',') {
+                let actual = rest[..end_idx].trim();
+                // Map common YAML type descriptions
+                let got_type = if actual.starts_with('"') && actual.ends_with('"') {
+                    "string"
+                } else if actual == "null" {
+                    "null"
+                } else if actual == "true" || actual == "false" {
+                    "boolean"
+                } else if actual.parse::<f64>().is_ok() {
+                    "number"
+                } else {
+                    actual
+                };
+                Some(got_type.to_string())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         // Try to extract field name from context
-        let field_start = msg[..idx].rfind(' ').map(|i| i + 1).unwrap_or(0);
-        let field_part = &msg[field_start..idx];
-        if !field_part.is_empty() && !field_part.contains(':') {
-            return (
-                Some(field_part.to_string()),
-                None,
-                Some("invalid type".to_string()),
-            );
-        }
+        let field = if let Some(idx) = msg.find(" at line ") {
+            let before = &msg[..idx];
+            if let Some(colon_idx) = before.rfind(':') {
+                let after_colon = &before[colon_idx + 1..].trim();
+                if !after_colon.is_empty() && after_colon.len() < 50 {
+                    Some(after_colon.to_string())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        return (field, expected, got);
+    }
+
+    // Pattern: data did not match any variant of untagged enum
+    if msg.contains("data did not match any variant") {
+        return (
+            None,
+            Some("valid enum value".to_string()),
+            Some("invalid value".to_string()),
+        );
     }
 
     (None, None, None)
@@ -409,6 +495,9 @@ pub struct ResolvedConfig {
 
     // Stuck detector (§C1, hoop-ttb.3.25)
     pub stuck_detector: Resolved<Option<StuckDetectorConfigMap>>,
+
+    // Role-based access control (RBAC) - two-role model
+    pub roles: Resolved<crate::auth::RoleConfig>,
 }
 
 // ---------------------------------------------------------------------------

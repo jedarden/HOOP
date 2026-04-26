@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/stuck_detector_config.json",
+  "title": "StuckDetectorConfig",
+  "description": "Stuck detector configuration for monitoring worker health (§C1). Detects workers that are idle, hung, or retrying the same bead repeatedly.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "idle_timeout_secs": {
+      "type": "integer",
+      "default": 180,
+      "minimum": 1,
+      "description": "Idle timeout: no events, any type, for N seconds (default: 180 = 3 minutes)"
+    },
+    "max_runtime_secs": {
+      "type": "integer",
+      "default": 3600,
+      "minimum": 1,
+      "description": "Hard ceiling on total turn duration regardless of activity (default: 3600 = 1 hour)"
+    },
+    "content_seen_grace_secs": {
+      "type": "integer",
+      "default": 600,
+      "minimum": 1,
+      "description": "Extended idle tolerance once real content appeared (default: 600 = 10 minutes)"
+    },
+    "heartbeat_transition_threshold_secs": {
+      "type": "integer",
+      "default": 300,
+      "minimum": 1,
+      "description": "No heartbeat state transition (Live<->Hung) for N seconds (default: 300 = 5 minutes)"
+    },
+    "retry_threshold": {
+      "type": "integer",
+      "default": 3,
+      "minimum": 1,
+      "description": "Maximum retry attempts on the same bead before alerting (default: 3)"
+    }
+  }
+}

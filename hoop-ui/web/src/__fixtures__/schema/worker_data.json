@@ -1,0 +1,12 @@
+{
+  "heartbeat_age_secs": 5,
+  "last_heartbeat": "2024-01-01T00:00:00Z",
+  "liveness": "Live",
+  "state": {
+    "adapter": "claude",
+    "bead": "bd-abc123",
+    "model": "opus",
+    "state": "executing"
+  },
+  "worker": "alpha"
+}

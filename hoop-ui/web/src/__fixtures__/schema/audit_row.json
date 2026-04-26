@@ -1,0 +1,9 @@
+{
+  "actor": "user:test",
+  "id": "01234567-89ab-cdef-0123-456789abcdef",
+  "kind": "bead_created",
+  "result": "success",
+  "schema_version": "1.0.0",
+  "target": "bd-123",
+  "ts": "2024-01-01T00:00:00Z"
+}

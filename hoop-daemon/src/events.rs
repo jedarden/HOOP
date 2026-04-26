@@ -50,6 +50,8 @@ pub enum NeedleEvent {
         error: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         duration_ms: Option<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        stash_sha: Option<String>,
     },
     /// Worker timed out waiting for the CLI.
     Timeout {

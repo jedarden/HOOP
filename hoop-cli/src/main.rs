@@ -28,6 +28,12 @@ enum Commands {
         /// Bind address (default: 127.0.0.1:3000)
         #[arg(short, long)]
         addr: Option<SocketAddr>,
+        /// Observer mode: read-only attach to primary daemon
+        #[arg(long)]
+        observer: bool,
+        /// Primary daemon address (for observer mode, default: 127.0.0.1:3000)
+        #[arg(long)]
+        primary_addr: Option<SocketAddr>,
         /// Skip br version compatibility check (dev override)
         #[arg(long)]
         allow_br_mismatch: bool,
@@ -93,18 +99,9 @@ enum Commands {
         #[arg(long)]
         from: String,
     },
-    /// Run schema migrations (required after a major binary upgrade)
-    Migrate {
-        /// Migrate from major version N (e.g. --from-1 migrates major 1 → current)
-        #[arg(long = "from-1", conflicts_with = "major_upgrade")]
-        from_1: bool,
-        /// Auto-detect and perform the required major upgrade
-        #[arg(long = "major-upgrade", conflicts_with = "from_1")]
-        major_upgrade: bool,
-        /// Required safety confirmation
-        #[arg(long)]
-        confirm: bool,
-    },
+    /// Manage schema migrations
+    #[command(subcommand)]
+    Migrate(MigrateCommands),
     /// Manage and run scripts
     #[command(subcommand)]
     Script(script::ScriptCommands),
@@ -162,6 +159,36 @@ enum AuditCommands {
     },
 }
 
+#[derive(clap::Subcommand, Debug)]
+enum MigrateCommands {
+    /// Run pending migrations (minor version upgrades only)
+    Run {
+        /// Required safety confirmation
+        #[arg(long)]
+        confirm: bool,
+    },
+    /// Show migration status and pending migrations
+    Status {
+        /// Output as JSON
+        #[arg(short, long)]
+        json: bool,
+    },
+    /// Perform a major version upgrade (e.g., 1.x → 2.x)
+    MajorUpgrade {
+        /// Required safety confirmation
+        #[arg(long)]
+        confirm: bool,
+    },
+    /// Rollback to a previous minor version (not available for major upgrades)
+    Rollback {
+        /// Target version to rollback to
+        version: String,
+        /// Required safety confirmation
+        #[arg(long)]
+        confirm: bool,
+    },
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
@@ -169,10 +196,24 @@ async fn main() -> anyhow::Result<()> {
     match cli.command {
         Commands::Serve {
             addr,
+            observer,
+            primary_addr,
             allow_br_mismatch,
         } => {
+            let bind_addr = addr.unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 3000)));
+            let primary_addr = primary_addr.unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 3000)));
+
+            // In observer mode, default bind to a different port to avoid conflict
+            let bind_addr = if observer && addr.is_none() {
+                SocketAddr::from(([127, 0, 0, 1], 3001))
+            } else {
+                bind_addr
+            };
+
             let config = DaemonConfig {
-                bind_addr: addr.unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 3000))),
+                bind_addr,
+                observer_mode: observer,
+                primary_addr,
                 allow_br_mismatch,
                 ..Default::default()
             };
@@ -238,31 +279,11 @@ async fn main() -> anyhow::Result<()> {
                 std::process::exit(1);
             }
         }
-        Commands::Migrate {
-            from_1,
-            major_upgrade,
-            confirm,
-        } => {
-            if !confirm {
-                eprintln!(
-                    "hoop migrate: --confirm is required to prevent accidental data migration."
-                );
-                eprintln!(
-                    "  Re-run with --confirm once you have verified you have a current backup."
-                );
-                std::process::exit(1);
-            }
-            if !from_1 && !major_upgrade {
-                eprintln!("hoop migrate: specify --from-1 or --major-upgrade.");
-                eprintln!("  Example: hoop migrate --from-1 --confirm");
-                eprintln!("  Example: hoop migrate --major-upgrade --confirm");
-                std::process::exit(1);
-            }
-            if let Err(e) = fleet::run_major_upgrade() {
+        Commands::Migrate(cmd) => {
+            if let Err(e) = handle_migrate(cmd) {
                 eprintln!("hoop migrate: {}", e);
                 std::process::exit(1);
             }
-            println!("Migration complete. You can now start the daemon with `hoop serve`.");
         }
         Commands::Script(cmd) => {
             if let Err(e) = script::handle_script(cmd).await {
@@ -408,6 +429,112 @@ fn handle_audit(cmd: AuditCommands) -> anyhow::Result<()> {
             }
         },
     }
+    Ok(())
+}
+
+/// Handle the `hoop migrate` subcommands
+fn handle_migrate(cmd: MigrateCommands) -> anyhow::Result<()> {
+    use hoop_daemon::{fleet, migrations};
+
+    match cmd {
+        MigrateCommands::Run { confirm } => {
+            if !confirm {
+                eprintln!("hoop migrate run: --confirm is required.");
+                eprintln!("  This will apply pending minor version migrations.");
+                eprintln!("  Re-run with --confirm once you have verified you have a current backup.");
+                std::process::exit(1);
+            }
+
+            // Open the database
+            let db_path = fleet::db_path();
+            let conn = &mut rusqlite::Connection::open(&db_path)?;
+
+            // Get the current schema version
+            let current_version = fleet::get_schema_version(conn)?;
+
+            // Check if this is a major version gate
+            if let Err(e) = fleet::check_schema_major_gate(&current_version, fleet::SCHEMA_VERSION) {
+                eprintln!("Major upgrade required: {}", e);
+                eprintln!("  Run: hoop migrate major-upgrade --confirm");
+                std::process::exit(1);
+            }
+
+            // Run pending migrations
+            migrations::run_pending_migrations(conn, &migrations::get_migration_registry(), &current_version)?;
+
+            println!("Migration complete. Schema version is now {}.", fleet::SCHEMA_VERSION);
+            println!("You can now start the daemon with `hoop serve`.");
+        }
+        MigrateCommands::Status { json } => {
+            let db_path = fleet::db_path();
+            let conn = rusqlite::Connection::open(&db_path)?;
+            let registry = migrations::get_migration_registry();
+            let status = migrations::get_migration_status(&conn, &registry)?;
+
+            if json {
+                println!("{}", serde_json::to_string_pretty(&status)?);
+            } else {
+                println!("Schema version: {}", status.current_version);
+                println!("Binary version: {}", fleet::SCHEMA_VERSION);
+
+                if status.pending_migrations.is_empty() {
+                    println!("\nNo pending migrations.");
+                } else {
+                    println!("\nPending migrations:");
+                    for pending in &status.pending_migrations {
+                        let rollback = if pending.can_rollback { " (rollbackable)" } else { "" };
+                        println!("  {} → {}{}", status.current_version, pending.version, rollback);
+                        println!("    {}", pending.description);
+                    }
+                }
+
+                if !status.can_rollback_to.is_empty() {
+                    println!("\nCan rollback to: {}", status.can_rollback_to.join(", "));
+                }
+            }
+        }
+        MigrateCommands::MajorUpgrade { confirm } => {
+            if !confirm {
+                eprintln!("hoop migrate major-upgrade: --confirm is required.");
+                eprintln!("  This will perform a major version upgrade (e.g., 1.x → 2.x).");
+                eprintln!("  Re-run with --confirm once you have verified you have a current backup.");
+                std::process::exit(1);
+            }
+
+            if let Err(e) = fleet::run_major_upgrade() {
+                eprintln!("hoop migrate major-upgrade: {}", e);
+                std::process::exit(1);
+            }
+
+            println!("Major upgrade complete. Schema version is now {}.", fleet::SCHEMA_VERSION);
+            println!("You can now start the daemon with `hoop serve`.");
+        }
+        MigrateCommands::Rollback { version, confirm } => {
+            if !confirm {
+                eprintln!("hoop migrate rollback: --confirm is required.");
+                eprintln!("  This will rollback schema to version {}.", version);
+                eprintln!("  Re-run with --confirm once you have verified you have a current backup.");
+                std::process::exit(1);
+            }
+
+            let db_path = fleet::db_path();
+            let conn = &mut rusqlite::Connection::open(&db_path)?;
+            let current_version = fleet::get_schema_version(conn)?;
+            let registry = migrations::get_migration_registry();
+
+            if !registry.can_rollback(&version) {
+                eprintln!("Cannot rollback to version {}.", version);
+                eprintln!("  Either the migration does not exist or does not support rollback.");
+                eprintln!("  Major version upgrades cannot be rolled back.");
+                std::process::exit(1);
+            }
+
+            migrations::rollback_migration(conn, &registry, &version, &current_version)?;
+
+            println!("Rollback complete. Schema version is now {}.", version);
+        }
+    }
+
     Ok(())
 }
 

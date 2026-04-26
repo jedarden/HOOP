@@ -1,0 +1,14 @@
+{
+  "complete": false,
+  "created_at": "2024-01-01T00:00:00Z",
+  "cwd": "/home/coding/project",
+  "file_path": "/path/to/session.jsonl",
+  "id": "conv-123",
+  "kind": "operator",
+  "messages": [],
+  "provider": "claude",
+  "session_id": "session-456",
+  "title": "Test conversation",
+  "total_tokens": 0,
+  "updated_at": "2024-01-01T00:00:00Z"
+}

@@ -1,0 +1,8 @@
+{
+  "created_at": "2024-01-01T00:00:00Z",
+  "description": "Test description",
+  "id": "01234567-89ab-cdef-0123-456789abcdef",
+  "schema_version": "1.0.0",
+  "status": "active",
+  "title": "Test pattern"
+}

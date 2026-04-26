@@ -1,0 +1,11 @@
+{
+  "created_at": "2024-01-01T00:00:00Z",
+  "created_by": "user",
+  "dependencies": [],
+  "id": "bd-abc123",
+  "issue_type": "task",
+  "priority": 0,
+  "status": "open",
+  "title": "Test bead",
+  "updated_at": "2024-01-01T00:00:00Z"
+}

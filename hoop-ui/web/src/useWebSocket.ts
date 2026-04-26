@@ -105,7 +105,8 @@ export function useWebSocket() {
             setWorkers([]);
             setProjectCards([]);
             setCapacity([]);
-            setConfigStatus({ valid: true });
+            // Note: configStatusAtom is NOT reset on init — server sends current status separately
+            // This preserves error banners across WebSocket reconnections (§17.5)
             setStitchCreated([]);
             setAgentSessionStatus(null);
             setAgentInflight(null);
