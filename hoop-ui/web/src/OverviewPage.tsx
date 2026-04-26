@@ -194,6 +194,7 @@ export default function OverviewPage({ onNavigateProject }: { onNavigateProject:
               <a href="#/dashboard" className="section-header-link">Cross-project dashboard &rarr;</a>
               <a href="#/fleet" className="section-header-link">Live worker map &rarr;</a>
               <a href="#/timeline" className="section-header-link">Worker timeline &rarr;</a>
+              <a href="#/diagnostics" className="section-header-link">Diagnostics &rarr;</a>
             </div>
           </div>
           {!projectsReceived ? (
