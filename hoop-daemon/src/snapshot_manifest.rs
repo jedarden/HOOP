@@ -34,6 +34,13 @@ pub struct SnapshotManifest {
     /// Size in bytes of the compressed fleet.db blob.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fleet_db_size: Option<u64>,
+    /// Final hash from the audit log hash chain (integrity anchor).
+    ///
+    /// This is the `hash_self` of the most recent action row at backup time.
+    /// Restore verification can detect if the audit log was tampered with
+    /// between backup and restore by comparing this against the current chain.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub final_audit_hash: Option<String>,
 }
 
 impl SnapshotManifest {
@@ -91,11 +98,15 @@ mod tests {
             hoop_version: "0.1.0".into(),
             fleet_db_sha256: Some("abc123".into()),
             fleet_db_size: Some(4096),
+            final_audit_hash: Some(
+                "deadbeef0000000000000000000000000000000000000000000000000000000000".into(),
+            ),
         };
         let json = serde_json::to_string(&m).unwrap();
         assert!(json.contains("\"snapshot_id\""));
         assert!(json.contains("\"fleet_db_key\""));
         assert!(json.contains("\"encryption\""));
+        assert!(json.contains("\"final_audit_hash\""));
     }
 
     #[test]
@@ -110,10 +121,12 @@ mod tests {
             hoop_version: "0.1.0".into(),
             fleet_db_sha256: None,
             fleet_db_size: None,
+            final_audit_hash: None,
         };
         let json = serde_json::to_string(&m).unwrap();
         assert!(!json.contains("attachments_manifest_key"));
         assert!(!json.contains("fleet_db_sha256"));
+        assert!(!json.contains("final_audit_hash"));
     }
 
     #[test]
@@ -128,6 +141,7 @@ mod tests {
             hoop_version: "0.1.0".into(),
             fleet_db_sha256: Some("deadbeef".into()),
             fleet_db_size: Some(2048),
+            final_audit_hash: Some("feedface00000000000000000000000000000000000000000000000000000000".into()),
         };
         let json = serde_json::to_string(&m).unwrap();
         let parsed: SnapshotManifest = serde_json::from_str(&json).unwrap();
@@ -146,6 +160,7 @@ mod tests {
             hoop_version: "0.1.0".into(),
             fleet_db_sha256: None,
             fleet_db_size: None,
+            final_audit_hash: None,
         };
         assert!(m.validate("1.11.0").is_ok());
         assert!(m.validate("2.0.0").is_ok());
@@ -163,6 +178,7 @@ mod tests {
             hoop_version: "0.1.0".into(),
             fleet_db_sha256: None,
             fleet_db_size: None,
+            final_audit_hash: None,
         };
         let err = m.validate("1.11.0").unwrap_err();
         assert!(err.to_string().contains("newer than"));

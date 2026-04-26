@@ -195,6 +195,7 @@ impl BackupPipeline {
             };
 
         // 7. Build and upload manifest (LAST — after all pieces)
+        let final_audit_hash = fleet::get_final_audit_hash().ok();
         let manifest = SnapshotManifest {
             snapshot_id: snapshot_id.to_string(),
             created_at: Utc::now().to_rfc3339(),
@@ -205,6 +206,7 @@ impl BackupPipeline {
             hoop_version: env!("CARGO_PKG_VERSION").to_string(),
             fleet_db_sha256: Some(fleet_db_sha256),
             fleet_db_size: Some(file_size),
+            final_audit_hash,
         };
 
         let manifest_json =
