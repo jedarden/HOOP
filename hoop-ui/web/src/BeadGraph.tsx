@@ -480,6 +480,29 @@ export default function BeadGraph({ beads }: BeadGraphProps) {
 
   const openCount = beads.filter(b => b.status === 'open').length;
 
+  // Mobile detection (§21) — BeadGraph requires desktop for usable graph interaction
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' && window.innerWidth < 768,
+  );
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+
+  if (isMobile) {
+    return (
+      <div className="bead-graph-container mobile-hide">
+        <div className="mobile-only-message">
+          <div className="mobile-only-message-icon">📊</div>
+          <h3>View on desktop</h3>
+          <p>The Bead Graph visualization requires a wider screen for effective dependency graph navigation.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bead-graph-container" ref={containerRef} onKeyDown={handleKeyDown} tabIndex={0}>
       <div className="bead-graph-toolbar">

@@ -11395,3 +11395,1143 @@ pre {
     min-height: 300px;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   REDACTION AUDIT PANEL
+──────────────────────────────────────────────────────────────────────────── */
+
+.redaction-audit-panel {
+  background: #ffffff;
+  border: 1px solid #d0d0d0;
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.redaction-audit-panel-header {
+  margin-bottom: 1.5rem;
+}
+
+.redaction-audit-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.redaction-audit-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+  color: #333;
+}
+
+.redaction-audit-header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.redaction-audit-refresh-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  background: #f5f5f5;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+
+.redaction-audit-refresh-btn:hover:not(:disabled) {
+  background: #ebebeb;
+}
+
+.redaction-audit-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Filter bar */
+.redaction-audit-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+  padding: 1rem;
+  background: #f9f9f9;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
+.redaction-audit-filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  flex: 1;
+  min-width: 140px;
+}
+
+.redaction-audit-filter-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.redaction-audit-filter-select,
+.redaction-audit-filter-input {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  background: #ffffff;
+  min-height: 38px;
+}
+
+.redaction-audit-filter-input::placeholder {
+  color: #999;
+}
+
+.redaction-audit-filter-apply,
+.redaction-audit-filter-clear {
+  padding: 0.5rem 1rem;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  min-height: 38px;
+  white-space: nowrap;
+}
+
+.redaction-audit-filter-apply {
+  background: #1976d2;
+  color: white;
+  border-color: #1976d2;
+}
+
+.redaction-audit-filter-apply:hover {
+  background: #1565c0;
+}
+
+.redaction-audit-filter-clear {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.redaction-audit-filter-clear:hover {
+  background: #ebebeb;
+}
+
+/* Table container */
+.redaction-audit-table-container {
+  overflow-x: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  min-height: 200px;
+}
+
+.redaction-audit-loading,
+.redaction-audit-error,
+.redaction-audit-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 3rem 2rem;
+  color: #999;
+  text-align: center;
+}
+
+.redaction-audit-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e0e0e0;
+  border-top-color: #1976d2;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.redaction-audit-error {
+  color: #c62828;
+}
+
+.redaction-audit-empty-hint {
+  font-size: 0.875rem;
+  max-width: 400px;
+}
+
+.redaction-audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.redaction-audit-th {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 2px solid #d0d0d0;
+  background: #f5f5f5;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.redaction-audit-td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.redaction-audit-row {
+  transition: background 0.15s;
+}
+
+.redaction-audit-row:hover {
+  background: #f9f9f9;
+}
+
+.redaction-audit-th-ts,
+.redaction-audit-td-ts {
+  width: 140px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.redaction-audit-th-what,
+.redaction-audit-td-what {
+  width: 120px;
+}
+
+.redaction-what-badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: #f5f5f5;
+  color: #666;
+  text-transform: capitalize;
+}
+
+.redaction-project-tag {
+  display: inline-block;
+  margin-left: 0.375rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  background: #e8f0fe;
+  color: #1967d2;
+}
+
+.redaction-audit-th-pattern,
+.redaction-audit-td-pattern {
+  width: 150px;
+}
+
+.redaction-pattern-name {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 0.8rem;
+  color: #333;
+}
+
+.redaction-audit-th-action,
+.redaction-audit-td-action {
+  width: 140px;
+}
+
+.redaction-action-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.redaction-action-flagged {
+  background: #fff8e1;
+  color: #f9ab00;
+}
+
+.redaction-action-redacted-in-place {
+  background: #e6f4ea;
+  color: #137333;
+}
+
+.redaction-action-deleted {
+  background: #fce8e6;
+  color: #c5221f;
+}
+
+.redaction-action-proceeded {
+  background: #f3e8fd;
+  color: #8430ce;
+}
+
+.redaction-action-unknown {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.redaction-audit-th-operator,
+.redaction-audit-td-operator {
+  width: 100px;
+}
+
+.redaction-operator {
+  font-weight: 500;
+  color: #333;
+}
+
+.redaction-audit-th-source,
+.redaction-audit-td-source {
+  width: 200px;
+}
+
+.redaction-source-ref {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.redaction-audit-th-metadata,
+.redaction-audit-td-metadata {
+  width: 180px;
+}
+
+.redaction-metadata-cell {
+  max-width: 180px;
+}
+
+.redaction-metadata-preview {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  color: #666;
+  word-break: break-all;
+}
+
+.redaction-metadata-empty {
+  color: #999;
+  font-style: italic;
+  font-size: 0.8rem;
+}
+
+/* Pagination */
+.redaction-audit-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  padding: 1rem 0;
+  flex-wrap: wrap;
+}
+
+.redaction-audit-page-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  min-height: 38px;
+}
+
+.redaction-audit-page-btn:hover:not(:disabled) {
+  background: #f5f5f5;
+}
+
+.redaction-audit-page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.redaction-audit-page-info {
+  font-size: 0.875rem;
+  color: #666;
+  text-align: center;
+}
+
+.redaction-audit-footer-note {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: #f9f9f9;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #666;
+  text-align: center;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   REDACTION AUDIT PANEL - RESPONSIVE BREAKPOINTS
+──────────────────────────────────────────────────────────────────────────── */
+
+/* Phone portrait (≤375px) */
+@media (max-width: 375px) {
+  .redaction-audit-panel {
+    padding: 0.75rem 0.5rem;
+  }
+
+  .redaction-audit-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .redaction-audit-title {
+    font-size: 1rem;
+  }
+
+  .redaction-audit-filters {
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+  }
+
+  .redaction-audit-filter-group {
+    min-width: 100%;
+  }
+
+  .redaction-audit-filter-apply,
+  .redaction-audit-filter-clear {
+    width: 100%;
+  }
+
+  .redaction-audit-table {
+    font-size: 0.7rem;
+  }
+
+  .redaction-audit-th,
+  .redaction-audit-td {
+    padding: 0.375rem 0.5rem;
+  }
+
+  /* Hide less important columns on very small screens */
+  .redaction-audit-th-metadata,
+  .redaction-audit-td-metadata,
+  .redaction-audit-th-source,
+  .redaction-audit-td-source {
+    display: none;
+  }
+
+  .redaction-audit-pagination {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .redaction-audit-page-btn {
+    width: 100%;
+  }
+}
+
+/* Phone landscape (376px - 700px) */
+@media (min-width: 376px) and (max-width: 700px) {
+  .redaction-audit-filters {
+    gap: 0.5rem;
+  }
+
+  .redaction-audit-filter-group {
+    min-width: calc(50% - 0.375rem);
+  }
+
+  .redaction-audit-filter-apply,
+  .redaction-audit-filter-clear {
+    min-width: calc(50% - 0.375rem);
+  }
+
+  .redaction-audit-table {
+    font-size: 0.75rem;
+  }
+
+  /* Hide metadata column on phone landscape */
+  .redaction-audit-th-metadata,
+  .redaction-audit-td-metadata {
+    display: none;
+  }
+}
+
+/* Tablet (701px - 768px) */
+@media (min-width: 701px) and (max-width: 768px) {
+  .redaction-audit-filter-group {
+    min-width: calc(33.33% - 0.5rem);
+  }
+
+  .redaction-audit-table {
+    font-size: 0.8rem;
+  }
+
+  .redaction-audit-th,
+  .redaction-audit-td {
+    padding: 0.5rem 0.75rem;
+  }
+}
+
+/* Desktop (≥1280px) */
+@media (min-width: 1280px) {
+  .redaction-audit-panel {
+    padding: 2rem;
+  }
+
+  .redaction-audit-filters {
+    flex-wrap: nowrap;
+  }
+
+  .redaction-audit-filter-group {
+    min-width: 0;
+  }
+
+  .redaction-audit-table {
+    font-size: 0.9rem;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   MOBILE RESPONSIVENESS - BREAKPOINT MATRIX (§21.1)
+   Breakpoints: 375px (phone portrait), 700px (phone landscape), 768px (tablet), 1280px (desktop)
+──────────────────────────────────────────────────────────────────────────── */
+
+/* Phone Portrait (≤375px) */
+@media (max-width: 375px) {
+  /* Base layout */
+  .app {
+    padding: 0.5rem;
+  }
+
+  h1 {
+    font-size: 1.5em;
+    line-height: 1.2;
+  }
+
+  h2 {
+    font-size: 1.1em;
+  }
+
+  /* Header */
+  .header-top {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
+  }
+
+  .connection-indicator {
+    font-size: 0.75rem;
+    padding: 0.375rem 0.75rem;
+  }
+
+  /* Worker cards */
+  .worker-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .worker-card {
+    padding: 0.75rem;
+  }
+
+  /* Bead table */
+  .bead-section {
+    padding: 0.75rem 0.5rem;
+  }
+
+  .bead-section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .bead-table {
+    font-size: 0.7rem;
+  }
+
+  .bead-cell {
+    padding: 0.375rem 0.5rem;
+  }
+
+  /* Badges */
+  .badge {
+    font-size: 0.65rem;
+    padding: 0.125rem 0.375rem;
+  }
+
+  /* Tabs */
+  .tab-list {
+    gap: 0.125rem;
+  }
+
+  .tab-button {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.7rem;
+  }
+
+  .tab-shortcut {
+    display: none;
+  }
+
+  /* Forms */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea,
+  select {
+    font-size: 16px; /* Prevent iOS zoom on focus */
+  }
+
+  /* Buttons */
+  button,
+  .button {
+    min-height: 44px; /* iOS minimum tap target */
+    min-width: 44px;
+  }
+
+  /* Settings menu */
+  .settings-menu-panel {
+    width: 100%;
+    max-width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  /* Dictation widget */
+  .dictation-widget {
+    bottom: 0.75rem;
+    right: 0.75rem;
+    padding: 0.375rem 0.625rem;
+    font-size: 0.75rem;
+  }
+
+  .dictation-project-name {
+    max-width: 80px;
+    display: none; /* Hide on very small screens */
+  }
+
+  /* Stitch cards */
+  .stitch-card {
+    padding: 0.75rem;
+  }
+
+  .stitch-card-header {
+    flex-direction: column;
+    gap: 0.375rem;
+  }
+
+  /* Fleet map */
+  .fleet-summary-strip {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .fss-item {
+    min-width: 40px;
+  }
+
+  .fss-value {
+    font-size: 0.875rem;
+  }
+
+  .fss-label {
+    font-size: 0.65rem;
+  }
+
+  /* Cost panel */
+  .cost-stats-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  /* Capacity panel */
+  .capacity-row {
+    padding: 0.75rem;
+  }
+
+  /* Debug panel */
+  .debug-panel {
+    font-size: 0.75rem;
+  }
+
+  /* Search palette */
+  .search-palette-overlay {
+    padding: 0.5rem;
+  }
+
+  .search-palette-container {
+    max-width: 100%;
+  }
+
+  /* Project cards */
+  .project-cards-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .project-card {
+    padding: 0.75rem;
+  }
+
+  /* Conversation pane */
+  .conversation-pane {
+    min-height: 400px;
+  }
+
+  /* Agent chat */
+  .agent-chat-pane {
+    height: calc(100vh - 120px);
+  }
+
+  /* File browser */
+  .file-tree-item {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.8rem;
+  }
+
+  /* Patterns view */
+  .patterns-header {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .patterns-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Cross-project dashboard */
+  .dashboard-stats {
+    grid-template-columns: 1fr;
+  }
+
+  /* Hide non-essential elements on very small screens */
+  .project-detail-footer,
+  .expert-toggle {
+    font-size: 0.75rem;
+  }
+}
+
+/* Phone Landscape (376px - 700px) */
+@media (min-width: 376px) and (max-width: 700px) {
+  /* Worker cards - 2 columns on landscape phones */
+  .worker-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+
+  /* Bead table - horizontal scroll */
+  .bead-table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Fleet map */
+  .fleet-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Stitches list */
+  .stitches-list {
+    grid-template-columns: 1fr;
+  }
+
+  /* Cost panel - 2 column stats */
+  .cost-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Capacity panel */
+  .capacity-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Forms */
+  .bdf-row {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .bdf-field {
+    width: 100%;
+  }
+
+  /* Conversation pane */
+  .conversation-pane {
+    min-height: 350px;
+  }
+
+  /* Settings menu */
+  .settings-menu-panel {
+    width: 90%;
+    max-width: 400px;
+  }
+
+  /* Search palette */
+  .search-palette-container {
+    max-width: 90%;
+  }
+}
+
+/* Tablet (701px - 768px) */
+@media (min-width: 701px) and (max-width: 768px) {
+  /* Worker cards - 2 columns */
+  .worker-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Fleet cards */
+  .fleet-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Stitches list - 2 columns */
+  .stitches-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Project cards */
+  .project-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Cost panel - 3 columns */
+  .cost-stats-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /* Capacity panel */
+  .capacity-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Bead table */
+  .bead-table {
+    font-size: 0.8rem;
+  }
+
+  /* Settings menu */
+  .settings-menu-panel {
+    width: 80%;
+    max-width: 500px;
+  }
+
+  /* File browser - side-by-side */
+  .files-content {
+    flex-direction: row;
+  }
+
+  .file-tree {
+    width: 40%;
+    max-height: 60vh;
+  }
+
+  .file-preview {
+    width: 60%;
+  }
+
+  /* Patterns view */
+  .patterns-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Debug panel */
+  .debug-layout {
+    flex-direction: row;
+  }
+
+  .debug-sidebar {
+    width: 35%;
+  }
+
+  .debug-main {
+    width: 65%;
+  }
+}
+
+/* Small Desktop (769px - 1024px) */
+@media (min-width: 769px) and (max-width: 1024px) {
+  /* Worker cards - 3 columns */
+  .worker-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /* Fleet cards */
+  .fleet-cards-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /* Stitches list - 2 columns */
+  .stitches-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Project cards */
+  .project-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Cost panel - 4 columns */
+  .cost-stats-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  /* Patterns view */
+  .patterns-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Standard Desktop (1025px - 1279px) */
+@media (min-width: 1025px) and (max-width: 1279px) {
+  /* Worker cards - 4 columns */
+  .worker-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  /* Fleet cards */
+  .fleet-cards-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  /* Stitches list - 3 columns */
+  .stitches-list {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /* Project cards */
+  .project-cards-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /* Patterns view */
+  .patterns-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Wide Desktop (≥1280px) */
+@media (min-width: 1280px) {
+  /* These are already well-defined in the main CSS */
+
+  /* Worker cards - auto-fill */
+  .worker-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+
+  /* Fleet cards - auto-fill */
+  .fleet-cards-grid {
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  }
+
+  /* Stitches list - 3 columns */
+  .stitches-list {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  /* Project cards */
+  .project-cards-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  /* Patterns view */
+  .patterns-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  /* Full file browser */
+  .files-content {
+    flex-direction: row;
+  }
+
+  .file-tree {
+    width: 35%;
+  }
+
+  .file-preview {
+    width: 65%;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   MOBILE-SPECIFIC OPTIMIZATIONS
+──────────────────────────────────────────────────────────────────────────── */
+
+/* Touch-friendly tap targets */
+@media (max-width: 768px) {
+  /* Ensure all interactive elements meet minimum tap target size */
+  button,
+  a,
+  input[type="checkbox"],
+  input[type="radio"],
+  select,
+  .clickable,
+  [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Exceptions for inline elements */
+  .badge,
+  .tag,
+  .inline-link,
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea {
+    min-height: auto;
+    min-width: auto;
+  }
+
+  /* Larger checkbox/radio hit areas */
+  input[type="checkbox"],
+  input[type="radio"] {
+    transform: scale(1.3);
+    margin: 0.5rem;
+  }
+
+  /* Prevent text selection on tap */
+  .no-select {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+}
+
+/* Safe area for notched phones */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .dictation-widget,
+  .settings-menu-panel,
+  .mobile-bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Dark mode support (system preference) */
+@media (prefers-color-scheme: dark) {
+  /* Note: HOOP uses a light theme by default, but respects system preference */
+  /* Add dark mode overrides here if needed in the future */
+}
+
+/* Print styles - hide mobile elements when printing */
+@media print {
+  .dictation-widget,
+  .settings-menu-panel,
+  .search-palette-overlay,
+  .mobile-only {
+    display: none !important;
+  }
+
+  /* Ensure full width for printing */
+  .app {
+    max-width: 100%;
+    padding: 0;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   NOT-FOR-PHONE SURFACES (§21.3)
+   These surfaces show "view on desktop" message on mobile
+──────────────────────────────────────────────────────────────────────────── */
+
+/* Mobile message container */
+.mobile-only-message {
+  display: none;
+  padding: 2rem;
+  text-align: center;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 300px;
+}
+
+.mobile-only-message-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+
+.mobile-only-message h3 {
+  font-size: 1.25rem;
+  color: #333;
+  margin: 0 0 0.5rem 0;
+}
+
+.mobile-only-message p {
+  font-size: 0.9rem;
+  color: #666;
+  margin: 0;
+  max-width: 300px;
+}
+
+.mobile-only-message a {
+  color: #1976d2;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.mobile-only-message a:hover {
+  text-decoration: underline;
+}
+
+/* Show mobile message on small screens */
+@media (max-width: 768px) {
+  /* Surfaces that are not suitable for mobile */
+  .bead-graph-container.mobile-hide .bead-graph-content,
+  .fleet-map-container.mobile-hide .fleet-map-content,
+  .stitch-net-diff-container.mobile-hide .nd-content,
+  .debug-panel-container.mobile-hide .debug-content {
+    display: none;
+  }
+
+  .bead-graph-container.mobile-hide .mobile-only-message,
+  .fleet-map-container.mobile-hide .mobile-only-message,
+  .stitch-net-diff-container.mobile-hide .mobile-only-message,
+  .debug-panel-container.mobile-hide .mobile-only-message {
+    display: flex;
+  }
+
+  /* Also hide the StitchNetDiff content (uses .nd-mobile-message class) */
+  .stitch-net-diff-container .nd-content {
+    display: none;
+  }
+
+  .stitch-net-diff-container .nd-mobile-message {
+    display: flex;
+  }
+}
+
+/* Ensure desktop-only surfaces are hidden on mobile */
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
+}
+
+/* Ensure mobile-only surfaces are shown on mobile */
+@media (max-width: 768px) {
+  .mobile-only {
+    display: block !important;
+  }
+}
+
+/* Hide mobile-only surfaces on desktop */
+@media (min-width: 769px) {
+  .mobile-only {
+    display: none !important;
+  }
+}
