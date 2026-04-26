@@ -4,6 +4,7 @@
 //! GET /api/screen-capture/:stitch_id             — JSON metadata (chapters + transcript)
 //! GET /api/screen-capture/:stitch_id/video       — range-aware video stream
 
+use crate::id_validators::ValidStitchId;
 use crate::screen_capture;
 use axum::{extract::Path, http::StatusCode, response::IntoResponse, routing::get, Json, Router};
 use tower::ServiceExt;
@@ -33,7 +34,8 @@ async fn list_screen_captures(
 async fn get_metadata(
     Path(stitch_id): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    crate::id_validators::validate_stitch_id(&stitch_id)
+    // Validate and parse stitch_id at API boundary (path-traversal protection, §13)
+    let stitch_id = ValidStitchId::parse(&stitch_id)
         .map_err(crate::id_validators::rejection)?;
 
     if !screen_capture::has_video(&stitch_id) {
@@ -49,7 +51,7 @@ async fn get_metadata(
 
     let data = screen_capture::ScreenCaptureData {
         video_url: format!("/api/screen-capture/{}/video", stitch_id),
-        stitch_id,
+        stitch_id: stitch_id.to_string(),
         title: meta.title,
         project: meta.project,
         recorded_at: meta.recorded_at,
@@ -72,10 +74,14 @@ async fn get_video(
 ) -> axum::response::Response {
     use tower_http::services::ServeFile;
 
-    if let Err(e) = crate::id_validators::validate_stitch_id(&stitch_id) {
-        let (status, msg) = crate::id_validators::rejection(e);
-        return (status, msg).into_response();
-    }
+    // Validate and parse stitch_id at API boundary (path-traversal protection, §13)
+    let stitch_id = match ValidStitchId::parse(&stitch_id) {
+        Ok(id) => id,
+        Err(e) => {
+            let (status, msg) = crate::id_validators::rejection(e);
+            return (status, msg).into_response();
+        }
+    };
 
     let path = match screen_capture::video_path(&stitch_id) {
         Some(p) => p,

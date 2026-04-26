@@ -834,7 +834,7 @@ async fn create_draft_from_note(
         return Err((StatusCode::CONFLICT, message));
     }
 
-    let actor = crate::api_stitch_decompose::resolve_actor(None);
+    let actor = crate::api_stitch_decompose::resolve_actor_no_state(None);
     let now = chrono::Utc::now().to_rfc3339();
     let draft_id = format!("draft-{}", uuid::Uuid::new_v4());
 

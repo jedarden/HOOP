@@ -30,9 +30,6 @@
 use std::fmt;
 use std::ops::Deref;
 
-// Re-export http types for convenience in API handlers
-pub use http;
-
 /// Maximum bead ID length.
 const BEAD_ID_MAX_LEN: usize = 256;
 
