@@ -1,0 +1,12 @@
+{
+  "agent": "codex",
+  "provider": "openai",
+  "model": "gpt-5.3-codex",
+  "exit_code": 1,
+  "outcome": "failure",
+  "duration_ms": 90000,
+  "captured_at": "2026-04-21T18:57:00Z",
+  "trace_format": "v1",
+  "pruned": false,
+  "template_version": "1.0.0"
+}

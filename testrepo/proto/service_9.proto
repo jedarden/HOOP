@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package testrepo.v9;
+
+service Service9 {
+    rpc Get9Request(Get9Request) returns (Get9Response);
+}
+
+message Get9Request {
+    string id = 1;
+}
+
+message Get9Response {
+    string data = 1;
+}

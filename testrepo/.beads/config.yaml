@@ -1,0 +1,34 @@
+# Beads Project Configuration
+# Test fixture configuration for integration testing
+
+# Issue prefix for this workspace
+issue_prefix: tr
+
+# Default priority for new issues (0=highest, 4=lowest)
+default_priority: 2
+
+# Default issue type
+default_type: task
+
+# Available issue types
+issue_types:
+  - task
+  - bug
+  - feature
+  - refactor
+  - investigation
+  - epic
+  - genesis
+
+# Available priorities
+priorities:
+  - value: 0
+    label: critical
+  - value: 1
+    label: high
+  - value: 2
+    label: medium
+  - value: 3
+    label: low
+  - value: 4
+    label: backlog

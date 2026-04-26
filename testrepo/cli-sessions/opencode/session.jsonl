@@ -1,0 +1,3 @@
+{"ts":"2026-04-21T19:05:00Z","cmd":"br list --status ready","output":"[needle:charlie:bd-ghi789:explore] tr-open-003|Update documentation|open|task"}
+{"ts":"2026-04-21T19:05:30Z","cmd":"br show tr-open-003","output":"[needle:charlie:bd-ghi789:explore] ID: tr-open-003\nTitle: Update documentation\nStatus: open\nType: task\nPriority: 2"}
+{"ts":"2026-04-21T19:10:00Z","cmd":"br timeout","output":"[needle:charlie:bd-ghi789:explore] Command timed out"}

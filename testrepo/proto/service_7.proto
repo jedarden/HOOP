@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package testrepo.v7;
+
+service Service7 {
+    rpc Get7Request(Get7Request) returns (Get7Response);
+}
+
+message Get7Request {
+    string id = 1;
+}
+
+message Get7Response {
+    string data = 1;
+}

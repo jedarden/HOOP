@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package testrepo.v14;
+
+service Service14 {
+    rpc Get14Request(Get14Request) returns (Get14Response);
+}
+
+message Get14Request {
+    string id = 1;
+}
+
+message Get14Response {
+    string data = 1;
+}

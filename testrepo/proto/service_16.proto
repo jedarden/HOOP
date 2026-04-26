@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package testrepo.v16;
+
+service Service16 {
+    rpc Get16Request(Get16Request) returns (Get16Response);
+}
+
+message Get16Request {
+    string id = 1;
+}
+
+message Get16Response {
+    string data = 1;
+}

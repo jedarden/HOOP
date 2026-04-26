@@ -1,0 +1,8 @@
+-- Schema 9
+CREATE TABLE IF NOT EXISTS table_9 (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_table_9_name ON table_9(name);

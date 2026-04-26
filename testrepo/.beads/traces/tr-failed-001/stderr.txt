@@ -1,0 +1,4 @@
+[needle:stderr] 2026-04-21T18:56:30Z
+Error: Token limit reached
+Warning: Migration analysis incomplete
+Error: Cannot proceed with automatic migration

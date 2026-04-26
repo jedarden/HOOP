@@ -1,0 +1,5 @@
+# Test configuration 06
+[test_config_06]
+enabled = true
+timeout = 30
+retries = 3

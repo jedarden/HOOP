@@ -1,0 +1,9 @@
+[server]
+host = "localhost"
+port = 8080
+
+[database]
+url = "sqlite:///tmp/test.db"
+
+[logging]
+level = "debug"

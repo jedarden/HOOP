@@ -1,0 +1,241 @@
+#!/usr/bin/env bash
+# br-stub: Minimal br CLI stub for integration testing
+# Records create calls, emulates read verbs against fixtures
+
+set -euo pipefail
+
+STUB_LOG="${TESTREPO_ROOT:-/home/coding/HOOP/testrepo}/.stub-log.jsonl"
+FIXTURES_DIR="${TESTREPO_ROOT:-/home/coding/HOOP/testrepo}/fixtures"
+mkdir -p "$(dirname "$STUB_LOG")"
+
+# Emit JSON to stdout and exit 0
+emit_json() {
+    echo "$1"
+    exit 0
+}
+
+# Emit error and exit 1
+emit_error() {
+    echo "Error: $1" >&2
+    exit 1
+}
+
+# Record a call to stub log for test inspection
+record_call() {
+    local verb="$1"
+    shift
+    local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    echo "{\"timestamp\":\"$timestamp\",\"verb\":\"$verb\",\"args\":$(printf '%s' "$*" | jq -Rs .)}" >> "$STUB_LOG"
+}
+
+# Show usage
+show_help() {
+    cat <<'EOF'
+Agent-first issue tracker (SQLite + JSONL)
+
+Usage: br [OPTIONS] <COMMAND>
+
+Commands:
+  agents       Manage AGENTS.md workflow instructions
+  audit        Record and label agent interactions (append-only JSONL)
+  blocked      List blocked issues
+  changelog    Generate changelog from closed issues
+  close        Close an issue
+  comments     Manage comments
+  completions  Generate shell completions
+  config       Configuration management
+  count        Count issues with optional grouping
+  create       Create a new issue
+  defer        Defer issues (schedule for later)
+  delete       Delete an issue (creates tombstone)
+  dep          Manage dependencies
+  doctor       Run diagnostics and optionally repair issues
+  epic         Epic management commands
+  graph        Visualize dependency graph
+  history      Manage local history backups
+  info         Show diagnostic metadata about the workspace
+  init         Initialize a beads workspace
+  label        Manage labels
+  lint         Check issues for missing template sections
+  list         List issues
+  orphans      List orphan issues (referenced in commits but open)
+  q            Quick capture (create issue, print ID only)
+  query        Manage saved queries
+  ready        List ready issues (open, unblocked, not deferred)
+  reopen       Reopen an issue
+  schema       Emit JSON Schemas for br output types (for agent/tooling integration)
+  search       Search issues
+  show         Show issue details
+  stale        List stale issues
+  stats        Show project statistics
+  status       Alias for stats
+  sync         Sync database with JSONL file (export or import)
+  undefer      Undefer issues (make ready again)
+  update       Update an issue
+  upgrade      Upgrade br to the latest version
+  version      Show version information
+  where        Show the active .beads directory
+  help         Print this message or the help of the given subcommand(s)
+
+Options:
+      --db <DB>                      Database path (auto-discover .beads/*.db if not set)
+      --actor <ACTOR>                Actor name for audit trail
+      --json                         Output as JSON
+EOF
+    exit 0
+}
+
+# Emit fixture if it exists, otherwise emit empty array
+emit_fixture_or_empty() {
+    local fixture="$1"
+    if [[ -f "$fixture" ]]; then
+        cat "$fixture"
+    else
+        echo "[]"
+    fi
+}
+
+# Parse arguments
+VERB="${1:-help}"
+shift || true
+
+# Parse global options
+OPT_JSON=""
+OPT_DB=""
+OPT_ACTOR=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --json)
+            OPT_JSON="1"
+            shift
+            ;;
+        --db)
+            OPT_DB="$2"
+            shift 2
+            ;;
+        --actor)
+            OPT_ACTOR="$2"
+            shift 2
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+# Handle verbs
+case "$VERB" in
+    help|--help|-h)
+        show_help
+        ;;
+
+    version|--version|-v)
+        echo "br-stub 0.1.0"
+        exit 0
+        ;;
+
+    # Read verbs - return fixture JSON
+    list|show|ready|blocked|orphans|search|count|stats|status|stale|where|info)
+        record_call "$VERB" "$@"
+        fixture="${FIXTURES_DIR}/${VERB}.json"
+        emit_fixture_or_empty "$fixture"
+        ;;
+
+    # schema verb - emit JSON schema
+    schema)
+        record_call "$VERB" "$@"
+        cat <<'EOF'
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Bead",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string" },
+    "title": { "type": "string" },
+    "description": { "type": "string" },
+    "status": { "type": "string", "enum": ["open", "in_progress", "closed"] },
+    "priority": { "type": "integer" },
+    "issue_type": { "type": "string" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "created_by": { "type": "string" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "assignee": { "type": "string" },
+    "labels": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["id", "title", "status", "created_at", "created_by"]
+}
+EOF
+        ;;
+
+    # create verb - record for test assertions
+    create|q)
+        record_call "$VERB" "$@"
+        # Generate a synthetic bead ID
+        bead_id="test-$(date +%s)"
+        # Emit the bead ID (create outputs the ID, q outputs just the ID)
+        if [[ "$VERB" == "q" ]]; then
+            echo "$bead_id"
+        else
+            echo "Created issue $bead_id"
+        fi
+        exit 0
+        ;;
+
+    # Write verbs - record but no-op
+    close|update|reopen|defer|undefer|label|delete)
+        record_call "$VERB" "$@"
+        echo "Stub: $VERB recorded (no-op)"
+        exit 0
+        ;;
+
+    # Dependency management
+    dep)
+        subverb="${1:-help}"
+        case "$subverb" in
+            add|remove)
+                record_call "dep-$subverb" "$@"
+                echo "Stub: dep $subverb recorded (no-op)"
+                exit 0
+                ;;
+            *)
+                record_call "dep" "$@"
+                echo "[]"
+                exit 0
+                ;;
+        esac
+        ;;
+
+    # Sync verb
+    sync)
+        record_call "$VERB" "$@"
+        echo "Stub: sync completed"
+        exit 0
+        ;;
+
+    # Doctor verb
+    doctor)
+        record_call "$VERB" "$@"
+        echo "Stub: doctor check passed"
+        exit 0
+        ;;
+
+    # Init verb
+    init)
+        record_call "$VERB" "$@"
+        echo "Stub: beads workspace initialized"
+        exit 0
+        ;;
+
+    # Completions
+    completions)
+        record_call "$VERB" "$@"
+        echo "# Stub completions"
+        exit 0
+        ;;
+
+    # Default: emit error for unknown verbs
+    *)
+        emit_error "Unknown command: $VERB"
+        ;;
+esac

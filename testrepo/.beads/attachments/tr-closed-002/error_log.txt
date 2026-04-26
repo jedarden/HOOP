@@ -1,0 +1,3 @@
+[ERROR] 2026-04-21T18:30:00Z - Test suite failed
+  at tests/integration/test_004.rs:42
+  assertion failed: `expected == actual`

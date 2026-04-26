@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package testrepo.v10;
+
+service Service10 {
+    rpc Get10Request(Get10Request) returns (Get10Response);
+}
+
+message Get10Request {
+    string id = 1;
+}
+
+message Get10Response {
+    string data = 1;
+}

@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package testrepo.v8;
+
+service Service8 {
+    rpc Get8Request(Get8Request) returns (Get8Response);
+}
+
+message Get8Request {
+    string id = 1;
+}
+
+message Get8Response {
+    string data = 1;
+}

@@ -1,0 +1,10 @@
+{
+  "filename": "screenshot.png",
+  "content_type": "image/png",
+  "size_bytes": 69,
+  "uploaded_at": "2026-04-21T18:45:00Z",
+  "uploaded_by": "alpha",
+  "purpose": "Screenshot showing memory profiler output",
+  "resolution": "8x8",
+  "description": "Memory leak visible in parser tokenization"
+}

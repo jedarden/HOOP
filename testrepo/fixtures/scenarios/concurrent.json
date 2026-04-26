@@ -1,0 +1,8 @@
+{
+  "scenario": "concurrent",
+  "description": "Test scenario for concurrent",
+  "steps": [
+    {"step": 1, "action": "init", "expected": "success"},
+    {"step": 2, "action": "run", "expected": "complete"}
+  ]
+}

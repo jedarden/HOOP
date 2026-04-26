@@ -1,0 +1,12 @@
+{"type":"content_block_delta","delta":{"text":"I'll help you analyze this project. Let me start by reading the README."}}
+{"type":"tool_use","id":"toolu_0123456789","name":"read_file","input":{"file_path":"README.md"}}
+{"type":"tool_result","tool_use_id":"toolu_0123456789","content":"# Project README\n\nThis is a test project.","is_error":false}
+{"type":"content_block_delta","delta":{"text":"I've read the README. Now let me check the source files."}}
+{"type":"tool_use","id":"toolu_0123456790","name":"list_files","input":{"path":".","limit":20}}
+{"type":"tool_result","tool_use_id":"toolu_0123456790","content":"README.md\nsrc/main.rs\nCargo.toml","is_error":false}
+{"type":"content_block_delta","delta":{"text":"Now let me read the main source file."}}
+{"type":"tool_use","id":"toolu_0123456791","name":"read_file","input":{"file_path":"src/main.rs"}}
+{"type":"tool_result","tool_use_id":"toolu_0123456791","content":"fn main() {\n    println!(\"Hello, world!\");\n}","is_error":false}
+{"type":"content_block_delta","delta":{"text":"Based on my analysis, this is a simple Rust project."}}
+{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":120,"input_tokens":150}}
+{"type":"message_stop"}

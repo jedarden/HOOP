@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package testrepo.v20;
+
+service Service20 {
+    rpc Get20Request(Get20Request) returns (Get20Response);
+}
+
+message Get20Request {
+    string id = 1;
+}
+
+message Get20Response {
+    string data = 1;
+}

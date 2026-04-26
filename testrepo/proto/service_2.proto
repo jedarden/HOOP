@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package testrepo.v2;
+
+service Service2 {
+    rpc Get2Request(Get2Request) returns (Get2Response);
+}
+
+message Get2Request {
+    string id = 1;
+}
+
+message Get2Response {
+    string data = 1;
+}

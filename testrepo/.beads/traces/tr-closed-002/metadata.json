@@ -1,0 +1,12 @@
+{
+  "agent": "claude",
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-6",
+  "exit_code": 0,
+  "outcome": "success",
+  "duration_ms": 78432,
+  "captured_at": "2026-04-21T19:10:15Z",
+  "trace_format": "v1",
+  "pruned": false,
+  "template_version": "1.0.0"
+}

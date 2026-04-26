@@ -1,0 +1,11 @@
+{
+  "database": "beads.db",
+  "jsonl_export": "issues.jsonl",
+  "events_log": "events.jsonl",
+  "heartbeats_log": "heartbeats.jsonl",
+  "workspace_root": "/home/coding/HOOP/testrepo",
+  "schema_version": "1.0.0",
+  "fixture_version": "1.0.0",
+  "generated_at": "2026-04-25T00:00:00Z",
+  "description": "Test fixture for HOOP integration testing"
+}

@@ -1,0 +1,3 @@
+[needle:stderr] 2026-04-21T18:47:40Z
+Warning: Using default Rust edition
+Note: Consider adding workspace dependencies

@@ -1,0 +1,6 @@
+{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+{"type":"content_block_delta","index":0,"delta":{"text":"Hello! I can help you with that."}}
+{"type":"content_block_delta","index":0,"delta":{"text":" Let me check the current directory."}}
+{"type":"content_block_stop","index":0}
+{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":15}}
+{"type":"message_stop"}

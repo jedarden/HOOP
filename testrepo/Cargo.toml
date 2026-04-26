@@ -1,0 +1,60 @@
+[package]
+name = "testrepo"
+version = "0.1.0"
+edition = "2021"
+authors = ["Test Author <test@example.com>"]
+description = "A test repository for HOOP integration testing"
+license = "MIT"
+repository = "https://github.com/test/testrepo"
+readme = "README.md"
+keywords = ["test", "fixture", "hoop"]
+categories = ["development-tools"]
+
+[lib]
+name = "testrepo"
+path = "src/lib.rs"
+
+[[bin]]
+name = "testrepo-cli"
+path = "src/bin/cli.rs"
+
+[[bin]]
+name = "testrepo-server"
+path = "src/bin/server.rs"
+
+[dependencies]
+tokio = { version = "1.35", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4.4", features = ["derive"] }
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite", "postgres", "mysql"] }
+reqwest = { version = "0.11", features = ["json"] }
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["fs", "cors", "trace"] }
+uuid = { version = "1.6", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+config = "0.14"
+secrecy = { version = "0.8", features = ["serde"] }
+
+[dev-dependencies]
+criterion = "0.5"
+proptest = "1.4"
+mockito = "1.2"
+
+[[bench]]
+name = "benchmark"
+harness = false
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.dev]
+opt-level = 0

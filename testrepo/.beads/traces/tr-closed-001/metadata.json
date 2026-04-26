@@ -1,0 +1,12 @@
+{
+  "agent": "claude",
+  "provider": "anthropic",
+  "model": "claude-opus-4-6",
+  "exit_code": 0,
+  "outcome": "success",
+  "duration_ms": 45231,
+  "captured_at": "2026-04-21T18:52:01Z",
+  "trace_format": "v1",
+  "pruned": false,
+  "template_version": "1.0.0"
+}

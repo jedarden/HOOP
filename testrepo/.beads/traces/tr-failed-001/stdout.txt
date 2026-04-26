@@ -1,0 +1,12 @@
+[needle:start] 2026-04-21T18:55:00Z
+Attempting complex migration script for tr-failed-001
+Analyzing database schema...
+Creating migration files...
+[needle:tool] {"type": "bash", "command": "sqlx migrate add initial_schema"}
+[needle:output] Migration file created
+Generating rollback scripts...
+[needle:error] 2026-04-21T18:56:45Z
+Error: Context limit exceeded during migration analysis
+Migration too complex for single pass
+[needle:fail] 2026-04-21T18:57:00Z
+Migration requires manual intervention

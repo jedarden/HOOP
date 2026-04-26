@@ -1,0 +1,10 @@
+{"candidates":[{"content":{"parts":[{"text":"I'll analyze the codebase for you."}]}}],"finishReason":"STOP"}
+{"functionCall":{"name":"search_files","args":{"query":"*.rs","path":"."}}}
+{"functionResponse":{"name":"search_files","response":{"matches":["src/main.rs","src/lib.rs"]}}}
+{"candidates":[{"content":{"parts":[{"text":"Let me read the main file."}]}}],"finishReason":"STOP"}
+{"functionCall":{"name":"read_file","args":{"path":"src/main.rs"}}}
+{"functionResponse":{"name":"read_file","response":{"content":"fn main() { println!(\"Hello\"); }"}}}
+{"candidates":[{"content":{"parts":[{"text":"Now let me check the library file."}]}}],"finishReason":"STOP"}
+{"functionCall":{"name":"read_file","args":{"path":"src/lib.rs"}}}
+{"functionResponse":{"name":"read_file","response":{"content":"pub fn greet() { println!(\"Hi\"); }"}}}
+{"candidates":[{"content":{"parts":[{"text":"I've reviewed the code. It's a simple Rust project with basic functionality."}]}}],"finishReason":"STOP"}

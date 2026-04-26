@@ -1,0 +1,11 @@
+{"content_block_delta":{"delta":{"text":"I'll analyze the codebase for you."}}}
+{"tool_call":{"id":"call_1","function":{"name":"search_files","arguments":{"query":"*.rs","path":"."}}}}
+{"tool_result":{"tool_call_id":"call_1","result":{"matches":["src/main.rs","src/lib.rs"]}}}
+{"content_block_delta":{"delta":{"text":"Let me read the main file."}}}
+{"tool_call":{"id":"call_2","function":{"name":"read_file","arguments":{"path":"src/main.rs"}}}}
+{"tool_result":{"tool_call_id":"call_2","result":{"content":"fn main() { println!(\"Hello\"); }"}}}
+{"content_block_delta":{"delta":{"text":"Now let me check the library file."}}}
+{"tool_call":{"id":"call_3","function":{"name":"read_file","arguments":{"path":"src/lib.rs"}}}}
+{"tool_result":{"tool_call_id":"call_3","result":{"content":"pub fn greet() { println!(\"Hi\"); }"}}}
+{"content_block_delta":{"delta":{"text":"I've reviewed the code. It's a simple Rust project with basic functionality."}}}
+{"message_end":{"finish_reason":"stop"}}

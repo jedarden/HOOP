@@ -1,0 +1,10 @@
+{
+  "filename": "audio_message.wav",
+  "content_type": "audio/wav",
+  "size_bytes": 44124,
+  "uploaded_at": "2026-04-21T18:45:00Z",
+  "uploaded_by": "alpha",
+  "purpose": "Voice message from agent about parser memory leak analysis",
+  "duration_seconds": 1.0,
+  "transcription": "I've identified the leak in the tokenizer."
+}

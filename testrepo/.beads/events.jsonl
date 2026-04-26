@@ -1,0 +1,17 @@
+{"ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-abc123","strand":"pluck","event":"claim"}
+{"ts":"2026-04-21T18:47:33Z","worker":"alpha","bead":"bd-abc123","event":"dispatch","adapter":"claude","model":"claude-opus-4-6"}
+{"ts":"2026-04-21T18:52:01Z","worker":"alpha","bead":"bd-abc123","event":"complete","outcome":"success","duration_ms":287104,"exit_code":0}
+{"ts":"2026-04-21T18:55:00Z","worker":"bravo","bead":"bd-def456","strand":"mend","event":"claim"}
+{"ts":"2026-04-21T18:55:30Z","worker":"bravo","bead":"bd-def456","event":"dispatch","adapter":"codex","model":"gpt-5.3-codex"}
+{"ts":"2026-04-21T18:57:00Z","worker":"bravo","bead":"bd-def456","event":"fail","error":"context limit exceeded","duration_ms":90000}
+{"ts":"2026-04-21T19:00:00Z","worker":"bravo","bead":"bd-def456","event":"release"}
+{"ts":"2026-04-21T19:05:00Z","worker":"charlie","bead":"bd-ghi789","strand":"explore","event":"claim"}
+{"ts":"2026-04-21T19:05:30Z","worker":"charlie","bead":"bd-ghi789","event":"dispatch","adapter":"opencode","model":"kimi-k2"}
+{"ts":"2026-04-21T19:10:00Z","worker":"charlie","bead":"bd-ghi789","event":"timeout"}
+{"ts":"2026-04-21T19:15:00Z","worker":"delta","bead":"bd-jkl012","strand":"weave","event":"claim"}
+{"ts":"2026-04-21T19:15:30Z","worker":"delta","bead":"bd-jkl012","event":"dispatch","adapter":"gemini","model":"gemini-2.5-pro"}
+{"ts":"2026-04-21T19:17:00Z","worker":"delta","bead":"bd-jkl012","event":"crash","exit_code":139}
+{"ts":"2026-04-21T19:20:00Z","worker":"alpha","bead":"bd-mno345","strand":"pluck","event":"claim"}
+{"ts":"2026-04-21T19:20:30Z","worker":"alpha","bead":"bd-mno345","event":"dispatch","adapter":"claude","model":"claude-sonnet-4-6"}
+{"ts":"2026-04-21T19:25:01Z","worker":"alpha","bead":"bd-mno345","event":"close"}
+{"ts":"2026-04-21T19:26:00Z","worker":"alpha","bead":"bd-pqr678","event":"update"}

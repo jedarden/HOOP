@@ -1,0 +1,2 @@
+[needle:stderr] 2026-04-25T22:58:00Z
+Warning: Consider adding circuit breaker pattern

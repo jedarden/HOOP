@@ -1,0 +1,13 @@
+{"ts":"2026-04-21T18:41:50Z","worker":"alpha","state":"idle","last_strand":null}
+{"ts":"2026-04-21T18:42:10Z","worker":"alpha","state":"executing","bead":"bd-abc123","pid":12345,"adapter":"claude"}
+{"ts":"2026-04-21T18:42:20Z","worker":"alpha","state":"executing","bead":"bd-abc123","pid":12345,"adapter":"claude"}
+{"ts":"2026-04-21T18:42:30Z","worker":"alpha","state":"executing","bead":"bd-abc123","pid":12345,"adapter":"claude"}
+{"ts":"2026-04-21T18:52:05Z","worker":"alpha","state":"idle","last_strand":"pluck"}
+{"ts":"2026-04-21T18:52:15Z","worker":"alpha","state":"idle","last_strand":"pluck"}
+{"ts":"2026-04-21T18:55:00Z","worker":"bravo","state":"executing","bead":"bd-def456","pid":12346,"adapter":"codex"}
+{"ts":"2026-04-21T18:55:10Z","worker":"bravo","state":"executing","bead":"bd-def456","pid":12346,"adapter":"codex"}
+{"ts":"2026-04-21T18:57:05Z","worker":"bravo","state":"knot","reason":"strands exhausted"}
+{"ts":"2026-04-21T18:57:15Z","worker":"bravo","state":"knot","reason":"strands exhausted"}
+{"ts":"2026-04-21T19:05:00Z","worker":"charlie","state":"executing","bead":"bd-ghi789","pid":12347,"adapter":"opencode"}
+{"ts":"2026-04-21T19:20:00Z","worker":"alpha","state":"executing","bead":"bd-mno345","pid":12348,"adapter":"claude"}
+{"ts":"2026-04-21T19:20:10Z","worker":"alpha","state":"executing","bead":"bd-mno345","pid":12348,"adapter":"claude"}

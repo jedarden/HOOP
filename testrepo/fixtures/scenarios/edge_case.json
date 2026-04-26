@@ -1,0 +1,8 @@
+{
+  "scenario": "edge_case",
+  "description": "Test scenario for edge_case",
+  "steps": [
+    {"step": 1, "action": "init", "expected": "success"},
+    {"step": 2, "action": "run", "expected": "complete"}
+  ]
+}

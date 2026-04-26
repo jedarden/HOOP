@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package testrepo.v4;
+
+service Service4 {
+    rpc Get4Request(Get4Request) returns (Get4Response);
+}
+
+message Get4Request {
+    string id = 1;
+}
+
+message Get4Response {
+    string data = 1;
+}

@@ -1,0 +1,8 @@
+{
+  "filename": "metrics.json",
+  "content_type": "application/json",
+  "size_bytes": 85,
+  "uploaded_at": "2026-04-21T18:45:00Z",
+  "uploaded_by": "alpha",
+  "purpose": "Performance metrics from failed task"
+}

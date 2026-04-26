@@ -1,0 +1,8 @@
+# Regenerated database
+.beads/beads.db
+
+# Stub log (runtime generated)
+.stub-log.jsonl
+
+# Cargo artifacts
+target/
