@@ -6,7 +6,7 @@
 
 use axum::{extract::State, response::Json, routing::get, Router};
 use serde::{Deserialize, Serialize};
-
+use crate::config_resolver::SecretPattern;
 use crate::DaemonState;
 
 /// Response for GET /api/config
@@ -69,6 +69,8 @@ pub struct RunningConfig {
     pub backup_encryption: bool,
     /// Pricing: file path
     pub pricing_file: String,
+    /// UI: archive after days
+    pub ui_archive_after_days: u32,
 }
 
 /// Config keys that require daemon restart to take effect (§17.4)
@@ -77,6 +79,18 @@ pub const RESTART_REQUIRED_KEYS: &[&str] = &["server.bind_addr", "metrics.port"]
 /// Check if a config key requires restart
 pub fn is_restart_required_key(key: &str) -> bool {
     RESTART_REQUIRED_KEYS.contains(&key)
+}
+
+/// Response for GET /api/config/secrets-patterns (§18)
+///
+/// Exposes the current secret scanning patterns to the client for pre-upload
+/// warning. This ensures client and backend use the same pattern set.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SecretsPatternsResponse {
+    /// Schema version for compatibility tracking
+    pub schema_version: String,
+    /// Secret patterns from config.yml or defaults
+    pub patterns: Vec<SecretPattern>,
 }
 
 async fn get_config(State(state): State<DaemonState>) -> Json<ConfigResponse> {
@@ -109,12 +123,28 @@ async fn get_config(State(state): State<DaemonState>) -> Json<ConfigResponse> {
             backup_retention_days: cfg.backup_retention_days.value,
             backup_encryption: cfg.backup_encryption.value,
             pricing_file: cfg.pricing_file.value.clone(),
+            ui_archive_after_days: cfg.ui_archive_after_days.value,
         },
     })
 }
 
+/// GET /api/config/secrets-patterns
+///
+/// Returns the current secret scanning patterns for client-side pre-upload
+/// warning (§18). Ensures parity between client warning and backend blocking.
+async fn get_secrets_patterns(State(state): State<DaemonState>) -> Json<SecretsPatternsResponse> {
+    let cfg = &*state.resolved_config;
+
+    Json(SecretsPatternsResponse {
+        schema_version: "1.0.0".to_string(),
+        patterns: cfg.secrets_patterns.value.clone(),
+    })
+}
+
 pub fn router() -> Router<DaemonState> {
-    Router::new().route("/api/config", get(get_config))
+    Router::new()
+        .route("/api/config", get(get_config))
+        .route("/api/config/secrets-patterns", get(get_secrets_patterns))
 }
 
 #[cfg(test)]

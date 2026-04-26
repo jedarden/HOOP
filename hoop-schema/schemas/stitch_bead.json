@@ -17,7 +17,11 @@
     },
     "workspace": {
       "type": "string",
-      "description": "Workspace path"
+      "description": "Workspace path (raw, for display)"
+    },
+    "canonical_workspace": {
+      "type": "string",
+      "description": "Realpath-resolved workspace path (for joins and dedup)"
     },
     "relationship": {
       "type": "string",

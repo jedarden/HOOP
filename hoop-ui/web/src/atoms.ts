@@ -297,12 +297,55 @@ export interface AgentChatScope {
   projects: string[];
 }
 
+// Stuck detector alert (§C1, hoop-ttb.3.25)
+export type StuckReason =
+  | 'idle_timeout'
+  | 'max_runtime_exceeded'
+  | 'content_seen_grace_exceeded'
+  | 'heartbeat_transition_silence'
+  | 'repeated_retry';
+
+export interface StuckAlert {
+  worker: string;
+  bead: string;
+  started_at: string;
+  last_event_at: string;
+  elapsed_secs: number;
+  idle_secs: number;
+  saw_content: boolean;
+  reason: StuckReason;
+  message: string;
+  last_heartbeat_at: string | null;
+  last_transition_at: string | null;
+  retry_count: number;
+}
+
+// Collision detector alert (§6 Phase 2, deliverable 12)
+export interface CollisionAlert {
+  alert_id: string;
+  detected_at: string;
+  worker_a: string;
+  bead_a: string;
+  worker_b: string;
+  bead_b: string;
+  overlapping_files: string[];
+}
+
 // Search palette open/closed state (cmd-K)
 export const searchPaletteOpenAtom = atom<boolean>(false);
 
+// Optimistic mutation stub — survives WS reconnect (§B2, epoch-sync)
+export interface OptimisticStub {
+  tempId: string;
+  type: 'bead' | 'stitch' | 'draft';
+  data: Record<string, unknown>;
+  createdAt: number;
+}
+
 // WebSocket event from backend
 export interface WsEvent {
-  type: 'worker_update' | 'workers_snapshot' | 'beads_snapshot' | 'conversations_snapshot' | 'conversation_update' | 'streaming_content' | 'config_status' | 'projects_snapshot' | 'capacity_snapshot' | 'stitch_created' | 'agent_session' | 'draft_update';
+  type: 'init' | 'worker_update' | 'workers_snapshot' | 'beads_snapshot' | 'conversations_snapshot' | 'conversation_update' | 'streaming_content' | 'config_status' | 'projects_snapshot' | 'capacity_snapshot' | 'stitch_created' | 'agent_session' | 'draft_update' | 'stuck_alert' | 'collision_alert';
+  subscriptions?: string[];
   worker?: WorkerData;
   workers?: WorkerData[];
   beads?: BeadData[];
@@ -315,6 +358,8 @@ export interface WsEvent {
   stitch_created?: StitchCreatedData;
   agent_session?: AgentSessionEventData;
   draft_update?: { draft_id: string; updated_at: string };
+  stuck_alert?: StuckAlert;
+  collision_alert?: CollisionAlert;
 }
 
 // Cost bucket from backend aggregation
@@ -333,6 +378,30 @@ export interface CostBucket {
 
 /** Filter values for the conversation pane — persisted across renders in a Jotai atom. */
 export type ConversationFilter = 'all' | 'fleet' | 'operator' | 'ad-hoc' | 'dictated' | 'screen-capture';
+
+const CONVERSATION_FILTER_STORAGE_KEY = 'hoop_conversation_filter';
+
+function loadConversationFilter(): ConversationFilter {
+  try {
+    const stored = localStorage.getItem(CONVERSATION_FILTER_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as string;
+      // Validate it's a known filter value
+      if (['all', 'fleet', 'operator', 'ad-hoc', 'dictated', 'screen-capture'].includes(parsed)) {
+        return parsed as ConversationFilter;
+      }
+    }
+  } catch {}
+  return 'all';
+}
+
+function saveConversationFilter(filter: ConversationFilter) {
+  try {
+    localStorage.setItem(CONVERSATION_FILTER_STORAGE_KEY, JSON.stringify(filter));
+  } catch {}
+}
+
+export { CONVERSATION_FILTER_STORAGE_KEY };
 
 // Stitch created event from backend WS
 export interface StitchCreatedData {
@@ -370,6 +439,30 @@ export interface HashChainVerifyResponse {
   valid: boolean;
   message: string;
   row_count: number;
+}
+
+// Redaction audit log row from GET /api/audit/redaction
+export interface RedactionAuditRow {
+  id: string;
+  ts: string;
+  project: string;
+  stitch_id: string | null;
+  what_flagged: string;
+  secret_type: string | null;
+  pattern_name: string | null;
+  action: string;
+  actor: string;
+  operator: string | null;
+  source_ref: string | null;
+  metadata: Record<string, unknown> | null;
+  reviewed_at: string | null;
+  reviewer: string | null;
+}
+
+// Response from GET /api/audit/redaction
+export interface RedactionAuditResponse {
+  audit_rows: RedactionAuditRow[];
+  total_count: number;
 }
 
 // Bead event from events.jsonl for debug panel
@@ -504,6 +597,52 @@ export const dictationHotkeyAtom = atom<DictationHotkey>(loadDictationHotkey());
 // Active project name — updated by App.tsx when route changes; read by DictationWidget
 export const activeProjectNameAtom = atom<string>('');
 
+// UI config from /api/config — includes ui_archive_after_days
+export interface UiConfig {
+  ui_archive_after_days: number;
+}
+
+// Response from GET /api/config (subset of fields)
+export interface ConfigResponse {
+  schema_version: string;
+  config: {
+    ui_archive_after_days: number;
+  };
+}
+
+export const uiConfigAtom = atom<UiConfig>({ ui_archive_after_days: 30 });
+
+// Archive filter toggle — persists per-operator to localStorage
+const ARCHIVE_FILTER_STORAGE_KEY = 'hoop_archive_filter_show_archived';
+
+function loadArchiveFilter(): boolean {
+  try {
+    const stored = localStorage.getItem(ARCHIVE_FILTER_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as boolean;
+      return parsed;
+    }
+  } catch {}
+  return false; // Default: hide archived
+}
+
+function saveArchiveFilter(show: boolean) {
+  try {
+    localStorage.setItem(ARCHIVE_FILTER_STORAGE_KEY, JSON.stringify(show));
+  } catch {}
+}
+
+export { ARCHIVE_FILTER_STORAGE_KEY };
+
+const baseArchiveFilterShowArchivedAtom = atom<boolean>(loadArchiveFilter());
+export const archiveFilterShowArchivedAtom = atom(
+  (get) => get(baseArchiveFilterShowArchivedAtom),
+  (get, set, newValue: boolean) => {
+    set(baseArchiveFilterShowArchivedAtom, newValue);
+    saveArchiveFilter(newValue);
+  }
+);
+
 // ── Draft persistence types (§19.1 Draft concurrency) ───────────────────────
 
 export type DraftStatus = 'pending' | 'approved' | 'submitted' | 'rejected' | 'edited' | 'abandoned';
@@ -558,8 +697,15 @@ export const draftUpdateAtom = atom<{ draftId: string; updatedAt: string } | nul
 // Atoms for state management
 export const conversationsAtom = atom<Conversation[]>([]);
 export const selectedConversationIdAtom = atom<string | null>(null);
-/** Per-operator conversation filter — persists across re-mounts within the session. */
-export const conversationFilterAtom = atom<ConversationFilter>('all');
+/** Per-operator conversation filter — persists to localStorage across sessions. */
+const baseConversationFilterAtom = atom<ConversationFilter>(loadConversationFilter());
+export const conversationFilterAtom = atom(
+  (get) => get(baseConversationFilterAtom),
+  (get, set, newValue: ConversationFilter) => {
+    set(baseConversationFilterAtom, newValue);
+    saveConversationFilter(newValue);
+  }
+);
 export const projectsAtom = atom<Project[]>([]);
 export const projectCardsAtom = atom<ProjectCardData[]>([]);
 export const projectsReceivedAtom = atom<boolean>(false);
@@ -568,12 +714,29 @@ export const workersAtom = atom<WorkerData[]>([]);
 export const beadsAtom = atom<BeadData[]>([]);
 export const beadEventsAtom = atom<Map<string, BeadEventFromEvents[]>>(new Map()); // bead_id -> events
 export const wsConnectedAtom = atom<boolean>(false);
+
+// WebSocket reconnection state
+export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
+export const connectionStatusAtom = atom<ConnectionStatus>('connecting');
+export const reconnectAttemptAtom = atom<number>(0);
+export const reconnectDelayAtom = atom<number>(1000); // Current backoff delay in ms
+
+// Derived atom: mutations are disabled when disconnected or connecting
+export const mutationsDisabledAtom = atom<boolean>((get) => {
+  const status = get(connectionStatusAtom);
+  return status === 'disconnected' || status === 'connecting';
+});
+
 export const configStatusAtom = atom<ConfigStatus>({ valid: true });
 export const capacityAtom = atom<AccountCapacity[]>([]);
 export const costBucketsAtom = atom<CostBucket[]>([]);
 export const dictatedNotesAtom = atom<Map<string, NoteSummary[]>>(new Map()); // project -> notes
 export const screenCapturesAtom = atom<Map<string, ScreenCaptureSummary[]>>(new Map()); // project -> captures
 export const stitchCreatedAtom = atom<StitchCreatedData[]>([]);
+// Stuck detector alerts (§C1, hoop-ttb.3.25) — keyed by worker name
+export const stuckAlertsAtom = atom<Map<string, StuckAlert>>(new Map());
+// Collision detector alerts (§6 Phase 2, deliverable 12) — keyed by alert_id
+export const collisionAlertsAtom = atom<Map<string, CollisionAlert>>(new Map());
 
 // File attach context — set by the file-tree context menu to pipe a file
 // into whichever draft form is currently open (or will open next).
@@ -590,6 +753,10 @@ export const agentSessionStatusAtom = atom<AgentSessionStatus | null>(null);
 export const agentInflightAtom = atom<AgentInflight | null>(null);
 export const agentChatMessagesAtom = atom<AgentChatMessage[]>([]);
 export const agentChatScopeAtom = atom<AgentChatScope>({ projects: [] });
+
+// Optimistic mutation stubs — survive WS reconnect (§B2, epoch-sync)
+// Cleared only when server confirms the mutation or client discards it
+export const optimisticStubsAtom = atom<OptimisticStub[]>([]);
 
 // Current time atom — updated every 30s by OverviewPage; used by RelativeTime
 // so that time-tick re-renders don't defeat memo on ProjectCard.

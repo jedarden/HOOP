@@ -8,11 +8,124 @@
 //!
 //! Plan reference: §17.2
 
-use serde::Serialize;
+use regex::Regex;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tracing::{info, warn};
+
+use crate::stuck_detector::StuckDetectorConfigMap;
+
+// ---------------------------------------------------------------------------
+// Secret pattern definition (§18)
+// ---------------------------------------------------------------------------
+
+/// A named secret pattern for the secrets scanner.
+///
+/// Each pattern has a human-readable name, a severity level, and one or more
+/// regular expressions that match secrets of this type.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct SecretPattern {
+    /// Human-readable name for this pattern type (e.g., "AWS Access Key").
+    pub name: String,
+    /// Severity level: high, medium, or low.
+    pub severity: String,
+    /// Regular expressions that match this secret type.
+    /// Multiple patterns are OR'd together.
+    pub patterns: Vec<String>,
+}
+
+impl SecretPattern {
+    /// Validate that all patterns compile to valid regexes.
+    pub fn validate(&self) -> Result<(), String> {
+        for pat in &self.patterns {
+            Regex::new(pat)
+                .map_err(|e| format!("invalid regex '{}': {}", pat, e))?;
+        }
+        Ok(())
+    }
+
+    /// Check if severity is valid.
+    pub fn is_valid_severity(&self) -> bool {
+        matches!(self.severity.as_str(), "high" | "medium" | "low")
+    }
+}
+
+/// Default secret patterns when none are configured.
+///
+/// These are the built-in patterns that ship with HOOP.
+fn default_secret_patterns() -> Vec<SecretPattern> {
+    vec![
+        SecretPattern {
+            name: "Anthropic API Key".to_string(),
+            severity: "high".to_string(),
+            patterns: vec![
+                r"sk-ant-[a-zA-Z0-9_-]{20,}".to_string(),
+            ],
+        },
+        SecretPattern {
+            name: "Generic API Key".to_string(),
+            severity: "high".to_string(),
+            patterns: vec![
+                r"\bsk-[a-zA-Z0-9]{20,}\b".to_string(),
+            ],
+        },
+        SecretPattern {
+            name: "AWS Access Key".to_string(),
+            severity: "high".to_string(),
+            patterns: vec![
+                r"\bAKIA[A-Z0-9]{16}\b".to_string(),
+            ],
+        },
+        SecretPattern {
+            name: "GitHub Token".to_string(),
+            severity: "high".to_string(),
+            patterns: vec![
+                r"\bghp_[a-zA-Z0-9]{36}\b".to_string(),
+                r"\bghs_[a-zA-Z0-9]{36}\b".to_string(),
+                r"\bghu_[a-zA-Z0-9]{36}\b".to_string(),
+                r"\bgithub_pat_[a-zA-Z0-9_]{82}\b".to_string(),
+            ],
+        },
+        SecretPattern {
+            name: "Slack Token".to_string(),
+            severity: "high".to_string(),
+            patterns: vec![
+                r"\bxoxb-[0-9A-Za-z-]{24,}\b".to_string(),
+                r"\bxoxp-[0-9A-Za-z-]{24,}\b".to_string(),
+            ],
+        },
+        SecretPattern {
+            name: "JWT".to_string(),
+            severity: "high".to_string(),
+            patterns: vec![
+                r"\bey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b".to_string(),
+            ],
+        },
+        SecretPattern {
+            name: "Bearer Token".to_string(),
+            severity: "high".to_string(),
+            patterns: vec![
+                r"(?i)bearer\s+[A-Za-z0-9._\-+/]{20,}".to_string(),
+            ],
+        },
+        SecretPattern {
+            name: "Environment Variable Secret".to_string(),
+            severity: "high".to_string(),
+            patterns: vec![
+                r#"(?i)(?:api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|private[_-]?key|client[_-]?secret|anthropic[_-]?api[_-]?key|openai[_-]?api[_-]?key|github[_-]?token)\s*[:=]\s*["']?([A-Za-z0-9+/_.~\-]{16,})["']?"#.to_string(),
+            ],
+        },
+        SecretPattern {
+            name: "JSON Secret Field".to_string(),
+            severity: "high".to_string(),
+            patterns: vec![
+                r#"(?i)"(?:password|passwd|secret|token|api_key|apikey|access_token|auth_token|private_key|client_secret)"\s*:\s*"([^"]{8,})""#.to_string(),
+            ],
+        },
+    ]
+}
 
 // ---------------------------------------------------------------------------
 // Attribution types
@@ -290,6 +403,12 @@ pub struct ResolvedConfig {
 
     // Pricing (§17.3)
     pub pricing_file: Resolved<String>,
+
+    // Secrets scanner patterns (§18)
+    pub secrets_patterns: Resolved<Vec<SecretPattern>>,
+
+    // Stuck detector (§C1, hoop-ttb.3.25)
+    pub stuck_detector: Resolved<Option<StuckDetectorConfigMap>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -485,6 +604,21 @@ fn yaml_get_bool(root: &serde_yaml::Value, path: &str) -> Option<bool> {
         node = node.get(*part)?;
     }
     None
+}
+
+/// Helper to extract secret patterns from a YAML value.
+fn yaml_get_secret_patterns(root: &serde_yaml::Value) -> Option<Vec<SecretPattern>> {
+    root.get("secrets_patterns")
+        .and_then(|v| v.as_sequence())
+        .and_then(|seq| {
+            let mut patterns = Vec::new();
+            for item in seq {
+                if let Ok(pat) = serde_yaml::from_value::<SecretPattern>(item.clone()) {
+                    patterns.push(pat);
+                }
+            }
+            if patterns.is_empty() { None } else { Some(patterns) }
+        })
 }
 
 /// Helper to read an env var and parse it.
@@ -1044,6 +1178,48 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
         "pricing_file",
     );
 
+    // Secrets scanner patterns (§18)
+    let secrets_patterns = if let Some(patterns) = yml_ref.and_then(|y| yaml_get_secret_patterns(y)) {
+        // Validate all patterns
+        let mut valid_patterns = Vec::new();
+        for pat in patterns {
+            if let Err(e) = pat.validate() {
+                warn!("Invalid secret pattern '{}': {}, using default", pat.name, e);
+            } else if !pat.is_valid_severity() {
+                warn!("Invalid severity '{}' for pattern '{}', using default", pat.severity, pat.name);
+            } else {
+                valid_patterns.push(pat);
+            }
+        }
+        if valid_patterns.is_empty() {
+            Resolved::new(
+                default_secret_patterns(),
+                ConfigSource::Default,
+                "compiled default (configured patterns were invalid)".to_string(),
+            )
+        } else {
+            Resolved::new(
+                valid_patterns,
+                ConfigSource::ConfigYml,
+                "config.yml: secrets_patterns".to_string(),
+            )
+        }
+    } else {
+        Resolved::new(
+            default_secret_patterns(),
+            ConfigSource::Default,
+            "compiled default".to_string(),
+        )
+    };
+
+    // Load stuck detector configuration
+    let stuck_detector_config_map = crate::stuck_detector::StuckDetector::load_config();
+    let stuck_detector = Resolved::new(
+        Some(stuck_detector_config_map),
+        ConfigSource::ConfigYml,
+        "config.yml: stuck_detector".to_string(),
+    );
+
     let config = ResolvedConfig {
         bind_addr,
         allow_br_mismatch,
@@ -1079,6 +1255,8 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
         backup_retention_days,
         backup_encryption,
         pricing_file,
+        secrets_patterns,
+        stuck_detector,
     };
 
     // Log the resolution summary
@@ -1632,6 +1810,42 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
         "pricing_file",
     );
 
+    // Secrets scanner patterns (§18)
+    let secrets_patterns = if let Some(patterns) = yml_ref.and_then(|y| yaml_get_secret_patterns(y)) {
+        // Validate all patterns
+        let mut valid_patterns = Vec::new();
+        for pat in patterns {
+            if let Err(e) = pat.validate() {
+                return Err(ConfigError::validation(
+                    format!("invalid secret pattern '{}': {}", pat.name, e),
+                    Some("secrets_patterns".to_string()),
+                    None,
+                    None,
+                ));
+            } else if !pat.is_valid_severity() {
+                return Err(ConfigError::validation(
+                    format!("invalid severity '{}' for pattern '{}'", pat.severity, pat.name),
+                    Some("secrets_patterns".to_string()),
+                    Some("one of: high, medium, low".to_string()),
+                    Some(pat.severity.clone()),
+                ));
+            } else {
+                valid_patterns.push(pat);
+            }
+        }
+        Resolved::new(
+            valid_patterns,
+            ConfigSource::ConfigYml,
+            "config.yml: secrets_patterns".to_string(),
+        )
+    } else {
+        Resolved::new(
+            default_secret_patterns(),
+            ConfigSource::Default,
+            "compiled default".to_string(),
+        )
+    };
+
     // Validate unknown top-level fields (config.yml only)
     if let Some(yml) = yml_ref {
         if let Some(mapping) = yml.as_mapping() {
@@ -1650,6 +1864,8 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
                         "reflection",
                         "backup",
                         "pricing",
+                        "secrets_patterns",
+                        "stuck_detector",
                     ];
                     if !VALID_TOP_LEVEL_KEYS.contains(&field_name) {
                         return Err(ConfigError::validation(
@@ -1703,6 +1919,12 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
         backup_retention_days,
         backup_encryption,
         pricing_file,
+        secrets_patterns,
+        stuck_detector: Resolved::new(
+            Some(crate::stuck_detector::StuckDetector::load_config()),
+            ConfigSource::ConfigYml,
+            "config.yml: stuck_detector".to_string(),
+        ),
     })
 }
 

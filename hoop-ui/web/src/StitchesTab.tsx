@@ -1,12 +1,13 @@
 import { useAtomValue, useSetAtom, useAtom } from 'jotai';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { conversationsAtom, streamingActiveIdsAtom, selectedConversationIdAtom, Conversation, dictatedNotesAtom, NoteSummary, DictatedNote, conversationFilterAtom, ConversationFilter, screenCapturesAtom, ScreenCaptureSummary, ScreenCaptureData, fileNavigationAtom, mutationsDisabledAtom } from './atoms';
+import { conversationsAtom, streamingActiveIdsAtom, selectedConversationIdAtom, Conversation, dictatedNotesAtom, NoteSummary, DictatedNote, conversationFilterAtom, ConversationFilter, screenCapturesAtom, ScreenCaptureSummary, ScreenCaptureData, fileNavigationAtom, mutationsDisabledAtom, uiConfigAtom, ConfigResponse, archiveFilterShowArchivedAtom } from './atoms';
 import AudioPlayer from './components/AudioPlayer';
 import VideoPlayer from './components/VideoPlayer';
-import { scanForSecrets, getSecretSeverity, truncateSecret } from './components/secretsScanner';
+import { scanForSecretsSync, getSecretSeverity, truncateSecret, prefetchSecretPatterns } from './components/secretsScanner';
 import BeadDraftForm from './BeadDraftForm';
 import StitchDraftForm from './StitchDraftForm';
 import { StitchLinker } from './components/StitchLinker';
+import ChatToStitchPane from './ChatToStitchPane';
 import { TabId } from './ProjectDetail';
 
 const PAGE_SIZE = 50;
@@ -119,7 +120,7 @@ function DictatedNoteDetail({ note, onUpdate, mutationsDisabled }: { note: NoteS
 
   const secretsWarning = useMemo(() => {
     if (!fullNote) return null;
-    return scanForSecrets(fullNote.transcript);
+    return scanForSecretsSync(fullNote.transcript);
   }, [fullNote]);
 
   const transcript = fullNote && fullNote.transcript_words.length > 0
@@ -501,6 +502,23 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
   const dictatedNotesMap = useAtomValue(dictatedNotesAtom);
   const screenCapturesMap = useAtomValue(screenCapturesAtom);
   const mutationsDisabled = useAtomValue(mutationsDisabledAtom);
+  const uiConfig = useAtomValue(uiConfigAtom);
+  const setUiConfig = useSetAtom(uiConfigAtom);
+  const [showArchived, setShowArchived] = useAtom(archiveFilterShowArchivedAtom);
+
+  // Fetch UI config on mount to get archive_after_days
+  useEffect(() => {
+    let mounted = true;
+    fetch('/api/config')
+      .then(r => r.ok ? r.json() : null)
+      .then((data: ConfigResponse | null) => {
+        if (mounted && data) {
+          setUiConfig({ ui_archive_after_days: data.config.ui_archive_after_days });
+        }
+      })
+      .catch(() => {});
+    return () => { mounted = false; };
+  }, [setUiConfig]);
 
   // Fetch dictated notes for this project on mount
   const setDictatedNotes = useSetAtom(dictatedNotesAtom);
@@ -540,6 +558,13 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
     return () => { mounted = false; };
   }, [projectName, setScreenCaptures]);
 
+  // Prefetch secret scanning patterns on mount (§18)
+  useEffect(() => {
+    prefetchSecretPatterns().catch(() => {
+      console.warn('Failed to prefetch secret patterns, will use defaults');
+    });
+  }, []);
+
   // Callback to update a single note in the atom (no page reload)
   const handleNoteUpdate = useCallback((updated: NoteSummary) => {
     setDictatedNotes(prev => {
@@ -565,6 +590,7 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
   const [lastCreatedId, setLastCreatedId] = useState<string | null>(null);
   const [lastStitchIds, setLastStitchIds] = useState<string[] | null>(null);
   const [lastStitchId, setLastStitchId] = useState<string | null>(null);
+  const [stitchViewMode, setStitchViewMode] = useState<'list' | 'chat'>('list');
 
   // Link graph state
   interface LinkGraph {
@@ -703,14 +729,27 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
   // Reset to first page when filter changes
   useEffect(() => {
     setPage(1);
-  }, [filter, classificationFilter]);
+  }, [filter, classificationFilter, showArchived]);
 
   const filteredItems = useMemo(() => {
+    const now = Date.now();
+
     return stitchItems.filter(item => {
+      // Archive filter: hide items older than archive_after_days unless showArchived is true
+      if (!showArchived && !filter.search) {
+        const lastActivityTime = new Date(item.lastActivityAt).getTime();
+        const daysSinceActivity = (now - lastActivityTime) / (24 * 60 * 60 * 1000);
+        if (daysSinceActivity > uiConfig.ui_archive_after_days) {
+          return false;
+        }
+      }
+
       if (classificationFilter !== 'all') {
         const matchesKind = classificationFilter === 'fleet'
           ? item.kind === 'worker'
-          : item.kind === (classificationFilter as string);
+          : classificationFilter === 'operator'
+            ? item.kind !== 'worker'  // operator filter = all non-fleet (operator, dictated, ad-hoc, screen-capture)
+            : item.kind === (classificationFilter as string);
         if (!matchesKind) return false;
       }
       if (filter.status !== 'all' && item.status !== filter.status) return false;
@@ -737,7 +776,7 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
       }
       return true;
     });
-  }, [stitchItems, filter, classificationFilter]);
+  }, [stitchItems, filter, classificationFilter, showArchived, uiConfig]);
 
   const visibleItems = useMemo(() => filteredItems.slice(0, page * PAGE_SIZE), [filteredItems, page]);
   const hasMore = visibleItems.length < filteredItems.length;
@@ -847,23 +886,44 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
         </div>
 
         <div className="stitches-filters">
-          <button
-            className="new-bead-btn"
-            onClick={() => setShowDraftForm(true)}
-            title="Draft a new bead in this project"
-            disabled={mutationsDisabled}
-          >
-            + New Bead
-          </button>
+          <div className="stitches-view-toggle">
+            <button
+              className={`stitches-view-btn ${stitchViewMode === 'list' ? 'stitches-view-btn--active' : ''}`}
+              onClick={() => setStitchViewMode('list')}
+              title="List view"
+            >
+              List
+            </button>
+            <button
+              className={`stitches-view-btn ${stitchViewMode === 'chat' ? 'stitches-view-btn--active' : ''}`}
+              onClick={() => setStitchViewMode('chat')}
+              title="Chat to create stitches"
+            >
+              Chat to Stitch
+            </button>
+          </div>
 
-          <button
-            className="new-bead-btn new-stitch-btn"
-            onClick={() => setShowStitchForm(true)}
-            title="Create a new stitch with decomposition"
-            disabled={mutationsDisabled}
-          >
-            + New Stitch
-          </button>
+          {stitchViewMode === 'list' && (
+            <>
+              <button
+                className="new-bead-btn"
+                onClick={() => setShowDraftForm(true)}
+                title="Draft a new bead in this project"
+                disabled={mutationsDisabled}
+              >
+                + New Bead
+              </button>
+
+              <button
+                className="new-bead-btn new-stitch-btn"
+                onClick={() => setShowStitchForm(true)}
+                title="Create a new stitch with decomposition"
+                disabled={mutationsDisabled}
+              >
+                + New Stitch
+              </button>
+            </>
+          )}
 
           <input
             type="text"
@@ -896,23 +956,48 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
             <option value="awaiting_review">Awaiting Review</option>
             <option value="done">Done</option>
           </select>
+
+          <button
+            className={`archive-toggle-btn ${showArchived ? 'archive-toggle-btn--showing' : ''}`}
+            onClick={() => setShowArchived(!showArchived)}
+            title={`Show stitches older than ${uiConfig.ui_archive_after_days} days`}
+          >
+            {showArchived ? 'Hide Archived' : 'Show Archived'}
+          </button>
         </div>
       </div>
 
-      {filteredItems.length === 0 ? (
-        <div className="stitches-empty">
-          <p>No stitches found</p>
-          {filter.search || filter.status !== 'all' ? (
-            <button
-              className="clear-filters-button"
-              onClick={() => setFilter({ status: 'all', search: '' })}
-            >
-              Clear filters
-            </button>
-          ) : (
-            <p className="empty-hint">Stitches will appear here as conversations happen</p>
-          )}
-        </div>
+      {stitchViewMode === 'chat' ? (
+        <ChatToStitchPane
+          projectName={projectName}
+          onStitchCreated={handleStitchCreated}
+        />
+      ) : (
+        <>
+          {filteredItems.length === 0 ? (
+            <div className="stitches-empty">
+              <p>No stitches found</p>
+              {filter.search || filter.status !== 'all' ? (
+                <button
+                  className="clear-filters-button"
+                  onClick={() => setFilter({ status: 'all', search: '' })}
+                >
+                  Clear filters
+                </button>
+              ) : !showArchived ? (
+                <div className="empty-hint">
+                  <p>Stitches will appear here as conversations happen</p>
+                  <button
+                    className="clear-filters-button"
+                    onClick={() => setShowArchived(true)}
+                  >
+                    Show archived stitches (older than {uiConfig.ui_archive_after_days} days)
+                  </button>
+                </div>
+              ) : (
+                <p className="empty-hint">Stitches will appear here as conversations happen</p>
+              )}
+            </div>
       ) : (
         <div className="stitches-list">
           {visibleItems.map(item => {
@@ -1064,6 +1149,13 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
                       );
                     })()}
                     <DictatedNoteDetail note={item.dictatedNote} onUpdate={handleNoteUpdate} mutationsDisabled={mutationsDisabled} />
+                    <TouchedFilesPanel
+                      stitchId={item.id}
+                      onFileClick={(filePath, refRange) => {
+                        setFileNavigation({ projectName, filePath, refRange });
+                        onSwitchTab?.('files');
+                      }}
+                    />
                   </div>
                 )}
 
@@ -1126,6 +1218,13 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
                       );
                     })()}
                     <ScreenCaptureDetail summary={item.screenCapture} />
+                    <TouchedFilesPanel
+                      stitchId={item.id}
+                      onFileClick={(filePath, refRange) => {
+                        setFileNavigation({ projectName, filePath, refRange });
+                        onSwitchTab?.('files');
+                      }}
+                    />
                   </div>
                 )}
 
@@ -1234,6 +1333,8 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
             </div>
           )}
         </div>
+      )}
+        </>
       )}
     </div>
   );
