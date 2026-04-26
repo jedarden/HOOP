@@ -22,7 +22,7 @@
     },
     "kind": {
       "type": "string",
-      "enum": ["bead_created", "stitch_created", "config_changed", "project_added", "project_removed"],
+      "enum": ["bead_created", "stitch_created", "config_changed", "project_added", "project_removed", "schema_migrated", "backup_started", "backup_finished", "backup_failed", "restore_started", "restore_finished", "restore_failed"],
       "description": "Action kind"
     },
     "target": {

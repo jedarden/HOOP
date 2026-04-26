@@ -12,7 +12,7 @@
 //! any modification breaks all subsequent hashes.
 
 use anyhow::Result;
-use chrono::Utc;
+use chrono::{Timelike, Utc};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -65,6 +65,8 @@ pub enum ActionKind {
     RestoreFinished,
     /// Restore failed (snapshot_id, error in args_json)
     RestoreFailed,
+    /// Schema migration from_version → to_version (duration_ms, rows_touched in args_json)
+    SchemaMigrated,
 }
 
 /// Action result for audit log
@@ -773,6 +775,87 @@ fn hex_encode(data: Vec<u8>) -> String {
     hex::encode(data)
 }
 
+/// Write an audit row for schema migration
+///
+/// Records {kind: schema_migrated, from, to, duration_ms, rows_touched} for
+/// every schema migration. This is the most consequential mutation HOOP performs
+/// on fleet.db, and the audit trail must answer "when did we go to version X?"
+fn write_schema_migration_audit(
+    from_version: &str,
+    to_version: &str,
+    duration_ms: f64,
+    rows_touched: i64,
+) -> Result<()> {
+    use serde_json::json;
+
+    let args = json!({
+        "from": from_version,
+        "to": to_version,
+        "duration_ms": duration_ms,
+        "rows_touched": rows_touched,
+    });
+
+    // Use a special actor for schema migrations
+    let actor = format!("hoop:schema:{}", to_version);
+
+    write_audit_row(
+        &actor,
+        ActionKind::SchemaMigrated,
+        &format!("{}→{}", from_version, to_version),
+        None, // project
+        Some(args.to_string()),
+        ActionResult::Success,
+        None, // error
+        Some("schema_migration"),
+        None, // stitch_id
+        None, // args_hash
+    )?;
+    Ok(())
+}
+
+/// Macro to wrap a migration function call with duration logging and audit row
+///
+/// Tracks duration, rows touched via SQLite changes, and writes an audit row
+/// on success. Returns the migration result, logging success/failure.
+macro_rules! migrate {
+    ($conn:expr, $func:ident, $from:expr, $to:expr, $desc:expr) => {{
+        let start = std::time::Instant::now();
+        info!("Running migration {} → {}: {}", $from, $to, $desc);
+
+        // Clear the change counter before migration to accurately track rows touched
+        let _ = $conn.execute("SELECT 1", []);
+
+        let result = $func($conn);
+        let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
+
+        // Get rows touched via SQLite's change counter
+        // This counts INSERT/UPDATE/DELETE operations during the migration
+        let rows_touched = $conn.changes();
+
+        match &result {
+            Ok(()) => {
+                info!(
+                    "Migration {} → {} completed in {:.2} ms ({} rows touched)",
+                    $from, $to, elapsed_ms, rows_touched
+                );
+                // Write audit row for successful migration
+                let _ = write_schema_migration_audit($from, $to, elapsed_ms, rows_touched as i64);
+            }
+            Err(e) => {
+                warn!(
+                    "Migration {} → {} failed after {:.2} ms: {}",
+                    $from, $to, elapsed_ms, e
+                );
+            }
+        }
+        // Record migration duration metric
+        crate::metrics::metrics()
+            .hoop_schema_migration_duration_ms
+            .observe(&[$from, $to], elapsed_ms);
+        result
+    }};
+}
+
 /// Run schema migrations from the given version to current
 ///
 /// This function handles incremental schema upgrades, applying each
@@ -784,366 +867,366 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
     match from_version {
         "0.1.0" => {
             // Migration 0.1.0 → 1.1.0: Add Stitch service tables
-            migrate_v01_to_v11(conn)?;
+            migrate!(conn, migrate_v01_to_v11, "0.1.0", "1.1.0", "Add Stitch service tables")?;
             // Fall through to 1.2.0
-            migrate_v11_to_v12(conn)?;
+            migrate!(conn, migrate_v11_to_v12, "1.1.0", "1.2.0", "Add Pattern service tables")?;
             // Fall through to 1.3.0
-            migrate_v12_to_v13(conn)?;
+            migrate!(conn, migrate_v12_to_v13, "1.2.0", "1.3.0", "Add dictated_notes metadata table")?;
             // Fall through to 1.4.0
-            migrate_v13_to_v14(conn)?;
+            migrate!(conn, migrate_v13_to_v14, "1.3.0", "1.4.0", "Add word-level timestamps to dictated_notes")?;
             // Fall through to 1.5.0
-            migrate_v14_to_v15(conn)?;
+            migrate!(conn, migrate_v14_to_v15, "1.4.0", "1.5.0", "Add transcription_jobs table")?;
             // Fall through to 1.6.0
-            migrate_v15_to_v16(conn)?;
+            migrate!(conn, migrate_v15_to_v16, "1.5.0", "1.6.0", "Add transcription_status to dictated_notes")?;
             // Fall through to 1.7.0
-            migrate_v16_to_v17(conn)?;
+            migrate!(conn, migrate_v16_to_v17, "1.6.0", "1.7.0", "Add audit trail columns to actions")?;
             // Fall through to 1.8.0
-            migrate_v17_to_v18(conn)?;
+            migrate!(conn, migrate_v17_to_v18, "1.7.0", "1.8.0", "Add agent_sessions table")?;
             // Fall through to 1.9.0
-            migrate_v18_to_v19(conn)?;
+            migrate!(conn, migrate_v18_to_v19, "1.8.0", "1.9.0", "Add reflection_ledger table")?;
             // Fall through to 1.10.0
-            migrate_v19_to_v110(conn)?;
+            migrate!(conn, migrate_v19_to_v110, "1.9.0", "1.10.0", "Add draft_queue table")?;
             // Fall through to 1.11.0
-            migrate_v110_to_v111(conn)?;
+            migrate!(conn, migrate_v110_to_v111, "1.10.0", "1.11.0", "Add morning_briefs table")?;
             // Fall through to 1.12.0
-            migrate_v111_to_v112(conn)?;
+            migrate!(conn, migrate_v111_to_v112, "1.11.0", "1.12.0", "Add has_started_session to agent_sessions")?;
             // Fall through to 1.13.0
-            migrate_v112_to_v113(conn)?;
+            migrate!(conn, migrate_v112_to_v113, "1.12.0", "1.13.0", "Add cross-project state tables")?;
             // Fall through to 1.14.0
-            migrate_v113_to_v114(conn)?;
+            migrate!(conn, migrate_v113_to_v114, "1.13.0", "1.14.0", "Add classification column to stitches")?;
             // Fall through to 1.15.0
-            migrate_v114_to_v115(conn)?;
+            migrate!(conn, migrate_v114_to_v115, "1.14.0", "1.15.0", "Add codex_account_daily_spend table")?;
             // Fall through to 1.16.0
-            migrate_v115_to_v116(conn)?;
-            migrate_v116_to_v117(conn)?;
-            migrate_v117_to_v118(conn)?;
-            migrate_v118_to_v119(conn)?;
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v115_to_v116, "1.15.0", "1.16.0", "Add stitch-based forecast columns to capacity_rollup")?;
+            migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
+            migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
+            migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.1.0" => {
-            migrate_v11_to_v12(conn)?;
-            migrate_v12_to_v13(conn)?;
-            migrate_v13_to_v14(conn)?;
-            migrate_v14_to_v15(conn)?;
-            migrate_v15_to_v16(conn)?;
-            migrate_v16_to_v17(conn)?;
-            migrate_v17_to_v18(conn)?;
-            migrate_v18_to_v19(conn)?;
-            migrate_v19_to_v110(conn)?;
-            migrate_v110_to_v111(conn)?;
-            migrate_v111_to_v112(conn)?;
-            migrate_v112_to_v113(conn)?;
-            migrate_v113_to_v114(conn)?;
-            migrate_v114_to_v115(conn)?;
-            migrate_v115_to_v116(conn)?;
-            migrate_v116_to_v117(conn)?;
-            migrate_v117_to_v118(conn)?;
-            migrate_v118_to_v119(conn)?;
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v11_to_v12, "1.1.0", "1.2.0", "Add Pattern service tables")?;
+            migrate!(conn, migrate_v12_to_v13, "1.2.0", "1.3.0", "Add dictated_notes metadata table")?;
+            migrate!(conn, migrate_v13_to_v14, "1.3.0", "1.4.0", "Add word-level timestamps to dictated_notes")?;
+            migrate!(conn, migrate_v14_to_v15, "1.4.0", "1.5.0", "Add transcription_jobs table")?;
+            migrate!(conn, migrate_v15_to_v16, "1.5.0", "1.6.0", "Add transcription_status to dictated_notes")?;
+            migrate!(conn, migrate_v16_to_v17, "1.6.0", "1.7.0", "Add audit trail columns to actions")?;
+            migrate!(conn, migrate_v17_to_v18, "1.7.0", "1.8.0", "Add agent_sessions table")?;
+            migrate!(conn, migrate_v18_to_v19, "1.8.0", "1.9.0", "Add reflection_ledger table")?;
+            migrate!(conn, migrate_v19_to_v110, "1.9.0", "1.10.0", "Add draft_queue table")?;
+            migrate!(conn, migrate_v110_to_v111, "1.10.0", "1.11.0", "Add morning_briefs table")?;
+            migrate!(conn, migrate_v111_to_v112, "1.11.0", "1.12.0", "Add has_started_session to agent_sessions")?;
+            migrate!(conn, migrate_v112_to_v113, "1.12.0", "1.13.0", "Add cross-project state tables")?;
+            migrate!(conn, migrate_v113_to_v114, "1.13.0", "1.14.0", "Add classification column to stitches")?;
+            migrate!(conn, migrate_v114_to_v115, "1.14.0", "1.15.0", "Add codex_account_daily_spend table")?;
+            migrate!(conn, migrate_v115_to_v116, "1.15.0", "1.16.0", "Add stitch-based forecast columns to capacity_rollup")?;
+            migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
+            migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
+            migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.2.0" => {
-            migrate_v12_to_v13(conn)?;
-            migrate_v13_to_v14(conn)?;
-            migrate_v14_to_v15(conn)?;
-            migrate_v15_to_v16(conn)?;
-            migrate_v16_to_v17(conn)?;
-            migrate_v17_to_v18(conn)?;
-            migrate_v18_to_v19(conn)?;
-            migrate_v19_to_v110(conn)?;
-            migrate_v110_to_v111(conn)?;
-            migrate_v111_to_v112(conn)?;
-            migrate_v112_to_v113(conn)?;
-            migrate_v113_to_v114(conn)?;
-            migrate_v114_to_v115(conn)?;
-            migrate_v115_to_v116(conn)?;
-            migrate_v116_to_v117(conn)?;
-            migrate_v117_to_v118(conn)?;
-            migrate_v118_to_v119(conn)?;
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v12_to_v13, "1.2.0", "1.3.0", "Add dictated_notes metadata table")?;
+            migrate!(conn, migrate_v13_to_v14, "1.3.0", "1.4.0", "Add word-level timestamps to dictated_notes")?;
+            migrate!(conn, migrate_v14_to_v15, "1.4.0", "1.5.0", "Add transcription_jobs table")?;
+            migrate!(conn, migrate_v15_to_v16, "1.5.0", "1.6.0", "Add transcription_status to dictated_notes")?;
+            migrate!(conn, migrate_v16_to_v17, "1.6.0", "1.7.0", "Add audit trail columns to actions")?;
+            migrate!(conn, migrate_v17_to_v18, "1.7.0", "1.8.0", "Add agent_sessions table")?;
+            migrate!(conn, migrate_v18_to_v19, "1.8.0", "1.9.0", "Add reflection_ledger table")?;
+            migrate!(conn, migrate_v19_to_v110, "1.9.0", "1.10.0", "Add draft_queue table")?;
+            migrate!(conn, migrate_v110_to_v111, "1.10.0", "1.11.0", "Add morning_briefs table")?;
+            migrate!(conn, migrate_v111_to_v112, "1.11.0", "1.12.0", "Add has_started_session to agent_sessions")?;
+            migrate!(conn, migrate_v112_to_v113, "1.12.0", "1.13.0", "Add cross-project state tables")?;
+            migrate!(conn, migrate_v113_to_v114, "1.13.0", "1.14.0", "Add classification column to stitches")?;
+            migrate!(conn, migrate_v114_to_v115, "1.14.0", "1.15.0", "Add codex_account_daily_spend table")?;
+            migrate!(conn, migrate_v115_to_v116, "1.15.0", "1.16.0", "Add stitch-based forecast columns to capacity_rollup")?;
+            migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
+            migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
+            migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.3.0" => {
-            migrate_v13_to_v14(conn)?;
-            migrate_v14_to_v15(conn)?;
-            migrate_v15_to_v16(conn)?;
-            migrate_v16_to_v17(conn)?;
-            migrate_v17_to_v18(conn)?;
-            migrate_v18_to_v19(conn)?;
-            migrate_v19_to_v110(conn)?;
-            migrate_v110_to_v111(conn)?;
-            migrate_v111_to_v112(conn)?;
-            migrate_v112_to_v113(conn)?;
-            migrate_v113_to_v114(conn)?;
-            migrate_v114_to_v115(conn)?;
-            migrate_v115_to_v116(conn)?;
-            migrate_v116_to_v117(conn)?;
-            migrate_v117_to_v118(conn)?;
-            migrate_v118_to_v119(conn)?;
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v13_to_v14, "1.3.0", "1.4.0", "Add word-level timestamps to dictated_notes")?;
+            migrate!(conn, migrate_v14_to_v15, "1.4.0", "1.5.0", "Add transcription_jobs table")?;
+            migrate!(conn, migrate_v15_to_v16, "1.5.0", "1.6.0", "Add transcription_status to dictated_notes")?;
+            migrate!(conn, migrate_v16_to_v17, "1.6.0", "1.7.0", "Add audit trail columns to actions")?;
+            migrate!(conn, migrate_v17_to_v18, "1.7.0", "1.8.0", "Add agent_sessions table")?;
+            migrate!(conn, migrate_v18_to_v19, "1.8.0", "1.9.0", "Add reflection_ledger table")?;
+            migrate!(conn, migrate_v19_to_v110, "1.9.0", "1.10.0", "Add draft_queue table")?;
+            migrate!(conn, migrate_v110_to_v111, "1.10.0", "1.11.0", "Add morning_briefs table")?;
+            migrate!(conn, migrate_v111_to_v112, "1.11.0", "1.12.0", "Add has_started_session to agent_sessions")?;
+            migrate!(conn, migrate_v112_to_v113, "1.12.0", "1.13.0", "Add cross-project state tables")?;
+            migrate!(conn, migrate_v113_to_v114, "1.13.0", "1.14.0", "Add classification column to stitches")?;
+            migrate!(conn, migrate_v114_to_v115, "1.14.0", "1.15.0", "Add codex_account_daily_spend table")?;
+            migrate!(conn, migrate_v115_to_v116, "1.15.0", "1.16.0", "Add stitch-based forecast columns to capacity_rollup")?;
+            migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
+            migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
+            migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.4.0" => {
-            migrate_v14_to_v15(conn)?;
-            migrate_v15_to_v16(conn)?;
-            migrate_v16_to_v17(conn)?;
-            migrate_v17_to_v18(conn)?;
-            migrate_v18_to_v19(conn)?;
-            migrate_v19_to_v110(conn)?;
-            migrate_v110_to_v111(conn)?;
-            migrate_v111_to_v112(conn)?;
-            migrate_v112_to_v113(conn)?;
-            migrate_v113_to_v114(conn)?;
-            migrate_v114_to_v115(conn)?;
-            migrate_v115_to_v116(conn)?;
-            migrate_v116_to_v117(conn)?;
-            migrate_v117_to_v118(conn)?;
-            migrate_v118_to_v119(conn)?;
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v14_to_v15, "1.4.0", "1.5.0", "Add transcription_jobs table")?;
+            migrate!(conn, migrate_v15_to_v16, "1.5.0", "1.6.0", "Add transcription_status to dictated_notes")?;
+            migrate!(conn, migrate_v16_to_v17, "1.6.0", "1.7.0", "Add audit trail columns to actions")?;
+            migrate!(conn, migrate_v17_to_v18, "1.7.0", "1.8.0", "Add agent_sessions table")?;
+            migrate!(conn, migrate_v18_to_v19, "1.8.0", "1.9.0", "Add reflection_ledger table")?;
+            migrate!(conn, migrate_v19_to_v110, "1.9.0", "1.10.0", "Add draft_queue table")?;
+            migrate!(conn, migrate_v110_to_v111, "1.10.0", "1.11.0", "Add morning_briefs table")?;
+            migrate!(conn, migrate_v111_to_v112, "1.11.0", "1.12.0", "Add has_started_session to agent_sessions")?;
+            migrate!(conn, migrate_v112_to_v113, "1.12.0", "1.13.0", "Add cross-project state tables")?;
+            migrate!(conn, migrate_v113_to_v114, "1.13.0", "1.14.0", "Add classification column to stitches")?;
+            migrate!(conn, migrate_v114_to_v115, "1.14.0", "1.15.0", "Add codex_account_daily_spend table")?;
+            migrate!(conn, migrate_v115_to_v116, "1.15.0", "1.16.0", "Add stitch-based forecast columns to capacity_rollup")?;
+            migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
+            migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
+            migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.5.0" => {
-            migrate_v15_to_v16(conn)?;
-            migrate_v16_to_v17(conn)?;
-            migrate_v17_to_v18(conn)?;
-            migrate_v18_to_v19(conn)?;
-            migrate_v19_to_v110(conn)?;
-            migrate_v110_to_v111(conn)?;
-            migrate_v111_to_v112(conn)?;
-            migrate_v112_to_v113(conn)?;
-            migrate_v113_to_v114(conn)?;
-            migrate_v114_to_v115(conn)?;
-            migrate_v115_to_v116(conn)?;
-            migrate_v116_to_v117(conn)?;
-            migrate_v117_to_v118(conn)?;
-            migrate_v118_to_v119(conn)?;
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v15_to_v16, "1.5.0", "1.6.0", "Add transcription_status to dictated_notes")?;
+            migrate!(conn, migrate_v16_to_v17, "1.6.0", "1.7.0", "Add audit trail columns to actions")?;
+            migrate!(conn, migrate_v17_to_v18, "1.7.0", "1.8.0", "Add agent_sessions table")?;
+            migrate!(conn, migrate_v18_to_v19, "1.8.0", "1.9.0", "Add reflection_ledger table")?;
+            migrate!(conn, migrate_v19_to_v110, "1.9.0", "1.10.0", "Add draft_queue table")?;
+            migrate!(conn, migrate_v110_to_v111, "1.10.0", "1.11.0", "Add morning_briefs table")?;
+            migrate!(conn, migrate_v111_to_v112, "1.11.0", "1.12.0", "Add has_started_session to agent_sessions")?;
+            migrate!(conn, migrate_v112_to_v113, "1.12.0", "1.13.0", "Add cross-project state tables")?;
+            migrate!(conn, migrate_v113_to_v114, "1.13.0", "1.14.0", "Add classification column to stitches")?;
+            migrate!(conn, migrate_v114_to_v115, "1.14.0", "1.15.0", "Add codex_account_daily_spend table")?;
+            migrate!(conn, migrate_v115_to_v116, "1.15.0", "1.16.0", "Add stitch-based forecast columns to capacity_rollup")?;
+            migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
+            migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
+            migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.6.0" => {
-            migrate_v16_to_v17(conn)?;
-            migrate_v17_to_v18(conn)?;
-            migrate_v18_to_v19(conn)?;
-            migrate_v19_to_v110(conn)?;
-            migrate_v110_to_v111(conn)?;
-            migrate_v111_to_v112(conn)?;
-            migrate_v112_to_v113(conn)?;
-            migrate_v113_to_v114(conn)?;
-            migrate_v114_to_v115(conn)?;
-            migrate_v115_to_v116(conn)?;
-            migrate_v116_to_v117(conn)?;
-            migrate_v117_to_v118(conn)?;
-            migrate_v118_to_v119(conn)?;
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v16_to_v17, "1.6.0", "1.7.0", "Add audit trail columns to actions")?;
+            migrate!(conn, migrate_v17_to_v18, "1.7.0", "1.8.0", "Add agent_sessions table")?;
+            migrate!(conn, migrate_v18_to_v19, "1.8.0", "1.9.0", "Add reflection_ledger table")?;
+            migrate!(conn, migrate_v19_to_v110, "1.9.0", "1.10.0", "Add draft_queue table")?;
+            migrate!(conn, migrate_v110_to_v111, "1.10.0", "1.11.0", "Add morning_briefs table")?;
+            migrate!(conn, migrate_v111_to_v112, "1.11.0", "1.12.0", "Add has_started_session to agent_sessions")?;
+            migrate!(conn, migrate_v112_to_v113, "1.12.0", "1.13.0", "Add cross-project state tables")?;
+            migrate!(conn, migrate_v113_to_v114, "1.13.0", "1.14.0", "Add classification column to stitches")?;
+            migrate!(conn, migrate_v114_to_v115, "1.14.0", "1.15.0", "Add codex_account_daily_spend table")?;
+            migrate!(conn, migrate_v115_to_v116, "1.15.0", "1.16.0", "Add stitch-based forecast columns to capacity_rollup")?;
+            migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
+            migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
+            migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.7.0" => {
-            migrate_v17_to_v18(conn)?;
-            migrate_v18_to_v19(conn)?;
-            migrate_v19_to_v110(conn)?;
-            migrate_v110_to_v111(conn)?;
-            migrate_v111_to_v112(conn)?;
-            migrate_v112_to_v113(conn)?;
-            migrate_v113_to_v114(conn)?;
-            migrate_v114_to_v115(conn)?;
-            migrate_v115_to_v116(conn)?;
-            migrate_v116_to_v117(conn)?;
-            migrate_v117_to_v118(conn)?;
-            migrate_v118_to_v119(conn)?;
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v17_to_v18, "1.7.0", "1.8.0", "Add agent_sessions table")?;
+            migrate!(conn, migrate_v18_to_v19, "1.8.0", "1.9.0", "Add reflection_ledger table")?;
+            migrate!(conn, migrate_v19_to_v110, "1.9.0", "1.10.0", "Add draft_queue table")?;
+            migrate!(conn, migrate_v110_to_v111, "1.10.0", "1.11.0", "Add morning_briefs table")?;
+            migrate!(conn, migrate_v111_to_v112, "1.11.0", "1.12.0", "Add has_started_session to agent_sessions")?;
+            migrate!(conn, migrate_v112_to_v113, "1.12.0", "1.13.0", "Add cross-project state tables")?;
+            migrate!(conn, migrate_v113_to_v114, "1.13.0", "1.14.0", "Add classification column to stitches")?;
+            migrate!(conn, migrate_v114_to_v115, "1.14.0", "1.15.0", "Add codex_account_daily_spend table")?;
+            migrate!(conn, migrate_v115_to_v116, "1.15.0", "1.16.0", "Add stitch-based forecast columns to capacity_rollup")?;
+            migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
+            migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
+            migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.8.0" => {
-            migrate_v18_to_v19(conn)?;
-            migrate_v19_to_v110(conn)?;
-            migrate_v110_to_v111(conn)?;
-            migrate_v111_to_v112(conn)?;
-            migrate_v112_to_v113(conn)?;
-            migrate_v113_to_v114(conn)?;
-            migrate_v114_to_v115(conn)?;
-            migrate_v115_to_v116(conn)?;
-            migrate_v116_to_v117(conn)?;
-            migrate_v117_to_v118(conn)?;
-            migrate_v118_to_v119(conn)?;
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v18_to_v19, "1.8.0", "1.9.0", "Add reflection_ledger table")?;
+            migrate!(conn, migrate_v19_to_v110, "1.9.0", "1.10.0", "Add draft_queue table")?;
+            migrate!(conn, migrate_v110_to_v111, "1.10.0", "1.11.0", "Add morning_briefs table")?;
+            migrate!(conn, migrate_v111_to_v112, "1.11.0", "1.12.0", "Add has_started_session to agent_sessions")?;
+            migrate!(conn, migrate_v112_to_v113, "1.12.0", "1.13.0", "Add cross-project state tables")?;
+            migrate!(conn, migrate_v113_to_v114, "1.13.0", "1.14.0", "Add classification column to stitches")?;
+            migrate!(conn, migrate_v114_to_v115, "1.14.0", "1.15.0", "Add codex_account_daily_spend table")?;
+            migrate!(conn, migrate_v115_to_v116, "1.15.0", "1.16.0", "Add stitch-based forecast columns to capacity_rollup")?;
+            migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
+            migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
+            migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.9.0" => {
-            migrate_v19_to_v110(conn)?;
-            migrate_v110_to_v111(conn)?;
-            migrate_v111_to_v112(conn)?;
-            migrate_v112_to_v113(conn)?;
-            migrate_v113_to_v114(conn)?;
-            migrate_v114_to_v115(conn)?;
-            migrate_v115_to_v116(conn)?;
-            migrate_v116_to_v117(conn)?;
-            migrate_v117_to_v118(conn)?;
-            migrate_v118_to_v119(conn)?;
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v19_to_v110, "1.9.0", "1.10.0", "Add draft_queue table")?;
+            migrate!(conn, migrate_v110_to_v111, "1.10.0", "1.11.0", "Add morning_briefs table")?;
+            migrate!(conn, migrate_v111_to_v112, "1.11.0", "1.12.0", "Add has_started_session to agent_sessions")?;
+            migrate!(conn, migrate_v112_to_v113, "1.12.0", "1.13.0", "Add cross-project state tables")?;
+            migrate!(conn, migrate_v113_to_v114, "1.13.0", "1.14.0", "Add classification column to stitches")?;
+            migrate!(conn, migrate_v114_to_v115, "1.14.0", "1.15.0", "Add codex_account_daily_spend table")?;
+            migrate!(conn, migrate_v115_to_v116, "1.15.0", "1.16.0", "Add stitch-based forecast columns to capacity_rollup")?;
+            migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
+            migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
+            migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.10.0" => {
-            migrate_v110_to_v111(conn)?;
-            migrate_v111_to_v112(conn)?;
-            migrate_v112_to_v113(conn)?;
-            migrate_v113_to_v114(conn)?;
-            migrate_v114_to_v115(conn)?;
-            migrate_v115_to_v116(conn)?;
-            migrate_v116_to_v117(conn)?;
-            migrate_v117_to_v118(conn)?;
-            migrate_v118_to_v119(conn)?;
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v110_to_v111, "1.10.0", "1.11.0", "Add morning_briefs table")?;
+            migrate!(conn, migrate_v111_to_v112, "1.11.0", "1.12.0", "Add has_started_session to agent_sessions")?;
+            migrate!(conn, migrate_v112_to_v113, "1.12.0", "1.13.0", "Add cross-project state tables")?;
+            migrate!(conn, migrate_v113_to_v114, "1.13.0", "1.14.0", "Add classification column to stitches")?;
+            migrate!(conn, migrate_v114_to_v115, "1.14.0", "1.15.0", "Add codex_account_daily_spend table")?;
+            migrate!(conn, migrate_v115_to_v116, "1.15.0", "1.16.0", "Add stitch-based forecast columns to capacity_rollup")?;
+            migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
+            migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
+            migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.11.0" => {
-            migrate_v111_to_v112(conn)?;
-            migrate_v112_to_v113(conn)?;
-            migrate_v113_to_v114(conn)?;
-            migrate_v114_to_v115(conn)?;
-            migrate_v115_to_v116(conn)?;
-            migrate_v116_to_v117(conn)?;
-            migrate_v117_to_v118(conn)?;
-            migrate_v118_to_v119(conn)?;
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v111_to_v112, "1.11.0", "1.12.0", "Add has_started_session to agent_sessions")?;
+            migrate!(conn, migrate_v112_to_v113, "1.12.0", "1.13.0", "Add cross-project state tables")?;
+            migrate!(conn, migrate_v113_to_v114, "1.13.0", "1.14.0", "Add classification column to stitches")?;
+            migrate!(conn, migrate_v114_to_v115, "1.14.0", "1.15.0", "Add codex_account_daily_spend table")?;
+            migrate!(conn, migrate_v115_to_v116, "1.15.0", "1.16.0", "Add stitch-based forecast columns to capacity_rollup")?;
+            migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
+            migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
+            migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.12.0" => {
-            migrate_v112_to_v113(conn)?;
-            migrate_v113_to_v114(conn)?;
-            migrate_v114_to_v115(conn)?;
-            migrate_v115_to_v116(conn)?;
-            migrate_v116_to_v117(conn)?;
-            migrate_v117_to_v118(conn)?;
-            migrate_v118_to_v119(conn)?;
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v112_to_v113, "1.12.0", "1.13.0", "Add cross-project state tables")?;
+            migrate!(conn, migrate_v113_to_v114, "1.13.0", "1.14.0", "Add classification column to stitches")?;
+            migrate!(conn, migrate_v114_to_v115, "1.14.0", "1.15.0", "Add codex_account_daily_spend table")?;
+            migrate!(conn, migrate_v115_to_v116, "1.15.0", "1.16.0", "Add stitch-based forecast columns to capacity_rollup")?;
+            migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
+            migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
+            migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.13.0" => {
-            migrate_v113_to_v114(conn)?;
-            migrate_v114_to_v115(conn)?;
-            migrate_v115_to_v116(conn)?;
-            migrate_v116_to_v117(conn)?;
-            migrate_v117_to_v118(conn)?;
-            migrate_v118_to_v119(conn)?;
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v113_to_v114, "1.13.0", "1.14.0", "Add classification column to stitches")?;
+            migrate!(conn, migrate_v114_to_v115, "1.14.0", "1.15.0", "Add codex_account_daily_spend table")?;
+            migrate!(conn, migrate_v115_to_v116, "1.15.0", "1.16.0", "Add stitch-based forecast columns to capacity_rollup")?;
+            migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
+            migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
+            migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.14.0" => {
-            migrate_v114_to_v115(conn)?;
-            migrate_v115_to_v116(conn)?;
-            migrate_v116_to_v117(conn)?;
-            migrate_v117_to_v118(conn)?;
-            migrate_v118_to_v119(conn)?;
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v114_to_v115, "1.14.0", "1.15.0", "Add codex_account_daily_spend table")?;
+            migrate!(conn, migrate_v115_to_v116, "1.15.0", "1.16.0", "Add stitch-based forecast columns to capacity_rollup")?;
+            migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
+            migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
+            migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.15.0" => {
-            migrate_v115_to_v116(conn)?;
-            migrate_v116_to_v117(conn)?;
-            migrate_v117_to_v118(conn)?;
-            migrate_v118_to_v119(conn)?;
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v115_to_v116, "1.15.0", "1.16.0", "Add stitch-based forecast columns to capacity_rollup")?;
+            migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
+            migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
+            migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.16.0" => {
-            migrate_v116_to_v117(conn)?;
-            migrate_v117_to_v118(conn)?;
-            migrate_v118_to_v119(conn)?;
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
+            migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
+            migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.17.0" => {
-            migrate_v117_to_v118(conn)?;
-            migrate_v118_to_v119(conn)?;
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
+            migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.18.0" => {
-            migrate_v118_to_v119(conn)?;
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.19.0" => {
-            migrate_v119_to_v120(conn)?;
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.20.0" => {
-            migrate_v120_to_v121(conn)?;
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
+            migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
         }
         "1.21.0" => {
-            migrate_v121_to_v122(conn)?;
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.22.0" => {
-            migrate_v122_to_v123(conn)?;
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         "1.23.0" => {
-            migrate_v123_to_v124(conn)?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
         }
         _ => {
             return Err(anyhow::anyhow!(
@@ -1167,9 +1250,6 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
 /// All tables include proper indexes for Reddit-post ranking queries
 /// and foreign key constraints for referential integrity.
 fn migrate_v01_to_v11(conn: &mut Connection) -> Result<()> {
-    let start = std::time::Instant::now();
-    info!("Running migration 0.1.0 → 1.1.0: Adding Stitch service tables");
-
     // Create stitches table
     conn.execute(
         r#"
@@ -1288,11 +1368,6 @@ fn migrate_v01_to_v11(conn: &mut Connection) -> Result<()> {
 
     info!("Stitch service tables created successfully");
     update_schema_version(conn, "1.1.0")?;
-    let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
-    info!("Migration 0.1.0 → 1.1.0 completed in {:.2} ms", elapsed_ms);
-    crate::metrics::metrics()
-        .hoop_schema_migration_duration_ms
-        .observe(&["0.1.0", "1.1.0"], elapsed_ms);
     Ok(())
 }
 
@@ -1306,6 +1381,7 @@ fn migrate_v01_to_v11(conn: &mut Connection) -> Result<()> {
 /// Includes a recursive-CTE trigger to prevent parent_pattern cycles
 /// and indexes for efficient member lookups.
 fn migrate_v11_to_v12(conn: &mut Connection) -> Result<()> {
+    let start = std::time::Instant::now();
     info!("Running migration 1.1.0 → 1.2.0: Adding Pattern service tables");
 
     // Create patterns table
@@ -2076,74 +2152,6 @@ fn update_schema_version(conn: &mut Connection, version: &str) -> Result<()> {
     Ok(())
 }
 
-/// Wrapper to run a migration with duration logging
-fn run_migration_with_duration<F>(
-    conn: &mut Connection,
-    from_version: &str,
-    to_version: &str,
-    description: &str,
-    f: F,
-) -> Result<()>
-where
-    F: FnOnce(&mut Connection) -> Result<()>,
-{
-    let start = std::time::Instant::now();
-    info!(
-        "Running migration {} → {}: {}",
-        from_version, to_version, description
-    );
-    let result = f(conn);
-    let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
-    match &result {
-        Ok(()) => {
-            info!(
-                "Migration {} → {} completed in {:.2} ms",
-                from_version, to_version, elapsed_ms
-            );
-        }
-        Err(e) => {
-            warn!(
-                "Migration {} → {} failed after {:.2} ms: {}",
-                from_version, to_version, elapsed_ms, e
-            );
-        }
-    }
-    // Record migration duration metric
-    crate::metrics::metrics()
-        .hoop_schema_migration_duration_ms
-        .observe(&[from_version, to_version], elapsed_ms);
-    result
-}
-
-/// Macro to wrap a migration function call with duration logging
-macro_rules! migrate {
-    ($conn:expr, $func:ident, $from:expr, $to:expr, $desc:expr) => {{
-        let start = std::time::Instant::now();
-        info!("Running migration {} → {}: {}", $from, $to, $desc);
-        let result = $func($conn);
-        let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
-        match &result {
-            Ok(()) => {
-                info!(
-                    "Migration {} → {} completed in {:.2} ms",
-                    $from, $to, elapsed_ms
-                );
-            }
-            Err(e) => {
-                warn!(
-                    "Migration {} → {} failed after {:.2} ms: {}",
-                    $from, $to, elapsed_ms, e
-                );
-            }
-        }
-        // Record migration duration metric
-        crate::metrics::metrics()
-            .hoop_schema_migration_duration_ms
-            .observe(&[$from, $to], elapsed_ms);
-        result
-    }};
-}
-
 /// Migration 1.18.0 → 1.19.0: Add turn_id to draft_queue
 ///
 /// Adds turn_id column to draft_queue table for tracking which agent turn
@@ -2476,10 +2484,21 @@ pub fn run_major_upgrade_at_version(path: PathBuf, binary_version: &str) -> Resu
         stored_version, binary_version, stored_major, binary_major
     );
 
+    let start = std::time::Instant::now();
+
+    // Clear the change counter before migration to accurately track rows touched
+    conn.execute("SELECT 1", [])?;
+
     // Future: add DDL migration steps for each major transition here.
     // For now (1→2 is the first path) the schema tables carry forward and
     // only the recorded version needs updating.
     update_schema_version(&mut conn, binary_version)?;
+
+    let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
+    let rows_touched = conn.changes();
+
+    // Write audit row for major upgrade
+    let _ = write_schema_migration_audit(&stored_version, binary_version, elapsed_ms, rows_touched as i64);
 
     info!(
         "Major upgrade complete: schema_version is now {}",
