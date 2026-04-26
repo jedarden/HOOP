@@ -1039,7 +1039,7 @@ mod tests {
 
     #[test]
     fn test_subscribe() {
-        let detector = StuckDetector::new();
+        let mut detector = StuckDetector::new();
         let mut rx = detector.subscribe();
 
         // Trigger an alert
