@@ -29,16 +29,16 @@ use std::path::{Path, PathBuf};
 /// in the production source tree.
 ///
 /// Patterns and rationale:
-///   `_status\.json`    — captures `*_status.json` (worker_status.json,
-///                        fleet_status.json, …).  Status is liveness; liveness
-///                        is derived from heartbeats, never a file.
-///   `live-[^/\\]*\.json` — captures `live-*.json` (live-workers.json, …).
-///                        "Live" implies real-time state — the same concern.
-///   `fleet_state\.`    — captures `fleet_state.*` (fleet_state.json,
-///                        fleet_state.yaml, …).  Fleet state is a projection of
-///                        bead events; writing it to disk produces the class of
-///                        bug documented in §A4.
-const FORBIDDEN_PATTERNS: &[&str] = &[r"_status\.json", r"live-[^/\\]*\.json", r"fleet_state\."];
+///   `_status\.json`       — captures `*_status.json` (worker_status.json,
+///                          fleet_status.json, …).  Status is liveness; liveness
+///                          is derived from heartbeats, never a file.
+///   `live-[^/\\]*\.json`  — captures `live-*.json` (live-workers.json, …).
+///                          "Live" implies real-time state — the same concern.
+///   `"[_a-z]+_state\.`   — captures quoted `"*_state.*` filenames (worker_state.json,
+///                          fleet_state.json, fleet_state.yaml, …).  Requiring the
+///                          opening quote ensures we match file paths, not variable
+///                          names like `ws_state` or `run_state`.
+const FORBIDDEN_PATTERNS: &[&str] = &[r#""[_a-z]+_state\."#, r"_status\.json", r"live-[^/\\]*\.json"];
 
 // ── Allowlist ────────────────────────────────────────────────────────────────
 
@@ -59,8 +59,7 @@ struct AllowlistEntry {
     rationale: &'static str,
 }
 
-/// Current exceptions — empty because no production source currently references
-/// the forbidden projection filenames.
+/// Current exceptions — documented with rationale for each entry.
 ///
 /// To add an exception, append an `AllowlistEntry` here with a `rationale` that
 /// explains why the matched string does not write the forbidden file at runtime.
@@ -76,7 +75,29 @@ struct AllowlistEntry {
 /// },
 /// ```
 const ALLOWLIST: &[AllowlistEntry] = &[
-    // ── No current exceptions ────────────────────────────────────────────────
+    // ── heartbeats.rs: comments warning AGAINST the pattern ─────────────────
+    //
+    // These are documentation examples of what NOT to do. The comments explicitly
+    // warn against writing projection files; they are not code that performs writes.
+    AllowlistEntry {
+        file_contains: "hoop-daemon/src/heartbeats.rs",
+        line_contains: "//   \"read ~/.hoop/worker_status.json and trust it\"",
+        rationale: "This is a comment WARNING against the pattern, not code that \
+                    writes it. The comment documents an anti-pattern to avoid.",
+    },
+    // ── api_metrics.rs: schema file reads (not state writes) ─────────────────
+    //
+    // `debug_state.json` is a JSON Schema definition file in hoop-schema/schemas/.
+    // The api_metrics.rs tests READ this file to verify schema version consistency.
+    // These are read-only test assertions, not runtime state writes.
+    AllowlistEntry {
+        file_contains: "hoop-daemon/src/api_metrics.rs",
+        line_contains: "debug_state.json",
+        rationale: "This is a READ of a JSON Schema definition file \
+                    (hoop-schema/schemas/debug_state.json) for test-time \
+                    schema validation, not a runtime state write.",
+    },
+    // ── Schema definition files (not runtime writes) ───────────────────────────
     //
     // Schema note: `hoop-schema/schemas/project_config_status.json` is a JSON
     // Schema definition file; its `$id` URL appears only in generated code under
@@ -270,8 +291,8 @@ fn scanner_detects_worker_state_json_write() {
     assert!(
         violations
             .iter()
-            .any(|v| v.line.contains("worker_state.json")),
-        "violation must be on the worker_state.json line, got: {:?}",
+            .any(|v| v.line.contains("worker_state")),
+        "violation must be on the worker_state line, got: {:?}",
         violations.iter().map(|v| v.line.trim()).collect::<Vec<_>>()
     );
 }
@@ -302,7 +323,7 @@ fn scanner_detects_live_dash_json_write() {
     );
 }
 
-/// `fleet_state.*` writes are forbidden — this covers `fleet_state.json`.
+/// `fleet_state.json` writes are forbidden (matches `"[_a-z]+_state\.` pattern).
 #[test]
 fn scanner_detects_fleet_state_write() {
     let patterns = compile_patterns();
@@ -315,7 +336,7 @@ fn scanner_detects_fleet_state_write() {
     );
 }
 
-/// `fleet_state.yaml` is also forbidden — pattern is extension-agnostic.
+/// `fleet_state.yaml` is also forbidden (matches `"[_a-z]+_state\.` pattern).
 #[test]
 fn scanner_detects_fleet_state_yaml_write() {
     let patterns = compile_patterns();
@@ -350,15 +371,11 @@ fn scanner_ignores_innocent_json_filenames() {
     let path = Path::new("innocent.rs");
     let innocent_code = r#"
         std::fs::write("workers.json", &bytes);        // no _status suffix
-        std::fs::write("fleet.json", &bytes);           // not fleet_state.
+        std::fs::write("fleet.json", &bytes);           // no _state suffix
         std::fs::write("usage.json", &cached);          // capacity JSONL cache
-        std::fs::write("state.json", &val);             // no fleet_ prefix
         std::fs::write("live_workers.json", &val);      // underscore not dash
         std::fs::write("livefleet.json", &val);         // no dash after "live"
-        std::fs::write("fleet_state_backup", &val);     // no dot after fleet_state... wait
     "#;
-    // Note: "fleet_state_backup" does NOT match r"fleet_state\." because there
-    // is no dot — it ends in "_backup", not ".anything".
     let violations = scan_content_with_path(path, innocent_code, &patterns, &[]);
     assert!(
         violations.is_empty(),

@@ -54,6 +54,9 @@ jobs:
     - name: Run unit tests
       run: cargo test --lib --verbose -- --test-threads=1
 
+    - name: Run projection file audit (static check for forbidden writes)
+      run: cargo test -p hoop-daemon --test projection_file_audit --verbose
+
     - name: Check formatting
       run: cargo fmt --all -- --check
 
