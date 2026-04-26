@@ -34,20 +34,60 @@ pub struct ConfigError {
 - The banner persists because the error state is only cleared when a new valid config is loaded
 
 ### 4. Test: every field has a validation error scenario ✅
-**Implementation:** `hoop-daemon/src/config_watcher.rs` tests module
+**Implementation:** `hoop-daemon/tests/config_field_validation.rs` (comprehensive)
 
 Test coverage includes:
-- `test_invalid_adapter_rejected` - agent.adapter enum validation
-- `test_invalid_theme_rejected` - ui.theme enum validation
-- `test_unknown_field_rejected` - unknown top-level field
-- `test_invalid_metrics_port_type_rejected` - metrics.port integer type
-- `test_invalid_audit_retention_days_type_rejected` - audit.retention_days integer type
-- `test_invalid_reflection_threshold_type_rejected` - reflection.detection_threshold float type
-- `test_invalid_ui_archive_days_type_rejected` - ui.archive_after_days integer type
-- `test_invalid_voice_max_seconds_type_rejected` - voice.max_recording_seconds integer type
-- `test_invalid_audit_hash_chain_type_rejected` - audit.hash_chain boolean type
-- `test_invalid_reflection_enabled_type_rejected` - reflection.enabled boolean type
-- `test_invalid_metrics_enabled_type_rejected` - metrics.enabled boolean type
+
+**config.yml field validation (40+ tests):**
+- `test_schema_version_missing_required_field` - schema_version is required
+- `test_schema_version_wrong_type_integer` - schema_version must be string
+- `test_schema_version_invalid_format_no_patch` - schema_version format validation
+- `test_schema_version_invalid_format_text` - schema_version pattern validation
+- `test_agent_adapter_missing_required_field` - agent.adapter is required
+- `test_agent_adapter_wrong_type_integer` - agent.adapter type validation
+- `test_agent_adapter_invalid_value` - agent.adapter enum validation
+- `test_agent_model_wrong_type_integer` - agent.model type validation
+- `test_server_bind_addr_wrong_type_integer` - server.bind_addr type validation
+- `test_metrics_enabled_wrong_type_string` - metrics.enabled type validation
+- `test_metrics_port_wrong_type_string` - metrics.port type validation
+- `test_audit_retention_days_wrong_type_string` - audit.retention_days type validation
+- `test_audit_hash_chain_wrong_type_string` - audit.hash_chain type validation
+- `test_ui_theme_wrong_type_integer` - ui.theme type validation
+- `test_ui_theme_invalid_value` - ui.theme enum validation
+- `test_ui_archive_after_days_wrong_type_string` - ui.archive_after_days type validation
+- `test_reflection_enabled_wrong_type_string` - reflection.enabled type validation
+- `test_reflection_detection_threshold_wrong_type_string` - reflection.detection_threshold type validation
+- `test_reflection_auto_archive_after_days_wrong_type_string` - reflection.auto_archive_after_days type validation
+- `test_roles_viewers_wrong_type_string` - roles.viewers type validation
+- `test_roles_drafters_wrong_type_string` - roles.drafters type validation
+- `test_agent_extensions_skills_wrong_type_integer` - agent_extensions.skills type validation
+
+**projects.yaml field validation (15+ tests):**
+- `test_projects_missing_required_name_field` - project name is required
+- `test_projects_name_wrong_type_integer` - project name type validation
+- `test_projects_missing_required_path_field` - project path is required
+- `test_projects_path_wrong_type_integer` - project path type validation
+- `test_projects_label_wrong_type_integer` - project label type validation
+- `test_projects_color_wrong_type_integer` - project color type validation
+- `test_projects_disabled_wrong_type_string` - project disabled type validation
+
+**Unknown field rejection (4 tests):**
+- `test_unknown_field_at_root_level` - unknown top-level field
+- `test_unknown_field_nested_in_agent` - unknown nested field
+- `test_unknown_field_nested_in_ui` - unknown nested field in ui
+- `test_unknown_field_in_projects_entry` - unknown field in project entry
+
+**YAML syntax errors (4 tests):**
+- `test_yaml_syntax_error_unclosed_quote` - unclosed quote
+- `test_yaml_syntax_error_unmatched_bracket` - unmatched bracket
+- `test_yaml_syntax_error_invalid_escape_sequence` - invalid escape
+- `test_yaml_syntax_error_trailing_comma_in_array` - trailing comma
+
+**Structured error details (4 tests):**
+- `test_error_includes_line_and_column_numbers` - line/column in error
+- `test_error_includes_field_path_for_nested_fields` - field path in error
+- `test_error_includes_expected_and_got_for_type_mismatches` - expected/got in error
+- `test_error_message_is_human_readable` - error message quality
 
 ## Architecture
 
@@ -80,6 +120,9 @@ Test coverage includes:
 | `hoop-ui/web/src/App.tsx` | ConfigBanner component |
 | `hoop-ui/web/src/useWebSocket.ts` | WebSocket message handling |
 | `hoop-ui/web/src/atoms.ts` | ConfigStatus atom |
+| `hoop-daemon/tests/config_field_validation.rs` | Comprehensive field validation tests (70+ test cases) |
+| `hoop-daemon/tests/config_reload_cycle.rs` | End-to-end reload cycle tests |
+| `hoop-daemon/tests/config_reload_audit.rs` | Audit trail verification tests |
 
 ## Metrics
 
