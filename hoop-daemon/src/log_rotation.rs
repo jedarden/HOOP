@@ -167,7 +167,9 @@ impl Write for RotatingFileWriter {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        self.file.flush()
+        // Use sync_all() instead of flush() to ensure log data reaches disk.
+        // This prevents partial/corrupted log entries on crash (crash-safe logging).
+        self.file.sync_all()
     }
 }
 

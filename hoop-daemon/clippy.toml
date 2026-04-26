@@ -1,0 +1,18 @@
+# Disallow direct filesystem writes in production code.
+#
+# All critical filesystem writes in hoop-daemon MUST use the atomic write pattern
+# (write to .tmp, fsync, rename) via the atomic_write module.
+#
+# Exceptions:
+# - Test code (#[cfg(test)])
+# - Log files (rotating log writer creates new files on rotation)
+# - Temporary files that are deleted before use (e.g., tarballs for upload)
+#
+# Plan reference: §3 principle 6, notes/architecture-patterns §F
+
+# Disallow std::fs::write and std::fs::File::create in production code.
+# Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead.
+disallowed-methods = [
+    { path = "std::fs::write", reason = "Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)" },
+    { path = "std::fs::File::create", reason = "Use atomic_write::atomic_write_file instead (crash-safe: tmp + fsync + rename)" },
+]
