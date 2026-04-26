@@ -107,6 +107,29 @@ use tracing::{debug, info, warn};
 
 use crate::metrics;
 
+/// Extract the event kind from raw JSON, returning "unknown" if not found.
+///
+/// This is used for labeling unknown events with their best-guess event kind.
+fn extract_event_kind_from_raw(raw: &str) -> String {
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) {
+        if let Some(obj) = value.as_object() {
+            // Try to find "event" field (NeedleEvent format)
+            if let Some(event) = obj.get("event").and_then(|v| v.as_str()) {
+                return event.to_string();
+            }
+            // Try to find "type" field (common in other formats)
+            if let Some(ty) = obj.get("type").and_then(|v| v.as_str()) {
+                return ty.to_string();
+            }
+            // Try to find "kind" field
+            if let Some(kind) = obj.get("kind").and_then(|v| v.as_str()) {
+                return kind.to_string();
+            }
+        }
+    }
+    "unknown".to_string()
+}
+
 /// Events emitted by the event tailer
 #[derive(Debug, Clone)]
 pub enum TailerEvent {
@@ -139,6 +162,9 @@ pub struct BeadEventData {
     pub exit_code: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// Git stash SHA from fail events for Stitch Replay reconstruction (hoop-ttb.5.11)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stash_sha: Option<String>,
 }
 
 impl BeadEventData {
@@ -162,6 +188,7 @@ impl BeadEventData {
                 duration_ms: None,
                 exit_code: None,
                 error: None,
+                stash_sha: None,
             }),
             NeedleEvent::Dispatch {
                 ts,
@@ -181,6 +208,7 @@ impl BeadEventData {
                 duration_ms: None,
                 exit_code: None,
                 error: None,
+                stash_sha: None,
             }),
             NeedleEvent::Complete {
                 ts,
@@ -201,6 +229,7 @@ impl BeadEventData {
                 duration_ms: *duration_ms,
                 exit_code: *exit_code,
                 error: None,
+                stash_sha: None,
             }),
             NeedleEvent::Fail {
                 ts,
@@ -208,6 +237,7 @@ impl BeadEventData {
                 bead,
                 error,
                 duration_ms,
+                stash_sha,
             } => Some(BeadEventData {
                 timestamp: ts.clone(),
                 event_type: "fail".to_string(),
@@ -220,6 +250,7 @@ impl BeadEventData {
                 duration_ms: *duration_ms,
                 exit_code: None,
                 error: error.clone(),
+                stash_sha: stash_sha.clone(),
             }),
             NeedleEvent::Timeout { ts, worker, bead } => Some(BeadEventData {
                 timestamp: ts.clone(),
@@ -233,6 +264,7 @@ impl BeadEventData {
                 duration_ms: None,
                 exit_code: None,
                 error: None,
+                stash_sha: None,
             }),
             NeedleEvent::Crash {
                 ts,
@@ -251,6 +283,7 @@ impl BeadEventData {
                 duration_ms: None,
                 exit_code: *exit_code,
                 error: None,
+                stash_sha: None,
             }),
             NeedleEvent::Close { ts, worker, bead } => Some(BeadEventData {
                 timestamp: ts.clone(),
@@ -264,6 +297,7 @@ impl BeadEventData {
                 duration_ms: None,
                 exit_code: None,
                 error: None,
+                stash_sha: None,
             }),
             NeedleEvent::Release { ts, worker, bead } => Some(BeadEventData {
                 timestamp: ts.clone(),
@@ -277,6 +311,7 @@ impl BeadEventData {
                 duration_ms: None,
                 exit_code: None,
                 error: None,
+                stash_sha: None,
             }),
             NeedleEvent::Update { ts, worker, bead } => Some(BeadEventData {
                 timestamp: ts.clone(),
@@ -290,6 +325,7 @@ impl BeadEventData {
                 duration_ms: None,
                 exit_code: None,
                 error: None,
+                stash_sha: None,
             }),
             NeedleEvent::Unknown => None,
         }
@@ -670,6 +706,43 @@ impl NdjsonParser {
         }
     }
 
+    /// Extract the timestamp from a NeedleEvent, if available.
+    ///
+    /// Returns the ISO 8601 timestamp string from any event variant.
+    fn extract_event_timestamp(event: &NeedleEvent) -> Option<&str> {
+        match event {
+            NeedleEvent::Claim { ts, .. }
+            | NeedleEvent::Dispatch { ts, .. }
+            | NeedleEvent::Complete { ts, .. }
+            | NeedleEvent::Fail { ts, .. }
+            | NeedleEvent::Timeout { ts, .. }
+            | NeedleEvent::Crash { ts, .. }
+            | NeedleEvent::Close { ts, .. }
+            | NeedleEvent::Release { ts, .. }
+            | NeedleEvent::Update { ts, .. } => Some(ts),
+            NeedleEvent::Unknown => None,
+        }
+    }
+
+    /// Record event tailer lag metric for a successfully parsed event.
+    ///
+    /// Lag is the difference between when the event was written (ts field)
+    /// and when we're processing it (now). Recorded per project.
+    fn record_event_lag(event: &NeedleEvent, project: &str) {
+        if let Some(ts_str) = Self::extract_event_timestamp(event) {
+            if let Ok(event_ts) = chrono::DateTime::parse_from_rfc3339(ts_str) {
+                let now = chrono::Utc::now();
+                let lag = now.signed_duration_since(event_ts.with_timezone(&chrono::Utc));
+                let lag_seconds = lag.num_seconds().max(0) as i64;
+
+                metrics::metrics().hoop_event_tailer_lag_seconds.set(
+                    &[project],
+                    lag_seconds,
+                );
+            }
+        }
+    }
+
     /// Parse a line, carrying over partial lines
     ///
     /// Returns None if the line was incomplete (carried over).
@@ -695,8 +768,23 @@ impl NdjsonParser {
                 let raw = input.to_string();
                 self.partial.clear();
 
-                // Increment unknown event metric if this is an unknown event type
-                if matches!(event, NeedleEvent::Unknown) {
+                // Record event tailer lag for known events
+                if !matches!(event, NeedleEvent::Unknown) {
+                    // Extract project from source path or use "unknown"
+                    let project = source
+                        .file_path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("unknown");
+                    Self::record_event_lag(&event, project);
+                } else {
+                    // Unknown event - increment the labeled metric with context
+                    // Try to infer event_kind from the raw JSON
+                    let event_kind = extract_event_kind_from_raw(&raw);
+                    metrics::metrics().hoop_unknown_event_labeled_total.inc(&[
+                        "needle",
+                        &event_kind,
+                    ]);
                     metrics::metrics().hoop_unknown_event_total.inc();
                 }
 
@@ -720,6 +808,10 @@ impl NdjsonParser {
                     // This is likely a malformed line - quarantine and skip
                     let raw = input.to_string();
                     crate::parse_jsonl_safe::quarantine_raw(&raw, &e.to_string(), source);
+
+                    // Record parse error for needle adapter
+                    metrics::metrics().hoop_event_parse_errors_total.inc(&["needle"]);
+
                     warn!(
                         "Malformed event on line {}: {}. Line content: {}",
                         line_number,
@@ -731,7 +823,12 @@ impl NdjsonParser {
                     self.partial.clear();
 
                     // Create an unknown event to preserve the raw data
-                    // Increment the unknown event metric
+                    // Increment the unknown event metrics
+                    let event_kind = extract_event_kind_from_raw(&raw);
+                    metrics::metrics().hoop_unknown_event_labeled_total.inc(&[
+                        "needle",
+                        &event_kind,
+                    ]);
                     metrics::metrics().hoop_unknown_event_total.inc();
 
                     Ok(Some(ParsedEvent {

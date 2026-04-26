@@ -290,6 +290,7 @@ export interface AgentChatMessage {
   timestamp: number;
   session_id: string;
   attachments?: string[];
+  turn_id?: string;
 }
 
 // Agent chat scope — which project(s) are in context (empty = cross-project / all)
@@ -473,6 +474,8 @@ export interface BeadEventFromEvents {
   worker: string;
   line_number?: number;
   raw: string;
+  /** Git stash SHA from fail events for Stitch Replay reconstruction (hoop-ttb.5.11) */
+  stash_sha?: string;
 }
 
 // Screen capture chapter marker (derived from frame-sample UI-change events)

@@ -547,6 +547,9 @@ pub struct BeadEventData {
     pub worker: String,
     pub line_number: Option<usize>,
     pub raw: String,
+    /// Git stash SHA from fail events for Stitch Replay reconstruction (hoop-ttb.5.11)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stash_sha: Option<String>,
 }
 
 /// Morning brief event data sent to WS clients
@@ -744,7 +747,7 @@ impl WsEvent {
     }
 
     /// Create a beads snapshot event
-    fn beads_snapshot(beads: Vec<BeadData>) -> Self {
+    pub fn beads_snapshot(beads: Vec<BeadData>) -> Self {
         Self {
             event_type: "beads_snapshot".to_string(),
             worker: None,
@@ -1412,7 +1415,7 @@ impl WorkerRegistry {
 }
 
 /// Convert Bead to BeadData for WebSocket
-fn bead_to_data(bead: &Bead) -> BeadData {
+pub fn bead_to_data(bead: &Bead) -> BeadData {
     BeadData {
         id: bead.id.clone(),
         title: bead.title.clone(),

@@ -264,11 +264,15 @@ impl ProjectSupervisor {
                                 worker: bead_event.worker.clone(),
                                 line_number: Some(parsed.line_number),
                                 raw: parsed.raw.clone(),
+                                stash_sha: bead_event.stash_sha.clone(),
                             };
                             worker_registry.add_bead_event(ws_event).await;
                         }
                         // Update fleet.db cross-project tables from this event
                         update_fleet_from_event(&parsed.event, &beads);
+
+                        // Emit fleet notifications when bead events occur
+                        check_and_emit_notifications(&parsed.event, &beads);
 
                         // Trigger event-subscribed scripts
                         let bead_id = match &parsed.event {
@@ -1067,6 +1071,89 @@ fn update_fleet_from_event(
             warn!("fleet: touch_project_event_at failed for {}: {}", proj, e);
         }
     }
+}
+
+/// Check and emit fleet notifications when bead events occur.
+///
+/// This function is called for each event from events.jsonl to determine
+/// if a fleet notification should be emitted to the agent's notification ring.
+/// Notifications are emitted for:
+/// - StitchBeadsClosed: when all beads linked to a stitch are closed
+/// - ConvoyComplete: when all workers for a stitch have terminal events
+fn check_and_emit_notifications(
+    event: &crate::events::NeedleEvent,
+    beads: &Arc<std::sync::RwLock<Vec<Bead>>>,
+) {
+    use crate::events::NeedleEvent;
+
+    // Extract bead_id from the event
+    let bead_id = match event {
+        NeedleEvent::Claim { bead, .. }
+        | NeedleEvent::Dispatch { bead, .. }
+        | NeedleEvent::Complete { bead, .. }
+        | NeedleEvent::Fail { bead, .. }
+        | NeedleEvent::Timeout { bead, .. }
+        | NeedleEvent::Crash { bead, .. }
+        | NeedleEvent::Close { bead, .. }
+        | NeedleEvent::Release { bead, .. }
+        | NeedleEvent::Update { bead, .. } => bead.clone(),
+        NeedleEvent::Unknown => return,
+    };
+
+    // Look up the stitch for this bead
+    let stitch_id = match lookup_stitch_for_bead(&bead_id) {
+        Some(sid) => sid,
+        None => return, // Not linked to any stitch
+    };
+
+    // Check for StitchBeadsClosed when a bead is closed
+    if matches!(event, NeedleEvent::Close { .. }) {
+        let beads_snapshot = beads.read().unwrap().clone();
+        if let Err(e) = crate::check_and_emit_stitch_beads_closed(&stitch_id, &beads_snapshot) {
+            warn!("Failed to check/emit StitchBeadsClosed notification: {}", e);
+        }
+    }
+
+    // Check for ConvoyComplete on any terminal event
+    if matches!(
+        event,
+        NeedleEvent::Complete { .. }
+            | NeedleEvent::Close { .. }
+            | NeedleEvent::Fail { .. }
+            | NeedleEvent::Timeout { .. }
+            | NeedleEvent::Crash { .. }
+            | NeedleEvent::Release { .. }
+    ) {
+        if let Err(e) = crate::check_and_emit_convoy_complete(&stitch_id) {
+            warn!("Failed to check/emit ConvoyComplete notification: {}", e);
+        }
+    }
+}
+
+/// Look up the stitch ID for a given bead ID from fleet.db.
+///
+/// Returns None if the bead is not linked to any stitch.
+fn lookup_stitch_for_bead(bead_id: &str) -> Option<String> {
+    use rusqlite::Connection;
+
+    let db_path = std::path::PathBuf::from(
+        dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")),
+    )
+    .join(".hoop")
+    .join("fleet.db");
+
+    if !db_path.exists() {
+        return None;
+    }
+
+    let conn = Connection::open(&db_path).ok()?;
+
+    conn.query_row(
+        "SELECT stitch_id FROM stitch_beads WHERE bead_id = ?1 LIMIT 1",
+        rusqlite::params![bead_id],
+        |row| row.get(0),
+    )
+    .ok()
 }
 
 /// Convert a panic payload to a string

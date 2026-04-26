@@ -15,3 +15,6 @@
 {"ts":"2026-04-21T19:20:30Z","worker":"alpha","bead":"bd-mno345","event":"dispatch","adapter":"claude","model":"claude-sonnet-4-6"}
 {"ts":"2026-04-21T19:25:01Z","worker":"alpha","bead":"bd-mno345","event":"close"}
 {"ts":"2026-04-21T19:26:00Z","worker":"alpha","bead":"bd-pqr678","event":"update"}
+{"ts":"2026-04-21T19:30:00Z","worker":"echo","bead":"bd-stash123","strand":"mend","event":"claim"}
+{"ts":"2026-04-21T19:30:30Z","worker":"echo","bead":"bd-stash123","event":"dispatch","adapter":"claude","model":"claude-opus-4-6"}
+{"ts":"2026-04-21T19:35:00Z","worker":"echo","bead":"bd-stash123","event":"fail","error":"syntax error","duration_ms":270000,"stash_sha":"abc123def4567890"}

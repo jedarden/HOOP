@@ -392,7 +392,7 @@ fn from_event_complete_carries_timing_fields() {
     assert_eq!(data.exit_code, Some(0));
 }
 
-/// fail → BeadEventData carries error + duration_ms.
+/// fail → BeadEventData carries error + duration_ms + stash_sha.
 #[test]
 fn from_event_fail_carries_error() {
     let event = NeedleEvent::Fail {
@@ -401,11 +401,29 @@ fn from_event_fail_carries_error() {
         bead: "bd-def456".to_string(),
         error: Some("context limit exceeded".to_string()),
         duration_ms: Some(90000),
+        stash_sha: None,
     };
     let data = BeadEventData::from_event(&event).unwrap();
     assert_eq!(data.event_type, "fail");
     assert_eq!(data.error, Some("context limit exceeded".to_string()));
     assert_eq!(data.duration_ms, Some(90000));
+    assert_eq!(data.stash_sha, None);
+}
+
+/// fail → BeadEventData carries stash_sha for Stitch Replay (hoop-ttb.5.11).
+#[test]
+fn from_event_fail_carries_stash_sha() {
+    let event = NeedleEvent::Fail {
+        ts: "2026-04-21T18:53:00Z".to_string(),
+        worker: "bravo".to_string(),
+        bead: "bd-def456".to_string(),
+        error: Some("context limit exceeded".to_string()),
+        duration_ms: Some(90000),
+        stash_sha: Some("abc123def456".to_string()),
+    };
+    let data = BeadEventData::from_event(&event).unwrap();
+    assert_eq!(data.event_type, "fail");
+    assert_eq!(data.stash_sha, Some("abc123def456".to_string()));
 }
 
 // ── Heartbeat-shape validation ───────────────────────────────────────────────
