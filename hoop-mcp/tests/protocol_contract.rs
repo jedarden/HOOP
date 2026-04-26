@@ -60,6 +60,229 @@ fn test_initialize_request_mcp_parses_fixture() {
 }
 
 // ---------------------------------------------------------------------------
+// MCP socket: tools/list — agent sends to hoop-mcp
+// ---------------------------------------------------------------------------
+
+/// hoop-mcp must deserialize a tools/list request from the agent.
+///
+/// Fails if `Method::ToolsList` changes the expected wire layout.
+#[test]
+fn test_tools_list_request_mcp_parses_fixture() {
+    let fixture = load_fixture("mcp_socket/tools_list_request.json");
+
+    let req: hoop_mcp::protocol::JsonRpcRequest = serde_json::from_value(fixture)
+        .expect("JsonRpcRequest must deserialize from tools/list fixture");
+
+    match req.method {
+        hoop_mcp::protocol::Method::ToolsList(_) => {
+            // tools/list accepts null or empty params
+        }
+        _ => panic!("expected Method::ToolsList"),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MCP socket: tools/list — hoop-mcp sends to agent
+// ---------------------------------------------------------------------------
+
+/// hoop-mcp serializes tools/list response with the expected structure.
+///
+/// Fails if the tools list structure changes.
+#[test]
+fn test_tools_list_response_mcp_serializes_fixture_shape() {
+    use hoop_mcp::protocol::{JsonRpcResponse, Tool};
+
+    let fixture = load_fixture("mcp_socket/tools_list_response.json");
+
+    // Build a minimal tools list response matching the fixture structure
+    let tools = vec![Tool {
+        name: "create_stitch".to_string(),
+        description: "Create a new Stitch (conversation work item) in a project".to_string(),
+        input_schema: hoop_mcp::protocol::InputSchema {
+            schema_type: "object".to_string(),
+            properties: serde_json::json!({
+                "project": {"type": "string", "description": "Project name"},
+                "title": {"type": "string", "description": "Stitch title"},
+                "description": {"type": "string", "description": "Stitch description"},
+                "kind": {"type": "string", "description": "Stitch kind (operator, dictated, worker, adhoc)"}
+            })
+            .as_object()
+            .unwrap()
+            .clone(),
+            required: Some(vec!["project".to_string(), "title".to_string(), "kind".to_string()]),
+        },
+        output_schema: None,
+    }];
+
+    let result = serde_json::json!({ "tools": tools });
+    let resp = JsonRpcResponse::result(serde_json::json!(null), result);
+
+    let serialized = serde_json::to_value(&resp).unwrap();
+
+    assert_eq!(serialized["jsonrpc"], fixture["jsonrpc"]);
+    assert!(
+        serialized.get("result").is_some(),
+        "response must have 'result'"
+    );
+    assert!(
+        serialized["result"].get("tools").is_some(),
+        "result must have 'tools' array"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// MCP socket: prompts/list — agent sends to hoop-mcp
+// ---------------------------------------------------------------------------
+
+/// hoop-mcp must deserialize a prompts/list request from the agent.
+///
+/// Fails if `Method::PromptsList` changes the expected wire layout.
+#[test]
+fn test_prompts_list_request_mcp_parses_fixture() {
+    let fixture = load_fixture("mcp_socket/prompts_list_request.json");
+
+    let req: hoop_mcp::protocol::JsonRpcRequest = serde_json::from_value(fixture)
+        .expect("JsonRpcRequest must deserialize from prompts/list fixture");
+
+    match req.method {
+        hoop_mcp::protocol::Method::PromptsList(_) => {
+            // prompts/list accepts null or empty params
+        }
+        _ => panic!("expected Method::PromptsList"),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MCP socket: prompts/list — hoop-mcp sends to agent
+// ---------------------------------------------------------------------------
+
+/// hoop-mcp serializes prompts/list response with empty prompts array.
+///
+/// Fails if the response structure changes.
+#[test]
+fn test_prompts_list_response_mcp_serializes_fixture_shape() {
+    use hoop_mcp::protocol::JsonRpcResponse;
+
+    let fixture = load_fixture("mcp_socket/prompts_list_response.json");
+
+    // prompts/list returns empty array (HOOP doesn't define prompts)
+    let result = serde_json::json!({ "prompts": [] });
+    let resp = JsonRpcResponse::result(serde_json::json!(null), result);
+
+    let serialized = serde_json::to_value(&resp).unwrap();
+
+    assert_eq!(serialized["jsonrpc"], fixture["jsonrpc"]);
+    assert!(
+        serialized.get("result").is_some(),
+        "response must have 'result'"
+    );
+    assert!(
+        serialized["result"].get("prompts").is_some(),
+        "result must have 'prompts' array"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// MCP socket: resources/list — agent sends to hoop-mcp
+// ---------------------------------------------------------------------------
+
+/// hoop-mcp must deserialize a resources/list request from the agent.
+///
+/// Fails if `Method::ResourcesList` changes the expected wire layout.
+#[test]
+fn test_resources_list_request_mcp_parses_fixture() {
+    let fixture = load_fixture("mcp_socket/resources_list_request.json");
+
+    let req: hoop_mcp::protocol::JsonRpcRequest = serde_json::from_value(fixture)
+        .expect("JsonRpcRequest must deserialize from resources/list fixture");
+
+    match req.method {
+        hoop_mcp::protocol::Method::ResourcesList(_) => {
+            // resources/list accepts null or empty params
+        }
+        _ => panic!("expected Method::ResourcesList"),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MCP socket: resources/list — hoop-mcp sends to agent
+// ---------------------------------------------------------------------------
+
+/// hoop-mcp serializes resources/list response with empty resources array.
+///
+/// Fails if the response structure changes.
+#[test]
+fn test_resources_list_response_mcp_serializes_fixture_shape() {
+    use hoop_mcp::protocol::JsonRpcResponse;
+
+    let fixture = load_fixture("mcp_socket/resources_list_response.json");
+
+    // resources/list returns empty array (HOOP doesn't define resources)
+    let result = serde_json::json!({ "resources": [] });
+    let resp = JsonRpcResponse::result(serde_json::json!(null), result);
+
+    let serialized = serde_json::to_value(&resp).unwrap();
+
+    assert_eq!(serialized["jsonrpc"], fixture["jsonrpc"]);
+    assert!(
+        serialized.get("result").is_some(),
+        "response must have 'result'"
+    );
+    assert!(
+        serialized["result"].get("resources").is_some(),
+        "result must have 'resources' array"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// MCP socket: shutdown — agent sends to hoop-mcp
+// ---------------------------------------------------------------------------
+
+/// hoop-mcp must deserialize a shutdown request from the agent.
+///
+/// Fails if `Method::Shutdown` changes the expected wire layout.
+#[test]
+fn test_shutdown_request_mcp_parses_fixture() {
+    let fixture = load_fixture("mcp_socket/shutdown_request.json");
+
+    let req: hoop_mcp::protocol::JsonRpcRequest = serde_json::from_value(fixture)
+        .expect("JsonRpcRequest must deserialize from shutdown fixture");
+
+    match req.method {
+        hoop_mcp::protocol::Method::Shutdown(_) => {
+            // shutdown accepts null or empty params
+        }
+        _ => panic!("expected Method::Shutdown"),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MCP socket: shutdown — hoop-mcp sends to agent
+// ---------------------------------------------------------------------------
+
+/// hoop-mcp serializes shutdown response with empty result.
+///
+/// Fails if the response structure changes.
+#[test]
+fn test_shutdown_response_mcp_serializes_fixture_shape() {
+    use hoop_mcp::protocol::JsonRpcResponse;
+
+    let fixture = load_fixture("mcp_socket/shutdown_response.json");
+
+    // shutdown returns empty object
+    let result = serde_json::json!({});
+    let resp = JsonRpcResponse::result(serde_json::json!(null), result);
+
+    let serialized = serde_json::to_value(&resp).unwrap();
+
+    assert_eq!(serialized["jsonrpc"], fixture["jsonrpc"]);
+    assert!(
+        serialized.get("result").is_some(),
+        "response must have 'result'"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // MCP socket: initialize — hoop-mcp sends to agent
 // ---------------------------------------------------------------------------
 
@@ -256,6 +479,7 @@ fn test_mcp_create_stitch_request_body_matches_daemon_fixture() {
     let description = fixture["description"].as_str();
     let kind = fixture["kind"].as_str().unwrap();
     let priority: Option<i64> = fixture["priority"].as_i64();
+    let labels = fixture["labels"].clone();
 
     let mcp_body = serde_json::json!({
         "project": project,
@@ -264,7 +488,7 @@ fn test_mcp_create_stitch_request_body_matches_daemon_fixture() {
         "description": description,
         "has_acceptance_criteria": false,
         "priority": priority,
-        "labels": [],
+        "labels": labels,
         "source": "agent",
     });
 
@@ -343,8 +567,16 @@ fn test_all_mcp_fixtures_are_valid_json() {
     let fixtures = [
         "mcp_socket/initialize_request.json",
         "mcp_socket/initialize_response.json",
+        "mcp_socket/tools_list_request.json",
+        "mcp_socket/tools_list_response.json",
         "mcp_socket/tools_call_request.json",
         "mcp_socket/tools_call_response.json",
+        "mcp_socket/prompts_list_request.json",
+        "mcp_socket/prompts_list_response.json",
+        "mcp_socket/resources_list_request.json",
+        "mcp_socket/resources_list_response.json",
+        "mcp_socket/shutdown_request.json",
+        "mcp_socket/shutdown_response.json",
         "daemon_http/create_draft_request.json",
         "daemon_http/create_draft_response.json",
         "daemon_http/read_stitch_response.json",

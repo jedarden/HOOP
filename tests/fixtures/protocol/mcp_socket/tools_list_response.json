@@ -1,0 +1,34 @@
+{
+  "jsonrpc": "2.0",
+  "id": null,
+  "result": {
+    "tools": [
+      {
+        "name": "create_stitch",
+        "description": "Create a new Stitch (conversation work item) in a project",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string",
+              "description": "Project name"
+            },
+            "title": {
+              "type": "string",
+              "description": "Stitch title"
+            },
+            "description": {
+              "type": "string",
+              "description": "Stitch description"
+            },
+            "kind": {
+              "type": "string",
+              "description": "Stitch kind (operator, dictated, worker, adhoc)"
+            }
+          },
+          "required": ["project", "title", "kind"]
+        }
+      }
+    ]
+  }
+}
