@@ -164,12 +164,11 @@ export function CodeViewer({ projectName, filePath, fileSize, theme = 'light', l
     setState({ kind: 'loading' });
 
     if (isLargeFile) {
-      // Large file: delegate to server-side syntect highlighting.
-      // The server reads the file, highlights up to 50k lines with the
-      // requested theme, and returns a HighlightResult JSON payload.
+      // Large file: use server-side SSE streaming for better performance.
+      // The server streams highlighted line chunks via Server-Sent Events.
       const serverTheme = theme === 'dark' ? 'dark' : 'light';
       const url =
-        `/api/projects/${encodeURIComponent(projectName)}/files/content` +
+        `/api/projects/${encodeURIComponent(projectName)}/files/content/stream` +
         `?path=${encodeURIComponent(filePath)}&theme=${serverTheme}`;
       try {
         const res = await fetch(url, { signal });
@@ -177,16 +176,105 @@ export function CodeViewer({ projectName, filePath, fileSize, theme = 'light', l
           if (!signal.aborted) setState({ kind: 'error', message: `HTTP ${res.status}` });
           return;
         }
-        const data: ServerHighlightResult = await res.json();
+
+        const reader = res.body?.getReader();
+        if (!reader) {
+          if (!signal.aborted) setState({ kind: 'error', message: 'No response body' });
+          return;
+        }
+
+        const decoder = new TextDecoder();
+        let language = '';
+        let lineCount = 0;
+        let themeBg = '#1e1e2e';
+        let themeFg = '#c0c5ce';
+        const lines: string[] = [];
+        let truncated = false;
+        let headerReceived = false;
+
+        const buffer: string[] = [];
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done || signal.aborted) break;
+
+          buffer.push(decoder.decode(value, { stream: true }));
+          const fullText = buffer.join('');
+
+          // Process SSE messages (format: "data: {...}\n\n")
+          let remaining = fullText;
+          while (true) {
+            const dataIdx = remaining.indexOf('data: ');
+            if (dataIdx === -1) {
+              buffer.length = 0;
+              buffer.push(remaining);
+              break;
+            }
+
+            const newlineIdx = remaining.indexOf('\n\n', dataIdx);
+            if (newlineIdx === -1) {
+              buffer.length = 0;
+              buffer.push(remaining.slice(dataIdx));
+              break;
+            }
+
+            const jsonStr = remaining.slice(dataIdx + 6, newlineIdx).trim();
+            remaining = remaining.slice(newlineIdx + 2);
+
+            try {
+              const msg = JSON.parse(jsonStr);
+
+              if (msg.type === 'header' && !headerReceived) {
+                language = msg.language;
+                lineCount = msg.line_count;
+                themeBg = msg.theme_bg;
+                themeFg = msg.theme_fg;
+                headerReceived = true;
+
+                // Set initial state with header info
+                setState({
+                  kind: 'ready',
+                  html: `<pre style="background:${themeBg};color:${themeFg};">Loading...</pre>`,
+                  lang: language,
+                  lineCount,
+                  truncated: false,
+                  serverMode: true,
+                });
+              } else if (msg.type === 'chunk') {
+                lines.push(...msg.lines);
+
+                // Update state incrementally with new lines
+                const body = lines.join('\n');
+                setState({
+                  kind: 'ready',
+                  html: `<pre style="background:${themeBg};color:${themeFg};">${body}</pre>`,
+                  lang: language,
+                  lineCount,
+                  truncated: false,
+                  serverMode: true,
+                });
+              } else if (msg.type === 'trailer') {
+                truncated = msg.truncated;
+              } else if (msg.type === 'error') {
+                if (!signal.aborted) setState({ kind: 'error', message: msg.error });
+                return;
+              }
+            } catch (e) {
+              // Skip invalid JSON
+            }
+          }
+        }
+
         if (signal.aborted) return;
 
-        const html = buildServerHtml(data);
+        // Final state with all lines
+        const body = lines.join('\n');
         setState({
           kind: 'ready',
-          html,
-          lang: data.language,
-          lineCount: data.line_count,
-          truncated: data.truncated,
+          html: `<pre style="background:${themeBg};color:${themeFg};">${body}</pre>`,
+          lang: language,
+          lineCount,
+          truncated,
           serverMode: true,
         });
       } catch (err) {
