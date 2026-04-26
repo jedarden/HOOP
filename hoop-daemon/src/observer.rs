@@ -4,7 +4,8 @@
 //! forwarding read requests to the primary daemon and broadcasting events
 //! to its own WebSocket clients.
 
-use axum::extract::{State, WebSocketUpgrade, ws::WebSocket};
+use axum::extract::{State, ws::WebSocket};
+use crate::log_rotation;
 use crate::ws::WsEvent;
 use anyhow::Result;
 use futures_util::{stream::StreamExt, SinkExt};
@@ -271,9 +272,12 @@ pub async fn observer_ws_handler(
     let beads = state.beads.read().await.clone();
     let projects = state.projects.read().await.clone();
 
+    // Convert beads to BeadData
+    let bead_data: Vec<crate::ws::BeadData> = beads.iter().map(crate::ws::bead_to_data).collect();
+
     let _ = ws_sender.send(Message::Text(serde_json::to_string(&WsEvent::init(init_subs)).unwrap())).await;
     let _ = ws_sender.send(Message::Text(serde_json::to_string(&WsEvent::workers_snapshot(workers)).unwrap())).await;
-    let _ = ws_sender.send(Message::Text(serde_json::to_string(&WsEvent::beads_snapshot_from_beads(&beads)).unwrap())).await;
+    let _ = ws_sender.send(Message::Text(serde_json::to_string(&WsEvent::beads_snapshot(bead_data)).unwrap())).await;
     let _ = ws_sender.send(Message::Text(serde_json::to_string(&WsEvent::projects_snapshot(projects)).unwrap())).await;
 
     // Subscribe to events
@@ -325,7 +329,7 @@ pub async fn observer_ws_handler(
 
 /// Serve the observer mode HTTP/WebSocket server
 pub async fn serve_observer(config: crate::Config) -> Result<()> {
-    log_rotation::init_logging();
+    crate::log_rotation::init_logging();
 
     info!("HOOP observer mode starting");
     info!("Connecting to primary daemon at {}", config.primary_addr);
