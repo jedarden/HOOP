@@ -133,6 +133,29 @@
           }
         }
       }
+    },
+    "roles": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Role-based access control (RBAC) configuration. Maps Tailscale identities to viewer/drafter roles. (§13 Security)",
+      "properties": {
+        "viewers": {
+          "type": "array",
+          "description": "Identities with viewer role (read-only access)",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "drafters": {
+          "type": "array",
+          "description": "Identities with drafter role (read + create access)",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      }
     }
   }
 }

@@ -1309,6 +1309,21 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
         "config.yml: stuck_detector".to_string(),
     );
 
+    // Load role configuration (RBAC)
+    let roles = if let Some(role_config) = yml_ref.and_then(|y| yaml_get_role_config(y)) {
+        Resolved::new(
+            role_config,
+            ConfigSource::ConfigYml,
+            "config.yml: roles".to_string(),
+        )
+    } else {
+        Resolved::new(
+            crate::auth::RoleConfig::default(),
+            ConfigSource::Default,
+            "compiled default (no roles configured)".to_string(),
+        )
+    };
+
     let config = ResolvedConfig {
         bind_addr,
         allow_br_mismatch,
@@ -1346,6 +1361,7 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
         pricing_file,
         secrets_patterns,
         stuck_detector,
+        roles,
     };
 
     // Log the resolution summary
@@ -1955,6 +1971,7 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
                         "pricing",
                         "secrets_patterns",
                         "stuck_detector",
+                        "roles",
                     ];
                     if !VALID_TOP_LEVEL_KEYS.contains(&field_name) {
                         return Err(ConfigError::validation(
@@ -2022,7 +2039,7 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
             )
         } else {
             Resolved::new(
-                RoleConfig::default(),
+                crate::auth::RoleConfig::default(),
                 ConfigSource::Default,
                 "compiled default (no roles configured)".to_string(),
             )

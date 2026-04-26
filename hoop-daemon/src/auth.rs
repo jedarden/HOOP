@@ -22,7 +22,7 @@
 //! Plan reference: §6 Phase 7 deliverable 1, §13 Security (inherited identity)
 
 use axum::{
-    extract::{ConnectInfo, Request, State},
+    extract::{ConnectInfo, Request},
     http::StatusCode,
     middleware::Next,
     response::Response,
