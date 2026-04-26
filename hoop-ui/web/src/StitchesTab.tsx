@@ -1,6 +1,6 @@
 import { useAtomValue, useSetAtom, useAtom } from 'jotai';
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { conversationsAtom, streamingActiveIdsAtom, selectedConversationIdAtom, Conversation, dictatedNotesAtom, NoteSummary, DictatedNote, conversationFilterAtom, ConversationFilter, screenCapturesAtom, ScreenCaptureSummary, ScreenCaptureData, fileNavigationAtom } from './atoms';
+import { conversationsAtom, streamingActiveIdsAtom, selectedConversationIdAtom, Conversation, dictatedNotesAtom, NoteSummary, DictatedNote, conversationFilterAtom, ConversationFilter, screenCapturesAtom, ScreenCaptureSummary, ScreenCaptureData, fileNavigationAtom, mutationsDisabledAtom } from './atoms';
 import AudioPlayer from './components/AudioPlayer';
 import VideoPlayer from './components/VideoPlayer';
 import { scanForSecrets, getSecretSeverity, truncateSecret } from './components/secretsScanner';
@@ -88,7 +88,7 @@ interface StitchItem {
   screenCapture?: ScreenCaptureSummary;
 }
 
-function DictatedNoteDetail({ note, onUpdate }: { note: NoteSummary; onUpdate: (updated: NoteSummary) => void }) {
+function DictatedNoteDetail({ note, onUpdate, mutationsDisabled }: { note: NoteSummary; onUpdate: (updated: NoteSummary) => void; mutationsDisabled: boolean }) {
   const audioUrl = `/api/dictated-notes/${note.stitch_id}/audio`;
   const [fullNote, setFullNote] = useState<DictatedNote | null>(null);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -216,19 +216,19 @@ function DictatedNoteDetail({ note, onUpdate }: { note: NoteSummary; onUpdate: (
               value={editedTitle}
               onChange={(e) => setEditedTitle(e.target.value)}
               className="dictated-note-title-input"
-              disabled={isSaving}
+              disabled={isSaving || mutationsDisabled}
               onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
             />
             <button
               onClick={handleSaveTitle}
-              disabled={isSaving || !editedTitle.trim()}
+              disabled={isSaving || mutationsDisabled || !editedTitle.trim()}
               className="dictated-note-save-btn"
             >
               {isSaving ? 'Saving...' : 'Save'}
             </button>
             <button
               onClick={() => { setIsEditingTitle(false); setEditedTitle(note.title); }}
-              disabled={isSaving}
+              disabled={isSaving || mutationsDisabled}
               className="dictated-note-cancel-btn"
             >
               Cancel
@@ -258,19 +258,19 @@ function DictatedNoteDetail({ note, onUpdate }: { note: NoteSummary; onUpdate: (
               onChange={(e) => setEditedTags(e.target.value)}
               placeholder="Enter comma-separated tags"
               className="dictated-note-tags-input"
-              disabled={isSaving}
+              disabled={isSaving || mutationsDisabled}
               onKeyDown={(e) => e.key === 'Enter' && handleSaveTags()}
             />
             <button
               onClick={handleSaveTags}
-              disabled={isSaving}
+              disabled={isSaving || mutationsDisabled}
               className="dictated-note-save-btn"
             >
               {isSaving ? 'Saving...' : 'Save'}
             </button>
             <button
               onClick={() => { setIsEditingTags(false); setEditedTags(note.tags.join(', ')); }}
-              disabled={isSaving}
+              disabled={isSaving || mutationsDisabled}
               className="dictated-note-cancel-btn"
             >
               Cancel
@@ -500,6 +500,7 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
   const setFileNavigation = useSetAtom(fileNavigationAtom);
   const dictatedNotesMap = useAtomValue(dictatedNotesAtom);
   const screenCapturesMap = useAtomValue(screenCapturesAtom);
+  const mutationsDisabled = useAtomValue(mutationsDisabledAtom);
 
   // Fetch dictated notes for this project on mount
   const setDictatedNotes = useSetAtom(dictatedNotesAtom);
@@ -850,6 +851,7 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
             className="new-bead-btn"
             onClick={() => setShowDraftForm(true)}
             title="Draft a new bead in this project"
+            disabled={mutationsDisabled}
           >
             + New Bead
           </button>
@@ -858,6 +860,7 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
             className="new-bead-btn new-stitch-btn"
             onClick={() => setShowStitchForm(true)}
             title="Create a new stitch with decomposition"
+            disabled={mutationsDisabled}
           >
             + New Stitch
           </button>
@@ -1060,7 +1063,7 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
                         </div>
                       );
                     })()}
-                    <DictatedNoteDetail note={item.dictatedNote} onUpdate={handleNoteUpdate} />
+                    <DictatedNoteDetail note={item.dictatedNote} onUpdate={handleNoteUpdate} mutationsDisabled={mutationsDisabled} />
                   </div>
                 )}
 
