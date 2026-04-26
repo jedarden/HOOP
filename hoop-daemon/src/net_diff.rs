@@ -218,7 +218,14 @@ pub fn compute_net_diff(bead_ids: &[String], max_lines: usize) -> Result<NetDiff
 
         let oldest_sha = &reachable[0].sha;
         let newest_sha = &reachable[reachable.len() - 1].sha;
-        let ref_range = format!("{}^..{}", oldest_sha, newest_sha);
+
+        // Build ref_range: handle the case where oldest is the root commit (no parent)
+        let ref_range = if run_git_get_parent(&workspace, oldest_sha).is_some() {
+            format!("{}^..{}", oldest_sha, newest_sha)
+        } else {
+            // Oldest is root commit - use --root to diff from empty tree
+            format!("--root {}", newest_sha)
+        };
 
         // Compute the aggregate diff for the ref_range
         let diff_output = run_git_diff(&workspace, &ref_range)?;
@@ -710,6 +717,7 @@ mod tests {
             .map(|(i, (bead_id, sha))| {
                 let ts = format!("2024-01-{:02}T00:00:00+00:00", i + 2);
                 CommitEntry {
+                    bead_id: bead_id.clone(),
                     workspace: dir.to_string(),
                     sha: sha.clone(),
                     ts,
@@ -775,6 +783,7 @@ mod tests {
                 let sha = parts.next()?.trim().to_string();
                 let ts = parts.next()?.trim().to_string();
                 Some(CommitEntry {
+                    bead_id: "perf-bead".to_string(),
                     workspace: dir.to_string(),
                     sha,
                     ts,
