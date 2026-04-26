@@ -17,6 +17,12 @@ const ACTION_KINDS = [
   { value: 'draft_approved', label: 'Draft Approved' },
   { value: 'draft_edited', label: 'Draft Edited' },
   { value: 'draft_rejected', label: 'Draft Rejected' },
+  { value: 'backup_started', label: 'Backup Started' },
+  { value: 'backup_finished', label: 'Backup Finished' },
+  { value: 'backup_failed', label: 'Backup Failed' },
+  { value: 'restore_started', label: 'Restore Started' },
+  { value: 'restore_finished', label: 'Restore Finished' },
+  { value: 'restore_failed', label: 'Restore Failed' },
 ];
 
 function formatTs(ts: string): string {
