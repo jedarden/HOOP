@@ -386,7 +386,7 @@ fn is_approval(lower: &str) -> bool {
     }
 
     for pattern in &approval_patterns {
-        if lower.contains(pattern) || lower.trim() == pattern {
+        if lower.contains(pattern) || lower.trim() == *pattern {
             return true;
         }
     }
