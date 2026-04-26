@@ -8,6 +8,9 @@ import {
   clearStreamingContentAction,
   clearAllStreamingAction,
   wsConnectedAtom,
+  connectionStatusAtom,
+  reconnectAttemptAtom,
+  reconnectDelayAtom,
   configStatusAtom,
   projectCardsAtom,
   projectsReceivedAtom,
@@ -16,12 +19,17 @@ import {
   agentSessionStatusAtom,
   agentInflightAtom,
   agentChatMessagesAtom,
+  stuckAlertsAtom,
+  optimisticStubsAtom,
   WsEvent,
   AgentChatMessage,
   AgentToolCallInProgress,
 } from './atoms';
 
 const WS_URL = `ws://${window.location.host}/ws`;
+
+// Exponential backoff sequence: 1s, 2s, 5s, 10s, 30s (max)
+const BACKOFF_DELAYS = [1000, 2000, 5000, 10000, 30000];
 
 export function useWebSocket() {
   const setWorkers = useSetAtom(workersAtom);
@@ -31,6 +39,9 @@ export function useWebSocket() {
   const dispatchClearStreaming = useSetAtom(clearStreamingContentAction);
   const dispatchClearAllStreaming = useSetAtom(clearAllStreamingAction);
   const setConnected = useSetAtom(wsConnectedAtom);
+  const setConnectionStatus = useSetAtom(connectionStatusAtom);
+  const setReconnectAttempt = useSetAtom(reconnectAttemptAtom);
+  const setReconnectDelay = useSetAtom(reconnectDelayAtom);
   const setConfigStatus = useSetAtom(configStatusAtom);
   const setProjectCards = useSetAtom(projectCardsAtom);
   const setProjectsReceived = useSetAtom(projectsReceivedAtom);
@@ -39,9 +50,12 @@ export function useWebSocket() {
   const setAgentSessionStatus = useSetAtom(agentSessionStatusAtom);
   const setAgentInflight = useSetAtom(agentInflightAtom);
   const setAgentChatMessages = useSetAtom(agentChatMessagesAtom);
+  const setStuckAlerts = useSetAtom(stuckAlertsAtom);
+  const setOptimisticStubs = useSetAtom(optimisticStubsAtom);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const attemptRef = useRef<number>(0);
 
   // Track in-flight text and tool calls via ref so turn_complete can finalize without
   // needing to read the atom (which requires an extra subscription).
@@ -67,6 +81,10 @@ export function useWebSocket() {
         if (!mounted) return;
         console.log('WebSocket connected');
         setConnected(true);
+        setConnectionStatus('connected');
+        setReconnectAttempt(0);
+        setReconnectDelay(BACKOFF_DELAYS[0]);
+        attemptRef.current = 0;
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
           reconnectTimeoutRef.current = undefined;
@@ -78,7 +96,23 @@ export function useWebSocket() {
         try {
           const data: WsEvent = JSON.parse(event.data);
 
-          if (data.type === 'workers_snapshot' && data.workers) {
+          if (data.type === 'init') {
+            // Epoch-sync: wipe all atom stores on init (reconnect).
+            // Server is the source of truth — client rebuilds from snapshot events.
+            // Only optimistic stubs survive (they represent un-sent client mutations).
+            setBeads([]);
+            setConversations([]);
+            setWorkers([]);
+            setProjectCards([]);
+            setCapacity([]);
+            setConfigStatus({ valid: true });
+            setStitchCreated([]);
+            setAgentSessionStatus(null);
+            setAgentInflight(null);
+            setStuckAlerts(new Map());
+            // Note: agentChatMessagesAtom is NOT cleared — committed messages persist
+            // Note: optimisticStubsAtom is NOT cleared — pending mutations survive
+          } else if (data.type === 'workers_snapshot' && data.workers) {
             setWorkers(data.workers);
           } else if (data.type === 'worker_update' && data.worker) {
             setWorkers((prev) => {
@@ -233,6 +267,12 @@ export function useWebSocket() {
               inflightRef.current = null;
               setAgentInflight(null);
             }
+          } else if (data.type === 'stuck_alert' && data.stuck_alert) {
+            setStuckAlerts((prev) => {
+              const updated = new Map(prev);
+              updated.set(data.stuck_alert!.worker, data.stuck_alert!);
+              return updated;
+            });
           }
         } catch (e) {
           console.error('Failed to parse WebSocket message:', e);
@@ -243,6 +283,7 @@ export function useWebSocket() {
         if (!mounted) return;
         console.log('WebSocket disconnected, reconnecting...');
         setConnected(false);
+        setConnectionStatus('disconnected');
         wsRef.current = null;
         // Clear all streaming buffers on disconnect — partial tokens must not
         // persist into the committed store when the connection is re-established.
@@ -251,9 +292,19 @@ export function useWebSocket() {
         // Committed messages are never at risk (they are only written on turn_complete).
         inflightRef.current = null;
         setAgentInflight(null);
+
+        // Calculate next backoff delay (capped at 30s)
+        attemptRef.current = Math.min(attemptRef.current + 1, BACKOFF_DELAYS.length - 1);
+        const delay = BACKOFF_DELAYS[attemptRef.current];
+        setReconnectAttempt(attemptRef.current);
+        setReconnectDelay(delay);
+
         reconnectTimeoutRef.current = setTimeout(() => {
-          if (mounted) connect();
-        }, 2000);
+          if (mounted) {
+            setConnectionStatus('connecting');
+            connect();
+          }
+        }, delay);
       };
 
       ws.onerror = (error) => {
@@ -270,5 +321,5 @@ export function useWebSocket() {
       }
       wsRef.current?.close();
     };
-  }, [setWorkers, setBeads, setConversations, dispatchSetStreaming, dispatchClearStreaming, dispatchClearAllStreaming, setConnected, setConfigStatus, setProjectCards, setProjectsReceived, setCapacity, setStitchCreated, setAgentSessionStatus, setAgentInflight, setAgentChatMessages]);
+  }, [setWorkers, setBeads, setConversations, dispatchSetStreaming, dispatchClearStreaming, dispatchClearAllStreaming, setConnected, setConnectionStatus, setReconnectAttempt, setReconnectDelay, setConfigStatus, setProjectCards, setProjectsReceived, setCapacity, setStitchCreated, setAgentSessionStatus, setAgentInflight, setAgentChatMessages, setStuckAlerts, setOptimisticStubs]);
 }
