@@ -393,6 +393,7 @@ interface NetDiffFile {
   is_deleted: boolean;
   added: number;
   removed: number;
+  bead_id?: string;
 }
 
 interface NetDiffWorkspace {
@@ -439,11 +440,11 @@ function TouchedFilesPanel({ stitchId, onFileClick }: TouchedFilesPanelProps) {
   if (loading) return <div className="touched-files-loading">Loading touched files…</div>;
   if (!netDiff) return null;
 
-  const allFiles: Array<{ filePath: string; added: number; removed: number; refRange: string }> = [];
+  const allFiles: Array<{ filePath: string; added: number; removed: number; refRange: string; beadId?: string }> = [];
   for (const ws of netDiff.workspaces) {
     for (const f of ws.files) {
       const filePath = f.new_path || f.old_path;
-      if (filePath) allFiles.push({ filePath, added: f.added, removed: f.removed, refRange: ws.ref_range });
+      if (filePath) allFiles.push({ filePath, added: f.added, removed: f.removed, refRange: ws.ref_range, beadId: f.bead_id });
     }
   }
 
@@ -461,7 +462,7 @@ function TouchedFilesPanel({ stitchId, onFileClick }: TouchedFilesPanelProps) {
         </div>
       </div>
       <div className="touched-files-list">
-        {allFiles.map(({ filePath, added, removed, refRange }) => (
+        {allFiles.map(({ filePath, added, removed, refRange, beadId }) => (
           <div
             key={filePath}
             className="touched-file-row"
@@ -469,9 +470,11 @@ function TouchedFilesPanel({ stitchId, onFileClick }: TouchedFilesPanelProps) {
             role="button"
             tabIndex={0}
             onKeyDown={(e) => e.key === 'Enter' && onFileClick(filePath, refRange)}
+            title={beadId ? `Modified by bead ${beadId}` : filePath}
           >
             <span className="touched-file-icon">📄</span>
             <span className="touched-file-path">{filePath}</span>
+            {beadId && <span className="touched-file-bead" title={`Modified by ${beadId}`}>{beadId}</span>}
             <div className="touched-file-stats">
               {added > 0 && <span className="diff-stat-add">+{added}</span>}
               {removed > 0 && <span className="diff-stat-rem">-{removed}</span>}

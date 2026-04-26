@@ -8,6 +8,7 @@
 //!   3. Filter out SHAs that are no longer reachable (rebased/force-pushed away).
 //!   4. Sort reachable SHAs by commit date → oldest = base; newest = tip.
 //!   5. Run `git diff <oldest>^..<newest>` for the net diff across the whole set.
+//!   6. Attribute each file to the bead that last modified it.
 //!
 //! Multi-workspace Stitches produce one WorkspaceDiff per repo.
 
@@ -29,6 +30,21 @@ use crate::fleet;
 use crate::DaemonState;
 
 // ---------------------------------------------------------------------------
+// Extended FileDiff with bead attribution
+// ---------------------------------------------------------------------------
+
+/// File diff with bead attribution for tracking which bead modified the file.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileDiffWithBead {
+    /// Base file diff data.
+    #[serde(flatten)]
+    pub diff: FileDiff,
+    /// Bead ID that last modified this file (if available from bead_commits).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bead_id: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
 // Public response types
 // ---------------------------------------------------------------------------
 
@@ -41,7 +57,7 @@ pub struct WorkspaceDiff {
     pub commit_shas: Vec<String>,
     /// `<oldest_sha>^..<newest_sha>` used for the diff.
     pub ref_range: String,
-    pub files: Vec<FileDiff>,
+    pub files: Vec<FileDiffWithBead>,
     pub total_added: usize,
     pub total_removed: usize,
 }
@@ -80,15 +96,16 @@ fn default_max_lines() -> usize {
 // Core computation (pure, synchronous, no mutations)
 // ---------------------------------------------------------------------------
 
-/// A single (workspace, sha, ts) record from `bead_commits`.
+/// A single (bead_id, workspace, sha, ts) record from `bead_commits`.
 #[derive(Debug, Clone)]
 struct CommitEntry {
+    bead_id: String,
     workspace: String,
     sha: String,
     ts: String,
 }
 
-/// Load every `(workspace, sha, ts)` record for a slice of bead IDs.
+/// Load every `(bead_id, workspace, sha, ts)` record for a slice of bead IDs.
 fn load_commits_for_beads(bead_ids: &[String]) -> Result<Vec<CommitEntry>> {
     if bead_ids.is_empty() {
         return Ok(vec![]);
@@ -101,15 +118,16 @@ fn load_commits_for_beads(bead_ids: &[String]) -> Result<Vec<CommitEntry>> {
         .collect::<Vec<_>>()
         .join(", ");
     let sql = format!(
-        "SELECT workspace, sha, ts FROM bead_commits WHERE bead_id IN ({}) ORDER BY ts ASC",
+        "SELECT bead_id, workspace, sha, ts FROM bead_commits WHERE bead_id IN ({}) ORDER BY ts ASC",
         placeholders
     );
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map(rusqlite::params_from_iter(bead_ids.iter()), |row| {
         Ok(CommitEntry {
-            workspace: row.get(0)?,
-            sha: row.get(1)?,
-            ts: row.get(2)?,
+            bead_id: row.get(0)?,
+            workspace: row.get(1)?,
+            sha: row.get(2)?,
+            ts: row.get(3)?,
         })
     })?;
     let mut out = Vec::new();
@@ -157,7 +175,8 @@ fn sha_reachable(workspace: &str, sha: &str) -> bool {
 /// Compute the net diff for a set of bead IDs. Pure, no mutations.
 ///
 /// Groups commits by workspace, filters unreachable SHAs, sorts by date,
-/// then diffs `oldest^..newest` per workspace.
+/// then diffs `oldest^..newest` per workspace. Attributes each file to
+/// the bead that last modified it.
 pub fn compute_net_diff(bead_ids: &[String], max_lines: usize) -> Result<NetDiffResponse> {
     let entries = load_commits_for_beads(bead_ids)?;
 
@@ -201,6 +220,7 @@ pub fn compute_net_diff(bead_ids: &[String], max_lines: usize) -> Result<NetDiff
         let newest_sha = &reachable[reachable.len() - 1].sha;
         let ref_range = format!("{}^..{}", oldest_sha, newest_sha);
 
+        // Compute the aggregate diff for the ref_range
         let diff_output = run_git_diff(&workspace, &ref_range)?;
         let (files, truncated) = parse_diff_output(&diff_output, max_lines);
 
@@ -208,8 +228,47 @@ pub fn compute_net_diff(bead_ids: &[String], max_lines: usize) -> Result<NetDiff
             any_truncated = true;
         }
 
-        let ws_added: usize = files.iter().map(|f| f.added).sum();
-        let ws_removed: usize = files.iter().map(|f| f.removed).sum();
+        // Attribute each file to the bead that last modified it
+        // by checking per-commit diffs (newest commits first)
+        let mut file_to_bead: HashMap<String, String> = HashMap::new();
+
+        for entry in reachable.iter().rev() {
+            // Get the parent of this commit
+            let parent = run_git_get_parent(&workspace, &entry.sha);
+
+            // Compute diff for just this commit: parent..entry.sha
+            let commit_range = if let Some(ref p) = parent {
+                format!("{}..{}", p, entry.sha)
+            } else {
+                // First commit in history (no parent), diff from empty tree
+                format!("--root {}", entry.sha)
+            };
+
+            if let Ok(commit_diff_output) = run_git_diff(&workspace, &commit_range) {
+                let (commit_files, _) = parse_diff_output(&commit_diff_output, max_lines);
+                for f in commit_files {
+                    let path = if f.new_path.is_empty() { &f.old_path } else { &f.new_path };
+                    // Only attribute if not already attributed (later commits already processed)
+                    file_to_bead.entry(path.clone()).or_insert_with(|| entry.bead_id.clone());
+                }
+            }
+        }
+
+        // Convert files to FileDiffWithBead with bead attribution
+        let files_with_bead: Vec<FileDiffWithBead> = files
+            .into_iter()
+            .map(|f| {
+                let path = if f.new_path.is_empty() { &f.old_path } else { &f.new_path };
+                let bead_id = file_to_bead.get(path).cloned();
+                FileDiffWithBead {
+                    diff: f,
+                    bead_id,
+                }
+            })
+            .collect();
+
+        let ws_added: usize = files_with_bead.iter().map(|f| f.diff.added).sum();
+        let ws_removed: usize = files_with_bead.iter().map(|f| f.diff.removed).sum();
         total_added += ws_added;
         total_removed += ws_removed;
         total_commit_count += reachable.len();
@@ -218,7 +277,7 @@ pub fn compute_net_diff(bead_ids: &[String], max_lines: usize) -> Result<NetDiff
             workspace,
             commit_shas: reachable.iter().map(|e| e.sha.clone()).collect(),
             ref_range,
-            files,
+            files: files_with_bead,
             total_added: ws_added,
             total_removed: ws_removed,
         });
@@ -250,6 +309,24 @@ fn run_git_diff(workspace: &str, ref_range: &str) -> Result<String> {
         anyhow::bail!("git diff failed in {}: {}", workspace, stderr.trim());
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// Get the parent SHA of a commit, or None if the commit has no parent.
+fn run_git_get_parent(workspace: &str, sha: &str) -> Option<String> {
+    let out = Command::new("git")
+        .args(["-C", workspace, "rev-parse", &format!("{}^", sha)])
+        .output()
+        .ok()?;
+    if out.status.success() {
+        let parent = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if parent.is_empty() || parent.contains("unknown revision") {
+            None
+        } else {
+            Some(parent)
+        }
+    } else {
+        None
+    }
 }
 
 // ---------------------------------------------------------------------------
