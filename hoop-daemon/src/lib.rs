@@ -24,6 +24,7 @@ pub mod api_beads;
 pub mod api_dictated_notes;
 pub mod api_draft_queue;
 pub mod api_metrics;
+pub mod api_scripts;
 pub mod api_preview;
 pub mod api_stitch_decompose;
 pub mod api_stitch_links;
@@ -45,6 +46,7 @@ pub mod heartbeats;
 pub mod id_validators;
 pub mod log_rotation;
 pub mod metrics;
+pub mod mutation_handler;
 pub mod parse_jsonl_safe;
 pub mod path_security;
 pub mod pattern_query_evaluator;
@@ -285,6 +287,8 @@ pub struct DaemonState {
     pub collision_alert_tx: broadcast::Sender<ws::CollisionAlertData>,
     /// Broadcast channel for pattern saved query synced events (§4.7)
     pub pattern_tx: broadcast::Sender<ws::PatternSavedQuerySyncedData>,
+    /// Broadcast channel for bead_created_by_hoop events sent after each successful br create via HOOP (hoop-ttb.3.53)
+    pub bead_created_by_hoop_tx: broadcast::Sender<ws::BeadCreatedByHoopData>,
     /// Per-project redaction policy resolver (§18.5)
     pub redaction_policy_state: Arc<tokio::sync::RwLock<redaction_policy::RedactionPolicyState>>,
 }
@@ -1905,6 +1909,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         worker_ack_monitor,
         collision_alert_tx: broadcast::channel::<ws::CollisionAlertData>(64).0,
         pattern_tx,
+        bead_created_by_hoop_tx: broadcast::channel::<ws::BeadCreatedByHoopData>(64).0,
         redaction_policy_state,
     };
 

@@ -1108,6 +1108,7 @@ impl WsEvent {
             draft_update: None,
             spawn_ack_alert: None,
             collision_alert: None,
+            bead_created_by_hoop: None,
             subscriptions: Some(subs),
         }
     }
