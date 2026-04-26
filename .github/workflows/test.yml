@@ -7,6 +7,20 @@ on:
     branches: [main]
 
 jobs:
+  changelog:
+    name: Schema Change Changelog Check (§20)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Check schema changes have CHANGELOG entry
+      run: ./scripts/check-changelog.sh
+      shell: bash
+
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
