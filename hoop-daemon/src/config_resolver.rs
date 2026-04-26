@@ -1925,6 +1925,19 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
             ConfigSource::ConfigYml,
             "config.yml: stuck_detector".to_string(),
         ),
+        roles: if let Some(role_config) = yml_ref.and_then(|y| yaml_get_role_config(y)) {
+            Resolved::new(
+                role_config,
+                ConfigSource::ConfigYml,
+                "config.yml: roles".to_string(),
+            )
+        } else {
+            Resolved::new(
+                RoleConfig::default(),
+                ConfigSource::Default,
+                "compiled default (no roles configured)".to_string(),
+            )
+        },
     })
 }
 

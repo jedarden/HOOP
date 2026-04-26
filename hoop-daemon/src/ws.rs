@@ -1517,11 +1517,8 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     }
 
-    // 6. Initial config status (valid by default since daemon started successfully)
-    let initial_config_status = ConfigStatusData {
-        valid: true,
-        error: None,
-    };
+    // 6. Initial config status (read from stored state so new clients see current errors)
+    let initial_config_status = state.config_status.read().unwrap().clone();
     if let Ok(json) = serde_json::to_string(&WsEvent::config_status(initial_config_status)) {
         if sender.send(Message::Text(json)).await.is_err() {
             return;
