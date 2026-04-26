@@ -140,9 +140,19 @@ async fn complete_upload(
     let valid_id = crate::id_validators::ValidUploadId::parse(&upload_id)
         .map_err(|_| StatusCode::BAD_REQUEST)?;
 
+    // Get redaction policy state for project-specific checks
+    let redaction_state = state.redaction_policy_state.read().await.clone();
+
+    // Load projects config for workspace lookup
+    let projects_config = crate::projects::ProjectsConfig::load()
+        .map_err(|_| {
+            tracing::error!("Failed to load projects config");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
     state
         .upload_registry
-        .complete_upload(&valid_id)
+        .complete_upload(&valid_id, &redaction_state, &projects_config)
         .map(|_| StatusCode::NO_CONTENT)
         .map_err(|e| {
             tracing::error!("Failed to complete upload: {}", e);
