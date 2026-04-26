@@ -14,6 +14,7 @@ import AuditPanel from './AuditPanel';
 import { SearchPalette } from './SearchPalette';
 import CrossProjectDashboard from './CrossProjectDashboard';
 import PatternsView from './PatternsView';
+import ConversationsView from './ConversationsView';
 import { DictationWidget } from './components/DictationWidget';
 
 type Route =
@@ -23,7 +24,8 @@ type Route =
   | { view: 'timeline' }
   | { view: 'audit' }
   | { view: 'dashboard' }
-  | { view: 'patterns'; patternId?: string };
+  | { view: 'patterns'; patternId?: string }
+  | { view: 'conversations' };
 
 function ConfigBanner({ error }: { error: { message: string; line: number; col: number; field?: string; expected?: string; got?: string } }) {
   return (
@@ -50,6 +52,7 @@ function parseHash(hash: string): Route {
   if (path === 'audit') return { view: 'audit' };
   if (path === 'dashboard') return { view: 'dashboard' };
   if (path === 'patterns') return { view: 'patterns' };
+  if (path === 'conversations') return { view: 'conversations' };
   if (path.startsWith('patterns/')) {
     const patternId = path.slice('patterns/'.length);
     if (patternId) return { view: 'patterns', patternId };
@@ -151,6 +154,7 @@ export default function App() {
               <div className="header-nav">
                 <a href="#/" className="back-link">&larr; All Projects</a>
                 <a href="#/patterns" className="header-nav-link">Patterns</a>
+                <a href="#/conversations" className="header-nav-link">Conversations</a>
                 <a href="#/fleet" className="header-nav-link">Fleet</a>
                 <a href="#/timeline" className="header-nav-link">Timeline</a>
                 <a href="#/audit" className="header-nav-link">Audit</a>
@@ -166,6 +170,38 @@ export default function App() {
               projectCards={projectCards}
               onNavigateProject={navigateToProjectByName}
             />
+          </main>
+        </div>
+        <SearchPalette />
+        <DictationWidget />
+      </>
+    );
+  }
+
+  // Cross-project conversations view
+  if (route.view === 'conversations') {
+    return (
+      <>
+        <div className="app app-project-detail">
+          {configStatus.error && <ConfigBanner error={configStatus.error} />}
+          <header className="app-header-mini">
+            <div className="header-top">
+              <div className="header-nav">
+                <a href="#/" className="back-link">&larr; All Projects</a>
+                <a href="#/patterns" className="header-nav-link">Patterns</a>
+                <a href="#/dashboard" className="header-nav-link">Dashboard</a>
+                <a href="#/fleet" className="header-nav-link">Fleet</a>
+                <a href="#/timeline" className="header-nav-link">Timeline</a>
+                <a href="#/audit" className="header-nav-link">Audit</a>
+              </div>
+              <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
+                <span className="indicator-dot" />
+                {wsConnected ? 'Connected' : 'Connecting...'}
+              </div>
+            </div>
+          </header>
+          <main>
+            <ConversationsView />
           </main>
         </div>
         <SearchPalette />
