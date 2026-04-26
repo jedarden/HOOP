@@ -6,7 +6,13 @@
 //!   frame_samples.json      — chapter markers derived from UI-change frame samples
 //!   transcript.json         — word-level Whisper transcript from the audio track
 //!   meta.json               — stitch metadata (title, project, recorded_at)
+//!
+//! All functions accept `ValidStitchId` for compile-time path-traversal protection (§13).
+//! Paths are canonicalized and prefix-checked against an allowlist (§13, §K2).
 
+use crate::id_validators::ValidStitchId;
+use crate::path_security::{canonicalize_and_check, PathAllowlist};
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -70,22 +76,37 @@ pub struct ScreenCaptureSummary {
 }
 
 /// Return the stitch attachments directory.
-pub fn attachments_dir(stitch_id: &str) -> PathBuf {
-    let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    home.push(".hoop");
-    home.push("attachments");
-    home.push(stitch_id);
-    home
+///
+/// Path-traversal protection: `stitch_id` is a `ValidStitchId` which guarantees
+/// it's a lowercase UUID format (no `..`, `/`, or other path components).
+/// The directory is created lazily, then canonicalized and prefix-checked
+/// against the allowlist to catch symlink escapes (§13, §K2).
+pub fn attachments_dir(stitch_id: &ValidStitchId) -> Result<PathBuf> {
+    let allowlist = PathAllowlist::for_stitch_attachments()
+        .context("failed to build path allowlist for stitch attachments")?;
+
+    let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
+    let dir = home
+        .join(".hoop")
+        .join("attachments")
+        .join(stitch_id.as_str());
+    std::fs::create_dir_all(&dir)
+        .with_context(|| format!("failed to create attachment dir: {}", dir.display()))?;
+
+    let canonical = canonicalize_and_check(&dir, &allowlist)
+        .map_err(|_| anyhow::anyhow!("path traversal detected for stitch id"))?;
+
+    Ok(canonical)
 }
 
 /// Check if a screen capture video exists for a stitch.
-pub fn has_video(stitch_id: &str) -> bool {
+pub fn has_video(stitch_id: &ValidStitchId) -> bool {
     video_path(stitch_id).is_some()
 }
 
 /// Get the video file path — checks screen.mp4, screen.webm, screen.mov in order.
-pub fn video_path(stitch_id: &str) -> Option<PathBuf> {
-    let dir = attachments_dir(stitch_id);
+pub fn video_path(stitch_id: &ValidStitchId) -> Option<PathBuf> {
+    let dir = attachments_dir(stitch_id).ok()?;
     for ext in &["mp4", "webm", "mov"] {
         let path = dir.join(format!("screen.{}", ext));
         if path.exists() {
@@ -96,8 +117,12 @@ pub fn video_path(stitch_id: &str) -> Option<PathBuf> {
 }
 
 /// Load frame samples from frame_samples.json. Returns empty vec if not found.
-pub fn load_frame_samples(stitch_id: &str) -> Vec<FrameSample> {
-    let path = attachments_dir(stitch_id).join("frame_samples.json");
+pub fn load_frame_samples(stitch_id: &ValidStitchId) -> Vec<FrameSample> {
+    let dir = match attachments_dir(stitch_id) {
+        Ok(d) => d,
+        Err(_) => return Vec::new(),
+    };
+    let path = dir.join("frame_samples.json");
     if !path.exists() {
         return Vec::new();
     }
@@ -108,8 +133,9 @@ pub fn load_frame_samples(stitch_id: &str) -> Vec<FrameSample> {
 }
 
 /// Load transcript from transcript.json. Returns None if not found.
-pub fn load_transcript(stitch_id: &str) -> Option<ScreenCaptureTranscript> {
-    let path = attachments_dir(stitch_id).join("transcript.json");
+pub fn load_transcript(stitch_id: &ValidStitchId) -> Option<ScreenCaptureTranscript> {
+    let dir = attachments_dir(stitch_id).ok()?;
+    let path = dir.join("transcript.json");
     if !path.exists() {
         return None;
     }
@@ -119,8 +145,20 @@ pub fn load_transcript(stitch_id: &str) -> Option<ScreenCaptureTranscript> {
 }
 
 /// Load meta.json sidecar. Returns a default if not found.
-pub fn load_meta(stitch_id: &str) -> ScreenCaptureMeta {
-    let path = attachments_dir(stitch_id).join("meta.json");
+pub fn load_meta(stitch_id: &ValidStitchId) -> ScreenCaptureMeta {
+    let dir = match attachments_dir(stitch_id) {
+        Ok(d) => d,
+        Err(_) => {
+            return ScreenCaptureMeta {
+                stitch_id: stitch_id.to_string(),
+                project: String::new(),
+                title: format!("Screen capture {}", stitch_id),
+                recorded_at: String::new(),
+                duration_secs: None,
+            }
+        }
+    };
+    let path = dir.join("meta.json");
     std::fs::read_to_string(&path)
         .ok()
         .and_then(|data| serde_json::from_str(&data).ok())
@@ -134,6 +172,9 @@ pub fn load_meta(stitch_id: &str) -> ScreenCaptureMeta {
 }
 
 /// List all screen-capture stitches for a project by scanning the attachments directory.
+///
+/// Path-traversal protection: only reads from the pre-canonicalized `~/.hoop/attachments/`
+/// directory. Stitch IDs found on disk are validated before use (defense-in-depth).
 pub fn list_for_project(project: &str) -> Vec<ScreenCaptureSummary> {
     let mut base = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     base.push(".hoop");
@@ -145,11 +186,15 @@ pub fn list_for_project(project: &str) -> Vec<ScreenCaptureSummary> {
 
     let mut results = Vec::new();
     for entry in entries.flatten() {
-        let stitch_id = entry.file_name().to_string_lossy().to_string();
+        let stitch_id_raw = entry.file_name().to_string_lossy().to_string();
         // Only consider directories that look like UUIDs (36-char lowercase)
-        if stitch_id.len() != 36 {
+        if stitch_id_raw.len() != 36 {
             continue;
         }
+        // Validate the stitch_id before using it (defense-in-depth)
+        let Ok(stitch_id) = ValidStitchId::parse(&stitch_id_raw) else {
+            continue;
+        };
         if !has_video(&stitch_id) {
             continue;
         }
@@ -158,9 +203,12 @@ pub fn list_for_project(project: &str) -> Vec<ScreenCaptureSummary> {
             continue;
         }
         let chapters = load_frame_samples(&stitch_id);
-        let has_transcript = attachments_dir(&stitch_id).join("transcript.json").exists();
+        let has_transcript = attachments_dir(&stitch_id)
+            .ok()
+            .map(|dir| dir.join("transcript.json").exists())
+            .unwrap_or(false);
         results.push(ScreenCaptureSummary {
-            stitch_id,
+            stitch_id: stitch_id_raw,
             project: meta.project,
             title: meta.title,
             recorded_at: meta.recorded_at,
