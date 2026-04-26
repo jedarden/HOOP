@@ -211,7 +211,11 @@ impl HeartbeatMonitor {
 
     /// Get liveness for a specific worker
     pub fn get_liveness(&self, worker: &str) -> Option<WorkerLiveness> {
-        self.workers.lock().unwrap().get(worker).map(|state| state.liveness)
+        self.workers
+            .lock()
+            .unwrap()
+            .get(worker)
+            .map(|state| state.liveness)
     }
 
     /// Start watching the heartbeats file
@@ -224,7 +228,13 @@ impl HeartbeatMonitor {
 
         // Create the watcher
         let mut watcher = notify::recommended_watcher(move |res| {
-            if let Err(e) = Self::handle_watch_event(res, &heartbeats_path_for_watch, &event_tx, position.clone(), workers.clone()) {
+            if let Err(e) = Self::handle_watch_event(
+                res,
+                &heartbeats_path_for_watch,
+                &event_tx,
+                position.clone(),
+                workers.clone(),
+            ) {
                 warn!("Error handling heartbeat watch event: {}", e);
             }
         })
@@ -266,10 +276,11 @@ impl HeartbeatMonitor {
     /// Replay all heartbeats from the existing file
     fn replay_file(&mut self) -> Result<()> {
         let heartbeats_path = &self.config.heartbeats_path;
-        let file = File::open(heartbeats_path)
-            .context("Failed to open heartbeats file for replay")?;
+        let file =
+            File::open(heartbeats_path).context("Failed to open heartbeats file for replay")?;
 
-        let metadata = file.metadata()
+        let metadata = file
+            .metadata()
             .context("Failed to get heartbeats file metadata")?;
 
         let reader = BufReader::new(file);
@@ -340,10 +351,15 @@ impl HeartbeatMonitor {
         heartbeats_path: &Path,
         position: Arc<Mutex<FilePosition>>,
     ) -> Result<Vec<(WorkerHeartbeat, usize)>> {
-        let file = File::open(heartbeats_path)
-            .with_context(|| format!("Failed to open heartbeats file {}", heartbeats_path.display()))?;
+        let file = File::open(heartbeats_path).with_context(|| {
+            format!(
+                "Failed to open heartbeats file {}",
+                heartbeats_path.display()
+            )
+        })?;
 
-        let metadata = file.metadata()
+        let metadata = file
+            .metadata()
             .with_context(|| format!("Failed to get metadata for {}", heartbeats_path.display()))?;
 
         // Check for log rotation
@@ -369,8 +385,13 @@ impl HeartbeatMonitor {
 
         // Seek to our last position
         let mut file = file;
-        file.seek(SeekFrom::Start(offset))
-            .with_context(|| format!("Failed to seek to offset {} in {}", offset, heartbeats_path.display()))?;
+        file.seek(SeekFrom::Start(offset)).with_context(|| {
+            format!(
+                "Failed to seek to offset {} in {}",
+                offset,
+                heartbeats_path.display()
+            )
+        })?;
 
         let reader = BufReader::new(file);
         let mut heartbeats = Vec::new();
@@ -412,7 +433,10 @@ impl HeartbeatMonitor {
     /// Returns `None` for empty/quarantined lines, `Some(hb)` on success.
     /// Additional validation failures (bad timestamp, invalid worker name) also
     /// quarantine the line.
-    pub fn parse_heartbeat_line(line: &str, source: &crate::parse_jsonl_safe::LineSource) -> Option<WorkerHeartbeat> {
+    pub fn parse_heartbeat_line(
+        line: &str,
+        source: &crate::parse_jsonl_safe::LineSource,
+    ) -> Option<WorkerHeartbeat> {
         #[derive(Debug, Deserialize)]
         struct HeartbeatRaw {
             ts: String,
@@ -501,7 +525,9 @@ impl HeartbeatMonitor {
 
             // Compute heartbeat age
             let now = Utc::now();
-            let heartbeat_age = now.signed_duration_since(worker_entry.last_heartbeat_at).num_seconds() as u64;
+            let heartbeat_age = now
+                .signed_duration_since(worker_entry.last_heartbeat_at)
+                .num_seconds() as u64;
 
             // Use the pure compute_liveness function
             compute_liveness(pid_alive, heartbeat_age)
@@ -513,7 +539,10 @@ impl HeartbeatMonitor {
 
             let reason = match new_liveness {
                 WorkerLiveness::Live => "PID alive and heartbeat fresh".to_string(),
-                WorkerLiveness::Hung => format!("PID alive but heartbeat stale (> {}s)", HEARTBEAT_GRACE_SECS),
+                WorkerLiveness::Hung => format!(
+                    "PID alive but heartbeat stale (> {}s)",
+                    HEARTBEAT_GRACE_SECS
+                ),
                 WorkerLiveness::Dead => "PID not found".to_string(),
             };
 
@@ -542,13 +571,19 @@ impl HeartbeatMonitor {
     pub fn reevaluate_liveness(&mut self) {
         let workers_snapshot: Vec<(String, Option<u32>, DateTime<Utc>)> = {
             let guard = self.workers.lock().unwrap();
-            guard.iter().map(|(w, s)| (w.clone(), s.last_pid, s.last_heartbeat_at)).collect()
+            guard
+                .iter()
+                .map(|(w, s)| (w.clone(), s.last_pid, s.last_heartbeat_at))
+                .collect()
         };
 
         for (worker, pid, last_heartbeat_at) in workers_snapshot {
             let old_liveness = {
                 let guard = self.workers.lock().unwrap();
-                guard.get(&worker).map(|s| s.liveness).unwrap_or(WorkerLiveness::Dead)
+                guard
+                    .get(&worker)
+                    .map(|s| s.liveness)
+                    .unwrap_or(WorkerLiveness::Dead)
             };
 
             // Compute new liveness directly
@@ -562,7 +597,8 @@ impl HeartbeatMonitor {
 
                 // Compute heartbeat age
                 let now = Utc::now();
-                let heartbeat_age = now.signed_duration_since(last_heartbeat_at).num_seconds() as u64;
+                let heartbeat_age =
+                    now.signed_duration_since(last_heartbeat_at).num_seconds() as u64;
 
                 // Use the pure compute_liveness function
                 compute_liveness(pid_alive, heartbeat_age)
@@ -575,7 +611,10 @@ impl HeartbeatMonitor {
 
                     let reason = match new_liveness {
                         WorkerLiveness::Live => "PID alive and heartbeat fresh".to_string(),
-                        WorkerLiveness::Hung => format!("PID alive but heartbeat stale (> {}s)", HEARTBEAT_GRACE_SECS),
+                        WorkerLiveness::Hung => format!(
+                            "PID alive but heartbeat stale (> {}s)",
+                            HEARTBEAT_GRACE_SECS
+                        ),
                         WorkerLiveness::Dead => "PID not found".to_string(),
                     };
 
@@ -584,12 +623,14 @@ impl HeartbeatMonitor {
                         worker, old_liveness, new_liveness, reason
                     );
 
-                    let _ = self.event_tx.send(MonitorEvent::LivenessChange(LivenessTransition {
-                        worker: worker.clone(),
-                        old_state: old_liveness,
-                        new_state: new_liveness,
-                        reason,
-                    }));
+                    let _ = self
+                        .event_tx
+                        .send(MonitorEvent::LivenessChange(LivenessTransition {
+                            worker: worker.clone(),
+                            old_state: old_liveness,
+                            new_state: new_liveness,
+                            reason,
+                        }));
                 }
             }
         }
@@ -617,10 +658,7 @@ impl HeartbeatMonitor {
 /// Prior art (M6): "parent died without stopped.json → dashboards show
 /// running forever." Liveness MUST be derived from process state, never
 /// from cached status files that can go stale.
-fn compute_liveness(
-    pid_alive: bool,
-    heartbeat_age_secs: u64,
-) -> WorkerLiveness {
+fn compute_liveness(pid_alive: bool, heartbeat_age_secs: u64) -> WorkerLiveness {
     // First check: is the PID alive?
     // This is the PRIMARY liveness signal (kill -0)
     if !pid_alive {
@@ -693,7 +731,8 @@ mod tests {
 
     #[test]
     fn test_parse_heartbeat_line_idle() {
-        let json = r#"{"ts":"2026-04-21T18:42:10Z","worker":"alpha","state":"idle","last_strand":null}"#;
+        let json =
+            r#"{"ts":"2026-04-21T18:42:10Z","worker":"alpha","state":"idle","last_strand":null}"#;
         let heartbeat = HeartbeatMonitor::parse_heartbeat_line(json, &test_source()).unwrap();
 
         assert_eq!(heartbeat.worker, "alpha");
@@ -729,7 +768,9 @@ mod tests {
     fn test_liveness_fresh_heartbeat() {
         // Fresh heartbeat should be considered live if PID is alive
         // We can't test actual PID checking in unit tests, but we can test the logic
-        const { assert!(HEARTBEAT_GRACE_SECS >= 20); }
+        const {
+            assert!(HEARTBEAT_GRACE_SECS >= 20);
+        }
         assert_eq!(HEARTBEAT_INTERVAL_SECS, 10);
     }
 
@@ -824,10 +865,16 @@ mod tests {
 
         // Live: PID alive, heartbeat fresh
         assert_eq!(compute_liveness(true, 0), WorkerLiveness::Live);
-        assert_eq!(compute_liveness(true, HEARTBEAT_GRACE_SECS), WorkerLiveness::Live);
+        assert_eq!(
+            compute_liveness(true, HEARTBEAT_GRACE_SECS),
+            WorkerLiveness::Live
+        );
 
         // Hung: PID alive, heartbeat stale
-        assert_eq!(compute_liveness(true, HEARTBEAT_GRACE_SECS + 1), WorkerLiveness::Hung);
+        assert_eq!(
+            compute_liveness(true, HEARTBEAT_GRACE_SECS + 1),
+            WorkerLiveness::Hung
+        );
         assert_eq!(compute_liveness(true, 1000), WorkerLiveness::Hung);
     }
 

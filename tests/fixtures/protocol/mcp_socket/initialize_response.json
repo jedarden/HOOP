@@ -1,0 +1,16 @@
+{
+  "jsonrpc": "2.0",
+  "id": null,
+  "result": {
+    "protocol_version": "2024-11-05",
+    "capabilities": {
+      "tools": {
+        "list_changed": false
+      }
+    },
+    "server_info": {
+      "name": "hoop-mcp",
+      "version": "0.1.0"
+    }
+  }
+}

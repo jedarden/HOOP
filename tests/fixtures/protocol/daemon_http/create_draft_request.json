@@ -1,0 +1,10 @@
+{
+  "project": "test-project",
+  "title": "Investigate auth timeout",
+  "kind": "task",
+  "description": "Users report 30 second timeouts on login endpoint",
+  "has_acceptance_criteria": false,
+  "priority": 5,
+  "labels": ["auth"],
+  "source": "agent"
+}

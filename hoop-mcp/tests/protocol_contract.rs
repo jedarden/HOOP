@@ -39,9 +39,8 @@ fn load_fixture(relative: &str) -> serde_json::Value {
 fn test_initialize_request_mcp_parses_fixture() {
     let fixture = load_fixture("mcp_socket/initialize_request.json");
 
-    let req: hoop_mcp::protocol::JsonRpcRequest =
-        serde_json::from_value(fixture.clone())
-            .expect("JsonRpcRequest must deserialize from initialize fixture");
+    let req: hoop_mcp::protocol::JsonRpcRequest = serde_json::from_value(fixture.clone())
+        .expect("JsonRpcRequest must deserialize from initialize fixture");
 
     match req.method {
         hoop_mcp::protocol::Method::Initialize(params) => {
@@ -51,7 +50,9 @@ fn test_initialize_request_mcp_parses_fixture() {
             let expected_name = fixture["params"]["client_info"]["name"].as_str().unwrap();
             assert_eq!(params.client_info.name, expected_name);
 
-            let expected_ver = fixture["params"]["client_info"]["version"].as_str().unwrap();
+            let expected_ver = fixture["params"]["client_info"]["version"]
+                .as_str()
+                .unwrap();
             assert_eq!(params.client_info.version, expected_ver);
         }
         _ => panic!("expected Method::Initialize"),
@@ -76,15 +77,26 @@ fn test_initialize_response_mcp_serializes_fixture_shape() {
     let fixture_result = &fixture["result"];
 
     let result = InitializeResult {
-        protocol_version: fixture_result["protocol_version"].as_str().unwrap().to_string(),
+        protocol_version: fixture_result["protocol_version"]
+            .as_str()
+            .unwrap()
+            .to_string(),
         capabilities: ServerCapabilities {
-            tools: ToolsCapability { list_changed: false },
+            tools: ToolsCapability {
+                list_changed: false,
+            },
             prompts: None,
             resources: None,
         },
         server_info: ServerInfo {
-            name: fixture_result["server_info"]["name"].as_str().unwrap().to_string(),
-            version: fixture_result["server_info"]["version"].as_str().unwrap().to_string(),
+            name: fixture_result["server_info"]["name"]
+                .as_str()
+                .unwrap()
+                .to_string(),
+            version: fixture_result["server_info"]["version"]
+                .as_str()
+                .unwrap()
+                .to_string(),
         },
     };
 
@@ -96,7 +108,10 @@ fn test_initialize_response_mcp_serializes_fixture_shape() {
     let serialized = serde_json::to_value(&resp).unwrap();
 
     assert_eq!(serialized["jsonrpc"], fixture["jsonrpc"]);
-    assert!(serialized.get("result").is_some(), "response must have 'result'");
+    assert!(
+        serialized.get("result").is_some(),
+        "response must have 'result'"
+    );
 
     let serialized_result = &serialized["result"];
     for key in fixture_result.as_object().unwrap().keys() {
@@ -134,9 +149,8 @@ fn test_initialize_response_mcp_serializes_fixture_shape() {
 fn test_tools_call_request_mcp_parses_fixture() {
     let fixture = load_fixture("mcp_socket/tools_call_request.json");
 
-    let req: hoop_mcp::protocol::JsonRpcRequest =
-        serde_json::from_value(fixture.clone())
-            .expect("JsonRpcRequest must deserialize from tools_call fixture");
+    let req: hoop_mcp::protocol::JsonRpcRequest = serde_json::from_value(fixture.clone())
+        .expect("JsonRpcRequest must deserialize from tools_call fixture");
 
     match req.method {
         hoop_mcp::protocol::Method::ToolsCall(params) => {
@@ -174,7 +188,10 @@ fn test_tools_call_response_mcp_serializes_fixture_shape() {
     let fixture = load_fixture("mcp_socket/tools_call_response.json");
     let fixture_result = &fixture["result"];
 
-    let text = fixture_result["content"][0]["text"].as_str().unwrap().to_string();
+    let text = fixture_result["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     let result = ToolCallResult {
         content: vec![Content::Text { text }],
@@ -198,12 +215,14 @@ fn test_tools_call_response_mcp_serializes_fixture_shape() {
     );
 
     let serialized_content = serialized_result["content"].as_array().unwrap();
-    assert!(!serialized_content.is_empty(), "'content' must not be empty");
+    assert!(
+        !serialized_content.is_empty(),
+        "'content' must not be empty"
+    );
 
     let first = &serialized_content[0];
     assert_eq!(
-        first["type"],
-        fixture_result["content"][0]["type"],
+        first["type"], fixture_result["content"][0]["type"],
         "Content type must match fixture"
     );
     assert!(

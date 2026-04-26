@@ -39,7 +39,9 @@ impl EventContext {
     pub fn from_event(event: &NeedleEvent, event_json: &str) -> Self {
         let (event_type, bead_id, adapter) = match event {
             NeedleEvent::Claim { bead, .. } => ("claim", bead.clone(), None),
-            NeedleEvent::Dispatch { bead, adapter, .. } => ("dispatch", bead.clone(), adapter.clone()),
+            NeedleEvent::Dispatch { bead, adapter, .. } => {
+                ("dispatch", bead.clone(), adapter.clone())
+            }
             NeedleEvent::Complete { bead, .. } => ("complete", bead.clone(), None),
             NeedleEvent::Fail { bead, .. } => ("fail", bead.clone(), None),
             NeedleEvent::Timeout { bead, .. } => ("timeout", bead.clone(), None),
@@ -169,10 +171,7 @@ pub async fn trigger_matching_scripts(
         .filter(|script_entry| {
             // Skip if not executable
             if !script_entry.executable {
-                debug!(
-                    "Skipping script '{}': not executable",
-                    script_entry.name
-                );
+                debug!("Skipping script '{}': not executable", script_entry.name);
                 return false;
             }
 
@@ -224,10 +223,7 @@ pub async fn trigger_matching_scripts(
 }
 
 /// Execute a single script with event JSON on stdin
-async fn trigger_script(
-    script_entry: &ScriptEntry,
-    ctx: &EventContext,
-) -> ScriptTriggerResult {
+async fn trigger_script(script_entry: &ScriptEntry, ctx: &EventContext) -> ScriptTriggerResult {
     use tokio::process::Command;
     use tokio::time::{timeout, Duration};
 
@@ -276,10 +272,7 @@ async fn trigger_script(
         Ok(Ok(status)) => {
             let succeeded = status.success();
             if !succeeded {
-                let error = format!(
-                    "Script '{}' exited with status: {}",
-                    script_name, status
-                );
+                let error = format!("Script '{}' exited with status: {}", script_name, status);
                 warn!("{}", error);
                 ScriptTriggerResult {
                     script_name,
@@ -478,7 +471,8 @@ mod tests {
 
     #[test]
     fn test_event_context_from_claim_event() {
-        let event_json = r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-abc123"}"#;
+        let event_json =
+            r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-abc123"}"#;
         let event: NeedleEvent = serde_json::from_str(event_json).unwrap();
 
         let ctx = EventContext::from_event(&event, event_json);

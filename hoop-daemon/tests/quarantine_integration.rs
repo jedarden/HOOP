@@ -56,7 +56,10 @@ fn bad_line_quarantined_and_reader_continues() {
 
     // Verify quarantine directory structure
     assert!(quarantine_dir.exists(), "quarantine dir should exist");
-    let date_dirs: Vec<_> = fs::read_dir(&quarantine_dir).unwrap().collect::<Result<_, _>>().unwrap();
+    let date_dirs: Vec<_> = fs::read_dir(&quarantine_dir)
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
     assert_eq!(date_dirs.len(), 1, "should have one date directory");
 
     let entries: Vec<_> = fs::read_dir(date_dirs[0].path())
@@ -70,7 +73,10 @@ fn bad_line_quarantined_and_reader_continues() {
         serde_json::from_str(&fs::read_to_string(entries[0].path()).unwrap()).unwrap();
     assert_eq!(entry["tag"], "integration_test");
     assert!(entry["line"].as_str().unwrap().contains("NOT JSON"));
-    assert!(entry["source_path"].as_str().unwrap().contains("test.jsonl"));
+    assert!(entry["source_path"]
+        .as_str()
+        .unwrap()
+        .contains("test.jsonl"));
     assert_eq!(entry["line_number"], 2);
 
     std::env::remove_var("HOOP_QUARANTINE_DIR");
@@ -97,7 +103,10 @@ fn quarantine_raw_for_custom_malformed_detection() {
     );
 
     // Verify quarantine was populated
-    let date_dirs: Vec<_> = fs::read_dir(&quarantine_dir).unwrap().collect::<Result<_, _>>().unwrap();
+    let date_dirs: Vec<_> = fs::read_dir(&quarantine_dir)
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
     assert_eq!(date_dirs.len(), 1);
 
     let entries: Vec<_> = fs::read_dir(date_dirs[0].path())

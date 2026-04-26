@@ -7,9 +7,9 @@
 //!
 //! Submit flow: draft → validate → dedup check → br create → audit → WS event → response
 
-use crate::br_verbs::{invoke_br_read, propagate_stitch_labels, ReadVerb};
 #[cfg(not(feature = "zero-write-v01"))]
 use crate::br_verbs::invoke_br_create;
+use crate::br_verbs::{invoke_br_read, propagate_stitch_labels, ReadVerb};
 use crate::fleet::{self, ActionKind, ActionResult, BeadActionArgs, BeadSource};
 use crate::pattern_query_evaluator;
 use crate::ws::StitchCreatedData;
@@ -160,7 +160,8 @@ async fn check_dedup(
     State(state): State<crate::DaemonState>,
     Json(req): Json<DedupCheckRequest>,
 ) -> Result<Json<DedupCheckResponse>, (StatusCode, String)> {
-    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_project_name(&project)
+        .map_err(crate::id_validators::rejection)?;
     let _ = resolve_project_path(&project, &state)?;
 
     let title = req.title.trim().to_string();
@@ -204,7 +205,8 @@ async fn dismiss_dedup(
     Path(project): Path<String>,
     State(state): State<crate::DaemonState>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_project_name(&project)
+        .map_err(crate::id_validators::rejection)?;
     let _ = resolve_project_path(&project, &state)?;
     state.vector_index.read().unwrap().report_false_positive();
     Ok(Json(serde_json::json!({"status": "ok"})))
@@ -214,9 +216,7 @@ async fn dismiss_dedup(
 ///
 /// Returns index size, rebuild progress, model info, and false positive rate.
 /// Used by the UI to show rebuild progress during model changes (hoop-ttb.5.9.1).
-async fn get_vector_index_stats(
-    State(state): State<crate::DaemonState>,
-) -> Json<VectorIndexStats> {
+async fn get_vector_index_stats(State(state): State<crate::DaemonState>) -> Json<VectorIndexStats> {
     let index = state.vector_index.read().unwrap();
     let (current, total) = index.rebuild_progress();
     Json(VectorIndexStats {
@@ -267,7 +267,10 @@ pub(crate) fn parse_source(source_str: &str) -> (BeadSource, String) {
         return (BeadSource::Form, "form".to_string());
     }
     if source_str.starts_with("template:") {
-        let name = source_str.strip_prefix("template:").unwrap_or("").to_string();
+        let name = source_str
+            .strip_prefix("template:")
+            .unwrap_or("")
+            .to_string();
         return (BeadSource::Template, format!("template:{}", name));
     }
     let source = match source_str {
@@ -323,7 +326,8 @@ async fn list_open_beads(
     Path(project): Path<String>,
     State(state): State<crate::DaemonState>,
 ) -> Result<Json<Vec<BeadSummary>>, (StatusCode, String)> {
-    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_project_name(&project)
+        .map_err(crate::id_validators::rejection)?;
     let project_path = resolve_project_path(&project, &state)?;
 
     let result = tokio::task::spawn_blocking(move || {
@@ -371,7 +375,12 @@ async fn list_open_beads(
         Ok::<Vec<BeadSummary>, String>(summaries)
     })
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Task failed: {}", e)))?
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Task failed: {}", e),
+        )
+    })?
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
     Ok(Json(result))
@@ -396,14 +405,18 @@ async fn create_bead(
     #[cfg(feature = "zero-write-v01")]
     {
         let _ = (&state, connect_info, req);
-        return Err((StatusCode::FORBIDDEN, "Bead creation is disabled in zero-write mode".to_string()));
+        return Err((
+            StatusCode::FORBIDDEN,
+            "Bead creation is disabled in zero-write mode".to_string(),
+        ));
     }
 
     // 1. Validate draft against schema
     validate_draft(&req)?;
 
     // 1a. Validate project name
-    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_project_name(&project)
+        .map_err(crate::id_validators::rejection)?;
 
     // 1b. Validate IDs in request body
     if let Some(ref sid) = req.stitch_id {
@@ -425,13 +438,19 @@ async fn create_bead(
                 best.item.id,
                 best.item.title
             );
-            let matches_json = serde_json::to_value(dedup_matches.iter().map(|m| DedupMatchRef {
-                id: m.item.id.clone(),
-                project: m.item.project.clone(),
-                title: m.item.title.clone(),
-                kind: m.item.kind.clone(),
-                similarity: m.similarity,
-            }).collect::<Vec<_>>()).unwrap_or(serde_json::Value::Null);
+            let matches_json = serde_json::to_value(
+                dedup_matches
+                    .iter()
+                    .map(|m| DedupMatchRef {
+                        id: m.item.id.clone(),
+                        project: m.item.project.clone(),
+                        title: m.item.title.clone(),
+                        kind: m.item.kind.clone(),
+                        similarity: m.similarity,
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap_or(serde_json::Value::Null);
             let error_json = serde_json::json!({
                 "message": message,
                 "dedup_matches": matches_json,
@@ -447,7 +466,10 @@ async fn create_bead(
     if !beads_dir.exists() {
         return Err((
             StatusCode::UNPROCESSABLE_ENTITY,
-            format!("Project '{}' has no .beads directory — cannot create beads", project),
+            format!(
+                "Project '{}' has no .beads directory — cannot create beads",
+                project
+            ),
         ));
     }
 
@@ -524,8 +546,18 @@ async fn create_bead(
         cmd.output()
     })
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Task join failed: {}", e)))?
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to run br: {}", e)))?;
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Task join failed: {}", e),
+        )
+    })?
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to run br: {}", e),
+        )
+    })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -634,7 +666,9 @@ async fn create_bead(
         source: source_str.clone(),
         ts: created_at.clone(),
     };
-    let _ = state.bead_created_by_hoop_tx.send(bead_created_by_hoop_event);
+    let _ = state
+        .bead_created_by_hoop_tx
+        .send(bead_created_by_hoop_event);
 
     // 5.5. Evaluate pattern queries for auto-including stitches
     if let Some(sid) = &stitch_id {
@@ -692,10 +726,15 @@ fn bead_type_str(t: &crate::BeadType) -> String {
 /// Look up a bead's labels via `br get --json`.
 ///
 /// Used by Hook 4 to inherit stitch labels from a parent bead.
-fn lookup_bead_labels(project_path: &std::path::Path, bead_id: &str) -> Result<Vec<String>, String> {
+fn lookup_bead_labels(
+    project_path: &std::path::Path,
+    bead_id: &str,
+) -> Result<Vec<String>, String> {
     let mut cmd = invoke_br_read(ReadVerb::Get, &[bead_id, "--json"]);
     cmd.current_dir(project_path);
-    let output = cmd.output().map_err(|e| format!("Failed to run br get: {}", e))?;
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Failed to run br get: {}", e))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -703,8 +742,8 @@ fn lookup_bead_labels(project_path: &std::path::Path, bead_id: &str) -> Result<V
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let bead_json: serde_json::Value =
-        serde_json::from_str(&stdout).map_err(|e| format!("Failed to parse br get output: {}", e))?;
+    let bead_json: serde_json::Value = serde_json::from_str(&stdout)
+        .map_err(|e| format!("Failed to parse br get output: {}", e))?;
 
     bead_json
         .get("labels")
@@ -731,8 +770,8 @@ fn list_via_br(project_path: &std::path::Path) -> Result<Vec<BeadSummary>, Strin
     }
 
     let json = String::from_utf8_lossy(&output.stdout);
-    let beads: Vec<serde_json::Value> =
-        serde_json::from_str(&json).map_err(|e| format!("Failed to parse br list output: {}", e))?;
+    let beads: Vec<serde_json::Value> = serde_json::from_str(&json)
+        .map_err(|e| format!("Failed to parse br list output: {}", e))?;
 
     let summaries = beads
         .into_iter()
@@ -753,10 +792,7 @@ fn list_via_br(project_path: &std::path::Path) -> Result<Vec<BeadSummary>, Strin
                 .and_then(|v| v.as_str())
                 .unwrap_or("task")
                 .to_string(),
-            priority: b
-                .get("priority")
-                .and_then(|v| v.as_i64())
-                .unwrap_or(0),
+            priority: b.get("priority").and_then(|v| v.as_i64()).unwrap_or(0),
             dependencies: b
                 .get("dependencies")
                 .and_then(|v| v.as_array())
@@ -965,7 +1001,11 @@ mod tests {
                 force_create: false,
                 parent_bead_id: None,
             };
-            assert!(validate_draft(&req).is_ok(), "issue_type '{}' should be valid", it);
+            assert!(
+                validate_draft(&req).is_ok(),
+                "issue_type '{}' should be valid",
+                it
+            );
         }
     }
 
@@ -981,10 +1021,7 @@ mod tests {
 
     #[test]
     fn test_stitch_label_inheritance_single_label() {
-        let parent_labels = vec![
-            "stitch:abc123".to_string(),
-            "urgent".to_string(),
-        ];
+        let parent_labels = vec!["stitch:abc123".to_string(), "urgent".to_string()];
         let mut all_labels: Vec<String> = vec!["tests".to_string()];
         propagate_stitch_labels(&mut all_labels, &parent_labels);
         assert!(all_labels.contains(&"stitch:abc123".to_string()));
@@ -1006,10 +1043,7 @@ mod tests {
 
     #[test]
     fn test_stitch_label_inheritance_no_duplicates() {
-        let parent_labels = vec![
-            "stitch:abc123".to_string(),
-            "stitch:abc123".to_string(),
-        ];
+        let parent_labels = vec!["stitch:abc123".to_string(), "stitch:abc123".to_string()];
         let mut all_labels: Vec<String> = vec!["stitch:abc123".to_string()];
         propagate_stitch_labels(&mut all_labels, &parent_labels);
         assert_eq!(all_labels, vec!["stitch:abc123"]);
@@ -1017,10 +1051,7 @@ mod tests {
 
     #[test]
     fn test_stitch_label_inheritance_no_stitch_labels() {
-        let parent_labels = vec![
-            "urgent".to_string(),
-            "bug".to_string(),
-        ];
+        let parent_labels = vec!["urgent".to_string(), "bug".to_string()];
         let mut all_labels: Vec<String> = vec!["tests".to_string()];
         propagate_stitch_labels(&mut all_labels, &parent_labels);
         assert_eq!(all_labels, vec!["tests"]);

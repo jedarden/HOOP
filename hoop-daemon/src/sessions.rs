@@ -12,13 +12,13 @@
 //! Multi-adapter support: each adapter implements SessionAdapter trait for
 //! discovery and parsing of its session file format.
 
+use crate::tag_join;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use hoop_schema::{
-    ParsedSession, ParsedSessionKind,
-    ParsedSessionMessagesItem, ParsedSessionMessagesItemUsage, ParsedSessionTotalUsage,
+    ParsedSession, ParsedSessionKind, ParsedSessionMessagesItem, ParsedSessionMessagesItemUsage,
+    ParsedSessionTotalUsage,
 };
-use crate::tag_join;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use rayon::prelude::*;
 use serde::Deserialize;
@@ -48,7 +48,8 @@ fn resolve_canonical_cwd(cwd: &str) -> String {
 
 fn cwd_matches_project(cwd: &str, project_path: &Path) -> bool {
     let resolved_cwd = std::fs::canonicalize(cwd).unwrap_or_else(|_| PathBuf::from(cwd));
-    let resolved_project = std::fs::canonicalize(project_path).unwrap_or_else(|_| project_path.to_path_buf());
+    let resolved_project =
+        std::fs::canonicalize(project_path).unwrap_or_else(|_| project_path.to_path_buf());
     let cwd_str = resolved_cwd.to_string_lossy();
     let project_str = resolved_project.to_string_lossy();
     if cwd_str == *project_str {
@@ -230,7 +231,11 @@ trait SessionAdapter: Send + Sync {
     fn discover_sessions(&self, project_path: Option<&Path>) -> Vec<DiscoveredFile>;
 
     /// Parse a single session file
-    fn parse_session_file(&self, path: &Path, project_path: Option<&Path>) -> Result<Option<ParsedSession>>;
+    fn parse_session_file(
+        &self,
+        path: &Path,
+        project_path: Option<&Path>,
+    ) -> Result<Option<ParsedSession>>;
 }
 
 /// Claude Code adapter - parses ~/.claude/projects/**/*.jsonl
@@ -255,7 +260,11 @@ impl SessionAdapter for ClaudeAdapter {
         discovered
     }
 
-    fn parse_session_file(&self, path: &Path, project_path: Option<&Path>) -> Result<Option<ParsedSession>> {
+    fn parse_session_file(
+        &self,
+        path: &Path,
+        project_path: Option<&Path>,
+    ) -> Result<Option<ParsedSession>> {
         SessionTailer::parse_claude_session_file(path, project_path)
     }
 }
@@ -282,7 +291,11 @@ impl SessionAdapter for CodexAdapter {
         discovered
     }
 
-    fn parse_session_file(&self, path: &Path, project_path: Option<&Path>) -> Result<Option<ParsedSession>> {
+    fn parse_session_file(
+        &self,
+        path: &Path,
+        project_path: Option<&Path>,
+    ) -> Result<Option<ParsedSession>> {
         SessionTailer::parse_codex_session_file(path, project_path)
     }
 }
@@ -356,7 +369,11 @@ impl SessionAdapter for OpenCodeAdapter {
         discovered
     }
 
-    fn parse_session_file(&self, path: &Path, project_path: Option<&Path>) -> Result<Option<ParsedSession>> {
+    fn parse_session_file(
+        &self,
+        path: &Path,
+        project_path: Option<&Path>,
+    ) -> Result<Option<ParsedSession>> {
         if path.extension().map(|e| e == "json").unwrap_or(false) {
             SessionTailer::parse_opencode_tree_session(path, project_path)
         } else {
@@ -383,7 +400,9 @@ impl OpenCodeAdapter {
             if metadata.is_dir() {
                 Self::scan_directory_recursive_json(&path, discovered)?;
             } else if path.extension().map(|e| e == "json").unwrap_or(false) {
-                let mtime = metadata.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                let mtime = metadata
+                    .modified()
+                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
                 discovered.push(DiscoveredFile {
                     path,
                     mtime,
@@ -417,7 +436,11 @@ impl SessionAdapter for GeminiAdapter {
         discovered
     }
 
-    fn parse_session_file(&self, path: &Path, project_path: Option<&Path>) -> Result<Option<ParsedSession>> {
+    fn parse_session_file(
+        &self,
+        path: &Path,
+        project_path: Option<&Path>,
+    ) -> Result<Option<ParsedSession>> {
         SessionTailer::parse_gemini_session_file(path, project_path)
     }
 }
@@ -444,7 +467,11 @@ impl SessionAdapter for AiderAdapter {
         discovered
     }
 
-    fn parse_session_file(&self, path: &Path, project_path: Option<&Path>) -> Result<Option<ParsedSession>> {
+    fn parse_session_file(
+        &self,
+        path: &Path,
+        project_path: Option<&Path>,
+    ) -> Result<Option<ParsedSession>> {
         // Aider uses similar format to Claude, can use Claude parser
         SessionTailer::parse_aider_session_file(path, project_path)
     }
@@ -562,7 +589,10 @@ impl SessionTailer {
                 .collect()
         };
 
-        let state = SessionTailerState { adapters, ..Default::default() };
+        let state = SessionTailerState {
+            adapters,
+            ..Default::default()
+        };
 
         Ok(Self {
             config,
@@ -641,18 +671,16 @@ impl SessionTailer {
         let project_path = self.config.project_path.clone();
 
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(interval_secs));
+            let mut interval =
+                tokio::time::interval(tokio::time::Duration::from_secs(interval_secs));
             loop {
                 interval.tick().await;
 
                 // Check for external edits by re-running discovery
                 // Bootstrap interceptor will handle aliasing
-                if let Err(e) = Self::do_discovery(
-                    &state,
-                    &event_tx,
-                    project_path.as_deref(),
-                    false,
-                ) {
+                if let Err(e) =
+                    Self::do_discovery(&state, &event_tx, project_path.as_deref(), false)
+                {
                     warn!("Error during background discovery: {}", e);
                 }
             }
@@ -671,8 +699,7 @@ impl SessionTailer {
 
         // Check if the event is for a JSONL file
         let relevant = event.paths.iter().any(|p| {
-            p.extension().map(|e| e == "jsonl").unwrap_or(false)
-                && p.starts_with(claude_dir)
+            p.extension().map(|e| e == "jsonl").unwrap_or(false) && p.starts_with(claude_dir)
         });
 
         if !relevant {
@@ -684,12 +711,8 @@ impl SessionTailer {
         match event.kind {
             Create(_) | Modify(_) => {
                 // Trigger discovery for the modified file
-                if let Err(e) = Self::do_discovery(
-                    &state,
-                    event_tx,
-                    project_path.as_deref(),
-                    false,
-                ) {
+                if let Err(e) = Self::do_discovery(&state, event_tx, project_path.as_deref(), false)
+                {
                     warn!("Error handling session file change: {}", e);
                 }
             }
@@ -747,11 +770,8 @@ impl SessionTailer {
         )?;
 
         // Apply bootstrap interceptor (alias new files to existing IDs)
-        let sessions = Self::apply_bootstrap_interceptor(
-            sessions,
-            &mut state.lock().unwrap(),
-            event_tx,
-        );
+        let sessions =
+            Self::apply_bootstrap_interceptor(sessions, &mut state.lock().unwrap(), event_tx);
 
         // Send sessions in batches of 100 for progressive streaming
         const BATCH_SIZE: usize = 100;
@@ -789,7 +809,9 @@ impl SessionTailer {
                 // Recurse into subdirectories
                 Self::scan_directory_recursive(&path, discovered)?;
             } else if path.extension().map(|e| e == "jsonl").unwrap_or(false) {
-                let mtime = metadata.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+                let mtime = metadata
+                    .modified()
+                    .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
                 discovered.push(DiscoveredFile {
                     path,
                     mtime,
@@ -909,7 +931,8 @@ impl SessionTailer {
                                 .iter()
                                 .find(|m| m.role == "user")
                                 .and_then(|m| {
-                                    m.content.as_str()
+                                    m.content
+                                        .as_str()
                                         .and_then(|s| s.chars().take(50).collect::<String>().into())
                                 })
                                 .unwrap_or_else(|| String::from("(Untitled)"))
@@ -956,7 +979,8 @@ impl SessionTailer {
                 .iter()
                 .find(|m| m.role == "user")
                 .and_then(|m| {
-                    m.content.as_str()
+                    m.content
+                        .as_str()
                         .and_then(|s| s.chars().take(50).collect::<String>().into())
                 })
                 .unwrap_or_else(|| String::from("(Untitled)"))
@@ -972,7 +996,11 @@ impl SessionTailer {
             provider: "claude".to_string(),
             kind,
             cwd,
-            canonical_cwd: if canonical_cwd.is_empty() { None } else { Some(canonical_cwd) },
+            canonical_cwd: if canonical_cwd.is_empty() {
+                None
+            } else {
+                Some(canonical_cwd)
+            },
             title,
             messages,
             total_usage,
@@ -1020,20 +1048,36 @@ impl SessionTailer {
 
             if let Some(existing_id) = state.bootstrap_matches.get(&key).cloned() {
                 // Found a match - alias this file to the existing session ID
-                state.path_to_id.insert(file_path.clone(), existing_id.clone());
+                state
+                    .path_to_id
+                    .insert(file_path.clone(), existing_id.clone());
                 state.id_to_path.insert(existing_id.clone(), file_path);
                 // Emit session_bound event
                 let _ = event_tx.send(SessionEvent::SessionBound {
                     id: existing_id.clone(),
                     file_path: session.file_path.clone(),
                 });
-                maybe_emit_session_bound(event_tx, &existing_id, &session.session_id, &session.kind, state);
+                maybe_emit_session_bound(
+                    event_tx,
+                    &existing_id,
+                    &session.session_id,
+                    &session.kind,
+                    state,
+                );
             } else {
                 // New session - register it
-                state.id_to_path.insert(session.id.clone(), file_path.clone());
+                state
+                    .id_to_path
+                    .insert(session.id.clone(), file_path.clone());
                 state.path_to_id.insert(file_path, session.id.clone());
                 state.bootstrap_matches.insert(key, session.id.clone());
-                maybe_emit_session_bound(event_tx, &session.id, &session.session_id, &session.kind, state);
+                maybe_emit_session_bound(
+                    event_tx,
+                    &session.id,
+                    &session.session_id,
+                    &session.kind,
+                    state,
+                );
                 result.push(session);
             }
         }
@@ -1091,27 +1135,35 @@ impl SessionTailer {
                 file_path: path.to_path_buf(),
                 line_number,
             };
-            let value = match crate::parse_jsonl_safe::parse_line::<serde_json::Value>(&line, &source) {
-                crate::parse_jsonl_safe::ParseResult::Ok(v) => v,
-                _ => continue,
-            };
+            let value =
+                match crate::parse_jsonl_safe::parse_line::<serde_json::Value>(&line, &source) {
+                    crate::parse_jsonl_safe::ParseResult::Ok(v) => v,
+                    _ => continue,
+                };
 
             let event_type = value.get("type").and_then(|v| v.as_str());
 
             match event_type {
                 Some("message") | Some("text") => {
-                    let role = value.get("role")
+                    let role = value
+                        .get("role")
                         .and_then(|v| v.as_str())
                         .unwrap_or("user")
                         .to_string();
 
-                    let content = value.get("content").cloned()
+                    let content = value
+                        .get("content")
+                        .cloned()
                         .unwrap_or(serde_json::Value::Null);
 
                     let usage = value.get("token_count").and_then(|tc| {
                         tc.as_u64().map(|tokens| ParsedSessionMessagesItemUsage {
                             input_tokens: if role == "user" { tokens as i64 } else { 0 },
-                            output_tokens: if role == "assistant" { tokens as i64 } else { 0 },
+                            output_tokens: if role == "assistant" {
+                                tokens as i64
+                            } else {
+                                0
+                            },
                             cache_read_tokens: 0,
                             cache_write_tokens: 0,
                         })
@@ -1127,7 +1179,8 @@ impl SessionTailer {
                         first_user_content = extract_text_content(&content);
                     }
 
-                    let timestamp = value.get("timestamp")
+                    let timestamp = value
+                        .get("timestamp")
                         .and_then(|v| v.as_str())
                         .and_then(|s| s.parse().ok());
 
@@ -1139,30 +1192,35 @@ impl SessionTailer {
                     });
                 }
                 Some("session_start") | Some("metadata") => {
-                    session_id = value.get("session_id")
+                    session_id = value
+                        .get("session_id")
                         .and_then(|v| v.as_str())
                         .or_else(|| value.get("id").and_then(|v| v.as_str()))
                         .unwrap_or(&uuid::Uuid::new_v4().to_string())
                         .to_string();
 
-                    cwd = value.get("cwd")
+                    cwd = value
+                        .get("cwd")
                         .and_then(|v| v.as_str())
                         .or_else(|| value.get("working_directory").and_then(|v| v.as_str()))
                         .unwrap_or(&cwd)
                         .to_string();
 
-                    title = value.get("title")
+                    title = value
+                        .get("title")
                         .and_then(|v| v.as_str())
                         .unwrap_or(&title)
                         .to_string();
 
-                    start_time = value.get("start_time")
+                    start_time = value
+                        .get("start_time")
                         .or_else(|| value.get("created_at"))
                         .and_then(|v| v.as_str())
                         .and_then(|s| s.parse().ok());
                 }
                 Some("session_end") | Some("completed") => {
-                    end_time = value.get("end_time")
+                    end_time = value
+                        .get("end_time")
                         .or_else(|| value.get("completed_at"))
                         .and_then(|v| v.as_str())
                         .and_then(|s| s.parse().ok());
@@ -1197,7 +1255,8 @@ impl SessionTailer {
                 .iter()
                 .find(|m| m.role == "user")
                 .and_then(|m| {
-                    m.content.as_str()
+                    m.content
+                        .as_str()
                         .and_then(|s| s.chars().take(50).collect::<String>().into())
                 })
                 .unwrap_or_else(|| String::from("(Untitled)"))
@@ -1213,7 +1272,11 @@ impl SessionTailer {
             provider: "codex".to_string(),
             kind,
             cwd,
-            canonical_cwd: if canonical_cwd.is_empty() { None } else { Some(canonical_cwd) },
+            canonical_cwd: if canonical_cwd.is_empty() {
+                None
+            } else {
+                Some(canonical_cwd)
+            },
             title,
             messages,
             total_usage,
@@ -1242,10 +1305,12 @@ impl SessionTailer {
             .unwrap_or_else(|| OpenCodeAdapter::storage_dir().join("storage"));
 
         let session_data: serde_json::Value = {
-            let raw = fs::read(session_path)
-                .with_context(|| format!("Failed to read session file {}", session_path.display()))?;
-            serde_json::from_slice(&raw)
-                .with_context(|| format!("Failed to parse session JSON {}", session_path.display()))?
+            let raw = fs::read(session_path).with_context(|| {
+                format!("Failed to read session file {}", session_path.display())
+            })?;
+            serde_json::from_slice(&raw).with_context(|| {
+                format!("Failed to parse session JSON {}", session_path.display())
+            })?
         };
 
         let session_id = session_data
@@ -1352,9 +1417,7 @@ impl SessionTailer {
             }
 
             // Per-message cost (parsed but accumulated into total for downstream use)
-            let _cost: Option<f64> = msg_data
-                .get("cost")
-                .and_then(|v| v.as_f64());
+            let _cost: Option<f64> = msg_data.get("cost").and_then(|v| v.as_f64());
 
             // Load parts to assemble content
             let part_ids = msg_data
@@ -1390,7 +1453,10 @@ impl SessionTailer {
                                 .or_else(|| part_data.get("name"))
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("unknown");
-                            let input = part_data.get("input").cloned().unwrap_or(serde_json::Value::Null);
+                            let input = part_data
+                                .get("input")
+                                .cloned()
+                                .unwrap_or(serde_json::Value::Null);
                             content_parts.push(serde_json::json!({
                                 "type": "tool_use",
                                 "name": tool_name,
@@ -1518,34 +1584,42 @@ impl SessionTailer {
                 file_path: path.to_path_buf(),
                 line_number,
             };
-            let value = match crate::parse_jsonl_safe::parse_line::<serde_json::Value>(&line, &source) {
-                crate::parse_jsonl_safe::ParseResult::Ok(v) => v,
-                _ => continue,
-            };
+            let value =
+                match crate::parse_jsonl_safe::parse_line::<serde_json::Value>(&line, &source) {
+                    crate::parse_jsonl_safe::ParseResult::Ok(v) => v,
+                    _ => continue,
+                };
 
             let event_type = value.get("type").and_then(|v| v.as_str());
 
             match event_type {
                 Some("message") => {
-                    let role = value.get("role")
+                    let role = value
+                        .get("role")
                         .and_then(|v| v.as_str())
                         .unwrap_or("user")
                         .to_string();
 
-                    let content = value.get("content").cloned()
+                    let content = value
+                        .get("content")
+                        .cloned()
                         .unwrap_or(serde_json::Value::Null);
 
                     let usage = if let Some(tokens_obj) = value.get("tokens") {
-                        let input = tokens_obj.get("input")
+                        let input = tokens_obj
+                            .get("input")
                             .and_then(|v| v.as_u64())
                             .unwrap_or(0) as i64;
-                        let output = tokens_obj.get("output")
+                        let output = tokens_obj
+                            .get("output")
                             .and_then(|v| v.as_u64())
                             .unwrap_or(0) as i64;
-                        let cache_read = tokens_obj.get("cache_read")
+                        let cache_read = tokens_obj
+                            .get("cache_read")
                             .and_then(|v| v.as_u64())
                             .unwrap_or(0) as i64;
-                        let cache_write = tokens_obj.get("cache_write")
+                        let cache_write = tokens_obj
+                            .get("cache_write")
                             .and_then(|v| v.as_u64())
                             .unwrap_or(0) as i64;
 
@@ -1556,12 +1630,23 @@ impl SessionTailer {
                             cache_write_tokens: cache_write,
                         })
                     } else {
-                        value.get("token_count").and_then(|v| v.as_u64()).map(|token_count| ParsedSessionMessagesItemUsage {
-                            input_tokens: if role == "user" { token_count as i64 } else { 0 },
-                            output_tokens: if role == "assistant" { token_count as i64 } else { 0 },
-                            cache_read_tokens: 0,
-                            cache_write_tokens: 0,
-                        })
+                        value
+                            .get("token_count")
+                            .and_then(|v| v.as_u64())
+                            .map(|token_count| ParsedSessionMessagesItemUsage {
+                                input_tokens: if role == "user" {
+                                    token_count as i64
+                                } else {
+                                    0
+                                },
+                                output_tokens: if role == "assistant" {
+                                    token_count as i64
+                                } else {
+                                    0
+                                },
+                                cache_read_tokens: 0,
+                                cache_write_tokens: 0,
+                            })
                     };
 
                     if let Some(u) = &usage {
@@ -1576,7 +1661,8 @@ impl SessionTailer {
                         first_user_content = extract_text_content(&content);
                     }
 
-                    let timestamp = value.get("timestamp")
+                    let timestamp = value
+                        .get("timestamp")
                         .and_then(|v| v.as_str())
                         .and_then(|s| s.parse().ok());
 
@@ -1588,30 +1674,35 @@ impl SessionTailer {
                     });
                 }
                 Some("metadata") | Some("session") => {
-                    session_id = value.get("session_id")
+                    session_id = value
+                        .get("session_id")
                         .or_else(|| value.get("id"))
                         .and_then(|v| v.as_str())
                         .unwrap_or(&uuid::Uuid::new_v4().to_string())
                         .to_string();
 
-                    cwd = value.get("cwd")
+                    cwd = value
+                        .get("cwd")
                         .or_else(|| value.get("working_directory"))
                         .and_then(|v| v.as_str())
                         .unwrap_or(&cwd)
                         .to_string();
 
-                    title = value.get("title")
+                    title = value
+                        .get("title")
                         .and_then(|v| v.as_str())
                         .unwrap_or(&title)
                         .to_string();
 
-                    start_time = value.get("start_time")
+                    start_time = value
+                        .get("start_time")
                         .or_else(|| value.get("created_at"))
                         .and_then(|v| v.as_str())
                         .and_then(|s| s.parse().ok());
                 }
                 Some("end") | Some("complete") => {
-                    end_time = value.get("end_time")
+                    end_time = value
+                        .get("end_time")
                         .or_else(|| value.get("completed_at"))
                         .and_then(|v| v.as_str())
                         .and_then(|s| s.parse().ok());
@@ -1644,7 +1735,8 @@ impl SessionTailer {
                 .iter()
                 .find(|m| m.role == "user")
                 .and_then(|m| {
-                    m.content.as_str()
+                    m.content
+                        .as_str()
                         .and_then(|s| s.chars().take(50).collect::<String>().into())
                 })
                 .unwrap_or_else(|| String::from("(Untitled)"))
@@ -1660,7 +1752,11 @@ impl SessionTailer {
             provider: "opencode".to_string(),
             kind,
             cwd,
-            canonical_cwd: if canonical_cwd.is_empty() { None } else { Some(canonical_cwd) },
+            canonical_cwd: if canonical_cwd.is_empty() {
+                None
+            } else {
+                Some(canonical_cwd)
+            },
             title,
             messages,
             total_usage,
@@ -1704,37 +1800,45 @@ impl SessionTailer {
                 file_path: path.to_path_buf(),
                 line_number,
             };
-            let value = match crate::parse_jsonl_safe::parse_line::<serde_json::Value>(&line, &source) {
-                crate::parse_jsonl_safe::ParseResult::Ok(v) => v,
-                _ => continue,
-            };
+            let value =
+                match crate::parse_jsonl_safe::parse_line::<serde_json::Value>(&line, &source) {
+                    crate::parse_jsonl_safe::ParseResult::Ok(v) => v,
+                    _ => continue,
+                };
 
             let event_type = value.get("type").and_then(|v| v.as_str());
 
             match event_type {
                 Some("message") | Some("turn") => {
-                    let role = value.get("role")
+                    let role = value
+                        .get("role")
                         .and_then(|v| v.as_str())
                         .unwrap_or("user")
                         .to_string();
 
-                    let content = value.get("content").cloned()
+                    let content = value
+                        .get("content")
+                        .cloned()
                         .unwrap_or(serde_json::Value::Null);
 
                     let usage = if let Some(usage_obj) = value.get("usage") {
-                        let input = usage_obj.get("promptTokenCount")
+                        let input = usage_obj
+                            .get("promptTokenCount")
                             .or_else(|| usage_obj.get("input_tokens"))
                             .and_then(|v| v.as_u64())
                             .unwrap_or(0) as i64;
-                        let output = usage_obj.get("candidatesTokenCount")
+                        let output = usage_obj
+                            .get("candidatesTokenCount")
                             .or_else(|| usage_obj.get("output_tokens"))
                             .and_then(|v| v.as_u64())
                             .unwrap_or(0) as i64;
-                        let cache_read = usage_obj.get("cachedContentTokenCount")
+                        let cache_read = usage_obj
+                            .get("cachedContentTokenCount")
                             .or_else(|| usage_obj.get("cache_read_tokens"))
                             .and_then(|v| v.as_u64())
                             .unwrap_or(0) as i64;
-                        let cache_write = usage_obj.get("cache_write_tokens")
+                        let cache_write = usage_obj
+                            .get("cache_write_tokens")
                             .and_then(|v| v.as_u64())
                             .unwrap_or(0) as i64;
 
@@ -1760,7 +1864,8 @@ impl SessionTailer {
                         first_user_content = extract_text_content(&content);
                     }
 
-                    let timestamp = value.get("timestamp")
+                    let timestamp = value
+                        .get("timestamp")
                         .or_else(|| value.get("time"))
                         .and_then(|v| v.as_str())
                         .and_then(|s| s.parse().ok());
@@ -1773,30 +1878,35 @@ impl SessionTailer {
                     });
                 }
                 Some("metadata") | Some("session_info") => {
-                    session_id = value.get("session_id")
+                    session_id = value
+                        .get("session_id")
                         .or_else(|| value.get("id"))
                         .and_then(|v| v.as_str())
                         .unwrap_or(&uuid::Uuid::new_v4().to_string())
                         .to_string();
 
-                    cwd = value.get("cwd")
+                    cwd = value
+                        .get("cwd")
                         .or_else(|| value.get("working_directory"))
                         .and_then(|v| v.as_str())
                         .unwrap_or(&cwd)
                         .to_string();
 
-                    title = value.get("title")
+                    title = value
+                        .get("title")
                         .and_then(|v| v.as_str())
                         .unwrap_or(&title)
                         .to_string();
 
-                    start_time = value.get("start_time")
+                    start_time = value
+                        .get("start_time")
                         .or_else(|| value.get("created_at"))
                         .and_then(|v| v.as_str())
                         .and_then(|s| s.parse().ok());
                 }
                 Some("end") => {
-                    end_time = value.get("end_time")
+                    end_time = value
+                        .get("end_time")
                         .or_else(|| value.get("completed_at"))
                         .and_then(|v| v.as_str())
                         .and_then(|s| s.parse().ok());
@@ -1829,7 +1939,8 @@ impl SessionTailer {
                 .iter()
                 .find(|m| m.role == "user")
                 .and_then(|m| {
-                    m.content.as_str()
+                    m.content
+                        .as_str()
                         .and_then(|s| s.chars().take(50).collect::<String>().into())
                 })
                 .unwrap_or_else(|| String::from("(Untitled)"))
@@ -1845,7 +1956,11 @@ impl SessionTailer {
             provider: "gemini".to_string(),
             kind,
             cwd,
-            canonical_cwd: if canonical_cwd.is_empty() { None } else { Some(canonical_cwd) },
+            canonical_cwd: if canonical_cwd.is_empty() {
+                None
+            } else {
+                Some(canonical_cwd)
+            },
             title,
             messages,
             total_usage,
@@ -1953,7 +2068,8 @@ impl SessionTailer {
                 .iter()
                 .find(|m| m.role == "user")
                 .and_then(|m| {
-                    m.content.as_str()
+                    m.content
+                        .as_str()
                         .and_then(|s| s.chars().take(50).collect::<String>().into())
                 })
                 .unwrap_or_else(|| String::from("(Untitled)"))
@@ -1969,7 +2085,11 @@ impl SessionTailer {
             provider: "aider".to_string(),
             kind,
             cwd,
-            canonical_cwd: if canonical_cwd.is_empty() { None } else { Some(canonical_cwd) },
+            canonical_cwd: if canonical_cwd.is_empty() {
+                None
+            } else {
+                Some(canonical_cwd)
+            },
             title,
             messages,
             total_usage,
@@ -2014,12 +2134,21 @@ fn maybe_emit_session_bound(
     kind: &ParsedSessionKind,
     state: &mut SessionTailerState,
 ) {
-    if let ParsedSessionKind::Variant0 { worker, bead, strand } = kind {
+    if let ParsedSessionKind::Variant0 {
+        worker,
+        bead,
+        strand,
+    } = kind
+    {
         let key = (bead.clone(), provider_session_id.to_string());
         if state.session_bound_seen.insert(key) {
             // First meeting of this (bead_id, provider_session_id) pair — record and emit.
-            state.bead_to_provider_session.insert(bead.clone(), provider_session_id.to_string());
-            state.provider_session_to_bead.insert(provider_session_id.to_string(), bead.clone());
+            state
+                .bead_to_provider_session
+                .insert(bead.clone(), provider_session_id.to_string());
+            state
+                .provider_session_to_bead
+                .insert(provider_session_id.to_string(), bead.clone());
             let _ = event_tx.send(SessionEvent::TagJoinBound {
                 session_id: session_id.to_string(),
                 provider_session_id: provider_session_id.to_string(),
@@ -2044,7 +2173,11 @@ impl NdjsonParser {
         }
     }
 
-    fn parse_line(&mut self, line: &str, source: &crate::parse_jsonl_safe::LineSource) -> Result<Option<ClaudeEntry>> {
+    fn parse_line(
+        &mut self,
+        line: &str,
+        source: &crate::parse_jsonl_safe::LineSource,
+    ) -> Result<Option<ClaudeEntry>> {
         let mut input = line;
 
         if !self.partial.is_empty() {
@@ -2099,7 +2232,11 @@ mod tests {
     fn test_tag_join_worker_via_resolve() {
         let result = tag_join::resolve("[needle:alpha:bd-abc123:pluck] Implement feature X", None);
         match result.kind {
-            ParsedSessionKind::Variant0 { worker, bead, strand } => {
+            ParsedSessionKind::Variant0 {
+                worker,
+                bead,
+                strand,
+            } => {
                 assert_eq!(worker, "alpha");
                 assert_eq!(bead, "bd-abc123");
                 assert_eq!(strand.as_deref(), Some("pluck"));
@@ -2113,7 +2250,11 @@ mod tests {
     fn test_tag_join_worker_no_strand_via_resolve() {
         let result = tag_join::resolve("[needle:bravo:bd-def456:] Some task", None);
         match result.kind {
-            ParsedSessionKind::Variant0 { worker, bead, strand } => {
+            ParsedSessionKind::Variant0 {
+                worker,
+                bead,
+                strand,
+            } => {
                 assert_eq!(worker, "bravo");
                 assert_eq!(bead, "bd-def456");
                 assert!(strand.is_none());
@@ -2125,14 +2266,20 @@ mod tests {
     #[test]
     fn test_tag_join_ad_hoc_via_resolve() {
         let result = tag_join::resolve("Fix the login bug", None);
-        assert_eq!(result.kind, ParsedSessionKind::Variant2(ParsedSessionKindVariant2::AdHoc));
+        assert_eq!(
+            result.kind,
+            ParsedSessionKind::Variant2(ParsedSessionKindVariant2::AdHoc)
+        );
         assert!(result.binding.is_none());
     }
 
     #[test]
     fn test_tag_join_dictated_via_resolve() {
         let result = tag_join::resolve("[dictated] Voice note transcript", None);
-        assert_eq!(result.kind, ParsedSessionKind::Variant1(ParsedSessionKindVariant1::Dictated));
+        assert_eq!(
+            result.kind,
+            ParsedSessionKind::Variant1(ParsedSessionKindVariant1::Dictated)
+        );
         assert!(result.binding.is_none());
     }
 
@@ -2170,10 +2317,24 @@ mod tests {
         };
 
         let kind = make_worker_kind("alpha", "bd-abc123", Some("pluck"));
-        maybe_emit_session_bound(&event_tx, "hoop-session-1", "provider-sess-xyz", &kind, &mut state);
+        maybe_emit_session_bound(
+            &event_tx,
+            "hoop-session-1",
+            "provider-sess-xyz",
+            &kind,
+            &mut state,
+        );
 
-        match event_rx.try_recv().expect("expected exactly one TagJoinBound event") {
-            SessionEvent::TagJoinBound { bead_id, provider_session_id, worker, .. } => {
+        match event_rx
+            .try_recv()
+            .expect("expected exactly one TagJoinBound event")
+        {
+            SessionEvent::TagJoinBound {
+                bead_id,
+                provider_session_id,
+                worker,
+                ..
+            } => {
                 assert_eq!(bead_id, "bd-abc123");
                 assert_eq!(provider_session_id, "provider-sess-xyz");
                 assert_eq!(worker, "alpha");
@@ -2200,7 +2361,10 @@ mod tests {
 
         // Exactly one event in the channel
         event_rx.try_recv().expect("expected one event");
-        assert!(event_rx.try_recv().is_err(), "second identical pair must not emit");
+        assert!(
+            event_rx.try_recv().is_err(),
+            "second identical pair must not emit"
+        );
     }
 
     #[test]
@@ -2236,19 +2400,24 @@ mod tests {
 
         // Forward index: bead → provider session
         assert_eq!(
-            state.bead_to_provider_session.get("bd-ccc999").map(|s| s.as_str()),
+            state
+                .bead_to_provider_session
+                .get("bd-ccc999")
+                .map(|s| s.as_str()),
             Some("prov-session-gamma"),
         );
         // Reverse index: provider session → bead
         assert_eq!(
-            state.provider_session_to_bead.get("prov-session-gamma").map(|s| s.as_str()),
+            state
+                .provider_session_to_bead
+                .get("prov-session-gamma")
+                .map(|s| s.as_str()),
             Some("bd-ccc999"),
         );
         // Dedup set contains the pair
-        assert!(state.session_bound_seen.contains(&(
-            "bd-ccc999".to_string(),
-            "prov-session-gamma".to_string(),
-        )));
+        assert!(state
+            .session_bound_seen
+            .contains(&("bd-ccc999".to_string(), "prov-session-gamma".to_string(),)));
     }
 
     #[test]
@@ -2263,7 +2432,10 @@ mod tests {
         let kind = ParsedSessionKind::Variant2(ParsedSessionKindVariant2::AdHoc);
         maybe_emit_session_bound(&event_tx, "s1", "prov-id", &kind, &mut state);
 
-        assert!(event_rx.try_recv().is_err(), "ad-hoc sessions must not emit session_bound");
+        assert!(
+            event_rx.try_recv().is_err(),
+            "ad-hoc sessions must not emit session_bound"
+        );
         assert!(state.session_bound_seen.is_empty());
     }
 
@@ -2321,7 +2493,10 @@ mod tests {
     #[test]
     fn cwd_does_not_match_unrelated_path() {
         assert!(
-            !cwd_matches_project("/home/coding/project-a", Path::new("/home/coding/project-b")),
+            !cwd_matches_project(
+                "/home/coding/project-a",
+                Path::new("/home/coding/project-b")
+            ),
             "unrelated paths must not match"
         );
     }
@@ -2480,7 +2655,10 @@ mod tests {
             .expect("parse")
             .expect("session");
 
-        assert_eq!(result.title, "[needle:alpha:bd-test123:pluck] Implement the widg");
+        assert_eq!(
+            result.title,
+            "[needle:alpha:bd-test123:pluck] Implement the widg"
+        );
     }
 
     #[test]
@@ -2493,7 +2671,11 @@ mod tests {
             .expect("session");
 
         match result.kind {
-            ParsedSessionKind::Variant0 { worker, bead, strand } => {
+            ParsedSessionKind::Variant0 {
+                worker,
+                bead,
+                strand,
+            } => {
                 assert_eq!(worker, "alpha");
                 assert_eq!(bead, "bd-test123");
                 assert_eq!(strand.as_deref(), Some("pluck"));
@@ -2513,7 +2695,10 @@ mod tests {
 
         let msg = &result.messages[0];
         // Content should be an array of 2 parts (text + tool_use)
-        let arr = msg.content.as_array().expect("content should be array for multi-part");
+        let arr = msg
+            .content
+            .as_array()
+            .expect("content should be array for multi-part");
         assert_eq!(arr.len(), 2);
         assert_eq!(arr[0]["type"], "text");
         assert_eq!(arr[1]["type"], "tool_use");
@@ -2529,14 +2714,8 @@ mod tests {
             .expect("parse")
             .expect("session");
 
-        assert_eq!(
-            result.created_at.to_rfc3339(),
-            "2025-06-15T10:30:00+00:00"
-        );
-        assert_eq!(
-            result.updated_at.to_rfc3339(),
-            "2025-06-15T10:30:00+00:00"
-        );
+        assert_eq!(result.created_at.to_rfc3339(), "2025-06-15T10:30:00+00:00");
+        assert_eq!(result.updated_at.to_rfc3339(), "2025-06-15T10:30:00+00:00");
     }
 
     #[test]

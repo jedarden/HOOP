@@ -49,17 +49,14 @@ pub struct AuditLog {
 impl AuditLog {
     /// Open the audit log at ~/.hoop/mcp_audit.log
     pub fn open() -> Result<Self> {
-        let mut path = dirs::home_dir()
-            .ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
+        let mut path =
+            dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
         path.push(".hoop");
 
         std::fs::create_dir_all(&path)?;
         path.push("mcp_audit.log");
 
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)?;
+        let file = OpenOptions::new().create(true).append(true).open(&path)?;
 
         Ok(Self {
             file: Mutex::new(file),
@@ -67,7 +64,13 @@ impl AuditLog {
     }
 
     /// Record a tool call
-    pub fn record(&self, actor: &str, tool_name: &str, args: Option<&Value>, result: &AuditResult) -> Result<()> {
+    pub fn record(
+        &self,
+        actor: &str,
+        tool_name: &str,
+        args: Option<&Value>,
+        result: &AuditResult,
+    ) -> Result<()> {
         let timestamp = Utc::now().to_rfc3339();
         let args_hash = compute_args_hash(args);
 
@@ -93,7 +96,9 @@ impl AuditLog {
         let json = serde_json::to_string(&entry)?;
         let line = format!("{}\n", json);
 
-        let mut file = self.file.lock()
+        let mut file = self
+            .file
+            .lock()
             .map_err(|e| anyhow::anyhow!("Lock error: {}", e))?;
         file.write_all(line.as_bytes())?;
         file.flush()?;
@@ -120,12 +125,8 @@ impl serde::Serialize for AuditResult {
         S: serde::Serializer,
     {
         match self {
-            AuditResult::Success => {
-                serializer.serialize_str("success")
-            }
-            AuditResult::Failure(msg) => {
-                serializer.serialize_str(&format!("failure: {}", msg))
-            }
+            AuditResult::Success => serializer.serialize_str("success"),
+            AuditResult::Failure(msg) => serializer.serialize_str(&format!("failure: {}", msg)),
         }
     }
 }

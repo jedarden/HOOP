@@ -76,7 +76,15 @@ impl ReadVerb {
 pub const WRITE_VERB_NAMES: &[&str] = &["create", "close", "update", "release", "claim", "depend"];
 
 /// All br verb names that are classified as read operations.
-pub const READ_VERB_NAMES: &[&str] = &["list", "get", "status", "--version", "doctor", "log", "show"];
+pub const READ_VERB_NAMES: &[&str] = &[
+    "list",
+    "get",
+    "status",
+    "--version",
+    "doctor",
+    "log",
+    "show",
+];
 
 /// Write verbs that are forbidden under `create-only-write`.
 /// `create` is NOT in this list — it is the one allowed write verb.
@@ -248,13 +256,9 @@ pub fn invoke_br(verb: &str, args: &[&str]) -> std::process::Command {
 /// Logs the invariant mode and panics if the runtime guards detect an inconsistency.
 pub fn validate_write_invariant() {
     if ZERO_WRITE_ACTIVE {
-        tracing::info!(
-            "write invariant: ZERO-WRITE (phase 1 — no br write verbs at compile time)"
-        );
+        tracing::info!("write invariant: ZERO-WRITE (phase 1 — no br write verbs at compile time)");
     } else if CREATE_ONLY_ACTIVE {
-        tracing::info!(
-            "write invariant: CREATE-ONLY (phase 4+ — only br create at compile time)"
-        );
+        tracing::info!("write invariant: CREATE-ONLY (phase 4+ — only br create at compile time)");
     } else {
         tracing::warn!(
             "write invariant: UNRESTRICTED (no feature flag set — all br verbs reachable)"
@@ -296,7 +300,11 @@ pub fn validate_zero_write_invariant() {
 /// Used to propagate stitch lineage from a claimed bead to follow-up beads
 /// created by the worker (Hook 4 — stitch label inheritance).
 pub fn extract_stitch_labels(labels: &[String]) -> Vec<String> {
-    labels.iter().filter(|l| l.starts_with("stitch:")).cloned().collect()
+    labels
+        .iter()
+        .filter(|l| l.starts_with("stitch:"))
+        .cloned()
+        .collect()
 }
 
 /// Propagate `stitch:*` labels from a parent bead to a new bead's label list.
@@ -351,7 +359,11 @@ mod tests {
     #[test]
     fn test_read_verbs_not_forbidden() {
         for verb in READ_VERB_NAMES {
-            assert!(!is_forbidden_verb(verb), "read verb '{}' must not be forbidden", verb);
+            assert!(
+                !is_forbidden_verb(verb),
+                "read verb '{}' must not be forbidden",
+                verb
+            );
         }
     }
 
@@ -485,7 +497,15 @@ mod tests {
 
     #[test]
     fn test_all_read_verbs_in_constant() {
-        let expected = ["list", "get", "status", "--version", "doctor", "log", "show"];
+        let expected = [
+            "list",
+            "get",
+            "status",
+            "--version",
+            "doctor",
+            "log",
+            "show",
+        ];
         for name in &expected {
             assert!(
                 READ_VERB_NAMES.contains(name),
@@ -649,11 +669,15 @@ mod tests {
         let parent_labels = vec!["stitch:abc123".to_string(), "urgent".to_string()];
         let mut target = vec!["follow-up".to_string()];
         propagate_stitch_labels(&mut target, &parent_labels);
-        assert!(target.contains(&"stitch:abc123".to_string()),
-            "worker-created follow-up bead must inherit parent's stitch label");
+        assert!(
+            target.contains(&"stitch:abc123".to_string()),
+            "worker-created follow-up bead must inherit parent's stitch label"
+        );
         assert!(target.contains(&"follow-up".to_string()));
-        assert!(!target.contains(&"urgent".to_string()),
-            "non-stitch labels must not propagate");
+        assert!(
+            !target.contains(&"urgent".to_string()),
+            "non-stitch labels must not propagate"
+        );
     }
 
     #[test]
@@ -665,7 +689,10 @@ mod tests {
         ];
         let mut target: Vec<String> = vec![];
         propagate_stitch_labels(&mut target, &parent_labels);
-        assert_eq!(target, vec!["stitch:abc123", "stitch:def456"],
-            "all stitch labels must propagate to follow-up bead");
+        assert_eq!(
+            target,
+            vec!["stitch:abc123", "stitch:def456"],
+            "all stitch labels must propagate to follow-up bead"
+        );
     }
 }

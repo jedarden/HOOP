@@ -9,7 +9,10 @@
 //!   cargo test -p hoop-daemon --test per_project_redaction_integration
 
 use hoop_daemon::redaction_policy::{self, RedactionAction, RedactionPolicyState};
-use hoop_schema::{HoopConfig, HoopConfigRedaction, HoopConfigRedactionAction, HoopConfigRedactionPatternsItem, ProjectsRegistry, ProjectsRegistryProjectsItem};
+use hoop_schema::{
+    HoopConfig, HoopConfigRedaction, HoopConfigRedactionAction, HoopConfigRedactionPatternsItem,
+    ProjectsRegistry, ProjectsRegistryProjectsItem,
+};
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -104,25 +107,40 @@ fn test_schema_redaction_field_exists() {
 
     // Check customer-data has reject policy
     if let ProjectsRegistryProjectsItem::Variant0 { redaction, .. } = &projects.projects[0] {
-        assert!(redaction.is_some(), "customer-data should have redaction policy");
+        assert!(
+            redaction.is_some(),
+            "customer-data should have redaction policy"
+        );
         let policy = redaction.as_ref().unwrap();
-        assert!(matches!(policy.action, hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionAction::Reject));
+        assert!(matches!(
+            policy.action,
+            hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionAction::Reject
+        ));
     } else {
         panic!("Expected Variant0 project");
     }
 
     // Check internal-tools has warn policy
     if let ProjectsRegistryProjectsItem::Variant0 { redaction, .. } = &projects.projects[1] {
-        assert!(redaction.is_some(), "internal-tools should have redaction policy");
+        assert!(
+            redaction.is_some(),
+            "internal-tools should have redaction policy"
+        );
         let policy = redaction.as_ref().unwrap();
-        assert!(matches!(policy.action, hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionAction::Warn));
+        assert!(matches!(
+            policy.action,
+            hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionAction::Warn
+        ));
     } else {
         panic!("Expected Variant0 project");
     }
 
     // Check legacy-project has no override
     if let ProjectsRegistryProjectsItem::Variant0 { redaction, .. } = &projects.projects[2] {
-        assert!(redaction.is_none(), "legacy-project should not have redaction override");
+        assert!(
+            redaction.is_none(),
+            "legacy-project should not have redaction override"
+        );
     } else {
         panic!("Expected Variant0 project");
     }
@@ -171,7 +189,8 @@ fn test_same_attachment_different_outcomes() {
     let rt = tokio::runtime::Runtime::new().unwrap();
 
     // Same content with Anthropic API key
-    let content_with_secret = "ANTHROPIC_API_KEY=sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666";
+    let content_with_secret =
+        "ANTHROPIC_API_KEY=sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666";
 
     // customer-data (reject): should fail
     let result = rt.block_on(redaction_policy::check_reject_policy(
@@ -179,7 +198,10 @@ fn test_same_attachment_different_outcomes() {
         "customer-data",
         content_with_secret,
     ));
-    assert!(result.is_err(), "customer-data with reject policy should block attachment with secret");
+    assert!(
+        result.is_err(),
+        "customer-data with reject policy should block attachment with secret"
+    );
     let err = result.unwrap_err();
     assert_eq!(err.project, "customer-data");
     assert!(err.pattern.contains("anthropic"));
@@ -190,7 +212,10 @@ fn test_same_attachment_different_outcomes() {
         "internal-tools",
         content_with_secret,
     ));
-    assert!(result.is_ok(), "internal-tools with warn policy should allow attachment with secret");
+    assert!(
+        result.is_ok(),
+        "internal-tools with warn policy should allow attachment with secret"
+    );
 
     // legacy-project (global warn): should pass
     let result = rt.block_on(redaction_policy::check_reject_policy(
@@ -198,7 +223,10 @@ fn test_same_attachment_different_outcomes() {
         "legacy-project",
         content_with_secret,
     ));
-    assert!(result.is_ok(), "legacy-project with global warn policy should allow attachment with secret");
+    assert!(
+        result.is_ok(),
+        "legacy-project with global warn policy should allow attachment with secret"
+    );
 }
 
 #[test]
@@ -247,7 +275,11 @@ fn test_customer_data_reject_blocks_risky_attachments() {
             "customer-data",
             content,
         ));
-        assert!(result.is_err(), "customer-data should block content with {}", expected_pattern);
+        assert!(
+            result.is_err(),
+            "customer-data should block content with {}",
+            expected_pattern
+        );
         let err = result.unwrap_err();
         assert_eq!(err.project, "customer-data");
     }
@@ -282,7 +314,8 @@ fn test_pattern_filtering_in_project_override() {
     let rt = tokio::runtime::Runtime::new().unwrap();
 
     // Anthropic key should be blocked
-    let anthropic_content = "ANTHROPIC_API_KEY=sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666";
+    let anthropic_content =
+        "ANTHROPIC_API_KEY=sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666";
     let result = rt.block_on(redaction_policy::check_reject_policy(
         &state,
         "customer-data",
@@ -297,7 +330,10 @@ fn test_pattern_filtering_in_project_override() {
         "customer-data",
         github_content,
     ));
-    assert!(result.is_ok(), "customer-data should allow GitHub tokens when not in pattern list");
+    assert!(
+        result.is_ok(),
+        "customer-data should allow GitHub tokens when not in pattern list"
+    );
 }
 
 #[test]
@@ -355,13 +391,17 @@ fn test_hot_reload_policy_changes() {
     let rt = tokio::runtime::Runtime::new().unwrap();
 
     // Initial state: customer-data has reject policy
-    let content_with_secret = "ANTHROPIC_API_KEY=sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666";
+    let content_with_secret =
+        "ANTHROPIC_API_KEY=sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666";
     let result = rt.block_on(redaction_policy::check_reject_policy(
         &state,
         "customer-data",
         content_with_secret,
     ));
-    assert!(result.is_err(), "Initial: customer-data should block secrets");
+    assert!(
+        result.is_err(),
+        "Initial: customer-data should block secrets"
+    );
 
     // Simulate hot-reload: change customer-data to warn policy
     if let ProjectsRegistryProjectsItem::Variant0 { redaction, .. } = &mut projects.projects[0] {
@@ -381,5 +421,8 @@ fn test_hot_reload_policy_changes() {
         "customer-data",
         content_with_secret,
     ));
-    assert!(result.is_ok(), "After hot-reload: customer-data should allow secrets with warn policy");
+    assert!(
+        result.is_ok(),
+        "After hot-reload: customer-data should allow secrets with warn policy"
+    );
 }

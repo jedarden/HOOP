@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": {
+    "name": "create_stitch",
+    "project": "test-project",
+    "title": "Investigate auth timeout",
+    "description": "Users report 30s timeouts on login",
+    "kind": "task",
+    "priority": 5
+  }
+}

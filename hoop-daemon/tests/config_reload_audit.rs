@@ -194,9 +194,13 @@ fn test_config_reload_audit_rejected() {
     assert!(row.hash_prev != row.hash_self);
 
     // Verify we can query it back
-    let rows =
-        fleet::query_audit_rows(None, None, None, Some(fleet::ActionKind::ConfigReloadRejected))
-            .expect("query");
+    let rows = fleet::query_audit_rows(
+        None,
+        None,
+        None,
+        Some(fleet::ActionKind::ConfigReloadRejected),
+    )
+    .expect("query");
     assert_eq!(
         rows.len(),
         1,
@@ -238,7 +242,11 @@ fn test_delta_keys_match_actual_diff() {
     let cfg2 = projects::ProjectsConfig::load_from(&yaml_path).unwrap();
 
     let delta = compute_delta(&cfg1.registry, &cfg2.registry);
-    assert_eq!(delta.len(), 1, "should have exactly one delta: +project:proj-two");
+    assert_eq!(
+        delta.len(),
+        1,
+        "should have exactly one delta: +project:proj-two"
+    );
     assert_eq!(delta[0], "+project:proj-two");
 
     // Write v3: test-proj moves to repo2, proj-two removed
@@ -317,8 +325,14 @@ fn test_round_trip_config_change_audit_matches_diff() {
         serde_json::from_str(rows[0].args_json.as_ref().unwrap()).unwrap();
 
     // The hashes in audit must match the actual file hashes
-    assert_eq!(fetched_args.prev_hash, cfg1.content_hash, "prev_hash mismatch");
-    assert_eq!(fetched_args.new_hash, cfg2.content_hash, "new_hash mismatch");
+    assert_eq!(
+        fetched_args.prev_hash, cfg1.content_hash,
+        "prev_hash mismatch"
+    );
+    assert_eq!(
+        fetched_args.new_hash, cfg2.content_hash,
+        "new_hash mismatch"
+    );
 
     // The delta_keys must match the actual compute_delta result
     assert_eq!(
@@ -326,7 +340,10 @@ fn test_round_trip_config_change_audit_matches_diff() {
         "delta_keys in audit row must match computed delta"
     );
     assert!(
-        fetched_args.delta_keys.iter().any(|k| k.contains("+project:proj-two")),
+        fetched_args
+            .delta_keys
+            .iter()
+            .any(|k| k.contains("+project:proj-two")),
         "delta should reflect proj-two was added"
     );
 

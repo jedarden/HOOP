@@ -3,6 +3,6 @@
 pub mod projects;
 
 pub use projects::{
+    add_project, list_projects, remove_project, scan_projects, show_project, validate_workspace,
     ProjectEntry, ProjectsRegistry,
-    add_project, list_projects, remove_project, show_project, scan_projects, validate_workspace,
 };

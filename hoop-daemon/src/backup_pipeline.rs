@@ -39,7 +39,10 @@ pub struct BackupPipeline {
 
 impl BackupPipeline {
     pub fn new(config: BackupFileConfig, credentials: BackupCredentials) -> Self {
-        Self { config, credentials }
+        Self {
+            config,
+            credentials,
+        }
     }
 
     /// Spawn a background scheduler that checks the cron schedule every 60 s.
@@ -140,16 +143,17 @@ impl BackupPipeline {
         }
 
         // 6. Incremental attachment sync
-        let attachments_key = if let Err(e) = self.sync_attachments_with_snapshot(&snapshot_id).await {
-            warn!("Attachment sync failed (fleet.db backup succeeded): {}", e);
-            None
-        } else {
-            Some(format!(
-                "{}/{}/attachments.manifest.json",
-                self.config.prefix.trim_end_matches('/'),
-                snapshot_id,
-            ))
-        };
+        let attachments_key =
+            if let Err(e) = self.sync_attachments_with_snapshot(&snapshot_id).await {
+                warn!("Attachment sync failed (fleet.db backup succeeded): {}", e);
+                None
+            } else {
+                Some(format!(
+                    "{}/{}/attachments.manifest.json",
+                    self.config.prefix.trim_end_matches('/'),
+                    snapshot_id,
+                ))
+            };
 
         // 7. Build and upload manifest (LAST — after all pieces)
         let manifest = SnapshotManifest {
@@ -164,26 +168,32 @@ impl BackupPipeline {
             fleet_db_size: Some(file_size),
         };
 
-        let manifest_json = serde_json::to_vec_pretty(&manifest)
-            .context("serialize snapshot manifest")?;
+        let manifest_json =
+            serde_json::to_vec_pretty(&manifest).context("serialize snapshot manifest")?;
         let manifest_key = format!(
             "{}/{}/manifest.json",
             self.config.prefix.trim_end_matches('/'),
             snapshot_id,
         );
-        self.upload_with_retry_from_bytes(&manifest_json, &manifest_key).await?;
+        self.upload_with_retry_from_bytes(&manifest_json, &manifest_key)
+            .await?;
 
         info!(
             "Snapshot manifest uploaded: {}/manifest.json",
-            manifest_key.rsplit_once('/').map(|(p, _)| p).unwrap_or(&manifest_key),
+            manifest_key
+                .rsplit_once('/')
+                .map(|(p, _)| p)
+                .unwrap_or(&manifest_key),
         );
 
         // 8. Record metrics
         let elapsed = start.elapsed();
         let m = metrics::metrics();
-        m.hoop_backup_last_success_timestamp.set(Utc::now().timestamp());
+        m.hoop_backup_last_success_timestamp
+            .set(Utc::now().timestamp());
         m.hoop_backup_last_size_bytes.set(file_size as i64);
-        m.hoop_backup_run_duration_seconds.observe(elapsed.as_secs_f64());
+        m.hoop_backup_run_duration_seconds
+            .observe(elapsed.as_secs_f64());
 
         info!(
             "Backup snapshot completed: {} bytes in {:.1}s (snapshot_id={})",
@@ -233,8 +243,7 @@ impl BackupPipeline {
             let data = std::fs::read(&disk_path)
                 .with_context(|| format!("read attachment {}", disk_path.display()))?;
 
-            let compressed = zstd::encode_all(&data[..], 3)
-                .context("zstd compress attachment")?;
+            let compressed = zstd::encode_all(&data[..], 3).context("zstd compress attachment")?;
 
             let s3_key = format!(
                 "{}/{}/attachments/{}.zst",
@@ -243,7 +252,8 @@ impl BackupPipeline {
                 rel_path,
             );
 
-            self.upload_with_retry_from_bytes(&compressed, &s3_key).await?;
+            self.upload_with_retry_from_bytes(&compressed, &s3_key)
+                .await?;
         }
 
         // Apply diff to manifest (adds tombstones for deletions)
@@ -251,14 +261,15 @@ impl BackupPipeline {
         manifest.save(&manifest_path)?;
 
         // Upload attachment manifest to snapshot directory
-        let manifest_json = serde_json::to_vec_pretty(&manifest)
-            .context("serialize attachment manifest")?;
+        let manifest_json =
+            serde_json::to_vec_pretty(&manifest).context("serialize attachment manifest")?;
         let s3_key = format!(
             "{}/{}/attachments.manifest.json",
             self.config.prefix.trim_end_matches('/'),
             snapshot_id,
         );
-        self.upload_with_retry_from_bytes(&manifest_json, &s3_key).await?;
+        self.upload_with_retry_from_bytes(&manifest_json, &s3_key)
+            .await?;
 
         info!(
             "Attachment sync complete: {} files tracked, {} tombstones",
@@ -303,18 +314,25 @@ impl BackupPipeline {
                 let projects: Vec<serde_json::Value> = serde_json::from_str(&data)?;
                 if let Some(first) = projects.first() {
                     if let Some(ws) = first.get("path").and_then(|p| p.as_str()) {
-                        let path = PathBuf::from(ws).join(".beads").join("attachments").join(rest);
+                        let path = PathBuf::from(ws)
+                            .join(".beads")
+                            .join("attachments")
+                            .join(rest);
                         if !path.exists() {
                             bail!("attachment path does not exist: {}", key);
                         }
                         let allowlist = PathAllowlist::for_workspace(Path::new(ws))
                             .context("failed to build allowlist for workspace")?;
-                        return canonicalize_and_check(&path, &allowlist)
-                            .map_err(|_| anyhow::anyhow!("path traversal detected in attachment key"));
+                        return canonicalize_and_check(&path, &allowlist).map_err(|_| {
+                            anyhow::anyhow!("path traversal detected in attachment key")
+                        });
                     }
                 }
             }
-            bail!("cannot resolve bead attachment path without workspace: {}", key)
+            bail!(
+                "cannot resolve bead attachment path without workspace: {}",
+                key
+            )
         } else {
             bail!("unknown attachment key prefix: {}", key)
         }
@@ -338,7 +356,11 @@ impl BackupPipeline {
                     backoff_secs = (backoff_secs * 2).min(MAX_BACKOFF_SECS);
                 }
                 Err(e) => {
-                    bail!("S3 PUT failed for attachment after {} attempts: {}", attempt, e);
+                    bail!(
+                        "S3 PUT failed for attachment after {} attempts: {}",
+                        attempt,
+                        e
+                    );
                 }
             }
         }
@@ -353,13 +375,10 @@ impl BackupPipeline {
         }
 
         let snapshot_dir = std::env::temp_dir().join("hoop-backup");
-        std::fs::create_dir_all(&snapshot_dir)
-            .context("create temp dir for backup snapshot")?;
+        std::fs::create_dir_all(&snapshot_dir).context("create temp dir for backup snapshot")?;
 
-        let snapshot_path = snapshot_dir.join(format!(
-            "fleet-{}.db",
-            Utc::now().format("%Y%m%dT%H%M%SZ")
-        ));
+        let snapshot_path =
+            snapshot_dir.join(format!("fleet-{}.db", Utc::now().format("%Y%m%dT%H%M%SZ")));
 
         info!(
             "VACUUM INTO {} from {}",
@@ -375,11 +394,8 @@ impl BackupPipeline {
 
         // VACUUM INTO produces a self-contained, consistent snapshot without
         // locking the source database for the duration of the copy.
-        conn.execute_batch(&format!(
-            "VACUUM INTO '{}'",
-            snapshot_path.display()
-        ))
-        .context("VACUUM INTO failed")?;
+        conn.execute_batch(&format!("VACUUM INTO '{}'", snapshot_path.display()))
+            .context("VACUUM INTO failed")?;
 
         drop(conn);
 
@@ -394,11 +410,9 @@ impl BackupPipeline {
     fn zstd_compress(&self, input: &Path) -> Result<PathBuf> {
         let output = PathBuf::from(format!("{}.zst", input.display()));
 
-        let raw = std::fs::read(input)
-            .with_context(|| format!("read {}", input.display()))?;
+        let raw = std::fs::read(input).with_context(|| format!("read {}", input.display()))?;
 
-        let compressed = zstd::encode_all(&raw[..], 3)
-            .context("zstd compression failed")?;
+        let compressed = zstd::encode_all(&raw[..], 3).context("zstd compression failed")?;
 
         std::fs::write(&output, &compressed)
             .with_context(|| format!("write {}", output.display()))?;
@@ -416,9 +430,11 @@ impl BackupPipeline {
     // ── Step 3: optional age encryption ────────────────────────────────
 
     async fn age_encrypt(&self, input: &Path) -> Result<PathBuf> {
-        let recipient = self.credentials.age_key.as_deref().with_context(|| {
-            "encryption enabled but HOOP_BACKUP_AGE_KEY not set"
-        })?;
+        let recipient = self
+            .credentials
+            .age_key
+            .as_deref()
+            .with_context(|| "encryption enabled but HOOP_BACKUP_AGE_KEY not set")?;
 
         let output = PathBuf::from(format!("{}.age", input.display()));
 
@@ -455,8 +471,8 @@ impl BackupPipeline {
     // ── Step 4: S3 PUT with exponential-backoff retry ─────────────────
 
     async fn upload_with_retry(&self, file_path: &Path, s3_key: &str) -> Result<()> {
-        let data = std::fs::read(file_path)
-            .with_context(|| format!("read {}", file_path.display()))?;
+        let data =
+            std::fs::read(file_path).with_context(|| format!("read {}", file_path.display()))?;
 
         let mut attempt = 0u32;
         let mut backoff_secs = INITIAL_BACKOFF_SECS;
@@ -513,11 +529,7 @@ impl BackupPipeline {
 
         let canonical_request = format!(
             "PUT\n{}\n{}\n{}\n{}\n{}",
-            canonical_uri,
-            canonical_qs,
-            canonical_headers,
-            signed_headers,
-            content_sha256,
+            canonical_uri, canonical_qs, canonical_headers, signed_headers, content_sha256,
         );
 
         let credential_scope = format!("{}/{}/s3/aws4_request", date_stamp, region);
@@ -690,7 +702,10 @@ mod tests {
             age_key: None,
         };
         let pipeline = BackupPipeline::new(config, creds);
-        assert_eq!(pipeline.snapshot_prefix("20240615T040000Z"), "backups/20240615T040000Z");
+        assert_eq!(
+            pipeline.snapshot_prefix("20240615T040000Z"),
+            "backups/20240615T040000Z"
+        );
     }
 
     #[test]
@@ -728,7 +743,9 @@ mod tests {
         // Snapshot should be a valid SQLite file
         assert!(snapshot.exists());
         let conn = rusqlite::Connection::open(&snapshot).unwrap();
-        let count: i64 = conn.query_row("SELECT COUNT(*) FROM t", [], |r| r.get(0)).unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM t", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(count, 1);
 
         // Cleanup

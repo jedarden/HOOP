@@ -57,9 +57,7 @@ impl SnapshotManifest {
 
 /// Compare two semver-like strings; returns `true` when `a > b`.
 pub fn is_newer_version(a: &str, b: &str) -> bool {
-    let parse = |v: &str| -> Vec<u32> {
-        v.split('.').filter_map(|p| p.parse().ok()).collect()
-    };
+    let parse = |v: &str| -> Vec<u32> { v.split('.').filter_map(|p| p.parse().ok()).collect() };
     let va = parse(a);
     let vb = parse(b);
     for i in 0..std::cmp::max(va.len(), vb.len()) {

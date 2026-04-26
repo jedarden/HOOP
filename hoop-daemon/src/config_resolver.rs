@@ -84,7 +84,12 @@ pub struct ConfigError {
 
 impl ConfigError {
     /// Create a semantic validation error with structured details.
-    pub fn validation(message: String, field: Option<String>, expected: Option<String>, got: Option<String>) -> Self {
+    pub fn validation(
+        message: String,
+        field: Option<String>,
+        expected: Option<String>,
+        got: Option<String>,
+    ) -> Self {
         Self {
             message,
             line: 0,
@@ -311,7 +316,11 @@ fn resolve_opt<T: Clone + Serialize>(
         return Resolved::new(v, ConfigSource::EnvVar, format!("env {}", env_label));
     }
     if let Some(v) = file_val {
-        return Resolved::new(v, ConfigSource::ConfigYml, format!("config.yml: {}", file_label));
+        return Resolved::new(
+            v,
+            ConfigSource::ConfigYml,
+            format!("config.yml: {}", file_label),
+        );
     }
     Resolved::new(default, ConfigSource::Default, "compiled default")
 }
@@ -327,15 +336,27 @@ fn resolve_opt_none<T: Clone + Serialize>(
     key_name: &str,
 ) -> Resolved<Option<T>> {
     if let Some(v) = cli {
-        return Resolved::new(Some(v), ConfigSource::CliFlag, format!("cli flag {}", cli_label));
+        return Resolved::new(
+            Some(v),
+            ConfigSource::CliFlag,
+            format!("cli flag {}", cli_label),
+        );
     }
     if let Some(v) = env_val {
         return Resolved::new(Some(v), ConfigSource::EnvVar, format!("env {}", env_label));
     }
     if let Some(v) = file_val {
-        return Resolved::new(Some(v), ConfigSource::ConfigYml, format!("config.yml: {}", file_label));
+        return Resolved::new(
+            Some(v),
+            ConfigSource::ConfigYml,
+            format!("config.yml: {}", file_label),
+        );
     }
-    Resolved::new(None, ConfigSource::Default, format!("compiled default ({} not set)", key_name))
+    Resolved::new(
+        None,
+        ConfigSource::Default,
+        format!("compiled default ({} not set)", key_name),
+    )
 }
 
 /// Strict resolve with type validation for hot-reload (§17.5).
@@ -354,10 +375,18 @@ fn resolve_opt_strict<T: Clone + Serialize>(
     type_validator: fn(&serde_yaml::Value, &str) -> Result<Option<T>, ConfigError>,
 ) -> Result<Resolved<T>, ConfigError> {
     if let Some(v) = cli {
-        return Ok(Resolved::new(v, ConfigSource::CliFlag, format!("cli flag {}", cli_label)));
+        return Ok(Resolved::new(
+            v,
+            ConfigSource::CliFlag,
+            format!("cli flag {}", cli_label),
+        ));
     }
     if let Some(v) = env_val {
-        return Ok(Resolved::new(v, ConfigSource::EnvVar, format!("env {}", env_label)));
+        return Ok(Resolved::new(
+            v,
+            ConfigSource::EnvVar,
+            format!("env {}", env_label),
+        ));
     }
 
     // Validate config.yml value type
@@ -368,10 +397,18 @@ fn resolve_opt_strict<T: Clone + Serialize>(
     };
 
     if let Some(v) = file_val {
-        return Ok(Resolved::new(v, ConfigSource::ConfigYml, format!("config.yml: {}", file_label)));
+        return Ok(Resolved::new(
+            v,
+            ConfigSource::ConfigYml,
+            format!("config.yml: {}", file_label),
+        ));
     }
 
-    Ok(Resolved::new(default, ConfigSource::Default, "compiled default".to_string()))
+    Ok(Resolved::new(
+        default,
+        ConfigSource::Default,
+        "compiled default".to_string(),
+    ))
 }
 
 /// Load config.yml as a raw YAML value. Returns None if the file doesn't exist.
@@ -476,16 +513,16 @@ fn yaml_navigate<'a>(root: &'a serde_yaml::Value, path: &str) -> Option<&'a serd
 }
 
 /// Strictly validate a boolean field — returns error if value exists but is not boolean.
-fn yaml_validate_bool(
-    root: &serde_yaml::Value,
-    path: &str,
-) -> Result<Option<bool>, ConfigError> {
+fn yaml_validate_bool(root: &serde_yaml::Value, path: &str) -> Result<Option<bool>, ConfigError> {
     match yaml_navigate(root, path) {
         None => Ok(None),
         Some(v) => match v.as_bool() {
             Some(b) => Ok(Some(b)),
             None => Err(ConfigError::validation(
-                format!("invalid type: expected boolean, found {}", yaml_type_name(v)),
+                format!(
+                    "invalid type: expected boolean, found {}",
+                    yaml_type_name(v)
+                ),
                 Some(path.to_string()),
                 Some("boolean".to_string()),
                 Some(yaml_type_name(v).to_string()),
@@ -495,16 +532,16 @@ fn yaml_validate_bool(
 }
 
 /// Strictly validate an integer field — returns error if value exists but is not an integer.
-fn yaml_validate_u64(
-    root: &serde_yaml::Value,
-    path: &str,
-) -> Result<Option<u64>, ConfigError> {
+fn yaml_validate_u64(root: &serde_yaml::Value, path: &str) -> Result<Option<u64>, ConfigError> {
     match yaml_navigate(root, path) {
         None => Ok(None),
         Some(v) => match v.as_u64() {
             Some(n) => Ok(Some(n)),
             None => Err(ConfigError::validation(
-                format!("invalid type: expected integer, found {}", yaml_type_name(v)),
+                format!(
+                    "invalid type: expected integer, found {}",
+                    yaml_type_name(v)
+                ),
                 Some(path.to_string()),
                 Some("integer".to_string()),
                 Some(yaml_type_name(v).to_string()),
@@ -514,10 +551,7 @@ fn yaml_validate_u64(
 }
 
 /// Strictly validate a float field — returns error if value exists but is not a number.
-fn yaml_validate_f64(
-    root: &serde_yaml::Value,
-    path: &str,
-) -> Result<Option<f64>, ConfigError> {
+fn yaml_validate_f64(root: &serde_yaml::Value, path: &str) -> Result<Option<f64>, ConfigError> {
     match yaml_navigate(root, path) {
         None => Ok(None),
         Some(v) => match v.as_f64() {
@@ -576,7 +610,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let bind_addr = resolve_opt(
         cli.bind_addr.map(|a| a.to_string()),
         env_parse::<SocketAddr>("HOOP_BIND_ADDR").map(|a| a.to_string()),
-        yml_ref.and_then(|y| yaml_get_str(y, "server.bind_addr")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "server.bind_addr"))
+            .map(|s| s.to_string()),
         "127.0.0.1:3000".to_string(),
         "--addr",
         "HOOP_BIND_ADDR",
@@ -597,7 +633,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let agent_adapter = resolve_opt(
         None, // no CLI flag
         std::env::var("HOOP_AGENT_ADAPTER").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "agent.adapter")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "agent.adapter"))
+            .map(|s| s.to_string()),
         "claude".to_string(),
         "N/A",
         "HOOP_AGENT_ADAPTER",
@@ -607,7 +645,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let agent_model = resolve_opt(
         None,
         std::env::var("HOOP_AGENT_MODEL").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "agent.model")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "agent.model"))
+            .map(|s| s.to_string()),
         "claude-opus-4-7".to_string(),
         "N/A",
         "HOOP_AGENT_MODEL",
@@ -617,7 +657,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let agent_anthropic_api_key = resolve_opt_none(
         None::<String>,
         std::env::var("ANTHROPIC_API_KEY").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "agent.anthropic_api_key")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "agent.anthropic_api_key"))
+            .map(|s| s.to_string()),
         "N/A",
         "ANTHROPIC_API_KEY",
         "agent.anthropic_api_key",
@@ -627,7 +669,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let agent_zai_base_url = resolve_opt_none(
         None::<String>,
         std::env::var("HOOP_ZAI_BASE_URL").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "agent.zai_base_url")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "agent.zai_base_url"))
+            .map(|s| s.to_string()),
         "N/A",
         "HOOP_ZAI_BASE_URL",
         "agent.zai_base_url",
@@ -637,7 +681,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let agent_zai_api_key = resolve_opt_none(
         None::<String>,
         std::env::var("HOOP_ZAI_API_KEY").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "agent.zai_api_key")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "agent.zai_api_key"))
+            .map(|s| s.to_string()),
         "N/A",
         "HOOP_ZAI_API_KEY",
         "agent.zai_api_key",
@@ -647,7 +693,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let agent_rate_limit_rpm = resolve_opt_none(
         None::<u32>,
         env_parse("HOOP_RATE_LIMIT_RPM"),
-        yml_ref.and_then(|y| yaml_get_u64(y, "agent.rate_limit_requests_per_minute")).map(|v| v as u32),
+        yml_ref
+            .and_then(|y| yaml_get_u64(y, "agent.rate_limit_requests_per_minute"))
+            .map(|v| v as u32),
         "N/A",
         "HOOP_RATE_LIMIT_RPM",
         "agent.rate_limit_requests_per_minute",
@@ -677,7 +725,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let projects_file = resolve_opt(
         None,
         std::env::var("HOOP_PROJECTS_FILE").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "projects_file")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "projects_file"))
+            .map(|s| s.to_string()),
         default_projects_path,
         "N/A",
         "HOOP_PROJECTS_FILE",
@@ -688,7 +738,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let ui_theme = resolve_opt(
         None,
         std::env::var("HOOP_UI_THEME").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "ui.theme")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "ui.theme"))
+            .map(|s| s.to_string()),
         "auto".to_string(),
         "N/A",
         "HOOP_UI_THEME",
@@ -698,7 +750,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let ui_default_project_sort = resolve_opt(
         None,
         std::env::var("HOOP_UI_SORT").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "ui.default_project_sort")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "ui.default_project_sort"))
+            .map(|s| s.to_string()),
         "last_activity".to_string(),
         "N/A",
         "HOOP_UI_SORT",
@@ -708,7 +762,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let ui_archive_after_days = resolve_opt(
         None::<u32>,
         env_parse("HOOP_ARCHIVE_DAYS"),
-        yml_ref.and_then(|y| yaml_get_u64(y, "ui.archive_after_days")).map(|v| v as u32),
+        yml_ref
+            .and_then(|y| yaml_get_u64(y, "ui.archive_after_days"))
+            .map(|v| v as u32),
         30,
         "N/A",
         "HOOP_ARCHIVE_DAYS",
@@ -729,7 +785,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let metrics_port = resolve_opt(
         None::<u16>,
         env_parse("HOOP_METRICS_PORT"),
-        yml_ref.and_then(|y| yaml_get_u64(y, "metrics.port")).map(|v| v as u16),
+        yml_ref
+            .and_then(|y| yaml_get_u64(y, "metrics.port"))
+            .map(|v| v as u16),
         9091,
         "N/A",
         "HOOP_METRICS_PORT",
@@ -750,7 +808,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let voice_whisper_model_path = resolve_opt_none(
         None::<String>,
         std::env::var("HOOP_WHISPER_MODEL_PATH").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "voice.whisper_model_path")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "voice.whisper_model_path"))
+            .map(|s| s.to_string()),
         "N/A",
         "HOOP_WHISPER_MODEL_PATH",
         "voice.whisper_model_path",
@@ -771,7 +831,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let voice_hotkey = resolve_opt(
         None,
         std::env::var("HOOP_VOICE_HOTKEY").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "voice.hotkey")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "voice.hotkey"))
+            .map(|s| s.to_string()),
         "Ctrl+Shift+V".to_string(),
         "N/A",
         "HOOP_VOICE_HOTKEY",
@@ -781,7 +843,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let voice_max_recording_seconds = resolve_opt(
         None::<u32>,
         env_parse("HOOP_VOICE_MAX_SECONDS"),
-        yml_ref.and_then(|y| yaml_get_u64(y, "voice.max_recording_seconds")).map(|v| v as u32),
+        yml_ref
+            .and_then(|y| yaml_get_u64(y, "voice.max_recording_seconds"))
+            .map(|v| v as u32),
         300,
         "N/A",
         "HOOP_VOICE_MAX_SECONDS",
@@ -792,7 +856,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let audit_retention_days = resolve_opt(
         None::<u32>,
         env_parse("HOOP_AUDIT_RETENTION_DAYS"),
-        yml_ref.and_then(|y| yaml_get_u64(y, "audit.retention_days")).map(|v| v as u32),
+        yml_ref
+            .and_then(|y| yaml_get_u64(y, "audit.retention_days"))
+            .map(|v| v as u32),
         90,
         "N/A",
         "HOOP_AUDIT_RETENTION_DAYS",
@@ -833,7 +899,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let reflection_auto_archive_after_days = resolve_opt(
         None::<u32>,
         env_parse("HOOP_REFLECTION_ARCHIVE_DAYS"),
-        yml_ref.and_then(|y| yaml_get_u64(y, "reflection.auto_archive_after_days")).map(|v| v as u32),
+        yml_ref
+            .and_then(|y| yaml_get_u64(y, "reflection.auto_archive_after_days"))
+            .map(|v| v as u32),
         30,
         "N/A",
         "HOOP_REFLECTION_ARCHIVE_DAYS",
@@ -844,7 +912,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let agent_extensions_skills = resolve_opt_none(
         None::<String>,
         std::env::var("HOOP_AGENT_EXTENSIONS_SKILLS").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "agent_extensions.skills")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "agent_extensions.skills"))
+            .map(|s| s.to_string()),
         "N/A",
         "HOOP_AGENT_EXTENSIONS_SKILLS",
         "agent_extensions.skills",
@@ -854,7 +924,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let agent_extensions_scripts = resolve_opt_none(
         None::<String>,
         std::env::var("HOOP_AGENT_EXTENSIONS_SCRIPTS").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "agent_extensions.scripts")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "agent_extensions.scripts"))
+            .map(|s| s.to_string()),
         "N/A",
         "HOOP_AGENT_EXTENSIONS_SCRIPTS",
         "agent_extensions.scripts",
@@ -864,7 +936,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let agent_extensions_notes = resolve_opt_none(
         None::<String>,
         std::env::var("HOOP_AGENT_EXTENSIONS_NOTES").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "agent_extensions.notes")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "agent_extensions.notes"))
+            .map(|s| s.to_string()),
         "N/A",
         "HOOP_AGENT_EXTENSIONS_NOTES",
         "agent_extensions.notes",
@@ -874,7 +948,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let agent_extensions_prompts = resolve_opt_none(
         None::<String>,
         std::env::var("HOOP_AGENT_EXTENSIONS_PROMPTS").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "agent_extensions.prompts")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "agent_extensions.prompts"))
+            .map(|s| s.to_string()),
         "N/A",
         "HOOP_AGENT_EXTENSIONS_PROMPTS",
         "agent_extensions.prompts",
@@ -885,7 +961,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let backup_endpoint = resolve_opt_none(
         None::<String>,
         None, // no env var for endpoint (in config.yml only)
-        yml_ref.and_then(|y| yaml_get_str(y, "backup.endpoint")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "backup.endpoint"))
+            .map(|s| s.to_string()),
         "N/A",
         "N/A",
         "backup.endpoint",
@@ -894,7 +972,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let backup_bucket = resolve_opt_none(
         None::<String>,
         None, // no env var for bucket (in config.yml only)
-        yml_ref.and_then(|y| yaml_get_str(y, "backup.bucket")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "backup.bucket"))
+            .map(|s| s.to_string()),
         "N/A",
         "N/A",
         "backup.bucket",
@@ -903,7 +983,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let backup_prefix = resolve_opt_none(
         None::<String>,
         None, // no env var for prefix (in config.yml only)
-        yml_ref.and_then(|y| yaml_get_str(y, "backup.prefix")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "backup.prefix"))
+            .map(|s| s.to_string()),
         "N/A",
         "N/A",
         "backup.prefix",
@@ -912,7 +994,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let backup_schedule = resolve_opt(
         None,
         None,
-        yml_ref.and_then(|y| yaml_get_str(y, "backup.schedule")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "backup.schedule"))
+            .map(|s| s.to_string()),
         "0 4 * * *".to_string(),
         "N/A",
         "N/A",
@@ -921,7 +1005,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let backup_retention_days = resolve_opt(
         None::<u32>,
         env_parse("HOOP_BACKUP_RETENTION_DAYS"),
-        yml_ref.and_then(|y| yaml_get_u64(y, "backup.retention_days")).map(|v| v as u32),
+        yml_ref
+            .and_then(|y| yaml_get_u64(y, "backup.retention_days"))
+            .map(|v| v as u32),
         30,
         "N/A",
         "HOOP_BACKUP_RETENTION_DAYS",
@@ -949,7 +1035,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let pricing_file = resolve_opt(
         None,
         std::env::var("HOOP_PRICING_FILE").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "pricing_file")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "pricing_file"))
+            .map(|s| s.to_string()),
         default_pricing_path,
         "N/A",
         "HOOP_PRICING_FILE",
@@ -1045,10 +1133,7 @@ impl ResolvedConfig {
 /// 3. Apply semantic validation (e.g. agent.adapter enum)
 /// 4. Apply CLI overrides with proper precedence
 /// 5. Return fully resolved `ResolvedConfig`
-pub fn resolve_from_raw(
-    cli: CliOverrides,
-    raw: &str,
-) -> Result<ResolvedConfig, ConfigError> {
+pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, ConfigError> {
     // Empty config is valid — uses all defaults
     let yml = if raw.trim().is_empty() {
         None
@@ -1072,7 +1157,9 @@ pub fn resolve_from_raw(
         file_label: &str,
         validator: fn(&str) -> Result<(), String>,
     ) -> Result<Resolved<String>, ConfigError> {
-        let file_val = yml_ref.and_then(|y| yaml_get_str(y, yml_path)).map(|s| s.to_string());
+        let file_val = yml_ref
+            .and_then(|y| yaml_get_str(y, yml_path))
+            .map(|s| s.to_string());
         let env_val = std::env::var(env_var).ok();
 
         let (value, source, attribution) = if let Some(v) = cli {
@@ -1080,9 +1167,17 @@ pub fn resolve_from_raw(
         } else if let Some(v) = env_val {
             (v, ConfigSource::EnvVar, format!("env {}", env_label))
         } else if let Some(v) = file_val {
-            (v.clone(), ConfigSource::ConfigYml, format!("config.yml: {}", file_label))
+            (
+                v.clone(),
+                ConfigSource::ConfigYml,
+                format!("config.yml: {}", file_label),
+            )
         } else {
-            (default.to_string(), ConfigSource::Default, "compiled default".to_string())
+            (
+                default.to_string(),
+                ConfigSource::Default,
+                "compiled default".to_string(),
+            )
         };
 
         // Validate if the value came from config.yml or env var
@@ -1104,7 +1199,9 @@ pub fn resolve_from_raw(
     let bind_addr = resolve_opt(
         cli.bind_addr.map(|a| a.to_string()),
         env_parse::<SocketAddr>("HOOP_BIND_ADDR").map(|a| a.to_string()),
-        yml_ref.and_then(|y| yaml_get_str(y, "server.bind_addr")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "server.bind_addr"))
+            .map(|s| s.to_string()),
         "127.0.0.1:3000".to_string(),
         "--addr",
         "HOOP_BIND_ADDR",
@@ -1137,7 +1234,9 @@ pub fn resolve_from_raw(
     let agent_model = resolve_opt(
         None,
         std::env::var("HOOP_AGENT_MODEL").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "agent.model")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "agent.model"))
+            .map(|s| s.to_string()),
         "claude-opus-4-7".to_string(),
         "N/A",
         "HOOP_AGENT_MODEL",
@@ -1147,7 +1246,9 @@ pub fn resolve_from_raw(
     let agent_anthropic_api_key = resolve_opt_none(
         None::<String>,
         std::env::var("ANTHROPIC_API_KEY").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "agent.anthropic_api_key")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "agent.anthropic_api_key"))
+            .map(|s| s.to_string()),
         "N/A",
         "ANTHROPIC_API_KEY",
         "agent.anthropic_api_key",
@@ -1157,7 +1258,9 @@ pub fn resolve_from_raw(
     let agent_zai_base_url = resolve_opt_none(
         None::<String>,
         std::env::var("HOOP_ZAI_BASE_URL").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "agent.zai_base_url")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "agent.zai_base_url"))
+            .map(|s| s.to_string()),
         "N/A",
         "HOOP_ZAI_BASE_URL",
         "agent.zai_base_url",
@@ -1167,7 +1270,9 @@ pub fn resolve_from_raw(
     let agent_zai_api_key = resolve_opt_none(
         None::<String>,
         std::env::var("HOOP_ZAI_API_KEY").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "agent.zai_api_key")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "agent.zai_api_key"))
+            .map(|s| s.to_string()),
         "N/A",
         "HOOP_ZAI_API_KEY",
         "agent.zai_api_key",
@@ -1177,7 +1282,9 @@ pub fn resolve_from_raw(
     let agent_rate_limit_rpm = resolve_opt_none(
         None::<u32>,
         env_parse("HOOP_RATE_LIMIT_RPM"),
-        yml_ref.and_then(|y| yaml_get_u64(y, "agent.rate_limit_requests_per_minute")).map(|v| v as u32),
+        yml_ref
+            .and_then(|y| yaml_get_u64(y, "agent.rate_limit_requests_per_minute"))
+            .map(|v| v as u32),
         "N/A",
         "HOOP_RATE_LIMIT_RPM",
         "agent.rate_limit_requests_per_minute",
@@ -1207,7 +1314,9 @@ pub fn resolve_from_raw(
     let projects_file = resolve_opt(
         None,
         std::env::var("HOOP_PROJECTS_FILE").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "projects_file")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "projects_file"))
+            .map(|s| s.to_string()),
         default_projects_path,
         "N/A",
         "HOOP_PROJECTS_FILE",
@@ -1242,7 +1351,9 @@ pub fn resolve_from_raw(
     let ui_archive_after_days = resolve_opt(
         None::<u32>,
         env_parse("HOOP_ARCHIVE_DAYS"),
-        yml_ref.and_then(|y| yaml_get_u64(y, "ui.archive_after_days")).map(|v| v as u32),
+        yml_ref
+            .and_then(|y| yaml_get_u64(y, "ui.archive_after_days"))
+            .map(|v| v as u32),
         30,
         "N/A",
         "HOOP_ARCHIVE_DAYS",
@@ -1263,7 +1374,9 @@ pub fn resolve_from_raw(
     let metrics_port = resolve_opt(
         None::<u16>,
         env_parse("HOOP_METRICS_PORT"),
-        yml_ref.and_then(|y| yaml_get_u64(y, "metrics.port")).map(|v| v as u16),
+        yml_ref
+            .and_then(|y| yaml_get_u64(y, "metrics.port"))
+            .map(|v| v as u16),
         9091,
         "N/A",
         "HOOP_METRICS_PORT",
@@ -1284,7 +1397,9 @@ pub fn resolve_from_raw(
     let voice_whisper_model_path = resolve_opt_none(
         None::<String>,
         std::env::var("HOOP_WHISPER_MODEL_PATH").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "voice.whisper_model_path")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "voice.whisper_model_path"))
+            .map(|s| s.to_string()),
         "N/A",
         "HOOP_WHISPER_MODEL_PATH",
         "voice.whisper_model_path",
@@ -1304,7 +1419,9 @@ pub fn resolve_from_raw(
     let voice_hotkey = resolve_opt(
         None,
         std::env::var("HOOP_VOICE_HOTKEY").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "voice.hotkey")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "voice.hotkey"))
+            .map(|s| s.to_string()),
         "Ctrl+Shift+V".to_string(),
         "N/A",
         "HOOP_VOICE_HOTKEY",
@@ -1314,7 +1431,9 @@ pub fn resolve_from_raw(
     let voice_max_recording_seconds = resolve_opt(
         None::<u32>,
         env_parse("HOOP_VOICE_MAX_SECONDS"),
-        yml_ref.and_then(|y| yaml_get_u64(y, "voice.max_recording_seconds")).map(|v| v as u32),
+        yml_ref
+            .and_then(|y| yaml_get_u64(y, "voice.max_recording_seconds"))
+            .map(|v| v as u32),
         300,
         "N/A",
         "HOOP_VOICE_MAX_SECONDS",
@@ -1325,7 +1444,9 @@ pub fn resolve_from_raw(
     let agent_extensions_skills = resolve_opt_none(
         None::<String>,
         std::env::var("HOOP_AGENT_EXTENSIONS_SKILLS").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "agent_extensions.skills")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "agent_extensions.skills"))
+            .map(|s| s.to_string()),
         "N/A",
         "HOOP_AGENT_EXTENSIONS_SKILLS",
         "agent_extensions.skills",
@@ -1335,7 +1456,9 @@ pub fn resolve_from_raw(
     let agent_extensions_scripts = resolve_opt_none(
         None::<String>,
         std::env::var("HOOP_AGENT_EXTENSIONS_SCRIPTS").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "agent_extensions.scripts")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "agent_extensions.scripts"))
+            .map(|s| s.to_string()),
         "N/A",
         "HOOP_AGENT_EXTENSIONS_SCRIPTS",
         "agent_extensions.scripts",
@@ -1345,7 +1468,9 @@ pub fn resolve_from_raw(
     let agent_extensions_notes = resolve_opt_none(
         None::<String>,
         std::env::var("HOOP_AGENT_EXTENSIONS_NOTES").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "agent_extensions.notes")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "agent_extensions.notes"))
+            .map(|s| s.to_string()),
         "N/A",
         "HOOP_AGENT_EXTENSIONS_NOTES",
         "agent_extensions.notes",
@@ -1355,7 +1480,9 @@ pub fn resolve_from_raw(
     let agent_extensions_prompts = resolve_opt_none(
         None::<String>,
         std::env::var("HOOP_AGENT_EXTENSIONS_PROMPTS").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "agent_extensions.prompts")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "agent_extensions.prompts"))
+            .map(|s| s.to_string()),
         "N/A",
         "HOOP_AGENT_EXTENSIONS_PROMPTS",
         "agent_extensions.prompts",
@@ -1366,7 +1493,9 @@ pub fn resolve_from_raw(
     let audit_retention_days = resolve_opt(
         None::<u32>,
         env_parse("HOOP_AUDIT_RETENTION_DAYS"),
-        yml_ref.and_then(|y| yaml_get_u64(y, "audit.retention_days")).map(|v| v as u32),
+        yml_ref
+            .and_then(|y| yaml_get_u64(y, "audit.retention_days"))
+            .map(|v| v as u32),
         90,
         "N/A",
         "HOOP_AUDIT_RETENTION_DAYS",
@@ -1407,7 +1536,9 @@ pub fn resolve_from_raw(
     let reflection_auto_archive_after_days = resolve_opt(
         None::<u32>,
         env_parse("HOOP_REFLECTION_ARCHIVE_DAYS"),
-        yml_ref.and_then(|y| yaml_get_u64(y, "reflection.auto_archive_after_days")).map(|v| v as u32),
+        yml_ref
+            .and_then(|y| yaml_get_u64(y, "reflection.auto_archive_after_days"))
+            .map(|v| v as u32),
         30,
         "N/A",
         "HOOP_REFLECTION_ARCHIVE_DAYS",
@@ -1418,7 +1549,9 @@ pub fn resolve_from_raw(
     let backup_endpoint = resolve_opt_none(
         None::<String>,
         None, // no env var for endpoint (in config.yml only)
-        yml_ref.and_then(|y| yaml_get_str(y, "backup.endpoint")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "backup.endpoint"))
+            .map(|s| s.to_string()),
         "N/A",
         "N/A",
         "backup.endpoint",
@@ -1427,7 +1560,9 @@ pub fn resolve_from_raw(
     let backup_bucket = resolve_opt_none(
         None::<String>,
         None, // no env var for bucket (in config.yml only)
-        yml_ref.and_then(|y| yaml_get_str(y, "backup.bucket")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "backup.bucket"))
+            .map(|s| s.to_string()),
         "N/A",
         "N/A",
         "backup.bucket",
@@ -1436,7 +1571,9 @@ pub fn resolve_from_raw(
     let backup_prefix = resolve_opt_none(
         None::<String>,
         None, // no env var for prefix (in config.yml only)
-        yml_ref.and_then(|y| yaml_get_str(y, "backup.prefix")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "backup.prefix"))
+            .map(|s| s.to_string()),
         "N/A",
         "N/A",
         "backup.prefix",
@@ -1445,7 +1582,9 @@ pub fn resolve_from_raw(
     let backup_schedule = resolve_opt(
         None,
         None,
-        yml_ref.and_then(|y| yaml_get_str(y, "backup.schedule")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "backup.schedule"))
+            .map(|s| s.to_string()),
         "0 4 * * *".to_string(),
         "N/A",
         "N/A",
@@ -1454,7 +1593,9 @@ pub fn resolve_from_raw(
     let backup_retention_days = resolve_opt(
         None::<u32>,
         env_parse("HOOP_BACKUP_RETENTION_DAYS"),
-        yml_ref.and_then(|y| yaml_get_u64(y, "backup.retention_days")).map(|v| v as u32),
+        yml_ref
+            .and_then(|y| yaml_get_u64(y, "backup.retention_days"))
+            .map(|v| v as u32),
         30,
         "N/A",
         "HOOP_BACKUP_RETENTION_DAYS",
@@ -1482,7 +1623,9 @@ pub fn resolve_from_raw(
     let pricing_file = resolve_opt(
         None,
         std::env::var("HOOP_PRICING_FILE").ok(),
-        yml_ref.and_then(|y| yaml_get_str(y, "pricing_file")).map(|s| s.to_string()),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "pricing_file"))
+            .map(|s| s.to_string()),
         default_pricing_path,
         "N/A",
         "HOOP_PRICING_FILE",
@@ -1510,7 +1653,11 @@ pub fn resolve_from_raw(
                     ];
                     if !VALID_TOP_LEVEL_KEYS.contains(&field_name) {
                         return Err(ConfigError::validation(
-                            format!("unknown field `{}`, expected one of: {}", field_name, VALID_TOP_LEVEL_KEYS.join(", ")),
+                            format!(
+                                "unknown field `{}`, expected one of: {}",
+                                field_name,
+                                VALID_TOP_LEVEL_KEYS.join(", ")
+                            ),
                             Some(field_name.to_string()),
                             Some("known field".to_string()),
                             Some("unknown field".to_string()),
@@ -1601,7 +1748,10 @@ mod tests {
 
         assert_eq!(config.metrics_port.value, 8080);
         assert_eq!(config.metrics_port.source, ConfigSource::EnvVar);
-        assert!(config.metrics_port.attribution.contains("HOOP_METRICS_PORT"));
+        assert!(config
+            .metrics_port
+            .attribution
+            .contains("HOOP_METRICS_PORT"));
 
         std::env::remove_var("HOOP_METRICS_PORT");
     }
@@ -1623,7 +1773,10 @@ mod tests {
         assert_eq!(config.agent_model.source, ConfigSource::Default);
 
         assert_eq!(config.voice_max_recording_seconds.value, 300);
-        assert_eq!(config.voice_max_recording_seconds.source, ConfigSource::Default);
+        assert_eq!(
+            config.voice_max_recording_seconds.source,
+            ConfigSource::Default
+        );
     }
 
     /// CLI allow_br_mismatch flag resolves correctly.
@@ -1812,7 +1965,10 @@ mod tests {
 
         assert_eq!(config.ui_archive_after_days.value, 60);
         assert_eq!(config.ui_archive_after_days.source, ConfigSource::EnvVar);
-        assert!(config.ui_archive_after_days.attribution.contains("HOOP_ARCHIVE_DAYS"));
+        assert!(config
+            .ui_archive_after_days
+            .attribution
+            .contains("HOOP_ARCHIVE_DAYS"));
 
         std::env::remove_var("HOOP_ARCHIVE_DAYS");
     }
@@ -1828,7 +1984,10 @@ mod tests {
 
         assert!(!config.audit_hash_chain.value);
         assert_eq!(config.audit_hash_chain.source, ConfigSource::EnvVar);
-        assert!(config.audit_hash_chain.attribution.contains("HOOP_AUDIT_HASH_CHAIN"));
+        assert!(config
+            .audit_hash_chain
+            .attribution
+            .contains("HOOP_AUDIT_HASH_CHAIN"));
 
         std::env::remove_var("HOOP_AUDIT_HASH_CHAIN");
     }
@@ -1840,12 +1999,18 @@ mod tests {
             "server:\n  bind_addr: \"0.0.0.0:9999\"\nui:\n  theme: dark\n  archive_after_days: 60\nmetrics:\n  enabled: true\n  port: 8080\nagent:\n  cost_cap_per_session_usd: 5.5\n"
         ).unwrap();
 
-        assert_eq!(yaml_get_str(&yaml, "server.bind_addr"), Some("0.0.0.0:9999"));
+        assert_eq!(
+            yaml_get_str(&yaml, "server.bind_addr"),
+            Some("0.0.0.0:9999")
+        );
         assert_eq!(yaml_get_str(&yaml, "ui.theme"), Some("dark"));
         assert_eq!(yaml_get_u64(&yaml, "ui.archive_after_days"), Some(60));
         assert_eq!(yaml_get_bool(&yaml, "metrics.enabled"), Some(true));
         assert_eq!(yaml_get_u64(&yaml, "metrics.port"), Some(8080));
-        assert_eq!(yaml_get_f64(&yaml, "agent.cost_cap_per_session_usd"), Some(5.5));
+        assert_eq!(
+            yaml_get_f64(&yaml, "agent.cost_cap_per_session_usd"),
+            Some(5.5)
+        );
 
         // Missing keys return None
         assert_eq!(yaml_get_str(&yaml, "nonexistent.key"), None);
@@ -1897,26 +2062,39 @@ mod tests {
         // Verify every entry has the expected sub-keys
         for (key, val) in &map {
             let obj = val.as_object().unwrap_or_else(|| {
-                panic!("key '{}' should be an object with value/source/resolved_from", key)
+                panic!(
+                    "key '{}' should be an object with value/source/resolved_from",
+                    key
+                )
             });
             assert!(obj.contains_key("value"), "key '{}' missing 'value'", key);
             assert!(obj.contains_key("source"), "key '{}' missing 'source'", key);
-            assert!(obj.contains_key("resolved_from"), "key '{}' missing 'resolved_from'", key);
+            assert!(
+                obj.contains_key("resolved_from"),
+                "key '{}' missing 'resolved_from'",
+                key
+            );
 
             // source should be one of the four valid values
-            let source = obj["source"].as_str().unwrap_or_else(|| {
-                panic!("key '{}' source should be a string", key)
-            });
+            let source = obj["source"]
+                .as_str()
+                .unwrap_or_else(|| panic!("key '{}' source should be a string", key));
             assert!(
                 ["cli_flag", "env_var", "config_yml", "default"].contains(&source),
-                "key '{}' has invalid source: {}", key, source
+                "key '{}' has invalid source: {}",
+                key,
+                source
             );
 
             // resolved_from should be a non-empty string
-            let resolved_from = obj["resolved_from"].as_str().unwrap_or_else(|| {
-                panic!("key '{}' resolved_from should be a string", key)
-            });
-            assert!(!resolved_from.is_empty(), "key '{}' has empty resolved_from", key);
+            let resolved_from = obj["resolved_from"]
+                .as_str()
+                .unwrap_or_else(|| panic!("key '{}' resolved_from should be a string", key));
+            assert!(
+                !resolved_from.is_empty(),
+                "key '{}' has empty resolved_from",
+                key
+            );
         }
     }
 }

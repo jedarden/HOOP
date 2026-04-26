@@ -85,25 +85,47 @@ fn test_raw_file_never_modified() {
 
     // Original file must be unchanged
     let after = fs::read_to_string(tmp.path()).unwrap();
-    assert_eq!(original_content, after, "Raw session file must not be modified by redaction");
-    assert!(after.contains("sk-ant-api03-FAKEKEY1111"), "Raw file must still contain original key");
+    assert_eq!(
+        original_content, after,
+        "Raw session file must not be modified by redaction"
+    );
+    assert!(
+        after.contains("sk-ant-api03-FAKEKEY1111"),
+        "Raw file must still contain original key"
+    );
 }
 
 #[test]
 fn test_anthropic_key_in_string_content_redacted() {
-    let raw = "Please use this key: sk-ant-api03-FAKEKEY1111AAAAABBBBBCCCCCDDDDDEEEEE to call the API.";
+    let raw =
+        "Please use this key: sk-ant-api03-FAKEKEY1111AAAAABBBBBCCCCCDDDDDEEEEE to call the API.";
     let out = redaction::redact_text(raw);
-    assert!(out.contains("[REDACTED]"), "expected [REDACTED], got: {out}");
-    assert!(!out.contains("sk-ant-api03-"), "raw key must not appear: {out}");
-    assert!(out.contains("Please use this key:"), "surrounding text must be preserved: {out}");
+    assert!(
+        out.contains("[REDACTED]"),
+        "expected [REDACTED], got: {out}"
+    );
+    assert!(
+        !out.contains("sk-ant-api03-"),
+        "raw key must not appear: {out}"
+    );
+    assert!(
+        out.contains("Please use this key:"),
+        "surrounding text must be preserved: {out}"
+    );
 }
 
 #[test]
 fn test_env_var_style_key_in_string_content_redacted() {
     let raw = "ANTHROPIC_API_KEY=sk-ant-api03-ANOTHERKEY2222BBBBBBCCCCCCDDDDDDEEEEEE in case you need it.";
     let out = redaction::redact_text(raw);
-    assert!(out.contains("[REDACTED]"), "expected [REDACTED], got: {out}");
-    assert!(!out.contains("ANOTHERKEY"), "raw key must not appear: {out}");
+    assert!(
+        out.contains("[REDACTED]"),
+        "expected [REDACTED], got: {out}"
+    );
+    assert!(
+        !out.contains("ANOTHERKEY"),
+        "raw key must not appear: {out}"
+    );
 }
 
 #[test]
@@ -115,11 +137,20 @@ fn test_array_content_blocks_redacted() {
     let out = redaction::redact_json_value(content);
 
     let text0 = out[0]["text"].as_str().unwrap();
-    assert!(text0.contains("[REDACTED]"), "token in block 0 must be redacted: {text0}");
-    assert!(!text0.contains("ghp_"), "raw token must not appear in block 0: {text0}");
+    assert!(
+        text0.contains("[REDACTED]"),
+        "token in block 0 must be redacted: {text0}"
+    );
+    assert!(
+        !text0.contains("ghp_"),
+        "raw token must not appear in block 0: {text0}"
+    );
 
     let text1 = out[1]["text"].as_str().unwrap();
-    assert_eq!(text1, "This block is clean.", "clean block must be unchanged");
+    assert_eq!(
+        text1, "This block is clean.",
+        "clean block must be unchanged"
+    );
 }
 
 #[test]
@@ -152,12 +183,27 @@ fn test_file_rotation_handled_transparently() {
     let r_old = redaction::redact_text(old_content);
     let r_new = redaction::redact_text(new_content);
 
-    assert!(r_old.contains("[REDACTED]"), "old content must be redacted: {r_old}");
-    assert!(r_new.contains("[REDACTED]"), "new content must be redacted: {r_new}");
-    assert!(!r_old.contains("OLDKEY"), "old key must not appear: {r_old}");
-    assert!(!r_new.contains("NEWKEY"), "new key must not appear: {r_new}");
+    assert!(
+        r_old.contains("[REDACTED]"),
+        "old content must be redacted: {r_old}"
+    );
+    assert!(
+        r_new.contains("[REDACTED]"),
+        "new content must be redacted: {r_new}"
+    );
+    assert!(
+        !r_old.contains("OLDKEY"),
+        "old key must not appear: {r_old}"
+    );
+    assert!(
+        !r_new.contains("NEWKEY"),
+        "new key must not appear: {r_new}"
+    );
     // Both should result in the same [REDACTED] output shape
-    assert_eq!(r_old, r_new, "both rotated-file variants should produce identical redacted form");
+    assert_eq!(
+        r_old, r_new,
+        "both rotated-file variants should produce identical redacted form"
+    );
 }
 
 #[test]
@@ -177,9 +223,18 @@ fn test_full_session_line_redaction_pipeline() {
 
         // Serialise back to check for raw secrets
         let serialised = redacted.to_string();
-        assert!(!serialised.contains("sk-ant-api03-"), "line {i}: raw Anthropic key must not appear after redaction");
-        assert!(!serialised.contains("ghp_16C7e"), "line {i}: raw GitHub token must not appear after redaction");
-        assert!(!serialised.contains("FAKEKEY"), "line {i}: raw fake key fragment must not appear after redaction");
+        assert!(
+            !serialised.contains("sk-ant-api03-"),
+            "line {i}: raw Anthropic key must not appear after redaction"
+        );
+        assert!(
+            !serialised.contains("ghp_16C7e"),
+            "line {i}: raw GitHub token must not appear after redaction"
+        );
+        assert!(
+            !serialised.contains("FAKEKEY"),
+            "line {i}: raw fake key fragment must not appear after redaction"
+        );
     }
 }
 
@@ -205,6 +260,12 @@ fn test_tool_result_content_redacted() {
     ]);
     let out = redaction::redact_json_value(content);
     let serialised = out.to_string();
-    assert!(serialised.contains("[REDACTED]"), "tool result secret must be redacted: {serialised}");
-    assert!(!serialised.contains("TOOLRESULT"), "raw key fragment must not appear: {serialised}");
+    assert!(
+        serialised.contains("[REDACTED]"),
+        "tool result secret must be redacted: {serialised}"
+    );
+    assert!(
+        !serialised.contains("TOOLRESULT"),
+        "raw key fragment must not appear: {serialised}"
+    );
 }

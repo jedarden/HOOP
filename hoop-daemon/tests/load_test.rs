@@ -87,15 +87,27 @@ fn test_event_generator_writes_to_disk() {
     generator.write_to_disk(temp_dir.path()).unwrap();
 
     // Check that events.jsonl was created
-    let events_path = temp_dir.path().join("load-test-project-000").join(".beads").join("events.jsonl");
+    let events_path = temp_dir
+        .path()
+        .join("load-test-project-000")
+        .join(".beads")
+        .join("events.jsonl");
     assert!(events_path.exists());
 
     // Check that heartbeats.jsonl was created
-    let heartbeats_path = temp_dir.path().join("load-test-project-000").join(".beads").join("heartbeats.jsonl");
+    let heartbeats_path = temp_dir
+        .path()
+        .join("load-test-project-000")
+        .join(".beads")
+        .join("heartbeats.jsonl");
     assert!(heartbeats_path.exists());
 
     // Check that beads.jsonl was created
-    let beads_path = temp_dir.path().join("load-test-project-000").join(".beads").join("beads.jsonl");
+    let beads_path = temp_dir
+        .path()
+        .join("load-test-project-000")
+        .join(".beads")
+        .join("beads.jsonl");
     assert!(beads_path.exists());
 
     // Verify events are valid JSONL
@@ -130,8 +142,8 @@ fn test_performance_report_assert_budgets_pass() {
     let report = PerformanceReport {
         passed: true,
         total_events: 1000,
-        api_latencies: vec![100, 200, 300], // All under 500ms
-        ws_fanout_lags: vec![10, 20, 30], // All under 100ms
+        api_latencies: vec![100, 200, 300],      // All under 500ms
+        ws_fanout_lags: vec![10, 20, 30],        // All under 100ms
         memory_samples: vec![1024 * 1024 * 500], // 500MB under 4GB
         failures: vec![],
     };
@@ -205,8 +217,10 @@ async fn test_load_test_with_daemon() {
     assert_eq!(report.total_events, 10); // 2 beads * ~5 events each
 
     // For small scale, we should pass budgets
-    assert!(report.assert_budgets(&config).is_ok(),
-        "Small-scale load test should pass performance budgets");
+    assert!(
+        report.assert_budgets(&config).is_ok(),
+        "Small-scale load test should pass performance budgets"
+    );
 }
 
 /// Full-scale load test (20x5x200)
@@ -263,21 +277,28 @@ async fn test_full_scale_load_test() {
     println!("{}", report.summary());
 
     // Assert performance budgets - this will fail if budgets are exceeded
-    report.assert_budgets(&config)
+    report
+        .assert_budgets(&config)
         .expect("Performance budgets must be satisfied");
 
     // Additional assertions for full-scale test
     assert!(report.total_events > 0, "Should process events");
-    assert!(report.api_latencies.len() > 0, "Should measure API latencies");
+    assert!(
+        report.api_latencies.len() > 0,
+        "Should measure API latencies"
+    );
 
     // Verify p95 latency is within budget
     let mut sorted_latencies = report.api_latencies.clone();
     sorted_latencies.sort();
     let p95_index = sorted_latencies.len() * 95 / 100;
     let p95_latency = sorted_latencies.get(p95_index).copied().unwrap_or(0);
-    assert!(p95_latency <= config.api_latency_budget_ms,
+    assert!(
+        p95_latency <= config.api_latency_budget_ms,
         "P95 API latency {}ms should be within budget {}ms",
-        p95_latency, config.api_latency_budget_ms);
+        p95_latency,
+        config.api_latency_budget_ms
+    );
 }
 
 /// Medium-scale load test for quick validation
@@ -319,6 +340,7 @@ async fn test_medium_scale_load_test() {
     println!("{}", report.summary());
 
     // Assert budgets pass
-    report.assert_budgets(&config)
+    report
+        .assert_budgets(&config)
         .expect("Medium-scale load test should pass performance budgets");
 }

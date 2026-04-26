@@ -111,7 +111,10 @@ pub fn predict_stitch(
 
     // Extract costs and durations
     let mut costs: Vec<f64> = similarities.iter().map(|(s, _)| s.cost_usd).collect();
-    let mut durations: Vec<i64> = similarities.iter().map(|(s, _)| s.duration_seconds).collect();
+    let mut durations: Vec<i64> = similarities
+        .iter()
+        .map(|(s, _)| s.duration_seconds)
+        .collect();
 
     costs.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     durations.sort();
@@ -180,9 +183,7 @@ fn compute_percentiles_i64(sorted: &[i64]) -> PercentileEstimate {
 /// highly-similar Stitch weighted at 0.9 counts more than a weakly-similar
 /// one at 0.3. This is "historical adapter-work-type fit" — NOT strand-based
 /// (§8.4 non-goal).
-fn most_common_adapter_model(
-    similarities: &[(&HistoricalStitch, f64)],
-) -> Option<String> {
+fn most_common_adapter_model(similarities: &[(&HistoricalStitch, f64)]) -> Option<String> {
     use std::collections::HashMap;
 
     let mut scores: HashMap<&str, f64> = HashMap::new();
@@ -247,9 +248,14 @@ mod tests {
 
     #[test]
     fn test_predict_stitch_no_similar() {
-        let historical = vec![
-            make_stitch("st1", "add feature", Some("claude:opus"), 1.5, 600, 10),
-        ];
+        let historical = vec![make_stitch(
+            "st1",
+            "add feature",
+            Some("claude:opus"),
+            1.5,
+            600,
+            10,
+        )];
 
         let result = predict_stitch("fix critical bug", None, &[], historical, 90);
 
@@ -320,19 +326,18 @@ mod tests {
 
     #[test]
     fn test_predict_with_labels() {
-        let historical = [
-            make_stitch("st1", "fix bug", Some("claude:opus"), 1.5, 600, 10),
-        ];
+        let historical = [make_stitch(
+            "st1",
+            "fix bug",
+            Some("claude:opus"),
+            1.5,
+            600,
+            10,
+        )];
         let mut stitch = historical[0].clone();
         stitch.labels = vec!["urgent".to_string()];
 
-        let result = predict_stitch(
-            "fix bug",
-            None,
-            &["urgent".to_string()],
-            vec![stitch],
-            90,
-        );
+        let result = predict_stitch("fix bug", None, &["urgent".to_string()], vec![stitch], 90);
 
         assert!(result.is_some());
     }

@@ -122,12 +122,20 @@ impl FixPatternService {
             params![id],
             |row| {
                 let signature_json: String = row.get(2)?;
-                let signature_vector: Vec<f32> = serde_json::from_str(&signature_json)
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e) as Box<dyn std::error::Error + Send + Sync>))?;
+                let signature_vector: Vec<f32> =
+                    serde_json::from_str(&signature_json).map_err(|e| {
+                        rusqlite::Error::ToSqlConversionFailure(
+                            Box::new(e) as Box<dyn std::error::Error + Send + Sync>
+                        )
+                    })?;
 
                 let examples_json: String = row.get(5)?;
                 let example_source_stitches: Vec<String> = serde_json::from_str(&examples_json)
-                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e) as Box<dyn std::error::Error + Send + Sync>))?;
+                    .map_err(|e| {
+                        rusqlite::Error::ToSqlConversionFailure(
+                            Box::new(e) as Box<dyn std::error::Error + Send + Sync>
+                        )
+                    })?;
 
                 Ok(FixPattern {
                     id: row.get(0)?,
@@ -164,27 +172,36 @@ impl FixPatternService {
              FROM fix_patterns ORDER BY created_at DESC",
         )?;
 
-        let patterns = stmt.query_map([], |row| {
-            let signature_json: String = row.get(2)?;
-            let signature_vector: Vec<f32> = serde_json::from_str(&signature_json)
-                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e) as Box<dyn std::error::Error + Send + Sync>))?;
+        let patterns = stmt
+            .query_map([], |row| {
+                let signature_json: String = row.get(2)?;
+                let signature_vector: Vec<f32> =
+                    serde_json::from_str(&signature_json).map_err(|e| {
+                        rusqlite::Error::ToSqlConversionFailure(
+                            Box::new(e) as Box<dyn std::error::Error + Send + Sync>
+                        )
+                    })?;
 
-            let examples_json: String = row.get(5)?;
-            let example_source_stitches: Vec<String> = serde_json::from_str(&examples_json)
-                .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e) as Box<dyn std::error::Error + Send + Sync>))?;
+                let examples_json: String = row.get(5)?;
+                let example_source_stitches: Vec<String> = serde_json::from_str(&examples_json)
+                    .map_err(|e| {
+                        rusqlite::Error::ToSqlConversionFailure(
+                            Box::new(e) as Box<dyn std::error::Error + Send + Sync>
+                        )
+                    })?;
 
-            Ok(FixPattern {
-                id: row.get(0)?,
-                name: row.get(1)?,
-                signature_vector,
-                keywords: row.get(3)?,
-                recommended_fix_template_md: row.get(4)?,
-                example_source_stitches,
-                created_at: row.get(6)?,
-                applied_count: row.get(7)?,
-            })
-        })?
-        .collect::<std::result::Result<Vec<_>, _>>()?;
+                Ok(FixPattern {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    signature_vector,
+                    keywords: row.get(3)?,
+                    recommended_fix_template_md: row.get(4)?,
+                    example_source_stitches,
+                    created_at: row.get(6)?,
+                    applied_count: row.get(7)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
 
         Ok(patterns)
     }
@@ -229,7 +246,8 @@ impl FixPatternService {
             set_clauses.join(", ")
         );
 
-        let params: Vec<&dyn rusqlite::ToSql> = values.iter().map(|v| v as &dyn rusqlite::ToSql).collect();
+        let params: Vec<&dyn rusqlite::ToSql> =
+            values.iter().map(|v| v as &dyn rusqlite::ToSql).collect();
         let affected = conn.execute(&query, params.as_slice())?;
         if affected == 0 {
             anyhow::bail!("Pattern '{}' not found", req.id);

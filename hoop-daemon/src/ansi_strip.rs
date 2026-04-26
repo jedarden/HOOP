@@ -160,7 +160,10 @@ mod tests {
         assert_eq!(strip_ansi("\x1b[1;31;42;104m"), "");
         // Text with color
         assert_eq!(strip_ansi("\x1b[31mRed\x1b[0m"), "Red");
-        assert_eq!(strip_ansi("Normal \x1b[1mBold\x1b[0m text"), "Normal Bold text");
+        assert_eq!(
+            strip_ansi("Normal \x1b[1mBold\x1b[0m text"),
+            "Normal Bold text"
+        );
     }
 
     #[test]

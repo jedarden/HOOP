@@ -2,13 +2,14 @@
 //!
 //! ## Overview
 //!
-//! Three trigger conditions emit a [`FleetNotification`] into the global ring:
+//! Four trigger conditions emit a [`FleetNotification`] into the global ring:
 //!
 //! | Kind | Trigger |
 //! |------|---------|
 //! | [`FleetNotificationKind::StitchBeadsClosed`] | All beads linked to a Stitch closed |
 //! | [`FleetNotificationKind::ConvoyComplete`] | All NEEDLE workers for a Stitch completed |
 //! | [`FleetNotificationKind::CapacityAlert`] | 5-hour utilisation exceeded threshold |
+//! | [`FleetNotificationKind::BeadCreatedByHoop`] | Bead created via HOOP (br create) |
 //!
 //! ## Agent delivery (≤5 s SLO)
 //!
@@ -68,6 +69,8 @@ pub enum FleetNotificationKind {
     ConvoyComplete,
     /// Account 5-hour utilisation exceeded [`CAPACITY_ALERT_THRESHOLD_PCT`].
     CapacityAlert,
+    /// Bead created via HOOP (br create).
+    BeadCreatedByHoop,
 }
 
 /// A structured event emitted by the fleet for agent consumption.
@@ -244,6 +247,13 @@ mod tests {
                 .as_str()
                 .unwrap(),
             "capacity_alert"
+        );
+        assert_eq!(
+            serde_json::to_value(FleetNotificationKind::BeadCreatedByHoop)
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "bead_created_by_hoop"
         );
     }
 

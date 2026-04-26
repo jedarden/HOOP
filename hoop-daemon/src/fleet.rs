@@ -21,7 +21,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 /// Current schema version
-pub const SCHEMA_VERSION: &str = "1.23.0";
+pub const SCHEMA_VERSION: &str = "1.24.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -49,6 +49,22 @@ pub enum ActionKind {
     DraftAbandoned,
     /// Words redacted from a dictated note transcript (§18.2)
     WordsRedacted,
+    /// Script executed via operator trigger, cron schedule, or event (§22.3)
+    ScriptExecuted,
+    /// Redaction pattern flagged content (audit only, no action taken)
+    RedactionFlagged,
+    /// Backup started (snapshot_id in args_json)
+    BackupStarted,
+    /// Backup finished successfully (snapshot_id, size, duration in args_json)
+    BackupFinished,
+    /// Backup failed (snapshot_id, error in args_json)
+    BackupFailed,
+    /// Restore started (snapshot_id in args_json)
+    RestoreStarted,
+    /// Restore finished successfully (snapshot_id, size, duration in args_json)
+    RestoreFinished,
+    /// Restore failed (snapshot_id, error in args_json)
+    RestoreFailed,
 }
 
 /// Action result for audit log
@@ -137,16 +153,24 @@ pub fn write_audit_row(
     let path = db_path();
     let conn = Connection::open(&path)?;
 
-    let hash_prev: String = conn.query_row(
-        "SELECT hash_self FROM actions ORDER BY rowid DESC LIMIT 1",
-        [],
-        |row| row.get(0),
-    ).unwrap_or_else(|_| GENESIS_HASH.to_string());
+    let hash_prev: String = conn
+        .query_row(
+            "SELECT hash_self FROM actions ORDER BY rowid DESC LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or_else(|_| GENESIS_HASH.to_string());
 
     // Compute hash of this row's content
     let hash_input = format!(
         "{}{}{}{}{}{:?}{}",
-        id, ts, actor, kind_str, target, project, args_json.as_deref().unwrap_or_default()
+        id,
+        ts,
+        actor,
+        kind_str,
+        target,
+        project,
+        args_json.as_deref().unwrap_or_default()
     );
     let hash_self = hex_encode(sha256(hash_input.as_bytes()));
 
@@ -163,7 +187,9 @@ pub fn write_audit_row(
     )?;
 
     // Update audit append rate metric
-    crate::metrics::metrics().hoop_audit_append_rate_per_second.inc();
+    crate::metrics::metrics()
+        .hoop_audit_append_rate_per_second
+        .inc();
 
     Ok(AuditRow {
         id,
@@ -181,6 +207,58 @@ pub fn write_audit_row(
         hash_prev,
         hash_self,
     })
+}
+
+/// Write a redaction audit entry when content is flagged by a pattern.
+///
+/// This is similar to `write_audit_row` but specifically for redaction events.
+/// It records when content is flagged, regardless of the action taken.
+#[allow(clippy::too_many_arguments)]
+pub fn write_redaction_audit(
+    what_flagged: &str,
+    pattern_name: &str,
+    action: crate::redaction_policy::RedactionAction,
+    operator: &str,
+    source_ref: Option<&str>,
+    project: &str,
+    metadata: Option<serde_json::Value>,
+) -> Result<()> {
+    use crate::redaction_policy::RedactionAction;
+
+    // Map RedactionAction to ActionResult for audit
+    let result = match action {
+        RedactionAction::Warn => ActionResult::Success,
+        RedactionAction::Redact => ActionResult::Success,
+        RedactionAction::Reject => ActionResult::Failure,
+        RedactionAction::FlaggedOnly => ActionResult::Success,
+    };
+
+    // Build args_json with redaction-specific information
+    let args_json = serde_json::json!({
+        "pattern": pattern_name,
+        "action": action,
+        "what_flagged": what_flagged,
+        "metadata": metadata,
+    }).to_string();
+
+    // Build a descriptive target
+    let target = format!("redaction:{}", pattern_name);
+
+    // Use the generic write_audit_row function
+    write_audit_row(
+        operator,
+        ActionKind::RedactionFlagged,
+        &target,
+        Some(project),
+        Some(args_json),
+        result,
+        None, // error
+        source_ref,
+        None, // stitch_id
+        None, // args_hash
+    )?;
+
+    Ok(())
 }
 
 /// Query audit rows with optional filters
@@ -224,10 +302,9 @@ pub fn query_audit_rows(
     let rows = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
         let kind_str: String = row.get(3)?;
         let result_str: String = row.get(7)?;
-        let kind: ActionKind = serde_json::from_str(&kind_str)
-            .unwrap_or(ActionKind::BeadCreated);
-        let result: ActionResult = serde_json::from_str(&result_str)
-            .unwrap_or(ActionResult::Success);
+        let kind: ActionKind = serde_json::from_str(&kind_str).unwrap_or(ActionKind::BeadCreated);
+        let result: ActionResult =
+            serde_json::from_str(&result_str).unwrap_or(ActionResult::Success);
 
         Ok(AuditRow {
             id: row.get(0)?,
@@ -264,23 +341,23 @@ pub fn verify_hash_chain() -> Result<()> {
 
     let mut stmt = conn.prepare(
         "SELECT id, ts, actor, kind, target, project, args_json, result, hash_prev, hash_self
-         FROM actions ORDER BY rowid ASC"
+         FROM actions ORDER BY rowid ASC",
     )?;
 
     let mut expected_hash = GENESIS_HASH.to_string();
 
     let rows = stmt.query_map([], |row| {
         Ok((
-            row.get::<_, String>(0)?, // id
-            row.get::<_, String>(1)?, // ts
-            row.get::<_, String>(2)?, // actor
-            row.get::<_, String>(3)?, // kind
-            row.get::<_, String>(4)?, // target
+            row.get::<_, String>(0)?,         // id
+            row.get::<_, String>(1)?,         // ts
+            row.get::<_, String>(2)?,         // actor
+            row.get::<_, String>(3)?,         // kind
+            row.get::<_, String>(4)?,         // target
             row.get::<_, Option<String>>(5)?, // project
             row.get::<_, Option<String>>(6)?, // args_json
-            row.get::<_, String>(7)?, // result
-            row.get::<_, String>(8)?, // hash_prev
-            row.get::<_, String>(9)?, // hash_self
+            row.get::<_, String>(7)?,         // result
+            row.get::<_, String>(8)?,         // hash_prev
+            row.get::<_, String>(9)?,         // hash_self
         ))
     })?;
 
@@ -291,21 +368,31 @@ pub fn verify_hash_chain() -> Result<()> {
         if hash_prev != expected_hash {
             return Err(anyhow::anyhow!(
                 "Hash chain broken at row {}: expected hash_prev={}, got={}",
-                id, expected_hash, hash_prev
+                id,
+                expected_hash,
+                hash_prev
             ));
         }
 
         // Verify hash_self is correct
         let hash_input = format!(
             "{}{}{}{}{}{:?}{}",
-            id, ts, actor, kind, target, project, args_json.as_deref().unwrap_or_default()
+            id,
+            ts,
+            actor,
+            kind,
+            target,
+            project,
+            args_json.as_deref().unwrap_or_default()
         );
         let computed_hash = hex_encode(sha256(hash_input.as_bytes()));
 
         if hash_self != computed_hash {
             return Err(anyhow::anyhow!(
                 "Hash self mismatch at row {}: expected={}, got={}",
-                id, computed_hash, hash_self
+                id,
+                computed_hash,
+                hash_self
             ));
         }
 
@@ -356,11 +443,11 @@ pub fn create_stitch(
         created_by,
         bead_ids,
         classification,
-        None,  // created_by_actor
-        None,  // created_by_session_id
-        None,  // created_by_adapter
-        None,  // created_by_model
-        None,  // turn_id
+        None, // created_by_actor
+        None, // created_by_session_id
+        None, // created_by_adapter
+        None, // created_by_model
+        None, // turn_id
     )
 }
 
@@ -438,7 +525,10 @@ pub fn create_stitch_with_audit(
 pub fn delete_stitch(stitch_id: &str) -> Result<()> {
     let path = db_path();
     let conn = Connection::open(&path)?;
-    conn.execute("DELETE FROM stitch_beads WHERE stitch_id = ?", params![stitch_id])?;
+    conn.execute(
+        "DELETE FROM stitch_beads WHERE stitch_id = ?",
+        params![stitch_id],
+    )?;
     conn.execute("DELETE FROM stitches WHERE id = ?", params![stitch_id])?;
     Ok(())
 }
@@ -474,7 +564,9 @@ pub fn init_fleet_db_at(path: PathBuf) -> Result<()> {
 /// can pass a binary_version of e.g. "2.0.0" against a database that is still
 /// at "1.x" to verify that the gate fires with the exact diagnostic message.
 pub fn init_fleet_db_at_version(path: PathBuf, binary_version: &str) -> Result<()> {
-    let parent = path.parent().ok_or_else(|| anyhow::anyhow!("Invalid db path"))?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("Invalid db path"))?;
 
     // Ensure parent directory exists
     std::fs::create_dir_all(parent)?;
@@ -497,16 +589,18 @@ pub fn init_fleet_db_at_version(path: PathBuf, binary_version: &str) -> Result<(
         // Fresh database: create schema and insert genesis row
         create_schema(&mut conn)?;
         insert_genesis_row(&mut conn)?;
-        info!("fleet.db created with initial schema {}, running migrations to {}", INITIAL_SCHEMA_VERSION, binary_version);
+        info!(
+            "fleet.db created with initial schema {}, running migrations to {}",
+            INITIAL_SCHEMA_VERSION, binary_version
+        );
 
         // Run migrations to bring fresh database to current version
         let start = std::time::Instant::now();
         run_migrations(&mut conn, INITIAL_SCHEMA_VERSION)?;
         let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
-        crate::metrics::metrics().hoop_schema_migration_duration_ms.observe(
-            &[INITIAL_SCHEMA_VERSION, binary_version],
-            elapsed_ms,
-        );
+        crate::metrics::metrics()
+            .hoop_schema_migration_duration_ms
+            .observe(&[INITIAL_SCHEMA_VERSION, binary_version], elapsed_ms);
         info!("Migrations complete, schema version {}", binary_version);
     } else {
         // Existing database: verify schema version and run migrations
@@ -525,10 +619,9 @@ pub fn init_fleet_db_at_version(path: PathBuf, binary_version: &str) -> Result<(
             let start = std::time::Instant::now();
             run_migrations(&mut conn, &version)?;
             let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
-            crate::metrics::metrics().hoop_schema_migration_duration_ms.observe(
-                &[&version, binary_version],
-                elapsed_ms,
-            );
+            crate::metrics::metrics()
+                .hoop_schema_migration_duration_ms
+                .observe(&[&version, binary_version], elapsed_ms);
             info!("Migrations complete, schema version {}", binary_version);
         } else {
             info!("fleet.db schema version {} verified", version);
@@ -625,7 +718,13 @@ fn insert_genesis_row(conn: &mut Connection) -> Result<()> {
     // Compute hash of this row's content
     let hash_input = format!(
         "{}{}{}{}{}{:?}{}",
-        id, ts, actor, kind, target, project, args_json.as_deref().unwrap_or_default()
+        id,
+        ts,
+        actor,
+        kind,
+        target,
+        project,
+        args_json.as_deref().unwrap_or_default()
     );
     let hash_self = hex_encode(sha256(hash_input.as_bytes()));
 
@@ -723,6 +822,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.1.0" => {
             migrate_v11_to_v12(conn)?;
@@ -747,6 +847,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.2.0" => {
             migrate_v12_to_v13(conn)?;
@@ -770,6 +871,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.3.0" => {
             migrate_v13_to_v14(conn)?;
@@ -792,6 +894,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.4.0" => {
             migrate_v14_to_v15(conn)?;
@@ -813,6 +916,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.5.0" => {
             migrate_v15_to_v16(conn)?;
@@ -833,6 +937,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.6.0" => {
             migrate_v16_to_v17(conn)?;
@@ -852,6 +957,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.7.0" => {
             migrate_v17_to_v18(conn)?;
@@ -870,6 +976,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.8.0" => {
             migrate_v18_to_v19(conn)?;
@@ -887,6 +994,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.9.0" => {
             migrate_v19_to_v110(conn)?;
@@ -903,6 +1011,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.10.0" => {
             migrate_v110_to_v111(conn)?;
@@ -918,6 +1027,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.11.0" => {
             migrate_v111_to_v112(conn)?;
@@ -932,6 +1042,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.12.0" => {
             migrate_v112_to_v113(conn)?;
@@ -945,6 +1056,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.13.0" => {
             migrate_v113_to_v114(conn)?;
@@ -957,6 +1069,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.14.0" => {
             migrate_v114_to_v115(conn)?;
@@ -968,6 +1081,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.15.0" => {
             migrate_v115_to_v116(conn)?;
@@ -978,6 +1092,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.16.0" => {
             migrate_v116_to_v117(conn)?;
@@ -987,6 +1102,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.17.0" => {
             migrate_v117_to_v118(conn)?;
@@ -995,6 +1111,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.18.0" => {
             migrate_v118_to_v119(conn)?;
@@ -1002,12 +1119,14 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.19.0" => {
             migrate_v119_to_v120(conn)?;
             migrate_v120_to_v121(conn)?;
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.20.0" => {
             migrate_v120_to_v121(conn)?;
@@ -1017,13 +1136,18 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
         "1.21.0" => {
             migrate_v121_to_v122(conn)?;
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
         }
         "1.22.0" => {
             migrate_v122_to_v123(conn)?;
+            migrate_v123_to_v124(conn)?;
+        }
+        "1.23.0" => {
+            migrate_v123_to_v124(conn)?;
         }
         _ => {
             return Err(anyhow::anyhow!(
-                "Unsupported schema version: {}. Expected 0.1.0–1.23.0",
+                "Unsupported schema version: {}. Expected 0.1.0–1.24.0",
                 from_version
             ));
         }
@@ -1166,10 +1290,9 @@ fn migrate_v01_to_v11(conn: &mut Connection) -> Result<()> {
     update_schema_version(conn, "1.1.0")?;
     let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
     info!("Migration 0.1.0 → 1.1.0 completed in {:.2} ms", elapsed_ms);
-    crate::metrics::metrics().hoop_schema_migration_duration_ms.observe(
-        &["0.1.0", "1.1.0"],
-        elapsed_ms,
-    );
+    crate::metrics::metrics()
+        .hoop_schema_migration_duration_ms
+        .observe(&["0.1.0", "1.1.0"], elapsed_ms);
     Ok(())
 }
 
@@ -1455,14 +1578,25 @@ fn migrate_v16_to_v17(conn: &mut Connection) -> Result<()> {
 }
 
 /// Add a column to a table only if it doesn't already exist.
-fn add_column_if_not_exists(conn: &mut Connection, table: &str, column: &str, col_type: &str) -> Result<()> {
+fn add_column_if_not_exists(
+    conn: &mut Connection,
+    table: &str,
+    column: &str,
+    col_type: &str,
+) -> Result<()> {
     let exists: bool = conn.query_row(
-        &format!("SELECT COUNT(*) > 0 FROM pragma_table_info('{}') WHERE name = '{}'", table, column),
+        &format!(
+            "SELECT COUNT(*) > 0 FROM pragma_table_info('{}') WHERE name = '{}'",
+            table, column
+        ),
         [],
         |row| row.get(0),
     )?;
     if !exists {
-        conn.execute(&format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, col_type), [])?;
+        conn.execute(
+            &format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, col_type),
+            [],
+        )?;
     }
     Ok(())
 }
@@ -1659,7 +1793,12 @@ fn migrate_v110_to_v111(conn: &mut Connection) -> Result<()> {
 fn migrate_v111_to_v112(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.11.0 → 1.12.0: Adding has_started_session to agent_sessions");
 
-    add_column_if_not_exists(conn, "agent_sessions", "has_started_session", "INTEGER NOT NULL DEFAULT 0")?;
+    add_column_if_not_exists(
+        conn,
+        "agent_sessions",
+        "has_started_session",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
 
     update_schema_version(conn, "1.12.0")?;
     Ok(())
@@ -1853,10 +1992,20 @@ fn migrate_v114_to_v115(conn: &mut Connection) -> Result<()> {
 fn migrate_v115_to_v116(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.15.0 → 1.16.0: Adding stitch forecast columns to capacity_rollup");
 
-    add_column_if_not_exists(conn, "capacity_rollup", "stitch_close_rate_per_min",   "REAL NOT NULL DEFAULT 0.0")?;
-    add_column_if_not_exists(conn, "capacity_rollup", "mean_cost_per_stitch_tokens", "REAL NOT NULL DEFAULT 0.0")?;
-    add_column_if_not_exists(conn, "capacity_rollup", "forecast_5h_stitch_min",      "REAL")?;
-    add_column_if_not_exists(conn, "capacity_rollup", "forecast_7d_stitch_min",      "REAL")?;
+    add_column_if_not_exists(
+        conn,
+        "capacity_rollup",
+        "stitch_close_rate_per_min",
+        "REAL NOT NULL DEFAULT 0.0",
+    )?;
+    add_column_if_not_exists(
+        conn,
+        "capacity_rollup",
+        "mean_cost_per_stitch_tokens",
+        "REAL NOT NULL DEFAULT 0.0",
+    )?;
+    add_column_if_not_exists(conn, "capacity_rollup", "forecast_5h_stitch_min", "REAL")?;
+    add_column_if_not_exists(conn, "capacity_rollup", "forecast_7d_stitch_min", "REAL")?;
 
     update_schema_version(conn, "1.16.0")?;
     Ok(())
@@ -1865,7 +2014,12 @@ fn migrate_v115_to_v116(conn: &mut Connection) -> Result<()> {
 fn migrate_v116_to_v117(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.16.0 → 1.17.0: Adding canonical_workspace to stitch_beads");
 
-    add_column_if_not_exists(conn, "stitch_beads", "canonical_workspace", "TEXT NOT NULL DEFAULT ''")?;
+    add_column_if_not_exists(
+        conn,
+        "stitch_beads",
+        "canonical_workspace",
+        "TEXT NOT NULL DEFAULT ''",
+    )?;
 
     update_schema_version(conn, "1.17.0")?;
     Ok(())
@@ -1934,7 +2088,10 @@ where
     F: FnOnce(&mut Connection) -> Result<()>,
 {
     let start = std::time::Instant::now();
-    info!("Running migration {} → {}: {}", from_version, to_version, description);
+    info!(
+        "Running migration {} → {}: {}",
+        from_version, to_version, description
+    );
     let result = f(conn);
     let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
     match &result {
@@ -1952,10 +2109,9 @@ where
         }
     }
     // Record migration duration metric
-    crate::metrics::metrics().hoop_schema_migration_duration_ms.observe(
-        &[from_version, to_version],
-        elapsed_ms,
-    );
+    crate::metrics::metrics()
+        .hoop_schema_migration_duration_ms
+        .observe(&[from_version, to_version], elapsed_ms);
     result
 }
 
@@ -1981,10 +2137,9 @@ macro_rules! migrate {
             }
         }
         // Record migration duration metric
-        crate::metrics::metrics().hoop_schema_migration_duration_ms.observe(
-            &[$from, $to],
-            elapsed_ms,
-        );
+        crate::metrics::metrics()
+            .hoop_schema_migration_duration_ms
+            .observe(&[$from, $to], elapsed_ms);
         result
     }};
 }
@@ -2072,12 +2227,14 @@ fn migrate_v121_to_v122(conn: &mut Connection) -> Result<()> {
 
     // Update the status check constraint to include 'abandoned'
     // SQLite doesn't support ALTER CONSTRAINT, so we need to recreate the table
-    let schema = conn.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='draft_queue'")?.query_row([], |row| {
-        row.get::<_, String>(0)
-    })?;
+    let schema = conn
+        .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='draft_queue'")?
+        .query_row([], |row| row.get::<_, String>(0))?;
 
     // Only recreate if the old constraint exists (without 'abandoned')
-    if schema.contains("CHECK(status IN ('pending', 'approved', 'submitted', 'rejected', 'edited'))") {
+    if schema
+        .contains("CHECK(status IN ('pending', 'approved', 'submitted', 'rejected', 'edited'))")
+    {
         conn.execute(
             r#"
             CREATE TABLE draft_queue_new (
@@ -2171,10 +2328,86 @@ fn migrate_v121_to_v122(conn: &mut Connection) -> Result<()> {
 fn migrate_v122_to_v123(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.22.0 → 1.23.0: Adding redacted_words column to dictated_notes");
 
-    add_column_if_not_exists(conn, "dictated_notes", "redacted_words", "TEXT DEFAULT '[]'")?;
+    add_column_if_not_exists(
+        conn,
+        "dictated_notes",
+        "redacted_words",
+        "TEXT DEFAULT '[]'",
+    )?;
 
     info!("redacted_words column added successfully");
     update_schema_version(conn, "1.23.0")?;
+    Ok(())
+}
+
+/// Migration 1.23.0 → 1.24.0: Add vector_index table for semantic dedup persistence
+///
+/// Creates the vector_index table to persist embeddings across daemon restarts.
+/// This enables the vector index to survive restarts and only rebuild when the
+/// embedding model changes (hoop-ttb.5.9.1).
+fn migrate_v123_to_v124(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.23.0 → 1.24.0: Adding vector_index table for semantic dedup persistence");
+
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS vector_index (
+            id TEXT PRIMARY KEY NOT NULL,
+            project TEXT NOT NULL,
+            title TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            description TEXT,
+            embedding BLOB NOT NULL,
+            tokens TEXT NOT NULL DEFAULT '[]',
+            model_name TEXT NOT NULL,
+            model_version TEXT NOT NULL,
+            indexed_at TEXT NOT NULL
+        )
+        "#,
+        [],
+    )?;
+
+    // Create index for project-scoped queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_vector_index_project ON vector_index(project)",
+        [],
+    )?;
+
+    // Create index for model version queries (to detect model changes)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_vector_index_model ON vector_index(model_name, model_version)",
+        [],
+    )?;
+
+    // Create metadata table for tracking index state
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS vector_index_metadata (
+            key TEXT PRIMARY KEY NOT NULL,
+            value TEXT NOT NULL
+        )
+        "#,
+        [],
+    )?;
+
+    // Initialize with current model info
+    let model_name =
+        std::env::var("HOOP_EMBEDDING_MODEL").unwrap_or_else(|_| "bge-small-en-v1.5".to_string());
+    let now = Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT OR REPLACE INTO vector_index_metadata (key, value) VALUES (?, ?)",
+        ["current_model_name", &model_name],
+    )?;
+    conn.execute(
+        "INSERT OR REPLACE INTO vector_index_metadata (key, value) VALUES (?, ?)",
+        ["current_model_version", &format!("{}:default", model_name)],
+    )?;
+    conn.execute(
+        "INSERT OR REPLACE INTO vector_index_metadata (key, value) VALUES (?, ?)",
+        ["last_rebuild_at", &now],
+    )?;
+
+    info!("vector_index table created successfully");
+    update_schema_version(conn, "1.24.0")?;
     Ok(())
 }
 
@@ -2248,7 +2481,10 @@ pub fn run_major_upgrade_at_version(path: PathBuf, binary_version: &str) -> Resu
     // only the recorded version needs updating.
     update_schema_version(&mut conn, binary_version)?;
 
-    info!("Major upgrade complete: schema_version is now {}", binary_version);
+    info!(
+        "Major upgrade complete: schema_version is now {}",
+        binary_version
+    );
     Ok(())
 }
 
@@ -2348,12 +2584,17 @@ pub fn load_active_agent_session() -> Result<Option<AgentSessionRow>> {
     match row {
         Ok(r) => Ok(Some(r)),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(e) => Err(anyhow::anyhow!("Failed to load active agent session: {}", e)),
+        Err(e) => Err(anyhow::anyhow!(
+            "Failed to load active agent session: {}",
+            e
+        )),
     }
 }
 
 /// Load an agent session by adapter_session_id (for audit trail reconstruction).
-pub fn load_agent_session_by_adapter_id(adapter_session_id: &str) -> Result<Option<AgentSessionRow>> {
+pub fn load_agent_session_by_adapter_id(
+    adapter_session_id: &str,
+) -> Result<Option<AgentSessionRow>> {
     let path = db_path();
     let conn = Connection::open(&path)?;
     let mut stmt = conn.prepare(
@@ -2386,7 +2627,10 @@ pub fn load_agent_session_by_adapter_id(adapter_session_id: &str) -> Result<Opti
     match row {
         Ok(r) => Ok(Some(r)),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
-        Err(e) => Err(anyhow::anyhow!("Failed to load agent session by adapter_id: {}", e)),
+        Err(e) => Err(anyhow::anyhow!(
+            "Failed to load agent session by adapter_id: {}",
+            e
+        )),
     }
 }
 
@@ -2635,7 +2879,14 @@ pub fn update_draft_status(
            SET status = ?1, resolved_by = ?2, resolved_at = ?3,
                rejection_reason = ?4, stitch_id = ?5
            WHERE id = ?6"#,
-        params![status, resolved_by, resolved_at, rejection_reason, stitch_id, draft_id],
+        params![
+            status,
+            resolved_by,
+            resolved_at,
+            rejection_reason,
+            stitch_id,
+            draft_id
+        ],
     )?;
     Ok(())
 }
@@ -2654,20 +2905,35 @@ pub fn edit_draft(
     let now = Utc::now().to_rfc3339();
 
     if let Some(t) = title {
-        conn.execute("UPDATE draft_queue SET title = ?1 WHERE id = ?2", params![t, draft_id])?;
+        conn.execute(
+            "UPDATE draft_queue SET title = ?1 WHERE id = ?2",
+            params![t, draft_id],
+        )?;
     }
     if let Some(d) = description {
-        conn.execute("UPDATE draft_queue SET description = ?1 WHERE id = ?2", params![d, draft_id])?;
+        conn.execute(
+            "UPDATE draft_queue SET description = ?1 WHERE id = ?2",
+            params![d, draft_id],
+        )?;
     }
     if let Some(k) = kind {
-        conn.execute("UPDATE draft_queue SET kind = ?1 WHERE id = ?2", params![k, draft_id])?;
+        conn.execute(
+            "UPDATE draft_queue SET kind = ?1 WHERE id = ?2",
+            params![k, draft_id],
+        )?;
     }
     if let Some(p) = priority {
-        conn.execute("UPDATE draft_queue SET priority = ?1 WHERE id = ?2", params![p, draft_id])?;
+        conn.execute(
+            "UPDATE draft_queue SET priority = ?1 WHERE id = ?2",
+            params![p, draft_id],
+        )?;
     }
     if let Some(l) = labels {
         let labels_json = serde_json::to_string(l)?;
-        conn.execute("UPDATE draft_queue SET labels = ?1 WHERE id = ?2", params![labels_json, draft_id])?;
+        conn.execute(
+            "UPDATE draft_queue SET labels = ?1 WHERE id = ?2",
+            params![labels_json, draft_id],
+        )?;
     }
 
     conn.execute(
@@ -2734,11 +3000,7 @@ fn read_draft_row(row: &rusqlite::Row<'_>) -> std::result::Result<DraftRow, rusq
 /// This is called when the operator opens the draft form in the UI.
 /// If a draft with this ID already exists (e.g., was autosaved before),
 /// it updates the opened_by/opened_at fields. Otherwise creates a new draft.
-pub fn open_draft(
-    draft_id: &str,
-    project: &str,
-    opened_by: &str,
-) -> Result<()> {
+pub fn open_draft(draft_id: &str, project: &str, opened_by: &str) -> Result<()> {
     let path = db_path();
     let conn = Connection::open(&path)?;
     let now = Utc::now().to_rfc3339();
@@ -2789,20 +3051,35 @@ pub fn autosave_draft(
     let now = Utc::now().to_rfc3339();
 
     if let Some(t) = title {
-        conn.execute("UPDATE draft_queue SET title = ?1 WHERE id = ?2", params![t, draft_id])?;
+        conn.execute(
+            "UPDATE draft_queue SET title = ?1 WHERE id = ?2",
+            params![t, draft_id],
+        )?;
     }
     if let Some(d) = description {
-        conn.execute("UPDATE draft_queue SET description = ?1 WHERE id = ?2", params![d, draft_id])?;
+        conn.execute(
+            "UPDATE draft_queue SET description = ?1 WHERE id = ?2",
+            params![d, draft_id],
+        )?;
     }
     if let Some(k) = kind {
-        conn.execute("UPDATE draft_queue SET kind = ?1 WHERE id = ?2", params![k, draft_id])?;
+        conn.execute(
+            "UPDATE draft_queue SET kind = ?1 WHERE id = ?2",
+            params![k, draft_id],
+        )?;
     }
     if let Some(p) = priority {
-        conn.execute("UPDATE draft_queue SET priority = ?1 WHERE id = ?2", params![p, draft_id])?;
+        conn.execute(
+            "UPDATE draft_queue SET priority = ?1 WHERE id = ?2",
+            params![p, draft_id],
+        )?;
     }
     if let Some(l) = labels {
         let labels_json = serde_json::to_string(l)?;
-        conn.execute("UPDATE draft_queue SET labels = ?1 WHERE id = ?2", params![labels_json, draft_id])?;
+        conn.execute(
+            "UPDATE draft_queue SET labels = ?1 WHERE id = ?2",
+            params![labels_json, draft_id],
+        )?;
     }
 
     conn.execute(
@@ -2897,7 +3174,9 @@ pub struct ReflectionLedgerEntry {
 }
 
 /// List approved reflection ledger entries, optionally filtered by scope.
-pub fn list_approved_reflection_entries(scope_prefix: Option<&str>) -> Result<Vec<ReflectionLedgerEntry>> {
+pub fn list_approved_reflection_entries(
+    scope_prefix: Option<&str>,
+) -> Result<Vec<ReflectionLedgerEntry>> {
     let path = db_path();
     let conn = Connection::open(&path)?;
     let mut sql = String::from(
@@ -2906,7 +3185,10 @@ pub fn list_approved_reflection_entries(scope_prefix: Option<&str>) -> Result<Ve
     );
     let mut p: Vec<String> = Vec::new();
     if let Some(prefix) = scope_prefix {
-        sql.push_str(&format!(" AND (scope = 'global' OR scope LIKE ?{} || '%')", p.len() + 1));
+        sql.push_str(&format!(
+            " AND (scope = 'global' OR scope LIKE ?{} || '%')",
+            p.len() + 1
+        ));
         p.push(prefix.to_string());
     }
     sql.push_str(" ORDER BY created_at ASC");
@@ -3635,7 +3917,15 @@ pub fn snapshot_codex_account_daily_spend(
 ) -> Result<()> {
     let path = db_path();
     let conn = Connection::open(&path)?;
-    snapshot_codex_account_daily_spend_conn(&conn, account_id, date, plan_tier, cost_usd, input_tokens, output_tokens)
+    snapshot_codex_account_daily_spend_conn(
+        &conn,
+        account_id,
+        date,
+        plan_tier,
+        cost_usd,
+        input_tokens,
+        output_tokens,
+    )
 }
 
 fn snapshot_codex_account_daily_spend_conn(
@@ -3652,7 +3942,15 @@ fn snapshot_codex_account_daily_spend_conn(
         r#"INSERT OR REPLACE INTO codex_account_daily_spend
            (account_id, date, plan_tier, cost_usd, input_tokens, output_tokens, updated_at)
            VALUES (?1,?2,?3,?4,?5,?6,?7)"#,
-        params![account_id, date, plan_tier, cost_usd, input_tokens, output_tokens, updated_at],
+        params![
+            account_id,
+            date,
+            plan_tier,
+            cost_usd,
+            input_tokens,
+            output_tokens,
+            updated_at
+        ],
     )?;
     Ok(())
 }
@@ -3676,7 +3974,8 @@ fn query_codex_account_daily_spend_conn(
     date_from: Option<&str>,
     date_to: Option<&str>,
 ) -> Result<Vec<CodexAccountDailySpendRow>> {
-    let sql = "SELECT account_id, date, plan_tier, cost_usd, input_tokens, output_tokens, updated_at
+    let sql =
+        "SELECT account_id, date, plan_tier, cost_usd, input_tokens, output_tokens, updated_at
                FROM codex_account_daily_spend
                WHERE (?1 IS NULL OR account_id = ?1)
                  AND (?2 IS NULL OR date >= ?2)
@@ -3837,8 +4136,8 @@ pub fn upsert_collision_entry(entry: &CollisionIndexEntry) -> Result<()> {
 }
 
 fn upsert_collision_entry_conn(conn: &Connection, entry: &CollisionIndexEntry) -> Result<()> {
-    let file_paths_json = serde_json::to_string(&entry.file_paths)
-        .unwrap_or_else(|_| "[]".to_string());
+    let file_paths_json =
+        serde_json::to_string(&entry.file_paths).unwrap_or_else(|_| "[]".to_string());
     conn.execute(
         r#"INSERT INTO collision_index
            (bead_id, project, worker, claimed_at, file_paths, updated_at)
@@ -3869,7 +4168,10 @@ pub fn remove_collision_entry(bead_id: &str) -> Result<()> {
 }
 
 fn remove_collision_entry_conn(conn: &Connection, bead_id: &str) -> Result<()> {
-    conn.execute("DELETE FROM collision_index WHERE bead_id = ?1", params![bead_id])?;
+    conn.execute(
+        "DELETE FROM collision_index WHERE bead_id = ?1",
+        params![bead_id],
+    )?;
     Ok(())
 }
 
@@ -3902,8 +4204,7 @@ fn query_collision_candidates_conn(
     )?;
     let rows = stmt.query_map(params![project], |row| {
         let fp_json: String = row.get(4)?;
-        let file_paths: Vec<String> =
-            serde_json::from_str(&fp_json).unwrap_or_default();
+        let file_paths: Vec<String> = serde_json::from_str(&fp_json).unwrap_or_default();
         Ok(CollisionIndexEntry {
             bead_id: row.get(0)?,
             project: row.get(1)?,
@@ -3921,7 +4222,11 @@ fn query_collision_candidates_conn(
         candidate_paths.iter().map(|s| s.as_str()).collect();
     Ok(all
         .into_iter()
-        .filter(|e| e.file_paths.iter().any(|fp| candidates.contains(fp.as_str())))
+        .filter(|e| {
+            e.file_paths
+                .iter()
+                .any(|fp| candidates.contains(fp.as_str()))
+        })
         .collect())
 }
 
@@ -4013,7 +4318,9 @@ pub fn query_bead_commits_by_sha(sha: &str) -> Result<Vec<BeadCommitRow>> {
 ///
 /// Follows the same `tokio::select!` pattern as the morning-brief and
 /// backup schedulers.
-pub fn start_draft_cleanup_scheduler(mut shutdown: tokio::sync::broadcast::Receiver<crate::shutdown::ShutdownPhase>) {
+pub fn start_draft_cleanup_scheduler(
+    mut shutdown: tokio::sync::broadcast::Receiver<crate::shutdown::ShutdownPhase>,
+) {
     tokio::spawn(async move {
         let mut last_cleanup_date: Option<chrono::NaiveDate> = None;
         const CLEANUP_HOUR: u32 = 3; // 3 AM
@@ -4112,7 +4419,11 @@ mod tests {
         insert_genesis_row(&mut conn)?;
 
         // Verify genesis row exists
-        let count: i64 = conn.query_row("SELECT COUNT(*) FROM actions WHERE kind = 'genesis'", [], |row| row.get(0))?;
+        let count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM actions WHERE kind = 'genesis'",
+            [],
+            |row| row.get(0),
+        )?;
         assert_eq!(count, 1);
 
         // Verify hash chain integrity
@@ -4268,7 +4579,10 @@ mod tests {
             "#,
             params![Uuid::new_v4().to_string(), "invalid-stitch-id"],
         );
-        assert!(result.is_err(), "Foreign key constraint should prevent invalid stitch_id");
+        assert!(
+            result.is_err(),
+            "Foreign key constraint should prevent invalid stitch_id"
+        );
 
         // Insert a stitch_bead with valid stitch_id should succeed
         conn.execute(
@@ -4329,7 +4643,10 @@ mod tests {
             "#,
             params![Uuid::new_v4().to_string(), "test-project", "invalid_kind", "Test", "user"],
         );
-        assert!(result.is_err(), "CHECK constraint should reject invalid stitch kind");
+        assert!(
+            result.is_err(),
+            "CHECK constraint should reject invalid stitch kind"
+        );
 
         Ok(())
     }
@@ -4374,7 +4691,10 @@ mod tests {
             "#,
             params![stitch_id, "bd-invalid", "/tmp/test", "/tmp/test", "invalid_rel"],
         );
-        assert!(result.is_err(), "CHECK constraint should reject invalid relationship");
+        assert!(
+            result.is_err(),
+            "CHECK constraint should reject invalid relationship"
+        );
 
         Ok(())
     }
@@ -4422,7 +4742,10 @@ mod tests {
             "#,
             params![stitch_id_1, stitch_id_2, "invalid_kind"],
         );
-        assert!(result.is_err(), "CHECK constraint should reject invalid link kind");
+        assert!(
+            result.is_err(),
+            "CHECK constraint should reject invalid link kind"
+        );
 
         Ok(())
     }
@@ -4514,7 +4837,11 @@ mod tests {
         for status in ["planned", "active", "blocked", "done", "abandoned"] {
             conn.execute(
                 "INSERT INTO patterns (id, title, status) VALUES (?, ?, ?)",
-                params![Uuid::new_v4().to_string(), format!("Pattern {}", status), status],
+                params![
+                    Uuid::new_v4().to_string(),
+                    format!("Pattern {}", status),
+                    status
+                ],
             )?;
         }
 
@@ -4523,14 +4850,20 @@ mod tests {
             "INSERT INTO patterns (id, title, status) VALUES (?, ?, ?)",
             params![Uuid::new_v4().to_string(), "Bad", "invalid"],
         );
-        assert!(result.is_err(), "CHECK constraint should reject invalid status");
+        assert!(
+            result.is_err(),
+            "CHECK constraint should reject invalid status"
+        );
 
         // NULL status should also fail
         let result = conn.execute(
             "INSERT INTO patterns (id, title, status) VALUES (?, ?, NULL)",
             params![Uuid::new_v4().to_string(), "Null Status"],
         );
-        assert!(result.is_err(), "NOT NULL constraint should reject NULL status");
+        assert!(
+            result.is_err(),
+            "NOT NULL constraint should reject NULL status"
+        );
 
         Ok(())
     }
@@ -4559,7 +4892,10 @@ mod tests {
             "UPDATE patterns SET parent_pattern = ? WHERE id = ?",
             params![id, id],
         );
-        assert!(result.is_err(), "Should prevent self-referencing parent_pattern");
+        assert!(
+            result.is_err(),
+            "Should prevent self-referencing parent_pattern"
+        );
 
         Ok(())
     }
@@ -4842,7 +5178,10 @@ mod tests {
             params![child],
             |row| Ok((row.get(0)?,)),
         )?;
-        assert_eq!(child_parent, None, "Child's parent should be NULL after parent deletion");
+        assert_eq!(
+            child_parent, None,
+            "Child's parent should be NULL after parent deletion"
+        );
 
         Ok(())
     }
@@ -4866,7 +5205,10 @@ mod tests {
             [],
             |row| row.get(0),
         )?;
-        assert_eq!(count, 1, "reflection_ledger table should exist after migration");
+        assert_eq!(
+            count, 1,
+            "reflection_ledger table should exist after migration"
+        );
 
         // Check status CHECK constraint
         use uuid::Uuid;
@@ -4881,7 +5223,10 @@ mod tests {
             "INSERT INTO reflection_ledger (id, scope, rule, reason, status, created_at) VALUES (?, 'global', 'r', 're', 'invalid', datetime('now'))",
             [Uuid::new_v4().to_string()],
         );
-        assert!(result.is_err(), "CHECK constraint should reject invalid reflection status");
+        assert!(
+            result.is_err(),
+            "CHECK constraint should reject invalid reflection status"
+        );
 
         Ok(())
     }
@@ -5003,7 +5348,10 @@ mod tests {
         let history = vec![
             ("user".to_string(), "What did we do today?".to_string()),
             ("assistant".to_string(), "Here's a summary...".to_string()),
-            ("user".to_string(), "Draft a bead for fixing Calico".to_string()),
+            (
+                "user".to_string(),
+                "Draft a bead for fixing Calico".to_string(),
+            ),
         ];
 
         let stitch_id = Uuid::new_v4().to_string();
@@ -5296,7 +5644,12 @@ mod tests {
     fn test_cross_project_state_tables_created() -> Result<()> {
         let (_f, conn) = setup_db()?;
 
-        for table in ["project_status", "cost_rollup", "capacity_rollup", "collision_index"] {
+        for table in [
+            "project_status",
+            "cost_rollup",
+            "capacity_rollup",
+            "collision_index",
+        ] {
             let count: i64 = conn.query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = ?",
                 [table],
@@ -5397,7 +5750,10 @@ mod tests {
 
         let rows = query_runtime_status_conn(&conn)?;
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].liveness, "alive", "recent heartbeat should be alive");
+        assert_eq!(
+            rows[0].liveness, "alive",
+            "recent heartbeat should be alive"
+        );
         Ok(())
     }
 
@@ -5443,7 +5799,10 @@ mod tests {
 
         let rows = query_runtime_status_conn(&conn)?;
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].liveness, "stale", "missing heartbeat should be stale");
+        assert_eq!(
+            rows[0].liveness, "stale",
+            "missing heartbeat should be stale"
+        );
         Ok(())
     }
 
@@ -5558,7 +5917,10 @@ mod tests {
             "snapshot should replace cost_usd: got {}",
             rows[0].cost_usd
         );
-        assert_eq!(rows[0].input_tokens, 10000, "snapshot should replace input_tokens");
+        assert_eq!(
+            rows[0].input_tokens, 10000,
+            "snapshot should replace input_tokens"
+        );
         assert_eq!(rows[0].output_tokens, 5000);
         Ok(())
     }
@@ -5652,7 +6014,10 @@ mod tests {
 
         let rows = query_capacity_rollup_conn(&conn)?;
         assert_eq!(rows.len(), 1, "upsert should not create a duplicate row");
-        assert!((rows[0].window_5h_pct - 55.0).abs() < 1e-6, "should have updated value");
+        assert!(
+            (rows[0].window_5h_pct - 55.0).abs() < 1e-6,
+            "should have updated value"
+        );
         assert_eq!(rows[0].computed_at, "2026-04-24T11:00:00Z");
         Ok(())
     }
@@ -5824,38 +6189,22 @@ mod tests {
         )?;
 
         // Overlap with src/lib.rs → bead-A only
-        let hits = query_collision_candidates_conn(
-            &conn,
-            "proj-x",
-            &["src/lib.rs".to_string()],
-        )?;
+        let hits = query_collision_candidates_conn(&conn, "proj-x", &["src/lib.rs".to_string()])?;
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].bead_id, "bead-A");
 
         // Overlap with Cargo.toml → bead-B only
-        let hits2 = query_collision_candidates_conn(
-            &conn,
-            "proj-x",
-            &["Cargo.toml".to_string()],
-        )?;
+        let hits2 = query_collision_candidates_conn(&conn, "proj-x", &["Cargo.toml".to_string()])?;
         assert_eq!(hits2.len(), 1);
         assert_eq!(hits2[0].bead_id, "bead-B");
 
         // Overlap with src/main.rs in proj-x → bead-A only (bead-C is proj-y)
-        let hits3 = query_collision_candidates_conn(
-            &conn,
-            "proj-x",
-            &["src/main.rs".to_string()],
-        )?;
+        let hits3 = query_collision_candidates_conn(&conn, "proj-x", &["src/main.rs".to_string()])?;
         assert_eq!(hits3.len(), 1);
         assert_eq!(hits3[0].bead_id, "bead-A");
 
         // No overlap
-        let no_hits = query_collision_candidates_conn(
-            &conn,
-            "proj-x",
-            &["README.md".to_string()],
-        )?;
+        let no_hits = query_collision_candidates_conn(&conn, "proj-x", &["README.md".to_string()])?;
         assert!(no_hits.is_empty(), "unrelated file should not match");
 
         // Empty candidates slice → always empty (public API short-circuits, _conn filters cleanly)
@@ -5884,19 +6233,13 @@ mod tests {
             )?;
         }
 
-        let hits1 = query_collision_candidates_conn(
-            &conn,
-            "proj-1",
-            &["shared/common.rs".to_string()],
-        )?;
+        let hits1 =
+            query_collision_candidates_conn(&conn, "proj-1", &["shared/common.rs".to_string()])?;
         assert_eq!(hits1.len(), 1);
         assert_eq!(hits1[0].bead_id, "bead-P1");
 
-        let hits2 = query_collision_candidates_conn(
-            &conn,
-            "proj-2",
-            &["shared/common.rs".to_string()],
-        )?;
+        let hits2 =
+            query_collision_candidates_conn(&conn, "proj-2", &["shared/common.rs".to_string()])?;
         assert_eq!(hits2.len(), 1);
         assert_eq!(hits2[0].bead_id, "bead-P2");
         Ok(())
@@ -5922,7 +6265,15 @@ mod tests {
     fn test_codex_account_daily_spend_snapshot_and_query() -> Result<()> {
         let (_f, conn) = setup_db()?;
 
-        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-04-24", "tier_1", 1.50, 100_000, 50_000)?;
+        snapshot_codex_account_daily_spend_conn(
+            &conn,
+            "default",
+            "2026-04-24",
+            "tier_1",
+            1.50,
+            100_000,
+            50_000,
+        )?;
 
         let rows = query_codex_account_daily_spend_conn(&conn, None, None, None)?;
         assert_eq!(rows.len(), 1);
@@ -5939,9 +6290,25 @@ mod tests {
     fn test_codex_account_daily_spend_snapshot_replaces() -> Result<()> {
         let (_f, conn) = setup_db()?;
 
-        snapshot_codex_account_daily_spend_conn(&conn, "work", "2026-04-24", "tier_2", 1.00, 80_000, 40_000)?;
+        snapshot_codex_account_daily_spend_conn(
+            &conn,
+            "work",
+            "2026-04-24",
+            "tier_2",
+            1.00,
+            80_000,
+            40_000,
+        )?;
         // Overwrite with updated totals
-        snapshot_codex_account_daily_spend_conn(&conn, "work", "2026-04-24", "tier_2", 2.00, 160_000, 80_000)?;
+        snapshot_codex_account_daily_spend_conn(
+            &conn,
+            "work",
+            "2026-04-24",
+            "tier_2",
+            2.00,
+            160_000,
+            80_000,
+        )?;
 
         let rows = query_codex_account_daily_spend_conn(&conn, Some("work"), None, None)?;
         assert_eq!(rows.len(), 1, "snapshot should replace, not accumulate");
@@ -5954,14 +6321,43 @@ mod tests {
     fn test_codex_account_daily_spend_date_range_filter() -> Result<()> {
         let (_f, conn) = setup_db()?;
 
-        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-04-01", "tier_1", 0.10, 1000, 500)?;
-        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-04-15", "tier_1", 0.20, 2000, 1000)?;
-        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-04-24", "tier_1", 0.30, 3000, 1500)?;
+        snapshot_codex_account_daily_spend_conn(
+            &conn,
+            "default",
+            "2026-04-01",
+            "tier_1",
+            0.10,
+            1000,
+            500,
+        )?;
+        snapshot_codex_account_daily_spend_conn(
+            &conn,
+            "default",
+            "2026-04-15",
+            "tier_1",
+            0.20,
+            2000,
+            1000,
+        )?;
+        snapshot_codex_account_daily_spend_conn(
+            &conn,
+            "default",
+            "2026-04-24",
+            "tier_1",
+            0.30,
+            3000,
+            1500,
+        )?;
 
         let all = query_codex_account_daily_spend_conn(&conn, None, None, None)?;
         assert_eq!(all.len(), 3);
 
-        let mid = query_codex_account_daily_spend_conn(&conn, None, Some("2026-04-10"), Some("2026-04-20"))?;
+        let mid = query_codex_account_daily_spend_conn(
+            &conn,
+            None,
+            Some("2026-04-10"),
+            Some("2026-04-20"),
+        )?;
         assert_eq!(mid.len(), 1);
         assert_eq!(mid[0].date, "2026-04-15");
 
@@ -5974,9 +6370,33 @@ mod tests {
     fn test_codex_account_daily_spend_account_filter() -> Result<()> {
         let (_f, conn) = setup_db()?;
 
-        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-04-24", "tier_1", 1.00, 10000, 5000)?;
-        snapshot_codex_account_daily_spend_conn(&conn, "work", "2026-04-24", "tier_2", 2.00, 20000, 10000)?;
-        snapshot_codex_account_daily_spend_conn(&conn, "personal", "2026-04-24", "free", 0.00, 5000, 2500)?;
+        snapshot_codex_account_daily_spend_conn(
+            &conn,
+            "default",
+            "2026-04-24",
+            "tier_1",
+            1.00,
+            10000,
+            5000,
+        )?;
+        snapshot_codex_account_daily_spend_conn(
+            &conn,
+            "work",
+            "2026-04-24",
+            "tier_2",
+            2.00,
+            20000,
+            10000,
+        )?;
+        snapshot_codex_account_daily_spend_conn(
+            &conn,
+            "personal",
+            "2026-04-24",
+            "free",
+            0.00,
+            5000,
+            2500,
+        )?;
 
         let all = query_codex_account_daily_spend_conn(&conn, None, None, None)?;
         assert_eq!(all.len(), 3);
@@ -5993,30 +6413,79 @@ mod tests {
         let (_f, conn) = setup_db()?;
 
         // April data for "default" (tier_1)
-        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-04-01", "tier_1", 0.50, 5000, 2500)?;
-        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-04-15", "tier_1", 0.75, 7500, 3750)?;
-        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-04-24", "tier_1", 1.00, 10000, 5000)?;
+        snapshot_codex_account_daily_spend_conn(
+            &conn,
+            "default",
+            "2026-04-01",
+            "tier_1",
+            0.50,
+            5000,
+            2500,
+        )?;
+        snapshot_codex_account_daily_spend_conn(
+            &conn,
+            "default",
+            "2026-04-15",
+            "tier_1",
+            0.75,
+            7500,
+            3750,
+        )?;
+        snapshot_codex_account_daily_spend_conn(
+            &conn,
+            "default",
+            "2026-04-24",
+            "tier_1",
+            1.00,
+            10000,
+            5000,
+        )?;
         // March data for "default"
-        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-03-31", "tier_1", 0.25, 2500, 1250)?;
+        snapshot_codex_account_daily_spend_conn(
+            &conn,
+            "default",
+            "2026-03-31",
+            "tier_1",
+            0.25,
+            2500,
+            1250,
+        )?;
         // April data for "work" (tier_2)
-        snapshot_codex_account_daily_spend_conn(&conn, "work", "2026-04-20", "tier_2", 2.00, 20000, 10000)?;
+        snapshot_codex_account_daily_spend_conn(
+            &conn,
+            "work",
+            "2026-04-20",
+            "tier_2",
+            2.00,
+            20000,
+            10000,
+        )?;
 
         let all = query_codex_account_monthly_rollup_conn(&conn, None, None, None)?;
         // Expect: default/2026-04, default/2026-03, work/2026-04
         assert_eq!(all.len(), 3);
 
         // default April should aggregate 3 days
-        let default_april = all.iter().find(|r| r.account_id == "default" && r.month == "2026-04").unwrap();
+        let default_april = all
+            .iter()
+            .find(|r| r.account_id == "default" && r.month == "2026-04")
+            .unwrap();
         assert!((default_april.cost_usd - 2.25).abs() < 1e-9);
         assert_eq!(default_april.input_tokens, 22500);
         assert_eq!(default_april.output_tokens, 11250);
 
         // default March should have one row
-        let default_march = all.iter().find(|r| r.account_id == "default" && r.month == "2026-03").unwrap();
+        let default_march = all
+            .iter()
+            .find(|r| r.account_id == "default" && r.month == "2026-03")
+            .unwrap();
         assert!((default_march.cost_usd - 0.25).abs() < 1e-9);
 
         // work April
-        let work_april = all.iter().find(|r| r.account_id == "work" && r.month == "2026-04").unwrap();
+        let work_april = all
+            .iter()
+            .find(|r| r.account_id == "work" && r.month == "2026-04")
+            .unwrap();
         assert_eq!(work_april.plan_tier, "tier_2");
         assert!((work_april.cost_usd - 2.00).abs() < 1e-9);
         Ok(())
@@ -6026,14 +6495,40 @@ mod tests {
     fn test_codex_account_monthly_rollup_month_filter() -> Result<()> {
         let (_f, conn) = setup_db()?;
 
-        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-02-15", "tier_1", 0.10, 1000, 500)?;
-        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-03-15", "tier_1", 0.20, 2000, 1000)?;
-        snapshot_codex_account_daily_spend_conn(&conn, "default", "2026-04-15", "tier_1", 0.30, 3000, 1500)?;
+        snapshot_codex_account_daily_spend_conn(
+            &conn,
+            "default",
+            "2026-02-15",
+            "tier_1",
+            0.10,
+            1000,
+            500,
+        )?;
+        snapshot_codex_account_daily_spend_conn(
+            &conn,
+            "default",
+            "2026-03-15",
+            "tier_1",
+            0.20,
+            2000,
+            1000,
+        )?;
+        snapshot_codex_account_daily_spend_conn(
+            &conn,
+            "default",
+            "2026-04-15",
+            "tier_1",
+            0.30,
+            3000,
+            1500,
+        )?;
 
-        let only_march_onward = query_codex_account_monthly_rollup_conn(&conn, None, Some("2026-03"), None)?;
+        let only_march_onward =
+            query_codex_account_monthly_rollup_conn(&conn, None, Some("2026-03"), None)?;
         assert_eq!(only_march_onward.len(), 2);
 
-        let only_march = query_codex_account_monthly_rollup_conn(&conn, None, Some("2026-03"), Some("2026-03"))?;
+        let only_march =
+            query_codex_account_monthly_rollup_conn(&conn, None, Some("2026-03"), Some("2026-03"))?;
         assert_eq!(only_march.len(), 1);
         assert_eq!(only_march[0].month, "2026-03");
         Ok(())

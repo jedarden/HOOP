@@ -74,8 +74,7 @@ impl BackupManifest {
             std::fs::create_dir_all(parent)
                 .with_context(|| format!("create manifest dir {}", parent.display()))?;
         }
-        let json = serde_json::to_string_pretty(self)
-            .context("serialize manifest")?;
+        let json = serde_json::to_string_pretty(self).context("serialize manifest")?;
 
         let tmp_path = path.with_extension("json.tmp");
         std::fs::write(&tmp_path, &json)
@@ -97,7 +96,10 @@ impl BackupManifest {
         self.tombstones.retain(|_, t| t.deleted_at > cutoff_str);
         let pruned = before - self.tombstones.len();
         if pruned > 0 {
-            info!("Pruned {} tombstones older than {} days", pruned, retention_days);
+            info!(
+                "Pruned {} tombstones older than {} days",
+                pruned, retention_days
+            );
         }
     }
 }
@@ -127,8 +129,7 @@ impl DiffResult {
 
 /// Compute the sha256 of a file.
 fn file_sha256(path: &Path) -> Result<String> {
-    let data = std::fs::read(path)
-        .with_context(|| format!("read {}", path.display()))?;
+    let data = std::fs::read(path).with_context(|| format!("read {}", path.display()))?;
     let mut hasher = Sha256::new();
     hasher.update(&data);
     Ok(hex::encode(hasher.finalize()))
@@ -136,9 +137,9 @@ fn file_sha256(path: &Path) -> Result<String> {
 
 /// Get file metadata (size + mtime as ISO 8601).
 fn file_metadata(path: &Path) -> Result<(u64, String)> {
-    let meta = std::fs::metadata(path)
-        .with_context(|| format!("stat {}", path.display()))?;
-    let mtime = meta.modified()
+    let meta = std::fs::metadata(path).with_context(|| format!("stat {}", path.display()))?;
+    let mtime = meta
+        .modified()
         .with_context(|| format!("mtime {}", path.display()))?;
     let dt: chrono::DateTime<chrono::Utc> = mtime.into();
     Ok((meta.len(), dt.to_rfc3339()))
@@ -177,20 +178,29 @@ fn scan_attachments(root: &Path) -> Result<BTreeMap<String, FileEntry>> {
         let path = entry.path();
 
         // Build relative path from the attachment root
-        let rel = path.strip_prefix(root)
+        let rel = path
+            .strip_prefix(root)
             .with_context(|| format!("strip prefix {} from {}", root.display(), path.display()))?;
         let rel_str = rel.to_string_lossy().to_string();
 
         let (size, mtime) = file_metadata(path)?;
         let sha256 = file_sha256(path)?;
 
-        debug!("Scanned attachment: {} ({} bytes, sha256={})", rel_str, size, &sha256[..12]);
-
-        entries.insert(rel_str, FileEntry {
-            sha256,
+        debug!(
+            "Scanned attachment: {} ({} bytes, sha256={})",
+            rel_str,
             size,
-            mtime,
-        });
+            &sha256[..12]
+        );
+
+        entries.insert(
+            rel_str,
+            FileEntry {
+                sha256,
+                size,
+                mtime,
+            },
+        );
     }
 
     Ok(entries)
@@ -291,11 +301,7 @@ pub fn scan_all_attachments(workspace: Option<&Path>) -> Result<BTreeMap<String,
 /// - Added/changed files are inserted into `manifest.files`.
 /// - Deleted files are moved from `manifest.files` to `manifest.tombstones`.
 /// - Tombstones past retention are pruned.
-pub fn apply_diff(
-    manifest: &mut BackupManifest,
-    diff: &DiffResult,
-    retention_days: u32,
-) {
+pub fn apply_diff(manifest: &mut BackupManifest, diff: &DiffResult, retention_days: u32) {
     let now = chrono::Utc::now().to_rfc3339();
 
     // Apply additions
@@ -312,12 +318,15 @@ pub fn apply_diff(
     for path in &diff.deleted {
         if let Some(old_entry) = manifest.files.remove(path) {
             // Don't overwrite an existing tombstone if one already exists
-            manifest.tombstones.entry(path.clone()).or_insert_with(|| TombstoneEntry {
-                sha256: old_entry.sha256,
-                size: old_entry.size,
-                mtime: old_entry.mtime,
-                deleted_at: now.clone(),
-            });
+            manifest
+                .tombstones
+                .entry(path.clone())
+                .or_insert_with(|| TombstoneEntry {
+                    sha256: old_entry.sha256,
+                    size: old_entry.size,
+                    mtime: old_entry.mtime,
+                    deleted_at: now.clone(),
+                });
         }
     }
 
@@ -407,10 +416,8 @@ mod tests {
         let old_ts = "2020-01-01T00:00:00+00:00";
         let recent_ts = chrono::Utc::now().to_rfc3339();
 
-        m.tombstones.insert(
-            "old.png".into(),
-            make_tombstone("aa", 10, old_ts, old_ts),
-        );
+        m.tombstones
+            .insert("old.png".into(), make_tombstone("aa", 10, old_ts, old_ts));
         m.tombstones.insert(
             "recent.png".into(),
             make_tombstone("bb", 20, &recent_ts, &recent_ts),
@@ -426,7 +433,12 @@ mod tests {
         let mut m = BackupManifest::new();
         m.tombstones.insert(
             "old.png".into(),
-            make_tombstone("aa", 10, "2020-01-01T00:00:00+00:00", "2020-01-01T00:00:00+00:00"),
+            make_tombstone(
+                "aa",
+                10,
+                "2020-01-01T00:00:00+00:00",
+                "2020-01-01T00:00:00+00:00",
+            ),
         );
         m.prune_tombstones(0);
         assert_eq!(m.tombstones.len(), 1);
@@ -437,8 +449,14 @@ mod tests {
     #[test]
     fn diff_empty_manifest_all_added() {
         let current = BTreeMap::from([
-            ("a.png".into(), make_entry("aa", 100, "2024-06-15T12:00:00+00:00")),
-            ("b.png".into(), make_entry("bb", 200, "2024-06-15T12:00:00+00:00")),
+            (
+                "a.png".into(),
+                make_entry("aa", 100, "2024-06-15T12:00:00+00:00"),
+            ),
+            (
+                "b.png".into(),
+                make_entry("bb", 200, "2024-06-15T12:00:00+00:00"),
+            ),
         ]);
         let manifest = BackupManifest::new();
 
@@ -452,9 +470,10 @@ mod tests {
 
     #[test]
     fn diff_no_changes() {
-        let entries = BTreeMap::from([
-            ("a.png".into(), make_entry("aa", 100, "2024-06-15T12:00:00+00:00")),
-        ]);
+        let entries = BTreeMap::from([(
+            "a.png".into(),
+            make_entry("aa", 100, "2024-06-15T12:00:00+00:00"),
+        )]);
         let mut manifest = BackupManifest::new();
         manifest.files = entries.clone();
 
@@ -468,9 +487,10 @@ mod tests {
 
     #[test]
     fn diff_detects_changes() {
-        let current = BTreeMap::from([
-            ("a.png".into(), make_entry("aa_new", 100, "2024-06-15T13:00:00+00:00")),
-        ]);
+        let current = BTreeMap::from([(
+            "a.png".into(),
+            make_entry("aa_new", 100, "2024-06-15T13:00:00+00:00"),
+        )]);
         let mut manifest = BackupManifest::new();
         manifest.files.insert(
             "a.png".into(),
@@ -500,9 +520,10 @@ mod tests {
     #[test]
     fn diff_mtime_size_match_skips_sha256_compare() {
         // Same mtime + same size → treated as unchanged even though sha256 would differ
-        let current = BTreeMap::from([
-            ("a.png".into(), make_entry("aa", 100, "2024-06-15T12:00:00+00:00")),
-        ]);
+        let current = BTreeMap::from([(
+            "a.png".into(),
+            make_entry("aa", 100, "2024-06-15T12:00:00+00:00"),
+        )]);
         let mut manifest = BackupManifest::new();
         manifest.files.insert(
             "a.png".into(),
@@ -517,9 +538,10 @@ mod tests {
     #[test]
     fn diff_sha256_match_even_if_mtime_differs() {
         // sha256 match → unchanged regardless of mtime
-        let current = BTreeMap::from([
-            ("a.png".into(), make_entry("aa", 100, "2024-06-15T13:00:00+00:00")),
-        ]);
+        let current = BTreeMap::from([(
+            "a.png".into(),
+            make_entry("aa", 100, "2024-06-15T13:00:00+00:00"),
+        )]);
         let mut manifest = BackupManifest::new();
         manifest.files.insert(
             "a.png".into(),
@@ -537,7 +559,10 @@ mod tests {
     fn apply_diff_adds_files() {
         let mut manifest = BackupManifest::new();
         let diff = DiffResult {
-            added: vec![("new.png".into(), make_entry("aa", 100, "2024-06-15T12:00:00+00:00"))],
+            added: vec![(
+                "new.png".into(),
+                make_entry("aa", 100, "2024-06-15T12:00:00+00:00"),
+            )],
             changed: vec![],
             deleted: vec![],
             unchanged_count: 0,
@@ -572,10 +597,9 @@ mod tests {
         let mut manifest = BackupManifest::new();
         // Use a recent timestamp so pruning doesn't remove it
         let recent = chrono::Utc::now().to_rfc3339();
-        manifest.files.insert(
-            "old.png".into(),
-            make_entry("cc_new", 60, &recent),
-        );
+        manifest
+            .files
+            .insert("old.png".into(), make_entry("cc_new", 60, &recent));
         manifest.tombstones.insert(
             "old.png".into(),
             make_tombstone("cc_orig", 50, &recent, &recent),
@@ -599,7 +623,12 @@ mod tests {
         let mut manifest = BackupManifest::new();
         manifest.tombstones.insert(
             "ancient.png".into(),
-            make_tombstone("zz", 1, "2020-01-01T00:00:00+00:00", "2020-01-01T00:00:00+00:00"),
+            make_tombstone(
+                "zz",
+                1,
+                "2020-01-01T00:00:00+00:00",
+                "2020-01-01T00:00:00+00:00",
+            ),
         );
 
         let diff = DiffResult {
@@ -713,7 +742,7 @@ mod tests {
         let current2 = scan_attachments(dir.path()).unwrap();
         let diff2 = compute_diff(&current2, &manifest);
         assert_eq!(diff2.changed.len(), 1); // a.png changed
-        assert_eq!(diff2.added.len(), 1);   // b.png new
+        assert_eq!(diff2.added.len(), 1); // b.png new
 
         apply_diff(&mut manifest, &diff2, 30);
         assert_eq!(manifest.files.len(), 2);

@@ -62,7 +62,14 @@ pub struct BackupCredentials {
 impl std::fmt::Debug for BackupCredentials {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("BackupCredentials")
-            .field("access_key_id", &format!("{}…{}", &self.access_key_id[..self.access_key_id.len().min(4)], &self.access_key_id[self.access_key_id.len().saturating_sub(4)..]))
+            .field(
+                "access_key_id",
+                &format!(
+                    "{}…{}",
+                    &self.access_key_id[..self.access_key_id.len().min(4)],
+                    &self.access_key_id[self.access_key_id.len().saturating_sub(4)..]
+                ),
+            )
             .field("secret_access_key", &"[REDACTED]")
             .field("age_key", &self.age_key.as_ref().map(|_| "[REDACTED]"))
             .finish()
@@ -190,34 +197,33 @@ pub fn load_backup_config() -> BackupState {
         None => return BackupState::NotConfigured,
     };
 
-    let config: BackupFileConfig = match serde_json::from_value(
-        serde_json::to_value(backup_section).unwrap_or_default(),
-    ) {
-        Ok(c) => c,
-        Err(e) => {
-            warn!("Failed to parse backup config section: {} — backup not configured", e);
-            return BackupState::NotConfigured;
-        }
-    };
+    let config: BackupFileConfig =
+        match serde_json::from_value(serde_json::to_value(backup_section).unwrap_or_default()) {
+            Ok(c) => c,
+            Err(e) => {
+                warn!(
+                    "Failed to parse backup config section: {} — backup not configured",
+                    e
+                );
+                return BackupState::NotConfigured;
+            }
+        };
 
     // Validate cron schedule is parseable
     if let Err(e) = validate_cron(&config.schedule) {
         let reason = format!("invalid cron schedule '{}': {}", config.schedule, e);
         warn!("Backup disabled: {}", reason);
-        return BackupState::Disabled {
-            config,
-            reason,
-        };
+        return BackupState::Disabled { config, reason };
     }
 
     // Validate endpoint looks like a URL
     if !config.endpoint.starts_with("http://") && !config.endpoint.starts_with("https://") {
-        let reason = format!("endpoint must start with http:// or https:// (got '{}')", config.endpoint);
+        let reason = format!(
+            "endpoint must start with http:// or https:// (got '{}')",
+            config.endpoint
+        );
         warn!("Backup disabled: {}", reason);
-        return BackupState::Disabled {
-            config,
-            reason,
-        };
+        return BackupState::Disabled { config, reason };
     }
 
     // Resolve credentials from env vars
@@ -241,7 +247,10 @@ pub fn load_backup_config() -> BackupState {
         config.encryption,
     );
 
-    BackupState::Ready { config, credentials }
+    BackupState::Ready {
+        config,
+        credentials,
+    }
 }
 
 /// Basic cron field count validation (5-field cron).
@@ -301,10 +310,8 @@ mod tests {
             "endpoint: https://s3.example.com\nbucket: my-bucket\nprefix: backups/",
         )
         .unwrap();
-        let config: BackupFileConfig = serde_json::from_value(
-            serde_json::to_value(yaml).unwrap(),
-        )
-        .unwrap();
+        let config: BackupFileConfig =
+            serde_json::from_value(serde_json::to_value(yaml).unwrap()).unwrap();
         assert_eq!(config.endpoint, "https://s3.example.com");
         assert_eq!(config.bucket, "my-bucket");
         assert_eq!(config.prefix, "backups/");
@@ -319,10 +326,8 @@ mod tests {
             "endpoint: https://s3.example.com\nbucket: my-bucket\nprefix: backups/\nschedule: '*/30 * * * *'\nretention_days: 14\nencryption: true",
         )
         .unwrap();
-        let config: BackupFileConfig = serde_json::from_value(
-            serde_json::to_value(yaml).unwrap(),
-        )
-        .unwrap();
+        let config: BackupFileConfig =
+            serde_json::from_value(serde_json::to_value(yaml).unwrap()).unwrap();
         assert_eq!(config.schedule, "*/30 * * * *");
         assert_eq!(config.retention_days, 14);
         assert!(config.encryption);
@@ -379,9 +384,18 @@ mod tests {
             age_key: Some("AGE-SECRET-KEY-1XYZ".into()),
         };
         let debug = format!("{:?}", creds);
-        assert!(!debug.contains("wJalrXUtnFEMI"), "secret_access_key leaked in Debug");
+        assert!(
+            !debug.contains("wJalrXUtnFEMI"),
+            "secret_access_key leaked in Debug"
+        );
         assert!(!debug.contains("AGE-SECRET-KEY"), "age_key leaked in Debug");
-        assert!(debug.contains("[REDACTED]"), "expected [REDACTED] placeholder");
-        assert!(debug.contains("AKIA"), "access_key_id prefix should be visible");
+        assert!(
+            debug.contains("[REDACTED]"),
+            "expected [REDACTED] placeholder"
+        );
+        assert!(
+            debug.contains("AKIA"),
+            "access_key_id prefix should be visible"
+        );
     }
 }

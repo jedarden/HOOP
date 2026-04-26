@@ -20,10 +20,10 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 use tempfile::TempDir;
-use tokio::time::{timeout, sleep};
+use tokio::time::{sleep, timeout};
 
-use hoop_daemon::supervisor::{ProjectRuntimeState, ProjectSupervisor};
 use hoop_daemon::projects::ProjectsConfig;
+use hoop_daemon::supervisor::{ProjectRuntimeState, ProjectSupervisor};
 use hoop_schema::{ProjectsRegistry, ProjectsRegistryProjectsItem};
 
 /// Create a test project with workspace path
@@ -48,7 +48,10 @@ fn setup_beads_dir(project_dir: &PathBuf) -> anyhow::Result<()> {
 
 /// Check if project state is an error state
 fn is_error_state(state: &ProjectRuntimeState) -> bool {
-    matches!(state, ProjectRuntimeState::Error { .. } | ProjectRuntimeState::Failed { .. })
+    matches!(
+        state,
+        ProjectRuntimeState::Error { .. } | ProjectRuntimeState::Failed { .. }
+    )
 }
 
 /// Check if project state is healthy
@@ -93,10 +96,10 @@ async fn test_beads_deletion_shows_error_card() {
     let beads = std::sync::Arc::new(std::sync::RwLock::new(Vec::new()));
     let shutdown = std::sync::Arc::new(hoop_daemon::shutdown::ShutdownCoordinator::new());
     let cost_aggregator = std::sync::Arc::new(std::sync::RwLock::new(
-        hoop_daemon::cost::CostAggregator::new()
+        hoop_daemon::cost::CostAggregator::new(),
     ));
     let vector_index = std::sync::Arc::new(std::sync::RwLock::new(
-        hoop_daemon::vector_index::VectorIndex::new()
+        hoop_daemon::vector_index::VectorIndex::new(),
     ));
     let scripts_dir = PathBuf::from("/tmp/scripts");
 
@@ -159,7 +162,10 @@ async fn test_beads_deletion_shows_error_card() {
 
     // Verify the final state
     let snapshot = supervisor.snapshot().await;
-    let status_a = snapshot.iter().find(|s| s.project_name == "project-a").unwrap();
+    let status_a = snapshot
+        .iter()
+        .find(|s| s.project_name == "project-a")
+        .unwrap();
     assert!(
         is_error_state(&status_a.state),
         "Project A should be in error state, got: {:?}",
@@ -167,17 +173,27 @@ async fn test_beads_deletion_shows_error_card() {
     );
 
     // Verify projects B and C are still running (not affected by A's failure)
-    let status_b = snapshot.iter().find(|s| s.project_name == "project-b").unwrap();
-    let status_c = snapshot.iter().find(|s| s.project_name == "project-c").unwrap();
+    let status_b = snapshot
+        .iter()
+        .find(|s| s.project_name == "project-b")
+        .unwrap();
+    let status_c = snapshot
+        .iter()
+        .find(|s| s.project_name == "project-c")
+        .unwrap();
 
     assert!(
-        status_b.state.is_running() || is_error_state(&status_b.state) && status_b.state.error().unwrap().contains("project-b"),
+        status_b.state.is_running()
+            || is_error_state(&status_b.state)
+                && status_b.state.error().unwrap().contains("project-b"),
         "Project B should not be affected by project A's .beads/ deletion, got: {:?}",
         status_b.state
     );
 
     assert!(
-        status_c.state.is_running() || is_error_state(&status_c.state) && status_c.state.error().unwrap().contains("project-c"),
+        status_c.state.is_running()
+            || is_error_state(&status_c.state)
+                && status_c.state.error().unwrap().contains("project-c"),
         "Project C should not be affected by project A's .beads/ deletion, got: {:?}",
         status_c.state
     );
@@ -220,10 +236,10 @@ async fn test_readyz_reports_degraded_after_beads_deletion() {
     let beads = std::sync::Arc::new(std::sync::RwLock::new(Vec::new()));
     let shutdown = std::sync::Arc::new(hoop_daemon::shutdown::ShutdownCoordinator::new());
     let cost_aggregator = std::sync::Arc::new(std::sync::RwLock::new(
-        hoop_daemon::cost::CostAggregator::new()
+        hoop_daemon::cost::CostAggregator::new(),
     ));
     let vector_index = std::sync::Arc::new(std::sync::RwLock::new(
-        hoop_daemon::vector_index::VectorIndex::new()
+        hoop_daemon::vector_index::VectorIndex::new(),
     ));
     let scripts_dir = PathBuf::from("/tmp/scripts");
 
@@ -333,10 +349,10 @@ async fn test_beads_restoration_recovers_project() {
     let beads = std::sync::Arc::new(std::sync::RwLock::new(Vec::new()));
     let shutdown = std::sync::Arc::new(hoop_daemon::shutdown::ShutdownCoordinator::new());
     let cost_aggregator = std::sync::Arc::new(std::sync::RwLock::new(
-        hoop_daemon::cost::CostAggregator::new()
+        hoop_daemon::cost::CostAggregator::new(),
     ));
     let vector_index = std::sync::Arc::new(std::sync::RwLock::new(
-        hoop_daemon::vector_index::VectorIndex::new()
+        hoop_daemon::vector_index::VectorIndex::new(),
     ));
     let scripts_dir = PathBuf::from("/tmp/scripts");
 
@@ -375,7 +391,10 @@ async fn test_beads_restoration_recovers_project() {
 
     // Verify project A is in error state
     let snapshot = supervisor.snapshot().await;
-    let status_a = snapshot.iter().find(|s| s.project_name == "project-a").unwrap();
+    let status_a = snapshot
+        .iter()
+        .find(|s| s.project_name == "project-a")
+        .unwrap();
     assert!(
         is_error_state(&status_a.state),
         "Project A should be in error state before restoration"
@@ -461,10 +480,10 @@ async fn test_sibling_projects_serve_events_during_degradation() {
     let beads = std::sync::Arc::new(std::sync::RwLock::new(Vec::new()));
     let shutdown = std::sync::Arc::new(hoop_daemon::shutdown::ShutdownCoordinator::new());
     let cost_aggregator = std::sync::Arc::new(std::sync::RwLock::new(
-        hoop_daemon::cost::CostAggregator::new()
+        hoop_daemon::cost::CostAggregator::new(),
     ));
     let vector_index = std::sync::Arc::new(std::sync::RwLock::new(
-        hoop_daemon::vector_index::VectorIndex::new()
+        hoop_daemon::vector_index::VectorIndex::new(),
     ));
     let scripts_dir = PathBuf::from("/tmp/scripts");
 
@@ -503,15 +522,24 @@ async fn test_sibling_projects_serve_events_during_degradation() {
 
     // Verify project A is in error state
     let snapshot = supervisor.snapshot().await;
-    let status_a = snapshot.iter().find(|s| s.project_name == "project-a").unwrap();
+    let status_a = snapshot
+        .iter()
+        .find(|s| s.project_name == "project-a")
+        .unwrap();
     assert!(
         is_error_state(&status_a.state),
         "Project A should be in error state"
     );
 
     // Verify projects B and C are still running
-    let status_b = snapshot.iter().find(|s| s.project_name == "project-b").unwrap();
-    let status_c = snapshot.iter().find(|s| s.project_name == "project-c").unwrap();
+    let status_b = snapshot
+        .iter()
+        .find(|s| s.project_name == "project-b")
+        .unwrap();
+    let status_c = snapshot
+        .iter()
+        .find(|s| s.project_name == "project-c")
+        .unwrap();
 
     // The sibling projects should still be running (Starting or Healthy)
     assert!(

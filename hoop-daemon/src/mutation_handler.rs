@@ -101,10 +101,7 @@ impl MutationReject {
         }
     }
 
-    pub fn internal(
-        entity_id: impl Into<String>,
-        message: impl Into<String>,
-    ) -> Self {
+    pub fn internal(entity_id: impl Into<String>, message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
             kind: ErrorKind::Internal,
@@ -289,10 +286,7 @@ mod tests {
 
     #[test]
     fn test_mutation_reject_internal() {
-        let reject = MutationReject::internal(
-            "draft-123",
-            "Database connection failed",
-        );
+        let reject = MutationReject::internal("draft-123", "Database connection failed");
 
         assert_eq!(reject.kind, ErrorKind::Internal);
         assert_eq!(reject.entity_id, "draft-123");
@@ -318,7 +312,8 @@ mod tests {
 
     #[test]
     fn test_mutation_reject_to_http_response() {
-        let validation = MutationReject::validation("title", "Bad title", None::<String>, None::<String>);
+        let validation =
+            MutationReject::validation("title", "Bad title", None::<String>, None::<String>);
         let (status, msg) = <(axum::http::StatusCode, String)>::from(validation.clone());
         assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
         assert_eq!(msg, "Bad title");
@@ -341,7 +336,8 @@ mod tests {
 
     #[test]
     fn test_mutation_reject_display() {
-        let reject = MutationReject::validation("title", "Title required", None::<String>, None::<String>);
+        let reject =
+            MutationReject::validation("title", "Title required", None::<String>, None::<String>);
         assert_eq!(format!("{}", reject), "[Validation] Title required");
 
         let reject = MutationReject::auth("id", "forbidden", "Not allowed");
@@ -356,7 +352,10 @@ mod tests {
         let (tx, mut rx) = tokio::sync::broadcast::channel::<MockState>(16);
         let handler = MutationHandler::new(&tx, "test_draft", "test-user".to_string());
 
-        let state = MockState { value: "success".to_string(), error: None };
+        let state = MockState {
+            value: "success".to_string(),
+            error: None,
+        };
         handler.accept(state.clone()).await;
 
         let event = rx.recv().await.unwrap();
@@ -377,14 +376,20 @@ mod tests {
         )
         .with_entity_id("draft-123");
 
-        let state = MockState { value: "authoritative_state".to_string(), error: None };
+        let state = MockState {
+            value: "authoritative_state".to_string(),
+            error: None,
+        };
         handler.reject(reject, state).await;
 
         let event = rx.recv().await.unwrap();
         assert_eq!(event.value, "authoritative_state");
         assert!(event.error.is_some());
         assert_eq!(event.error.as_ref().unwrap().message, "Title is required");
-        assert_eq!(event.error.as_ref().unwrap().field, Some("title".to_string()));
+        assert_eq!(
+            event.error.as_ref().unwrap().field,
+            Some("title".to_string())
+        );
     }
 
     #[tokio::test]
@@ -395,7 +400,10 @@ mod tests {
         assert_eq!(handler.entity_type, "test_entity");
         assert_eq!(handler.actor, "test-user");
 
-        let state = MockState { value: "test_event".to_string(), error: None };
+        let state = MockState {
+            value: "test_event".to_string(),
+            error: None,
+        };
         handler.accept(state).await;
         let event = rx.recv().await.unwrap();
         assert_eq!(event.value, "test_event");

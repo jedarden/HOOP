@@ -15,8 +15,8 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, RwLock};
 use tokio::task::JoinSet;
@@ -67,10 +67,14 @@ pub fn build_transcription_config(voice_config: &VoiceConfigFile) -> Transcripti
     let default_model_path = home.join(".hoop").join("models").join("ggml-base.en.bin");
 
     TranscriptionConfig {
-        whisper_cli_path: voice_config.whisper_cli_path.as_ref()
+        whisper_cli_path: voice_config
+            .whisper_cli_path
+            .as_ref()
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from("whisper")),
-        whisper_model_path: voice_config.whisper_model_path.as_ref()
+        whisper_model_path: voice_config
+            .whisper_model_path
+            .as_ref()
             .map(PathBuf::from)
             .unwrap_or(default_model_path),
         max_concurrent: voice_config.max_concurrent.unwrap_or(MAX_CONCURRENT_JOBS),
@@ -158,10 +162,8 @@ impl TranscriptionService {
         };
 
         // Spawn the job processor
-        let processor = TranscriptionJobProcessor::new(
-            service.config.clone(),
-            service.jobs.clone(),
-        );
+        let processor =
+            TranscriptionJobProcessor::new(service.config.clone(), service.jobs.clone());
         tokio::spawn(async move {
             processor.run(job_rx).await;
         });
@@ -170,11 +172,7 @@ impl TranscriptionService {
     }
 
     /// Submit a new transcription job
-    pub async fn submit_job(
-        &self,
-        stitch_id: String,
-        audio_path: PathBuf,
-    ) -> Result<String> {
+    pub async fn submit_job(&self, stitch_id: String, audio_path: PathBuf) -> Result<String> {
         let job_id = uuid::Uuid::new_v4().to_string();
         let job = TranscriptionJob {
             id: job_id.clone(),
@@ -195,16 +193,23 @@ impl TranscriptionService {
         self.persist_job(&job).await?;
 
         // Send to job queue
-        self.job_tx.send(job_id.clone()).await
+        self.job_tx
+            .send(job_id.clone())
+            .await
             .context("Failed to send job to queue")?;
 
-        info!("Submitted transcription job {} for stitch {}", job_id, job.stitch_id);
+        info!(
+            "Submitted transcription job {} for stitch {}",
+            job_id, job.stitch_id
+        );
         Ok(job_id)
     }
 
     /// Get a job by ID
     pub async fn get_job(&self, job_id: &str) -> Option<TranscriptionJob> {
-        self.jobs.read().await
+        self.jobs
+            .read()
+            .await
             .iter()
             .find(|j| j.id == job_id)
             .cloned()
@@ -212,7 +217,9 @@ impl TranscriptionService {
 
     /// Get all jobs for a stitch
     pub async fn get_jobs_for_stitch(&self, stitch_id: &str) -> Vec<TranscriptionJob> {
-        self.jobs.read().await
+        self.jobs
+            .read()
+            .await
             .iter()
             .filter(|j| j.stitch_id == stitch_id)
             .cloned()
@@ -249,18 +256,31 @@ impl TranscriptionService {
                     error_message = excluded.error_message
                 "#,
                 params![
-                    job_id, stitch_id, audio_path, status, attempts,
-                    created_at, started_at, completed_at, error_message
+                    job_id,
+                    stitch_id,
+                    audio_path,
+                    status,
+                    attempts,
+                    created_at,
+                    started_at,
+                    completed_at,
+                    error_message
                 ],
             )?;
             Ok::<(), anyhow::Error>(())
-        }).await??;
+        })
+        .await??;
 
         Ok(())
     }
 
     /// Update job status in memory and database
-    async fn update_job_status(&self, job_id: &str, status: JobStatus, error: Option<String>) -> Result<()> {
+    async fn update_job_status(
+        &self,
+        job_id: &str,
+        status: JobStatus,
+        error: Option<String>,
+    ) -> Result<()> {
         let mut jobs = self.jobs.write().await;
         if let Some(job) = jobs.iter_mut().find(|j| j.id == job_id) {
             job.status = status.clone();
@@ -316,19 +336,18 @@ fn needs_conversion(path: &Path) -> bool {
 ///
 /// Returns the path to the converted WAV file (in temp directory)
 fn convert_to_wav(audio_path: &Path) -> Result<PathBuf> {
-    let temp_wav = std::env::temp_dir()
-        .join(format!("hoop_convert_{}.wav", uuid::Uuid::new_v4()));
+    let temp_wav = std::env::temp_dir().join(format!("hoop_convert_{}.wav", uuid::Uuid::new_v4()));
 
     let output = Command::new("ffmpeg")
         .arg("-i")
         .arg(audio_path)
         .arg("-ar")
-        .arg("16000")  // Whisper prefers 16kHz
+        .arg("16000") // Whisper prefers 16kHz
         .arg("-ac")
-        .arg("1")      // Mono
+        .arg("1") // Mono
         .arg("-acodec")
-        .arg("pcm_s16le")  // 16-bit PCM
-        .arg("-y")      // Overwrite output file
+        .arg("pcm_s16le") // 16-bit PCM
+        .arg("-y") // Overwrite output file
         .arg(&temp_wav)
         .output()
         .context("Failed to execute ffmpeg for audio conversion")?;
@@ -355,15 +374,23 @@ async fn transcribe_with_fallback(
             if result.words.is_empty() && !result.transcript.is_empty() {
                 debug!("Word-level timestamps empty, will use segment-level fallback");
                 // Fall back to segment-level timestamps
-                if let Ok(segment_result) = transcribe_segment_level_internal(audio_path, config).await {
-                    info!("Using segment-level timestamps for {}", audio_path.display());
+                if let Ok(segment_result) =
+                    transcribe_segment_level_internal(audio_path, config).await
+                {
+                    info!(
+                        "Using segment-level timestamps for {}",
+                        audio_path.display()
+                    );
                     return segment_result;
                 }
             }
             result
         }
         Err(e) => {
-            warn!("Full transcription failed: {}, trying segment-level fallback", e);
+            warn!(
+                "Full transcription failed: {}, trying segment-level fallback",
+                e
+            );
             // Fallback to segment-level transcription
             match transcribe_segment_level_internal(audio_path, config).await {
                 Ok(result) => result,
@@ -393,15 +420,24 @@ async fn transcribe_with_whisper_internal(
 
     tokio::task::spawn_blocking(move || {
         if !model_path.exists() {
-            return Err(anyhow::anyhow!("Whisper model not found at {}", model_path.display()));
+            return Err(anyhow::anyhow!(
+                "Whisper model not found at {}",
+                model_path.display()
+            ));
         }
 
         if !audio_path.exists() {
-            return Err(anyhow::anyhow!("Audio file not found: {}", audio_path.display()));
+            return Err(anyhow::anyhow!(
+                "Audio file not found: {}",
+                audio_path.display()
+            ));
         }
 
         let working_audio_path = if needs_conversion(&audio_path) {
-            debug!("Converting audio file {} to WAV format", audio_path.display());
+            debug!(
+                "Converting audio file {} to WAV format",
+                audio_path.display()
+            );
             convert_to_wav(&audio_path)?
         } else {
             audio_path.clone()
@@ -449,16 +485,24 @@ async fn transcribe_with_whisper_internal(
             }
         }
 
-        let transcript = whisper_output.segments
+        let transcript = whisper_output
+            .segments
             .iter()
             .map(|s| s.text.trim().to_string())
             .collect::<Vec<_>>()
             .join(" ");
 
-        let duration_secs = whisper_output.segments
+        let duration_secs = whisper_output
+            .segments
             .last()
             .map(|s| s.end)
-            .or_else(|| whisper_output.segments.iter().map(|s| s.end).reduce(f64::max))
+            .or_else(|| {
+                whisper_output
+                    .segments
+                    .iter()
+                    .map(|s| s.end)
+                    .reduce(f64::max)
+            })
             .or(Some(0.0));
 
         Ok(TranscriptionResult {
@@ -467,7 +511,8 @@ async fn transcribe_with_whisper_internal(
             duration_secs,
             language: whisper_output.language,
         })
-    }).await?
+    })
+    .await?
 }
 
 /// Internal function to transcribe with segment-level timestamps (fallback)
@@ -481,7 +526,10 @@ async fn transcribe_segment_level_internal(
 
     tokio::task::spawn_blocking(move || {
         if !model_path.exists() {
-            return Err(anyhow::anyhow!("Whisper model not found at {}", model_path.display()));
+            return Err(anyhow::anyhow!(
+                "Whisper model not found at {}",
+                model_path.display()
+            ));
         }
 
         let working_audio_path = if needs_conversion(&audio_path) {
@@ -497,7 +545,7 @@ async fn transcribe_segment_level_internal(
             .arg(&model_path)
             .arg("-f")
             .arg(&working_audio_path)
-            .arg("-oj")  // Still request JSON output
+            .arg("-oj") // Still request JSON output
             .arg("--output-file")
             .arg(&temp_output)
             .output()?;
@@ -522,9 +570,7 @@ async fn transcribe_segment_level_internal(
         let mut words = Vec::new();
         for segment in &whisper_output.segments {
             // Split segment text into words
-            let segment_words: Vec<&str> = segment.text
-                .split_whitespace()
-                .collect();
+            let segment_words: Vec<&str> = segment.text.split_whitespace().collect();
 
             if segment_words.is_empty() {
                 continue;
@@ -542,16 +588,24 @@ async fn transcribe_segment_level_internal(
             }
         }
 
-        let transcript = whisper_output.segments
+        let transcript = whisper_output
+            .segments
             .iter()
             .map(|s| s.text.trim().to_string())
             .collect::<Vec<_>>()
             .join(" ");
 
-        let duration_secs = whisper_output.segments
+        let duration_secs = whisper_output
+            .segments
             .last()
             .map(|s| s.end)
-            .or_else(|| whisper_output.segments.iter().map(|s| s.end).reduce(f64::max))
+            .or_else(|| {
+                whisper_output
+                    .segments
+                    .iter()
+                    .map(|s| s.end)
+                    .reduce(f64::max)
+            })
             .or(Some(0.0));
 
         Ok(TranscriptionResult {
@@ -560,7 +614,8 @@ async fn transcribe_segment_level_internal(
             duration_secs,
             language: whisper_output.language,
         })
-    }).await?
+    })
+    .await?
 }
 
 /// Job processor - runs transcription jobs in a limited pool
@@ -640,7 +695,10 @@ impl TranscriptionJobProcessor {
             (job.stitch_id.clone(), job.audio_path.clone())
         };
 
-        info!("Starting transcription job {} for stitch {}", job_id, stitch_id);
+        info!(
+            "Starting transcription job {} for stitch {}",
+            job_id, stitch_id
+        );
 
         // Update status to running
         let service = TranscriptionService {
@@ -648,7 +706,10 @@ impl TranscriptionJobProcessor {
             jobs: jobs.clone(),
             job_tx: mpsc::channel(1).0, // Dummy sender
         };
-        if let Err(e) = service.update_job_status(&job_id, JobStatus::Running, None).await {
+        if let Err(e) = service
+            .update_job_status(&job_id, JobStatus::Running, None)
+            .await
+        {
             error!("Failed to update job status: {}", e);
         }
 
@@ -669,11 +730,17 @@ impl TranscriptionJobProcessor {
 
             let transcription = transcribe_with_fallback(&audio_path, &config).await;
             if !transcription.transcript.is_empty() {
-                info!("Transcription succeeded for job {} on attempt {}", job_id, attempt);
+                info!(
+                    "Transcription succeeded for job {} on attempt {}",
+                    job_id, attempt
+                );
                 result = Some(transcription);
                 break;
             } else {
-                warn!("Transcription attempt {} produced empty transcript for job {}", attempt, job_id);
+                warn!(
+                    "Transcription attempt {} produced empty transcript for job {}",
+                    attempt, job_id
+                );
                 last_error = Some("Empty transcript produced".to_string());
             }
 
@@ -686,22 +753,33 @@ impl TranscriptionJobProcessor {
         match result {
             Some(transcription) => {
                 if let Err(e) = Self::store_transcription_result(
-                    &stitch_id, &transcription, TranscriptionStatus::Completed
-                ).await {
+                    &stitch_id,
+                    &transcription,
+                    TranscriptionStatus::Completed,
+                )
+                .await
+                {
                     error!("Failed to store transcription result: {}", e);
-                    let _ = service.update_job_status(
-                        &job_id,
-                        JobStatus::Failed,
-                        Some(format!("Failed to store result: {}", e))
-                    ).await;
+                    let _ = service
+                        .update_job_status(
+                            &job_id,
+                            JobStatus::Failed,
+                            Some(format!("Failed to store result: {}", e)),
+                        )
+                        .await;
                 } else {
-                    let _ = service.update_job_status(&job_id, JobStatus::Completed, None).await;
+                    let _ = service
+                        .update_job_status(&job_id, JobStatus::Completed, None)
+                        .await;
                 }
             }
             None => {
                 // All retries failed - store partial transcript if available
                 let error_msg = last_error.unwrap_or_else(|| "Unknown error".to_string());
-                error!("Transcription failed for job {} after {} attempts: {}", job_id, config.max_retries, error_msg);
+                error!(
+                    "Transcription failed for job {} after {} attempts: {}",
+                    job_id, config.max_retries, error_msg
+                );
 
                 let partial_result = TranscriptionResult {
                     transcript: format!("[Transcription failed: {}]", error_msg),
@@ -711,16 +789,25 @@ impl TranscriptionJobProcessor {
                 };
 
                 if let Err(e) = Self::store_transcription_result(
-                    &stitch_id, &partial_result, TranscriptionStatus::Failed
-                ).await {
+                    &stitch_id,
+                    &partial_result,
+                    TranscriptionStatus::Failed,
+                )
+                .await
+                {
                     error!("Failed to store partial transcription result: {}", e);
                 }
 
-                let _ = service.update_job_status(
-                    &job_id,
-                    JobStatus::Failed,
-                    Some(format!("Failed after {} attempts: {}", config.max_retries, error_msg))
-                ).await;
+                let _ = service
+                    .update_job_status(
+                        &job_id,
+                        JobStatus::Failed,
+                        Some(format!(
+                            "Failed after {} attempts: {}",
+                            config.max_retries, error_msg
+                        )),
+                    )
+                    .await;
             }
         }
     }
@@ -751,12 +838,20 @@ impl TranscriptionJobProcessor {
                     duration_secs = ?4, language = ?5, transcription_status = ?6
                 WHERE stitch_id = ?7
                 "#,
-                params![transcript, words_json, transcribed_at,
-                        duration_secs, language, status_json, stitch_id],
+                params![
+                    transcript,
+                    words_json,
+                    transcribed_at,
+                    duration_secs,
+                    language,
+                    status_json,
+                    stitch_id
+                ],
             )?;
 
             Ok::<(), anyhow::Error>(())
-        }).await??;
+        })
+        .await??;
 
         Ok(())
     }

@@ -13,7 +13,9 @@
 
 use hoop_daemon::fleet;
 use hoop_daemon::metrics;
-use hoop_daemon::projects::{self, compute_delta, ConfigError, ConfigReloadAudit, ConfigReloadRejectedAudit};
+use hoop_daemon::projects::{
+    self, compute_delta, ConfigError, ConfigReloadAudit, ConfigReloadRejectedAudit,
+};
 use serial_test::serial;
 
 fn yaml_one_project(name: &str, path: &str) -> String {
@@ -96,8 +98,8 @@ fn test_edit_invalid_then_fix_cycle_preserves_state() {
     // ── Phase 1: Load initial valid config ──────────────────────────────
     let v1 = yaml_one_project("proj-alpha", repo1.to_str().unwrap());
     std::fs::write(&yaml_path, &v1).unwrap();
-    let cfg_v1 = projects::ProjectsConfig::load_from(&yaml_path)
-        .expect("v1 should parse successfully");
+    let cfg_v1 =
+        projects::ProjectsConfig::load_from(&yaml_path).expect("v1 should parse successfully");
     assert_eq!(cfg_v1.registry.projects.len(), 1, "v1: one project");
     assert_eq!(cfg_v1.registry.projects[0].name(), "proj-alpha");
     let hash_v1 = cfg_v1.content_hash.clone();
@@ -110,9 +112,16 @@ fn test_edit_invalid_then_fix_cycle_preserves_state() {
 
     // Verify: previous config still valid
     let cfg_check = cfg_v1.clone();
-    assert_eq!(cfg_check.registry.projects.len(), 1, "previous config preserved");
+    assert_eq!(
+        cfg_check.registry.projects.len(),
+        1,
+        "previous config preserved"
+    );
     assert_eq!(cfg_check.registry.projects[0].name(), "proj-alpha");
-    assert_eq!(cfg_check.content_hash, hash_v1, "hash unchanged after rejection");
+    assert_eq!(
+        cfg_check.content_hash, hash_v1,
+        "hash unchanged after rejection"
+    );
 
     // ── Phase 3: Fix with different valid config ────────────────────────
     let v2 = yaml_two_projects(
@@ -122,8 +131,8 @@ fn test_edit_invalid_then_fix_cycle_preserves_state() {
         repo2.to_str().unwrap(),
     );
     std::fs::write(&yaml_path, &v2).unwrap();
-    let cfg_v2 = projects::ProjectsConfig::load_from(&yaml_path)
-        .expect("v2 should parse successfully");
+    let cfg_v2 =
+        projects::ProjectsConfig::load_from(&yaml_path).expect("v2 should parse successfully");
     assert_eq!(cfg_v2.registry.projects.len(), 2, "v2: two projects");
     assert_eq!(cfg_v2.registry.projects[0].name(), "proj-alpha");
     assert_eq!(cfg_v2.registry.projects[1].name(), "proj-beta");
@@ -134,7 +143,8 @@ fn test_edit_invalid_then_fix_cycle_preserves_state() {
     let delta = compute_delta(&cfg_v1.registry, &cfg_v2.registry);
     assert!(
         delta.iter().any(|k| k.contains("+project:proj-beta")),
-        "delta should show proj-beta added, got: {:?}", delta
+        "delta should show proj-beta added, got: {:?}",
+        delta
     );
 
     // ── Phase 4: Write another invalid (missing required field) ─────────
@@ -143,21 +153,26 @@ fn test_edit_invalid_then_fix_cycle_preserves_state() {
     assert!(result_bad2.is_err(), "missing field must be rejected");
 
     // Verify: previous config (v2) still preserved
-    assert_eq!(cfg_v2.registry.projects.len(), 2, "v2 config preserved after second rejection");
+    assert_eq!(
+        cfg_v2.registry.projects.len(),
+        2,
+        "v2 config preserved after second rejection"
+    );
     assert_eq!(cfg_v2.content_hash, hash_v2, "v2 hash unchanged");
 
     // ── Phase 5: Fix back to single project ─────────────────────────────
     let v3 = yaml_one_project("proj-alpha", repo2.to_str().unwrap());
     std::fs::write(&yaml_path, &v3).unwrap();
-    let cfg_v3 = projects::ProjectsConfig::load_from(&yaml_path)
-        .expect("v3 should parse successfully");
+    let cfg_v3 =
+        projects::ProjectsConfig::load_from(&yaml_path).expect("v3 should parse successfully");
     assert_eq!(cfg_v3.registry.projects.len(), 1, "v3: back to one project");
 
     // Delta from v2 → v3 should show removal of proj-beta and path change
     let delta_23 = compute_delta(&cfg_v2.registry, &cfg_v3.registry);
     assert!(
         delta_23.iter().any(|k| k == "-project:proj-beta"),
-        "delta should show proj-beta removed, got: {:?}", delta_23
+        "delta should show proj-beta removed, got: {:?}",
+        delta_23
     );
 
     // ── Verify audit trail ──────────────────────────────────────────────
@@ -207,16 +222,26 @@ fn test_edit_invalid_then_fix_cycle_preserves_state() {
 
     // Query and verify
     let rejected_rows = fleet::query_audit_rows(
-        None, None, None, Some(fleet::ActionKind::ConfigReloadRejected),
-    ).expect("query rejected");
+        None,
+        None,
+        None,
+        Some(fleet::ActionKind::ConfigReloadRejected),
+    )
+    .expect("query rejected");
     assert_eq!(rejected_rows.len(), 1, "one rejected audit row");
-    assert!(matches!(rejected_rows[0].result, fleet::ActionResult::Failure));
+    assert!(matches!(
+        rejected_rows[0].result,
+        fleet::ActionResult::Failure
+    ));
 
-    let success_rows = fleet::query_audit_rows(
-        None, None, None, Some(fleet::ActionKind::ConfigReloaded),
-    ).expect("query success");
+    let success_rows =
+        fleet::query_audit_rows(None, None, None, Some(fleet::ActionKind::ConfigReloaded))
+            .expect("query success");
     assert_eq!(success_rows.len(), 1, "one success audit row");
-    assert!(matches!(success_rows[0].result, fleet::ActionResult::Success));
+    assert!(matches!(
+        success_rows[0].result,
+        fleet::ActionResult::Success
+    ));
 
     // Verify hash chain integrity through the full cycle
     fleet::verify_hash_chain().expect("hash chain intact after full cycle");
@@ -239,38 +264,38 @@ fn test_schema_violation_surfaces_structured_details() {
     assert!(
         err.line > 0 || err.field.is_some(),
         "missing field error should have location info: line={}, field={:?}",
-        err.line, err.field,
+        err.line,
+        err.field,
     );
-    assert!(
-        !err.message.is_empty(),
-        "error message should not be empty",
-    );
+    assert!(!err.message.is_empty(), "error message should not be empty",);
 
     // ── Test 2: Wrong type for name ─────────────────────────────────────
-    let result2: Result<hoop_schema::ProjectsRegistry, _> =
-        serde_yaml::from_str(yaml_bad_type());
+    let result2: Result<hoop_schema::ProjectsRegistry, _> = serde_yaml::from_str(yaml_bad_type());
     assert!(result2.is_err(), "integer name should fail");
     let yaml_err2 = result2.unwrap_err();
     let err2 = ConfigError::from(yaml_err2);
     assert!(
         err2.line > 0,
-        "type error should report line number: line={}", err2.line,
+        "type error should report line number: line={}",
+        err2.line,
     );
     assert!(
         err2.expected.is_some() || err2.got.is_some() || err2.field.is_some(),
         "type error should have structured details: expected={:?}, got={:?}, field={:?}",
-        err2.expected, err2.got, err2.field,
+        err2.expected,
+        err2.got,
+        err2.field,
     );
 
     // ── Test 3: Truncated/malformed YAML ────────────────────────────────
-    let result3: Result<hoop_schema::ProjectsRegistry, _> =
-        serde_yaml::from_str(yaml_truncated());
+    let result3: Result<hoop_schema::ProjectsRegistry, _> = serde_yaml::from_str(yaml_truncated());
     assert!(result3.is_err(), "truncated YAML should fail");
     let yaml_err3 = result3.unwrap_err();
     let err3 = ConfigError::from(yaml_err3);
     assert!(
         err3.line > 0,
-        "parse error should report line number: line={}", err3.line,
+        "parse error should report line number: line={}",
+        err3.line,
     );
 }
 
@@ -284,7 +309,8 @@ fn test_rejection_metric_increments() {
 
     let rejected_after = metrics::metrics().hoop_config_reload_rejected_total.get();
     assert_eq!(
-        rejected_after, rejected_before + 1,
+        rejected_after,
+        rejected_before + 1,
         "rejection metric should increment by 1"
     );
 }
@@ -298,7 +324,8 @@ fn test_success_metric_increments() {
 
     let success_after = metrics::metrics().hoop_config_reload_success_total.get();
     assert_eq!(
-        success_after, success_before + 1,
+        success_after,
+        success_before + 1,
         "success metric should increment by 1"
     );
 }
@@ -334,8 +361,7 @@ projects:
     );
 
     std::fs::write(&yaml_path, &yaml).unwrap();
-    let cfg = projects::ProjectsConfig::load_from(&yaml_path)
-        .expect("YAML should parse fine");
+    let cfg = projects::ProjectsConfig::load_from(&yaml_path).expect("YAML should parse fine");
 
     let errors = cfg.validate();
     assert!(
@@ -345,10 +371,13 @@ projects:
     );
 
     // Verify structured error details
-    let no_beads_err = errors.iter().find(|e| e.message.contains("no-beads-proj") && e.message.contains(".beads"));
+    let no_beads_err = errors
+        .iter()
+        .find(|e| e.message.contains("no-beads-proj") && e.message.contains(".beads"));
     assert!(
         no_beads_err.is_some(),
-        "should detect missing .beads for no-beads-proj, got: {:?}", errors,
+        "should detect missing .beads for no-beads-proj, got: {:?}",
+        errors,
     );
     let err = no_beads_err.unwrap();
     assert!(err.field.is_some(), "semantic error should have field path");
@@ -357,10 +386,13 @@ projects:
         "expected should say what's needed"
     );
 
-    let missing_err = errors.iter().find(|e| e.message.contains("missing-path-proj") && e.message.contains("does not exist"));
+    let missing_err = errors
+        .iter()
+        .find(|e| e.message.contains("missing-path-proj") && e.message.contains("does not exist"));
     assert!(
         missing_err.is_some(),
-        "should detect nonexistent path for missing-path-proj, got: {:?}", errors,
+        "should detect nonexistent path for missing-path-proj, got: {:?}",
+        errors,
     );
     let err = missing_err.unwrap();
     assert!(err.field.is_some(), "missing path error should have field");
@@ -385,41 +417,53 @@ fn test_semantic_validation_rejection_preserves_state() {
     // Phase 1: Valid config
     let v1 = yaml_one_project("good-proj", repo.to_str().unwrap());
     std::fs::write(&yaml_path, &v1).unwrap();
-    let cfg_v1 = projects::ProjectsConfig::load_from(&yaml_path)
-        .expect("valid config should load");
-    assert!(cfg_v1.validate().is_empty(), "valid config should pass validation");
+    let cfg_v1 = projects::ProjectsConfig::load_from(&yaml_path).expect("valid config should load");
+    assert!(
+        cfg_v1.validate().is_empty(),
+        "valid config should pass validation"
+    );
     let hash_v1 = cfg_v1.content_hash.clone();
 
     // Phase 2: Parseable YAML but semantically invalid (nonexistent path)
     let bad_yaml = yaml_one_project("bad-proj", "/nonexistent/path");
     std::fs::write(&yaml_path, &bad_yaml).unwrap();
-    let cfg_bad = projects::ProjectsConfig::load_from(&yaml_path)
-        .expect("YAML should still parse");
+    let cfg_bad = projects::ProjectsConfig::load_from(&yaml_path).expect("YAML should still parse");
     let validation_errors = cfg_bad.validate();
-    assert!(!validation_errors.is_empty(), "nonexistent path should fail validation");
+    assert!(
+        !validation_errors.is_empty(),
+        "nonexistent path should fail validation"
+    );
 
     // Previous config (v1) is still the active one — cfg_bad was never "applied"
-    assert_eq!(cfg_v1.registry.projects.len(), 1, "previous config preserved");
+    assert_eq!(
+        cfg_v1.registry.projects.len(),
+        1,
+        "previous config preserved"
+    );
     assert_eq!(cfg_v1.registry.projects[0].name(), "good-proj");
     assert_eq!(cfg_v1.content_hash, hash_v1, "hash unchanged");
 
     // Phase 3: Fix with valid config (different project name)
     let v2 = yaml_one_project("another-proj", repo.to_str().unwrap());
     std::fs::write(&yaml_path, &v2).unwrap();
-    let cfg_v2 = projects::ProjectsConfig::load_from(&yaml_path)
-        .expect("fixed config should load");
-    assert!(cfg_v2.validate().is_empty(), "fixed config should pass validation");
+    let cfg_v2 = projects::ProjectsConfig::load_from(&yaml_path).expect("fixed config should load");
+    assert!(
+        cfg_v2.validate().is_empty(),
+        "fixed config should pass validation"
+    );
     assert_eq!(cfg_v2.registry.projects[0].name(), "another-proj");
 
     // Verify delta from v1 → v2
     let delta = compute_delta(&cfg_v1.registry, &cfg_v2.registry);
     assert!(
         delta.iter().any(|k| k.contains("-project:good-proj")),
-        "delta should show good-proj removed, got: {:?}", delta
+        "delta should show good-proj removed, got: {:?}",
+        delta
     );
     assert!(
         delta.iter().any(|k| k.contains("+project:another-proj")),
-        "delta should show another-proj added, got: {:?}", delta
+        "delta should show another-proj added, got: {:?}",
+        delta
     );
 
     // Verify audit trail for the rejected semantic validation
@@ -446,10 +490,21 @@ fn test_semantic_validation_rejection_preserves_state() {
     .expect("write rejected audit");
 
     let rows = fleet::query_audit_rows(
-        None, None, None, Some(fleet::ActionKind::ConfigReloadRejected),
-    ).expect("query");
-    assert_eq!(rows.len(), 1, "one rejected audit row for semantic validation");
-    assert!(rows[0].error.is_some(), "rejected row should have error message");
+        None,
+        None,
+        None,
+        Some(fleet::ActionKind::ConfigReloadRejected),
+    )
+    .expect("query");
+    assert_eq!(
+        rows.len(),
+        1,
+        "one rejected audit row for semantic validation"
+    );
+    assert!(
+        rows[0].error.is_some(),
+        "rejected row should have error message"
+    );
 
     fleet::verify_hash_chain().expect("hash chain intact");
 

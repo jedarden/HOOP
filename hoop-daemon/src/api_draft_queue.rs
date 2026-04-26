@@ -223,7 +223,7 @@ async fn list_all_drafts(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     drafts.extend(
         fleet::list_drafts(None, Some("edited"), 200)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
     );
     drafts.sort_by(|a, b| b.created_at.cmp(&a.created_at));
     let count = drafts.len();
@@ -235,12 +235,13 @@ async fn list_project_drafts(
     Path(project): Path<String>,
     State(_state): State<crate::DaemonState>,
 ) -> Result<Json<DraftListResponse>, (StatusCode, String)> {
-    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_project_name(&project)
+        .map_err(crate::id_validators::rejection)?;
     let mut drafts = fleet::list_drafts(Some(&project), Some("pending"), 200)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     drafts.extend(
         fleet::list_drafts(Some(&project), Some("edited"), 200)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
     );
     drafts.sort_by(|a, b| b.created_at.cmp(&a.created_at));
     let count = drafts.len();
@@ -252,12 +253,16 @@ async fn get_draft(
     Path(draft_id): Path<String>,
     State(_state): State<crate::DaemonState>,
 ) -> Result<Json<DraftResponse>, (StatusCode, String)> {
-    crate::id_validators::validate_draft_id(&draft_id)
-        .map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_draft_id(&draft_id).map_err(crate::id_validators::rejection)?;
 
     let draft = fleet::get_draft(&draft_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Draft '{}' not found", draft_id)))?;
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                format!("Draft '{}' not found", draft_id),
+            )
+        })?;
     Ok(Json(DraftResponse { draft }))
 }
 
@@ -272,13 +277,17 @@ async fn create_draft(
     Json(req): Json<CreateDraftRequest>,
 ) -> Result<Json<CreateDraftResponse>, (StatusCode, String)> {
     // Validate project name from request body
-    crate::id_validators::validate_project_name(&req.project).map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_project_name(&req.project)
+        .map_err(crate::id_validators::rejection)?;
 
     // Validate project exists
     let _project_path = resolve_project_path(&req.project, &state)?;
 
     // Validate the stitch kind
-    crate::api_stitch_decompose::validate_stitch_kind(&req.kind, req.has_acceptance_criteria.unwrap_or(false))?;
+    crate::api_stitch_decompose::validate_stitch_kind(
+        &req.kind,
+        req.has_acceptance_criteria.unwrap_or(false),
+    )?;
 
     // Dedup check (unless force_create)
     if !req.force_create {
@@ -323,7 +332,11 @@ async fn create_draft(
         labels: req.labels.clone().unwrap_or_default(),
         created_by: actor.clone(),
         created_at: now.clone(),
-        source: if req.source.is_empty() { "chat".to_string() } else { req.source.clone() },
+        source: if req.source.is_empty() {
+            "chat".to_string()
+        } else {
+            req.source.clone()
+        },
         agent_session_id: req.agent_session_id.clone(),
         turn_id: req.turn_id.clone(),
         status: "pending".to_string(),
@@ -351,11 +364,14 @@ async fn create_draft(
         fleet::ActionKind::DraftCreated,
         &draft_id,
         Some(&req.project),
-        Some(serde_json::json!({
-            "title": req.title,
-            "kind": req.kind,
-            "source": req.source,
-        }).to_string()),
+        Some(
+            serde_json::json!({
+                "title": req.title,
+                "kind": req.kind,
+                "source": req.source,
+            })
+            .to_string(),
+        ),
         fleet::ActionResult::Success,
         None,
         Some("agent"),
@@ -365,7 +381,10 @@ async fn create_draft(
         warn!("Failed to write DraftCreated audit row: {}", e);
     }
 
-    info!("Draft {} created by {} in project '{}': {}", draft_id, actor, req.project, req.title);
+    info!(
+        "Draft {} created by {} in project '{}': {}",
+        draft_id, actor, req.project, req.title
+    );
 
     // Emit draft_update WS event
     let _ = state.draft_tx.send(crate::ws::DraftUpdateData {
@@ -397,17 +416,24 @@ async fn approve_draft(
     connect_info: Option<ConnectInfo<SocketAddr>>,
     Json(req): Json<ApproveRequest>,
 ) -> Result<Json<ApproveResponse>, (StatusCode, String)> {
-    crate::id_validators::validate_draft_id(&draft_id)
-        .map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_draft_id(&draft_id).map_err(crate::id_validators::rejection)?;
 
     let draft = fleet::get_draft(&draft_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Draft '{}' not found", draft_id)))?;
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                format!("Draft '{}' not found", draft_id),
+            )
+        })?;
 
     if draft.status != "pending" && draft.status != "edited" {
         return Err((
             StatusCode::CONFLICT,
-            format!("Draft '{}' is in status '{}', expected 'pending' or 'edited'", draft_id, draft.status),
+            format!(
+                "Draft '{}' is in status '{}', expected 'pending' or 'edited'",
+                draft_id, draft.status
+            ),
         ));
     }
 
@@ -424,12 +450,15 @@ async fn approve_draft(
         ActionKind::DraftApproved,
         &draft_id,
         Some(&draft.project),
-        Some(serde_json::json!({
-            "title": draft.title,
-            "kind": draft.kind,
-            "source": draft.source,
-            "original_actor": draft.created_by,
-        }).to_string()),
+        Some(
+            serde_json::json!({
+                "title": draft.title,
+                "kind": draft.kind,
+                "source": draft.source,
+                "original_actor": draft.created_by,
+            })
+            .to_string(),
+        ),
         ActionResult::Success,
         None,
         Some("operator"),
@@ -462,7 +491,8 @@ async fn approve_draft(
     // Dedup check (unless force_create)
     if !submit_req.force_create {
         let index = state.vector_index.read().unwrap();
-        let dedup_matches = index.check_duplicate(&submit_req.title, submit_req.description.as_deref());
+        let dedup_matches =
+            index.check_duplicate(&submit_req.title, submit_req.description.as_deref());
         if !dedup_matches.is_empty() {
             let best = &dedup_matches[0];
             let message = format!(
@@ -508,10 +538,13 @@ async fn approve_draft(
         ActionKind::DraftApproved,
         &draft_id,
         Some(&draft.project),
-        Some(serde_json::json!({
-            "stitch_id": submit_result.stitch_id,
-            "bead_count": submit_result.created_beads.len(),
-        }).to_string()),
+        Some(
+            serde_json::json!({
+                "stitch_id": submit_result.stitch_id,
+                "bead_count": submit_result.created_beads.len(),
+            })
+            .to_string(),
+        ),
         ActionResult::Success,
         None,
         Some("operator"),
@@ -561,17 +594,24 @@ async fn edit_draft(
     connect_info: Option<ConnectInfo<SocketAddr>>,
     Json(req): Json<EditDraftRequest>,
 ) -> Result<Json<EditResponse>, (StatusCode, String)> {
-    crate::id_validators::validate_draft_id(&draft_id)
-        .map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_draft_id(&draft_id).map_err(crate::id_validators::rejection)?;
 
     let draft = fleet::get_draft(&draft_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Draft '{}' not found", draft_id)))?;
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                format!("Draft '{}' not found", draft_id),
+            )
+        })?;
 
     if draft.status != "pending" && draft.status != "edited" {
         return Err((
             StatusCode::CONFLICT,
-            format!("Draft '{}' is in status '{}', cannot edit", draft_id, draft.status),
+            format!(
+                "Draft '{}' is in status '{}', cannot edit",
+                draft_id, draft.status
+            ),
         ));
     }
 
@@ -592,7 +632,12 @@ async fn edit_draft(
 
     let updated = fleet::get_draft(&draft_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, "Draft disappeared after edit".to_string()))?;
+        .ok_or_else(|| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Draft disappeared after edit".to_string(),
+            )
+        })?;
 
     // Audit: draft edited
     let actor = resolve_actor(connect_info.map(|ci| ci.0));
@@ -602,10 +647,13 @@ async fn edit_draft(
         ActionKind::DraftEdited,
         &draft_id,
         Some(&draft.project),
-        Some(serde_json::json!({
-            "version": updated.version,
-            "title": updated.title,
-        }).to_string()),
+        Some(
+            serde_json::json!({
+                "version": updated.version,
+                "title": updated.title,
+            })
+            .to_string(),
+        ),
         ActionResult::Success,
         None,
         Some("operator"),
@@ -643,17 +691,24 @@ async fn reject_draft(
     connect_info: Option<ConnectInfo<SocketAddr>>,
     Json(req): Json<RejectRequest>,
 ) -> Result<Json<RejectResponse>, (StatusCode, String)> {
-    crate::id_validators::validate_draft_id(&draft_id)
-        .map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_draft_id(&draft_id).map_err(crate::id_validators::rejection)?;
 
     let draft = fleet::get_draft(&draft_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Draft '{}' not found", draft_id)))?;
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                format!("Draft '{}' not found", draft_id),
+            )
+        })?;
 
     if draft.status != "pending" && draft.status != "edited" {
         return Err((
             StatusCode::CONFLICT,
-            format!("Draft '{}' is in status '{}', cannot reject", draft_id, draft.status),
+            format!(
+                "Draft '{}' is in status '{}', cannot reject",
+                draft_id, draft.status
+            ),
         ));
     }
 
@@ -676,11 +731,14 @@ async fn reject_draft(
         ActionKind::DraftRejected,
         &draft_id,
         Some(&draft.project),
-        Some(serde_json::json!({
-            "title": draft.title,
-            "kind": draft.kind,
-            "rejection_reason": req.reason,
-        }).to_string()),
+        Some(
+            serde_json::json!({
+                "title": draft.title,
+                "kind": draft.kind,
+                "rejection_reason": req.reason,
+            })
+            .to_string(),
+        ),
         ActionResult::Success,
         None,
         Some("operator"),
@@ -735,9 +793,9 @@ async fn open_draft(
     connect_info: Option<ConnectInfo<SocketAddr>>,
     Json(req): Json<OpenDraftRequest>,
 ) -> Result<Json<OpenDraftResponse>, (StatusCode, String)> {
-    crate::id_validators::validate_draft_id(&draft_id)
+    crate::id_validators::validate_draft_id(&draft_id).map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_project_name(&req.project)
         .map_err(crate::id_validators::rejection)?;
-    crate::id_validators::validate_project_name(&req.project).map_err(crate::id_validators::rejection)?;
 
     let actor = resolve_actor(connect_info.map(|ci| ci.0));
     let now = chrono::Utc::now().to_rfc3339();
@@ -761,7 +819,10 @@ async fn open_draft(
         warn!("Failed to write DraftOpened audit row: {}", e);
     }
 
-    info!("Draft {} opened by {} in project '{}'", draft_id, actor, req.project);
+    info!(
+        "Draft {} opened by {} in project '{}'",
+        draft_id, actor, req.project
+    );
 
     Ok(Json(OpenDraftResponse {
         draft_id,
@@ -780,13 +841,17 @@ async fn autosave_draft(
     State(state): State<crate::DaemonState>,
     Json(req): Json<AutosaveDraftRequest>,
 ) -> Result<Json<AutosaveDraftResponse>, (StatusCode, String)> {
-    crate::id_validators::validate_draft_id(&draft_id)
-        .map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_draft_id(&draft_id).map_err(crate::id_validators::rejection)?;
 
     // Verify draft exists
     let _draft = fleet::get_draft(&draft_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Draft '{}' not found", draft_id)))?;
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                format!("Draft '{}' not found", draft_id),
+            )
+        })?;
 
     let now = chrono::Utc::now().to_rfc3339();
 
@@ -829,18 +894,25 @@ async fn abandon_draft(
     State(_state): State<crate::DaemonState>,
     connect_info: Option<ConnectInfo<SocketAddr>>,
 ) -> Result<Json<AbandonDraftResponse>, (StatusCode, String)> {
-    crate::id_validators::validate_draft_id(&draft_id)
-        .map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_draft_id(&draft_id).map_err(crate::id_validators::rejection)?;
 
     // Verify draft exists and is in an abandonable state
     let draft = fleet::get_draft(&draft_id)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Draft '{}' not found", draft_id)))?;
+        .ok_or_else(|| {
+            (
+                StatusCode::NOT_FOUND,
+                format!("Draft '{}' not found", draft_id),
+            )
+        })?;
 
     if draft.status == "submitted" || draft.status == "approved" || draft.status == "rejected" {
         return Err((
             StatusCode::CONFLICT,
-            format!("Draft '{}' is in status '{}', cannot be abandoned", draft_id, draft.status),
+            format!(
+                "Draft '{}' is in status '{}', cannot be abandoned",
+                draft_id, draft.status
+            ),
         ));
     }
 
@@ -856,10 +928,13 @@ async fn abandon_draft(
         fleet::ActionKind::DraftAbandoned,
         &draft_id,
         Some(&draft.project),
-        Some(serde_json::json!({
-            "title": draft.title,
-            "kind": draft.kind,
-        }).to_string()),
+        Some(
+            serde_json::json!({
+                "title": draft.title,
+                "kind": draft.kind,
+            })
+            .to_string(),
+        ),
         fleet::ActionResult::Success,
         None,
         Some("operator"),

@@ -50,12 +50,15 @@ pub async fn run_socket_server(config: SocketConfig) -> Result<()> {
     // Set socket permissions: user read/write only (0o600)
     // This ensures only the same user can connect (§13 security)
     let expected_mode = 0o600;
-    fs::set_permissions(socket_path, fs::Permissions::from_mode(expected_mode))
-        .map_err(|e| {
-            // Clean failure: remove socket if mode set fails
-            let _ = fs::remove_file(socket_path);
-            anyhow::anyhow!("failed to set socket mode 0{:o}: {}. Socket removed for security.", expected_mode, e)
-        })?;
+    fs::set_permissions(socket_path, fs::Permissions::from_mode(expected_mode)).map_err(|e| {
+        // Clean failure: remove socket if mode set fails
+        let _ = fs::remove_file(socket_path);
+        anyhow::anyhow!(
+            "failed to set socket mode 0{:o}: {}. Socket removed for security.",
+            expected_mode,
+            e
+        )
+    })?;
 
     // Verify the mode was set correctly (startup verification)
     let metadata = fs::metadata(socket_path)?;
@@ -117,10 +120,7 @@ pub async fn run_socket_server(config: SocketConfig) -> Result<()> {
 }
 
 /// Handle a single socket connection
-async fn handle_socket_connection(
-    mut socket: tokio::net::UnixStream,
-    actor: String,
-) -> Result<()> {
+async fn handle_socket_connection(mut socket: tokio::net::UnixStream, actor: String) -> Result<()> {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
     let (reader, mut writer) = socket.split();
@@ -210,7 +210,10 @@ fn handle_request(
                     version: env!("CARGO_PKG_VERSION").to_string(),
                 },
             };
-            crate::protocol::JsonRpcResponse::result(serde_json::json!(null), serde_json::to_value(result).unwrap())
+            crate::protocol::JsonRpcResponse::result(
+                serde_json::json!(null),
+                serde_json::to_value(result).unwrap(),
+            )
         }
         crate::protocol::Method::ToolsList(_) => {
             let tools = crate::tools::McpServerState::get_tools();
@@ -225,11 +228,7 @@ fn handle_request(
                 }
                 Err(e) => {
                     warn!("Tool call error: {}", e);
-                    crate::protocol::JsonRpcResponse::error(
-                        serde_json::json!(null),
-                        -32603,
-                        e,
-                    )
+                    crate::protocol::JsonRpcResponse::error(serde_json::json!(null), -32603, e)
                 }
             }
         }

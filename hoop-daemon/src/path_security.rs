@@ -3,9 +3,7 @@
 //! Re-exports the canonical implementation from `hoop_schema::path_security`
 //! and adds axum-specific HTTP helpers.
 
-pub use hoop_schema::path_security::{
-    canonicalize_and_check, PathAllowlist, PathTraversalError,
-};
+pub use hoop_schema::path_security::{canonicalize_and_check, PathAllowlist, PathTraversalError};
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────────
 
@@ -32,7 +30,7 @@ mod tests {
         let (status, body) = safe_rejection("bead_id");
         assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
         assert!(body.contains("bead_id"));
-        assert!(!body.contains('/'));   // no filesystem path in the message
+        assert!(!body.contains('/')); // no filesystem path in the message
         assert!(!body.contains(".."));
     }
 
@@ -71,15 +69,9 @@ mod tests {
     /// Verify that IdValidationError rejection also never echoes the bad value.
     #[test]
     fn id_validation_rejection_is_safe() {
-        use crate::id_validators::{validate_bead_id, rejection};
+        use crate::id_validators::{rejection, validate_bead_id};
 
-        let attacks = [
-            "../etc/passwd",
-            "/etc/shadow",
-            "%2e%2e%2f",
-            "-rf",
-            "..",
-        ];
+        let attacks = ["../etc/passwd", "/etc/shadow", "%2e%2e%2f", "-rf", ".."];
         for attack in &attacks {
             if let Err(e) = validate_bead_id(attack) {
                 let (_status, body) = rejection(e);

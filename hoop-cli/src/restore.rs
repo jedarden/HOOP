@@ -21,7 +21,9 @@ struct S3Locator {
 }
 
 fn parse_s3_uri(uri: &str) -> Result<S3Locator> {
-    let stripped = uri.strip_prefix("s3://").context("URI must start with s3://")?;
+    let stripped = uri
+        .strip_prefix("s3://")
+        .context("URI must start with s3://")?;
     let (bucket, key) = stripped
         .split_once('/')
         .context("URI must be s3://<bucket>/<key>")?;
@@ -44,11 +46,10 @@ struct S3Config {
 fn load_s3_config() -> Result<S3Config> {
     let endpoint = std::env::var("HOOP_BACKUP_ENDPOINT")
         .or_else(|_| std::env::var("AWS_ENDPOINT_URL"))
-        .context(
-            "Set HOOP_BACKUP_ENDPOINT or AWS_ENDPOINT_URL to your S3-compatible endpoint",
-        )?;
-    let region =
-        std::env::var("AWS_REGION").or_else(|_| std::env::var("AWS_DEFAULT_REGION")).unwrap_or_else(|_| "us-east-1".into());
+        .context("Set HOOP_BACKUP_ENDPOINT or AWS_ENDPOINT_URL to your S3-compatible endpoint")?;
+    let region = std::env::var("AWS_REGION")
+        .or_else(|_| std::env::var("AWS_DEFAULT_REGION"))
+        .unwrap_or_else(|_| "us-east-1".into());
     let access_key = std::env::var("AWS_ACCESS_KEY_ID")
         .context("Set AWS_ACCESS_KEY_ID for S3 authentication")?;
     let secret_key = std::env::var("AWS_SECRET_ACCESS_KEY")
@@ -80,7 +81,8 @@ fn sign_request(
     let canonical_uri = url.path();
     let canonical_querystring = url.query().unwrap_or("");
 
-    let canonical_headers = format!("host:{host}\nx-amz-content-sha256:UNSIGNED-PAYLOAD\nx-amz-date:{amz_date}\n");
+    let canonical_headers =
+        format!("host:{host}\nx-amz-content-sha256:UNSIGNED-PAYLOAD\nx-amz-date:{amz_date}\n");
     let signed_headers = "host;x-amz-content-sha256;x-amz-date";
 
     let canonical_request = format!(
@@ -93,9 +95,8 @@ fn sign_request(
     hasher.update(canonical_request.as_bytes());
     let canonical_request_hash = hex::encode(hasher.finalize());
 
-    let string_to_sign = format!(
-        "AWS4-HMAC-SHA256\n{amz_date}\n{credential_scope}\n{canonical_request_hash}"
-    );
+    let string_to_sign =
+        format!("AWS4-HMAC-SHA256\n{amz_date}\n{credential_scope}\n{canonical_request_hash}");
 
     // Derive signing key
     let mut mac = HmacSha256::new_from_slice(format!("AWS4{}", config.secret_key).as_bytes())
@@ -173,11 +174,7 @@ fn verify_sha256(data: &[u8], expected: &str) -> Result<()> {
     hasher.update(data);
     let actual = hex::encode(hasher.finalize());
     if actual != expected {
-        bail!(
-            "SHA-256 mismatch: expected {}, got {}",
-            expected,
-            actual
-        );
+        bail!("SHA-256 mismatch: expected {}, got {}", expected, actual);
     }
     Ok(())
 }
@@ -261,8 +258,13 @@ fn rollback_to(backup_dir: &Path, target: &Path) -> Result<()> {
             .with_context(|| format!("Failed to remove partial restore at {}", target.display()))?;
     }
     if backup_dir.exists() {
-        std::fs::rename(backup_dir, target)
-            .with_context(|| format!("Failed to restore rollback {} -> {}", backup_dir.display(), target.display()))?;
+        std::fs::rename(backup_dir, target).with_context(|| {
+            format!(
+                "Failed to restore rollback {} -> {}",
+                backup_dir.display(),
+                target.display()
+            )
+        })?;
     }
     Ok(())
 }
@@ -283,33 +285,37 @@ pub async fn run_restore(from_uri: &str) -> Result<()> {
     let locator = parse_s3_uri(from_uri)?;
     let s3_config = load_s3_config()?;
 
-    println!("Fetching manifest from s3://{}/{} ...", locator.bucket, locator.key);
+    println!(
+        "Fetching manifest from s3://{}/{} ...",
+        locator.bucket, locator.key
+    );
 
     // 3. Download and parse manifest (uploaded last by backup pipeline)
-    let manifest_bytes = s3_get(&s3_config, &locator.bucket, &format!("{}/manifest.json", locator.key)).await?;
-    let manifest: hoop_daemon::snapshot_manifest::SnapshotManifest = serde_json::from_slice(&manifest_bytes)
-        .context("Failed to parse manifest.json")?;
+    let manifest_bytes = s3_get(
+        &s3_config,
+        &locator.bucket,
+        &format!("{}/manifest.json", locator.key),
+    )
+    .await?;
+    let manifest: hoop_daemon::snapshot_manifest::SnapshotManifest =
+        serde_json::from_slice(&manifest_bytes).context("Failed to parse manifest.json")?;
 
     println!(
         "Snapshot: {} (schema {}, {})",
-        manifest.snapshot_id,
-        manifest.schema_version,
-        manifest.created_at
+        manifest.snapshot_id, manifest.schema_version, manifest.created_at
     );
 
     // 4. Validate manifest before any destructive action (§20.1)
     let current = hoop_daemon::fleet::SCHEMA_VERSION;
-    manifest.validate(current)
+    manifest
+        .validate(current)
         .context("Manifest validation failed")?;
 
     // 5. Move existing ~/.hoop/ aside (destructive action follows)
-    let backup_dir = move_aside_for_rollback()
-        .context("Failed to move existing ~/.hoop/ aside for rollback")?;
+    let backup_dir =
+        move_aside_for_rollback().context("Failed to move existing ~/.hoop/ aside for rollback")?;
 
-    println!(
-        "Moved existing state to {}",
-        backup_dir.display()
-    );
+    println!("Moved existing state to {}", backup_dir.display());
 
     // Everything after move_aside is protected: any failure triggers rollback.
     let result: Result<()> = async {
@@ -329,18 +335,18 @@ pub async fn run_restore(from_uri: &str) -> Result<()> {
         }
 
         // Decompress
-        let db_data = if manifest.fleet_db_key.ends_with(".zst") || manifest.fleet_db_key.ends_with(".age") {
-            // If encrypted, try to decrypt first
-            let compressed = if manifest.encryption == "age" {
-                decrypt_with_age(&db_compressed)?
+        let db_data =
+            if manifest.fleet_db_key.ends_with(".zst") || manifest.fleet_db_key.ends_with(".age") {
+                // If encrypted, try to decrypt first
+                let compressed = if manifest.encryption == "age" {
+                    decrypt_with_age(&db_compressed)?
+                } else {
+                    db_compressed
+                };
+                zstd::decode_all(&compressed[..]).context("zstd decompress fleet.db")?
             } else {
-                db_compressed
+                db_compressed.to_vec()
             };
-            zstd::decode_all(&compressed[..])
-                .context("zstd decompress fleet.db")?
-        } else {
-            db_compressed.to_vec()
-        };
 
         let db_path = hoop.join("fleet.db");
         std::fs::write(&db_path, &db_data)
@@ -389,8 +395,8 @@ pub async fn run_restore(from_uri: &str) -> Result<()> {
         // 10. Run schema migrations on restored fleet.db
         println!("Running schema migrations ...");
         let db_path = hoop.join("fleet.db");
-        let pre_version = hoop_daemon::fleet::restore_and_migrate(&db_path)
-            .context("Schema migration failed")?;
+        let pre_version =
+            hoop_daemon::fleet::restore_and_migrate(&db_path).context("Schema migration failed")?;
         if pre_version != current {
             println!("Migrated schema {} -> {}", pre_version, current);
         }
@@ -405,7 +411,10 @@ pub async fn run_restore(from_uri: &str) -> Result<()> {
         eprintln!("Rolling back...");
         if let Err(re) = rollback(&backup_dir) {
             eprintln!("Rollback also failed: {re}");
-            eprintln!("Manual recovery: rename {} to ~/.hoop/", backup_dir.display());
+            eprintln!(
+                "Manual recovery: rename {} to ~/.hoop/",
+                backup_dir.display()
+            );
         } else {
             eprintln!("Rollback complete — original state restored.");
         }
@@ -504,7 +513,8 @@ mod tests {
             "fleet_db_sha256": "abc123",
             "fleet_db_size": 4096
         }"#;
-        let m: hoop_daemon::snapshot_manifest::SnapshotManifest = serde_json::from_str(json).unwrap();
+        let m: hoop_daemon::snapshot_manifest::SnapshotManifest =
+            serde_json::from_str(json).unwrap();
         assert_eq!(m.snapshot_id, "snap-001");
         assert_eq!(m.fleet_db_key, "backups/snap-001/fleet.db.zst");
         assert_eq!(m.encryption, "none");
@@ -671,10 +681,7 @@ mod tests {
             msg.contains(current),
             "must mention binary's current version ({current}): {msg}"
         );
-        assert!(
-            msg.contains("newer than"),
-            "must say 'newer than': {msg}"
-        );
+        assert!(msg.contains("newer than"), "must say 'newer than': {msg}");
         assert!(
             msg.contains("Upgrade HOOP"),
             "must suggest upgrading: {msg}"
@@ -757,7 +764,11 @@ mod tests {
         // Step 1: Original state
         std::fs::create_dir_all(&hoop).unwrap();
         std::fs::write(hoop.join("fleet.db"), "original-fleet-data").unwrap();
-        std::fs::write(hoop.join("projects.yaml"), "projects:\n  - name: test\n    path: /test").unwrap();
+        std::fs::write(
+            hoop.join("projects.yaml"),
+            "projects:\n  - name: test\n    path: /test",
+        )
+        .unwrap();
         std::fs::create_dir_all(hoop.join("attachments/sessions")).unwrap();
         std::fs::write(hoop.join("attachments/sessions/log.txt"), "session data").unwrap();
 
@@ -813,10 +824,11 @@ mod tests {
         assert_eq!(removed, 0);
 
         // No .hoop.rollback.* exists → daemon audit would pass
-        let has_leftovers = std::fs::read_dir(tmp.path())
-            .unwrap()
-            .flatten()
-            .any(|e| e.file_name().to_string_lossy().starts_with(".hoop.rollback."));
+        let has_leftovers = std::fs::read_dir(tmp.path()).unwrap().flatten().any(|e| {
+            e.file_name()
+                .to_string_lossy()
+                .starts_with(".hoop.rollback.")
+        });
         assert!(!has_leftovers, "no leftover rollback dirs after cleanup");
     }
 }

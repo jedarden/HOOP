@@ -35,13 +35,18 @@ async fn get_job(
     Path(job_id): Path<String>,
     State(state): State<crate::DaemonState>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    crate::id_validators::validate_job_id(&job_id)
-        .map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_job_id(&job_id).map_err(crate::id_validators::rejection)?;
 
-    let transcription_service = state.transcription_service.as_ref()
-        .ok_or_else(|| (StatusCode::SERVICE_UNAVAILABLE, "Transcription service not available".to_string()))?;
+    let transcription_service = state.transcription_service.as_ref().ok_or_else(|| {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Transcription service not available".to_string(),
+        )
+    })?;
 
-    let job = transcription_service.get_job(&job_id).await
+    let job = transcription_service
+        .get_job(&job_id)
+        .await
         .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Job {} not found", job_id)))?;
 
     Ok(Json(job))
@@ -52,8 +57,12 @@ async fn list_jobs(
     Query(params): Query<ListJobsQuery>,
     State(state): State<crate::DaemonState>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let transcription_service = state.transcription_service.as_ref()
-        .ok_or_else(|| (StatusCode::SERVICE_UNAVAILABLE, "Transcription service not available".to_string()))?;
+    let transcription_service = state.transcription_service.as_ref().ok_or_else(|| {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Transcription service not available".to_string(),
+        )
+    })?;
 
     // If stitch_id is specified, filter by stitch
     if let Some(stitch_id) = params.stitch_id {
@@ -63,11 +72,13 @@ async fn list_jobs(
 
         // Optionally filter by status
         let jobs = if let Some(status_str) = params.status {
-            let status = parse_job_status(&status_str)
-                .ok_or_else(|| (StatusCode::BAD_REQUEST, format!("Invalid status: {}", status_str)))?;
-            jobs.into_iter()
-                .filter(|j| j.status == status)
-                .collect()
+            let status = parse_job_status(&status_str).ok_or_else(|| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    format!("Invalid status: {}", status_str),
+                )
+            })?;
+            jobs.into_iter().filter(|j| j.status == status).collect()
         } else {
             jobs
         };

@@ -12,7 +12,7 @@ use crate::api_preview::FileConflict;
 use crate::br_verbs::invoke_br_create;
 use crate::fleet::{self, ActionKind, ActionResult, BeadActionArgs};
 use crate::metrics;
-use crate::predictor::{predict_stitch, PercentileEstimate, DateRange};
+use crate::predictor::{predict_stitch, DateRange, PercentileEstimate};
 
 use crate::stitch_decompose::{
     self, apply_override, decompose, BeadGraph, GraphOverride, StitchIntent,
@@ -183,7 +183,8 @@ async fn preview_decompose(
     State(state): State<crate::DaemonState>,
     Json(req): Json<DecomposePreviewRequest>,
 ) -> Result<Json<DecomposePreviewResponse>, (StatusCode, String)> {
-    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_project_name(&project)
+        .map_err(crate::id_validators::rejection)?;
     let _project_path = resolve_project_path(&project, &state)?;
 
     validate_stitch_kind(&req.kind, req.has_acceptance_criteria.unwrap_or(false))?;
@@ -200,8 +201,12 @@ async fn preview_decompose(
         labels: labels.clone(),
     };
 
-    let graph = decompose(&config.rules, &intent)
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, format!("No decomposition rule matches kind '{}'", intent.kind)))?;
+    let graph = decompose(&config.rules, &intent).ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            format!("No decomposition rule matches kind '{}'", intent.kind),
+        )
+    })?;
 
     // Check for potential duplicates across all projects
     let dedup_refs = {
@@ -210,18 +215,30 @@ async fn preview_decompose(
         if dedup_matches.is_empty() {
             None
         } else {
-            Some(dedup_matches.into_iter().map(|m| DedupMatchRef {
-                id: m.item.id,
-                project: m.item.project,
-                title: m.item.title,
-                kind: m.item.kind,
-                similarity: m.similarity,
-            }).collect())
+            Some(
+                dedup_matches
+                    .into_iter()
+                    .map(|m| DedupMatchRef {
+                        id: m.item.id,
+                        project: m.item.project,
+                        title: m.item.title,
+                        kind: m.item.kind,
+                        similarity: m.similarity,
+                    })
+                    .collect(),
+            )
         }
     };
 
     // Fetch "What Will This Take?" preview data
-    let preview = fetch_stitch_preview(&project, &req.title, req.description.as_deref(), &labels, &state).await;
+    let preview = fetch_stitch_preview(
+        &project,
+        &req.title,
+        req.description.as_deref(),
+        &labels,
+        &state,
+    )
+    .await;
 
     Ok(Json(DecomposePreviewResponse {
         rule_name: graph.rule_name.clone(),
@@ -246,7 +263,8 @@ async fn submit_stitch(
     validate_stitch_draft(&req)?;
 
     // 1a. Validate project name
-    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_project_name(&project)
+        .map_err(crate::id_validators::rejection)?;
 
     // 1b. Validate stitch_id if provided
     if let Some(ref sid) = req.stitch_id {
@@ -258,7 +276,9 @@ async fn submit_stitch(
         let index = state.vector_index.read().unwrap();
         let dedup_matches = index.check_duplicate(&req.title, req.description.as_deref());
         if !dedup_matches.is_empty() {
-            metrics::metrics().hoop_already_started_dedup_hits_total.inc();
+            metrics::metrics()
+                .hoop_already_started_dedup_hits_total
+                .inc();
             let best = &dedup_matches[0];
             let message = format!(
                 "This looks like `{}/{}` ({}), which is in progress. Continue that, add this as a child, or proceed as new?",
@@ -266,13 +286,19 @@ async fn submit_stitch(
                 best.item.id,
                 best.item.title
             );
-            let matches_json = serde_json::to_value(dedup_matches.iter().map(|m| DedupMatchRef {
-                id: m.item.id.clone(),
-                project: m.item.project.clone(),
-                title: m.item.title.clone(),
-                kind: m.item.kind.clone(),
-                similarity: m.similarity,
-            }).collect::<Vec<_>>()).unwrap_or(serde_json::Value::Null);
+            let matches_json = serde_json::to_value(
+                dedup_matches
+                    .iter()
+                    .map(|m| DedupMatchRef {
+                        id: m.item.id.clone(),
+                        project: m.item.project.clone(),
+                        title: m.item.title.clone(),
+                        kind: m.item.kind.clone(),
+                        similarity: m.similarity,
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap_or(serde_json::Value::Null);
             let error_json = serde_json::json!({
                 "message": message,
                 "dedup_matches": matches_json,
@@ -288,7 +314,10 @@ async fn submit_stitch(
     if !beads_dir.exists() {
         return Err((
             StatusCode::UNPROCESSABLE_ENTITY,
-            format!("Project '{}' has no .beads directory — cannot create beads", project),
+            format!(
+                "Project '{}' has no .beads directory — cannot create beads",
+                project
+            ),
         ));
     }
 
@@ -318,11 +347,21 @@ pub async fn submit_stitch_internal(
 ) -> Result<SubmitResult, (StatusCode, String)> {
     // Zero-write guard: stitch submit creates beads via br create
     #[cfg(feature = "zero-write-v01")]
-    return Err((StatusCode::FORBIDDEN, "Stitch submission is disabled in zero-write mode".to_string()));
+    return Err((
+        StatusCode::FORBIDDEN,
+        "Stitch submission is disabled in zero-write mode".to_string(),
+    ));
 
     // Auto-generate stitch_id if not provided
     let stitch_id = req.stitch_id.clone().unwrap_or_else(|| {
-        format!("stitch-{}", uuid::Uuid::new_v4().to_string().split('-').next().unwrap_or("unknown"))
+        format!(
+            "stitch-{}",
+            uuid::Uuid::new_v4()
+                .to_string()
+                .split('-')
+                .next()
+                .unwrap_or("unknown")
+        )
     });
 
     let config = stitch_decompose::load_config_from_file();
@@ -336,8 +375,12 @@ pub async fn submit_stitch_internal(
         labels: req.labels.clone().unwrap_or_default(),
     };
 
-    let base_graph = decompose(&config.rules, &intent)
-        .ok_or_else(|| (StatusCode::BAD_REQUEST, format!("No decomposition rule matches kind '{}'", intent.kind)))?;
+    let base_graph = decompose(&config.rules, &intent).ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            format!("No decomposition rule matches kind '{}'", intent.kind),
+        )
+    })?;
 
     let graph = if let Some(over) = &req.override_ {
         apply_override(&base_graph, over)
@@ -414,16 +457,34 @@ pub async fn submit_stitch_internal(
             cmd.output()
         })
         .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Task join failed: {}", e)))?
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to run br: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Task join failed: {}", e),
+            )
+        })?
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to run br: {}", e),
+            )
+        })?;
         let br_elapsed_ms = br_start.elapsed().as_secs_f64() * 1_000.0;
         let br_ok = output.status.success();
-        metrics::metrics().hoop_br_subprocess_total.inc(&["create", if br_ok { "ok" } else { "error" }]);
-        metrics::metrics().hoop_br_subprocess_duration_ms.observe(&["create"], br_elapsed_ms);
+        metrics::metrics()
+            .hoop_br_subprocess_total
+            .inc(&["create", if br_ok { "ok" } else { "error" }]);
+        metrics::metrics()
+            .hoop_br_subprocess_duration_ms
+            .observe(&["create"], br_elapsed_ms);
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            errors.push(format!("Failed to create bead '{}': {}", bead.key, stderr.trim()));
+            errors.push(format!(
+                "Failed to create bead '{}': {}",
+                bead.key,
+                stderr.trim()
+            ));
             had_failure = true;
             break;
         }
@@ -440,15 +501,18 @@ pub async fn submit_stitch_internal(
             ActionKind::BeadCreated,
             &id,
             Some(project),
-            Some(serde_json::to_string(&BeadActionArgs {
-                source: source.clone(),
-                stitch_id: Some(stitch_id.clone()),
-                title: bead_title_for_audit.clone(),
-                issue_type: bead_issue_type_for_audit.clone(),
-                priority: bead_priority,
-                dependencies: bead_depends_on,
-                labels: bead.labels.clone(),
-            }).unwrap_or_default()),
+            Some(
+                serde_json::to_string(&BeadActionArgs {
+                    source: source.clone(),
+                    stitch_id: Some(stitch_id.clone()),
+                    title: bead_title_for_audit.clone(),
+                    issue_type: bead_issue_type_for_audit.clone(),
+                    priority: bead_priority,
+                    dependencies: bead_depends_on,
+                    labels: bead.labels.clone(),
+                })
+                .unwrap_or_default(),
+            ),
             ActionResult::Success,
             None,
             Some(&source_str),
@@ -459,7 +523,9 @@ pub async fn submit_stitch_internal(
         }
 
         key_to_id.insert(bead_key.clone(), id.clone());
-        metrics::metrics().hoop_bead_created_by_hoop_total.inc(&[project]);
+        metrics::metrics()
+            .hoop_bead_created_by_hoop_total
+            .inc(&[project]);
         created_beads.push(CreatedBead {
             key: bead_key,
             id: id.clone(),
@@ -487,7 +553,8 @@ pub async fn submit_stitch_internal(
 
                 let _ = tokio::task::spawn_blocking(move || {
                     let start = std::time::Instant::now();
-                    let mut cmd = crate::br_verbs::invoke_br_write(crate::br_verbs::WriteVerb::Close, &[]);
+                    let mut cmd =
+                        crate::br_verbs::invoke_br_write(crate::br_verbs::WriteVerb::Close, &[]);
                     cmd.current_dir(&close_cwd);
                     cmd.arg(&close_id);
                     cmd.arg("--actor").arg(&close_actor);
@@ -495,10 +562,15 @@ pub async fn submit_stitch_internal(
                     let result = cmd.output();
                     let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
                     let ok = result.as_ref().map(|o| o.status.success()).unwrap_or(false);
-                    crate::metrics::metrics().hoop_br_subprocess_total.inc(&["close", if ok { "ok" } else { "error" }]);
-                    crate::metrics::metrics().hoop_br_subprocess_duration_ms.observe(&["close"], elapsed_ms);
+                    crate::metrics::metrics()
+                        .hoop_br_subprocess_total
+                        .inc(&["close", if ok { "ok" } else { "error" }]);
+                    crate::metrics::metrics()
+                        .hoop_br_subprocess_duration_ms
+                        .observe(&["close"], elapsed_ms);
                     result
-                }).await;
+                })
+                .await;
             }
 
             let _ = fleet::write_audit_row(
@@ -526,7 +598,10 @@ pub async fn submit_stitch_internal(
             Some(project),
             None,
             ActionResult::Failure,
-            Some(format!("Rolled back: {} bead(s) created then closed due to partial failure", created_beads.len())),
+            Some(format!(
+                "Rolled back: {} bead(s) created then closed due to partial failure",
+                created_beads.len()
+            )),
             Some(&source_str),
             Some(&stitch_id),
             None,
@@ -576,7 +651,7 @@ pub async fn submit_stitch_internal(
     // Add stitch to vector index for deduplication (hoop-ttb.5.9.1)
     {
         let mut index = state.vector_index.write().unwrap();
-        let stitch_item = crate::vector_index::IndexedItem {
+        let stitch_item = crate::embedding::IndexedItem {
             id: stitch_id.clone(),
             project: project.to_string(),
             title: req.title.clone(),
@@ -589,7 +664,9 @@ pub async fn submit_stitch_internal(
     }
 
     // Emit stitch creation metrics
-    metrics::metrics().hoop_stitch_created_total.inc(&[project, &req.kind]);
+    metrics::metrics()
+        .hoop_stitch_created_total
+        .inc(&[project, &req.kind]);
     metrics::metrics().hoop_stitches_created_per_day.inc();
 
     // Write StitchCreated audit row
@@ -598,20 +675,26 @@ pub async fn submit_stitch_internal(
         ActionKind::StitchCreated,
         &stitch_id,
         Some(project),
-        Some(serde_json::json!({
-            "source": source_str,
-            "kind": req.kind,
-            "title": req.title,
-            "bead_count": created_beads.len(),
-            "bead_ids": created_beads.iter().map(|b| &b.id).collect::<Vec<_>>(),
-        }).to_string()),
+        Some(
+            serde_json::json!({
+                "source": source_str,
+                "kind": req.kind,
+                "title": req.title,
+                "bead_count": created_beads.len(),
+                "bead_ids": created_beads.iter().map(|b| &b.id).collect::<Vec<_>>(),
+            })
+            .to_string(),
+        ),
         ActionResult::Success,
         None,
         Some(&source_str),
         Some(&stitch_id),
         None,
     ) {
-        warn!("Failed to write StitchCreated audit row for {}: {}", stitch_id, e);
+        warn!(
+            "Failed to write StitchCreated audit row for {}: {}",
+            stitch_id, e
+        );
     }
 
     // Emit WS events
@@ -638,13 +721,15 @@ pub async fn submit_stitch_internal(
             dependencies: vec![],
         });
         // Broadcast bead_created_by_hoop event
-        let _ = state.bead_created_by_hoop_tx.send(crate::ws::BeadCreatedByHoopData {
-            project: project.to_string(),
-            bead_id: created.id.clone(),
-            actor: actor.to_string(),
-            source: source_str.clone(),
-            ts: created_at.clone(),
-        });
+        let _ = state
+            .bead_created_by_hoop_tx
+            .send(crate::ws::BeadCreatedByHoopData {
+                project: project.to_string(),
+                bead_id: created.id.clone(),
+                actor: actor.to_string(),
+                source: source_str.clone(),
+                ts: created_at.clone(),
+            });
     }
 
     Ok(SubmitResult {
@@ -666,7 +751,7 @@ async fn fetch_stitch_preview(
     labels: &[String],
     state: &crate::DaemonState,
 ) -> Option<StitchPreviewData> {
-    use crate::api_preview::{load_historical_stitches, load_risk_library, check_file_conflicts};
+    use crate::api_preview::{check_file_conflicts, load_historical_stitches, load_risk_library};
     use crate::similarity::find_similar_stitches;
 
     // Load historical Stitches from fleet.db
@@ -687,7 +772,14 @@ async fn fetch_stitch_preview(
         let beads = state.beads.read().unwrap();
         let historical: Vec<_> = beads
             .iter()
-            .map(|b| (b.id.clone(), b.title.clone(), None as Option<String>, vec![]))
+            .map(|b| {
+                (
+                    b.id.clone(),
+                    b.title.clone(),
+                    None as Option<String>,
+                    vec![],
+                )
+            })
             .collect();
         let similar = find_similar_stitches(title, description, labels, historical, 0.3, 5);
         similar
@@ -779,7 +871,10 @@ pub fn validate_stitch_draft(req: &StitchSubmitRequest) -> Result<(), (StatusCod
 }
 
 /// Validate that the stitch kind matches at least one decomposition rule
-pub fn validate_stitch_kind(kind: &str, has_acceptance_criteria: bool) -> Result<(), (StatusCode, String)> {
+pub fn validate_stitch_kind(
+    kind: &str,
+    has_acceptance_criteria: bool,
+) -> Result<(), (StatusCode, String)> {
     let config = stitch_decompose::load_config_from_file();
     let test_intent = StitchIntent {
         kind: kind.to_string(),

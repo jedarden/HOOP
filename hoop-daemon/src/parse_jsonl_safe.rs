@@ -264,8 +264,7 @@ mod tests {
         };
 
         // Valid JSON object
-        let result: ParseResult<serde_json::Value> =
-            parse_line(r#"{"key": "value"}"#, &source);
+        let result: ParseResult<serde_json::Value> = parse_line(r#"{"key": "value"}"#, &source);
         assert!(
             matches!(result, ParseResult::Ok(_)),
             "valid JSON should parse"
@@ -279,8 +278,7 @@ mod tests {
         );
 
         // Invalid JSON — goes to quarantine
-        let result: ParseResult<serde_json::Value> =
-            parse_line("NOT JSON {{{", &source);
+        let result: ParseResult<serde_json::Value> = parse_line("NOT JSON {{{", &source);
         assert!(
             matches!(result, ParseResult::Quarantined),
             "invalid JSON should be quarantined"
@@ -316,10 +314,7 @@ mod tests {
         let count = quarantine_today_count();
         // The count may or may not be 0 depending on whether ~/.hoop/quarantine
         // has entries for today, but the function should not panic.
-        assert!(
-            count < 1_000_000,
-            "quarantine count should be reasonable"
-        );
+        assert!(count < 1_000_000, "quarantine count should be reasonable");
     }
 
     // =======================================================================
@@ -413,7 +408,10 @@ mod tests {
         let lines = reader.feed(&long);
         assert!(lines.is_empty(), "no newlines → no complete lines");
         // Buffer should have been discarded by enforce_limit.
-        assert!(reader.finish().is_none(), "over-limit partial should be discarded");
+        assert!(
+            reader.finish().is_none(),
+            "over-limit partial should be discarded"
+        );
     }
 
     /// Feeding empty chunks is a no-op.

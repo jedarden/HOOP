@@ -252,7 +252,10 @@ fn query_overnight_activity(window_hours: u64) -> Result<OvernightActivity> {
 // ---------------------------------------------------------------------------
 
 fn build_brief_prompt(activity: &OvernightActivity) -> String {
-    let from = activity.window_from.format("%Y-%m-%d %H:%M UTC").to_string();
+    let from = activity
+        .window_from
+        .format("%Y-%m-%d %H:%M UTC")
+        .to_string();
     let to = activity.window_to.format("%Y-%m-%d %H:%M UTC").to_string();
     let date = activity.window_to.format("%Y-%m-%d").to_string();
 
@@ -281,7 +284,11 @@ fn build_brief_prompt(activity: &OvernightActivity) -> String {
         prompt.push_str("(none)\n\n");
     } else {
         for s in &activity.closed_stitches {
-            let ts = s.last_activity_at.split('T').next().unwrap_or(&s.last_activity_at);
+            let ts = s
+                .last_activity_at
+                .split('T')
+                .next()
+                .unwrap_or(&s.last_activity_at);
             prompt.push_str(&format!("- [{}] [{}] {}\n", ts, s.project, s.title));
         }
         prompt.push('\n');
@@ -296,8 +303,15 @@ fn build_brief_prompt(activity: &OvernightActivity) -> String {
         prompt.push_str("(none)\n\n");
     } else {
         for s in &activity.open_stitches {
-            let ts = s.last_activity_at.split('T').next().unwrap_or(&s.last_activity_at);
-            prompt.push_str(&format!("- [{}] [{}] {} (kind: {})\n", ts, s.project, s.title, s.kind));
+            let ts = s
+                .last_activity_at
+                .split('T')
+                .next()
+                .unwrap_or(&s.last_activity_at);
+            prompt.push_str(&format!(
+                "- [{}] [{}] {} (kind: {})\n",
+                ts, s.project, s.title, s.kind
+            ));
         }
         prompt.push('\n');
     }
@@ -311,7 +325,11 @@ fn build_brief_prompt(activity: &OvernightActivity) -> String {
         prompt.push_str("(none)\n\n");
     } else {
         for s in &activity.new_stitches {
-            let ts = s.last_activity_at.split('T').next().unwrap_or(&s.last_activity_at);
+            let ts = s
+                .last_activity_at
+                .split('T')
+                .next()
+                .unwrap_or(&s.last_activity_at);
             prompt.push_str(&format!("- [{}] [{}] {}\n", ts, s.project, s.title));
         }
         prompt.push('\n');
@@ -346,8 +364,15 @@ fn build_brief_prompt(activity: &OvernightActivity) -> String {
         prompt.push_str("(none)\n\n");
     } else {
         for s in &activity.stuck_stitches {
-            let ts = s.last_activity_at.split('T').next().unwrap_or(&s.last_activity_at);
-            prompt.push_str(&format!("- [{}] [{}] {} (kind: {})\n", ts, s.project, s.title, s.kind));
+            let ts = s
+                .last_activity_at
+                .split('T')
+                .next()
+                .unwrap_or(&s.last_activity_at);
+            prompt.push_str(&format!(
+                "- [{}] [{}] {} (kind: {})\n",
+                ts, s.project, s.title, s.kind
+            ));
         }
         prompt.push('\n');
     }
@@ -362,7 +387,10 @@ fn build_brief_prompt(activity: &OvernightActivity) -> String {
     } else {
         for d in &activity.pending_drafts {
             let ts = d.created_at.split('T').next().unwrap_or(&d.created_at);
-            prompt.push_str(&format!("- [{}] [{}] {} ({})\n", ts, d.project, d.title, d.status));
+            prompt.push_str(&format!(
+                "- [{}] [{}] {} ({})\n",
+                ts, d.project, d.title, d.status
+            ));
         }
         prompt.push('\n');
     }
@@ -596,7 +624,9 @@ impl MorningBriefRunner {
                 }
                 Err(e) => {
                     warn!("Morning brief {} failed: {}", id, e);
-                    if let Err(de) = fleet::update_morning_brief_status(&id, "failed", Some(&e.to_string())) {
+                    if let Err(de) =
+                        fleet::update_morning_brief_status(&id, "failed", Some(&e.to_string()))
+                    {
                         warn!("Failed to mark brief as failed: {}", de);
                     }
                     let _ = tx.send(MorningBriefData {
@@ -617,7 +647,10 @@ impl MorningBriefRunner {
     }
 
     /// Start the background scheduler (checks every minute, runs at configured hour).
-    pub fn start_scheduler(self: Arc<Self>, mut shutdown: broadcast::Receiver<crate::shutdown::ShutdownPhase>) {
+    pub fn start_scheduler(
+        self: Arc<Self>,
+        mut shutdown: broadcast::Receiver<crate::shutdown::ShutdownPhase>,
+    ) {
         tokio::spawn(async move {
             let mut last_brief_date: Option<chrono::NaiveDate> = None;
             loop {
@@ -701,7 +734,9 @@ async fn run_brief_turn(
     }
 
     if full_text.is_empty() {
-        return Err(anyhow::anyhow!("Agent produced no response for morning brief"));
+        return Err(anyhow::anyhow!(
+            "Agent produced no response for morning brief"
+        ));
     }
 
     let headline = extract_headline(&full_text);
@@ -807,7 +842,11 @@ mod tests {
                 status: "pending".to_string(),
                 created_at: "2026-04-22T20:00:00Z".to_string(),
             }],
-            project_names: vec!["HOOP".to_string(), "NEEDLE".to_string(), "SIGIL".to_string()],
+            project_names: vec![
+                "HOOP".to_string(),
+                "NEEDLE".to_string(),
+                "SIGIL".to_string(),
+            ],
         }
     }
 

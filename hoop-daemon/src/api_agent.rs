@@ -124,6 +124,7 @@ async fn switch_adapter(
         zai_api_key: req.zai_api_key,
         rate_limit_rpm: None,
         cost_cap_usd: None,
+        system_prompt_budget_bytes: crate::agent_adapter::load_system_prompt_budget_bytes(),
     };
 
     match mgr.switch_adapter(new_config).await {
@@ -211,8 +212,8 @@ async fn send_turn(
 }
 
 /// GET /api/agent/sessions
-async fn list_sessions(
-) -> Result<Json<Vec<crate::fleet::AgentSessionRow>>, axum::http::StatusCode> {
+async fn list_sessions() -> Result<Json<Vec<crate::fleet::AgentSessionRow>>, axum::http::StatusCode>
+{
     match crate::fleet::list_agent_sessions(20) {
         Ok(rows) => Ok(Json(rows)),
         Err(e) => {

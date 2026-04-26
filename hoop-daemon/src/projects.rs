@@ -49,13 +49,12 @@ impl ProjectsConfig {
             });
         }
 
-        let contents = fs::read_to_string(path)
-            .context("Failed to read projects.yaml")?;
+        let contents = fs::read_to_string(path).context("Failed to read projects.yaml")?;
 
         let content_hash = hex::encode(Sha256::digest(contents.as_bytes()));
 
-        let mut registry: hoop_schema::ProjectsRegistry = serde_yaml::from_str(&contents)
-            .context("Failed to parse projects.yaml")?;
+        let mut registry: hoop_schema::ProjectsRegistry =
+            serde_yaml::from_str(&contents).context("Failed to parse projects.yaml")?;
 
         // Auto-populate canonical_path on any entry missing it, and persist.
         let backfilled = Self::backfill_canonical_paths(&mut registry);
@@ -82,7 +81,9 @@ impl ProjectsConfig {
         for project in &mut registry.projects {
             match project {
                 hoop_schema::ProjectsRegistryProjectsItem::Variant0 {
-                    path, canonical_path, ..
+                    path,
+                    canonical_path,
+                    ..
                 } => {
                     if canonical_path.is_none() {
                         if let Ok(resolved) = fs::canonicalize(path) {
@@ -108,10 +109,8 @@ impl ProjectsConfig {
 
     /// Serialize the registry back to the YAML file.
     fn write_back(path: &Path, registry: &hoop_schema::ProjectsRegistry) -> Result<()> {
-        let yaml = serde_yaml::to_string(registry)
-            .context("Failed to serialize projects.yaml")?;
-        fs::write(path, yaml)
-            .context("Failed to write projects.yaml")?;
+        let yaml = serde_yaml::to_string(registry).context("Failed to serialize projects.yaml")?;
+        fs::write(path, yaml).context("Failed to write projects.yaml")?;
         info!("Backfilled canonical_path entries in {}", path.display());
         Ok(())
     }
@@ -205,13 +204,7 @@ impl ProjectsConfig {
                 let resolved = workspace
                     .canonical_path
                     .as_ref()
-                    .and_then(|cp| {
-                        if cp.exists() {
-                            Some(cp.clone())
-                        } else {
-                            None
-                        }
-                    })
+                    .and_then(|cp| if cp.exists() { Some(cp.clone()) } else { None })
                     .or_else(|| fs::canonicalize(&workspace.path).ok())
                     .unwrap_or_else(|| workspace.path.clone());
 
@@ -271,7 +264,12 @@ pub struct ConfigError {
 
 impl ConfigError {
     /// Create a semantic validation error with structured details.
-    pub fn validation(message: String, field: Option<String>, expected: Option<String>, got: Option<String>) -> Self {
+    pub fn validation(
+        message: String,
+        field: Option<String>,
+        expected: Option<String>,
+        got: Option<String>,
+    ) -> Self {
         Self {
             message,
             line: 0,
@@ -379,7 +377,11 @@ fn parse_serde_details(msg: &str) -> (Option<String>, Option<String>, Option<Str
             .next()
             .unwrap_or("enum");
         return (
-            if field_path.is_empty() { None } else { Some(field_path.to_string()) },
+            if field_path.is_empty() {
+                None
+            } else {
+                Some(field_path.to_string())
+            },
             Some(format!("valid variant of {}", enum_name)),
             Some("no matching variant".to_string()),
         );
@@ -437,19 +439,16 @@ pub struct ConfigReloadRejectedAudit {
 /// Compute the delta between two project registries.
 ///
 /// Returns a sorted list of human-readable delta keys describing what changed.
-pub fn compute_delta(old: &hoop_schema::ProjectsRegistry, new: &hoop_schema::ProjectsRegistry) -> Vec<String> {
+pub fn compute_delta(
+    old: &hoop_schema::ProjectsRegistry,
+    new: &hoop_schema::ProjectsRegistry,
+) -> Vec<String> {
     let mut deltas = Vec::new();
 
-    let old_map: BTreeMap<&str, &hoop_schema::ProjectsRegistryProjectsItem> = old
-        .projects
-        .iter()
-        .map(|p| (p.name(), p))
-        .collect();
-    let new_map: BTreeMap<&str, &hoop_schema::ProjectsRegistryProjectsItem> = new
-        .projects
-        .iter()
-        .map(|p| (p.name(), p))
-        .collect();
+    let old_map: BTreeMap<&str, &hoop_schema::ProjectsRegistryProjectsItem> =
+        old.projects.iter().map(|p| (p.name(), p)).collect();
+    let new_map: BTreeMap<&str, &hoop_schema::ProjectsRegistryProjectsItem> =
+        new.projects.iter().map(|p| (p.name(), p)).collect();
 
     // Projects removed
     for name in old_map.keys() {
@@ -471,8 +470,14 @@ pub fn compute_delta(old: &hoop_schema::ProjectsRegistry, new: &hoop_schema::Pro
             let old_views = old_proj.workspace_views();
             let new_views = new_proj.workspace_views();
 
-            let old_paths: Vec<_> = old_views.iter().map(|v| v.path.display().to_string()).collect();
-            let new_paths: Vec<_> = new_views.iter().map(|v| v.path.display().to_string()).collect();
+            let old_paths: Vec<_> = old_views
+                .iter()
+                .map(|v| v.path.display().to_string())
+                .collect();
+            let new_paths: Vec<_> = new_views
+                .iter()
+                .map(|v| v.path.display().to_string())
+                .collect();
             if old_paths != new_paths {
                 deltas.push(format!("~project:{}.paths", name));
             }
@@ -515,8 +520,8 @@ impl ProjectsWatcher {
         let (event_tx, _) = tokio::sync::broadcast::channel(64);
         let (shutdown_tx, _) = mpsc::channel(1);
 
-        let config = ProjectsConfig::load()
-            .context("Failed to load initial projects configuration")?;
+        let config =
+            ProjectsConfig::load().context("Failed to load initial projects configuration")?;
 
         Ok(Self {
             config: Arc::new(Mutex::new(config)),
@@ -544,8 +549,7 @@ impl ProjectsWatcher {
         // Ensure the .hoop directory exists
         if let Some(parent) = watch_path.parent() {
             if !parent.exists() {
-                fs::create_dir_all(parent)
-                    .context("Failed to create .hoop directory")?;
+                fs::create_dir_all(parent).context("Failed to create .hoop directory")?;
             }
         }
 
@@ -578,7 +582,8 @@ impl ProjectsWatcher {
             PathBuf::from(".")
         };
 
-        watcher.watch(&watch_dir, RecursiveMode::NonRecursive)
+        watcher
+            .watch(&watch_dir, RecursiveMode::NonRecursive)
             .context("Failed to watch projects directory")?;
 
         self.watcher = Some(watcher);
@@ -662,10 +667,7 @@ impl ProjectsWatcher {
             Ok(cfg) => cfg,
             Err(error) => {
                 let msg = error.message.clone();
-                let _ = event_tx.send(ProjectsEvent::ConfigError {
-                    error,
-                    prev_hash,
-                });
+                let _ = event_tx.send(ProjectsEvent::ConfigError { error, prev_hash });
                 warn!("Projects configuration rejected (schema): {}", msg);
                 return;
             }
@@ -676,7 +678,10 @@ impl ProjectsWatcher {
         if !validation_errors.is_empty() {
             // Collect all errors into a single structured ConfigError
             let first_error = validation_errors.first().unwrap().clone();
-            let all_messages: Vec<String> = validation_errors.iter().map(|e| e.message.clone()).collect();
+            let all_messages: Vec<String> = validation_errors
+                .iter()
+                .map(|e| e.message.clone())
+                .collect();
             let combined = ConfigError {
                 message: all_messages.join("; "),
                 line: first_error.line,
@@ -700,7 +705,8 @@ impl ProjectsWatcher {
             if let Err(e) = ProjectsConfig::write_back(path, &new_config.registry) {
                 warn!("Failed to backfill canonical paths on reload: {}", e);
             }
-            new_config.canonical_cache = ProjectsConfig::build_canonical_cache(&new_config.registry);
+            new_config.canonical_cache =
+                ProjectsConfig::build_canonical_cache(&new_config.registry);
         }
 
         *config.lock().await = new_config.clone();
@@ -732,20 +738,19 @@ impl ProjectsWatcher {
             });
         }
 
-        let contents = fs::read_to_string(path)
-            .map_err(|e| ConfigError {
-                message: format!("Failed to read file: {}", e),
-                line: 0,
-                col: 0,
-                field: None,
-                expected: None,
-                got: None,
-            })?;
+        let contents = fs::read_to_string(path).map_err(|e| ConfigError {
+            message: format!("Failed to read file: {}", e),
+            line: 0,
+            col: 0,
+            field: None,
+            expected: None,
+            got: None,
+        })?;
 
         let content_hash = hex::encode(Sha256::digest(contents.as_bytes()));
 
-        let registry: hoop_schema::ProjectsRegistry = serde_yaml::from_str(&contents)
-            .map_err(ConfigError::from)?;
+        let registry: hoop_schema::ProjectsRegistry =
+            serde_yaml::from_str(&contents).map_err(ConfigError::from)?;
 
         let canonical_cache = ProjectsConfig::build_canonical_cache(&registry);
 
@@ -760,8 +765,7 @@ impl ProjectsWatcher {
 
 /// Get the path to the projects.yaml file
 fn registry_path() -> Result<PathBuf> {
-    let mut home = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."));
+    let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     home.push(".hoop");
     home.push("projects.yaml");
     Ok(home)
@@ -786,7 +790,8 @@ projects:
         role: primary
   invalid_key: value
 "#;
-        let result: std::result::Result<hoop_schema::ProjectsRegistry, _> = serde_yaml::from_str(yaml);
+        let result: std::result::Result<hoop_schema::ProjectsRegistry, _> =
+            serde_yaml::from_str(yaml);
         assert!(result.is_err());
 
         let yaml_err = result.unwrap_err();
@@ -840,8 +845,7 @@ projects:
             canonical.display(),
         );
 
-        let registry: hoop_schema::ProjectsRegistry =
-            serde_yaml::from_str(&yaml).expect("parse");
+        let registry: hoop_schema::ProjectsRegistry = serde_yaml::from_str(&yaml).expect("parse");
         let cfg = ProjectsConfig {
             registry,
             canonical_cache: std::collections::HashMap::new(),
@@ -850,10 +854,24 @@ projects:
         };
 
         let errors = cfg.validate();
-        let dup_errors: Vec<_> = errors.iter().filter(|e| e.message.contains("Duplicate canonical path")).collect();
-        assert_eq!(dup_errors.len(), 1, "should detect exactly one duplicate canonical path, got: {:?}", errors);
-        assert!(dup_errors[0].message.contains("proj-a"), "should mention proj-a");
-        assert!(dup_errors[0].message.contains("proj-b"), "should mention proj-b");
+        let dup_errors: Vec<_> = errors
+            .iter()
+            .filter(|e| e.message.contains("Duplicate canonical path"))
+            .collect();
+        assert_eq!(
+            dup_errors.len(),
+            1,
+            "should detect exactly one duplicate canonical path, got: {:?}",
+            errors
+        );
+        assert!(
+            dup_errors[0].message.contains("proj-a"),
+            "should mention proj-a"
+        );
+        assert!(
+            dup_errors[0].message.contains("proj-b"),
+            "should mention proj-b"
+        );
     }
 
     #[test]
@@ -879,14 +897,16 @@ projects:
             link.display(),
         );
 
-        let registry: hoop_schema::ProjectsRegistry =
-            serde_yaml::from_str(&yaml).expect("parse");
+        let registry: hoop_schema::ProjectsRegistry = serde_yaml::from_str(&yaml).expect("parse");
         let cache = ProjectsConfig::build_canonical_cache(&registry);
 
         let resolved = cache
             .get(&(String::from("my-project"), link.clone()))
             .expect("should have cache entry");
-        assert_eq!(*resolved, expected_canonical, "cache should resolve symlink to real path");
+        assert_eq!(
+            *resolved, expected_canonical,
+            "cache should resolve symlink to real path"
+        );
     }
 
     #[test]
@@ -905,8 +925,7 @@ projects:
             repo.display(),
         );
 
-        let registry: hoop_schema::ProjectsRegistry =
-            serde_yaml::from_str(&yaml).expect("parse");
+        let registry: hoop_schema::ProjectsRegistry = serde_yaml::from_str(&yaml).expect("parse");
         let canonical_cache = ProjectsConfig::build_canonical_cache(&registry);
         let cfg = ProjectsConfig {
             registry,
@@ -1004,7 +1023,10 @@ projects:
         match rx.try_recv() {
             Ok(ProjectsEvent::ConfigError { error, prev_hash }) => {
                 assert!(!error.message.is_empty(), "error should have a message");
-                assert_eq!(prev_hash, initial_hash, "prev_hash should be the initial hash");
+                assert_eq!(
+                    prev_hash, initial_hash,
+                    "prev_hash should be the initial hash"
+                );
                 assert!(error.line > 0, "parse error should report a line number");
             }
             other => panic!("expected ConfigError, got {:?}", other),
@@ -1015,7 +1037,10 @@ projects:
             let cfg = shared_config.lock().await;
             assert_eq!(cfg.registry.projects.len(), 1);
             assert_eq!(cfg.registry.projects[0].name(), "alpha");
-            assert_eq!(cfg.content_hash, initial_hash, "hash should not change on rejection");
+            assert_eq!(
+                cfg.content_hash, initial_hash,
+                "hash should not change on rejection"
+            );
         }
 
         // ── Phase 2: write schema-invalid YAML → reject again ────────────────
@@ -1045,12 +1070,22 @@ projects:
         ProjectsWatcher::reload_config(&config_path, event_tx.clone(), shared_config.clone()).await;
 
         match rx.try_recv() {
-            Ok(ProjectsEvent::ConfigReloaded { config, prev_hash, delta_keys }) => {
+            Ok(ProjectsEvent::ConfigReloaded {
+                config,
+                prev_hash,
+                delta_keys,
+            }) => {
                 assert_eq!(config.registry.projects.len(), 1);
                 assert_eq!(config.registry.projects[0].name(), "beta");
                 assert_eq!(prev_hash, initial_hash);
-                assert!(delta_keys.iter().any(|d| d.contains("-project:alpha")), "should show alpha removed");
-                assert!(delta_keys.iter().any(|d| d.contains("+project:beta")), "should show beta added");
+                assert!(
+                    delta_keys.iter().any(|d| d.contains("-project:alpha")),
+                    "should show alpha removed"
+                );
+                assert!(
+                    delta_keys.iter().any(|d| d.contains("+project:beta")),
+                    "should show beta added"
+                );
             }
             other => panic!("expected ConfigReloaded, got {:?}", other),
         }
@@ -1108,7 +1143,8 @@ projects:
         // Missing required field — typify generates untagged enums, so the
         // error may report at the "projects" level rather than individual field.
         let yaml = "projects:\n  - path: /tmp/test\n";
-        let result: std::result::Result<hoop_schema::ProjectsRegistry, _> = serde_yaml::from_str(yaml);
+        let result: std::result::Result<hoop_schema::ProjectsRegistry, _> =
+            serde_yaml::from_str(yaml);
         assert!(result.is_err());
         let err = ConfigError::from(result.unwrap_err());
 
@@ -1123,10 +1159,12 @@ projects:
 
         // Wrong type for a workspace path
         let yaml2 = "projects:\n  - name: 42\n    path: /tmp/test\n";
-        let _result2: std::result::Result<hoop_schema::ProjectsRegistry, _> = serde_yaml::from_str(yaml2);
+        let _result2: std::result::Result<hoop_schema::ProjectsRegistry, _> =
+            serde_yaml::from_str(yaml2);
         // name=42 may parse as untagged enum variant (typify) — verify ConfigError surfaces for genuinely broken YAML
         let yaml3 = "projects:\n  - name: test\n    workspaces:\n      - path: 123\n";
-        let result3: std::result::Result<hoop_schema::ProjectsRegistry, _> = serde_yaml::from_str(yaml3);
+        let result3: std::result::Result<hoop_schema::ProjectsRegistry, _> =
+            serde_yaml::from_str(yaml3);
         assert!(result3.is_err(), "path=123 should fail parse");
         let err3 = ConfigError::from(result3.unwrap_err());
         // Typify untagged enums produce "data did not match any variant" errors
@@ -1146,19 +1184,29 @@ projects:
     fn test_hoop_config_bad_schema_rejected() {
         // Valid minimal HoopConfig
         let valid = r#"{"schema_version": "1.0.0"}"#;
-        let parsed: hoop_schema::HoopConfig = serde_json::from_str(valid).expect("minimal config should parse");
+        let parsed: hoop_schema::HoopConfig =
+            serde_json::from_str(valid).expect("minimal config should parse");
         let serialized = serde_json::to_string(&parsed).expect("serialize");
-        assert!(serialized.contains("1.0.0"), "schema_version should round-trip");
+        assert!(
+            serialized.contains("1.0.0"),
+            "schema_version should round-trip"
+        );
 
         // Invalid schema_version format
         let bad_version = r#"{"schema_version": "not-a-version"}"#;
-        let result: std::result::Result<hoop_schema::HoopConfig, _> = serde_json::from_str(bad_version);
+        let result: std::result::Result<hoop_schema::HoopConfig, _> =
+            serde_json::from_str(bad_version);
         assert!(result.is_err(), "bad schema_version should be rejected");
 
         // Unknown field in nested section
-        let unknown_field = r#"{"schema_version": "1.0.0", "agent": {"adapter": "unknown_adapter"}}"#;
-        let result2: std::result::Result<hoop_schema::HoopConfig, _> = serde_json::from_str(unknown_field);
-        assert!(result2.is_err(), "unknown adapter enum value should be rejected");
+        let unknown_field =
+            r#"{"schema_version": "1.0.0", "agent": {"adapter": "unknown_adapter"}}"#;
+        let result2: std::result::Result<hoop_schema::HoopConfig, _> =
+            serde_json::from_str(unknown_field);
+        assert!(
+            result2.is_err(),
+            "unknown adapter enum value should be rejected"
+        );
     }
 
     /// Integration test: write same content → no delta keys (no-op reload).
@@ -1182,8 +1230,15 @@ projects:
         ProjectsWatcher::reload_config(&config_path, event_tx.clone(), shared_config.clone()).await;
 
         match rx.try_recv() {
-            Ok(ProjectsEvent::ConfigReloaded { delta_keys, prev_hash, .. }) => {
-                assert!(delta_keys.is_empty(), "no keys should change on identical reload");
+            Ok(ProjectsEvent::ConfigReloaded {
+                delta_keys,
+                prev_hash,
+                ..
+            }) => {
+                assert!(
+                    delta_keys.is_empty(),
+                    "no keys should change on identical reload"
+                );
                 assert_eq!(prev_hash, initial_hash);
             }
             other => panic!("expected ConfigReloaded, got {:?}", other),

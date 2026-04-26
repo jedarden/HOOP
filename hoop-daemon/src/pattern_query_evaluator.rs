@@ -259,13 +259,16 @@ fn parse_primary_expr(tokens: &[Token]) -> Result<(QueryExpr, &[Token])> {
 fn evaluate_query(expr: &QueryExpr, ctx: &StitchContext) -> Result<bool> {
     match expr {
         QueryExpr::TitleRegex(pattern) => {
-            let regex = Regex::new(pattern)
-                .map_err(|e| anyhow!("Invalid regex '{}': {}", pattern, e))?;
+            let regex =
+                Regex::new(pattern).map_err(|e| anyhow!("Invalid regex '{}': {}", pattern, e))?;
             Ok(regex.is_match(&ctx.title))
         }
         QueryExpr::Label(label) => {
             // Check if any bead has this label (including stitch:* labels)
-            Ok(ctx.labels.iter().any(|l| l == label || l == &format!("stitch:{}", label)))
+            Ok(ctx
+                .labels
+                .iter()
+                .any(|l| l == label || l == &format!("stitch:{}", label)))
         }
         QueryExpr::Project(project) => Ok(ctx.project == *project),
         QueryExpr::Kind(kind) => Ok(ctx.kind == *kind),
@@ -295,9 +298,8 @@ fn evaluate_query(expr: &QueryExpr, ctx: &StitchContext) -> Result<bool> {
 fn get_stitch_labels(stitch_id: &str) -> Result<Vec<String>> {
     let conn = Connection::open(fleet::db_path())?;
 
-    let mut stmt = conn.prepare(
-        "SELECT workspace, bead_id FROM stitch_beads WHERE stitch_id = ?1"
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT workspace, bead_id FROM stitch_beads WHERE stitch_id = ?1")?;
 
     let rows = stmt.query_map(params![stitch_id], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
@@ -326,7 +328,8 @@ fn lookup_bead_labels(project_path: &std::path::Path, bead_id: &str) -> Result<V
     let mut cmd = invoke_br_read(ReadVerb::Get, &[bead_id, "--json"]);
     cmd.current_dir(project_path);
 
-    let output = cmd.output()
+    let output = cmd
+        .output()
         .map_err(|e| anyhow!("Failed to run br get: {}", e))?;
 
     if !output.status.success() {
@@ -353,16 +356,15 @@ pub fn evaluate_pattern_queries(stitch_ctx: &StitchContext) -> Result<Vec<QueryE
     let conn = Connection::open(fleet::db_path())?;
 
     // Get all pattern_queries
-    let mut stmt = conn.prepare(
-        "SELECT pattern_id, saved_query FROM pattern_queries"
-    )?;
+    let mut stmt = conn.prepare("SELECT pattern_id, saved_query FROM pattern_queries")?;
 
     let rows = stmt.query_map([], |row| {
         Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
     })?;
 
     let mut results = Vec::new();
-    let mut pattern_queries: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    let mut pattern_queries: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
 
     for row in rows {
         let (pattern_id, query) = row?;
@@ -375,21 +377,25 @@ pub fn evaluate_pattern_queries(stitch_ctx: &StitchContext) -> Result<Vec<QueryE
 
         for query in queries {
             match parse_query(&query) {
-                Ok(expr) => {
-                    match evaluate_query(&expr, stitch_ctx) {
-                        Ok(true) => {
-                            matched = true;
-                            break;
-                        }
-                        Ok(false) => continue,
-                        Err(e) => {
-                            warn!("Failed to evaluate query '{}' for pattern {}: {}", query, pattern_id, e);
-                            continue;
-                        }
+                Ok(expr) => match evaluate_query(&expr, stitch_ctx) {
+                    Ok(true) => {
+                        matched = true;
+                        break;
                     }
-                }
+                    Ok(false) => continue,
+                    Err(e) => {
+                        warn!(
+                            "Failed to evaluate query '{}' for pattern {}: {}",
+                            query, pattern_id, e
+                        );
+                        continue;
+                    }
+                },
                 Err(e) => {
-                    warn!("Failed to parse query '{}' for pattern {}: {}", query, pattern_id, e);
+                    warn!(
+                        "Failed to parse query '{}' for pattern {}: {}",
+                        query, pattern_id, e
+                    );
                     continue;
                 }
             }
@@ -533,25 +539,31 @@ mod tests {
     #[test]
     fn test_tokenize_simple() {
         let tokens = tokenize("title:fix").unwrap();
-        assert_eq!(tokens, vec![
-            Token::Word("title".to_string()),
-            Token::Colon,
-            Token::Word("fix".to_string()),
-        ]);
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Word("title".to_string()),
+                Token::Colon,
+                Token::Word("fix".to_string()),
+            ]
+        );
     }
 
     #[test]
     fn test_tokenize_with_spaces() {
         let tokens = tokenize("title:fix AND label:urgent").unwrap();
-        assert_eq!(tokens, vec![
-            Token::Word("title".to_string()),
-            Token::Colon,
-            Token::Word("fix".to_string()),
-            Token::And,
-            Token::Word("label".to_string()),
-            Token::Colon,
-            Token::Word("urgent".to_string()),
-        ]);
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Word("title".to_string()),
+                Token::Colon,
+                Token::Word("fix".to_string()),
+                Token::And,
+                Token::Word("label".to_string()),
+                Token::Colon,
+                Token::Word("urgent".to_string()),
+            ]
+        );
     }
 
     #[test]
@@ -569,10 +581,13 @@ mod tests {
     #[test]
     fn test_parse_and_expression() {
         let expr = parse_query("title:fix AND label:urgent").unwrap();
-        assert_eq!(expr, QueryExpr::And(vec![
-            QueryExpr::TitleRegex("fix".to_string()),
-            QueryExpr::Label("urgent".to_string()),
-        ]));
+        assert_eq!(
+            expr,
+            QueryExpr::And(vec![
+                QueryExpr::TitleRegex("fix".to_string()),
+                QueryExpr::Label("urgent".to_string()),
+            ])
+        );
     }
 
     #[test]

@@ -227,7 +227,9 @@ pub fn parse_diff_output(output: &str, max_lines: usize) -> (Vec<FileDiff>, bool
         let first_byte = line.as_bytes().first().copied();
         match first_byte {
             Some(b'+') => {
-                let Some(ref mut file) = current_file else { continue };
+                let Some(ref mut file) = current_file else {
+                    continue;
+                };
                 hunk.lines.push(DiffLine {
                     kind: DiffLineKind::Add,
                     content: line[1..].to_string(),
@@ -239,7 +241,9 @@ pub fn parse_diff_output(output: &str, max_lines: usize) -> (Vec<FileDiff>, bool
                 total_lines += 1;
             }
             Some(b'-') => {
-                let Some(ref mut file) = current_file else { continue };
+                let Some(ref mut file) = current_file else {
+                    continue;
+                };
                 hunk.lines.push(DiffLine {
                     kind: DiffLineKind::Remove,
                     content: line[1..].to_string(),
@@ -297,7 +301,11 @@ fn run_git_merge_base(project_root: &Path, upstream: &str) -> Option<String> {
         .ok()?;
     if output.status.success() {
         let sha = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if sha.is_empty() { None } else { Some(sha) }
+        if sha.is_empty() {
+            None
+        } else {
+            Some(sha)
+        }
     } else {
         None
     }
@@ -305,9 +313,7 @@ fn run_git_merge_base(project_root: &Path, upstream: &str) -> Option<String> {
 
 fn validate_ref_arg(r: &str) -> bool {
     !r.is_empty()
-        && !r.contains(|c: char| {
-            matches!(c, ';' | '|' | '&' | '$' | '`' | '\n' | '\r' | ' ')
-        })
+        && !r.contains(|c: char| matches!(c, ';' | '|' | '&' | '$' | '`' | '\n' | '\r' | ' '))
 }
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
@@ -344,7 +350,10 @@ async fn get_project_diff(
 
     let ref1 = params.ref_.as_deref().unwrap_or("HEAD");
     if !validate_ref_arg(ref1) {
-        return Err((axum::http::StatusCode::BAD_REQUEST, "Invalid ref".to_string()));
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            "Invalid ref".to_string(),
+        ));
     }
     if let Some(r2) = &params.ref2 {
         if !validate_ref_arg(r2) {
@@ -430,11 +439,9 @@ async fn get_merge_base(
     };
 
     let upstream = params.upstream.clone();
-    let sha = tokio::task::spawn_blocking(move || {
-        run_git_merge_base(&project_root, &upstream)
-    })
-    .await
-    .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let sha = tokio::task::spawn_blocking(move || run_git_merge_base(&project_root, &upstream))
+        .await
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(axum::Json(MergeBaseResponse {
         sha,
@@ -564,15 +571,27 @@ index abc1234..0000000
         let (files, _) = parse_diff_output(SAMPLE_DIFF, 10_000);
         let hunk = &files[0].hunks[0];
         // First context line should be old_lineno=10, new_lineno=10
-        let ctx = hunk.lines.iter().find(|l| l.kind == DiffLineKind::Context).unwrap();
+        let ctx = hunk
+            .lines
+            .iter()
+            .find(|l| l.kind == DiffLineKind::Context)
+            .unwrap();
         assert_eq!(ctx.old_lineno, Some(10));
         assert_eq!(ctx.new_lineno, Some(10));
         // Removed line has old_lineno but no new_lineno
-        let rem = hunk.lines.iter().find(|l| l.kind == DiffLineKind::Remove).unwrap();
+        let rem = hunk
+            .lines
+            .iter()
+            .find(|l| l.kind == DiffLineKind::Remove)
+            .unwrap();
         assert!(rem.old_lineno.is_some());
         assert!(rem.new_lineno.is_none());
         // Added line has new_lineno but no old_lineno
-        let add = hunk.lines.iter().find(|l| l.kind == DiffLineKind::Add).unwrap();
+        let add = hunk
+            .lines
+            .iter()
+            .find(|l| l.kind == DiffLineKind::Add)
+            .unwrap();
         assert!(add.old_lineno.is_none());
         assert!(add.new_lineno.is_some());
     }

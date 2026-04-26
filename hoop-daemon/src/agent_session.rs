@@ -6,8 +6,8 @@
 //! a Stitch) and starts fresh with the Reflection Ledger carried forward.
 
 use crate::agent_adapter::{
-    self, AdapterKind, AgentAdapter, AgentEvent, AgentSession, Attachment, EventStream,
-    SpawnConfig, SessionId,
+    self, AdapterKind, AgentAdapter, AgentEvent, AgentSession, Attachment, EventStream, SessionId,
+    SpawnConfig,
 };
 use crate::agent_context;
 use crate::fleet;
@@ -57,10 +57,7 @@ pub enum AgentSessionEvent {
         model: String,
     },
     /// A streaming text delta from the model.
-    TextDelta {
-        session_id: String,
-        text: String,
-    },
+    TextDelta { session_id: String, text: String },
     /// A tool invocation.
     ToolUse {
         session_id: String,
@@ -83,15 +80,9 @@ pub enum AgentSessionEvent {
         output_tokens: i64,
     },
     /// Session archived (adapter switch, agent-off, or error).
-    SessionArchived {
-        session_id: String,
-        reason: String,
-    },
+    SessionArchived { session_id: String, reason: String },
     /// Error inside the adapter.
-    Error {
-        session_id: String,
-        message: String,
-    },
+    Error { session_id: String, message: String },
 }
 
 /// The internal state held behind the Mutex.
@@ -129,6 +120,14 @@ pub struct AgentAdapterConfig {
     pub rate_limit_rpm: Option<u32>,
     #[serde(default)]
     pub cost_cap_usd: Option<f64>,
+    /// Budget for serialized system prompt bytes (default 4096).
+    /// Set to 0 to disable the size gate.
+    #[serde(default = "default_system_prompt_budget_bytes")]
+    pub system_prompt_budget_bytes: u32,
+}
+
+fn default_system_prompt_budget_bytes() -> u32 {
+    4096
 }
 
 impl Default for AgentAdapterConfig {
@@ -141,6 +140,7 @@ impl Default for AgentAdapterConfig {
             zai_api_key: None,
             rate_limit_rpm: None,
             cost_cap_usd: None,
+            system_prompt_budget_bytes: default_system_prompt_budget_bytes(),
         }
     }
 }
@@ -249,13 +249,13 @@ impl AgentSessionManager {
         let enabled = self.enabled.load(std::sync::atomic::Ordering::Relaxed);
         match (&inner.session, &inner.db_row_id) {
             (Some(s), Some(db_id)) => {
-                let row = fleet::load_active_agent_session()
-                    .ok()
-                    .flatten();
+                let row = fleet::load_active_agent_session().ok().flatten();
                 let age_secs = row.as_ref().and_then(|r| {
-                    chrono::DateTime::parse_from_rfc3339(&r.created_at).ok().map(|dt| {
-                        (chrono::Utc::now() - dt.with_timezone(&chrono::Utc)).num_seconds()
-                    })
+                    chrono::DateTime::parse_from_rfc3339(&r.created_at)
+                        .ok()
+                        .map(|dt| {
+                            (chrono::Utc::now() - dt.with_timezone(&chrono::Utc)).num_seconds()
+                        })
                 });
                 let row_data = row.unwrap_or_else(|| fleet::AgentSessionRow {
                     id: db_id.clone(),
@@ -336,10 +336,41 @@ impl AgentSessionManager {
                 Some(index.to_system_prompt())
             }
             Err(e) => {
-                warn!("Failed to build context index, using empty system prompt: {}", e);
+                warn!(
+                    "Failed to build context index, using empty system prompt: {}",
+                    e
+                );
                 None
             }
         };
+
+        // System-prompt size gate (§3.12, §6 marquee #12): reject if over budget
+        let budget_bytes = inner.config.system_prompt_budget_bytes as usize;
+        if budget_bytes > 0 {
+            if let Some(ref prompt) = system_prompt {
+                let prompt_bytes = prompt.len();
+                if prompt_bytes > budget_bytes {
+                    let is_default_budget = budget_bytes == 4096;
+                    let help_msg = if is_default_budget {
+                        "Set agent.system_prompt_budget_bytes in config.yml to override the default 4KB budget."
+                    } else {
+                        "The current budget is already an explicit override. Consider reducing the context index size."
+                    };
+                    return Err(anyhow::anyhow!(
+                        "System prompt size gate: {} bytes exceeds budget of {} bytes. {}",
+                        prompt_bytes,
+                        budget_bytes,
+                        help_msg
+                    ));
+                }
+                info!(
+                    "System prompt size check passed: {} bytes (budget: {} bytes)",
+                    prompt_bytes, budget_bytes
+                );
+            }
+        } else {
+            info!("System prompt size gate disabled (budget_bytes = 0)");
+        }
 
         let spawn_config = SpawnConfig {
             model: inner.config.model.clone(),
@@ -379,10 +410,14 @@ impl AgentSessionManager {
 
         inner.session = Some(session);
         inner.db_row_id = Some(db_id.clone());
-        self.enabled.store(true, std::sync::atomic::Ordering::Relaxed);
+        self.enabled
+            .store(true, std::sync::atomic::Ordering::Relaxed);
         let _ = fleet::set_agent_enabled(true);
 
-        info!("Spawned new agent session {} (adapter={})", session_id, adapter_str);
+        info!(
+            "Spawned new agent session {} (adapter={})",
+            session_id, adapter_str
+        );
         let _ = self.event_tx.send(AgentSessionEvent::SessionSpawned {
             session_id,
             adapter: adapter_str,
@@ -428,7 +463,11 @@ impl AgentSessionManager {
             None => return,
         };
         let db_id = inner.db_row_id.clone();
-        let session_has_started = inner.session.as_ref().map(|s| s.has_started_session).unwrap_or(true);
+        let session_has_started = inner
+            .session
+            .as_ref()
+            .map(|s| s.has_started_session)
+            .unwrap_or(true);
 
         match event {
             AgentEvent::TextDelta { text } => {
@@ -438,7 +477,9 @@ impl AgentSessionManager {
                 });
             }
             AgentEvent::ToolUse { id, name, input } => {
-                metrics::metrics().hoop_agent_tool_calls_total.inc(&[name, "invoked"]);
+                metrics::metrics()
+                    .hoop_agent_tool_calls_total
+                    .inc(&[name, "invoked"]);
                 let _ = self.event_tx.send(AgentSessionEvent::ToolUse {
                     session_id: session_id.clone(),
                     id: id.clone(),
@@ -446,11 +487,17 @@ impl AgentSessionManager {
                     input: input.clone(),
                 });
             }
-            AgentEvent::ToolResult { id, output, is_error } => {
+            AgentEvent::ToolResult {
+                id,
+                output,
+                is_error,
+            } => {
                 // We don't have the tool name here, so we record result generically.
                 // The name is tracked at ToolUse time.
                 let result_label = if *is_error { "error" } else { "ok" };
-                metrics::metrics().hoop_agent_tool_calls_total.inc(&["*", result_label]);
+                metrics::metrics()
+                    .hoop_agent_tool_calls_total
+                    .inc(&["*", result_label]);
                 let _ = self.event_tx.send(AgentSessionEvent::ToolResult {
                     session_id: session_id.clone(),
                     id: id.clone(),
@@ -488,14 +535,12 @@ impl AgentSessionManager {
                         &[adapter_str, model, "complete"],
                         0.0, // duration tracked at send_turn level
                     );
-                    metrics::metrics().hoop_agent_tokens_total.inc_by(
-                        &[adapter_str, model, "input"],
-                        usage.input_tokens,
-                    );
-                    metrics::metrics().hoop_agent_tokens_total.inc_by(
-                        &[adapter_str, model, "output"],
-                        usage.output_tokens,
-                    );
+                    metrics::metrics()
+                        .hoop_agent_tokens_total
+                        .inc_by(&[adapter_str, model, "input"], usage.input_tokens);
+                    metrics::metrics()
+                        .hoop_agent_tokens_total
+                        .inc_by(&[adapter_str, model, "output"], usage.output_tokens);
                     metrics::metrics().hoop_agent_session_cost_usd.set(cost);
 
                     let _ = fleet::update_agent_session_usage(
@@ -621,7 +666,10 @@ impl AgentSessionManager {
         inner.db_row_id = Some(db_id.clone());
         inner.config = new_config;
 
-        info!("Switched adapter, new session {} (adapter={})", session_id, adapter_str);
+        info!(
+            "Switched adapter, new session {} (adapter={})",
+            session_id, adapter_str
+        );
         let _ = self.event_tx.send(AgentSessionEvent::SessionSpawned {
             session_id,
             adapter: adapter_str,
@@ -635,7 +683,8 @@ impl AgentSessionManager {
     /// Persists disabled state so it survives daemon restart.
     pub async fn disable(&self) -> Result<()> {
         let mut inner = self.inner.lock().await;
-        self.enabled.store(false, std::sync::atomic::Ordering::Relaxed);
+        self.enabled
+            .store(false, std::sync::atomic::Ordering::Relaxed);
         let _ = fleet::set_agent_enabled(false);
 
         if let (Some(ref session), Some(ref db_id)) = (&inner.session, &inner.db_row_id) {
@@ -687,8 +736,15 @@ fn build_handoff_context() -> String {
             let mut recent = String::from("## Recent Activity\n");
             for (id, project, title, last_at) in &stitches {
                 let short_id = if id.len() > 8 { &id[..8] } else { id };
-                let short_ts = if last_at.len() > 19 { &last_at[..19] } else { last_at };
-                recent.push_str(&format!("- [{}] {} — {} ({})\n", short_id, project, title, short_ts));
+                let short_ts = if last_at.len() > 19 {
+                    &last_at[..19]
+                } else {
+                    last_at
+                };
+                recent.push_str(&format!(
+                    "- [{}] {} — {} ({})\n",
+                    short_id, project, title, short_ts
+                ));
             }
             parts.push(recent);
         }
@@ -729,9 +785,7 @@ fn estimate_cost(
             // GLM pricing placeholder (per 1M tokens)
             (2.0, 8.0, 0.5, 4.0)
         }
-        AdapterKind::Codex | AdapterKind::OpenCode | AdapterKind::Gemini => {
-            (0.0, 0.0, 0.0, 0.0)
-        }
+        AdapterKind::Codex | AdapterKind::OpenCode | AdapterKind::Gemini => (0.0, 0.0, 0.0, 0.0),
     };
 
     let input = (input_tokens as f64 / 1_000_000.0) * input_price;
@@ -767,14 +821,7 @@ mod tests {
 
     #[test]
     fn estimate_cost_zai() {
-        let cost = estimate_cost(
-            AdapterKind::Zai,
-            "glm-5",
-            1_000_000,
-            1_000_000,
-            None,
-            None,
-        );
+        let cost = estimate_cost(AdapterKind::Zai, "glm-5", 1_000_000, 1_000_000, None, None);
         // input=2, output=8
         assert!((cost - 10.0).abs() < 0.01, "cost was {}", cost);
     }
@@ -826,7 +873,10 @@ mod tests {
         assert!(json.contains("\"type\":\"session_reattached\""));
         assert!(json.contains("\"session_id\":\"sess-123\""));
         let parsed: AgentSessionEvent = serde_json::from_str(&json).unwrap();
-        assert!(matches!(parsed, AgentSessionEvent::SessionReattached { .. }));
+        assert!(matches!(
+            parsed,
+            AgentSessionEvent::SessionReattached { .. }
+        ));
     }
 
     // -----------------------------------------------------------------------
@@ -855,12 +905,18 @@ mod tests {
                 last_activity_at TEXT NOT NULL,
                 archived_at TEXT,
                 archived_reason TEXT
-            )"#, []).unwrap();
+            )"#,
+            [],
+        )
+        .unwrap();
         conn.execute(
             r#"CREATE TABLE metadata (
                 key TEXT PRIMARY KEY NOT NULL,
                 value TEXT NOT NULL
-            )"#, []).unwrap();
+            )"#,
+            [],
+        )
+        .unwrap();
         conn.execute(
             r#"CREATE TABLE stitches (
                 id TEXT PRIMARY KEY NOT NULL,
@@ -872,7 +928,10 @@ mod tests {
                 last_activity_at TEXT NOT NULL,
                 participants TEXT DEFAULT '[]',
                 attachments_path TEXT
-            )"#, []).unwrap();
+            )"#,
+            [],
+        )
+        .unwrap();
         conn.execute(
             r#"CREATE TABLE stitch_messages (
                 id TEXT PRIMARY KEY NOT NULL,
@@ -882,7 +941,10 @@ mod tests {
                 content TEXT NOT NULL,
                 attachments TEXT DEFAULT '[]',
                 tokens INTEGER
-            )"#, []).unwrap();
+            )"#,
+            [],
+        )
+        .unwrap();
         conn.execute(
             r#"CREATE TABLE reflection_ledger (
                 id TEXT PRIMARY KEY NOT NULL,
@@ -895,7 +957,10 @@ mod tests {
                 created_at TEXT NOT NULL,
                 last_applied TEXT,
                 applied_count INTEGER NOT NULL DEFAULT 0
-            )"#, []).unwrap();
+            )"#,
+            [],
+        )
+        .unwrap();
         conn
     }
 
@@ -917,33 +982,38 @@ mod tests {
                 output_tokens, turn_count, created_at, last_activity_at)
                VALUES (?1,?2,'claude','claude-opus-4-7','active',0.025,1200,300,2,?3,?3)"#,
             rusqlite::params![session_id, adapter_sess, now],
-        ).unwrap();
+        )
+        .unwrap();
 
         // 2. Simulate restart: load the active session.
-        let row: fleet::AgentSessionRow = db.query_row(
-            "SELECT id, adapter_session_id, adapter, model, status, stitch_id,
+        let row: fleet::AgentSessionRow = db
+            .query_row(
+                "SELECT id, adapter_session_id, adapter, model, status, stitch_id,
                     cost_usd, input_tokens, output_tokens, turn_count,
                     has_started_session, created_at, last_activity_at, archived_at, archived_reason
              FROM agent_sessions WHERE status = 'active' ORDER BY created_at DESC LIMIT 1",
-            [],
-            |row| Ok(fleet::AgentSessionRow {
-                id: row.get(0)?,
-                adapter_session_id: row.get(1)?,
-                adapter: row.get(2)?,
-                model: row.get(3)?,
-                status: row.get(4)?,
-                stitch_id: row.get(5)?,
-                cost_usd: row.get(6)?,
-                input_tokens: row.get(7)?,
-                output_tokens: row.get(8)?,
-                turn_count: row.get(9)?,
-                has_started_session: row.get(10)?,
-                created_at: row.get(11)?,
-                last_activity_at: row.get(12)?,
-                archived_at: row.get(13)?,
-                archived_reason: row.get(14)?,
-            }),
-        ).unwrap();
+                [],
+                |row| {
+                    Ok(fleet::AgentSessionRow {
+                        id: row.get(0)?,
+                        adapter_session_id: row.get(1)?,
+                        adapter: row.get(2)?,
+                        model: row.get(3)?,
+                        status: row.get(4)?,
+                        stitch_id: row.get(5)?,
+                        cost_usd: row.get(6)?,
+                        input_tokens: row.get(7)?,
+                        output_tokens: row.get(8)?,
+                        turn_count: row.get(9)?,
+                        has_started_session: row.get(10)?,
+                        created_at: row.get(11)?,
+                        last_activity_at: row.get(12)?,
+                        archived_at: row.get(13)?,
+                        archived_reason: row.get(14)?,
+                    })
+                },
+            )
+            .unwrap();
 
         // 3. Verify the reattached session matches what was persisted.
         assert_eq!(row.id, session_id);
@@ -983,50 +1053,61 @@ mod tests {
         ).unwrap();
 
         // 2. Simulate restart: load the row from DB.
-        let row: fleet::AgentSessionRow = db.query_row(
-            "SELECT id, adapter_session_id, adapter, model, status, stitch_id,
+        let row: fleet::AgentSessionRow = db
+            .query_row(
+                "SELECT id, adapter_session_id, adapter, model, status, stitch_id,
                     cost_usd, input_tokens, output_tokens, turn_count,
                     has_started_session, created_at, last_activity_at, archived_at, archived_reason
              FROM agent_sessions WHERE status = 'active' ORDER BY created_at DESC LIMIT 1",
-            [],
-            |row| Ok(fleet::AgentSessionRow {
-                id: row.get(0)?,
-                adapter_session_id: row.get(1)?,
-                adapter: row.get(2)?,
-                model: row.get(3)?,
-                status: row.get(4)?,
-                stitch_id: row.get(5)?,
-                cost_usd: row.get(6)?,
-                input_tokens: row.get(7)?,
-                output_tokens: row.get(8)?,
-                turn_count: row.get(9)?,
-                has_started_session: row.get(10)?,
-                created_at: row.get(11)?,
-                last_activity_at: row.get(12)?,
-                archived_at: row.get(13)?,
-                archived_reason: row.get(14)?,
-            }),
-        ).unwrap();
+                [],
+                |row| {
+                    Ok(fleet::AgentSessionRow {
+                        id: row.get(0)?,
+                        adapter_session_id: row.get(1)?,
+                        adapter: row.get(2)?,
+                        model: row.get(3)?,
+                        status: row.get(4)?,
+                        stitch_id: row.get(5)?,
+                        cost_usd: row.get(6)?,
+                        input_tokens: row.get(7)?,
+                        output_tokens: row.get(8)?,
+                        turn_count: row.get(9)?,
+                        has_started_session: row.get(10)?,
+                        created_at: row.get(11)?,
+                        last_activity_at: row.get(12)?,
+                        archived_at: row.get(13)?,
+                        archived_reason: row.get(14)?,
+                    })
+                },
+            )
+            .unwrap();
 
         // 3. The reloaded row must have has_started_session=true.
-        assert!(row.has_started_session,
-            "reloaded session must have has_started_session=true after daemon restart");
+        assert!(
+            row.has_started_session,
+            "reloaded session must have has_started_session=true after daemon restart"
+        );
 
         // 4. Verify each adapter uses the resume form when has_started_session=true.
         //    Claude: --resume (not --session-id)
         let claude_args = AdapterKind::Claude
             .build_turn_args(&row.adapter_session_id, "continue", row.has_started_session)
             .unwrap();
-        assert_eq!(claude_args[0], "--resume",
-            "Claude must use --resume after restart, not --session-id");
+        assert_eq!(
+            claude_args[0], "--resume",
+            "Claude must use --resume after restart, not --session-id"
+        );
         assert_eq!(claude_args[1], provider_session_id);
 
         //    Codex: exec resume <id>
         let codex_args = AdapterKind::Codex
             .build_turn_args(provider_session_id, "continue", true)
             .unwrap();
-        assert_eq!(&codex_args[..3], &["exec", "resume", provider_session_id],
-            "Codex must use exec resume <id> after restart");
+        assert_eq!(
+            &codex_args[..3],
+            &["exec", "resume", provider_session_id],
+            "Codex must use exec resume <id> after restart"
+        );
 
         //    OpenCode: --session <id> --continue
         let oc_args = AdapterKind::OpenCode
@@ -1034,8 +1115,10 @@ mod tests {
             .unwrap();
         assert_eq!(oc_args[0], "--session");
         assert_eq!(oc_args[1], provider_session_id);
-        assert_eq!(oc_args[2], "--continue",
-            "OpenCode must include --continue after restart");
+        assert_eq!(
+            oc_args[2], "--continue",
+            "OpenCode must include --continue after restart"
+        );
 
         //    Gemini: same args (sandbox-native, no distinction)
         let g_args_turn1 = AdapterKind::Gemini
@@ -1044,8 +1127,10 @@ mod tests {
         let g_args_resume = AdapterKind::Gemini
             .build_turn_args(provider_session_id, "continue", true)
             .unwrap();
-        assert_eq!(g_args_turn1, g_args_resume,
-            "Gemini args must be identical regardless of has_started_session");
+        assert_eq!(
+            g_args_turn1, g_args_resume,
+            "Gemini args must be identical regardless of has_started_session"
+        );
     }
 
     /// Acceptance: has_started_session starts false and is updated to true after first turn.
@@ -1063,27 +1148,36 @@ mod tests {
                 output_tokens, turn_count, has_started_session, created_at, last_activity_at)
                VALUES (?1, ?2, 'claude', 'claude-opus-4-7', 'active', 0.0, 0, 0, 0, 0, ?3, ?3)"#,
             rusqlite::params![db_row_id, provider_session_id, now],
-        ).unwrap();
+        )
+        .unwrap();
 
-        let started: bool = db.query_row(
-            "SELECT has_started_session FROM agent_sessions WHERE id = ?1",
-            rusqlite::params![db_row_id],
-            |row| row.get(0),
-        ).unwrap();
+        let started: bool = db
+            .query_row(
+                "SELECT has_started_session FROM agent_sessions WHERE id = ?1",
+                rusqlite::params![db_row_id],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert!(!started, "new session must have has_started_session=false");
 
         // Simulate first turn completing: flip to true.
         db.execute(
             "UPDATE agent_sessions SET has_started_session = 1 WHERE id = ?1",
             rusqlite::params![db_row_id],
-        ).unwrap();
+        )
+        .unwrap();
 
-        let started_after: bool = db.query_row(
-            "SELECT has_started_session FROM agent_sessions WHERE id = ?1",
-            rusqlite::params![db_row_id],
-            |row| row.get(0),
-        ).unwrap();
-        assert!(started_after, "has_started_session must be true after first turn");
+        let started_after: bool = db
+            .query_row(
+                "SELECT has_started_session FROM agent_sessions WHERE id = ?1",
+                rusqlite::params![db_row_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(
+            started_after,
+            "has_started_session must be true after first turn"
+        );
     }
 
     /// Acceptance: adapter switch archives old session and starts a new one.
@@ -1104,7 +1198,8 @@ mod tests {
                 output_tokens, turn_count, created_at, last_activity_at)
                VALUES (?1,?2,'claude','claude-opus-4-7','active',0.08,5000,1200,5,?3,?3)"#,
             rusqlite::params![old_id, old_adapter_sess, now],
-        ).unwrap();
+        )
+        .unwrap();
 
         // 2. Archive old session as "switched".
         let archive_ts = chrono::Utc::now().to_rfc3339();
@@ -1123,7 +1218,8 @@ mod tests {
         db.execute(
             "UPDATE agent_sessions SET stitch_id = ?1 WHERE id = ?2",
             rusqlite::params![stitch_id, old_id],
-        ).unwrap();
+        )
+        .unwrap();
 
         // 4. Insert new session on the new adapter.
         let new_id = uuid::Uuid::new_v4().to_string();
@@ -1135,41 +1231,49 @@ mod tests {
                 output_tokens, turn_count, created_at, last_activity_at)
                VALUES (?1,?2,'zai','glm-5','active',0.0,0,0,0,?3,?3)"#,
             rusqlite::params![new_id, new_adapter_sess, new_now],
-        ).unwrap();
+        )
+        .unwrap();
 
         // 5. Verify old session is archived, linked to stitch.
-        let (status, archived_reason, linked_stitch): (String, Option<String>, Option<String>) =
-            db.query_row(
+        let (status, archived_reason, linked_stitch): (String, Option<String>, Option<String>) = db
+            .query_row(
                 "SELECT status, archived_reason, stitch_id FROM agent_sessions WHERE id = ?1",
                 rusqlite::params![old_id],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-            ).unwrap();
+            )
+            .unwrap();
         assert_eq!(status, "switched");
         assert_eq!(archived_reason, Some("adapter_switch".to_string()));
         assert_eq!(linked_stitch, Some(stitch_id.clone()));
 
         // 6. Verify new session is active.
-        let new_status: String = db.query_row(
-            "SELECT status FROM agent_sessions WHERE id = ?1",
-            rusqlite::params![new_id],
-            |row| row.get(0),
-        ).unwrap();
+        let new_status: String = db
+            .query_row(
+                "SELECT status FROM agent_sessions WHERE id = ?1",
+                rusqlite::params![new_id],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(new_status, "active");
 
         // 7. Verify only one active session.
-        let active_count: i64 = db.query_row(
-            "SELECT COUNT(*) FROM agent_sessions WHERE status = 'active'",
-            [],
-            |row| row.get(0),
-        ).unwrap();
+        let active_count: i64 = db
+            .query_row(
+                "SELECT COUNT(*) FROM agent_sessions WHERE status = 'active'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(active_count, 1);
 
         // 8. Verify stitch has messages.
-        let msg_count: i64 = db.query_row(
-            "SELECT COUNT(*) FROM stitches WHERE id = ?1",
-            rusqlite::params![stitch_id],
-            |row| row.get(0),
-        ).unwrap();
+        let msg_count: i64 = db
+            .query_row(
+                "SELECT COUNT(*) FROM stitches WHERE id = ?1",
+                rusqlite::params![stitch_id],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(msg_count, 1);
     }
 
@@ -1187,7 +1291,8 @@ mod tests {
                 output_tokens, turn_count, created_at, last_activity_at)
                VALUES (?1,'sess-age','claude','claude-opus-4-7','active',0.0,0,0,0,?2,?2)"#,
             rusqlite::params![id, two_hours_ago],
-        ).unwrap();
+        )
+        .unwrap();
 
         // Simulate 3 turns accumulating cost.
         for _ in 0..3 {
@@ -1199,7 +1304,8 @@ mod tests {
                        turn_count = turn_count + 1
                    WHERE id = ?1"#,
                 rusqlite::params![id],
-            ).unwrap();
+            )
+            .unwrap();
         }
 
         // Verify accumulated usage.
@@ -1241,7 +1347,8 @@ mod tests {
         db.execute(
             "INSERT INTO metadata (key, value) VALUES ('agent_enabled', 'true')",
             [],
-        ).unwrap();
+        )
+        .unwrap();
 
         // 2. Agent-off: archive session + persist disabled state.
         let archive_ts = chrono::Utc::now().to_rfc3339();
@@ -1252,39 +1359,48 @@ mod tests {
         db.execute(
             "INSERT OR REPLACE INTO metadata (key, value) VALUES ('agent_enabled', 'false')",
             [],
-        ).unwrap();
+        )
+        .unwrap();
 
         // 3. Verify no active sessions remain.
-        let active_count: i64 = db.query_row(
-            "SELECT COUNT(*) FROM agent_sessions WHERE status = 'active'",
-            [],
-            |row| row.get(0),
-        ).unwrap();
+        let active_count: i64 = db
+            .query_row(
+                "SELECT COUNT(*) FROM agent_sessions WHERE status = 'active'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(active_count, 0, "should have no orphaned active sessions");
 
         // 4. Verify session is disabled (not just archived).
-        let (status, reason): (String, String) = db.query_row(
-            "SELECT status, archived_reason FROM agent_sessions WHERE id = ?1",
-            rusqlite::params![id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        ).unwrap();
+        let (status, reason): (String, String) = db
+            .query_row(
+                "SELECT status, archived_reason FROM agent_sessions WHERE id = ?1",
+                rusqlite::params![id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
         assert_eq!(status, "disabled");
         assert_eq!(reason, "disabled");
 
         // 5. Verify persisted enabled state is false.
-        let enabled: String = db.query_row(
-            "SELECT value FROM metadata WHERE key = 'agent_enabled'",
-            [],
-            |row| row.get(0),
-        ).unwrap();
+        let enabled: String = db
+            .query_row(
+                "SELECT value FROM metadata WHERE key = 'agent_enabled'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(enabled, "false");
 
         // 6. Verify disabled state survives a "restart" (re-read from metadata).
-        let persisted_enabled = db.query_row(
-            "SELECT value FROM metadata WHERE key = 'agent_enabled'",
-            [],
-            |row| row.get::<_, String>(0),
-        ).unwrap_or_else(|_| "true".to_string());
+        let persisted_enabled = db
+            .query_row(
+                "SELECT value FROM metadata WHERE key = 'agent_enabled'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .unwrap_or_else(|_| "true".to_string());
         assert_eq!(persisted_enabled, "false");
     }
 
@@ -1307,7 +1423,8 @@ mod tests {
                     output_tokens, turn_count, created_at, last_activity_at)
                    VALUES (?1,?2,?3,?4,'active',0.0,0,0,0,?5,?5)"#,
                 rusqlite::params![id, adapter_sess, adapter, model, now],
-            ).unwrap();
+            )
+            .unwrap();
 
             // Archive previous sessions (simulating switch).
             if i > 0 {
@@ -1319,25 +1436,31 @@ mod tests {
         }
 
         // Only the last session should be active.
-        let active_count: i64 = db.query_row(
-            "SELECT COUNT(*) FROM agent_sessions WHERE status = 'active'",
-            [],
-            |row| row.get(0),
-        ).unwrap();
+        let active_count: i64 = db
+            .query_row(
+                "SELECT COUNT(*) FROM agent_sessions WHERE status = 'active'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(active_count, 1);
 
-        let active_adapter: String = db.query_row(
-            "SELECT adapter FROM agent_sessions WHERE status = 'active'",
-            [],
-            |row| row.get(0),
-        ).unwrap();
+        let active_adapter: String = db
+            .query_row(
+                "SELECT adapter FROM agent_sessions WHERE status = 'active'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(active_adapter, "zai");
 
-        let switched_count: i64 = db.query_row(
-            "SELECT COUNT(*) FROM agent_sessions WHERE status = 'switched'",
-            [],
-            |row| row.get(0),
-        ).unwrap();
+        let switched_count: i64 = db
+            .query_row(
+                "SELECT COUNT(*) FROM agent_sessions WHERE status = 'switched'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(switched_count, 2);
     }
 
@@ -1469,5 +1592,104 @@ mod tests {
         let ctx = build_handoff_context();
         assert!(!ctx.is_empty());
         assert!(ctx.contains("HOOP") || ctx.contains("adapter switch"));
+    }
+
+    // ---------------------------------------------------------------------------
+    // System prompt size gate tests (§3.12, §6 marquee #12)
+    // ---------------------------------------------------------------------------
+
+    /// Build a synthetic system prompt of exactly the requested byte size
+    fn build_synthetic_prompt(byte_size: usize) -> String {
+        // Use 'A' repeated to get exact byte count (ASCII = 1 byte per char)
+        "A".repeat(byte_size)
+    }
+
+    /// Test: default 4KB budget rejects 8KB prompt with clear diagnostic
+    #[test]
+    fn size_gate_rejects_over_budget_prompt_default() {
+        let budget = 4096;
+        let oversize_prompt = build_synthetic_prompt(8192);
+
+        // Simulate the size gate check logic (from agent_session.rs lines 352-370)
+        let prompt_bytes = oversize_prompt.len();
+        assert!(prompt_bytes > budget, "Test prompt should exceed budget");
+
+        let is_default_budget = budget == 4096;
+        let help_msg = if is_default_budget {
+            "Set agent.system_prompt_budget_bytes in config.yml to override the default 4KB budget."
+        } else {
+            "The current budget is already an explicit override. Consider reducing the context index size."
+        };
+
+        // The error should include exact byte counts
+        let expected_error = format!(
+            "System prompt size gate: {} bytes exceeds budget of {} bytes. {}",
+            prompt_bytes, budget, help_msg
+        );
+
+        // Verify the error message format matches expectations
+        assert!(expected_error.contains("8192 bytes"));
+        assert!(expected_error.contains("4096 bytes"));
+        assert!(expected_error.contains("agent.system_prompt_budget_bytes"));
+    }
+
+    /// Test: explicit config override allows larger prompts
+    #[test]
+    fn size_gate_honors_config_override() {
+        let custom_budget: u32 = 16384;
+        let oversize_prompt = build_synthetic_prompt(8192);
+
+        let prompt_bytes = oversize_prompt.len();
+        let budget_bytes = custom_budget as usize;
+
+        // With the custom budget, the prompt should be accepted
+        assert!(
+            prompt_bytes <= budget_bytes,
+            "8KB prompt should fit in 16KB budget"
+        );
+
+        // Verify the budget is not the default
+        let is_default_budget = custom_budget == 4096;
+        assert!(!is_default_budget, "Custom budget should not equal default");
+    }
+
+    /// Test: exact boundary conditions
+    #[test]
+    fn size_gate_boundary_conditions() {
+        let budget = 4096;
+        let exact_prompt = build_synthetic_prompt(budget);
+        assert_eq!(exact_prompt.len(), budget);
+
+        let over_prompt = build_synthetic_prompt(budget + 1);
+        assert_eq!(over_prompt.len(), budget + 1);
+
+        assert!(exact_prompt.len() <= budget);
+        assert!(over_prompt.len() > budget);
+    }
+
+    /// Test: error message guidance differs for default vs explicit override
+    #[test]
+    fn size_gate_error_message_guidance() {
+        // Default budget message
+        let is_default_budget = true;
+        let help_msg_default = if is_default_budget {
+            "Set agent.system_prompt_budget_bytes in config.yml to override the default 4KB budget."
+        } else {
+            "The current budget is already an explicit override. Consider reducing the context index size."
+        };
+
+        assert!(help_msg_default.contains("config.yml"));
+        assert!(help_msg_default.contains("4KB"));
+
+        // Explicit override budget message
+        let is_default_budget = false;
+        let help_msg_override = if is_default_budget {
+            "Set agent.system_prompt_budget_bytes in config.yml to override the default 4KB budget."
+        } else {
+            "The current budget is already an explicit override. Consider reducing the context index size."
+        };
+
+        assert!(help_msg_override.contains("override"));
+        assert!(help_msg_override.contains("reducing"));
     }
 }

@@ -15,12 +15,10 @@ fn test_socket_mode_is_0600() {
     let socket_path = temp_dir.path().join("test-mcp.sock");
 
     // Bind socket like the production code does
-    let listener = std::os::unix::net::UnixListener::bind(&socket_path)
-        .expect("bind socket");
+    let listener = std::os::unix::net::UnixListener::bind(&socket_path).expect("bind socket");
 
     // Set permissions
-    fs::set_permissions(&socket_path, fs::Permissions::from_mode(0o600))
-        .expect("set permissions");
+    fs::set_permissions(&socket_path, fs::Permissions::from_mode(0o600)).expect("set permissions");
 
     // Verify mode
     let metadata = fs::metadata(&socket_path).expect("metadata");
@@ -129,11 +127,9 @@ fn test_cross_user_connection_is_blocked_by_kernel() {
     let temp_dir = TempDir::new().expect("temp dir");
     let socket_path = temp_dir.path().join("test-perm.sock");
 
-    let _listener = std::os::unix::net::UnixListener::bind(&socket_path)
-        .expect("bind socket");
+    let _listener = std::os::unix::net::UnixListener::bind(&socket_path).expect("bind socket");
 
-    fs::set_permissions(&socket_path, fs::Permissions::from_mode(0o600))
-        .expect("set permissions");
+    fs::set_permissions(&socket_path, fs::Permissions::from_mode(0o600)).expect("set permissions");
 
     // Verify the permissions
     let metadata = fs::metadata(&socket_path).expect("metadata");

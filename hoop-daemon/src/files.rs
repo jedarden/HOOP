@@ -48,9 +48,12 @@ pub struct FileEntry {
 
 /// Reject any relative path that contains `..` components (path traversal guard).
 pub fn is_safe_rel_path(rel: &str) -> bool {
-    PathBuf::from(rel)
-        .components()
-        .all(|c| !matches!(c, Component::ParentDir | Component::RootDir | Component::Prefix(_)))
+    PathBuf::from(rel).components().all(|c| {
+        !matches!(
+            c,
+            Component::ParentDir | Component::RootDir | Component::Prefix(_)
+        )
+    })
 }
 
 /// Run `git status --porcelain -- <filter>` and return a map from
@@ -193,7 +196,10 @@ pub fn list_dir(project_root: &Path, rel_dir: &str) -> Result<Vec<FileEntry>> {
                 GitStatus::Clean
             }
         } else {
-            status_map.get(&rel_path).cloned().unwrap_or(GitStatus::Clean)
+            status_map
+                .get(&rel_path)
+                .cloned()
+                .unwrap_or(GitStatus::Clean)
         };
 
         entries.push(FileEntry {
@@ -251,16 +257,28 @@ pub fn parse_ext_patterns(ext: &str) -> Vec<String> {
     }
 
     // Strip leading `*.` or `.` from each token.
-    let strip = |s: &str| s.trim().trim_start_matches('*').trim_start_matches('.').to_string();
+    let strip = |s: &str| {
+        s.trim()
+            .trim_start_matches('*')
+            .trim_start_matches('.')
+            .to_string()
+    };
 
     // Detect brace expansion: *.{ts,tsx} or {ts,tsx}
     if let (Some(open), Some(close)) = (ext.find('{'), ext.rfind('}')) {
         let inside = &ext[open + 1..close];
-        return inside.split(',').map(|p| strip(p)).filter(|p| !p.is_empty()).collect();
+        return inside
+            .split(',')
+            .map(|p| strip(p))
+            .filter(|p| !p.is_empty())
+            .collect();
     }
 
     // Plain comma-separated list.
-    ext.split(',').map(|p| strip(p)).filter(|p| !p.is_empty()).collect()
+    ext.split(',')
+        .map(|p| strip(p))
+        .filter(|p| !p.is_empty())
+        .collect()
 }
 
 /// Files changed between `ref_str` and the working tree/index.
@@ -307,8 +325,18 @@ fn build_search_result(
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
-    let git_status = status_map.get(rel_path).cloned().unwrap_or(GitStatus::Clean);
-    Some(FileSearchResult { path: rel_path.to_string(), name, size, mtime, git_status, grep_match })
+    let git_status = status_map
+        .get(rel_path)
+        .cloned()
+        .unwrap_or(GitStatus::Clean);
+    Some(FileSearchResult {
+        path: rel_path.to_string(),
+        name,
+        size,
+        mtime,
+        git_status,
+        grep_match,
+    })
 }
 
 const MAX_SEARCH_RESULTS: usize = 500;
@@ -321,8 +349,8 @@ pub fn search_files(
     modified_since: Option<&str>,
     grep_pattern: Option<&str>,
 ) -> Result<Vec<FileSearchResult>> {
-    let allowlist = PathAllowlist::for_workspace(project_root)
-        .context("failed to build path allowlist")?;
+    let allowlist =
+        PathAllowlist::for_workspace(project_root).context("failed to build path allowlist")?;
     canonicalize_and_check(project_root, &allowlist)
         .map_err(|_| anyhow::anyhow!("project root not within workspace"))?;
 
@@ -393,7 +421,10 @@ fn search_with_grep(
             }
         }
 
-        let line_number = data.get("line_number").and_then(|n| n.as_u64()).unwrap_or(0);
+        let line_number = data
+            .get("line_number")
+            .and_then(|n| n.as_u64())
+            .unwrap_or(0);
         let line_text = data
             .get("lines")
             .and_then(|l| l.get("text"))
@@ -412,7 +443,12 @@ fn search_with_grep(
             })
             .unwrap_or((0, 0));
 
-        let gm = GrepMatch { line_number, line: line_text, match_start, match_end };
+        let gm = GrepMatch {
+            line_number,
+            line: line_text,
+            match_start,
+            match_end,
+        };
         if let Some(r) = build_search_result(project_root, &rel_path, &status_map, Some(gm)) {
             results.push(r);
         }

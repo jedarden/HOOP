@@ -5,7 +5,7 @@
 //! Runs as HOOP user, captures stdout/stderr + exit code.
 
 use axum::{
-    extract::{Path as AxumPath, Query, State},
+    extract::{ConnectInfo, Path as AxumPath, Query, State},
     response::Json,
     routing::{get, post},
     Router,
@@ -14,14 +14,17 @@ use serde::{Deserialize, Serialize};
 use std::{
     fs,
     io::{BufRead, BufReader},
+    net::SocketAddr,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     time::{Duration, Instant},
 };
+use sha2::{Digest, Sha256};
 use tracing::{debug, info, warn};
 
 use crate::DaemonState;
+use crate::fleet::{self, ActionKind, ActionResult};
 
 /// Script manifest metadata (from optional manifest.yml next to script)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -181,6 +184,45 @@ pub struct ScriptListQuery {
     pub project: Option<String>,
 }
 
+/// Resolve the actor identity for audit purposes.
+///
+/// Per §13: identity from Tailscale whois where available,
+/// falling back to the OS user running the HOOP process.
+fn resolve_actor(remote_addr: Option<SocketAddr>) -> String {
+    if let Some(addr) = remote_addr {
+        let ip = addr.ip();
+        let output = std::process::Command::new("tailscale")
+            .arg("whois")
+            .arg(ip.to_string())
+            .output();
+
+        if let Ok(out) = output {
+            if out.status.success() {
+                let identity = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if !identity.is_empty() {
+                    return format!("tailscale:{}", identity);
+                }
+            }
+        }
+    }
+
+    // Fallback to OS username
+    let user = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "unknown".to_string());
+    format!("os:{}", user)
+}
+
+/// Compute SHA-256 hash of script arguments for audit integrity
+fn hash_args(args: &[String]) -> String {
+    let mut hasher = Sha256::new();
+    for arg in args {
+        hasher.update(arg.as_bytes());
+        hasher.update(b"\x00");
+    }
+    format!("{:x}", hasher.finalize())
+}
+
 /// Discover all scripts in the configured scripts directory
 pub fn discover_scripts(scripts_dir: &Path) -> Vec<ScriptEntry> {
     let mut scripts = Vec::new();
@@ -194,7 +236,11 @@ pub fn discover_scripts(scripts_dir: &Path) -> Vec<ScriptEntry> {
         let path = entry.path();
 
         // Skip directories and hidden files
-        if path.is_dir() || path.file_name().is_none_or(|n| n.to_string_lossy().starts_with('.')) {
+        if path.is_dir()
+            || path
+                .file_name()
+                .is_none_or(|n| n.to_string_lossy().starts_with('.'))
+        {
             continue;
         }
 
@@ -324,12 +370,20 @@ pub fn execute_script(
                 let mut stdout_lines = Vec::new();
                 let mut stderr_lines = Vec::new();
 
-                while stdout_lines.len() + stderr_lines.len() < 1000 && collect_start.elapsed() < Duration::from_secs(1) {
+                while stdout_lines.len() + stderr_lines.len() < 1000
+                    && collect_start.elapsed() < Duration::from_secs(1)
+                {
                     let received = match stdout_rx.recv_timeout(Duration::from_millis(50)) {
-                        Ok(l) => { stdout_lines.push(l); true }
+                        Ok(l) => {
+                            stdout_lines.push(l);
+                            true
+                        }
                         Err(_) => false,
                     };
-                    let _ = stderr_rx.recv_timeout(Duration::from_millis(50)).ok().map(|l| stderr_lines.push(l));
+                    let _ = stderr_rx
+                        .recv_timeout(Duration::from_millis(50))
+                        .ok()
+                        .map(|l| stderr_lines.push(l));
                     if !received {
                         break;
                     }
@@ -353,7 +407,11 @@ pub fn execute_script(
                 };
 
                 return Ok(ScriptRunResponse {
-                    script: script_path.file_name().unwrap().to_string_lossy().to_string(),
+                    script: script_path
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .to_string(),
                     exit_code,
                     timed_out: false,
                     stdout,
@@ -378,7 +436,11 @@ pub fn execute_script(
     let stderr_lines: Vec<_> = stderr_rx.try_iter().collect();
 
     Ok(ScriptRunResponse {
-        script: script_path.file_name().unwrap().to_string_lossy().to_string(),
+        script: script_path
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .to_string(),
         exit_code: None,
         timed_out: true,
         stdout: stdout_lines.join("\n"),
@@ -495,6 +557,7 @@ async fn run_script(
     State(state): State<DaemonState>,
     AxumPath(name): AxumPath<String>,
     Json(req): Json<ScriptRunRequest>,
+    connect_info: Option<ConnectInfo<SocketAddr>>,
 ) -> Result<Json<ScriptRunResponse>, (axum::http::StatusCode, String)> {
     let scripts_dir_str = state
         .resolved_config
@@ -569,10 +632,37 @@ async fn run_script(
         )
     })?;
 
-    info!(
-        "Script '{}' completed with status: {}",
-        name, result.status
-    );
+    // Write audit row for script execution
+    let actor = resolve_actor(connect_info.map(|ci| ci.0));
+    let args_json = serde_json::to_string(&req.args).ok();
+    let args_hash = hash_args(&req.args);
+    let audit_result = if result.exit_code == Some(0) {
+        ActionResult::Success
+    } else {
+        ActionResult::Failure
+    };
+    let audit_error = if result.exit_code != Some(0) {
+        Some(result.status.clone())
+    } else {
+        None
+    };
+
+    if let Err(e) = fleet::write_audit_row(
+        &actor,
+        ActionKind::ScriptExecuted,
+        &name,
+        req.project.as_deref(),
+        args_json,
+        audit_result,
+        audit_error,
+        Some("api"),
+        None,
+        Some(&args_hash),
+    ) {
+        warn!("Failed to write audit row for script execution: {}", e);
+    }
+
+    info!("Script '{}' completed with status: {}", name, result.status);
 
     Ok(Json(result))
 }

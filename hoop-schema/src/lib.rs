@@ -86,7 +86,11 @@ macro_rules! impl_project_helpers {
             /// Returns a unified workspace view for all workspaces in this project.
             pub fn workspace_views(&self) -> Vec<WorkspaceView> {
                 match self {
-                    Self::Variant0 { path, canonical_path, .. } => vec![WorkspaceView {
+                    Self::Variant0 {
+                        path,
+                        canonical_path,
+                        ..
+                    } => vec![WorkspaceView {
                         path: std::path::PathBuf::from(path),
                         canonical_path: canonical_path.as_ref().map(std::path::PathBuf::from),
                         role: WorkspaceViewRole::Primary,
@@ -116,9 +120,9 @@ macro_rules! impl_project_helpers {
             /// Returns an iterator over all workspace canonical paths (for joins/dedup).
             /// Falls back to raw path when canonical_path is absent (legacy or v0.1 shorthand).
             pub fn all_canonical_paths(&self) -> impl Iterator<Item = std::path::PathBuf> + '_ {
-                self.workspace_views().into_iter().map(|w| {
-                    w.canonical_path.unwrap_or(w.path)
-                })
+                self.workspace_views()
+                    .into_iter()
+                    .map(|w| w.canonical_path.unwrap_or(w.path))
             }
 
             /// Returns the optional display label.
@@ -140,8 +144,16 @@ macro_rules! impl_project_helpers {
     };
 }
 
-impl_project_helpers!(ProjectEntry, ProjectEntryVariant1WorkspacesItem, ProjectEntryVariant1WorkspacesItemRole);
-impl_project_helpers!(ProjectsRegistryProjectsItem, ProjectsRegistryProjectsItemVariant1WorkspacesItem, ProjectsRegistryProjectsItemVariant1WorkspacesItemRole);
+impl_project_helpers!(
+    ProjectEntry,
+    ProjectEntryVariant1WorkspacesItem,
+    ProjectEntryVariant1WorkspacesItemRole
+);
+impl_project_helpers!(
+    ProjectsRegistryProjectsItem,
+    ProjectsRegistryProjectsItemVariant1WorkspacesItem,
+    ProjectsRegistryProjectsItemVariant1WorkspacesItemRole
+);
 
 /// Trait for records persisted to durable storage (SQLite, JSONL, config).
 ///
@@ -266,12 +278,12 @@ mod tests {
             #[test]
             fn $name() {
                 let original = $value;
-                let serialized =
-                    serde_json::to_string(&original).expect("Failed to serialize");
+                let serialized = serde_json::to_string(&original).expect("Failed to serialize");
                 let deserialized: $type =
                     serde_json::from_str(&serialized).expect("Failed to deserialize");
                 assert_eq!(
-                    original, deserialized,
+                    original,
+                    deserialized,
                     "Round-trip failed for {}",
                     stringify!($type)
                 );
@@ -280,9 +292,7 @@ mod tests {
     }
 
     fn parse_utc(s: &str) -> DateTime<Utc> {
-        DateTime::parse_from_rfc3339(s)
-            .unwrap()
-            .with_timezone(&Utc)
+        DateTime::parse_from_rfc3339(s).unwrap().with_timezone(&Utc)
     }
 
     // Test round-trip for WorkerData
@@ -363,9 +373,7 @@ mod tests {
     round_trip_test!(
         projects_registry_round_trip,
         ProjectsRegistry,
-        ProjectsRegistry {
-            projects: vec![],
-        }
+        ProjectsRegistry { projects: vec![] }
     );
 
     // Test round-trip for AuditRow
@@ -600,8 +608,7 @@ mod tests {
         };
 
         let json = serde_json::to_string(&original).expect("serialize");
-        let round_tripped: HoopConfig =
-            serde_json::from_str(&json).expect("deserialize");
+        let round_tripped: HoopConfig = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(original, round_tripped);
     }
 

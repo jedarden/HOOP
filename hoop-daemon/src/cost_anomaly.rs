@@ -200,7 +200,9 @@ pub fn check_cost_anomaly(
     };
 
     if is_anomaly {
-        crate::metrics::metrics().hoop_cost_anomaly_alerts_total.inc();
+        crate::metrics::metrics()
+            .hoop_cost_anomaly_alerts_total
+            .inc();
     }
 
     CostAnomalyResult {
@@ -322,7 +324,14 @@ mod tests {
     fn test_3sigma_case_flagged() {
         // 10 normal Stitches: costs 1.0, 1.1, …, 1.9 USD
         let normal: Vec<CostAnomalyStitch> = (0..10)
-            .map(|i| make_stitch(&format!("n{i}"), "fix deployment bug", 1.0 + i as f64 * 0.1, 10 + i))
+            .map(|i| {
+                make_stitch(
+                    &format!("n{i}"),
+                    "fix deployment bug",
+                    1.0 + i as f64 * 0.1,
+                    10 + i,
+                )
+            })
             .collect();
 
         // Compute population stats for the normal group
@@ -345,7 +354,11 @@ mod tests {
             DEFAULT_MIN_SIMILARITY,
         );
 
-        assert!(result.is_anomaly, "3σ outlier should be flagged; cost={outlier_cost:.4}, band={:?}", result.band);
+        assert!(
+            result.is_anomaly,
+            "3σ outlier should be flagged; cost={outlier_cost:.4}, band={:?}",
+            result.band
+        );
         assert_eq!(result.cost_usd, outlier_cost);
         assert!(result.band.is_some());
 
@@ -373,7 +386,12 @@ mod tests {
 
         // Stitch at exactly mean (2.0) — not anomalous
         let stitch = make_stitch("target", "refactor module", 2.0, 1);
-        let result = check_cost_anomaly(&stitch, &historical, DEFAULT_WINDOW_DAYS, DEFAULT_MIN_SIMILARITY);
+        let result = check_cost_anomaly(
+            &stitch,
+            &historical,
+            DEFAULT_WINDOW_DAYS,
+            DEFAULT_MIN_SIMILARITY,
+        );
         assert!(!result.is_anomaly);
     }
 
@@ -385,7 +403,12 @@ mod tests {
             .collect();
 
         let stitch = make_stitch("target", "fix crash", 999.0, 1);
-        let result = check_cost_anomaly(&stitch, &historical, DEFAULT_WINDOW_DAYS, DEFAULT_MIN_SIMILARITY);
+        let result = check_cost_anomaly(
+            &stitch,
+            &historical,
+            DEFAULT_WINDOW_DAYS,
+            DEFAULT_MIN_SIMILARITY,
+        );
 
         // No band → no anomaly (too few data points)
         assert!(!result.is_anomaly);
@@ -400,7 +423,12 @@ mod tests {
             .collect();
 
         let stitch = make_stitch("target", "deploy service", 999.0, 1);
-        let result = check_cost_anomaly(&stitch, &historical, DEFAULT_WINDOW_DAYS, DEFAULT_MIN_SIMILARITY);
+        let result = check_cost_anomaly(
+            &stitch,
+            &historical,
+            DEFAULT_WINDOW_DAYS,
+            DEFAULT_MIN_SIMILARITY,
+        );
 
         // Historical too old → no band → no anomaly
         assert!(!result.is_anomaly);
@@ -416,7 +444,12 @@ mod tests {
 
         // High cost stitch with unrelated title
         let stitch = make_stitch("target", "setup kubernetes cluster", 999.0, 1);
-        let result = check_cost_anomaly(&stitch, &historical, DEFAULT_WINDOW_DAYS, DEFAULT_MIN_SIMILARITY);
+        let result = check_cost_anomaly(
+            &stitch,
+            &historical,
+            DEFAULT_WINDOW_DAYS,
+            DEFAULT_MIN_SIMILARITY,
+        );
 
         // Dissimilar → not enough comparables → no anomaly
         assert!(!result.is_anomaly);

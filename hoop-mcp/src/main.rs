@@ -133,7 +133,10 @@ async fn run_stdio_mode(actor_override: Option<String>) -> Result<()> {
 
         let response = match request.method {
             Method::Initialize(ref params) => {
-                eprintln!("Client connected: {} {}", params.client_info.name, params.client_info.version);
+                eprintln!(
+                    "Client connected: {} {}",
+                    params.client_info.name, params.client_info.version
+                );
                 let result = protocol::InitializeResult {
                     protocol_version: "2024-11-05".to_string(),
                     capabilities: protocol::ServerCapabilities {
@@ -148,7 +151,10 @@ async fn run_stdio_mode(actor_override: Option<String>) -> Result<()> {
                         version: env!("CARGO_PKG_VERSION").to_string(),
                     },
                 };
-                protocol::JsonRpcResponse::result(serde_json::json!(null), serde_json::to_value(result)?)
+                protocol::JsonRpcResponse::result(
+                    serde_json::json!(null),
+                    serde_json::to_value(result)?,
+                )
             }
             Method::ToolsList(_) => {
                 let tools = tools::McpServerState::get_tools();
@@ -161,9 +167,7 @@ async fn run_stdio_mode(actor_override: Option<String>) -> Result<()> {
                         let result_value = serde_json::to_value(result)?;
                         protocol::JsonRpcResponse::result(request.id.clone(), result_value)
                     }
-                    Err(e) => {
-                        protocol::JsonRpcResponse::error(request.id.clone(), -32603, e)
-                    }
+                    Err(e) => protocol::JsonRpcResponse::error(request.id.clone(), -32603, e),
                 }
             }
             Method::PromptsList(_) => {

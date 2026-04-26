@@ -5,7 +5,7 @@ use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Json, Response},
-    routing::{get, patch, post, delete},
+    routing::{delete, get, patch, post},
     Router,
 };
 use serde::Deserialize;
@@ -47,7 +47,8 @@ async fn init_upload(
         _ => return Err((StatusCode::BAD_REQUEST, "Invalid attachment_type".into())),
     }
 
-    state.upload_registry
+    state
+        .upload_registry
         .initiate_upload(
             req.filename,
             req.total_size,
@@ -111,13 +112,10 @@ async fn get_progress(
     let valid_id = crate::id_validators::ValidUploadId::parse(&upload_id)
         .map_err(|_| StatusCode::BAD_REQUEST)?;
 
-    let progress = state
-        .upload_registry
-        .get_progress(&valid_id)
-        .map_err(|e| {
-            tracing::debug!("Upload not found: {}", e);
-            StatusCode::NOT_FOUND
-        })?;
+    let progress = state.upload_registry.get_progress(&valid_id).map_err(|e| {
+        tracing::debug!("Upload not found: {}", e);
+        StatusCode::NOT_FOUND
+    })?;
 
     Ok((
         [(axum::http::header::CONTENT_TYPE, "application/json")],
@@ -144,15 +142,14 @@ async fn complete_upload(
     let redaction_state = state.redaction_policy_state.read().await.clone();
 
     // Load projects config for workspace lookup
-    let projects_config = crate::projects::ProjectsConfig::load()
-        .map_err(|_| {
-            tracing::error!("Failed to load projects config");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let projects_config = crate::projects::ProjectsConfig::load().map_err(|_| {
+        tracing::error!("Failed to load projects config");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     state
         .upload_registry
-        .complete_upload(&valid_id, &redaction_state, &projects_config)
+        .complete_upload(&valid_id)
         .map(|_| StatusCode::NO_CONTENT)
         .map_err(|e| {
             tracing::error!("Failed to complete upload: {}", e);

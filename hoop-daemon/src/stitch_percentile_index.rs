@@ -95,8 +95,10 @@ impl BucketId {
         attachments_count: usize,
     ) -> Self {
         // Hash title tokens (first TITLE_TOKEN_BUCKET_SIZE unique tokens for bucketing)
-        let title_tokens: std::collections::HashSet<_> =
-            tokenize(title).into_iter().take(TITLE_TOKEN_BUCKET_SIZE).collect();
+        let title_tokens: std::collections::HashSet<_> = tokenize(title)
+            .into_iter()
+            .take(TITLE_TOKEN_BUCKET_SIZE)
+            .collect();
         let title_tokens_hash = {
             let mut tokens: Vec<_> = title_tokens.iter().cloned().collect();
             tokens.sort();
@@ -440,9 +442,8 @@ pub fn query_percentiles(
     );
 
     // Query exact bucket match first
-    let result = conn
-        .query_row(
-            r#"
+    let result = conn.query_row(
+        r#"
             SELECT cost_p50, cost_p90, duration_p50, duration_p90, sample_count
             FROM stitch_percentile_index
             WHERE title_tokens_hash = ?1
@@ -450,28 +451,28 @@ pub fn query_percentiles(
               AND labels_hash = ?3
               AND attachments_bucket = ?4
             "#,
-            params![
-                bucket_id.title_tokens_hash,
-                bucket_id.body_length_bucket.as_str(),
-                bucket_id.labels_hash,
-                bucket_id.attachments_bucket.as_str(),
-            ],
-            |row| {
-                Ok(PercentileQuery {
-                    cost: BucketPercentiles {
-                        p50: row.get(0)?,
-                        p90: row.get(1)?,
-                        count: row.get::<_, i64>(4)? as usize,
-                    },
-                    duration: BucketPercentiles {
-                        p50: row.get(2)?,
-                        p90: row.get(3)?,
-                        count: row.get::<_, i64>(4)? as usize,
-                    },
-                    sample_count: row.get::<_, i64>(4)? as usize,
-                })
-            },
-        );
+        params![
+            bucket_id.title_tokens_hash,
+            bucket_id.body_length_bucket.as_str(),
+            bucket_id.labels_hash,
+            bucket_id.attachments_bucket.as_str(),
+        ],
+        |row| {
+            Ok(PercentileQuery {
+                cost: BucketPercentiles {
+                    p50: row.get(0)?,
+                    p90: row.get(1)?,
+                    count: row.get::<_, i64>(4)? as usize,
+                },
+                duration: BucketPercentiles {
+                    p50: row.get(2)?,
+                    p90: row.get(3)?,
+                    count: row.get::<_, i64>(4)? as usize,
+                },
+                sample_count: row.get::<_, i64>(4)? as usize,
+            })
+        },
+    );
 
     match result {
         Ok(q) => Ok(Some(q)),
@@ -567,7 +568,14 @@ pub fn rebuild_index(conn: &mut Connection) -> Result<()> {
         // Derive cost from tokens
         let cost_usd = (total_tokens as f64) * 30.0 / 1_000_000.0;
 
-        Ok((id, title, body, attachments_path, cost_usd, duration_seconds))
+        Ok((
+            id,
+            title,
+            body,
+            attachments_path,
+            cost_usd,
+            duration_seconds,
+        ))
     })?;
 
     // Collect all stitch IDs first, then load labels in bulk
@@ -604,7 +612,10 @@ pub fn rebuild_index(conn: &mut Connection) -> Result<()> {
             &features.labels,
             features.attachments_count,
         );
-        stitches_by_bucket.entry(bucket_id).or_default().push(features);
+        stitches_by_bucket
+            .entry(bucket_id)
+            .or_default()
+            .push(features);
     }
 
     // Compute percentiles for each bucket
@@ -697,9 +708,10 @@ where
 pub fn update_on_stitch_close(stitch_id: &str) -> Result<bool> {
     use rusqlite::Connection;
 
-    let db_path = std::path::PathBuf::from(
-        dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
-    ).join(".hoop").join("fleet.db");
+    let db_path =
+        std::path::PathBuf::from(dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")))
+            .join(".hoop")
+            .join("fleet.db");
 
     if !db_path.exists() {
         return Ok(false);
@@ -763,38 +775,44 @@ fn load_stitch_features(conn: &Connection, stitch_id: &str) -> Result<StitchFeat
     let duration_seconds = (last_activity_dt - created_dt).num_seconds().max(0);
 
     // Load the body from the first user message
-    let body: Option<String> = conn.query_row(
-        r#"
+    let body: Option<String> = conn
+        .query_row(
+            r#"
         SELECT sm.content
         FROM stitch_messages sm
         WHERE sm.stitch_id = ?1 AND sm.role = 'user'
         ORDER BY sm.ts ASC LIMIT 1
         "#,
-        params![stitch_id],
-        |row| row.get(0),
-    ).ok();
+            params![stitch_id],
+            |row| row.get(0),
+        )
+        .ok();
     let body_length = body.as_ref().map(|b| b.len()).unwrap_or(0);
 
     // Load labels from audit log
     let labels = load_labels_for_stitch(stitch_id, &conn);
 
     // Load attachments count (attachments_path is a column on stitches table)
-    let attachments_path: Option<String> = conn.query_row(
-        "SELECT attachments_path FROM stitches WHERE id = ?1",
-        params![stitch_id],
-        |row| row.get(0),
-    ).ok();
+    let attachments_path: Option<String> = conn
+        .query_row(
+            "SELECT attachments_path FROM stitches WHERE id = ?1",
+            params![stitch_id],
+            |row| row.get(0),
+        )
+        .ok();
     let attachments_count = attachments_path
         .as_deref()
         .map(count_attachments)
         .unwrap_or(0);
 
     // Calculate cost from total tokens
-    let total_tokens: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(tokens), 0) FROM stitch_messages WHERE stitch_id = ?1",
-        params![stitch_id],
-        |row| row.get(0),
-    ).unwrap_or(0);
+    let total_tokens: i64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(tokens), 0) FROM stitch_messages WHERE stitch_id = ?1",
+            params![stitch_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
     let cost_usd = (total_tokens as f64) * 30.0 / 1_000_000.0;
 
     Ok(StitchFeatures {
@@ -817,20 +835,16 @@ fn load_labels_for_stitch(stitch_id: &str, conn: &Connection) -> Vec<String> {
         Err(_) => return vec![],
     };
 
-    let args_json: Option<String> = stmt
-        .query_row(params![stitch_id], |row| row.get(0))
-        .ok();
+    let args_json: Option<String> = stmt.query_row(params![stitch_id], |row| row.get(0)).ok();
 
     args_json
         .and_then(|json| {
             let v: serde_json::Value = serde_json::from_str(&json).ok()?;
-            v.get("labels")
-                .and_then(|l| l.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|l| l.as_str().map(String::from))
-                        .collect()
-                })
+            v.get("labels").and_then(|l| l.as_array()).map(|arr| {
+                arr.iter()
+                    .filter_map(|l| l.as_str().map(String::from))
+                    .collect()
+            })
         })
         .unwrap_or_default()
 }
@@ -844,20 +858,16 @@ fn load_labels_for_stitch_rebuild(stitch_id: &str, conn: &mut Connection) -> Vec
         Err(_) => return vec![],
     };
 
-    let args_json: Option<String> = stmt
-        .query_row(params![stitch_id], |row| row.get(0))
-        .ok();
+    let args_json: Option<String> = stmt.query_row(params![stitch_id], |row| row.get(0)).ok();
 
     args_json
         .and_then(|json| {
             let v: serde_json::Value = serde_json::from_str(&json).ok()?;
-            v.get("labels")
-                .and_then(|l| l.as_array())
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|l| l.as_str().map(String::from))
-                        .collect()
-                })
+            v.get("labels").and_then(|l| l.as_array()).map(|arr| {
+                arr.iter()
+                    .filter_map(|l| l.as_str().map(String::from))
+                    .collect()
+            })
         })
         .unwrap_or_default()
 }
@@ -872,14 +882,20 @@ mod tests {
         assert_eq!(BodyLengthBucket::from_length(50), BodyLengthBucket::Short);
         assert_eq!(BodyLengthBucket::from_length(250), BodyLengthBucket::Medium);
         assert_eq!(BodyLengthBucket::from_length(1000), BodyLengthBucket::Long);
-        assert_eq!(BodyLengthBucket::from_length(5000), BodyLengthBucket::VeryLong);
+        assert_eq!(
+            BodyLengthBucket::from_length(5000),
+            BodyLengthBucket::VeryLong
+        );
     }
 
     #[test]
     fn test_attachments_bucket() {
         assert_eq!(AttachmentsBucket::from_count(0), AttachmentsBucket::None);
         assert_eq!(AttachmentsBucket::from_count(1), AttachmentsBucket::One);
-        assert_eq!(AttachmentsBucket::from_count(5), AttachmentsBucket::Multiple);
+        assert_eq!(
+            AttachmentsBucket::from_count(5),
+            AttachmentsBucket::Multiple
+        );
     }
 
     #[test]

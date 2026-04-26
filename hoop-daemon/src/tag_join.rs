@@ -42,16 +42,13 @@ static MALFORMED_NEEDLE_RE: OnceLock<Regex> = OnceLock::new();
 
 fn needle_tag_re() -> &'static Regex {
     NEEDLE_TAG_RE.get_or_init(|| {
-        Regex::new(r"^\[needle:([^:]+):([^:]+):([^:\]]*)\]")
-            .expect("valid needle tag regex")
+        Regex::new(r"^\[needle:([^:]+):([^:]+):([^:\]]*)\]").expect("valid needle tag regex")
     })
 }
 
 fn malformed_needle_re() -> &'static Regex {
-    MALFORMED_NEEDLE_RE.get_or_init(|| {
-        Regex::new(r"^\[needle:[^\]]*\]")
-            .expect("valid malformed needle regex")
-    })
+    MALFORMED_NEEDLE_RE
+        .get_or_init(|| Regex::new(r"^\[needle:[^\]]*\]").expect("valid malformed needle regex"))
 }
 
 /// Resolve the tag-join for a session.
@@ -137,7 +134,11 @@ mod tests {
     fn test_worker_tag_full() {
         let result = resolve("[needle:alpha:bd-abc123:pluck] Fix the login bug", None);
         match result.kind {
-            ParsedSessionKind::Variant0 { worker, bead, strand } => {
+            ParsedSessionKind::Variant0 {
+                worker,
+                bead,
+                strand,
+            } => {
                 assert_eq!(worker, "alpha");
                 assert_eq!(bead, "bd-abc123");
                 assert_eq!(strand.as_deref(), Some("pluck"));
@@ -154,7 +155,11 @@ mod tests {
     fn test_worker_tag_empty_strand() {
         let result = resolve("[needle:bravo:bd-def456:] Some task", None);
         match result.kind {
-            ParsedSessionKind::Variant0 { worker, bead, strand } => {
+            ParsedSessionKind::Variant0 {
+                worker,
+                bead,
+                strand,
+            } => {
                 assert_eq!(worker, "bravo");
                 assert_eq!(bead, "bd-def456");
                 assert!(strand.is_none());
@@ -183,7 +188,11 @@ mod tests {
             Some("[needle:delta:bd-jkl012:mend] Fix the login bug in auth module"),
         );
         match result.kind {
-            ParsedSessionKind::Variant0 { worker, bead, strand } => {
+            ParsedSessionKind::Variant0 {
+                worker,
+                bead,
+                strand,
+            } => {
                 assert_eq!(worker, "delta");
                 assert_eq!(bead, "bd-jkl012");
                 assert_eq!(strand.as_deref(), Some("mend"));
@@ -363,7 +372,11 @@ mod tests {
             None,
         );
         match result.kind {
-            ParsedSessionKind::Variant0 { worker, bead, strand } => {
+            ParsedSessionKind::Variant0 {
+                worker,
+                bead,
+                strand,
+            } => {
                 assert_eq!(worker, "worker-alpha");
                 assert_eq!(bead, "bd-abc-123");
                 assert_eq!(strand.as_deref(), Some("deep-explore"));

@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+"""
+notify-pushover — Example HOOP script for sending Pushover notifications
+
+This script demonstrates the external integration escape hatch pattern (§22.3).
+It sends a notification to Pushover (https://pushover.net) when triggered.
+
+Setup:
+1. Create a Pushover account at https://pushover.net
+2. Create an application to get API_TOKEN
+3. Set PUSHOVER_USER and PUSHOVER_TOKEN environment variables
+4. Copy this script to ~/.hoop/scripts/notify-pushover
+5. Make it executable: chmod +x ~/.hoop/scripts/notify-pushover
+
+Usage:
+  hoop script run notify-pushover "Build failed on prod" "Check logs for details"
+  echo "Urgent message" | hoop script run notify-pushover -
+
+When triggered by events, the full event JSON is available on stdin.
+"""
+
+import os
+import sys
+import json
+from urllib import request
+from urllib.error import URLError
+
+
+def load_env_from_file():
+    """Load environment from ~/.hoop/scripts/.env if it exists."""
+    env_file = os.path.expanduser("~/.hoop/scripts/.env")
+    try:
+        with open(env_file, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    key, value = line.split("=", 1)
+                    os.environ.setdefault(key.strip(), value.strip())
+    except FileNotFoundError:
+        pass
+
+
+def send_pushover(message, title=None, priority=0, url=None, url_title=None):
+    """Send a notification via Pushover API."""
+    load_env_from_file()
+
+    user_key = os.getenv("PUSHOVER_USER")
+    api_token = os.getenv("PUSHOVER_TOKEN")
+
+    if not user_key or not api_token:
+        print("Error: PUSHOVER_USER and PUSHOVER_TOKEN environment variables must be set.", file=sys.stderr)
+        print("Set them in ~/.hoop/scripts/.env or your shell profile.", file=sys.stderr)
+        sys.exit(1)
+
+    endpoint = "https://api.pushover.net/1/messages.json"
+    data = {
+        "user": user_key,
+        "token": api_token,
+        "message": message,
+        "priority": priority,
+    }
+
+    if title:
+        data["title"] = title
+    if url:
+        data["url"] = url
+    if url_title:
+        data["url_title"] = url_title
+
+    try:
+        req = request.Request(
+            endpoint,
+            data=json.dumps(data).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with request.urlopen(req) as response:
+            result = json.loads(response.read().decode("utf-8"))
+            if result.get("status") == 1:
+                print("Notification sent successfully")
+                return 0
+            else:
+                print(f"Pushover error: {result}", file=sys.stderr)
+                return 1
+    except URLError as e:
+        print(f"Network error: {e}", file=sys.stderr)
+        return 1
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: notify-pushover <message> [title]", file=sys.stderr)
+        print("   or: echo <message> | notify-pushover - [title]", file=sys.stderr)
+        sys.exit(1)
+
+    # Check if reading from stdin
+    if sys.argv[1] == "-":
+        message = sys.stdin.read().strip()
+        title = sys.argv[2] if len(sys.argv) > 2 else None
+    else:
+        message = sys.argv[1]
+        title = sys.argv[2] if len(sys.argv) > 2 else None
+
+    # If stdin has data and wasn't explicitly requested, try to parse as event JSON
+    if not sys.stdin.isatty():
+        stdin_data = sys.stdin.read().strip()
+        if stdin_data:
+            try:
+                event = json.loads(stdin_data)
+                # Extract meaningful info from event
+                event_type = event.get("event", "unknown")
+                bead = event.get("bead", "")
+                worker = event.get("worker", "")
+
+                if event_type == "fail":
+                    message = f"Bead {bead} failed on worker {worker}"
+                    title = "HOOP: Bead Failure"
+                elif event_type == "complete":
+                    message = f"Bead {bead} completed successfully"
+                    title = "HOOP: Bead Complete"
+                elif event_type == "timeout":
+                    message = f"Bead {bead} timed out on worker {worker}"
+                    title = "HOOP: Bead Timeout"
+                else:
+                    message = f"Event: {event_type}"
+                    title = "HOOP: Event Notification"
+            except json.JSONDecodeError:
+                pass
+
+    sys.exit(send_pushover(message, title))
+
+
+if __name__ == "__main__":
+    main()

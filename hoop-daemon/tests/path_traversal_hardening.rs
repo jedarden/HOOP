@@ -143,8 +143,8 @@ fn attack_9_valid_prefix_then_traversal_in_bead_id() {
 #[test]
 fn attack_10_symlink_escape_via_canonicalize_and_check() {
     let ws = workspace();
-    let allowlist = PathAllowlist::for_workspace(ws.path())
-        .expect("allowlist construction must succeed");
+    let allowlist =
+        PathAllowlist::for_workspace(ws.path()).expect("allowlist construction must succeed");
 
     // Place a symlink inside .beads/attachments/ that points to /etc (outside).
     let link = ws
@@ -247,7 +247,10 @@ fn uploads_allowlist_accepts_paths_inside_uploads_dir() {
     let fake_upload = uploads_dir.join("550e8400-e29b-41d4-a716-446655440000");
     std::fs::create_dir_all(&fake_upload).unwrap();
     let canon = canonicalize_and_check(&fake_upload, &al);
-    assert!(canon.is_ok(), "upload dir inside allowlist must be accepted");
+    assert!(
+        canon.is_ok(),
+        "upload dir inside allowlist must be accepted"
+    );
 }
 
 /// A symlink inside the uploads directory pointing outside must be rejected.

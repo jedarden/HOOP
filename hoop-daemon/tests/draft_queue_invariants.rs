@@ -81,7 +81,10 @@ fn test_insert_draft_creates_no_beads() {
         .expect("draft exists");
     assert_eq!(fetched.status, "pending");
     assert_eq!(fetched.source, "agent");
-    assert!(fetched.stitch_id.is_none(), "draft must not have stitch_id until approved");
+    assert!(
+        fetched.stitch_id.is_none(),
+        "draft must not have stitch_id until approved"
+    );
 
     teardown_test_db();
 }
@@ -238,16 +241,19 @@ fn test_list_drafts_filters_by_status() {
         hoop_daemon::fleet::insert_draft(&draft).expect("insert draft");
     }
 
-    let pending = hoop_daemon::fleet::list_drafts(None, Some("pending"), 100).expect("list pending");
+    let pending =
+        hoop_daemon::fleet::list_drafts(None, Some("pending"), 100).expect("list pending");
     assert_eq!(pending.len(), 2);
     assert!(pending.iter().all(|d| d.status == "pending"));
 
-    let rejected = hoop_daemon::fleet::list_drafts(None, Some("rejected"), 100).expect("list rejected");
+    let rejected =
+        hoop_daemon::fleet::list_drafts(None, Some("rejected"), 100).expect("list rejected");
     assert_eq!(rejected.len(), 1);
     assert_eq!(rejected[0].id, "draft-s6");
 
     let actionable = {
-        let mut p = hoop_daemon::fleet::list_drafts(None, Some("pending"), 100).expect("list pending");
+        let mut p =
+            hoop_daemon::fleet::list_drafts(None, Some("pending"), 100).expect("list pending");
         p.extend(hoop_daemon::fleet::list_drafts(None, Some("edited"), 100).expect("list edited"));
         p
     };
@@ -308,8 +314,14 @@ fn test_audit_row_written_on_draft_created() {
     assert_eq!(audit_row.kind, hoop_daemon::fleet::ActionKind::DraftCreated);
     assert_eq!(audit_row.target, "draft-audit-1");
     assert_eq!(audit_row.project, Some("test-project".to_string()));
-    assert!(!audit_row.hash_self.is_empty(), "hash_self must be populated");
-    assert!(!audit_row.hash_prev.is_empty(), "hash_prev must be populated (genesis or previous)");
+    assert!(
+        !audit_row.hash_self.is_empty(),
+        "hash_self must be populated"
+    );
+    assert!(
+        !audit_row.hash_prev.is_empty(),
+        "hash_prev must be populated (genesis or previous)"
+    );
 
     teardown_test_db();
 }
@@ -353,26 +365,34 @@ fn test_audit_row_captures_approver_identity() {
         Some(&now),
         None,
         None,
-    ).expect("update draft status");
+    )
+    .expect("update draft status");
 
     let audit_row = hoop_daemon::fleet::write_audit_row(
         operator,
         hoop_daemon::fleet::ActionKind::DraftApproved,
         "draft-approve-audit",
         Some("test-project"),
-        Some(serde_json::json!({
-            "title": "To be approved",
-            "original_actor": "os:test-agent",
-        }).to_string()),
+        Some(
+            serde_json::json!({
+                "title": "To be approved",
+                "original_actor": "os:test-agent",
+            })
+            .to_string(),
+        ),
         hoop_daemon::fleet::ActionResult::Success,
         None,
         Some("operator"),
         None,
         None,
-    ).expect("write audit row");
+    )
+    .expect("write audit row");
 
     assert_eq!(audit_row.actor, operator);
-    assert_eq!(audit_row.kind, hoop_daemon::fleet::ActionKind::DraftApproved);
+    assert_eq!(
+        audit_row.kind,
+        hoop_daemon::fleet::ActionKind::DraftApproved
+    );
     assert!(audit_row.source.as_deref() == Some("operator"));
 
     let updated = hoop_daemon::fleet::get_draft("draft-approve-audit")
@@ -429,7 +449,8 @@ fn test_rejection_with_reason() {
         Some(&now),
         Some(reason),
         None,
-    ).expect("reject draft");
+    )
+    .expect("reject draft");
 
     let rejected = hoop_daemon::fleet::get_draft("draft-reject-reason")
         .expect("get draft")
@@ -482,14 +503,18 @@ fn test_rejection_without_reason() {
         Some(&now),
         None,
         None,
-    ).expect("reject draft");
+    )
+    .expect("reject draft");
 
     let rejected = hoop_daemon::fleet::get_draft("draft-reject-noreason")
         .expect("get draft")
         .expect("draft exists");
 
     assert_eq!(rejected.status, "rejected");
-    assert_eq!(rejected.rejection_reason, None, "rejection reason is optional");
+    assert_eq!(
+        rejected.rejection_reason, None,
+        "rejection reason is optional"
+    );
     assert_eq!(rejected.resolved_by, Some(operator.to_string()));
 
     teardown_test_db();
@@ -505,22 +530,28 @@ fn test_rejection_audit_captures_reason() {
         hoop_daemon::fleet::ActionKind::DraftRejected,
         "draft-reject-audit",
         Some("test-project"),
-        Some(serde_json::json!({
-            "title": "Rejected stitch",
-            "rejection_reason": reason,
-        }).to_string()),
+        Some(
+            serde_json::json!({
+                "title": "Rejected stitch",
+                "rejection_reason": reason,
+            })
+            .to_string(),
+        ),
         hoop_daemon::fleet::ActionResult::Success,
         None,
         Some("operator"),
         None,
         None,
-    ).expect("write audit row");
+    )
+    .expect("write audit row");
 
-    assert_eq!(audit_row.kind, hoop_daemon::fleet::ActionKind::DraftRejected);
+    assert_eq!(
+        audit_row.kind,
+        hoop_daemon::fleet::ActionKind::DraftRejected
+    );
 
-    let args: serde_json::Value = serde_json::from_str(
-        audit_row.args_json.as_deref().unwrap_or("{}")
-    ).unwrap();
+    let args: serde_json::Value =
+        serde_json::from_str(audit_row.args_json.as_deref().unwrap_or("{}")).unwrap();
     assert_eq!(args["rejection_reason"], reason);
 
     teardown_test_db();
@@ -566,7 +597,8 @@ fn test_edit_increments_version_and_stores_original() {
         None,
         Some(8),
         None,
-    ).expect("edit draft");
+    )
+    .expect("edit draft");
 
     let edited = hoop_daemon::fleet::get_draft("draft-edit-ver")
         .expect("get draft")
@@ -577,7 +609,10 @@ fn test_edit_increments_version_and_stores_original() {
     assert_eq!(edited.priority, Some(8));
     assert_eq!(edited.version, 2, "edit must increment version");
     assert_eq!(edited.status, "edited", "edit must set status to 'edited'");
-    assert!(edited.original_json.is_some(), "first edit must store original_json");
+    assert!(
+        edited.original_json.is_some(),
+        "first edit must store original_json"
+    );
 
     teardown_test_db();
 }
@@ -622,7 +657,8 @@ fn test_approved_draft_records_stitch_id() {
         Some(&now),
         None,
         Some(stitch_id),
-    ).expect("approve and submit draft");
+    )
+    .expect("approve and submit draft");
 
     let submitted = hoop_daemon::fleet::get_draft("draft-stitch-id")
         .expect("get draft")
@@ -660,7 +696,8 @@ fn test_hash_chain_integrity_with_draft_actions() {
             None,
             None,
             None,
-        ).expect("write audit row");
+        )
+        .expect("write audit row");
 
         if i > 0 {
             assert_eq!(

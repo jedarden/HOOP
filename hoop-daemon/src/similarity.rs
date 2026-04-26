@@ -79,16 +79,17 @@ pub fn combined_similarity(
 
     // Body similarity if both have descriptions
     let body_sim = match (draft_body, historical_body) {
-        (Some(db), Some(hb)) if !db.is_empty() && !hb.is_empty() => {
-            Some(text_similarity(db, hb))
-        }
+        (Some(db), Some(hb)) if !db.is_empty() && !hb.is_empty() => Some(text_similarity(db, hb)),
         _ => None,
     };
 
     // Label overlap
     let draft_labels_set: HashSet<_> = draft_labels.iter().map(|l| l.to_lowercase()).collect();
-    let historical_labels_set: HashSet<_> = historical_labels.iter().map(|l| l.to_lowercase()).collect();
-    let label_overlap = draft_labels_set.intersection(&historical_labels_set).count();
+    let historical_labels_set: HashSet<_> =
+        historical_labels.iter().map(|l| l.to_lowercase()).collect();
+    let label_overlap = draft_labels_set
+        .intersection(&historical_labels_set)
+        .count();
 
     // Combined score: 60% title, 30% body, 10% labels
     let title_weight = 0.6;
@@ -104,9 +105,8 @@ pub fn combined_similarity(
         label_overlap as f64 / draft_labels_set.len().max(historical_labels_set.len()) as f64
     };
 
-    let score = title_sim.jaccard * title_weight
-        + body_score * body_weight
-        + label_score * label_weight;
+    let score =
+        title_sim.jaccard * title_weight + body_score * body_weight + label_score * label_weight;
 
     CombinedSimilarity {
         score,
@@ -262,19 +262,22 @@ mod tests {
     #[test]
     fn test_find_similar_stitches() {
         let historical = vec![
-            ("st1".to_string(), "fix crash bug".to_string(), None, vec!["bug".to_string()]),
+            (
+                "st1".to_string(),
+                "fix crash bug".to_string(),
+                None,
+                vec!["bug".to_string()],
+            ),
             ("st2".to_string(), "add feature".to_string(), None, vec![]),
-            ("st3".to_string(), "fix bug".to_string(), Some("detailed".to_string()), vec![]),
+            (
+                "st3".to_string(),
+                "fix bug".to_string(),
+                Some("detailed".to_string()),
+                vec![],
+            ),
         ];
 
-        let results = find_similar_stitches(
-            "fix bug",
-            None,
-            &[],
-            historical,
-            0.3,
-            10,
-        );
+        let results = find_similar_stitches("fix bug", None, &[], historical, 0.3, 10);
 
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].id, "st3"); // Closest match
@@ -284,7 +287,12 @@ mod tests {
     #[test]
     fn test_find_similar_stitches_filters_by_threshold() {
         let historical = vec![
-            ("st1".to_string(), "totally different".to_string(), None, vec![]),
+            (
+                "st1".to_string(),
+                "totally different".to_string(),
+                None,
+                vec![],
+            ),
             ("st2".to_string(), "fix bug".to_string(), None, vec![]),
         ];
 
@@ -315,7 +323,7 @@ mod tests {
             &[],
             historical,
             0.0, // No threshold
-            2, // Limit to 2
+            2,   // Limit to 2
         );
 
         assert_eq!(results.len(), 2);

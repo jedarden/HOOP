@@ -133,7 +133,8 @@ async fn read_stitch(
     Path(stitch_id): Path<String>,
     State(state): State<crate::DaemonState>,
 ) -> Result<Json<AggregatedStitchResponse>, (StatusCode, String)> {
-    crate::id_validators::validate_stitch_id(&stitch_id).map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_stitch_id(&stitch_id)
+        .map_err(crate::id_validators::rejection)?;
 
     let start = Instant::now();
 
@@ -142,7 +143,12 @@ async fn read_stitch(
         &db_path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to open fleet.db: {}", e)))?;
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to open fleet.db: {}", e),
+        )
+    })?;
 
     // 1. Stitch row
     let stitch = query_stitch_row(&conn, &stitch_id)?;
@@ -158,18 +164,20 @@ async fn read_stitch(
     let linked_beads: Vec<LinkedBead> = raw_beads
         .into_iter()
         .map(|mut b| {
-            b.live_status = beads_lock.iter().find(|ib| ib.id == b.bead_id).map(|ib| {
-                LiveBeadStatus {
-                    title: ib.title.clone(),
-                    status: format!("{:?}", ib.status).to_lowercase(),
-                    priority: ib.priority,
-                    issue_type: format!("{:?}", ib.issue_type).to_lowercase(),
-                    created_at: ib.created_at.to_rfc3339(),
-                    updated_at: ib.updated_at.to_rfc3339(),
-                    created_by: ib.created_by.clone(),
-                    dependencies: ib.dependencies.clone(),
-                }
-            });
+            b.live_status =
+                beads_lock
+                    .iter()
+                    .find(|ib| ib.id == b.bead_id)
+                    .map(|ib| LiveBeadStatus {
+                        title: ib.title.clone(),
+                        status: format!("{:?}", ib.status).to_lowercase(),
+                        priority: ib.priority,
+                        issue_type: format!("{:?}", ib.issue_type).to_lowercase(),
+                        created_at: ib.created_at.to_rfc3339(),
+                        updated_at: ib.updated_at.to_rfc3339(),
+                        created_by: ib.created_by.clone(),
+                        dependencies: ib.dependencies.clone(),
+                    });
             b
         })
         .collect();
@@ -227,9 +235,15 @@ fn query_stitch_row(
     )
     .map_err(|e| {
         if e == rusqlite::Error::QueryReturnedNoRows {
-            (StatusCode::NOT_FOUND, format!("Stitch '{}' not found", stitch_id))
+            (
+                StatusCode::NOT_FOUND,
+                format!("Stitch '{}' not found", stitch_id),
+            )
         } else {
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("DB error: {}", e),
+            )
         }
     })
 }
@@ -243,7 +257,12 @@ fn query_messages(
             "SELECT id, ts, role, content, tokens \
              FROM stitch_messages WHERE stitch_id = ?1 ORDER BY ts",
         )
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Prepare messages: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Prepare messages: {}", e),
+            )
+        })?;
 
     let rows = stmt
         .query_map([stitch_id], |row| {
@@ -255,11 +274,21 @@ fn query_messages(
                 tokens: row.get(4)?,
             })
         })
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Query messages: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Query messages: {}", e),
+            )
+        })?;
 
     let mut out = Vec::new();
     for row in rows {
-        out.push(row.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Message row: {}", e)))?);
+        out.push(row.map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Message row: {}", e),
+            )
+        })?);
     }
     Ok(out)
 }
@@ -273,7 +302,12 @@ fn query_linked_beads_raw(
             "SELECT bead_id, workspace, relationship \
              FROM stitch_beads WHERE stitch_id = ?1",
         )
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Prepare beads: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Prepare beads: {}", e),
+            )
+        })?;
 
     let rows = stmt
         .query_map([stitch_id], |row| {
@@ -284,11 +318,21 @@ fn query_linked_beads_raw(
                 live_status: None,
             })
         })
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Query beads: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Query beads: {}", e),
+            )
+        })?;
 
     let mut out = Vec::new();
     for row in rows {
-        out.push(row.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Bead row: {}", e)))?);
+        out.push(row.map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Bead row: {}", e),
+            )
+        })?);
     }
     Ok(out)
 }
@@ -304,7 +348,12 @@ fn query_link_graph(
              FROM stitch_links sl LEFT JOIN stitches s ON sl.to_stitch = s.id \
              WHERE sl.from_stitch = ?1",
         )
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Prepare outgoing: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Prepare outgoing: {}", e),
+            )
+        })?;
 
     let rows = stmt
         .query_map([stitch_id], |row| {
@@ -315,11 +364,21 @@ fn query_link_graph(
                 title,
             })
         })
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Query outgoing: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Query outgoing: {}", e),
+            )
+        })?;
 
     let mut outgoing = Vec::new();
     for row in rows {
-        outgoing.push(row.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Outgoing row: {}", e)))?);
+        outgoing.push(row.map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Outgoing row: {}", e),
+            )
+        })?);
     }
 
     // Incoming
@@ -329,7 +388,12 @@ fn query_link_graph(
              FROM stitch_links sl LEFT JOIN stitches s ON sl.from_stitch = s.id \
              WHERE sl.to_stitch = ?1",
         )
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Prepare incoming: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Prepare incoming: {}", e),
+            )
+        })?;
 
     let rows = stmt
         .query_map([stitch_id], |row| {
@@ -340,11 +404,21 @@ fn query_link_graph(
                 title,
             })
         })
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Query incoming: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Query incoming: {}", e),
+            )
+        })?;
 
     let mut incoming = Vec::new();
     for row in rows {
-        incoming.push(row.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Incoming row: {}", e)))?);
+        incoming.push(row.map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Incoming row: {}", e),
+            )
+        })?);
     }
 
     Ok(LinkGraph { outgoing, incoming })
@@ -382,7 +456,10 @@ fn extract_touched_files(messages: &[StitchMessage]) -> Vec<TouchedFile> {
 
     let mut files: Vec<TouchedFile> = counts
         .into_iter()
-        .map(|(path, mention_count)| TouchedFile { path, mention_count })
+        .map(|(path, mention_count)| TouchedFile {
+            path,
+            mention_count,
+        })
         .collect();
     files.sort_by(|a, b| b.mention_count.cmp(&a.mention_count));
     files.truncate(50);
@@ -404,16 +481,17 @@ fn compute_cost_duration(messages: &[StitchMessage]) -> CostDuration {
         ) {
             (Ok(f), Ok(l)) => {
                 let dur = l.signed_duration_since(f);
-                format!("{}h {}m {}s", dur.num_hours(), dur.num_minutes() % 60, dur.num_seconds() % 60)
+                format!(
+                    "{}h {}m {}s",
+                    dur.num_hours(),
+                    dur.num_minutes() % 60,
+                    dur.num_seconds() % 60
+                )
             }
             _ => "parse error".to_string(),
         };
 
-        (
-            Some(first.clone()),
-            Some(last.clone()),
-            wall_clock,
-        )
+        (Some(first.clone()), Some(last.clone()), wall_clock)
     } else if messages.len() == 1 {
         (
             Some(messages[0].ts.clone()),

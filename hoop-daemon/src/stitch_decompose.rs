@@ -273,17 +273,19 @@ fn resolve_template(template: &str, intent: &StitchIntent) -> String {
 /// Find the matching rule for a Stitch intent
 fn find_rule<'a>(rules: &'a [DecomposeRule], intent: &StitchIntent) -> Option<&'a DecomposeRule> {
     // Prefer more specific rules first (those with requires_acceptance_criteria = Some(true))
-    rules.iter().find(|r| {
-        r.match_kinds.contains(&intent.kind)
-            && r.requires_acceptance_criteria == Some(true)
-            && intent.has_acceptance_criteria
-    }).or_else(|| {
-        // Then rules without criteria requirement or with criteria=false
-        rules.iter().find(|r| {
+    rules
+        .iter()
+        .find(|r| {
             r.match_kinds.contains(&intent.kind)
-                && r.requires_acceptance_criteria != Some(true)
+                && r.requires_acceptance_criteria == Some(true)
+                && intent.has_acceptance_criteria
         })
-    })
+        .or_else(|| {
+            // Then rules without criteria requirement or with criteria=false
+            rules.iter().find(|r| {
+                r.match_kinds.contains(&intent.kind) && r.requires_acceptance_criteria != Some(true)
+            })
+        })
 }
 
 /// Decompose a Stitch intent into a bead graph.
@@ -310,7 +312,10 @@ pub fn decompose(rules: &[DecomposeRule], intent: &StitchIntent) -> Option<BeadG
                 title: resolve_template(&tmpl.title_template, intent),
                 issue_type: tmpl.issue_type.clone(),
                 depends_on: tmpl.depends_on.clone(),
-                body_template: tmpl.body_template.as_ref().map(|t| resolve_template(t, intent)),
+                body_template: tmpl
+                    .body_template
+                    .as_ref()
+                    .map(|t| resolve_template(t, intent)),
                 priority: tmpl.priority.or(intent.priority),
                 labels,
             }
@@ -346,7 +351,14 @@ pub fn apply_override(graph: &BeadGraph, override_: &GraphOverride) -> BeadGraph
 
     BeadGraph {
         rule_name: if override_.override_reason.is_some() {
-            format!("{} (overridden: {})", graph.rule_name, override_.override_reason.as_deref().unwrap_or("operator edit"))
+            format!(
+                "{} (overridden: {})",
+                graph.rule_name,
+                override_
+                    .override_reason
+                    .as_deref()
+                    .unwrap_or("operator edit")
+            )
         } else {
             format!("{} (overridden)", graph.rule_name)
         },
@@ -364,7 +376,10 @@ pub fn load_config(yaml: &str) -> DecomposeConfig {
     match serde_yaml::from_str::<DecomposeConfig>(yaml) {
         Ok(config) => config,
         Err(e) => {
-            warn!("Failed to parse decomposition config, using defaults: {}", e);
+            warn!(
+                "Failed to parse decomposition config, using defaults: {}",
+                e
+            );
             DecomposeConfig::default()
         }
     }
@@ -388,7 +403,10 @@ pub fn load_config_from_file() -> DecomposeConfig {
                     if let Some(section) = val.get("stitch_decompose") {
                         match serde_yaml::from_value::<DecomposeConfig>(section.clone()) {
                             Ok(config) => {
-                                info!("Loaded {} decomposition rules from config.yml", config.rules.len());
+                                info!(
+                                    "Loaded {} decomposition rules from config.yml",
+                                    config.rules.len()
+                                );
                                 config
                             }
                             Err(e) => {

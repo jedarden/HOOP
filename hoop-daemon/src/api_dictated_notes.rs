@@ -49,24 +49,37 @@ async fn create_note(
     State(state): State<crate::DaemonState>,
     Json(req): Json<CreateNoteRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_project_name(&project)
+        .map_err(crate::id_validators::rejection)?;
 
     // Validate project exists
     {
         let projects = state.projects.read().unwrap();
         if !projects.iter().any(|p| p.name == project) {
-            return Err((StatusCode::NOT_FOUND, format!("Project '{}' not found", project)));
+            return Err((
+                StatusCode::NOT_FOUND,
+                format!("Project '{}' not found", project),
+            ));
         }
     }
 
     // Decode audio data
     let audio_data = base64::engine::general_purpose::STANDARD
         .decode(&req.audio_data)
-        .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid base64 audio data: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                format!("Invalid base64 audio data: {}", e),
+            )
+        })?;
 
     let stitch_id = Uuid::new_v4().to_string();
-    let valid_stitch_id = ValidStitchId::parse(&stitch_id)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Generated invalid UUID: {}", e)))?;
+    let valid_stitch_id = ValidStitchId::parse(&stitch_id).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Generated invalid UUID: {}", e),
+        )
+    })?;
     let now = chrono::Utc::now();
 
     // Determine initial state: pre-transcribed or pending
@@ -74,7 +87,10 @@ async fn create_note(
     let (transcript, transcription_status) = if let Some(t) = &req.transcript {
         (t.clone(), TranscriptionStatus::Completed)
     } else {
-        ("Transcription pending...".to_string(), TranscriptionStatus::Pending)
+        (
+            "Transcription pending...".to_string(),
+            TranscriptionStatus::Pending,
+        )
     };
 
     // §18.2 secrets scan: flag secrets in the incoming transcript (Phase 3)
@@ -96,19 +112,41 @@ async fn create_note(
     };
 
     // Store audio file
-    let audio_path = dictated_notes::store_audio(&valid_stitch_id, &req.audio_filename, &audio_data)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to store audio: {}", e)))?;
+    let audio_path =
+        dictated_notes::store_audio(&valid_stitch_id, &req.audio_filename, &audio_data).map_err(
+            |e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to store audio: {}", e),
+                )
+            },
+        )?;
 
     // Insert into fleet.db
     let db_path = fleet::db_path();
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB open error: {}", e)))?;
+    let conn = rusqlite::Connection::open(&db_path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("DB open error: {}", e),
+        )
+    })?;
     conn.pragma_update(None, "journal_mode", "WAL")
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB WAL error: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("DB WAL error: {}", e),
+            )
+        })?;
 
     // Insert stitch row
-    dictated_notes::insert_stitch(&conn, &valid_stitch_id, &project, &title, "operator")
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create stitch: {}", e)))?;
+    dictated_notes::insert_stitch(&conn, &valid_stitch_id, &project, &title, "operator").map_err(
+        |e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to create stitch: {}", e),
+            )
+        },
+    )?;
 
     // Insert note metadata
     let note = DictatedNote {
@@ -124,8 +162,12 @@ async fn create_note(
         tags: req.tags.unwrap_or_default(),
         transcription_status: transcription_status.clone(),
     };
-    dictated_notes::insert_note(&conn, &note)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to insert note: {}", e)))?;
+    dictated_notes::insert_note(&conn, &note).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to insert note: {}", e),
+        )
+    })?;
 
     // Submit transcription job if no pre-computed transcript
     if !has_transcript {
@@ -134,7 +176,8 @@ async fn create_note(
                 Ok(job_id) => {
                     tracing::info!(
                         "Submitted transcription job {} for dictated note {}",
-                        job_id, stitch_id
+                        job_id,
+                        stitch_id
                     );
                 }
                 Err(e) => {
@@ -175,14 +218,23 @@ async fn create_note(
 async fn list_notes(
     Path(project): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_project_name(&project)
+        .map_err(crate::id_validators::rejection)?;
 
     let db_path = fleet::db_path();
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e)))?;
+    let conn = rusqlite::Connection::open(&db_path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("DB error: {}", e),
+        )
+    })?;
 
-    let notes = dictated_notes::list_notes_for_project(&conn, &project)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Query error: {}", e)))?;
+    let notes = dictated_notes::list_notes_for_project(&conn, &project).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Query error: {}", e),
+        )
+    })?;
 
     Ok(Json(notes))
 }
@@ -194,11 +246,19 @@ async fn get_note(
     let valid_id = ValidStitchId::parse(&stitch_id).map_err(crate::id_validators::rejection)?;
 
     let db_path = fleet::db_path();
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e)))?;
+    let conn = rusqlite::Connection::open(&db_path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("DB error: {}", e),
+        )
+    })?;
 
-    let note = dictated_notes::get_note(&conn, valid_id.as_str())
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Query error: {}", e)))?;
+    let note = dictated_notes::get_note(&conn, valid_id.as_str()).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Query error: {}", e),
+        )
+    })?;
 
     match note {
         Some(n) => Ok(Json(n).into_response()),
@@ -215,11 +275,19 @@ async fn get_audio(
     let valid_id = ValidStitchId::parse(&stitch_id).map_err(crate::id_validators::rejection)?;
 
     let db_path = fleet::db_path();
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e)))?;
+    let conn = rusqlite::Connection::open(&db_path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("DB error: {}", e),
+        )
+    })?;
 
-    let note = dictated_notes::get_note(&conn, valid_id.as_str())
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Query error: {}", e)))?;
+    let note = dictated_notes::get_note(&conn, valid_id.as_str()).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Query error: {}", e),
+        )
+    })?;
 
     let note = match note {
         Some(n) => n,
@@ -240,7 +308,13 @@ async fn get_audio(
                 &audio_path,
                 &redacted_path,
                 &note.redacted_words,
-            ).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Audio redaction failed: {}", e)))?;
+            )
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Audio redaction failed: {}", e),
+                )
+            })?;
         }
         redacted_path
     };
@@ -269,11 +343,19 @@ async fn update_note(
     let valid_id = ValidStitchId::parse(&stitch_id).map_err(crate::id_validators::rejection)?;
 
     let db_path = fleet::db_path();
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e)))?;
+    let conn = rusqlite::Connection::open(&db_path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("DB error: {}", e),
+        )
+    })?;
 
-    let note = dictated_notes::get_note(&conn, valid_id.as_str())
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Query error: {}", e)))?;
+    let note = dictated_notes::get_note(&conn, valid_id.as_str()).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Query error: {}", e),
+        )
+    })?;
 
     let mut note = match note {
         Some(n) => n,
@@ -281,8 +363,12 @@ async fn update_note(
     };
 
     if let Some(title) = req.title {
-        dictated_notes::update_stitch_title(&conn, valid_id.as_str(), &title)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Title update error: {}", e)))?;
+        dictated_notes::update_stitch_title(&conn, valid_id.as_str(), &title).map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Title update error: {}", e),
+            )
+        })?;
     }
     if let Some(transcript) = req.transcript {
         // §18.2 secrets scan: flag secrets in the updated transcript (Phase 3)
@@ -301,8 +387,12 @@ async fn update_note(
         note.tags = tags;
     }
 
-    dictated_notes::update_note(&conn, &note)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Update error: {}", e)))?;
+    dictated_notes::update_note(&conn, &note).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Update error: {}", e),
+        )
+    })?;
 
     Ok(Json(note))
 }
@@ -332,23 +422,38 @@ async fn redact_words(
     let valid_id = ValidStitchId::parse(&stitch_id).map_err(id_validators::rejection)?;
 
     let db_path = fleet::db_path();
-    let conn = rusqlite::Connection::open(&db_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {}", e)))?;
+    let conn = rusqlite::Connection::open(&db_path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("DB error: {}", e),
+        )
+    })?;
 
     let note = dictated_notes::get_note(&conn, valid_id.as_str())
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Query error: {}", e)))?
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Query error: {}", e),
+            )
+        })?
         .ok_or_else(|| (StatusCode::NOT_FOUND, "Note not found".to_string()))?;
 
     // Get project for audit logging
-    let project: Option<String> = conn.query_row(
-        "SELECT project FROM stitches WHERE id = ?",
-        params![valid_id.as_str()],
-        |row| row.get(0),
-    ).ok();
+    let project: Option<String> = conn
+        .query_row(
+            "SELECT project FROM stitches WHERE id = ?",
+            params![valid_id.as_str()],
+            |row| row.get(0),
+        )
+        .ok();
 
     // Get the audio path
-    let audio_path = dictated_notes::audio_path(&valid_id, &note.audio_filename)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Audio path error: {}", e)))?;
+    let audio_path = dictated_notes::audio_path(&valid_id, &note.audio_filename).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Audio path error: {}", e),
+        )
+    })?;
 
     // Perform atomic redaction: validates indices, generates audio, reconstructs transcript
     let (all_redacted, redacted_transcript) = crate::audio_redaction::atomic_redact_words(
@@ -356,13 +461,17 @@ async fn redact_words(
         &note.transcript_words,
         &note.redacted_words,
         &req.word_indices,
-    ).map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Audio redaction failed: {}", e)))?;
+    )
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Audio redaction failed: {}", e),
+        )
+    })?;
 
     // Collect newly redacted words for audit log (those not in existing redacted_words)
-    let existing_indices: std::collections::HashSet<usize> = note.redacted_words
-        .iter()
-        .map(|rw| rw.word_index)
-        .collect();
+    let existing_indices: std::collections::HashSet<usize> =
+        note.redacted_words.iter().map(|rw| rw.word_index).collect();
     let newly_redacted: Vec<&dictated_notes::RedactedWord> = all_redacted
         .iter()
         .filter(|rw| !existing_indices.contains(&rw.word_index))
@@ -389,8 +498,12 @@ async fn redact_words(
         ..note
     };
 
-    dictated_notes::update_note(&conn, &updated_note)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Update error: {}", e)))?;
+    dictated_notes::update_note(&conn, &updated_note).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Update error: {}", e),
+        )
+    })?;
 
     // Write audit log entry (§18.2) - reversible only from audit log
     let _ = fleet::write_audit_row(

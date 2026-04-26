@@ -11,7 +11,7 @@
 
 use anyhow::{Context, Result};
 use chrono::{NaiveDate, Utc};
-use hoop_schema::{ParsedSession, ParsedSessionKind, ParsedSessionTotalUsage, MessageUsage};
+use hoop_schema::{MessageUsage, ParsedSession, ParsedSessionKind, ParsedSessionTotalUsage};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -70,8 +70,7 @@ struct PricingConfigInternal {
 
 impl Default for PricingConfigInternal {
     fn default() -> Self {
-        serde_yaml::from_str(DEFAULT_PRICING_YAML)
-            .expect("Default pricing YAML should be valid")
+        serde_yaml::from_str(DEFAULT_PRICING_YAML).expect("Default pricing YAML should be valid")
     }
 }
 
@@ -150,7 +149,10 @@ impl CostAggregator {
     /// Load pricing configuration from file
     fn load_pricing(path: &Path) -> Result<PricingConfigInternal> {
         if !path.exists() {
-            info!("Pricing config not found at {}, using defaults", path.display());
+            info!(
+                "Pricing config not found at {}, using defaults",
+                path.display()
+            );
             return Ok(PricingConfigInternal::default());
         }
 
@@ -166,7 +168,10 @@ impl CostAggregator {
     /// Reload pricing configuration
     pub fn reload_pricing(&mut self) -> Result<()> {
         self.pricing = Self::load_pricing(&self.config_path)?;
-        info!("Reloaded pricing configuration from {}", self.config_path.display());
+        info!(
+            "Reloaded pricing configuration from {}",
+            self.config_path.display()
+        );
         Ok(())
     }
 
@@ -281,7 +286,11 @@ impl CostAggregator {
     ///
     /// Uses the `account_tiers` map in the adapter pricing; falls back to "tier_1".
     /// Returns empty string for non-Codex providers.
-    fn resolve_plan_tier(account_id: &str, provider: &str, pricing: &PricingConfigInternal) -> String {
+    fn resolve_plan_tier(
+        account_id: &str,
+        provider: &str,
+        pricing: &PricingConfigInternal,
+    ) -> String {
         if provider != "codex" || account_id.is_empty() {
             return String::new();
         }
@@ -330,7 +339,10 @@ impl CostAggregator {
     /// For Codex buckets with a non-empty plan_tier the plan-tier pricing table
     /// is consulted first; the regular adapter/model table is used as fallback.
     fn calculate_cost(&self, key: &CostBucketKey, usage: &UsageAccumulator) -> f64 {
-        let adapter_pricing = self.pricing.adapters.get(&key.adapter)
+        let adapter_pricing = self
+            .pricing
+            .adapters
+            .get(&key.adapter)
             .or_else(|| self.pricing.adapters.get("claude"));
 
         if let Some(adapter) = adapter_pricing {
@@ -361,7 +373,10 @@ impl CostAggregator {
             }
         }
 
-        warn!("No pricing found for {}/{} using fallback", key.adapter, key.model);
+        warn!(
+            "No pricing found for {}/{} using fallback",
+            key.adapter, key.model
+        );
         Self::fallback_pricing(usage)
     }
 
@@ -460,7 +475,11 @@ impl CostAggregator {
             }
             let cost = self.calculate_cost(key, usage);
             let entry = map
-                .entry((key.account_id.clone(), key.date.to_string(), key.plan_tier.clone()))
+                .entry((
+                    key.account_id.clone(),
+                    key.date.to_string(),
+                    key.plan_tier.clone(),
+                ))
                 .or_default();
             entry.0 += cost;
             entry.1 += usage.input_tokens;
@@ -490,9 +509,11 @@ impl CostAggregator {
             entry.4 += usage.cache_write_tokens;
         }
         map.into_iter()
-            .map(|((project, date), (cost, input, output, cache_read, cache_write))| {
-                (project, date, cost, input, output, cache_read, cache_write)
-            })
+            .map(
+                |((project, date), (cost, input, output, cache_read, cache_write))| {
+                    (project, date, cost, input, output, cache_read, cache_write)
+                },
+            )
             .collect()
     }
 
@@ -663,7 +684,10 @@ mod tests {
     #[test]
     fn test_extract_project() {
         assert_eq!(CostAggregator::extract_project("/home/coding/HOOP"), "HOOP");
-        assert_eq!(CostAggregator::extract_project("/home/user/projects/my-project"), "my-project");
+        assert_eq!(
+            CostAggregator::extract_project("/home/user/projects/my-project"),
+            "my-project"
+        );
     }
 
     #[test]
@@ -697,8 +721,17 @@ mod tests {
 
     #[test]
     fn test_extract_account_id_non_codex() {
-        assert_eq!(CostAggregator::extract_account_id("/home/user/.codex/sessions/abc.json", "claude"), "");
-        assert_eq!(CostAggregator::extract_account_id("/home/user/.codex-work/sessions/abc.json", "gemini"), "");
+        assert_eq!(
+            CostAggregator::extract_account_id("/home/user/.codex/sessions/abc.json", "claude"),
+            ""
+        );
+        assert_eq!(
+            CostAggregator::extract_account_id(
+                "/home/user/.codex-work/sessions/abc.json",
+                "gemini"
+            ),
+            ""
+        );
     }
 
     #[test]
@@ -716,7 +749,10 @@ mod tests {
             "work"
         );
         assert_eq!(
-            CostAggregator::extract_account_id("/home/user/.codex-personal/sessions/abc.json", "codex"),
+            CostAggregator::extract_account_id(
+                "/home/user/.codex-personal/sessions/abc.json",
+                "codex"
+            ),
             "personal"
         );
     }
@@ -733,16 +769,28 @@ mod tests {
     #[test]
     fn test_resolve_plan_tier_non_codex() {
         let pricing = PricingConfigInternal::default();
-        assert_eq!(CostAggregator::resolve_plan_tier("default", "claude", &pricing), "");
-        assert_eq!(CostAggregator::resolve_plan_tier("default", "gemini", &pricing), "");
+        assert_eq!(
+            CostAggregator::resolve_plan_tier("default", "claude", &pricing),
+            ""
+        );
+        assert_eq!(
+            CostAggregator::resolve_plan_tier("default", "gemini", &pricing),
+            ""
+        );
     }
 
     #[test]
     fn test_resolve_plan_tier_default_fallback() {
         let pricing = PricingConfigInternal::default();
         // "default" account has no explicit mapping → falls back to "tier_1"
-        assert_eq!(CostAggregator::resolve_plan_tier("default", "codex", &pricing), "tier_1");
-        assert_eq!(CostAggregator::resolve_plan_tier("unknown_acct", "codex", &pricing), "tier_1");
+        assert_eq!(
+            CostAggregator::resolve_plan_tier("default", "codex", &pricing),
+            "tier_1"
+        );
+        assert_eq!(
+            CostAggregator::resolve_plan_tier("unknown_acct", "codex", &pricing),
+            "tier_1"
+        );
     }
 
     #[test]
@@ -759,9 +807,18 @@ adapters:
       personal: free
 "#;
         let pricing: PricingConfigInternal = serde_yaml::from_str(yaml).unwrap();
-        assert_eq!(CostAggregator::resolve_plan_tier("work", "codex", &pricing), "tier_2");
-        assert_eq!(CostAggregator::resolve_plan_tier("personal", "codex", &pricing), "free");
-        assert_eq!(CostAggregator::resolve_plan_tier("other", "codex", &pricing), "tier_1");
+        assert_eq!(
+            CostAggregator::resolve_plan_tier("work", "codex", &pricing),
+            "tier_2"
+        );
+        assert_eq!(
+            CostAggregator::resolve_plan_tier("personal", "codex", &pricing),
+            "free"
+        );
+        assert_eq!(
+            CostAggregator::resolve_plan_tier("other", "codex", &pricing),
+            "tier_1"
+        );
     }
 
     #[test]
@@ -791,14 +848,21 @@ adapters:
                 account_id: String::new(),
                 plan_tier: String::new(),
             },
-            UsageAccumulator { input_tokens: 1000, output_tokens: 500, ..Default::default() },
+            UsageAccumulator {
+                input_tokens: 1000,
+                output_tokens: 500,
+                ..Default::default()
+            },
         );
         let agg = CostAggregator {
             config_path: std::path::PathBuf::from("/dev/null"),
             pricing,
             buckets,
         };
-        assert!(agg.get_codex_account_date_rollup().is_empty(), "non-codex buckets should be excluded");
+        assert!(
+            agg.get_codex_account_date_rollup().is_empty(),
+            "non-codex buckets should be excluded"
+        );
     }
 
     #[test]
@@ -818,7 +882,12 @@ adapters:
                 account_id: "work".to_string(),
                 plan_tier: "tier_2".to_string(),
             },
-            UsageAccumulator { input_tokens: 100_000, output_tokens: 50_000, request_count: 5, ..Default::default() },
+            UsageAccumulator {
+                input_tokens: 100_000,
+                output_tokens: 50_000,
+                request_count: 5,
+                ..Default::default()
+            },
         );
         buckets.insert(
             CostBucketKey {
@@ -831,7 +900,12 @@ adapters:
                 account_id: "work".to_string(),
                 plan_tier: "tier_2".to_string(),
             },
-            UsageAccumulator { input_tokens: 50_000, output_tokens: 25_000, request_count: 2, ..Default::default() },
+            UsageAccumulator {
+                input_tokens: 50_000,
+                output_tokens: 25_000,
+                request_count: 2,
+                ..Default::default()
+            },
         );
         let agg = CostAggregator {
             config_path: std::path::PathBuf::from("/dev/null"),
@@ -839,7 +913,11 @@ adapters:
             buckets,
         };
         let rows = agg.get_codex_account_date_rollup();
-        assert_eq!(rows.len(), 1, "two buckets for same (account, date, tier) should merge into one row");
+        assert_eq!(
+            rows.len(),
+            1,
+            "two buckets for same (account, date, tier) should merge into one row"
+        );
         let (account_id, date_str, plan_tier, _cost, input, output) = &rows[0];
         assert_eq!(account_id, "work");
         assert_eq!(date_str, "2026-04-24");

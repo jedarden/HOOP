@@ -111,8 +111,8 @@ pub async fn run(project: &str, dry_run: bool) -> Result<()> {
     }
 
     // 4. Read saved file
-    let contents = std::fs::read_to_string(&tmp_path)
-        .context("Failed to read draft file after editing")?;
+    let contents =
+        std::fs::read_to_string(&tmp_path).context("Failed to read draft file after editing")?;
 
     // 5. Parse and validate YAML frontmatter
     let fm = parse_frontmatter(&contents)?;
@@ -160,7 +160,10 @@ pub async fn run(project: &str, dry_run: bool) -> Result<()> {
         bail!("Daemon returned {}: {}", http_status, err_body);
     }
 
-    let resp_text = resp.text().await.context("Failed to read daemon response")?;
+    let resp_text = resp
+        .text()
+        .await
+        .context("Failed to read daemon response")?;
     let created: CreateDraftResponse =
         serde_json::from_str(&resp_text).context("Failed to parse daemon response")?;
 

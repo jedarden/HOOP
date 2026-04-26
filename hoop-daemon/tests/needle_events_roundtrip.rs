@@ -63,14 +63,13 @@ fn events_fixture_covers_all_event_types() {
         .expect("testrepo/.beads/events.jsonl must be readable");
 
     let required = [
-        "claim", "dispatch", "complete", "fail", "release",
-        "timeout", "crash", "close", "update",
+        "claim", "dispatch", "complete", "fail", "release", "timeout", "crash", "close", "update",
     ];
 
     for event_type in required {
-        let found = content.lines().any(|l| {
-            l.contains(&format!(r#""event":"{event_type}""#))
-        });
+        let found = content
+            .lines()
+            .any(|l| l.contains(&format!(r#""event":"{event_type}""#)));
         assert!(
             found,
             "fixture must contain at least one '{event_type}' event — add one to testrepo/.beads/events.jsonl"
@@ -85,9 +84,9 @@ fn heartbeats_fixture_covers_all_states() {
         .expect("testrepo/.beads/heartbeats.jsonl must be readable");
 
     for state in ["idle", "executing", "knot"] {
-        let found = content.lines().any(|l| {
-            l.contains(&format!(r#""state":"{state}""#))
-        });
+        let found = content
+            .lines()
+            .any(|l| l.contains(&format!(r#""state":"{state}""#)));
         assert!(
             found,
             "fixture must contain at least one '{state}' heartbeat — add one to testrepo/.beads/heartbeats.jsonl"
@@ -100,15 +99,24 @@ fn heartbeats_fixture_covers_all_states() {
 #[test]
 fn claim_event_parses_with_strand() {
     let content = fs::read_to_string(events_fixture_path()).unwrap();
-    let line = content.lines()
+    let line = content
+        .lines()
         .find(|l| l.contains(r#""event":"claim""#))
         .expect("fixture must have a claim event");
 
     match parse_event(line) {
-        NeedleEvent::Claim { worker, bead, strand, .. } => {
+        NeedleEvent::Claim {
+            worker,
+            bead,
+            strand,
+            ..
+        } => {
             assert!(!worker.is_empty(), "claim: worker must be non-empty");
             assert!(bead.starts_with("bd-"), "claim: bead must start with 'bd-'");
-            assert!(strand.is_some(), "claim in fixture should include strand field");
+            assert!(
+                strand.is_some(),
+                "claim in fixture should include strand field"
+            );
         }
         other => panic!("Expected Claim, got {other:?}"),
     }
@@ -117,15 +125,28 @@ fn claim_event_parses_with_strand() {
 #[test]
 fn dispatch_event_parses_adapter_and_model() {
     let content = fs::read_to_string(events_fixture_path()).unwrap();
-    let line = content.lines()
+    let line = content
+        .lines()
         .find(|l| l.contains(r#""event":"dispatch""#))
         .expect("fixture must have a dispatch event");
 
     match parse_event(line) {
-        NeedleEvent::Dispatch { worker, bead, adapter, model, .. } => {
+        NeedleEvent::Dispatch {
+            worker,
+            bead,
+            adapter,
+            model,
+            ..
+        } => {
             assert!(!worker.is_empty(), "dispatch: worker must be non-empty");
-            assert!(bead.starts_with("bd-"), "dispatch: bead must start with 'bd-'");
-            assert!(adapter.is_some(), "dispatch in fixture should include adapter");
+            assert!(
+                bead.starts_with("bd-"),
+                "dispatch: bead must start with 'bd-'"
+            );
+            assert!(
+                adapter.is_some(),
+                "dispatch in fixture should include adapter"
+            );
             assert!(model.is_some(), "dispatch in fixture should include model");
         }
         other => panic!("Expected Dispatch, got {other:?}"),
@@ -135,17 +156,37 @@ fn dispatch_event_parses_adapter_and_model() {
 #[test]
 fn complete_event_parses_outcome_and_duration() {
     let content = fs::read_to_string(events_fixture_path()).unwrap();
-    let line = content.lines()
+    let line = content
+        .lines()
         .find(|l| l.contains(r#""event":"complete""#))
         .expect("fixture must have a complete event");
 
     match parse_event(line) {
-        NeedleEvent::Complete { worker, bead, outcome, duration_ms, exit_code, .. } => {
+        NeedleEvent::Complete {
+            worker,
+            bead,
+            outcome,
+            duration_ms,
+            exit_code,
+            ..
+        } => {
             assert!(!worker.is_empty(), "complete: worker must be non-empty");
-            assert!(bead.starts_with("bd-"), "complete: bead must start with 'bd-'");
-            assert!(outcome.is_some(), "complete in fixture should include outcome");
-            assert!(duration_ms.is_some(), "complete in fixture should include duration_ms");
-            assert!(exit_code.is_some(), "complete in fixture should include exit_code");
+            assert!(
+                bead.starts_with("bd-"),
+                "complete: bead must start with 'bd-'"
+            );
+            assert!(
+                outcome.is_some(),
+                "complete in fixture should include outcome"
+            );
+            assert!(
+                duration_ms.is_some(),
+                "complete in fixture should include duration_ms"
+            );
+            assert!(
+                exit_code.is_some(),
+                "complete in fixture should include exit_code"
+            );
         }
         other => panic!("Expected Complete, got {other:?}"),
     }
@@ -154,16 +195,26 @@ fn complete_event_parses_outcome_and_duration() {
 #[test]
 fn fail_event_parses_error_and_duration() {
     let content = fs::read_to_string(events_fixture_path()).unwrap();
-    let line = content.lines()
+    let line = content
+        .lines()
         .find(|l| l.contains(r#""event":"fail""#))
         .expect("fixture must have a fail event");
 
     match parse_event(line) {
-        NeedleEvent::Fail { worker, bead, error, duration_ms, .. } => {
+        NeedleEvent::Fail {
+            worker,
+            bead,
+            error,
+            duration_ms,
+            ..
+        } => {
             assert!(!worker.is_empty(), "fail: worker must be non-empty");
             assert!(bead.starts_with("bd-"), "fail: bead must start with 'bd-'");
             assert!(error.is_some(), "fail in fixture should include error");
-            assert!(duration_ms.is_some(), "fail in fixture should include duration_ms");
+            assert!(
+                duration_ms.is_some(),
+                "fail in fixture should include duration_ms"
+            );
         }
         other => panic!("Expected Fail, got {other:?}"),
     }
@@ -172,14 +223,18 @@ fn fail_event_parses_error_and_duration() {
 #[test]
 fn release_event_parses() {
     let content = fs::read_to_string(events_fixture_path()).unwrap();
-    let line = content.lines()
+    let line = content
+        .lines()
         .find(|l| l.contains(r#""event":"release""#))
         .expect("fixture must have a release event");
 
     match parse_event(line) {
         NeedleEvent::Release { worker, bead, .. } => {
             assert!(!worker.is_empty(), "release: worker must be non-empty");
-            assert!(bead.starts_with("bd-"), "release: bead must start with 'bd-'");
+            assert!(
+                bead.starts_with("bd-"),
+                "release: bead must start with 'bd-'"
+            );
         }
         other => panic!("Expected Release, got {other:?}"),
     }
@@ -188,14 +243,18 @@ fn release_event_parses() {
 #[test]
 fn timeout_event_parses() {
     let content = fs::read_to_string(events_fixture_path()).unwrap();
-    let line = content.lines()
+    let line = content
+        .lines()
         .find(|l| l.contains(r#""event":"timeout""#))
         .expect("fixture must have a timeout event");
 
     match parse_event(line) {
         NeedleEvent::Timeout { worker, bead, .. } => {
             assert!(!worker.is_empty(), "timeout: worker must be non-empty");
-            assert!(bead.starts_with("bd-"), "timeout: bead must start with 'bd-'");
+            assert!(
+                bead.starts_with("bd-"),
+                "timeout: bead must start with 'bd-'"
+            );
         }
         other => panic!("Expected Timeout, got {other:?}"),
     }
@@ -204,15 +263,24 @@ fn timeout_event_parses() {
 #[test]
 fn crash_event_parses_exit_code() {
     let content = fs::read_to_string(events_fixture_path()).unwrap();
-    let line = content.lines()
+    let line = content
+        .lines()
         .find(|l| l.contains(r#""event":"crash""#))
         .expect("fixture must have a crash event");
 
     match parse_event(line) {
-        NeedleEvent::Crash { worker, bead, exit_code, .. } => {
+        NeedleEvent::Crash {
+            worker,
+            bead,
+            exit_code,
+            ..
+        } => {
             assert!(!worker.is_empty(), "crash: worker must be non-empty");
             assert!(bead.starts_with("bd-"), "crash: bead must start with 'bd-'");
-            assert!(exit_code.is_some(), "crash in fixture should include exit_code");
+            assert!(
+                exit_code.is_some(),
+                "crash in fixture should include exit_code"
+            );
         }
         other => panic!("Expected Crash, got {other:?}"),
     }
@@ -257,9 +325,21 @@ fn from_event_produces_some_for_all_fixture_events() {
             i + 1
         );
         let data = data.unwrap();
-        assert!(!data.bead_id.is_empty(), "BeadEventData must have bead_id (line {})", i + 1);
-        assert!(!data.worker.is_empty(), "BeadEventData must have worker (line {})", i + 1);
-        assert!(!data.event_type.is_empty(), "BeadEventData must have event_type (line {})", i + 1);
+        assert!(
+            !data.bead_id.is_empty(),
+            "BeadEventData must have bead_id (line {})",
+            i + 1
+        );
+        assert!(
+            !data.worker.is_empty(),
+            "BeadEventData must have worker (line {})",
+            i + 1
+        );
+        assert!(
+            !data.event_type.is_empty(),
+            "BeadEventData must have event_type (line {})",
+            i + 1
+        );
     }
 }
 
@@ -341,7 +421,8 @@ fn heartbeat_source(line_number: usize) -> LineSource {
 #[test]
 fn heartbeat_executing_state_parses() {
     let content = fs::read_to_string(heartbeats_fixture_path()).unwrap();
-    let line = content.lines()
+    let line = content
+        .lines()
         .find(|l| l.contains(r#""state":"executing""#))
         .expect("fixture must have an executing heartbeat");
 
@@ -351,7 +432,10 @@ fn heartbeat_executing_state_parses() {
     assert!(!hb.worker.is_empty(), "heartbeat: worker must be non-empty");
     match hb.state {
         hoop_daemon::WorkerState::Executing { bead, pid, adapter } => {
-            assert!(bead.starts_with("bd-"), "executing: bead must start with 'bd-'");
+            assert!(
+                bead.starts_with("bd-"),
+                "executing: bead must start with 'bd-'"
+            );
             assert!(pid > 0, "executing: pid must be positive");
             assert!(!adapter.is_empty(), "executing: adapter must be non-empty");
         }
@@ -362,7 +446,8 @@ fn heartbeat_executing_state_parses() {
 #[test]
 fn heartbeat_idle_state_parses() {
     let content = fs::read_to_string(heartbeats_fixture_path()).unwrap();
-    let line = content.lines()
+    let line = content
+        .lines()
         .find(|l| l.contains(r#""state":"idle""#))
         .expect("fixture must have an idle heartbeat");
 
@@ -376,7 +461,8 @@ fn heartbeat_idle_state_parses() {
 #[test]
 fn heartbeat_knot_state_parses() {
     let content = fs::read_to_string(heartbeats_fixture_path()).unwrap();
-    let line = content.lines()
+    let line = content
+        .lines()
         .find(|l| l.contains(r#""state":"knot""#))
         .expect("fixture must have a knot heartbeat");
 
@@ -444,8 +530,10 @@ fn consecutive_heartbeats_per_bead_are_roughly_10s_apart() {
     let content = fs::read_to_string(heartbeats_fixture_path()).unwrap();
 
     // Collect all executing heartbeats, keyed by (worker, bead)
-    let mut per_bead: std::collections::HashMap<(String, String), Vec<chrono::DateTime<chrono::Utc>>> =
-        std::collections::HashMap::new();
+    let mut per_bead: std::collections::HashMap<
+        (String, String),
+        Vec<chrono::DateTime<chrono::Utc>>,
+    > = std::collections::HashMap::new();
 
     for (i, line) in content.lines().enumerate() {
         if line.trim().is_empty() {

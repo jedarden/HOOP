@@ -21,7 +21,10 @@
 //! 4. The startup validation function runs cleanly
 //! 5. Under create-only-write, `create` is allowed but other writes are forbidden
 
-use hoop_daemon::br_verbs::{self, ReadVerb, WriteVerb, is_write_verb, is_forbidden_verb, assert_read_only, assert_create_only};
+use hoop_daemon::br_verbs::{
+    self, assert_create_only, assert_read_only, is_forbidden_verb, is_write_verb, ReadVerb,
+    WriteVerb,
+};
 
 // ---------------------------------------------------------------------------
 // Classification tests
@@ -29,23 +32,46 @@ use hoop_daemon::br_verbs::{self, ReadVerb, WriteVerb, is_write_verb, is_forbidd
 
 #[test]
 fn test_read_verbs_are_not_write_verbs() {
-    for verb in &["list", "get", "status", "--version", "doctor", "log", "show"] {
-        assert!(!is_write_verb(verb), "read verb '{}' classified as write", verb);
+    for verb in &[
+        "list",
+        "get",
+        "status",
+        "--version",
+        "doctor",
+        "log",
+        "show",
+    ] {
+        assert!(
+            !is_write_verb(verb),
+            "read verb '{}' classified as write",
+            verb
+        );
     }
 }
 
 #[test]
 fn test_write_verbs_are_detected() {
     for verb in &["create", "close", "update", "release", "claim", "depend"] {
-        assert!(is_write_verb(verb), "write verb '{}' not classified as write", verb);
+        assert!(
+            is_write_verb(verb),
+            "write verb '{}' not classified as write",
+            verb
+        );
     }
 }
 
 #[test]
 fn test_forbidden_verbs_exclude_create() {
-    assert!(!is_forbidden_verb("create"), "'create' must not be forbidden");
+    assert!(
+        !is_forbidden_verb("create"),
+        "'create' must not be forbidden"
+    );
     for verb in &["close", "update", "release", "claim", "depend"] {
-        assert!(is_forbidden_verb(verb), "verb '{}' should be forbidden", verb);
+        assert!(
+            is_forbidden_verb(verb),
+            "verb '{}' should be forbidden",
+            verb
+        );
     }
 }
 
@@ -55,7 +81,15 @@ fn test_forbidden_verbs_exclude_create() {
 
 #[test]
 fn test_assert_read_only_allows_read_verbs() {
-    for verb in &["list", "get", "status", "--version", "doctor", "log", "show"] {
+    for verb in &[
+        "list",
+        "get",
+        "status",
+        "--version",
+        "doctor",
+        "log",
+        "show",
+    ] {
         assert_read_only(verb);
     }
 }
@@ -107,7 +141,15 @@ fn test_assert_create_only_allows_create() {
 
 #[test]
 fn test_assert_create_only_allows_read_verbs() {
-    for verb in &["list", "get", "status", "--version", "doctor", "log", "show"] {
+    for verb in &[
+        "list",
+        "get",
+        "status",
+        "--version",
+        "doctor",
+        "log",
+        "show",
+    ] {
         assert_create_only(verb);
     }
 }
@@ -317,7 +359,11 @@ fn test_validate_br_subprocess_args_rejects_forbidden_verbs() {
             cmd.arg(verb);
             br_verbs::validate_br_subprocess_args(&cmd);
         });
-        assert!(result.is_err(), "validate_br_subprocess_args should reject '{}'", verb);
+        assert!(
+            result.is_err(),
+            "validate_br_subprocess_args should reject '{}'",
+            verb
+        );
     }
 }
 

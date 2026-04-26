@@ -68,12 +68,18 @@ impl ReadVerb {
 }
 
 #[allow(dead_code)]
-pub const WRITE_VERB_NAMES: &[&str] =
-    &["create", "close", "update", "release", "claim", "depend"];
+pub const WRITE_VERB_NAMES: &[&str] = &["create", "close", "update", "release", "claim", "depend"];
 
 #[allow(dead_code)]
-pub const READ_VERB_NAMES: &[&str] =
-    &["list", "get", "status", "--version", "doctor", "log", "show"];
+pub const READ_VERB_NAMES: &[&str] = &[
+    "list",
+    "get",
+    "status",
+    "--version",
+    "doctor",
+    "log",
+    "show",
+];
 
 pub const FORBIDDEN_WRITE_VERBS: &[&str] = &["close", "update", "release", "claim", "depend"];
 
@@ -181,7 +187,11 @@ pub fn invoke_br_write(verb: WriteVerb, args: &[&str]) -> std::process::Command 
 /// created by the worker (Hook 4 — stitch label inheritance).
 #[allow(dead_code)]
 pub fn extract_stitch_labels(labels: &[String]) -> Vec<String> {
-    labels.iter().filter(|l| l.starts_with("stitch:")).cloned().collect()
+    labels
+        .iter()
+        .filter(|l| l.starts_with("stitch:"))
+        .cloned()
+        .collect()
 }
 
 /// Propagate `stitch:*` labels from a parent bead to a new bead's label list.
@@ -201,13 +211,9 @@ pub fn propagate_stitch_labels(target_labels: &mut Vec<String>, parent_labels: &
 
 pub fn validate_write_invariant() {
     if ZERO_WRITE_ACTIVE {
-        tracing::info!(
-            "write invariant: ZERO-WRITE (phase 1 — no br write verbs at compile time)"
-        );
+        tracing::info!("write invariant: ZERO-WRITE (phase 1 — no br write verbs at compile time)");
     } else if CREATE_ONLY_ACTIVE {
-        tracing::info!(
-            "write invariant: CREATE-ONLY (phase 4+ — only br create at compile time)"
-        );
+        tracing::info!("write invariant: CREATE-ONLY (phase 4+ — only br create at compile time)");
     } else {
         tracing::warn!(
             "write invariant: UNRESTRICTED (no feature flag set — all br verbs reachable)"
@@ -248,7 +254,11 @@ mod tests {
     #[test]
     fn test_read_verb_classification() {
         for verb in READ_VERB_NAMES {
-            assert!(!is_write_verb(verb), "read verb '{}' classified as write", verb);
+            assert!(
+                !is_write_verb(verb),
+                "read verb '{}' classified as write",
+                verb
+            );
         }
     }
 
@@ -420,10 +430,7 @@ mod tests {
 
     #[test]
     fn test_stitch_label_inheritance_single_label() {
-        let parent_labels = vec![
-            "stitch:abc123".to_string(),
-            "urgent".to_string(),
-        ];
+        let parent_labels = vec!["stitch:abc123".to_string(), "urgent".to_string()];
         let mut all_labels: Vec<String> = vec!["tests".to_string()];
         let inherited = extract_stitch_labels(&parent_labels);
         for label in &inherited {
@@ -462,11 +469,15 @@ mod tests {
         let parent_labels = vec!["stitch:abc123".to_string(), "urgent".to_string()];
         let mut target = vec!["follow-up".to_string()];
         propagate_stitch_labels(&mut target, &parent_labels);
-        assert!(target.contains(&"stitch:abc123".to_string()),
-            "worker-created follow-up bead must inherit parent's stitch label");
+        assert!(
+            target.contains(&"stitch:abc123".to_string()),
+            "worker-created follow-up bead must inherit parent's stitch label"
+        );
         assert!(target.contains(&"follow-up".to_string()));
-        assert!(!target.contains(&"urgent".to_string()),
-            "non-stitch labels must not propagate");
+        assert!(
+            !target.contains(&"urgent".to_string()),
+            "non-stitch labels must not propagate"
+        );
     }
 
     #[test]
@@ -478,7 +489,10 @@ mod tests {
         ];
         let mut target: Vec<String> = vec![];
         propagate_stitch_labels(&mut target, &parent_labels);
-        assert_eq!(target, vec!["stitch:abc123", "stitch:def456"],
-            "all stitch labels must propagate to follow-up bead");
+        assert_eq!(
+            target,
+            vec!["stitch:abc123", "stitch:def456"],
+            "all stitch labels must propagate to follow-up bead"
+        );
     }
 }

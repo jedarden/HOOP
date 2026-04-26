@@ -141,9 +141,7 @@ fn run_blame(project_root: &std::path::Path, rel_path: &str) -> anyhow::Result<V
         .into_iter()
         .map(|raw| {
             let bead_id = sha_to_bead.get(&raw.sha).cloned();
-            let stitch_info = bead_id
-                .as_ref()
-                .and_then(|bid| bead_to_stitch.get(bid));
+            let stitch_info = bead_id.as_ref().and_then(|bid| bead_to_stitch.get(bid));
             BlameLine {
                 line_no: raw.line_no,
                 sha: raw.sha,
@@ -203,18 +201,27 @@ fn parse_porcelain_blame(text: &str) -> Vec<RawBlameLine> {
             });
         } else if line.starts_with("author ") && !line.starts_with("author-") {
             cur_author = line[7..].to_string();
-            meta.entry(cur_sha.clone())
-                .and_modify(|e| { if e.0.is_empty() { e.0 = cur_author.clone(); } });
+            meta.entry(cur_sha.clone()).and_modify(|e| {
+                if e.0.is_empty() {
+                    e.0 = cur_author.clone();
+                }
+            });
         } else if line.starts_with("author-time ") {
             if let Ok(unix) = line[12..].trim().parse::<i64>() {
                 cur_ts = format_unix_ts(unix);
-                meta.entry(cur_sha.clone())
-                    .and_modify(|e| { if e.1.is_empty() { e.1 = cur_ts.clone(); } });
+                meta.entry(cur_sha.clone()).and_modify(|e| {
+                    if e.1.is_empty() {
+                        e.1 = cur_ts.clone();
+                    }
+                });
             }
         } else if line.starts_with("summary ") {
             cur_summary = line[8..].to_string();
-            meta.entry(cur_sha.clone())
-                .and_modify(|e| { if e.2.is_empty() { e.2 = cur_summary.clone(); } });
+            meta.entry(cur_sha.clone()).and_modify(|e| {
+                if e.2.is_empty() {
+                    e.2 = cur_summary.clone();
+                }
+            });
         } else {
             // Commit header: <40-char sha> <orig-lineno> <final-lineno> [<count>]
             let parts: Vec<&str> = line.splitn(4, ' ').collect();
@@ -277,9 +284,7 @@ fn lookup_sha_to_bead(shas: &[String]) -> anyhow::Result<HashMap<String, String>
 }
 
 /// Map each bead_id to the most-recently-active Stitch that references it.
-fn lookup_bead_to_stitch(
-    bead_ids: &[String],
-) -> anyhow::Result<HashMap<String, (String, String)>> {
+fn lookup_bead_to_stitch(bead_ids: &[String]) -> anyhow::Result<HashMap<String, (String, String)>> {
     if bead_ids.is_empty() {
         return Ok(HashMap::new());
     }

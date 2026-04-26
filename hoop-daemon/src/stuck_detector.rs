@@ -34,6 +34,12 @@ const DEFAULT_MAX_RUNTIME_SECS: u64 = 3600;
 /// Default content-seen grace: extended idle tolerance after content (600s = 10 minutes)
 const DEFAULT_CONTENT_SEEN_GRACE_SECS: u64 = 600;
 
+/// Default heartbeat transition silence threshold: no state change for N seconds (300s = 5 minutes)
+const DEFAULT_HEARTBEAT_TRANSITION_THRESHOLD_SECS: u64 = 300;
+
+/// Default retry threshold: max times a worker can retry the same bead (3 attempts)
+const DEFAULT_RETRY_THRESHOLD: u32 = 3;
+
 /// Known worker adapter types for stuck detector configuration
 ///
 /// These correspond to the CLI adapters that workers can use:
@@ -93,6 +99,12 @@ pub struct StuckDetectorConfig {
     /// Extended idle tolerance once real content appeared
     #[serde(default = "default_content_seen_grace")]
     pub content_seen_grace_secs: u64,
+    /// No heartbeat state transition (Live<->Hung) for N seconds
+    #[serde(default = "default_heartbeat_transition_threshold")]
+    pub heartbeat_transition_threshold_secs: u64,
+    /// Maximum retry attempts on the same bead before alerting
+    #[serde(default = "default_retry_threshold")]
+    pub retry_threshold: u32,
 }
 
 impl Default for StuckDetectorConfig {
@@ -101,6 +113,8 @@ impl Default for StuckDetectorConfig {
             idle_timeout_secs: DEFAULT_IDLE_TIMEOUT_SECS,
             max_runtime_secs: DEFAULT_MAX_RUNTIME_SECS,
             content_seen_grace_secs: DEFAULT_CONTENT_SEEN_GRACE_SECS,
+            heartbeat_transition_threshold_secs: DEFAULT_HEARTBEAT_TRANSITION_THRESHOLD_SECS,
+            retry_threshold: DEFAULT_RETRY_THRESHOLD,
         }
     }
 }
@@ -115,6 +129,14 @@ fn default_max_runtime() -> u64 {
 
 fn default_content_seen_grace() -> u64 {
     DEFAULT_CONTENT_SEEN_GRACE_SECS
+}
+
+fn default_heartbeat_transition_threshold() -> u64 {
+    DEFAULT_HEARTBEAT_TRANSITION_THRESHOLD_SECS
+}
+
+fn default_retry_threshold() -> u32 {
+    DEFAULT_RETRY_THRESHOLD
 }
 
 /// Per-worker-type stuck detector configuration map
@@ -153,6 +175,12 @@ pub struct StuckAlert {
     pub saw_content: bool,
     pub reason: StuckReason,
     pub message: String,
+    /// Last heartbeat timestamp (for transition silence detection)
+    pub last_heartbeat_at: Option<DateTime<Utc>>,
+    /// Last heartbeat state transition timestamp
+    pub last_transition_at: Option<DateTime<Utc>>,
+    /// Number of times this bead has been retried
+    pub retry_count: u32,
 }
 
 /// Why the worker was detected as stuck
@@ -164,6 +192,10 @@ pub enum StuckReason {
     MaxRuntimeExceeded,
     /// No events for content_seen_grace_secs after content was seen
     ContentSeenGraceExceeded,
+    /// No heartbeat state transition (Live<->Hung) for heartbeat_transition_threshold_secs
+    HeartbeatTransitionSilence,
+    /// Retrying the same bead more than retry_threshold times
+    RepeatedRetry,
 }
 
 /// Events emitted by the stuck detector
@@ -184,6 +216,14 @@ struct WorkerStuckState {
     last_event_at: Option<DateTime<Utc>>,
     saw_content: bool,
     alert_fired: bool,
+    /// Last heartbeat timestamp
+    last_heartbeat_at: Option<DateTime<Utc>>,
+    /// Last heartbeat state transition timestamp (Live<->Hung)
+    last_transition_at: Option<DateTime<Utc>>,
+    /// Retry count per bead: maps bead ID to number of retries
+    retry_count: u32,
+    /// Previous bead for detecting retries (when worker starts a new bead, check if it's the same as before)
+    previous_bead: Option<String>,
 }
 
 impl Default for WorkerStuckState {
@@ -195,6 +235,10 @@ impl Default for WorkerStuckState {
             last_event_at: None,
             saw_content: false,
             alert_fired: false,
+            last_heartbeat_at: None,
+            last_transition_at: None,
+            retry_count: 0,
+            previous_bead: None,
         }
     }
 }
@@ -278,6 +322,16 @@ impl StuckDetector {
         let mut guard = self.state.lock().unwrap();
         let state = guard.entry(worker.to_string()).or_default();
 
+        // Check if this is a retry (same bead as before)
+        let is_retry = state.previous_bead.as_ref() == Some(bead);
+        let retry_count = if is_retry {
+            state.retry_count + 1
+        } else {
+            // New bead, reset retry count
+            state.previous_bead = Some(bead.to_string());
+            1 // First attempt
+        };
+
         // Reset state for new bead
         state.bead = Some(bead.to_string());
         state.adapter = adapter.map(|s| s.to_string());
@@ -285,10 +339,11 @@ impl StuckDetector {
         state.last_event_at = Some(started_at);
         state.saw_content = false;
         state.alert_fired = false;
+        state.retry_count = retry_count;
 
         debug!(
-            "Worker {} started bead {} at {} (adapter: {:?})",
-            worker, bead, started_at, state.adapter
+            "Worker {} started bead {} at {} (adapter: {:?}, attempt: {})",
+            worker, bead, started_at, state.adapter, retry_count
         );
     }
 
@@ -332,6 +387,43 @@ impl StuckDetector {
         debug!("Worker {} completed, removed from stuck detector", worker);
     }
 
+    /// Called when a heartbeat state transition occurs
+    ///
+    /// This tracks liveness transitions (Live<->Hung) to detect workers that
+    /// are stuck in a state with no transitions.
+    pub fn on_heartbeat_state_transition(
+        &self,
+        worker: &str,
+        heartbeat_at: DateTime<Utc>,
+        _old_state: crate::heartbeats::WorkerLiveness,
+        _new_state: crate::heartbeats::WorkerLiveness,
+    ) {
+        let mut guard = self.state.lock().unwrap();
+        let state = guard.entry(worker.to_string()).or_default();
+
+        // Update last heartbeat and transition timestamps
+        state.last_heartbeat_at = Some(heartbeat_at);
+        state.last_transition_at = Some(heartbeat_at);
+
+        debug!(
+            "Worker {} heartbeat transition at {}: {:?} -> {:?}",
+            worker, heartbeat_at, _old_state, _new_state
+        );
+    }
+
+    /// Called when a heartbeat is received (no state change)
+    ///
+    /// This updates the last heartbeat timestamp without updating the transition time.
+    pub fn on_heartbeat(&self, worker: &str, heartbeat_at: DateTime<Utc>) {
+        let mut guard = self.state.lock().unwrap();
+        let state = guard.entry(worker.to_string()).or_default();
+
+        // Only update last heartbeat, not transition time
+        state.last_heartbeat_at = Some(heartbeat_at);
+
+        debug!("Worker {} heartbeat at {}", worker, heartbeat_at);
+    }
+
     /// Check for stuck workers (called periodically by supervisor)
     pub fn check_stuck_workers(&self) {
         let mut guard = self.state.lock().unwrap();
@@ -366,7 +458,106 @@ impl StuckDetector {
             };
 
             // Check for stuck conditions
-            let alert = if idle_secs >= idle_threshold {
+            // 1. Check retry threshold first (most specific)
+            let alert = if state.retry_count > config.retry_threshold {
+                let transition_secs = if let Some(ts) = state.last_transition_at {
+                    (now - ts).num_seconds().max(0)
+                } else {
+                    0
+                };
+                Some(StuckAlert {
+                    worker: worker.clone(),
+                    bead: bead.clone(),
+                    started_at,
+                    last_event_at,
+                    elapsed_secs: elapsed_secs as i64,
+                    idle_secs: idle_secs as i64,
+                    saw_content: state.saw_content,
+                    reason: StuckReason::RepeatedRetry,
+                    message: format!(
+                        "Worker '{}' on bead '{}' has retried {} times (threshold: {}, adapter: {})",
+                        worker, bead, state.retry_count, config.retry_threshold, adapter
+                    ),
+                    last_heartbeat_at: state.last_heartbeat_at,
+                    last_transition_at: state.last_transition_at,
+                    retry_count: state.retry_count,
+                })
+            } else if let Some(last_transition) = state.last_transition_at {
+                // 2. Check heartbeat transition silence
+                let transition_silence_secs = (now - last_transition).num_seconds().max(0) as u64;
+                if transition_silence_secs >= config.heartbeat_transition_threshold_secs {
+                    Some(StuckAlert {
+                        worker: worker.clone(),
+                        bead: bead.clone(),
+                        started_at,
+                        last_event_at,
+                        elapsed_secs: elapsed_secs as i64,
+                        idle_secs: idle_secs as i64,
+                        saw_content: state.saw_content,
+                        reason: StuckReason::HeartbeatTransitionSilence,
+                        message: format!(
+                            "Worker '{}' on bead '{}' has no heartbeat state transition for {}s (threshold: {}s, adapter: {})",
+                            worker, bead, transition_silence_secs, config.heartbeat_transition_threshold_secs, adapter
+                        ),
+                        last_heartbeat_at: state.last_heartbeat_at,
+                        last_transition_at: state.last_transition_at,
+                        retry_count: state.retry_count,
+                    })
+                } else if idle_secs >= idle_threshold {
+                    // 3. Check idle timeout (original logic)
+                    Some(StuckAlert {
+                        worker: worker.clone(),
+                        bead: bead.clone(),
+                        started_at,
+                        last_event_at,
+                        elapsed_secs: elapsed_secs as i64,
+                        idle_secs: idle_secs as i64,
+                        saw_content: state.saw_content,
+                        reason: if state.saw_content {
+                            StuckReason::ContentSeenGraceExceeded
+                        } else {
+                            StuckReason::IdleTimeout
+                        },
+                        message: format!(
+                            "Worker '{}' on bead '{}' has been idle for {}s (threshold: {}s, adapter: {}). {}",
+                            worker,
+                            bead,
+                            idle_secs,
+                            idle_threshold,
+                            adapter,
+                            if state.saw_content {
+                                "Content was seen, using extended grace period"
+                            } else {
+                                "No content seen yet"
+                            }
+                        ),
+                        last_heartbeat_at: state.last_heartbeat_at,
+                        last_transition_at: state.last_transition_at,
+                        retry_count: state.retry_count,
+                    })
+                } else if elapsed_secs >= config.max_runtime_secs {
+                    Some(StuckAlert {
+                        worker: worker.clone(),
+                        bead: bead.clone(),
+                        started_at,
+                        last_event_at,
+                        elapsed_secs: elapsed_secs as i64,
+                        idle_secs: idle_secs as i64,
+                        saw_content: state.saw_content,
+                        reason: StuckReason::MaxRuntimeExceeded,
+                        message: format!(
+                            "Worker '{}' on bead '{}' exceeded max runtime of {}s (elapsed: {}s, adapter: {})",
+                            worker, bead, config.max_runtime_secs, elapsed_secs, adapter
+                        ),
+                        last_heartbeat_at: state.last_heartbeat_at,
+                        last_transition_at: state.last_transition_at,
+                        retry_count: state.retry_count,
+                    })
+                } else {
+                    None
+                }
+            } else if idle_secs >= idle_threshold {
+                // No transition yet, fall back to idle timeout check
                 Some(StuckAlert {
                     worker: worker.clone(),
                     bead: bead.clone(),
@@ -393,6 +584,9 @@ impl StuckDetector {
                             "No content seen yet"
                         }
                     ),
+                    last_heartbeat_at: state.last_heartbeat_at,
+                    last_transition_at: state.last_transition_at,
+                    retry_count: state.retry_count,
                 })
             } else if elapsed_secs >= config.max_runtime_secs {
                 Some(StuckAlert {
@@ -408,6 +602,9 @@ impl StuckDetector {
                         "Worker '{}' on bead '{}' exceeded max runtime of {}s (elapsed: {}s, adapter: {})",
                         worker, bead, config.max_runtime_secs, elapsed_secs, adapter
                     ),
+                    last_heartbeat_at: state.last_heartbeat_at,
+                    last_transition_at: state.last_transition_at,
+                    retry_count: state.retry_count,
                 })
             } else {
                 None

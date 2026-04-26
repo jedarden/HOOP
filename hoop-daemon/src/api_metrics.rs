@@ -192,8 +192,18 @@ async fn append_scrape_time_metrics(out: &mut String, state: &DaemonState) {
         .filter(|w| matches!(w.state, WorkerDisplayState::Knot { .. }))
         .count() as u64;
 
-    push_gauge_u64(out, "hoop_workers_live", "Workers with a fresh heartbeat.", live);
-    push_gauge_u64(out, "hoop_workers_hung", "Workers whose heartbeat is stale.", hung);
+    push_gauge_u64(
+        out,
+        "hoop_workers_live",
+        "Workers with a fresh heartbeat.",
+        live,
+    );
+    push_gauge_u64(
+        out,
+        "hoop_workers_hung",
+        "Workers whose heartbeat is stale.",
+        hung,
+    );
     push_gauge_u64(out, "hoop_workers_dead", "Workers presumed dead.", dead);
     push_gauge_u64(
         out,
@@ -211,18 +221,36 @@ async fn append_scrape_time_metrics(out: &mut String, state: &DaemonState) {
     // ── §16.4 Open Stitch / bead counts ───────────────────────────────────
     let (open_count, total_count) = {
         let beads = state.beads.read().unwrap();
-        let open = beads.iter().filter(|b| b.status == BeadStatus::Open).count() as u64;
+        let open = beads
+            .iter()
+            .filter(|b| b.status == BeadStatus::Open)
+            .count() as u64;
         (open, beads.len() as u64)
     };
-    push_gauge_u64(out, "hoop_open_stitches", "Number of currently open Stitches.", open_count);
-    push_gauge_u64(out, "hoop_total_beads", "Total beads known to the daemon.", total_count);
+    push_gauge_u64(
+        out,
+        "hoop_open_stitches",
+        "Number of currently open Stitches.",
+        open_count,
+    );
+    push_gauge_u64(
+        out,
+        "hoop_total_beads",
+        "Total beads known to the daemon.",
+        total_count,
+    );
 
     // ── §16.6 Storage: fleet.db sizes ─────────────────────────────────────
     let fleet_db = crate::fleet::db_path();
     let db_bytes = file_size_bytes(&fleet_db);
     let wal_bytes = file_size_bytes(&wal_path(&fleet_db));
 
-    push_gauge_u64(out, "hoop_fleet_db_size_bytes", "fleet.db file size in bytes.", db_bytes);
+    push_gauge_u64(
+        out,
+        "hoop_fleet_db_size_bytes",
+        "fleet.db file size in bytes.",
+        db_bytes,
+    );
     push_gauge_u64(
         out,
         "hoop_fleet_db_wal_size_bytes",
@@ -365,7 +393,10 @@ async fn debug_state(State(state): State<DaemonState>) -> Json<DebugStateRespons
     let (open_stitches, total_beads) = {
         let beads = state.beads.read().unwrap();
         (
-            beads.iter().filter(|b| b.status == BeadStatus::Open).count(),
+            beads
+                .iter()
+                .filter(|b| b.status == BeadStatus::Open)
+                .count(),
             beads.len(),
         )
     };
@@ -438,7 +469,11 @@ async fn debug_state(State(state): State<DaemonState>) -> Json<DebugStateRespons
             .iter()
             .filter_map(|c| {
                 let (worker, bead, strand) = match &c.worker_metadata {
-                    Some(meta) => (Some(meta.worker.clone()), Some(meta.bead.clone()), meta.strand.clone()),
+                    Some(meta) => (
+                        Some(meta.worker.clone()),
+                        Some(meta.bead.clone()),
+                        meta.strand.clone(),
+                    ),
                     None => (None, None, None),
                 };
                 // Only include sessions that have a worker binding (the alias table
@@ -465,9 +500,11 @@ async fn debug_state(State(state): State<DaemonState>) -> Json<DebugStateRespons
     let backup_timestamps = BackupTimestamps {
         last_success_unix: backup_ts,
         last_success_iso: if backup_ts > 0 {
-            Some(chrono::DateTime::from_timestamp(backup_ts, 0)
-                .map(|dt| dt.to_rfc3339())
-                .unwrap_or_default())
+            Some(
+                chrono::DateTime::from_timestamp(backup_ts, 0)
+                    .map(|dt| dt.to_rfc3339())
+                    .unwrap_or_default(),
+            )
         } else {
             None
         },
@@ -611,10 +648,7 @@ fn file_size_bytes(path: &Path) -> u64 {
 /// Compute the SQLite WAL path for `db_path` (appends `-wal` to the extension).
 /// For `fleet.db` this produces `fleet.db-wal`.
 fn wal_path(db_path: &Path) -> std::path::PathBuf {
-    let ext = db_path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("db");
+    let ext = db_path.extension().and_then(|e| e.to_str()).unwrap_or("db");
     let mut p = db_path.to_path_buf();
     p.set_extension(format!("{ext}-wal"));
     p
@@ -726,7 +760,10 @@ mod tests {
         let workers = json["workers"].as_array().expect("workers array");
         assert_eq!(workers.len(), 1);
         assert_eq!(workers[0]["name"], "worker-alpha");
-        assert_eq!(workers[0]["state"], "Executing { bead: \"hoop-ttb.1\", adapter: \"claude\" }");
+        assert_eq!(
+            workers[0]["state"],
+            "Executing { bead: \"hoop-ttb.1\", adapter: \"claude\" }"
+        );
         assert_eq!(workers[0]["liveness"], "Live");
         assert_eq!(workers[0]["last_heartbeat"], "2024-01-01T00:00:00Z");
         assert_eq!(workers[0]["heartbeat_age_secs"], 3);
@@ -739,7 +776,9 @@ mod tests {
         assert_eq!(pids[0]["pid"], 12345);
 
         // ── active_claims ────────────────────────────────────────────────────
-        let claims = json["active_claims"].as_array().expect("active_claims array");
+        let claims = json["active_claims"]
+            .as_array()
+            .expect("active_claims array");
         assert_eq!(claims.len(), 1);
         assert_eq!(claims[0]["worker"], "worker-alpha");
         assert_eq!(claims[0]["bead"], "hoop-ttb.1");
@@ -754,7 +793,9 @@ mod tests {
         assert_eq!(ws[0]["connected_secs"], 10);
 
         // ── session_alias_table ──────────────────────────────────────────────
-        let aliases = json["session_alias_table"].as_array().expect("session_alias_table array");
+        let aliases = json["session_alias_table"]
+            .as_array()
+            .expect("session_alias_table array");
         assert_eq!(aliases.len(), 1);
         assert_eq!(aliases[0]["session_id"], "sess-abc");
         assert_eq!(aliases[0]["provider"], "claude");
@@ -827,11 +868,17 @@ mod tests {
 
         // Worker pid omitted when None
         let worker = &json["workers"][0];
-        assert!(worker.get("pid").is_none(), "pid should be omitted when None");
+        assert!(
+            worker.get("pid").is_none(),
+            "pid should be omitted when None"
+        );
 
         // Claim pid omitted when None
         let claim = &json["active_claims"][0];
-        assert!(claim.get("pid").is_none(), "claim pid should be omitted when None");
+        assert!(
+            claim.get("pid").is_none(),
+            "claim pid should be omitted when None"
+        );
 
         // Session alias optional fields omitted
         let alias = &json["session_alias_table"][0];
@@ -941,16 +988,22 @@ mod tests {
 
         // Validate array fields are arrays
         for array_field in &[
-            "workers", "worker_pids", "active_claims", "ws_clients",
-            "session_alias_table", "projects",
+            "workers",
+            "worker_pids",
+            "active_claims",
+            "ws_clients",
+            "session_alias_table",
+            "projects",
         ] {
             assert!(json[array_field].is_array(), "{array_field} must be array");
         }
 
         // Validate integer fields
         for int_field in &[
-            "fleet_db_size_bytes", "fleet_db_wal_size_bytes",
-            "open_stitches", "total_beads",
+            "fleet_db_size_bytes",
+            "fleet_db_wal_size_bytes",
+            "open_stitches",
+            "total_beads",
         ] {
             assert!(json[int_field].is_number(), "{int_field} must be number");
         }
@@ -973,12 +1026,26 @@ mod tests {
             .collect();
 
         let handler_fields: std::collections::HashSet<&str> = [
-            "schema_version", "uptime_secs", "version", "config_hash",
-            "bind_addr", "workers", "worker_pids", "active_claims",
-            "ws_clients", "session_alias_table", "backup_timestamps",
-            "fleet_db_path", "fleet_db_size_bytes", "fleet_db_wal_size_bytes",
-            "open_stitches", "total_beads", "projects",
-        ].into_iter().collect();
+            "schema_version",
+            "uptime_secs",
+            "version",
+            "config_hash",
+            "bind_addr",
+            "workers",
+            "worker_pids",
+            "active_claims",
+            "ws_clients",
+            "session_alias_table",
+            "backup_timestamps",
+            "fleet_db_path",
+            "fleet_db_size_bytes",
+            "fleet_db_wal_size_bytes",
+            "open_stitches",
+            "total_beads",
+            "projects",
+        ]
+        .into_iter()
+        .collect();
 
         // Handler → schema: every field the handler produces must be in the schema
         for field in &handler_fields {
@@ -1039,7 +1106,13 @@ mod tests {
         );
 
         // Array item objects
-        for array_field in &["workers", "worker_pids", "active_claims", "ws_clients", "session_alias_table"] {
+        for array_field in &[
+            "workers",
+            "worker_pids",
+            "active_claims",
+            "ws_clients",
+            "session_alias_table",
+        ] {
             assert_eq!(
                 schema["properties"][*array_field]["items"]["additionalProperties"].as_bool(),
                 Some(false),

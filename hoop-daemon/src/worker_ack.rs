@@ -135,9 +135,8 @@ impl WorkerAckMonitor {
     /// Start the directory watcher and scan any pre-existing ack files.
     pub fn start(&mut self) -> Result<()> {
         if !self.ack_dir.exists() {
-            std::fs::create_dir_all(&self.ack_dir).with_context(|| {
-                format!("Failed to create ack dir {}", self.ack_dir.display())
-            })?;
+            std::fs::create_dir_all(&self.ack_dir)
+                .with_context(|| format!("Failed to create ack dir {}", self.ack_dir.display()))?;
         }
 
         // Load any ack files that existed before the daemon started.
@@ -147,8 +146,8 @@ impl WorkerAckMonitor {
         let event_tx = self.event_tx.clone();
         let state = self.state.clone();
 
-        let mut watcher = notify::recommended_watcher(
-            move |res: Result<notify::Event, notify::Error>| {
+        let mut watcher =
+            notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
                 if let Ok(event) = res {
                     use notify::EventKind::*;
                     if matches!(event.kind, Create(_) | Modify(_)) {
@@ -161,15 +160,12 @@ impl WorkerAckMonitor {
                         }
                     }
                 }
-            },
-        )
-        .context("Failed to create ack directory watcher")?;
+            })
+            .context("Failed to create ack directory watcher")?;
 
         watcher
             .watch(&self.ack_dir, RecursiveMode::NonRecursive)
-            .with_context(|| {
-                format!("Failed to watch ack dir {}", self.ack_dir.display())
-            })?;
+            .with_context(|| format!("Failed to watch ack dir {}", self.ack_dir.display()))?;
 
         self._watcher = Some(watcher);
         info!("Worker ack monitor watching {}", self.ack_dir.display());
@@ -181,9 +177,8 @@ impl WorkerAckMonitor {
         if !self.ack_dir.exists() {
             return Ok(());
         }
-        let entries = std::fs::read_dir(&self.ack_dir).with_context(|| {
-            format!("Failed to read ack dir {}", self.ack_dir.display())
-        })?;
+        let entries = std::fs::read_dir(&self.ack_dir)
+            .with_context(|| format!("Failed to read ack dir {}", self.ack_dir.display()))?;
 
         let mut count = 0usize;
         for entry in entries.flatten() {

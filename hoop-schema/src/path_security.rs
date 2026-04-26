@@ -63,8 +63,9 @@ impl PathAllowlist {
     ///
     /// Accepted root: `~/.hoop/attachments/`
     pub fn for_stitch_attachments() -> std::io::Result<Self> {
-        let home =
-            dirs::home_dir().ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "home directory not found"))?;
+        let home = dirs::home_dir().ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::NotFound, "home directory not found")
+        })?;
         let dir = home.join(".hoop").join("attachments");
         std::fs::create_dir_all(&dir)?;
         let canon = dir.canonicalize()?;
@@ -213,7 +214,10 @@ mod tests {
 
         if link.exists() {
             let result = canonicalize_and_check(&link, &al);
-            assert!(result.is_err(), "symlink escaping allowlist must be rejected");
+            assert!(
+                result.is_err(),
+                "symlink escaping allowlist must be rejected"
+            );
         }
     }
 
@@ -224,7 +228,7 @@ mod tests {
     // validator (before path construction) or by canonicalize_and_check.
 
     use crate::id_validators::{
-        validate_bead_id, validate_stitch_id, validate_worker_name, validate_project_name,
+        validate_bead_id, validate_project_name, validate_stitch_id, validate_worker_name,
     };
 
     /// Vector 1: Basic directory traversal via `../` in bead ID.
@@ -302,7 +306,10 @@ mod tests {
             let file_through_link = link.join("evil.txt");
             // The file may not exist, so canonicalize would fail — either way rejected
             let result = canonicalize_and_check(&file_through_link, &al);
-            assert!(result.is_err(), "path through escaping symlink must be rejected");
+            assert!(
+                result.is_err(),
+                "path through escaping symlink must be rejected"
+            );
         }
     }
 
@@ -329,7 +336,10 @@ mod tests {
 
         if link3.exists() {
             let result = canonicalize_and_check(&link3, &al);
-            assert!(result.is_err(), "nested symlink chain escaping allowlist must be rejected");
+            assert!(
+                result.is_err(),
+                "nested symlink chain escaping allowlist must be rejected"
+            );
         }
     }
 
@@ -373,8 +383,14 @@ mod tests {
         // Even though the ID validators prevent `..` in IDs, defense-in-depth:
         // verify that canonicalize_and_check rejects a hand-crafted path with
         // `..` components that would escape the workspace.
-        let escape_path = tmp.path().join(".beads").join("attachments")
-            .join("..").join("..").join("..").join("tmp");
+        let escape_path = tmp
+            .path()
+            .join(".beads")
+            .join("attachments")
+            .join("..")
+            .join("..")
+            .join("..")
+            .join("tmp");
 
         // This canonicalizes to /tmp which is outside the workspace
         if std::path::Path::new("/tmp").exists() {

@@ -180,7 +180,11 @@ pub enum Content {
     #[serde(rename = "image")]
     Image { data: String, mime_type: String },
     #[serde(rename = "resource")]
-    Resource { uri: String, #[serde(flatten)] _extra: serde_json::Map<String, Value> },
+    Resource {
+        uri: String,
+        #[serde(flatten)]
+        _extra: serde_json::Map<String, Value>,
+    },
 }
 
 impl JsonRpcResponse {

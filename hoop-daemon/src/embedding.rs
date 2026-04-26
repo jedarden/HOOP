@@ -43,6 +43,8 @@ pub trait Embedder: Send + Sync {
     /// Return the canonical tokens for a text (after synonym expansion, stop-word removal).
     /// Used for word-level Jaccard similarity as a complement to embedding cosine similarity.
     fn canonical_tokens(&self, text: &str) -> Vec<String>;
+    /// Return the model name and version for persistence and change detection.
+    fn model_info(&self) -> (String, String);
 }
 
 /// Dimension of transformer embeddings (BGE-small-en-v1.5)
@@ -70,16 +72,20 @@ impl TransformerEmbedder {
         let options = fastembed::TextInitOptions::new(model);
         let model = fastembed::TextEmbedding::try_new(options)
             .map_err(|e| format!("Failed to load embedding model: {}", e))?;
-        Ok(Self { model: std::sync::Mutex::new(model) })
+        Ok(Self {
+            model: std::sync::Mutex::new(model),
+        })
     }
 
     /// Embed multiple texts efficiently (batch processing).
     pub fn embed_batch(&self, texts: &[&str]) -> Result<Vec<Embedding>, String> {
         let mut model = self.model.lock().unwrap();
-        let embeddings = model.embed(texts, None)
+        let embeddings = model
+            .embed(texts, None)
             .map_err(|e| format!("Failed to generate embeddings: {}", e))?;
 
-        embeddings.into_iter()
+        embeddings
+            .into_iter()
             .map(|vec| {
                 let mut arr = [0.0f32; EMBEDDING_DIM];
                 let copy_len = TRANSFORMER_DIM.min(EMBEDDING_DIM).min(vec.len());
@@ -97,6 +103,10 @@ impl Default for TransformerEmbedder {
 }
 
 impl Embedder for TransformerEmbedder {
+    fn model_info(&self) -> (String, String) {
+        ("bge-small-en-v1.5".to_string(), "default".to_string())
+    }
+
     fn embed(&self, text: &str) -> Embedding {
         if text.trim().is_empty() {
             return [0.0f32; EMBEDDING_DIM];
@@ -176,7 +186,17 @@ const SYNONYM_GROUPS: &[&[&str]] = &[
     &["vpn", "virtual", "private", "network"],
     &["ssl", "secure", "sockets", "tls"],
     &["rpc", "remote", "procedure", "call"],
-    &["cicd", "ci", "cd", "continuous", "integration", "deployment", "pipeline", "ci/cd", "ci-cd"],
+    &[
+        "cicd",
+        "ci",
+        "cd",
+        "continuous",
+        "integration",
+        "deployment",
+        "pipeline",
+        "ci/cd",
+        "ci-cd",
+    ],
     &["redis", "cache"],
     &["http", "https"],
     &["json", "javascript", "object", "notation"],
@@ -184,7 +204,14 @@ const SYNONYM_GROUPS: &[&[&str]] = &[
     &["ui", "user", "interface"],
     &["ux", "user", "experience"],
     // Additional semantic mappings for cross-project dedup
-    &["layer", "tier", "perf", "performance", "optimization", "optimize"],
+    &[
+        "layer",
+        "tier",
+        "perf",
+        "performance",
+        "optimization",
+        "optimize",
+    ],
     &["build", "compile", "artifact"],
 ];
 
@@ -282,16 +309,19 @@ impl Default for NgramEmbedder {
 
 /// Common stop words that dilute semantic signal in short text
 const STOP_WORDS: &[&str] = &[
-    "the", "a", "an", "in", "on", "at", "to", "for", "of", "with", "and",
-    "or", "is", "are", "was", "were", "be", "been", "being", "have", "has",
-    "had", "do", "does", "did", "will", "would", "could", "should", "may",
-    "might", "can", "shall", "this", "that", "these", "those", "it", "its",
-    "from", "by", "as", "but", "not", "no", "nor", "so", "if", "then",
-    "than", "too", "very", "just", "about", "up", "down", "into", "through",
-    "during", "before", "after", "above", "below", "between", "under", "again",
+    "the", "a", "an", "in", "on", "at", "to", "for", "of", "with", "and", "or", "is", "are", "was",
+    "were", "be", "been", "being", "have", "has", "had", "do", "does", "did", "will", "would",
+    "could", "should", "may", "might", "can", "shall", "this", "that", "these", "those", "it",
+    "its", "from", "by", "as", "but", "not", "no", "nor", "so", "if", "then", "than", "too",
+    "very", "just", "about", "up", "down", "into", "through", "during", "before", "after", "above",
+    "below", "between", "under", "again",
 ];
 
 impl Embedder for NgramEmbedder {
+    fn model_info(&self) -> (String, String) {
+        ("ngram-hash".to_string(), format!("dims-{}", self.dims))
+    }
+
     fn embed(&self, text: &str) -> Embedding {
         let mut vec = vec![0.0f32; self.dims];
 
@@ -299,10 +329,7 @@ impl Embedder for NgramEmbedder {
         let raw_tokens: Vec<String> = text
             .to_lowercase()
             .split_whitespace()
-            .map(|s| {
-                s.trim_matches(|c: char| !c.is_alphanumeric())
-                    .to_string()
-            })
+            .map(|s| s.trim_matches(|c: char| !c.is_alphanumeric()).to_string())
             .filter(|s| !s.is_empty())
             .collect();
 
@@ -416,11 +443,7 @@ pub fn jaccard_similarity(tokens_a: &[String], tokens_b: &[String]) -> f64 {
 /// - Jaccard similarity captures word overlap (order-independent)
 ///
 /// The formula is: 0.7 * cosine + 0.3 * jaccard
-pub fn combined_similarity(
-    embedder: &NgramEmbedder,
-    text_a: &str,
-    text_b: &str,
-) -> f64 {
+pub fn combined_similarity(embedder: &NgramEmbedder, text_a: &str, text_b: &str) -> f64 {
     let emb_a = embedder.embed(text_a);
     let emb_b = embedder.embed(text_b);
     let cosine = cosine_similarity(&emb_a, &emb_b);
@@ -444,7 +467,11 @@ mod tests {
         let a = embedder.embed("Fix the authentication bug in login flow");
         let b = embedder.embed("Fix the authentication bug in login flow");
         let sim = cosine_similarity(&a, &b);
-        assert!((sim - 1.0).abs() < 0.001, "identical texts should have sim ~1.0, got {}", sim);
+        assert!(
+            (sim - 1.0).abs() < 0.001,
+            "identical texts should have sim ~1.0, got {}",
+            sim
+        );
     }
 
     #[test]
@@ -453,7 +480,11 @@ mod tests {
         let a = embedder.embed("Fix authentication bug in login flow");
         let b = embedder.embed("Fix auth bug in the login process");
         let sim = cosine_similarity(&a, &b);
-        assert!(sim > 0.75, "similar texts with abbreviation expansion should have sim > 0.75, got {}", sim);
+        assert!(
+            sim > 0.75,
+            "similar texts with abbreviation expansion should have sim > 0.75, got {}",
+            sim
+        );
     }
 
     #[test]
@@ -463,7 +494,11 @@ mod tests {
         let a = embedder.embed("Fix auth bug");
         let b = embedder.embed("Fix authentication bug");
         let sim = cosine_similarity(&a, &b);
-        assert!(sim > 0.85, "synonym canonicalization should boost similarity > 0.85, got {}", sim);
+        assert!(
+            sim > 0.85,
+            "synonym canonicalization should boost similarity > 0.85, got {}",
+            sim
+        );
     }
 
     #[test]
@@ -472,7 +507,11 @@ mod tests {
         let a = embedder.embed("Fix DB connection pool");
         let b = embedder.embed("Fix database connection pool");
         let sim = cosine_similarity(&a, &b);
-        assert!(sim > 0.85, "db→database synonym should boost similarity > 0.85, got {}", sim);
+        assert!(
+            sim > 0.85,
+            "db→database synonym should boost similarity > 0.85, got {}",
+            sim
+        );
     }
 
     #[test]
@@ -481,7 +520,11 @@ mod tests {
         let a = embedder.embed("Fix authentication bug in login flow");
         let b = embedder.embed("Add dark mode support to settings page");
         let sim = cosine_similarity(&a, &b);
-        assert!(sim < 0.5, "unrelated texts should have sim < 0.5, got {}", sim);
+        assert!(
+            sim < 0.5,
+            "unrelated texts should have sim < 0.5, got {}",
+            sim
+        );
     }
 
     #[test]
@@ -508,7 +551,11 @@ mod tests {
         let existing = embedder.embed("Implement user auth with OAuth2 provider");
         let draft = embedder.embed("Implement OAuth2 user authentication provider");
         let sim = cosine_similarity(&existing, &draft);
-        assert!(sim > 0.82, "cross-project duplicate should exceed 0.82 threshold, got {}", sim);
+        assert!(
+            sim > 0.82,
+            "cross-project duplicate should exceed 0.82 threshold, got {}",
+            sim
+        );
     }
 
     #[test]
@@ -527,7 +574,13 @@ mod tests {
             let emb_a = embedder.embed(a);
             let emb_b = embedder.embed(b);
             let sim = cosine_similarity(&emb_a, &emb_b);
-            assert!(sim > 0.75, "synonym pair '{}' vs '{}' should have sim > 0.75, got {}", a, b, sim);
+            assert!(
+                sim > 0.75,
+                "synonym pair '{}' vs '{}' should have sim > 0.75, got {}",
+                a,
+                b,
+                sim
+            );
         }
     }
 
@@ -557,7 +610,11 @@ mod tests {
         let embedder = NgramEmbedder::new();
         let emb = embedder.embed("some text for normalization test");
         let norm: f32 = emb.iter().map(|v| v * v).sum::<f32>().sqrt();
-        assert!((norm - 1.0).abs() < 0.001, "embedding should be L2-normalized, got norm {}", norm);
+        assert!(
+            (norm - 1.0).abs() < 0.001,
+            "embedding should be L2-normalized, got norm {}",
+            norm
+        );
     }
 
     #[test]

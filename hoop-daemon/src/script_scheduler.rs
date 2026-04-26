@@ -9,6 +9,7 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Datelike, Timelike, Utc};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -16,6 +17,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use crate::api_scripts::{discover_scripts, execute_script, OverlapPolicy};
+use crate::fleet::{self, ActionKind, ActionResult};
 use crate::shutdown::ShutdownPhase;
 
 /// Tracking state for a scheduled script
@@ -53,7 +55,10 @@ impl ScriptScheduler {
     ///
     /// Checks every 60 seconds for scripts that should run based on their cron schedule.
     /// Hot-reloads schedule changes on each tick.
-    pub fn start_scheduler(self: Arc<Self>, mut shutdown: tokio::sync::broadcast::Receiver<ShutdownPhase>) {
+    pub fn start_scheduler(
+        self: Arc<Self>,
+        mut shutdown: tokio::sync::broadcast::Receiver<ShutdownPhase>,
+    ) {
         tokio::spawn(async move {
             let mut tick_interval = tokio::time::interval(std::time::Duration::from_secs(60));
             tick_interval.tick().await; // Skip first immediate tick
@@ -104,12 +109,14 @@ impl ScriptScheduler {
         // Update state with current schedule info
         let mut state = this.state.write().await;
         for (name, (schedule, overlap_policy)) in &scheduled {
-            let entry = state.entry(name.clone()).or_insert_with(|| ScriptScheduleState {
-                last_fire: None,
-                next_fire: None,
-                running: false,
-                schedule: Some(schedule.clone()),
-            });
+            let entry = state
+                .entry(name.clone())
+                .or_insert_with(|| ScriptScheduleState {
+                    last_fire: None,
+                    next_fire: None,
+                    running: false,
+                    schedule: Some(schedule.clone()),
+                });
 
             // Update schedule if changed
             entry.schedule = Some(schedule.clone());
@@ -204,12 +211,11 @@ impl ScriptScheduler {
 
         // Run in blocking task
         let script_path = script.path.clone();
-        let result = tokio::task::spawn_blocking(move || {
-            execute_script(&script_path, &[], timeout_secs)
-        })
-        .await
-        .map_err(|e| anyhow::anyhow!("Failed to join script execution task: {}", e))?
-        .map_err(|e| anyhow::anyhow!("{}", e))?;
+        let result =
+            tokio::task::spawn_blocking(move || execute_script(&script_path, &[], timeout_secs))
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to join script execution task: {}", e))?
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
 
         // Update state
         let now = Utc::now();
@@ -367,7 +373,10 @@ mod tests {
 
     #[test]
     fn test_parse_cron_field_star() {
-        assert_eq!(parse_cron_field("*", 0, 59).unwrap(), (0..=59).collect::<Vec<_>>());
+        assert_eq!(
+            parse_cron_field("*", 0, 59).unwrap(),
+            (0..=59).collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -382,7 +391,10 @@ mod tests {
 
     #[test]
     fn test_parse_cron_field_step() {
-        assert_eq!(parse_cron_field("*/15", 0, 59).unwrap(), vec![0, 15, 30, 45]);
+        assert_eq!(
+            parse_cron_field("*/15", 0, 59).unwrap(),
+            vec![0, 15, 30, 45]
+        );
     }
 
     #[test]

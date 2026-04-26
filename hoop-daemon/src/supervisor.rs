@@ -23,7 +23,7 @@ use crate::beads::{BeadEvent, BeadReader, BeadReaderConfig};
 use crate::cost::CostAggregator;
 use crate::events::{BeadEventData, EventTailer, EventTailerConfig, TailerEvent};
 use crate::projects::ProjectsConfig;
-use crate::script_trigger::{EventContext, trigger_matching_scripts};
+use crate::script_trigger::{trigger_matching_scripts, EventContext};
 use crate::sessions::{SessionEvent, SessionTailer, SessionTailerConfig};
 use crate::shutdown::ShutdownPhase;
 use crate::Bead;
@@ -72,7 +72,9 @@ impl ProjectRuntimeState {
     /// Returns the error message if in a failed or error state
     pub fn error(&self) -> Option<&str> {
         match self {
-            Self::Failed { error, .. } | Self::Abandoned { error, .. } | Self::Error { error, .. } => Some(error),
+            Self::Failed { error, .. }
+            | Self::Abandoned { error, .. }
+            | Self::Error { error, .. } => Some(error),
             _ => None,
         }
     }
@@ -201,9 +203,12 @@ impl ProjectSupervisor {
         let mut event_tailer = EventTailer::new(EventTailerConfig {
             replay_on_startup: true,
             ..Default::default()
-        }).context("Failed to create event tailer")?;
+        })
+        .context("Failed to create event tailer")?;
 
-        event_tailer.start().context("Failed to start event tailer")?;
+        event_tailer
+            .start()
+            .context("Failed to start event tailer")?;
 
         // Subscribe to event tailer events and forward to worker registry
         let mut event_rx = event_tailer.subscribe();
@@ -350,7 +355,10 @@ impl ProjectSupervisor {
             if let Some(runtime) = runtimes.get_mut(&name) {
                 // Update workspaces if changed
                 if runtime.workspaces != paths {
-                    info!("Restarting runtime for project {} (workspaces changed)", name);
+                    info!(
+                        "Restarting runtime for project {} (workspaces changed)",
+                        name
+                    );
                     self.stop_runtime(runtime).await;
                     runtime.workspaces = paths.clone();
                     self.start_runtime(runtime)?;
@@ -385,7 +393,12 @@ impl ProjectSupervisor {
         }
 
         // Stop all bead readers
-        let bead_readers = runtime.bead_readers.lock().unwrap().drain(..).collect::<Vec<_>>();
+        let bead_readers = runtime
+            .bead_readers
+            .lock()
+            .unwrap()
+            .drain(..)
+            .collect::<Vec<_>>();
         for mut bead_reader in bead_readers {
             if let Err(e) = bead_reader.stop().await {
                 warn!("Error stopping bead reader for {}: {}", runtime.name, e);
@@ -430,6 +443,7 @@ impl ProjectSupervisor {
         let session_tailer = runtime.session_tailer.clone();
         let bead_readers = runtime.bead_readers.clone();
         let cost_aggregator = self.cost_aggregator.clone();
+        let vector_index = self.vector_index.clone();
         let supervisor = self.clone();
 
         // Create shutdown channel for this runtime
@@ -460,15 +474,25 @@ impl ProjectSupervisor {
                 bead_readers,
                 error_tx,
                 cost_aggregator,
-            ).await;
+                vector_index,
+            )
+            .await;
 
             match result {
                 Ok(()) => {
-                    info!("Project runtime shut down gracefully: {}", project_name_clone);
+                    info!(
+                        "Project runtime shut down gracefully: {}",
+                        project_name_clone
+                    );
                 }
                 Err(e) => {
-                    error!("Project runtime failed: {} - error: {}", project_name_clone, e);
-                    supervisor_clone.handle_failure(&project_name_clone, &e.to_string()).await;
+                    error!(
+                        "Project runtime failed: {} - error: {}",
+                        project_name_clone, e
+                    );
+                    supervisor_clone
+                        .handle_failure(&project_name_clone, &e.to_string())
+                        .await;
                 }
             }
         });
@@ -496,9 +520,9 @@ impl ProjectSupervisor {
     /// Check if an error is permanent (should not trigger auto-restart)
     pub fn is_permanent_error(error: &str) -> bool {
         let error_lower = error.to_lowercase();
-        error_lower.contains("workspace path does not exist") ||
-        error_lower.contains(".beads directory not found") ||
-        error_lower.contains("does not exist")
+        error_lower.contains("workspace path does not exist")
+            || error_lower.contains(".beads directory not found")
+            || error_lower.contains("does not exist")
     }
 
     /// Handle runtime failure with exponential backoff and auto-restart
@@ -558,8 +582,9 @@ impl ProjectSupervisor {
                 }
 
                 // Calculate exponential backoff delay
-                let delay_secs = (BASE_RESTART_DELAY_SECS * 2_u64.pow(runtime.consecutive_failures as u32 - 1))
-                    .min(MAX_RESTART_DELAY_SECS);
+                let delay_secs = (BASE_RESTART_DELAY_SECS
+                    * 2_u64.pow(runtime.consecutive_failures as u32 - 1))
+                .min(MAX_RESTART_DELAY_SECS);
                 let next_restart = Utc::now() + chrono::Duration::seconds(delay_secs as i64);
 
                 runtime.state = ProjectRuntimeState::Failed {
@@ -571,7 +596,10 @@ impl ProjectSupervisor {
 
                 warn!(
                     "Project runtime failed (attempt {}/{}): {} - restarting in {}s",
-                    runtime.consecutive_failures, MAX_CONSECUTIVE_FAILURES, project_name, delay_secs
+                    runtime.consecutive_failures,
+                    MAX_CONSECUTIVE_FAILURES,
+                    project_name,
+                    delay_secs
                 );
 
                 // Send status update
@@ -618,6 +646,7 @@ impl ProjectSupervisor {
         bead_readers_clone: Arc<std::sync::Mutex<Vec<BeadReader>>>,
         error_tx: mpsc::Sender<anyhow::Error>,
         _cost_aggregator: Arc<std::sync::RwLock<CostAggregator>>,
+        vector_index: Arc<std::sync::RwLock<crate::vector_index::VectorIndex>>,
     ) -> Result<()> {
         // Subscribe to shutdown phases
         let mut shutdown_rx = shutdown.subscribe();
@@ -647,18 +676,21 @@ impl ProjectSupervisor {
                 workspace_path: workspace.to_path_buf(),
             };
 
-            let mut bead_reader = BeadReader::new(bead_reader_config)
-                .with_context(|| format!("Failed to create bead reader for {}", workspace.display()))?;
+            let mut bead_reader = BeadReader::new(bead_reader_config).with_context(|| {
+                format!("Failed to create bead reader for {}", workspace.display())
+            })?;
 
             // Replay existing beads
             let issues_path = workspace.join(".beads").join("issues.jsonl");
             if issues_path.exists() {
-                bead_reader.replay_file()
-                    .with_context(|| format!("Failed to replay beads for {}", workspace.display()))?;
+                bead_reader.replay_file().with_context(|| {
+                    format!("Failed to replay beads for {}", workspace.display())
+                })?;
             }
 
-            bead_reader.start()
-                .with_context(|| format!("Failed to start bead reader for {}", workspace.display()))?;
+            bead_reader.start().with_context(|| {
+                format!("Failed to start bead reader for {}", workspace.display())
+            })?;
 
             // Subscribe to bead events
             let mut rx = bead_reader.subscribe();
@@ -676,25 +708,34 @@ impl ProjectSupervisor {
                             // Tag each bead with the project name before merging
                             let new_beads: Vec<Bead> = new_beads
                                 .into_iter()
-                                .map(|mut b| { b.project = project_name_clone.clone(); b })
+                                .map(|mut b| {
+                                    b.project = project_name_clone.clone();
+                                    b
+                                })
                                 .collect();
 
                             // Track which beads were open before this update (for vector index removal)
-                            let old_beads: std::collections::HashSet<String> = beads_clone.read().unwrap()
+                            let old_beads: std::collections::HashSet<String> = beads_clone
+                                .read()
+                                .unwrap()
                                 .iter()
-                                .filter(|b| b.project == project_name_clone && b.status == crate::BeadStatus::Open)
+                                .filter(|b| {
+                                    b.project == project_name_clone
+                                        && b.status == crate::BeadStatus::Open
+                                })
                                 .map(|b| b.id.clone())
                                 .collect();
 
                             // Update shared beads store
                             let mut all_beads = beads_clone.write().unwrap().clone();
-                            let workspace_bead_ids: std::collections::HashSet<String> = new_beads
-                                .iter()
-                                .map(|b| b.id.clone())
-                                .collect();
+                            let workspace_bead_ids: std::collections::HashSet<String> =
+                                new_beads.iter().map(|b| b.id.clone()).collect();
 
                             // Remove old beads from this workspace
-                            all_beads.retain(|b| !workspace_bead_ids.contains(&b.id) || new_beads.iter().any(|nb| nb.id == b.id));
+                            all_beads.retain(|b| {
+                                !workspace_bead_ids.contains(&b.id)
+                                    || new_beads.iter().any(|nb| nb.id == b.id)
+                            });
                             // Add new beads from this workspace
                             all_beads.extend(new_beads.clone());
                             // Sort by created_at descending
@@ -717,8 +758,10 @@ impl ProjectSupervisor {
 
                             // Add new open beads to vector index
                             for bead in &new_beads {
-                                if bead.status == crate::BeadStatus::Open && !old_beads.contains(&bead.id) {
-                                    let item = crate::vector_index::IndexedItem {
+                                if bead.status == crate::BeadStatus::Open
+                                    && !old_beads.contains(&bead.id)
+                                {
+                                    let item = crate::embedding::IndexedItem {
                                         id: bead.id.clone(),
                                         project: bead.project.clone(),
                                         title: bead.title.clone(),
@@ -730,14 +773,21 @@ impl ProjectSupervisor {
                             }
 
                             // Forward to broadcast
-                            let _ = bead_tx_clone.send(BeadEvent::BeadsUpdated { beads: new_beads });
+                            let _ =
+                                bead_tx_clone.send(BeadEvent::BeadsUpdated { beads: new_beads });
 
                             debug!("Beads updated for workspace: {}", workspace_clone.display());
                         }
                         BeadEvent::Error(e) => {
                             error!("Bead reader error for {}: {}", workspace_clone.display(), e);
                             // Send error to runtime via channel
-                            let _ = error_tx_clone.send(anyhow::anyhow!("Bead reader error for {}: {}", workspace_clone.display(), e)).await;
+                            let _ = error_tx_clone
+                                .send(anyhow::anyhow!(
+                                    "Bead reader error for {}: {}",
+                                    workspace_clone.display(),
+                                    e
+                                ))
+                                .await;
                         }
                     }
                 }
@@ -767,8 +817,8 @@ impl ProjectSupervisor {
             enabled_adapters: vec![],
         };
 
-        let mut session_tailer = SessionTailer::new(session_tailer_config)
-            .context("Failed to create session tailer")?;
+        let mut session_tailer =
+            SessionTailer::new(session_tailer_config).context("Failed to create session tailer")?;
 
         // Subscribe to session events
         let mut session_rx = session_tailer.subscribe();
@@ -786,16 +836,26 @@ impl ProjectSupervisor {
                         // Registry will handle this via the WebSocket
                     }
                     SessionEvent::Error(e) => {
-                        error!("Session tailer error for project {}: {}", project_name_for_tailer, e);
+                        error!(
+                            "Session tailer error for project {}: {}",
+                            project_name_for_tailer, e
+                        );
                         // Send error to runtime via channel
-                        let _ = error_tx_clone.send(anyhow::anyhow!("Session tailer error for {}: {}", project_name_for_tailer, e)).await;
+                        let _ = error_tx_clone
+                            .send(anyhow::anyhow!(
+                                "Session tailer error for {}: {}",
+                                project_name_for_tailer,
+                                e
+                            ))
+                            .await;
                     }
                     SessionEvent::TagJoinBound { .. } => {}
                 }
             }
         });
 
-        session_tailer.start()
+        session_tailer
+            .start()
             .context("Failed to start session tailer")?;
 
         info!(
@@ -860,7 +920,10 @@ fn lookup_project_for_bead(
     beads: &Arc<std::sync::RwLock<Vec<Bead>>>,
 ) -> Option<String> {
     let guard = beads.read().unwrap();
-    guard.iter().find(|b| b.id == bead_id).map(|b| b.project.clone())
+    guard
+        .iter()
+        .find(|b| b.id == bead_id)
+        .map(|b| b.project.clone())
 }
 
 /// Look up project and kind for a given bead ID from the shared beads store.
@@ -892,15 +955,33 @@ fn update_fleet_from_event(
 
     // Extract (ts, worker, bead_id) from the event — all known variants carry these.
     let (ts, worker, bead_id) = match event {
-        NeedleEvent::Claim { ts, worker, bead, .. }
-        | NeedleEvent::Dispatch { ts, worker, bead, .. }
-        | NeedleEvent::Complete { ts, worker, bead, .. }
-        | NeedleEvent::Fail { ts, worker, bead, .. }
-        | NeedleEvent::Timeout { ts, worker, bead, .. }
-        | NeedleEvent::Crash { ts, worker, bead, .. }
-        | NeedleEvent::Close { ts, worker, bead, .. }
-        | NeedleEvent::Release { ts, worker, bead, .. }
-        | NeedleEvent::Update { ts, worker, bead, .. } => (ts.as_str(), worker.as_str(), bead.as_str()),
+        NeedleEvent::Claim {
+            ts, worker, bead, ..
+        }
+        | NeedleEvent::Dispatch {
+            ts, worker, bead, ..
+        }
+        | NeedleEvent::Complete {
+            ts, worker, bead, ..
+        }
+        | NeedleEvent::Fail {
+            ts, worker, bead, ..
+        }
+        | NeedleEvent::Timeout {
+            ts, worker, bead, ..
+        }
+        | NeedleEvent::Crash {
+            ts, worker, bead, ..
+        }
+        | NeedleEvent::Close {
+            ts, worker, bead, ..
+        }
+        | NeedleEvent::Release {
+            ts, worker, bead, ..
+        }
+        | NeedleEvent::Update {
+            ts, worker, bead, ..
+        } => (ts.as_str(), worker.as_str(), bead.as_str()),
         NeedleEvent::Unknown => return,
     };
 
@@ -921,7 +1002,10 @@ fn update_fleet_from_event(
                     updated_at: now,
                 };
                 if let Err(e) = fleet::upsert_collision_entry(&entry) {
-                    warn!("fleet: upsert_collision_entry failed for {}: {}", bead_id, e);
+                    warn!(
+                        "fleet: upsert_collision_entry failed for {}: {}",
+                        bead_id, e
+                    );
                 }
             }
         }
@@ -933,7 +1017,10 @@ fn update_fleet_from_event(
         | NeedleEvent::Crash { .. } => {
             // Free the collision index entry — bead is no longer active
             if let Err(e) = fleet::remove_collision_entry(bead_id) {
-                warn!("fleet: remove_collision_entry failed for {}: {}", bead_id, e);
+                warn!(
+                    "fleet: remove_collision_entry failed for {}: {}",
+                    bead_id, e
+                );
             }
         }
         _ => {}
@@ -1016,8 +1103,12 @@ mod tests {
 
     #[test]
     fn test_is_permanent_error() {
-        assert!(ProjectSupervisor::is_permanent_error("Workspace path does not exist: /path"));
-        assert!(ProjectSupervisor::is_permanent_error(".beads directory not found at: /path"));
+        assert!(ProjectSupervisor::is_permanent_error(
+            "Workspace path does not exist: /path"
+        ));
+        assert!(ProjectSupervisor::is_permanent_error(
+            ".beads directory not found at: /path"
+        ));
         assert!(!ProjectSupervisor::is_permanent_error("Connection refused"));
         assert!(!ProjectSupervisor::is_permanent_error("Timeout"));
     }

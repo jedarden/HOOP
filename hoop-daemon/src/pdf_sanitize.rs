@@ -66,15 +66,15 @@ pub fn sanitize(input: &[u8]) -> Result<PdfSanitizeResult> {
 fn neutralise_javascript_actions(data: &mut Vec<u8>, record: &mut PdfSanitizeRecord) {
     replace_all(
         data,
-        b"/S /JavaScript",     // 14 bytes
-        b"/S /None      ",     // 14 bytes: "/S /None" (8) + 6 spaces
+        b"/S /JavaScript", // 14 bytes
+        b"/S /None      ", // 14 bytes: "/S /None" (8) + 6 spaces
         record,
         "JavaScript action type (/S /JavaScript)",
     );
     replace_all(
         data,
-        b"/S/JavaScript",      // 13 bytes
-        b"/S /None     ",      // 13 bytes: "/S /None" (8) + 5 spaces
+        b"/S/JavaScript", // 13 bytes
+        b"/S /None     ", // 13 bytes: "/S /None" (8) + 5 spaces
         record,
         "JavaScript action type (/S/JavaScript)",
     );
@@ -104,8 +104,7 @@ fn neutralise_aa_dictionaries(data: &mut Vec<u8>, record: &mut PdfSanitizeRecord
                 let pad = dict_len.saturating_sub(4);
                 let patch = format!("    {}", " ".repeat(pad));
                 let copy_len = dict_len.min(data.len() - abs_pos);
-                data[abs_pos..abs_pos + copy_len]
-                    .copy_from_slice(&patch.as_bytes()[..copy_len]);
+                data[abs_pos..abs_pos + copy_len].copy_from_slice(&patch.as_bytes()[..copy_len]);
             }
             record.was_modified = true;
             push_unique(
@@ -119,7 +118,12 @@ fn neutralise_aa_dictionaries(data: &mut Vec<u8>, record: &mut PdfSanitizeRecord
     }
 
     // Also handle indirect reference form: /AA 123 0 R
-    replace_all_regex(data, b"/AA ", record, "Additional Actions reference (/AA ref)");
+    replace_all_regex(
+        data,
+        b"/AA ",
+        record,
+        "Additional Actions reference (/AA ref)",
+    );
 }
 
 /// Replace `/JS` entries with `/JS null` (padded).
@@ -192,10 +196,12 @@ fn neutralise_open_action_js(data: &mut Vec<u8>, record: &mut PdfSanitizeRecord)
             let dict_content = &data[abs_pos..abs_pos + 11 + end + 2];
             if contains_js_indicator(dict_content) {
                 let total_len = 11 + end + 2;
-                let replacement = format!("/OpenAction null{}", " ".repeat(total_len - "/OpenAction null".len()));
+                let replacement = format!(
+                    "/OpenAction null{}",
+                    " ".repeat(total_len - "/OpenAction null".len())
+                );
                 if replacement.len() == total_len {
-                    data[abs_pos..abs_pos + total_len]
-                        .copy_from_slice(replacement.as_bytes());
+                    data[abs_pos..abs_pos + total_len].copy_from_slice(replacement.as_bytes());
                     record.was_modified = true;
                     push_unique(
                         &mut record.removed_threats,
@@ -245,9 +251,7 @@ fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.is_empty() || needle.len() > haystack.len() {
         return None;
     }
-    haystack
-        .windows(needle.len())
-        .position(|w| w == needle)
+    haystack.windows(needle.len()).position(|w| w == needle)
 }
 
 /// Replace all occurrences of `from` with `to` (must be same length).
@@ -419,8 +423,7 @@ fn find_matching_end(data: &[u8], open: &[u8], close: &[u8]) -> Option<usize> {
 
 /// Check if a byte slice contains JavaScript indicators.
 fn contains_js_indicator(data: &[u8]) -> bool {
-    find_bytes(data, b"/JavaScript").is_some()
-        || find_bytes(data, b"/JS").is_some()
+    find_bytes(data, b"/JavaScript").is_some() || find_bytes(data, b"/JS").is_some()
 }
 
 /// Append to vec only if not already present.
@@ -445,20 +448,15 @@ mod tests {
 
     fn make_minimal_pdf(body: &str) -> Vec<u8> {
         // Build a valid-ish PDF with a single page and the given extra objects
-        format!(
-            "%PDF-1.4\n{}\n%%EOF\n",
-            body
-        )
-        .into_bytes()
+        format!("%PDF-1.4\n{}\n%%EOF\n", body).into_bytes()
     }
 
     // ── JavaScript action detection ──────────────────────────────────────────
 
     #[test]
     fn detects_javascript_action() {
-        let pdf = make_minimal_pdf(
-            "1 0 obj\n<< /Type /Action /S /JavaScript /JS (alert(1)) >>\nendobj",
-        );
+        let pdf =
+            make_minimal_pdf("1 0 obj\n<< /Type /Action /S /JavaScript /JS (alert(1)) >>\nendobj");
         let (out, rec) = sanitize_bytes(&pdf);
         assert!(rec.was_modified, "should detect JS action");
         assert!(!String::from_utf8_lossy(&out).contains("/JavaScript"));
@@ -467,9 +465,8 @@ mod tests {
 
     #[test]
     fn detects_javascript_action_no_space() {
-        let pdf = make_minimal_pdf(
-            "1 0 obj\n<< /Type /Action /S/JavaScript /JS (evil()) >>\nendobj",
-        );
+        let pdf =
+            make_minimal_pdf("1 0 obj\n<< /Type /Action /S/JavaScript /JS (evil()) >>\nendobj");
         let (out, rec) = sanitize_bytes(&pdf);
         assert!(rec.was_modified);
         assert!(!String::from_utf8_lossy(&out).contains("/JavaScript"));
@@ -477,9 +474,7 @@ mod tests {
 
     #[test]
     fn detects_js_inline_string() {
-        let pdf = make_minimal_pdf(
-            "1 0 obj\n<< /S /JavaScript /JS (app.alert('XSS')) >>\nendobj",
-        );
+        let pdf = make_minimal_pdf("1 0 obj\n<< /S /JavaScript /JS (app.alert('XSS')) >>\nendobj");
         let (out, rec) = sanitize_bytes(&pdf);
         assert!(rec.was_modified);
         assert!(
@@ -520,9 +515,7 @@ mod tests {
 
     #[test]
     fn detects_aa_indirect_ref() {
-        let pdf = make_minimal_pdf(
-            "1 0 obj\n<< /Type /Page /AA 7 0 R >>\nendobj",
-        );
+        let pdf = make_minimal_pdf("1 0 obj\n<< /Type /Page /AA 7 0 R >>\nendobj");
         let (out, rec) = sanitize_bytes(&pdf);
         assert!(rec.was_modified, "should neutralise /AA indirect ref");
     }
@@ -542,9 +535,7 @@ mod tests {
 
     #[test]
     fn detects_names_js() {
-        let pdf = make_minimal_pdf(
-            "1 0 obj\n<< /Names << /JavaScript 5 0 R >> >>\nendobj",
-        );
+        let pdf = make_minimal_pdf("1 0 obj\n<< /Names << /JavaScript 5 0 R >> >>\nendobj");
         let (out, rec) = sanitize_bytes(&pdf);
         assert!(rec.was_modified);
     }

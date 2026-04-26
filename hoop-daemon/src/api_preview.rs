@@ -19,8 +19,8 @@
 /// Predictions with fewer samples are considered too unreliable.
 const MIN_SAMPLES_FOR_PREDICTION: usize = 3;
 
-use crate::predictor::{HistoricalStitch, predict_stitch};
-use crate::risk_patterns::{FixLineageLibrary, default_risk_patterns};
+use crate::predictor::{predict_stitch, HistoricalStitch};
+use crate::risk_patterns::{default_risk_patterns, FixLineageLibrary};
 use crate::similarity::find_similar_stitches;
 use crate::stitch_percentile_index::query_percentiles;
 use axum::{
@@ -118,7 +118,8 @@ async fn preview_bead(
     State(state): State<crate::DaemonState>,
     Query(params): Query<PreviewRequest>,
 ) -> Result<Json<StitchPreview>, (StatusCode, String)> {
-    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_project_name(&project)
+        .map_err(crate::id_validators::rejection)?;
     let _project_path = resolve_project_path(&project, &state)?;
 
     let labels: Vec<String> = params
@@ -156,13 +157,9 @@ async fn preview_bead(
     };
 
     // Match risk patterns from Fix Lineage library
-    let risk_library = load_risk_library()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
-    let risk_matches = risk_library.match_draft(
-        &params.title,
-        params.description.as_deref(),
-        &labels,
-    );
+    let risk_library = load_risk_library().map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    let risk_matches =
+        risk_library.match_draft(&params.title, params.description.as_deref(), &labels);
 
     // Check for file conflicts with currently-executing beads
     let file_conflicts = check_file_conflicts(&state).await;
@@ -173,7 +170,8 @@ async fn preview_bead(
         params.description.as_deref(),
         &labels,
         &state,
-    ).await;
+    )
+    .await;
 
     let preview = StitchPreview {
         schema_version: "1.0.0".to_string(),
@@ -231,8 +229,7 @@ pub fn load_historical_stitches(project: &str) -> Result<Vec<HistoricalStitch>, 
         return Ok(vec![]);
     }
 
-    let conn = Connection::open(&db_path)
-        .map_err(|e| format!("Failed to open fleet.db: {}", e))?;
+    let conn = Connection::open(&db_path).map_err(|e| format!("Failed to open fleet.db: {}", e))?;
 
     // Query stitches with derived cost and duration.
     // The stitches table has: id, project, kind, title, created_by,
@@ -335,13 +332,11 @@ fn load_labels_for_stitch(stitch_id: &str, conn: &rusqlite::Connection) -> Vec<S
     args_json
         .and_then(|json| {
             let v: serde_json::Value = serde_json::from_str(&json).ok()?;
-            v.get("labels")?
-                .as_array()
-                .map(|arr| {
-                    arr.iter()
-                        .filter_map(|l| l.as_str().map(String::from))
-                        .collect()
-                })
+            v.get("labels")?.as_array().map(|arr| {
+                arr.iter()
+                    .filter_map(|l| l.as_str().map(String::from))
+                    .collect()
+            })
         })
         .unwrap_or_default()
 }
@@ -367,13 +362,11 @@ fn query_percentile_index(
     let conn = Connection::open(&db_path).ok()?;
     let attachments_count = 0; // TODO: derive from draft attachments
 
-    let Some(query_result) = query_percentiles(
-        &conn,
-        title,
-        body_length,
-        labels,
-        attachments_count,
-    ).ok().flatten() else {
+    let Some(query_result) =
+        query_percentiles(&conn, title, body_length, labels, attachments_count)
+            .ok()
+            .flatten()
+    else {
         return None;
     };
 
@@ -464,7 +457,8 @@ pub async fn check_file_conflicts(state: &crate::DaemonState) -> Vec<FileConflic
                     if e.event_type == "tool_call" {
                         // Parse the raw JSON to extract file_path
                         if let Ok(value) = serde_json::from_str::<serde_json::Value>(&e.raw) {
-                            value.get("file_path")
+                            value
+                                .get("file_path")
                                 .and_then(|v| v.as_str())
                                 .map(String::from)
                         } else {

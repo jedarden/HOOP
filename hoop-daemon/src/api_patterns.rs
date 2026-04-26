@@ -140,7 +140,12 @@ async fn list_patterns(
         &db_path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("open fleet.db: {e}")))?;
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("open fleet.db: {e}"),
+        )
+    })?;
 
     let mut stmt = conn
         .prepare(
@@ -148,7 +153,12 @@ async fn list_patterns(
                     created_at, updated_at \
              FROM patterns ORDER BY created_at DESC",
         )
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("prepare patterns: {e}")))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("prepare patterns: {e}"),
+            )
+        })?;
 
     let pattern_rows: Vec<PatternRow> = stmt
         .query_map([], |row| {
@@ -164,7 +174,12 @@ async fn list_patterns(
                 updated_at: row.get(8)?,
             })
         })
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("query patterns: {e}")))?
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("query patterns: {e}"),
+            )
+        })?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -209,7 +224,12 @@ async fn get_pattern(
         &db_path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("open fleet.db: {e}")))?;
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("open fleet.db: {e}"),
+        )
+    })?;
 
     let pattern = conn
         .query_row(
@@ -233,7 +253,10 @@ async fn get_pattern(
         )
         .map_err(|e| {
             if e == rusqlite::Error::QueryReturnedNoRows {
-                (StatusCode::NOT_FOUND, format!("Pattern '{}' not found", pattern_id))
+                (
+                    StatusCode::NOT_FOUND,
+                    format!("Pattern '{}' not found", pattern_id),
+                )
             } else {
                 (StatusCode::INTERNAL_SERVER_ERROR, format!("DB error: {e}"))
             }
@@ -288,13 +311,23 @@ fn query_pattern_stats(
              WHERE pm.pattern_id = ?1 \
              GROUP BY pm.stitch_id",
         )
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("prepare stats: {e}")))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("prepare stats: {e}"),
+            )
+        })?;
 
     let rows: Vec<(String, i64)> = stmt
         .query_map(params![pattern_id], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
         })
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("query stats: {e}")))?
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("query stats: {e}"),
+            )
+        })?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -318,11 +351,21 @@ fn is_stitch_closed(
 ) -> Result<bool, (StatusCode, String)> {
     let mut stmt = conn
         .prepare("SELECT bead_id FROM stitch_beads WHERE stitch_id = ?1")
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("prepare is_closed: {e}")))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("prepare is_closed: {e}"),
+            )
+        })?;
 
     let bead_ids: Vec<String> = stmt
         .query_map(params![stitch_id], |row| row.get::<_, String>(0))
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("query is_closed: {e}")))?
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("query is_closed: {e}"),
+            )
+        })?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -330,9 +373,11 @@ fn is_stitch_closed(
         return Ok(false);
     }
 
-    Ok(bead_ids
-        .iter()
-        .any(|bid| beads.iter().any(|b| b.id == *bid && b.status == BeadStatus::Closed)))
+    Ok(bead_ids.iter().any(|bid| {
+        beads
+            .iter()
+            .any(|b| b.id == *bid && b.status == BeadStatus::Closed)
+    }))
 }
 
 fn build_parent_chain(
@@ -360,7 +405,11 @@ fn build_parent_chain(
             },
         ) {
             Ok((pid, title, status, next_parent)) => {
-                chain.push(PatternBreadcrumb { id: pid, title, status });
+                chain.push(PatternBreadcrumb {
+                    id: pid,
+                    title,
+                    status,
+                });
                 current = next_parent;
             }
             Err(_) => break,
@@ -399,7 +448,12 @@ fn query_members(
                 row.get(6)?,
             ))
         })
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("query members: {e}")))?
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("query members: {e}"),
+            )
+        })?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -442,13 +496,23 @@ fn query_stitch_beads(
 ) -> Result<Vec<BeadSummary>, (StatusCode, String)> {
     let mut stmt = conn
         .prepare("SELECT bead_id, relationship FROM stitch_beads WHERE stitch_id = ?1")
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("prepare stitch beads: {e}")))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("prepare stitch beads: {e}"),
+            )
+        })?;
 
     let rows: Vec<(String, String)> = stmt
         .query_map(params![stitch_id], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("query stitch beads: {e}")))?
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("query stitch beads: {e}"),
+            )
+        })?
         .filter_map(|r| r.ok())
         .collect();
 
@@ -491,5 +555,9 @@ fn compute_duration(members: &[PatternMemberDetail]) -> Option<i64> {
         .ok()?;
 
     let secs = (last_dt.timestamp() - first_dt.timestamp()).max(0);
-    if secs == 0 { None } else { Some(secs) }
+    if secs == 0 {
+        None
+    } else {
+        Some(secs)
+    }
 }

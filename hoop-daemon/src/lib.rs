@@ -6,40 +6,43 @@
 
 pub mod adb_dictate;
 pub mod agent_adapter;
-pub mod ansi_strip;
-pub mod atomic_write;
 pub mod agent_context;
 pub mod agent_session;
+pub mod ansi_strip;
 pub mod api_agent;
-pub mod api_config;
-pub mod api_conversations;
-pub mod attachment_sync;
-pub mod audio_redaction;
-pub mod backup;
-pub mod backup_pipeline;
-pub mod config_resolver;
-pub mod config_watcher;
 pub mod api_attachments;
 pub mod api_audit;
 pub mod api_beads;
+pub mod api_config;
+pub mod api_conversations;
 pub mod api_dictated_notes;
 pub mod api_draft_queue;
 pub mod api_metrics;
-pub mod api_scripts;
+pub mod api_morning_brief;
+pub mod api_patterns;
 pub mod api_preview;
+pub mod api_scripts;
 pub mod api_stitch_decompose;
 pub mod api_stitch_links;
 pub mod api_stitch_read;
 pub mod api_timeline;
 pub mod api_transcription;
 pub mod api_uploads;
+pub mod atomic_write;
+pub mod attachment_sync;
 pub mod attachments;
+pub mod audio_redaction;
 pub mod audit;
+pub mod backup;
+pub mod backup_pipeline;
 pub mod beads;
 pub mod br_verbs;
 pub mod capacity;
+pub mod config_resolver;
+pub mod config_watcher;
 pub mod cost;
 pub mod dictated_notes;
+pub mod embedding;
 pub mod events;
 pub mod files;
 pub mod fleet;
@@ -48,48 +51,45 @@ pub mod heartbeats;
 pub mod id_validators;
 pub mod log_rotation;
 pub mod metrics;
+pub mod morning_brief;
 pub mod mutation_handler;
 pub mod parse_jsonl_safe;
 pub mod path_security;
 pub mod pattern_query_evaluator;
+pub mod pdf_sanitize;
+pub mod predictor;
 pub mod projects;
+pub mod redaction;
+pub mod redaction_policy;
+pub mod risk_patterns;
 pub mod script_scheduler;
 pub mod script_trigger;
 pub mod sessions;
 pub mod shutdown;
-pub mod stitch_status;
+pub mod similarity;
+pub mod snapshot_manifest;
 pub mod stitch_decompose;
+pub mod stitch_status;
+pub mod stuck_detector;
 pub mod supervisor;
+pub mod svg_sanitize;
+pub mod syntax_highlight;
 pub mod tag_join;
 pub mod transcription;
 pub mod uploads;
-pub mod ws;
-pub mod similarity;
-pub mod snapshot_manifest;
-pub mod stuck_detector;
-pub mod svg_sanitize;
-pub mod pdf_sanitize;
-pub mod predictor;
-pub mod risk_patterns;
-pub mod embedding;
 pub mod vector_index;
-pub mod morning_brief;
-pub mod api_morning_brief;
-pub mod api_patterns;
-pub mod redaction;
-pub mod redaction_policy;
-pub mod syntax_highlight;
 pub mod worker_ack;
+pub mod ws;
 // TODO: Uncomment when collision_detector is complete
 // pub mod collision_detector;
-pub mod bead_commit_index;
+pub mod api_blame;
 pub mod api_diff;
 pub mod api_fix_patterns;
-pub mod api_blame;
-pub mod api_screen_capture;
 pub mod api_orphans;
-pub mod orphan_beads;
+pub mod api_screen_capture;
+pub mod bead_commit_index;
 pub mod net_diff;
+pub mod orphan_beads;
 pub mod screen_capture;
 // TODO: Uncomment when observer is complete
 // pub mod observer;
@@ -108,13 +108,9 @@ pub enum WorkerState {
         adapter: String,
     },
     /// Worker is idle
-    Idle {
-        last_strand: Option<String>,
-    },
+    Idle { last_strand: Option<String> },
     /// Worker is in a knot state
-    Knot {
-        reason: String,
-    },
+    Knot { reason: String },
 }
 
 /// Bead representation
@@ -190,18 +186,12 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use hoop_schema::{HealthResponse, ReadinessResponse, DegradedProject};
+use hoop_schema::{DegradedProject, HealthResponse, ReadinessResponse};
 use hoop_ui::AssetsHandler;
 use sha2::{Digest, Sha256};
 use shutdown::{DbCheckpointHandle, ShutdownCoordinator, SocketCleanupHandle};
 use std::sync::Arc;
-use std::{
-    fs,
-    net::SocketAddr,
-    os::unix::fs::PermissionsExt,
-    path::PathBuf,
-    time::Duration,
-};
+use std::{fs, net::SocketAddr, os::unix::fs::PermissionsExt, path::PathBuf, time::Duration};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt},
     net::UnixListener,
@@ -212,7 +202,7 @@ use tokio::{
 use tower_http::trace::TraceLayer;
 use tracing::{error, info, warn};
 
-pub use config_resolver::{CliOverrides, ResolvedConfig, ConfigSource};
+pub use config_resolver::{CliOverrides, ConfigSource, ResolvedConfig};
 
 /// Daemon configuration
 #[derive(Debug, Clone)]
@@ -261,7 +251,8 @@ pub struct DaemonState {
     pub shutdown: Arc<ShutdownCoordinator>,
     pub supervisor: Arc<supervisor::ProjectSupervisor>,
     pub projects: Arc<std::sync::RwLock<Vec<ws::ProjectCardData>>>,
-    pub project_metadata: Arc<std::sync::RwLock<std::collections::HashMap<String, ProjectMetadata>>>,
+    pub project_metadata:
+        Arc<std::sync::RwLock<std::collections::HashMap<String, ProjectMetadata>>>,
     pub config_status_tx: broadcast::Sender<ws::ConfigStatusData>,
     pub project_status_tx: broadcast::Sender<ws::ProjectCardData>,
     pub capacity_tx: broadcast::Sender<Vec<capacity::AccountCapacity>>,
@@ -298,6 +289,8 @@ pub struct DaemonState {
     pub bead_created_by_hoop_tx: broadcast::Sender<ws::BeadCreatedByHoopData>,
     /// Per-project redaction policy resolver (§18.5)
     pub redaction_policy_state: Arc<tokio::sync::RwLock<redaction_policy::RedactionPolicyState>>,
+    /// Stuck detector — monitors worker events for idle/max-runtime/content-seen timeouts (§C1)
+    pub stuck_detector: Arc<std::sync::Mutex<stuck_detector::StuckDetector>>,
 }
 
 /// Health check endpoint handler — returns 200 if the process is responsive.
@@ -310,14 +303,18 @@ async fn healthz() -> axum::Json<HealthResponse> {
 /// a JSON body naming any degraded projects.
 async fn readyz(
     axum::extract::State(state): axum::extract::State<DaemonState>,
-) -> Result<axum::Json<ReadinessResponse>, (axum::http::StatusCode, axum::Json<ReadinessResponse>)> {
+) -> Result<axum::Json<ReadinessResponse>, (axum::http::StatusCode, axum::Json<ReadinessResponse>)>
+{
     if state.shutdown.is_shutting_down() {
         let body = ReadinessResponse::degraded(vec![DegradedProject {
             project: "_daemon".into(),
             state: "shutting_down".into(),
             error: None,
         }]);
-        return Err((axum::http::StatusCode::SERVICE_UNAVAILABLE, axum::Json(body)));
+        return Err((
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            axum::Json(body),
+        ));
     }
 
     let snapshot = state.supervisor.snapshot().await;
@@ -334,7 +331,10 @@ async fn readyz(
     if degraded.is_empty() {
         Ok(axum::Json(ReadinessResponse::ok()))
     } else {
-        Err((axum::http::StatusCode::SERVICE_UNAVAILABLE, axum::Json(ReadinessResponse::degraded(degraded))))
+        Err((
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            axum::Json(ReadinessResponse::degraded(degraded)),
+        ))
     }
 }
 
@@ -367,11 +367,10 @@ async fn reload_pricing(
     axum::extract::State(state): axum::extract::State<DaemonState>,
 ) -> Result<Json<serde_json::Value>, axum::http::StatusCode> {
     let mut aggregator = state.cost_aggregator.write().unwrap();
-    aggregator.reload_pricing()
-        .map_err(|e| {
-            warn!("Failed to reload pricing configuration: {}", e);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    aggregator.reload_pricing().map_err(|e| {
+        warn!("Failed to reload pricing configuration: {}", e);
+        axum::http::StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     info!("Pricing configuration reloaded via API request");
     Ok(Json(serde_json::json!({
         "status": "ok",
@@ -559,7 +558,10 @@ async fn get_file_content(
     axum::extract::State(state): axum::extract::State<DaemonState>,
 ) -> Result<axum::response::Response, (axum::http::StatusCode, String)> {
     if id_validators::validate_project_name(&project).is_err() {
-        return Err((axum::http::StatusCode::BAD_REQUEST, "invalid project name".into()));
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            "invalid project name".into(),
+        ));
     }
 
     let project_root = {
@@ -568,7 +570,10 @@ async fn get_file_content(
             .iter()
             .find(|p| p.name == project)
             .map(|p| std::path::PathBuf::from(&p.path))
-            .ok_or((axum::http::StatusCode::NOT_FOUND, "project not found".into()))?
+            .ok_or((
+                axum::http::StatusCode::NOT_FOUND,
+                "project not found".into(),
+            ))?
     };
 
     let rel_path = params.path;
@@ -586,8 +591,8 @@ async fn get_file_content(
         // then streamed asynchronously so large images (10 MB+) are delivered
         // progressively without buffering the whole file in server memory.
         const IMAGE_MAX: u64 = 50 * 1024 * 1024;
-        let (abs_path, file_size, mime) =
-            tokio::task::spawn_blocking(move || -> anyhow::Result<(std::path::PathBuf, u64, &'static str)> {
+        let (abs_path, file_size, mime) = tokio::task::spawn_blocking(
+            move || -> anyhow::Result<(std::path::PathBuf, u64, &'static str)> {
                 use crate::path_security::{canonicalize_and_check, PathAllowlist};
                 let allowlist = PathAllowlist::for_workspace(&project_root)
                     .map_err(|e| anyhow::anyhow!("workspace allowlist: {e}"))?;
@@ -618,20 +623,21 @@ async fn get_file_content(
                     _ => "application/octet-stream",
                 };
                 Ok((abs_path, file_size, mime))
-            })
-            .await
-            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-            .map_err(|e| {
-                let msg = e.to_string();
-                let status = if msg.contains("not a file") || msg.contains("not found") {
-                    axum::http::StatusCode::NOT_FOUND
-                } else if msg.contains("too large") {
-                    axum::http::StatusCode::PAYLOAD_TOO_LARGE
-                } else {
-                    axum::http::StatusCode::INTERNAL_SERVER_ERROR
-                };
-                (status, msg)
-            })?;
+            },
+        )
+        .await
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .map_err(|e| {
+            let msg = e.to_string();
+            let status = if msg.contains("not a file") || msg.contains("not found") {
+                axum::http::StatusCode::NOT_FOUND
+            } else if msg.contains("too large") {
+                axum::http::StatusCode::PAYLOAD_TOO_LARGE
+            } else {
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR
+            };
+            (status, msg)
+        })?;
 
         let file = tokio::fs::File::open(&abs_path)
             .await
@@ -686,34 +692,36 @@ async fn get_file_content(
     }
 
     // Highlighted JSON mode (syntect — server-side, legacy).
-    let result = tokio::task::spawn_blocking(move || -> anyhow::Result<syntax_highlight::HighlightResult> {
-        use crate::path_security::{canonicalize_and_check, PathAllowlist};
+    let result = tokio::task::spawn_blocking(
+        move || -> anyhow::Result<syntax_highlight::HighlightResult> {
+            use crate::path_security::{canonicalize_and_check, PathAllowlist};
 
-        let allowlist = PathAllowlist::for_workspace(&project_root)
-            .map_err(|e| anyhow::anyhow!("workspace allowlist: {e}"))?;
-        let abs_path = project_root.join(&rel_path);
-        let abs_path = canonicalize_and_check(&abs_path, &allowlist)
-            .map_err(|e| anyhow::anyhow!("path traversal: {e}"))?;
+            let allowlist = PathAllowlist::for_workspace(&project_root)
+                .map_err(|e| anyhow::anyhow!("workspace allowlist: {e}"))?;
+            let abs_path = project_root.join(&rel_path);
+            let abs_path = canonicalize_and_check(&abs_path, &allowlist)
+                .map_err(|e| anyhow::anyhow!("path traversal: {e}"))?;
 
-        if !abs_path.is_file() {
-            anyhow::bail!("not a file");
-        }
+            if !abs_path.is_file() {
+                anyhow::bail!("not a file");
+            }
 
-        let meta = std::fs::metadata(&abs_path)?;
-        if meta.len() > 100 * 1024 * 1024 {
-            anyhow::bail!("file too large (>100 MB)");
-        }
+            let meta = std::fs::metadata(&abs_path)?;
+            if meta.len() > 100 * 1024 * 1024 {
+                anyhow::bail!("file too large (>100 MB)");
+            }
 
-        let content = std::fs::read_to_string(&abs_path)
-            .map_err(|e| anyhow::anyhow!("read: {e}"))?;
+            let content =
+                std::fs::read_to_string(&abs_path).map_err(|e| anyhow::anyhow!("read: {e}"))?;
 
-        let filename = abs_path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown");
+            let filename = abs_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown");
 
-        syntax_highlight::highlight_content(&content, filename, &theme)
-    })
+            syntax_highlight::highlight_content(&content, filename, &theme)
+        },
+    )
     .await
     .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     .map_err(|e| {
@@ -821,7 +829,7 @@ async fn get_cross_project_dashboard(
     axum::extract::Query(params): axum::extract::Query<CrossProjectDashboardQuery>,
     axum::extract::State(state): axum::extract::State<DaemonState>,
 ) -> Json<CrossProjectDashboardResponse> {
-    use chrono::{Utc, Duration, Datelike};
+    use chrono::{Datelike, Duration, Utc};
 
     let now = Utc::now();
     let today = now.date_naive();
@@ -829,8 +837,8 @@ async fn get_cross_project_dashboard(
     let (start_date, range_label) = match params.range.as_str() {
         "week" => (today - Duration::days(6), "Last 7 days"),
         "month" => {
-            let month_start = chrono::NaiveDate::from_ymd_opt(today.year(), today.month(), 1)
-                .unwrap_or(today);
+            let month_start =
+                chrono::NaiveDate::from_ymd_opt(today.year(), today.month(), 1).unwrap_or(today);
             (month_start, "This month")
         }
         _ => (today, "Today"),
@@ -861,13 +869,21 @@ async fn get_cross_project_dashboard(
         .into_iter()
         .map(|(project, cost_usd)| ProjectSpend { project, cost_usd })
         .collect();
-    spend_by_project.sort_by(|a, b| b.cost_usd.partial_cmp(&a.cost_usd).unwrap_or(std::cmp::Ordering::Equal));
+    spend_by_project.sort_by(|a, b| {
+        b.cost_usd
+            .partial_cmp(&a.cost_usd)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     let mut spend_by_adapter: Vec<AdapterSpend> = by_adapter
         .into_iter()
         .map(|(adapter, cost_usd)| AdapterSpend { adapter, cost_usd })
         .collect();
-    spend_by_adapter.sort_by(|a, b| b.cost_usd.partial_cmp(&a.cost_usd).unwrap_or(std::cmp::Ordering::Equal));
+    spend_by_adapter.sort_by(|a, b| {
+        b.cost_usd
+            .partial_cmp(&a.cost_usd)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     // --- Worker counts per project ---
     let project_cards = state.projects.read().unwrap().clone();
@@ -899,7 +915,10 @@ async fn get_cross_project_dashboard(
             LongestRunningStitch {
                 // project is tagged at load time by the supervisor
                 project: if b.project.is_empty() {
-                    project_cards.first().map(|c| c.name.clone()).unwrap_or_else(|| "unknown".to_string())
+                    project_cards
+                        .first()
+                        .map(|c| c.name.clone())
+                        .unwrap_or_else(|| "unknown".to_string())
                 } else {
                     b.project.clone()
                 },
@@ -924,7 +943,8 @@ async fn get_cross_project_dashboard(
 }
 
 /// GET /api/fleet/runtime-status — cross-project runtime status with liveness derived on read.
-async fn get_runtime_status() -> Result<Json<Vec<fleet::RuntimeStatusRow>>, (axum::http::StatusCode, String)> {
+async fn get_runtime_status(
+) -> Result<Json<Vec<fleet::RuntimeStatusRow>>, (axum::http::StatusCode, String)> {
     tokio::task::spawn_blocking(fleet::query_runtime_status)
         .await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
@@ -951,7 +971,9 @@ async fn get_bead_commits(
         } else if let Some(sha) = params.sha {
             fleet::query_bead_commits_by_sha(&sha)
         } else {
-            Err(anyhow::anyhow!("Requires ?bead_id= or ?sha= query parameter"))
+            Err(anyhow::anyhow!(
+                "Requires ?bead_id= or ?sha= query parameter"
+            ))
         }
     })
     .await
@@ -969,17 +991,38 @@ pub fn router() -> Router<DaemonState> {
         .route("/api/beads/:bead_id/events", get(get_bead_events))
         .route("/api/capacity", get(get_capacity))
         .route("/api/cost/buckets", get(get_cost_buckets))
-        .route("/api/cost/buckets/:project", get(get_cost_buckets_by_project))
+        .route(
+            "/api/cost/buckets/:project",
+            get(get_cost_buckets_by_project),
+        )
         .route("/api/cost/reload-pricing", post(reload_pricing))
-        .route("/api/cost/codex-accounts", get(get_codex_account_daily_spend))
-        .route("/api/cost/codex-accounts/monthly", get(get_codex_account_monthly_rollup))
-        .route("/api/dashboard/cross-project", get(get_cross_project_dashboard))
+        .route(
+            "/api/cost/codex-accounts",
+            get(get_codex_account_daily_spend),
+        )
+        .route(
+            "/api/cost/codex-accounts/monthly",
+            get(get_codex_account_monthly_rollup),
+        )
+        .route(
+            "/api/dashboard/cross-project",
+            get(get_cross_project_dashboard),
+        )
         .route("/api/fleet/runtime-status", get(get_runtime_status))
         .route("/api/bead-commits", get(get_bead_commits))
         .route("/api/projects/:project/files", get(get_project_files))
-        .route("/api/projects/:project/files/search", get(search_project_files))
-        .route("/api/projects/:project/files/content", get(get_file_content))
-        .route("/api/attachments/:attachment_type/:id/:filename", get(api_attachments::serve_attachment))
+        .route(
+            "/api/projects/:project/files/search",
+            get(search_project_files),
+        )
+        .route(
+            "/api/projects/:project/files/content",
+            get(get_file_content),
+        )
+        .route(
+            "/api/attachments/:attachment_type/:id/:filename",
+            get(api_attachments::serve_attachment),
+        )
         .route("/ws", get(ws::ws_handler))
         .merge(api_uploads::router())
         .merge(api_dictated_notes::router())
@@ -1000,7 +1043,10 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_orphans::router())
         .merge(api_fix_patterns::router())
         .merge(net_diff::router())
-        .route("/api/workers/timeline", get(api_timeline::get_worker_timeline))
+        .route(
+            "/api/workers/timeline",
+            get(api_timeline::get_worker_timeline),
+        )
         .merge(api_agent::router())
         .merge(api_morning_brief::router())
         .merge(api_metrics::router())
@@ -1154,7 +1200,11 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                 None
             }
         },
-        allow_br_mismatch: if config.allow_br_mismatch { Some(true) } else { None },
+        allow_br_mismatch: if config.allow_br_mismatch {
+            Some(true)
+        } else {
+            None
+        },
     };
     let resolved_config = Arc::new(config_resolver::resolve(cli_overrides.clone()));
     info!("Config precedence resolver initialized (§17.2)");
@@ -1162,20 +1212,26 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     // Install panic hook that records hoop_panics_total metric before aborting.
     let previous_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        let subsystem = info.location()
+        let subsystem = info
+            .location()
             .map(|l| l.file())
             .unwrap_or("unknown")
             .rsplit('/')
             .next()
             .unwrap_or("unknown");
         metrics::metrics().hoop_panics_total.inc(&[subsystem]);
-        metrics::metrics().hoop_errors_total.inc(&["panic", "panic"]);
+        metrics::metrics()
+            .hoop_errors_total
+            .inc(&["panic", "panic"]);
         previous_hook(info);
     }));
 
     // Run startup audit - refuse to start on critical failures
     info!("Running startup audit...");
-    let audit_config = audit::AuditConfig { allow_br_mismatch: config.allow_br_mismatch, ..Default::default() };
+    let audit_config = audit::AuditConfig {
+        allow_br_mismatch: config.allow_br_mismatch,
+        ..Default::default()
+    };
     if let Err(e) = audit::daemon_startup_check(&audit_config) {
         error!("{}", e);
         return Err(e);
@@ -1194,9 +1250,8 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     info!("fleet.db initialized");
 
     // Initialize heartbeat monitor
-    let mut heartbeat_monitor = heartbeats::HeartbeatMonitor::new(
-        heartbeats::HeartbeatMonitorConfig::default()
-    )?;
+    let mut heartbeat_monitor =
+        heartbeats::HeartbeatMonitor::new(heartbeats::HeartbeatMonitorConfig::default())?;
     heartbeat_monitor.start()?;
     let heartbeat_tx = heartbeat_monitor.sender();
 
@@ -1235,7 +1290,10 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         capacity_tx.clone(),
         Some(capacity_trigger_rx),
     );
-    info!("Capacity meter refresh loop started ({} account(s))", account_count);
+    info!(
+        "Capacity meter refresh loop started ({} account(s))",
+        account_count
+    );
 
     // Forward bead close events → capacity trigger for immediate recompute
     {
@@ -1244,7 +1302,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         tokio::spawn(async move {
             loop {
                 match bead_close_rx.recv().await {
-                    Ok(bead) if bead.status == "closed" => { let _ = cap_trig.send(()); }
+                    Ok(bead) if bead.status == "closed" => {
+                        let _ = cap_trig.send(());
+                    }
                     Ok(_) => {}
                     Err(broadcast::error::RecvError::Lagged(_)) => {}
                     Err(broadcast::error::RecvError::Closed) => break,
@@ -1263,10 +1323,20 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         // Check if this bead belongs to a Stitch and update the index
                         if let Some(stitch_id) = find_stitch_for_bead(&bead.id).await {
                             tokio::task::spawn_blocking(move || {
-                                if let Err(e) = crate::stitch_percentile_index::update_on_stitch_close(&stitch_id) {
-                                    tracing::debug!("Failed to update percentile index for stitch {}: {}", stitch_id, e);
+                                if let Err(e) =
+                                    crate::stitch_percentile_index::update_on_stitch_close(
+                                        &stitch_id,
+                                    )
+                                {
+                                    tracing::debug!(
+                                        "Failed to update percentile index for stitch {}: {}",
+                                        stitch_id,
+                                        e
+                                    );
                                 }
-                            }).await.ok();
+                            })
+                            .await
+                            .ok();
                         }
                     }
                     Ok(_) => {}
@@ -1291,16 +1361,25 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     let voice_config = transcription::load_voice_config();
     let transcription_config = transcription::build_transcription_config(&voice_config);
     let whisper_model_path = transcription_config.whisper_model_path.clone();
-    let transcription_service = Arc::new(transcription::TranscriptionService::new(transcription_config.clone()));
+    let transcription_service = Arc::new(transcription::TranscriptionService::new(
+        transcription_config.clone(),
+    ));
 
     // Ensure models directory exists
     if let Some(model_dir) = whisper_model_path.parent() {
         if !model_dir.exists() {
             if let Err(e) = std::fs::create_dir_all(model_dir) {
-                warn!("Failed to create models directory {}: {}", model_dir.display(), e);
+                warn!(
+                    "Failed to create models directory {}: {}",
+                    model_dir.display(),
+                    e
+                );
             } else {
                 info!("Created models directory at {}", model_dir.display());
-                info!("Whisper models should be placed at {}", whisper_model_path.display());
+                info!(
+                    "Whisper models should be placed at {}",
+                    whisper_model_path.display()
+                );
                 info!("Download from: https://huggingface.co/ggerganov/whisper.cpp");
             }
         }
@@ -1308,15 +1387,20 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
 
     // Check if model exists
     if !whisper_model_path.exists() {
-        warn!("Whisper model not found at {}", whisper_model_path.display());
+        warn!(
+            "Whisper model not found at {}",
+            whisper_model_path.display()
+        );
         warn!("Transcription will fail until model is downloaded");
         warn!("Download from: https://huggingface.co/ggerganov/whisper.cpp");
     } else {
         info!("Whisper model found at {}", whisper_model_path.display());
     }
-    info!("Transcription service initialized (cli: {}, model: {})",
-          transcription_config.whisper_cli_path.display(),
-          transcription_config.whisper_model_path.display());
+    info!(
+        "Transcription service initialized (cli: {}, model: {})",
+        transcription_config.whisper_cli_path.display(),
+        transcription_config.whisper_model_path.display()
+    );
 
     // Initialize upload registry
     let upload_config = uploads::UploadConfig::default();
@@ -1330,8 +1414,19 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     let shutdown_coordinator = Arc::new(ShutdownCoordinator::new());
     let mut shutdown_rx = shutdown_coordinator.subscribe();
 
+    // Initialize vector index (will be populated later after initial projects load)
+    let vector_index = Arc::new(std::sync::RwLock::new(vector_index::VectorIndex::new()));
+
+    // Initialize stuck detector (§C1, hoop-ttb.3.25)
+    let stuck_detector = Arc::new(std::sync::Mutex::new(stuck_detector::StuckDetector::new()));
+    info!("Stuck detector initialized");
+
     // Initialize project supervisor
     info!("Initializing project supervisor...");
+    let scripts_dir = dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".hoop")
+        .join("scripts");
     let supervisor = Arc::new(supervisor::ProjectSupervisor::new(
         broadcast::channel(256).0, // bead events (internal)
         session_tx.clone(),
@@ -1339,14 +1434,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         beads.clone(),
         shutdown_coordinator.clone(),
         cost_aggregator.clone(),
+        vector_index.clone(),
+        scripts_dir,
     ));
-
-    // Set scripts directory for event-triggered scripts (§22.3)
-    let scripts_dir_for_events = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".hoop")
-        .join("scripts");
-    supervisor.set_scripts_dir(scripts_dir_for_events);
 
     // Start global event tailer (for bead claim/close/release/update events)
     if let Err(e) = supervisor.start_event_tailer().await {
@@ -1380,7 +1470,11 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         let mut rx = projects_watcher.subscribe();
         while let Ok(event) = rx.recv().await {
             match event {
-                projects::ProjectsEvent::ConfigReloaded { config, prev_hash, delta_keys } => {
+                projects::ProjectsEvent::ConfigReloaded {
+                    config,
+                    prev_hash,
+                    delta_keys,
+                } => {
                     info!("Projects configuration reloaded, reconciling runtimes");
                     if let Err(e) = supervisor_for_reconcile.reconcile(&config).await {
                         error!("Failed to reconcile runtimes: {}", e);
@@ -1480,7 +1574,10 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         let mut rx = config_watcher.subscribe();
         while let Ok(event) = rx.recv().await {
             match event {
-                config_watcher::ConfigEvent::ConfigReloaded { config: _, prev_hash } => {
+                config_watcher::ConfigEvent::ConfigReloaded {
+                    config: _,
+                    prev_hash,
+                } => {
                     info!("config.yml reloaded successfully");
                     // Note: config.yml changes don't trigger runtime reconcile
                     // because they only affect defaults for new sessions
@@ -1499,7 +1596,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         new_hash: hex::encode(Sha256::digest(
                             std::fs::read_to_string(&config_path)
                                 .unwrap_or_default()
-                                .as_bytes()
+                                .as_bytes(),
                         )),
                         actor: "system:hot-reload".to_string(),
                     };
@@ -1592,7 +1689,10 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         let mut aggregator = cost_aggregator_for_sessions.write().unwrap();
                         for session in &sessions {
                             if let Err(e) = aggregator.aggregate_session(session) {
-                                warn!("Failed to aggregate session {} into cost: {}", session.id, e);
+                                warn!(
+                                    "Failed to aggregate session {} into cost: {}",
+                                    session.id, e
+                                );
                             }
                         }
                     }
@@ -1617,6 +1717,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     let registry_clone = worker_registry.clone();
     let ack_monitor_clone = worker_ack_monitor.clone();
     let beads_for_hb = beads.clone();
+    let stuck_detector_for_hb = Arc::clone(&stuck_detector);
     tokio::spawn(async move {
         use heartbeats::MonitorEvent;
         let mut rx = registry_clone.subscribe();
@@ -1633,13 +1734,43 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         .map(|w| w.liveness)
                         .unwrap_or(heartbeats::WorkerLiveness::Dead);
                     // Advance last_heartbeat_at for the project this worker is executing
-                    if let WorkerState::Executing { ref bead, .. } = hb.state {
+                    if let WorkerState::Executing { ref bead, adapter, .. } = hb.state {
+                        // Track worker started for stuck detection (on bead switch)
+                        let worker_name = hb.worker.clone();
+                        let bead_id = bead.clone();
+                        let adapter_name = adapter.clone();
+                        let started_at = hb.ts;
+                        let snapshot = registry_clone.snapshot().await;
+                        let is_new_bead = snapshot
+                            .iter()
+                            .find(|w| w.worker == worker_name)
+                            .map(|w| match &w.state {
+                                ws::WorkerDisplayState::Executing { bead, .. } => bead != &bead_id,
+                                _ => true,
+                            })
+                            .unwrap_or(true);
+                        if is_new_bead {
+                            stuck_detector_for_hb
+                                .lock()
+                                .unwrap()
+                                .on_worker_started(&worker_name, &bead_id, Some(&adapter_name), started_at);
+                        }
+                        // Track worker event for stuck detection
+                        stuck_detector_for_hb
+                            .lock()
+                            .unwrap()
+                            .on_worker_event(&worker_name, true); // heartbeat counts as content
                         let proj = {
                             let guard = beads_for_hb.read().unwrap();
-                            guard.iter().find(|b| b.id == *bead).map(|b| b.project.clone())
+                            guard
+                                .iter()
+                                .find(|b| b.id == *bead)
+                                .map(|b| b.project.clone())
                         };
                         if let Some(ref p) = proj {
-                            if let Err(e) = fleet::touch_project_heartbeat_at(p, &hb.ts.to_rfc3339()) {
+                            if let Err(e) =
+                                fleet::touch_project_heartbeat_at(p, &hb.ts.to_rfc3339())
+                            {
                                 warn!("fleet: touch_project_heartbeat_at failed: {}", e);
                             }
                         }
@@ -1650,33 +1781,60 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                     // Update worker liveness
                     let snapshot = registry_clone.snapshot().await;
                     if let Some(w) = snapshot.iter().find(|w| w.worker == t.worker) {
-                        registry_clone.update_worker(
-                            heartbeats::WorkerHeartbeat {
-                                ts: w.last_heartbeat,
-                                worker: w.worker.clone(),
-                                state: match &w.state {
-                                    ws::WorkerDisplayState::Executing { bead, adapter, .. } => {
-                                        WorkerState::Executing {
+                        registry_clone
+                            .update_worker(
+                                heartbeats::WorkerHeartbeat {
+                                    ts: w.last_heartbeat,
+                                    worker: w.worker.clone(),
+                                    state: match &w.state {
+                                        ws::WorkerDisplayState::Executing {
+                                            bead, adapter, ..
+                                        } => WorkerState::Executing {
                                             bead: bead.clone(),
                                             pid: 0,
                                             adapter: adapter.clone(),
+                                        },
+                                        ws::WorkerDisplayState::Idle { last_strand } => {
+                                            WorkerState::Idle {
+                                                last_strand: last_strand.clone(),
+                                            }
                                         }
-                                    }
-                                    ws::WorkerDisplayState::Idle { last_strand } => {
-                                        WorkerState::Idle {
-                                            last_strand: last_strand.clone(),
+                                        ws::WorkerDisplayState::Knot { reason } => {
+                                            WorkerState::Knot {
+                                                reason: reason.clone(),
+                                            }
                                         }
-                                    }
-                                    ws::WorkerDisplayState::Knot { reason } => {
-                                        WorkerState::Knot {
-                                            reason: reason.clone(),
-                                        }
-                                    }
+                                    },
                                 },
-                            },
-                            t.new_state,
-                        ).await;
+                                t.new_state,
+                            )
+                            .await;
                     }
+                    // Track heartbeat state transition for stuck detection (§C1, hoop-ttb.3.25)
+                    let now = Utc::now();
+                    stuck_detector_for_hb
+                        .lock()
+                        .unwrap()
+                        .on_heartbeat_state_transition(&t.worker, now, t.old_state, t.new_state);
+                }
+                _ => {}
+            }
+        }
+    });
+
+    // Wire up heartbeat monitor events to stuck detector (§C1, hoop-ttb.3.25)
+    let stuck_detector_for_hb_monitor = Arc::clone(&state.stuck_detector);
+    tokio::spawn(async move {
+        use heartbeats::MonitorEvent;
+        let mut rx = heartbeat_monitor.subscribe().unwrap();
+        while let Ok(event) = rx.recv().await {
+            match event {
+                MonitorEvent::Heartbeat(hb) => {
+                    // Track heartbeats for stuck detection
+                    stuck_detector_for_hb_monitor
+                        .lock()
+                        .unwrap()
+                        .on_heartbeat(&hb.worker, hb.ts);
                 }
                 _ => {}
             }
@@ -1700,25 +1858,45 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
             (name, ProjectMetadata { label, color })
         })
         .collect();
-    let project_metadata: Arc<std::sync::RwLock<std::collections::HashMap<String, ProjectMetadata>>> =
-        Arc::new(std::sync::RwLock::new(project_metadata));
+    let project_metadata: Arc<
+        std::sync::RwLock<std::collections::HashMap<String, ProjectMetadata>>,
+    > = Arc::new(std::sync::RwLock::new(project_metadata));
 
     let meta_for_init = project_metadata.clone();
     let initial_projects: Vec<ws::ProjectCardData> = supervisor_snapshot
         .iter()
         .map(|r| {
             let worker_count = initial_workers.len();
-            let stuck_count = initial_workers.iter().filter(|w| matches!(w.state, ws::WorkerDisplayState::Knot { .. })).count();
-            let active_stitch_count = initial_beads_guard.iter().filter(|b| b.status == BeadStatus::Open).count();
-            let last_activity = initial_workers.iter().map(|w| w.last_heartbeat).max().map(|t| t.to_rfc3339());
+            let stuck_count = initial_workers
+                .iter()
+                .filter(|w| matches!(w.state, ws::WorkerDisplayState::Knot { .. }))
+                .count();
+            let active_stitch_count = initial_beads_guard
+                .iter()
+                .filter(|b| b.status == BeadStatus::Open)
+                .count();
+            let last_activity = initial_workers
+                .iter()
+                .map(|w| w.last_heartbeat)
+                .max()
+                .map(|t| t.to_rfc3339());
 
-            let cost_today = cost_aggregator.read().unwrap().cost_today_for_project(&r.project_name);
+            let cost_today = cost_aggregator
+                .read()
+                .unwrap()
+                .cost_today_for_project(&r.project_name);
 
             let meta = meta_for_init.read().unwrap().get(&r.project_name).cloned();
             ws::ProjectCardData {
                 name: r.project_name.clone(),
-                label: meta.as_ref().map(|m| m.label.clone()).unwrap_or_else(|| r.project_name.clone()),
-                color: meta.as_ref().map(|m| m.color.clone()).unwrap_or_else(|| "#3b82f6".to_string()),
+                label: meta
+                    .as_ref()
+                    .map(|m| m.label.clone())
+                    .unwrap_or_else(|| r.project_name.clone()),
+                color: meta
+                    .as_ref()
+                    .map(|m| m.color.clone())
+                    .unwrap_or_else(|| "#3b82f6".to_string()),
                 path: r.project_path.display().to_string(),
                 degraded: !r.state.is_running(),
                 runtime_state: Some(r.state.to_display_string().to_string()),
@@ -1733,8 +1911,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         })
         .collect();
 
-    // Initialize vector index for semantic pre-dedup
-    let vector_index = Arc::new(std::sync::RwLock::new(vector_index::VectorIndex::new()));
+    // Populate vector index with initial data
     {
         let beads_guard = beads.read().unwrap();
         let projects_guard = initial_projects.clone();
@@ -1754,13 +1931,20 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         rate_limit_rpm: adapter_config.rate_limit_rpm,
         cost_cap_usd: adapter_config.cost_cap_usd,
     };
-    let agent_session_manager = match agent_session::AgentSessionManager::new(session_config).await {
+    let agent_session_manager = match agent_session::AgentSessionManager::new(session_config).await
+    {
         Ok(mgr) => {
-            info!("Agent session manager initialized (adapter={})", adapter_config.adapter);
+            info!(
+                "Agent session manager initialized (adapter={})",
+                adapter_config.adapter
+            );
             Some(Arc::new(mgr))
         }
         Err(e) => {
-            warn!("Failed to initialize agent session manager: {}. Agent features disabled.", e);
+            warn!(
+                "Failed to initialize agent session manager: {}. Agent features disabled.",
+                e
+            );
             None
         }
     };
@@ -1837,7 +2021,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     // Initialize redaction policy state (§18.5)
     let hoop_config = load_hoop_config_for_redaction().await;
     let redaction_policy_state = Arc::new(tokio::sync::RwLock::new(
-        redaction_policy::RedactionPolicyState::new(&hoop_config, initial_config.registry.clone())
+        redaction_policy::RedactionPolicyState::new(&hoop_config, initial_config.registry.clone()),
     ));
     info!("Redaction policy state initialized");
 
@@ -1883,7 +2067,11 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     }
 
     // Start backup scheduler when fully configured
-    if let backup::BackupState::Ready { config, credentials } = backup_state {
+    if let backup::BackupState::Ready {
+        config,
+        credentials,
+    } = backup_state
+    {
         let pipeline = backup_pipeline::BackupPipeline::new(config, credentials);
         let sched_shutdown = shutdown_coordinator.subscribe();
         pipeline.start_scheduler(sched_shutdown);
@@ -1937,6 +2125,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         pattern_tx,
         bead_created_by_hoop_tx: broadcast::channel::<ws::BeadCreatedByHoopData>(64).0,
         redaction_policy_state,
+        stuck_detector,
     };
 
     // Forward project runtime status updates to shared store and broadcast
@@ -1952,18 +2141,41 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         while let Ok(runtime_status) = rx.recv().await {
             let workers = registry_for_cards.snapshot().await;
             let all_beads = beads_for_cards.read().unwrap().clone();
-            let cost_today = cost_for_updates.read().unwrap().cost_today_for_project(&runtime_status.project_name);
+            let cost_today = cost_for_updates
+                .read()
+                .unwrap()
+                .cost_today_for_project(&runtime_status.project_name);
 
             let worker_count = workers.len();
-            let stuck_count = workers.iter().filter(|w| matches!(w.state, ws::WorkerDisplayState::Knot { .. })).count();
-            let active_stitch_count = all_beads.iter().filter(|b| b.status == BeadStatus::Open).count();
-            let last_activity = workers.iter().map(|w| w.last_heartbeat).max().map(|t| t.to_rfc3339());
+            let stuck_count = workers
+                .iter()
+                .filter(|w| matches!(w.state, ws::WorkerDisplayState::Knot { .. }))
+                .count();
+            let active_stitch_count = all_beads
+                .iter()
+                .filter(|b| b.status == BeadStatus::Open)
+                .count();
+            let last_activity = workers
+                .iter()
+                .map(|w| w.last_heartbeat)
+                .max()
+                .map(|t| t.to_rfc3339());
 
-            let meta = meta_for_updates.read().unwrap().get(&runtime_status.project_name).cloned();
+            let meta = meta_for_updates
+                .read()
+                .unwrap()
+                .get(&runtime_status.project_name)
+                .cloned();
             let card = ws::ProjectCardData {
                 name: runtime_status.project_name.clone(),
-                label: meta.as_ref().map(|m| m.label.clone()).unwrap_or_else(|| runtime_status.project_name.clone()),
-                color: meta.as_ref().map(|m| m.color.clone()).unwrap_or_else(|| "#3b82f6".to_string()),
+                label: meta
+                    .as_ref()
+                    .map(|m| m.label.clone())
+                    .unwrap_or_else(|| runtime_status.project_name.clone()),
+                color: meta
+                    .as_ref()
+                    .map(|m| m.color.clone())
+                    .unwrap_or_else(|| "#3b82f6".to_string()),
                 path: runtime_status.project_path.display().to_string(),
                 degraded: !runtime_status.state.is_running(),
                 runtime_state: Some(runtime_status.state.to_display_string().to_string()),
@@ -2082,7 +2294,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         fleet_notifications::notifications().push(notification);
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
-                        debug!("Bead created by hoop broadcast lagged by {}, continuing", n);
+                        info!("Bead created by hoop broadcast lagged by {}, continuing", n);
                     }
                     Err(broadcast::error::RecvError::Closed) => break,
                 }
@@ -2114,17 +2326,34 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                 let new_cards: Vec<ws::ProjectCardData> = runtime_statuses
                     .iter()
                     .map(|r| {
-                        let cost = cost_ref.read().unwrap().cost_today_for_project(&r.project_name);
+                        let cost = cost_ref
+                            .read()
+                            .unwrap()
+                            .cost_today_for_project(&r.project_name);
                         let worker_count = workers.len();
-                        let stuck_count = workers.iter().filter(|w| matches!(w.state, ws::WorkerDisplayState::Knot { .. })).count();
-                        let active_stitch_count = all_beads.iter().filter(|b| b.status == BeadStatus::Open).count();
-                        let last_activity = workers.iter().map(|w| w.last_heartbeat).max().map(|t| t.to_rfc3339());
+                        let stuck_count = workers
+                            .iter()
+                            .filter(|w| matches!(w.state, ws::WorkerDisplayState::Knot { .. }))
+                            .count();
+                        let active_stitch_count = all_beads
+                            .iter()
+                            .filter(|b| b.status == BeadStatus::Open)
+                            .count();
+                        let last_activity = workers
+                            .iter()
+                            .map(|w| w.last_heartbeat)
+                            .max()
+                            .map(|t| t.to_rfc3339());
                         let m = meta.get(&r.project_name);
 
                         ws::ProjectCardData {
                             name: r.project_name.clone(),
-                            label: m.map(|m| m.label.clone()).unwrap_or_else(|| r.project_name.clone()),
-                            color: m.map(|m| m.color.clone()).unwrap_or_else(|| "#3b82f6".to_string()),
+                            label: m
+                                .map(|m| m.label.clone())
+                                .unwrap_or_else(|| r.project_name.clone()),
+                            color: m
+                                .map(|m| m.color.clone())
+                                .unwrap_or_else(|| "#3b82f6".to_string()),
                             path: r.project_path.display().to_string(),
                             degraded: !r.state.is_running(),
                             runtime_state: Some(r.state.to_display_string().to_string()),
@@ -2143,13 +2372,16 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                 {
                     let now = chrono::Utc::now().to_rfc3339();
                     for r in &runtime_statuses {
-                        let open_beads = all_beads.iter()
+                        let open_beads = all_beads
+                            .iter()
                             .filter(|b| b.project == r.project_name && b.status == BeadStatus::Open)
                             .count() as i64;
-                        let closed_beads = all_beads.iter()
+                        let closed_beads = all_beads
+                            .iter()
                             .filter(|b| b.project == r.project_name && b.status != BeadStatus::Open)
                             .count() as i64;
-                        let stuck_beads = workers.iter()
+                        let stuck_beads = workers
+                            .iter()
                             .filter(|w| matches!(w.state, ws::WorkerDisplayState::Knot { .. }))
                             .count() as i64;
                         let worker_count = workers.len() as i64;
@@ -2196,20 +2428,42 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                 interval.tick().await;
                 let (project_rows, codex_rows) = {
                     let agg = cost_ref.read().unwrap();
-                    (agg.get_project_date_rollup(), agg.get_codex_account_date_rollup())
+                    (
+                        agg.get_project_date_rollup(),
+                        agg.get_codex_account_date_rollup(),
+                    )
                 };
-                for (project, date, cost_usd, input, output, cache_read, cache_write) in project_rows {
+                for (project, date, cost_usd, input, output, cache_read, cache_write) in
+                    project_rows
+                {
                     if let Err(e) = fleet::snapshot_project_cost_row(
-                        &project, &date, cost_usd, input, output, cache_read, cache_write,
+                        &project,
+                        &date,
+                        cost_usd,
+                        input,
+                        output,
+                        cache_read,
+                        cache_write,
                     ) {
-                        warn!("fleet: snapshot_project_cost_row failed for {}/{}: {}", project, date, e);
+                        warn!(
+                            "fleet: snapshot_project_cost_row failed for {}/{}: {}",
+                            project, date, e
+                        );
                     }
                 }
                 for (account_id, date, plan_tier, cost_usd, input, output) in codex_rows {
                     if let Err(e) = fleet::snapshot_codex_account_daily_spend(
-                        &account_id, &date, &plan_tier, cost_usd, input, output,
+                        &account_id,
+                        &date,
+                        &plan_tier,
+                        cost_usd,
+                        input,
+                        output,
                     ) {
-                        warn!("fleet: snapshot_codex_account_daily_spend failed for {}/{}: {}", account_id, date, e);
+                        warn!(
+                            "fleet: snapshot_codex_account_daily_spend failed for {}/{}: {}",
+                            account_id, date, e
+                        );
                     }
                 }
             }
@@ -2237,11 +2491,27 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         forecast_7d_stitch_min: cap.forecast_full_7d_stitch_min,
                     };
                     if let Err(e) = fleet::upsert_capacity_rollup(&row) {
-                        warn!("fleet: upsert_capacity_rollup failed for {}: {}", cap.account_id, e);
+                        warn!(
+                            "fleet: upsert_capacity_rollup failed for {}: {}",
+                            cap.account_id, e
+                        );
                     }
                 }
             }
         });
+    }
+
+    // Periodic stuck worker check (every 60 seconds) — §C1, hoop-ttb.3.25
+    {
+        let stuck_detector_ref = state.stuck_detector.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(60));
+            loop {
+                interval.tick().await;
+                stuck_detector_ref.lock().unwrap().check_stuck_workers();
+            }
+        });
+        info!("Stuck worker checker started (60s interval)");
     }
 
     let app = router()
@@ -2273,9 +2543,8 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
 
     let control_state = state.clone();
     let control_shutdown = shutdown_tx.subscribe();
-    let control_socket_task = tokio::spawn(async move {
-        run_control_socket(control_state, control_shutdown).await
-    });
+    let control_socket_task =
+        tokio::spawn(async move { run_control_socket(control_state, control_shutdown).await });
 
     // Set up signal handling
     let ctrl_c = async {
@@ -2355,7 +2624,13 @@ mod dashboard_tests {
     use super::*;
     use chrono::Utc;
 
-    fn make_bead(id: &str, title: &str, status: BeadStatus, project: &str, created_ago_secs: i64) -> Bead {
+    fn make_bead(
+        id: &str,
+        title: &str,
+        status: BeadStatus,
+        project: &str,
+        created_ago_secs: i64,
+    ) -> Bead {
         let created_at = Utc::now() - chrono::Duration::seconds(created_ago_secs);
         Bead {
             id: id.to_string(),
@@ -2382,7 +2657,10 @@ mod dashboard_tests {
             make_bead("bd-004", "Closed task", BeadStatus::Closed, "proj-b", 7200),
         ];
 
-        let mut open_beads: Vec<&Bead> = beads.iter().filter(|b| b.status == BeadStatus::Open).collect();
+        let mut open_beads: Vec<&Bead> = beads
+            .iter()
+            .filter(|b| b.status == BeadStatus::Open)
+            .collect();
         open_beads.sort_by_key(|b| b.created_at);
 
         assert_eq!(open_beads.len(), 3);
@@ -2394,17 +2672,32 @@ mod dashboard_tests {
         // Verify durations are positive
         for b in &open_beads {
             let dur = (now - b.created_at).num_seconds().max(0);
-            assert!(dur > 0, "duration should be positive for open bead {}", b.id);
+            assert!(
+                dur > 0,
+                "duration should be positive for open bead {}",
+                b.id
+            );
         }
     }
 
     #[test]
     fn test_longest_running_top_10_cap() {
         let beads: Vec<Bead> = (0..15)
-            .map(|i| make_bead(&format!("bd-{:03}", i), &format!("task {}", i), BeadStatus::Open, "proj", (i as i64 + 1) * 60))
+            .map(|i| {
+                make_bead(
+                    &format!("bd-{:03}", i),
+                    &format!("task {}", i),
+                    BeadStatus::Open,
+                    "proj",
+                    (i as i64 + 1) * 60,
+                )
+            })
             .collect();
 
-        let mut open_beads: Vec<&Bead> = beads.iter().filter(|b| b.status == BeadStatus::Open).collect();
+        let mut open_beads: Vec<&Bead> = beads
+            .iter()
+            .filter(|b| b.status == BeadStatus::Open)
+            .collect();
         open_beads.sort_by_key(|b| b.created_at);
 
         let top10: Vec<_> = open_beads.iter().take(10).collect();
@@ -2417,7 +2710,8 @@ mod dashboard_tests {
 
     #[test]
     fn test_project_spend_sorted_descending() {
-        let mut by_project: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+        let mut by_project: std::collections::HashMap<String, f64> =
+            std::collections::HashMap::new();
         by_project.insert("alpha".to_string(), 1.50);
         by_project.insert("beta".to_string(), 5.00);
         by_project.insert("gamma".to_string(), 0.25);
@@ -2426,7 +2720,11 @@ mod dashboard_tests {
             .into_iter()
             .map(|(project, cost_usd)| ProjectSpend { project, cost_usd })
             .collect();
-        spend.sort_by(|a, b| b.cost_usd.partial_cmp(&a.cost_usd).unwrap_or(std::cmp::Ordering::Equal));
+        spend.sort_by(|a, b| {
+            b.cost_usd
+                .partial_cmp(&a.cost_usd)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         assert_eq!(spend[0].project, "beta");
         assert_eq!(spend[1].project, "alpha");
@@ -2435,7 +2733,8 @@ mod dashboard_tests {
 
     #[test]
     fn test_adapter_spend_sorted_descending() {
-        let mut by_adapter: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+        let mut by_adapter: std::collections::HashMap<String, f64> =
+            std::collections::HashMap::new();
         by_adapter.insert("claude".to_string(), 3.00);
         by_adapter.insert("codex".to_string(), 7.50);
 
@@ -2443,7 +2742,11 @@ mod dashboard_tests {
             .into_iter()
             .map(|(adapter, cost_usd)| AdapterSpend { adapter, cost_usd })
             .collect();
-        spend.sort_by(|a, b| b.cost_usd.partial_cmp(&a.cost_usd).unwrap_or(std::cmp::Ordering::Equal));
+        spend.sort_by(|a, b| {
+            b.cost_usd
+                .partial_cmp(&a.cost_usd)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         assert_eq!(spend[0].adapter, "codex");
         assert_eq!(spend[1].adapter, "claude");
@@ -2481,13 +2784,18 @@ mod dashboard_tests {
 
     #[test]
     fn test_total_spend_aggregation() {
-        let mut by_project: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+        let mut by_project: std::collections::HashMap<String, f64> =
+            std::collections::HashMap::new();
         by_project.insert("alpha".to_string(), 1.50);
         by_project.insert("beta".to_string(), 5.00);
         by_project.insert("gamma".to_string(), 0.25);
 
         let total: f64 = by_project.values().sum();
-        assert!((total - 6.75).abs() < 1e-9, "total should be 6.75, got {}", total);
+        assert!(
+            (total - 6.75).abs() < 1e-9,
+            "total should be 6.75, got {}",
+            total
+        );
     }
 
     #[test]
@@ -2497,7 +2805,10 @@ mod dashboard_tests {
             make_bead("bd-closed", "Closed", BeadStatus::Closed, "proj", 9999),
         ];
 
-        let open: Vec<&Bead> = beads.iter().filter(|b| b.status == BeadStatus::Open).collect();
+        let open: Vec<&Bead> = beads
+            .iter()
+            .filter(|b| b.status == BeadStatus::Open)
+            .collect();
         assert_eq!(open.len(), 1);
         assert_eq!(open[0].id, "bd-open");
     }
@@ -2563,8 +2874,10 @@ async fn find_stitch_for_bead(bead_id: &str) -> Option<String> {
         use rusqlite::Connection;
 
         let db_path = std::path::PathBuf::from(
-            dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
-        ).join(".hoop").join("fleet.db");
+            dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")),
+        )
+        .join(".hoop")
+        .join("fleet.db");
 
         if !db_path.exists() {
             return None;
@@ -2576,7 +2889,8 @@ async fn find_stitch_for_bead(bead_id: &str) -> Option<String> {
             "SELECT stitch_id FROM stitch_beads WHERE bead_id = ?1 LIMIT 1",
             rusqlite::params![&bead_id],
             |row| row.get(0),
-        ).ok()
+        )
+        .ok()
     })
     .await
     .ok()

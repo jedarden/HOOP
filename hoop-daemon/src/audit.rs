@@ -6,9 +6,9 @@
 use crate::br_verbs;
 use hoop_schema::version::BR_MIN_VERSION;
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::fs;
 use std::time::Duration;
 
 /// Minimum disk space required (1GB in bytes)
@@ -172,8 +172,14 @@ pub fn run_audit(config: &AuditConfig) -> AuditReport {
     if config.allow_br_mismatch {
         checks.push(AuditCheck::warning(
             "br_version",
-            format!("br version check skipped (--allow-br-mismatch); requires >={}", BR_MIN_VERSION),
-            format!("Remove --allow-br-mismatch and update br to >={}", BR_MIN_VERSION),
+            format!(
+                "br version check skipped (--allow-br-mismatch); requires >={}",
+                BR_MIN_VERSION
+            ),
+            format!(
+                "Remove --allow-br-mismatch and update br to >={}",
+                BR_MIN_VERSION
+            ),
         ));
     } else {
         checks.push(check_br_version());
@@ -265,9 +271,7 @@ fn check_br_version() -> AuditCheck {
 
 /// Check if tmux is in PATH
 fn check_tmux() -> AuditCheck {
-    let result = Command::new("tmux")
-        .arg("-V")
-        .output();
+    let result = Command::new("tmux").arg("-V").output();
 
     match result {
         Ok(output) if output.status.success() => {
@@ -413,11 +417,7 @@ fn check_disk_space() -> AuditCheck {
 
                 if let Ok(output) = result {
                     let stdout = String::from_utf8_lossy(&output.stdout);
-                    let avail_str = stdout
-                        .lines()
-                        .last()
-                        .unwrap_or("0")
-                        .trim();
+                    let avail_str = stdout.lines().last().unwrap_or("0").trim();
 
                     if let Ok(avail_kb) = avail_str.parse::<u64>() {
                         let avail_bytes = avail_kb * 1024;
@@ -451,7 +451,10 @@ fn check_disk_space() -> AuditCheck {
     }
 
     // Fallback: assume OK if we can't check
-    AuditCheck::passed("disk_space", "Disk space check skipped (unsupported platform)")
+    AuditCheck::passed(
+        "disk_space",
+        "Disk space check skipped (unsupported platform)",
+    )
 }
 
 /// Check for leftover `~/.hoop.rollback.*` directories indicating an
@@ -478,8 +481,14 @@ fn check_restore_state() -> AuditCheck {
     let names = leftovers.join(", ");
     AuditCheck::critical(
         "restore_state",
-        format!("Interrupted restore detected: {} found. ~/.hoop/ may be inconsistent.", names),
-        format!("Complete the restore or recover manually:\n  mv {} ~/.hoop/  # undo partial restore", leftovers[0]),
+        format!(
+            "Interrupted restore detected: {} found. ~/.hoop/ may be inconsistent.",
+            names
+        ),
+        format!(
+            "Complete the restore or recover manually:\n  mv {} ~/.hoop/  # undo partial restore",
+            leftovers[0]
+        ),
     )
 }
 
@@ -495,7 +504,8 @@ fn check_tailscale() -> AuditCheck {
             // Try to parse as JSON to get the current machine's name
             if let Ok(json) = String::from_utf8(output.stdout) {
                 if let Ok(obj) = serde_json::from_str::<serde_json::Value>(&json) {
-                    if let Some(name) = obj.get("Self")
+                    if let Some(name) = obj
+                        .get("Self")
                         .and_then(|s| s.get("NickName"))
                         .and_then(|n| n.as_str())
                     {
@@ -542,8 +552,14 @@ fn version_meets_minimum(version: &str, minimum: &str) -> bool {
     let m_parts: Vec<&str> = minimum.trim_start_matches('v').split('.').collect();
 
     for i in 0..3 {
-        let v = v_parts.get(i).and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
-        let m = m_parts.get(i).and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+        let v = v_parts
+            .get(i)
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
+        let m = m_parts
+            .get(i)
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
 
         if v > m {
             return true;

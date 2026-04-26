@@ -54,9 +54,17 @@ pub struct HistoryMessage {
 /// File or URL attachment sent with a turn.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Attachment {
-    File { path: String },
-    Url { url: String },
-    Inline { name: String, content: String, mime: String },
+    File {
+        path: String,
+    },
+    Url {
+        url: String,
+    },
+    Inline {
+        name: String,
+        content: String,
+        mime: String,
+    },
 }
 
 /// Single event in the unified stream returned by `send_turn`.
@@ -68,9 +76,17 @@ pub enum AgentEvent {
     /// Incremental text delta from the model.
     TextDelta { text: String },
     /// Model is invoking a tool.
-    ToolUse { id: String, name: String, input: serde_json::Value },
+    ToolUse {
+        id: String,
+        name: String,
+        input: serde_json::Value,
+    },
     /// Tool returned a result.
-    ToolResult { id: String, output: serde_json::Value, is_error: bool },
+    ToolResult {
+        id: String,
+        output: serde_json::Value,
+        is_error: bool,
+    },
     /// Turn completed with optional usage stats.
     TurnComplete { usage: Option<TurnUsage> },
     /// An error occurred inside the adapter.
@@ -192,10 +208,7 @@ impl AdapterKind {
                 Some(args)
             }
             Self::OpenCode => {
-                let mut args = vec![
-                    "--session".to_string(),
-                    session_id.to_string(),
-                ];
+                let mut args = vec!["--session".to_string(), session_id.to_string()];
                 if has_started_session {
                     args.push("--continue".to_string());
                 }
@@ -326,7 +339,10 @@ pub fn build_adapter(config: &AgentAdapterConfig) -> Result<Box<dyn AgentAdapter
             default_model: config.model.clone(),
         }),
         AdapterKind::Zai => Box::new(ZaiGlmAdapter {
-            base_url: config.zai_base_url.clone().unwrap_or_else(|| "https://zai.example.com".to_string()),
+            base_url: config
+                .zai_base_url
+                .clone()
+                .unwrap_or_else(|| "https://zai.example.com".to_string()),
             api_key: config.zai_api_key.clone().unwrap_or_default(),
             default_model: config.model.clone(),
         }),
@@ -359,32 +375,30 @@ pub fn load_adapter_config() -> AgentAdapterConfig {
     }
 
     match std::fs::read_to_string(&config_path) {
-        Ok(contents) => {
-            match serde_yaml::from_str::<serde_yaml::Value>(&contents) {
-                Ok(root) => {
-                    if let Some(agent) = root.get("agent") {
-                        match serde_json::from_value::<AgentAdapterConfig>(
-                            serde_json::to_value(agent).unwrap_or_default(),
-                        ) {
-                            Ok(config) => {
-                                tracing::info!(
-                                    "Loaded agent adapter config: adapter={}, model={}",
-                                    config.adapter,
-                                    config.model
-                                );
-                                return config;
-                            }
-                            Err(e) => {
-                                tracing::warn!("Failed to parse agent config: {}, using defaults", e);
-                            }
+        Ok(contents) => match serde_yaml::from_str::<serde_yaml::Value>(&contents) {
+            Ok(root) => {
+                if let Some(agent) = root.get("agent") {
+                    match serde_json::from_value::<AgentAdapterConfig>(
+                        serde_json::to_value(agent).unwrap_or_default(),
+                    ) {
+                        Ok(config) => {
+                            tracing::info!(
+                                "Loaded agent adapter config: adapter={}, model={}",
+                                config.adapter,
+                                config.model
+                            );
+                            return config;
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to parse agent config: {}, using defaults", e);
                         }
                     }
                 }
-                Err(e) => {
-                    tracing::warn!("Failed to parse config.yml: {}, using defaults", e);
-                }
             }
-        }
+            Err(e) => {
+                tracing::warn!("Failed to parse config.yml: {}, using defaults", e);
+            }
+        },
         Err(e) => {
             tracing::warn!("Failed to read config.yml: {}, using defaults", e);
         }
@@ -406,23 +420,21 @@ pub fn load_system_prompt_budget_bytes() -> u32 {
     }
 
     match std::fs::read_to_string(&config_path) {
-        Ok(contents) => {
-            match serde_yaml::from_str::<serde_yaml::Value>(&contents) {
-                Ok(root) => {
-                    if let Some(agent) = root.get("agent") {
-                        if let Some(budget) = agent.get("system_prompt_budget_bytes") {
-                            if let Some(value) = budget.as_u64() {
-                                tracing::info!("Loaded system_prompt_budget_bytes: {}", value);
-                                return value as u32;
-                            }
+        Ok(contents) => match serde_yaml::from_str::<serde_yaml::Value>(&contents) {
+            Ok(root) => {
+                if let Some(agent) = root.get("agent") {
+                    if let Some(budget) = agent.get("system_prompt_budget_bytes") {
+                        if let Some(value) = budget.as_u64() {
+                            tracing::info!("Loaded system_prompt_budget_bytes: {}", value);
+                            return value as u32;
                         }
                     }
                 }
-                Err(e) => {
-                    tracing::warn!("Failed to parse config.yml: {}, using default budget", e);
-                }
             }
-        }
+            Err(e) => {
+                tracing::warn!("Failed to parse config.yml: {}, using default budget", e);
+            }
+        },
         Err(e) => {
             tracing::warn!("Failed to read config.yml: {}, using default budget", e);
         }
@@ -525,7 +537,10 @@ impl AgentAdapter for ClaudeCodeAdapter {
                         let event = parse_claude_stream_line(&line);
                         Some((event, (reader, child_handle)))
                     }
-                    Err(e) => Some((Err(anyhow::anyhow!("read error: {}", e)), (reader, child_handle))),
+                    Err(e) => Some((
+                        Err(anyhow::anyhow!("read error: {}", e)),
+                        (reader, child_handle),
+                    )),
                 }
             },
         );
@@ -552,47 +567,93 @@ pub fn parse_claude_stream_line(line: &str) -> Result<AgentEvent> {
         "assistant" | "content_block_start" | "content_block_delta" => {
             // Text delta - strip ANSI sequences
             if let Some(text) = val.get("text").and_then(|v| v.as_str()) {
-                return Ok(AgentEvent::TextDelta { text: crate::ansi_strip::strip_ansi(text) });
+                return Ok(AgentEvent::TextDelta {
+                    text: crate::ansi_strip::strip_ansi(text),
+                });
             }
             // Sometimes text is nested under delta
             if let Some(delta) = val.get("delta") {
                 if let Some(text) = delta.get("text").and_then(|v| v.as_str()) {
-                    return Ok(AgentEvent::TextDelta { text: crate::ansi_strip::strip_ansi(text) });
+                    return Ok(AgentEvent::TextDelta {
+                        text: crate::ansi_strip::strip_ansi(text),
+                    });
                 }
             }
-            Ok(AgentEvent::TextDelta { text: String::new() })
+            Ok(AgentEvent::TextDelta {
+                text: String::new(),
+            })
         }
         "tool_use" | "tool_call" => {
-            let id = val.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let name = val.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let id = val
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let name = val
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
             let input = val.get("input").cloned().unwrap_or(serde_json::Value::Null);
             Ok(AgentEvent::ToolUse { id, name, input })
         }
         "tool_result" => {
-            let id = val.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let output = val.get("output").cloned().unwrap_or(serde_json::Value::Null);
-            let is_error = val.get("is_error").and_then(|v| v.as_bool()).unwrap_or(false);
-            Ok(AgentEvent::ToolResult { id, output, is_error })
+            let id = val
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let output = val
+                .get("output")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null);
+            let is_error = val
+                .get("is_error")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            Ok(AgentEvent::ToolResult {
+                id,
+                output,
+                is_error,
+            })
         }
         "message_stop" | "turn_complete" => {
             let usage = parse_usage_from_value(&val);
             Ok(AgentEvent::TurnComplete { usage })
         }
         "error" => {
-            let message = val.get("message").and_then(|v| v.as_str()).unwrap_or("unknown error").to_string();
+            let message = val
+                .get("message")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown error")
+                .to_string();
             Ok(AgentEvent::Error { message })
         }
-        _ => Ok(AgentEvent::TextDelta { text: String::new() }),
+        _ => Ok(AgentEvent::TextDelta {
+            text: String::new(),
+        }),
     }
 }
 
 fn parse_usage_from_value(val: &serde_json::Value) -> Option<TurnUsage> {
     let usage = val.get("usage")?;
     Some(TurnUsage {
-        input_tokens: usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
-        output_tokens: usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
-        cache_read_tokens: usage.get("cache_read_input_tokens").or_else(|| usage.get("cache_read_tokens")).and_then(|v| v.as_u64()),
-        cache_write_tokens: usage.get("cache_creation_input_tokens").or_else(|| usage.get("cache_write_tokens")).and_then(|v| v.as_u64()),
+        input_tokens: usage
+            .get("input_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0),
+        output_tokens: usage
+            .get("output_tokens")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0),
+        cache_read_tokens: usage
+            .get("cache_read_input_tokens")
+            .or_else(|| usage.get("cache_read_tokens"))
+            .and_then(|v| v.as_u64()),
+        cache_write_tokens: usage
+            .get("cache_creation_input_tokens")
+            .or_else(|| usage.get("cache_write_tokens"))
+            .and_then(|v| v.as_u64()),
     })
 }
 
@@ -676,7 +737,10 @@ impl AgentAdapter for AnthropicApiAdapter {
         // Store text-only version in history so future replays remain lightweight.
         {
             let mut history = session.history.lock().await;
-            history.push(HistoryMessage { role: "user".into(), content: prompt.into() });
+            history.push(HistoryMessage {
+                role: "user".into(),
+                content: prompt.into(),
+            });
         }
 
         let client = reqwest_like_client();
@@ -696,7 +760,8 @@ impl AgentAdapter for AnthropicApiAdapter {
         }
 
         let session_history = session.history.clone();
-        let tracked_stream = track_assistant_response(parse_sse_response(response), session_history).await;
+        let tracked_stream =
+            track_assistant_response(parse_sse_response(response), session_history).await;
 
         Ok(Box::pin(tracked_stream))
     }
@@ -759,7 +824,10 @@ impl AgentAdapter for ZaiGlmAdapter {
     ) -> Result<EventStream> {
         let model = &session.model;
         let api_key = &self.api_key;
-        let url = format!("{}/v1/chat/completions", self.base_url.trim_end_matches('/'));
+        let url = format!(
+            "{}/v1/chat/completions",
+            self.base_url.trim_end_matches('/')
+        );
 
         // Build multimodal user content (plain string if no attachments).
         let user_content = build_openai_user_content(prompt, &attachments);
@@ -787,7 +855,10 @@ impl AgentAdapter for ZaiGlmAdapter {
         // Store text-only version in history so future replays remain lightweight.
         {
             let mut history = session.history.lock().await;
-            history.push(HistoryMessage { role: "user".into(), content: prompt.into() });
+            history.push(HistoryMessage {
+                role: "user".into(),
+                content: prompt.into(),
+            });
         }
 
         let client = reqwest_like_client();
@@ -806,7 +877,8 @@ impl AgentAdapter for ZaiGlmAdapter {
         }
 
         let session_history = session.history.clone();
-        let tracked_stream = track_assistant_response(parse_openai_sse_response(response), session_history).await;
+        let tracked_stream =
+            track_assistant_response(parse_openai_sse_response(response), session_history).await;
 
         Ok(Box::pin(tracked_stream))
     }
@@ -899,7 +971,10 @@ impl AgentAdapter for CodexAdapter {
                         let event = parse_claude_stream_line(&line);
                         Some((event, (reader, child_handle)))
                     }
-                    Err(e) => Some((Err(anyhow::anyhow!("read error: {}", e)), (reader, child_handle))),
+                    Err(e) => Some((
+                        Err(anyhow::anyhow!("read error: {}", e)),
+                        (reader, child_handle),
+                    )),
                 }
             },
         );
@@ -995,7 +1070,10 @@ impl AgentAdapter for OpenCodeAdapter {
                         let event = parse_claude_stream_line(&line);
                         Some((event, (reader, child_handle)))
                     }
-                    Err(e) => Some((Err(anyhow::anyhow!("read error: {}", e)), (reader, child_handle))),
+                    Err(e) => Some((
+                        Err(anyhow::anyhow!("read error: {}", e)),
+                        (reader, child_handle),
+                    )),
                 }
             },
         );
@@ -1091,7 +1169,10 @@ impl AgentAdapter for GeminiAdapter {
                         let event = parse_claude_stream_line(&line);
                         Some((event, (reader, child_handle)))
                     }
-                    Err(e) => Some((Err(anyhow::anyhow!("read error: {}", e)), (reader, child_handle))),
+                    Err(e) => Some((
+                        Err(anyhow::anyhow!("read error: {}", e)),
+                        (reader, child_handle),
+                    )),
                 }
             },
         );
@@ -1188,7 +1269,10 @@ impl AgentAdapter for AiderAdapter {
                         let event = parse_claude_stream_line(&line);
                         Some((event, (reader, child_handle)))
                     }
-                    Err(e) => Some((Err(anyhow::anyhow!("read error: {}", e)), (reader, child_handle))),
+                    Err(e) => Some((
+                        Err(anyhow::anyhow!("read error: {}", e)),
+                        (reader, child_handle),
+                    )),
                 }
             },
         );
@@ -1226,7 +1310,11 @@ fn build_anthropic_user_content(prompt: &str, attachments: &[Attachment]) -> ser
 
     for att in attachments {
         match att {
-            Attachment::Inline { name, content, mime } => {
+            Attachment::Inline {
+                name,
+                content,
+                mime,
+            } => {
                 if mime.starts_with("image/") {
                     parts.push(serde_json::json!({
                         "type": "image",
@@ -1283,7 +1371,11 @@ fn build_openai_user_content(prompt: &str, attachments: &[Attachment]) -> serde_
 
     for att in attachments {
         match att {
-            Attachment::Inline { name, content, mime } => {
+            Attachment::Inline {
+                name,
+                content,
+                mime,
+            } => {
                 if mime.starts_with("image/") {
                     parts.push(serde_json::json!({
                         "type": "image_url",
@@ -1329,7 +1421,12 @@ fn parse_sse_response(response: reqwest::Response) -> impl Stream<Item = Result<
     stream.flat_map(|chunk_result| {
         let chunk = match chunk_result {
             Ok(c) => c,
-            Err(e) => return futures_util::stream::iter(vec![Err(anyhow::anyhow!("stream error: {}", e))]),
+            Err(e) => {
+                return futures_util::stream::iter(vec![Err(anyhow::anyhow!(
+                    "stream error: {}",
+                    e
+                ))])
+            }
         };
 
         let text = String::from_utf8_lossy(&chunk);
@@ -1369,23 +1466,23 @@ async fn track_assistant_response(
             match result {
                 Ok(event) => {
                     match &event {
-                        AgentEvent::TextDelta { text }
-                            if !text.is_empty() => {
-                                accumulating.store(true, Ordering::Relaxed);
-                                buffer.lock().await.push_str(text);
-                            }
+                        AgentEvent::TextDelta { text } if !text.is_empty() => {
+                            accumulating.store(true, Ordering::Relaxed);
+                            buffer.lock().await.push_str(text);
+                        }
                         AgentEvent::TurnComplete { .. } | AgentEvent::SessionEnded { .. }
-                            if accumulating.load(Ordering::Relaxed) => {
-                                let full_text = buffer.lock().await.clone();
-                                if !full_text.is_empty() {
-                                    history.lock().await.push(HistoryMessage {
-                                        role: "assistant".into(),
-                                        content: full_text,
-                                    });
-                                }
-                                buffer.lock().await.clear();
-                                accumulating.store(false, Ordering::Relaxed);
+                            if accumulating.load(Ordering::Relaxed) =>
+                        {
+                            let full_text = buffer.lock().await.clone();
+                            if !full_text.is_empty() {
+                                history.lock().await.push(HistoryMessage {
+                                    role: "assistant".into(),
+                                    content: full_text,
+                                });
                             }
+                            buffer.lock().await.clear();
+                            accumulating.store(false, Ordering::Relaxed);
+                        }
                         _ => {}
                     }
                     Ok(event)
@@ -1397,7 +1494,9 @@ async fn track_assistant_response(
 }
 
 /// Parse an OpenAI-compatible SSE response into AgentEvent stream.
-fn parse_openai_sse_response(response: reqwest::Response) -> impl Stream<Item = Result<AgentEvent>> {
+fn parse_openai_sse_response(
+    response: reqwest::Response,
+) -> impl Stream<Item = Result<AgentEvent>> {
     use futures_util::StreamExt;
 
     let stream = response.bytes_stream();
@@ -1405,7 +1504,12 @@ fn parse_openai_sse_response(response: reqwest::Response) -> impl Stream<Item = 
     stream.flat_map(|chunk_result| {
         let chunk = match chunk_result {
             Ok(c) => c,
-            Err(e) => return futures_util::stream::iter(vec![Err(anyhow::anyhow!("stream error: {}", e))]),
+            Err(e) => {
+                return futures_util::stream::iter(vec![Err(anyhow::anyhow!(
+                    "stream error: {}",
+                    e
+                ))])
+            }
         };
 
         let text = String::from_utf8_lossy(&chunk);
@@ -1432,19 +1536,31 @@ fn anthropic_sse_to_event(val: &serde_json::Value) -> Result<AgentEvent> {
                 .and_then(|d| d.get("text"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
-            Ok(AgentEvent::TextDelta { text: crate::ansi_strip::strip_ansi(text) })
+            Ok(AgentEvent::TextDelta {
+                text: crate::ansi_strip::strip_ansi(text),
+            })
         }
         "content_block_start" => {
             if let Some(cb) = val.get("content_block") {
                 if cb.get("type").and_then(|v| v.as_str()) == Some("tool_use") {
                     return Ok(AgentEvent::ToolUse {
-                        id: cb.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                        name: cb.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        id: cb
+                            .get("id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        name: cb
+                            .get("name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
                         input: serde_json::Value::Null,
                     });
                 }
             }
-            Ok(AgentEvent::TextDelta { text: String::new() })
+            Ok(AgentEvent::TextDelta {
+                text: String::new(),
+            })
         }
         "message_delta" => {
             let usage = val.get("usage").map(|u| TurnUsage {
@@ -1467,10 +1583,18 @@ fn anthropic_sse_to_event(val: &serde_json::Value) -> Result<AgentEvent> {
             })
         }
         "error" => {
-            let msg = val.get("error").and_then(|e| e.get("message")).and_then(|v| v.as_str()).unwrap_or("error");
-            Ok(AgentEvent::Error { message: msg.to_string() })
+            let msg = val
+                .get("error")
+                .and_then(|e| e.get("message"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("error");
+            Ok(AgentEvent::Error {
+                message: msg.to_string(),
+            })
         }
-        _ => Ok(AgentEvent::TextDelta { text: String::new() }),
+        _ => Ok(AgentEvent::TextDelta {
+            text: String::new(),
+        }),
     }
 }
 
@@ -1485,13 +1609,19 @@ fn openai_sse_to_event(val: &serde_json::Value) -> Result<AgentEvent> {
         if let Some(tool_calls) = delta.and_then(|d| d.get("tool_calls")) {
             if let Some(tc) = tool_calls.as_array().and_then(|a| a.first()) {
                 return Ok(AgentEvent::ToolUse {
-                    id: tc.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    name: tc.get("function")
+                    id: tc
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    name: tc
+                        .get("function")
                         .and_then(|f| f.get("name"))
                         .and_then(|v| v.as_str())
                         .unwrap_or("")
                         .to_string(),
-                    input: tc.get("function")
+                    input: tc
+                        .get("function")
                         .and_then(|f| f.get("arguments"))
                         .and_then(|v| v.as_str())
                         .and_then(|s| serde_json::from_str(s).ok())
@@ -1501,16 +1631,29 @@ fn openai_sse_to_event(val: &serde_json::Value) -> Result<AgentEvent> {
         }
 
         // Text content delta - strip ANSI sequences
-        if let Some(content) = delta.and_then(|d| d.get("content")).and_then(|v| v.as_str()) {
-            return Ok(AgentEvent::TextDelta { text: crate::ansi_strip::strip_ansi(content) });
+        if let Some(content) = delta
+            .and_then(|d| d.get("content"))
+            .and_then(|v| v.as_str())
+        {
+            return Ok(AgentEvent::TextDelta {
+                text: crate::ansi_strip::strip_ansi(content),
+            });
         }
 
         // Finish reason
-        if choice.get("finish_reason").and_then(|v| v.as_str()).is_some() {
+        if choice
+            .get("finish_reason")
+            .and_then(|v| v.as_str())
+            .is_some()
+        {
             let usage = val.get("usage").map(|u| TurnUsage {
                 input_tokens: u.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
-                output_tokens: u.get("completion_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
-                cache_read_tokens: u.get("prompt_tokens_details")
+                output_tokens: u
+                    .get("completion_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0),
+                cache_read_tokens: u
+                    .get("prompt_tokens_details")
                     .and_then(|d| d.get("cached_tokens"))
                     .and_then(|v| v.as_u64()),
                 cache_write_tokens: None,
@@ -1519,7 +1662,9 @@ fn openai_sse_to_event(val: &serde_json::Value) -> Result<AgentEvent> {
         }
     }
 
-    Ok(AgentEvent::TextDelta { text: String::new() })
+    Ok(AgentEvent::TextDelta {
+        text: String::new(),
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -1536,14 +1681,25 @@ mod tests {
     #[test]
     fn event_shape_identity_text_delta() {
         let events: Vec<AgentEvent> = vec![
-            AgentEvent::TextDelta { text: "hello".into() },
-            AgentEvent::TextDelta { text: "hello".into() },
-            AgentEvent::TextDelta { text: "hello".into() },
+            AgentEvent::TextDelta {
+                text: "hello".into(),
+            },
+            AgentEvent::TextDelta {
+                text: "hello".into(),
+            },
+            AgentEvent::TextDelta {
+                text: "hello".into(),
+            },
         ];
 
-        let jsons: Vec<String> = events.iter().map(|e| serde_json::to_string(e).unwrap()).collect();
-        assert!(jsons.windows(2).all(|w| w[0] == w[1]),
-            "TextDelta must serialize identically regardless of source adapter");
+        let jsons: Vec<String> = events
+            .iter()
+            .map(|e| serde_json::to_string(e).unwrap())
+            .collect();
+        assert!(
+            jsons.windows(2).all(|w| w[0] == w[1]),
+            "TextDelta must serialize identically regardless of source adapter"
+        );
     }
 
     #[test]
@@ -1555,7 +1711,10 @@ mod tests {
         };
         let json = serde_json::to_string(&event).unwrap();
         let parsed: AgentEvent = serde_json::from_str(&json).unwrap();
-        assert_eq!(event, parsed, "ToolUse round-trips through JSON identically");
+        assert_eq!(
+            event, parsed,
+            "ToolUse round-trips through JSON identically"
+        );
     }
 
     #[test]
@@ -1587,7 +1746,9 @@ mod tests {
 
     #[test]
     fn event_shape_identity_error() {
-        let event = AgentEvent::Error { message: "rate limited".into() };
+        let event = AgentEvent::Error {
+            message: "rate limited".into(),
+        };
         let json = serde_json::to_string(&event).unwrap();
         let parsed: AgentEvent = serde_json::from_str(&json).unwrap();
         assert_eq!(event, parsed);
@@ -1595,7 +1756,9 @@ mod tests {
 
     #[test]
     fn event_shape_identity_session_started() {
-        let event = AgentEvent::SessionStarted { session_id: SessionId("abc".into()) };
+        let event = AgentEvent::SessionStarted {
+            session_id: SessionId("abc".into()),
+        };
         let json = serde_json::to_string(&event).unwrap();
         let parsed: AgentEvent = serde_json::from_str(&json).unwrap();
         assert_eq!(event, parsed);
@@ -1603,7 +1766,9 @@ mod tests {
 
     #[test]
     fn event_shape_identity_session_ended() {
-        let event = AgentEvent::SessionEnded { reason: "max_tokens".into() };
+        let event = AgentEvent::SessionEnded {
+            reason: "max_tokens".into(),
+        };
         let json = serde_json::to_string(&event).unwrap();
         let parsed: AgentEvent = serde_json::from_str(&json).unwrap();
         assert_eq!(event, parsed);
@@ -1613,18 +1778,36 @@ mod tests {
     #[test]
     fn event_tagged_json_has_type_field() {
         let events = vec![
-            AgentEvent::SessionStarted { session_id: SessionId("s1".into()) },
+            AgentEvent::SessionStarted {
+                session_id: SessionId("s1".into()),
+            },
             AgentEvent::TextDelta { text: "hi".into() },
-            AgentEvent::ToolUse { id: "1".into(), name: "n".into(), input: serde_json::Value::Null },
-            AgentEvent::ToolResult { id: "1".into(), output: serde_json::Value::Null, is_error: false },
+            AgentEvent::ToolUse {
+                id: "1".into(),
+                name: "n".into(),
+                input: serde_json::Value::Null,
+            },
+            AgentEvent::ToolResult {
+                id: "1".into(),
+                output: serde_json::Value::Null,
+                is_error: false,
+            },
             AgentEvent::TurnComplete { usage: None },
-            AgentEvent::Error { message: "err".into() },
-            AgentEvent::SessionEnded { reason: "done".into() },
+            AgentEvent::Error {
+                message: "err".into(),
+            },
+            AgentEvent::SessionEnded {
+                reason: "done".into(),
+            },
         ];
 
         for event in &events {
             let json = serde_json::to_string(event).unwrap();
-            assert!(json.contains("\"type\":"), "event must have type tag: {}", json);
+            assert!(
+                json.contains("\"type\":"),
+                "event must have type tag: {}",
+                json
+            );
         }
     }
 
@@ -1660,7 +1843,12 @@ mod tests {
                 ..Default::default()
             };
             let adapter = build_adapter(&config).unwrap();
-            assert_eq!(adapter.kind(), expected, "factory must build {} adapter", name);
+            assert_eq!(
+                adapter.kind(),
+                expected,
+                "factory must build {} adapter",
+                name
+            );
         }
     }
 
@@ -1678,10 +1866,22 @@ mod tests {
     #[test]
     fn all_variants_round_trip() {
         let events: Vec<AgentEvent> = vec![
-            AgentEvent::SessionStarted { session_id: SessionId("sid".into()) },
-            AgentEvent::TextDelta { text: "delta".into() },
-            AgentEvent::ToolUse { id: "t1".into(), name: "tool".into(), input: serde_json::json!({"k": "v"}) },
-            AgentEvent::ToolResult { id: "t1".into(), output: serde_json::json!("res"), is_error: false },
+            AgentEvent::SessionStarted {
+                session_id: SessionId("sid".into()),
+            },
+            AgentEvent::TextDelta {
+                text: "delta".into(),
+            },
+            AgentEvent::ToolUse {
+                id: "t1".into(),
+                name: "tool".into(),
+                input: serde_json::json!({"k": "v"}),
+            },
+            AgentEvent::ToolResult {
+                id: "t1".into(),
+                output: serde_json::json!("res"),
+                is_error: false,
+            },
             AgentEvent::TurnComplete {
                 usage: Some(TurnUsage {
                     input_tokens: 1,
@@ -1690,8 +1890,12 @@ mod tests {
                     cache_write_tokens: Some(4),
                 }),
             },
-            AgentEvent::Error { message: "boom".into() },
-            AgentEvent::SessionEnded { reason: "limit".into() },
+            AgentEvent::Error {
+                message: "boom".into(),
+            },
+            AgentEvent::SessionEnded {
+                reason: "limit".into(),
+            },
         ];
 
         for original in &events {
@@ -1774,11 +1978,17 @@ mod tests {
         let args = AdapterKind::Claude
             .build_turn_args(TEST_SESSION_ID, TEST_PROMPT, false)
             .unwrap();
-        assert_eq!(args, vec![
-            "--session-id", TEST_SESSION_ID,
-            "--output-format", "stream-json",
-            "-p", TEST_PROMPT,
-        ]);
+        assert_eq!(
+            args,
+            vec![
+                "--session-id",
+                TEST_SESSION_ID,
+                "--output-format",
+                "stream-json",
+                "-p",
+                TEST_PROMPT,
+            ]
+        );
     }
 
     #[test]
@@ -1786,11 +1996,17 @@ mod tests {
         let args = AdapterKind::Claude
             .build_turn_args(TEST_SESSION_ID, TEST_PROMPT, true)
             .unwrap();
-        assert_eq!(args, vec![
-            "--resume", TEST_SESSION_ID,
-            "--output-format", "stream-json",
-            "-p", TEST_PROMPT,
-        ]);
+        assert_eq!(
+            args,
+            vec![
+                "--resume",
+                TEST_SESSION_ID,
+                "--output-format",
+                "stream-json",
+                "-p",
+                TEST_PROMPT,
+            ]
+        );
     }
 
     /// Codex golden transcript: turn 1 uses `exec`, turn N uses `exec resume <id>`.
@@ -1799,10 +2015,7 @@ mod tests {
         let args = AdapterKind::Codex
             .build_turn_args(TEST_SESSION_ID, TEST_PROMPT, false)
             .unwrap();
-        assert_eq!(args, vec![
-            "exec",
-            "-p", TEST_PROMPT,
-        ]);
+        assert_eq!(args, vec!["exec", "-p", TEST_PROMPT,]);
     }
 
     #[test]
@@ -1810,10 +2023,10 @@ mod tests {
         let args = AdapterKind::Codex
             .build_turn_args(TEST_SESSION_ID, TEST_PROMPT, true)
             .unwrap();
-        assert_eq!(args, vec![
-            "exec", "resume", TEST_SESSION_ID,
-            "-p", TEST_PROMPT,
-        ]);
+        assert_eq!(
+            args,
+            vec!["exec", "resume", TEST_SESSION_ID, "-p", TEST_PROMPT,]
+        );
     }
 
     /// OpenCode golden transcript: turn 1 uses `--session <sid>`, turn N adds `--continue`.
@@ -1822,10 +2035,7 @@ mod tests {
         let args = AdapterKind::OpenCode
             .build_turn_args(TEST_SESSION_ID, TEST_PROMPT, false)
             .unwrap();
-        assert_eq!(args, vec![
-            "--session", TEST_SESSION_ID,
-            "-p", TEST_PROMPT,
-        ]);
+        assert_eq!(args, vec!["--session", TEST_SESSION_ID, "-p", TEST_PROMPT,]);
     }
 
     #[test]
@@ -1833,11 +2043,16 @@ mod tests {
         let args = AdapterKind::OpenCode
             .build_turn_args(TEST_SESSION_ID, TEST_PROMPT, true)
             .unwrap();
-        assert_eq!(args, vec![
-            "--session", TEST_SESSION_ID,
-            "--continue",
-            "-p", TEST_PROMPT,
-        ]);
+        assert_eq!(
+            args,
+            vec![
+                "--session",
+                TEST_SESSION_ID,
+                "--continue",
+                "-p",
+                TEST_PROMPT,
+            ]
+        );
     }
 
     /// Gemini golden transcript: sandbox-native, same args regardless of turn count.
@@ -1856,10 +2071,18 @@ mod tests {
     /// API adapters return None (no CLI invocation).
     #[test]
     fn api_adapters_produce_no_cli_args() {
-        assert!(AdapterKind::Anthropic.build_turn_args("sid", "prompt", false).is_none());
-        assert!(AdapterKind::Anthropic.build_turn_args("sid", "prompt", true).is_none());
-        assert!(AdapterKind::Zai.build_turn_args("sid", "prompt", false).is_none());
-        assert!(AdapterKind::Zai.build_turn_args("sid", "prompt", true).is_none());
+        assert!(AdapterKind::Anthropic
+            .build_turn_args("sid", "prompt", false)
+            .is_none());
+        assert!(AdapterKind::Anthropic
+            .build_turn_args("sid", "prompt", true)
+            .is_none());
+        assert!(AdapterKind::Zai
+            .build_turn_args("sid", "prompt", false)
+            .is_none());
+        assert!(AdapterKind::Zai
+            .build_turn_args("sid", "prompt", true)
+            .is_none());
     }
 
     /// Verify has_started_session is false on spawn, true on resume — for all CLI adapters.
@@ -1867,7 +2090,9 @@ mod tests {
     fn spawn_sets_has_started_false_resume_sets_true() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let adapter = ClaudeCodeAdapter { default_model: "claude-opus-4-7".into() };
+            let adapter = ClaudeCodeAdapter {
+                default_model: "claude-opus-4-7".into(),
+            };
             let config = SpawnConfig {
                 model: "claude-opus-4-7".into(),
                 system_prompt: None,
@@ -1877,10 +2102,16 @@ mod tests {
                 working_dir: None,
             };
             let spawned = adapter.spawn_session(config).await.unwrap();
-            assert!(!spawned.has_started_session, "spawn must start with has_started_session=false");
+            assert!(
+                !spawned.has_started_session,
+                "spawn must start with has_started_session=false"
+            );
 
             let resumed = adapter.resume_session(&spawned.id).await.unwrap();
-            assert!(resumed.has_started_session, "resume must set has_started_session=true");
+            assert!(
+                resumed.has_started_session,
+                "resume must set has_started_session=true"
+            );
         });
     }
 
@@ -1889,7 +2120,9 @@ mod tests {
     fn codex_spawn_resume_flags() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let adapter = CodexAdapter { default_model: "codex-mini".into() };
+            let adapter = CodexAdapter {
+                default_model: "codex-mini".into(),
+            };
             let config = SpawnConfig {
                 model: "codex-mini".into(),
                 system_prompt: None,
@@ -1911,7 +2144,9 @@ mod tests {
     fn opencode_spawn_resume_flags() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let adapter = OpenCodeAdapter { default_model: "gpt-4o".into() };
+            let adapter = OpenCodeAdapter {
+                default_model: "gpt-4o".into(),
+            };
             let config = SpawnConfig {
                 model: "gpt-4o".into(),
                 system_prompt: None,
@@ -1933,7 +2168,9 @@ mod tests {
     fn gemini_spawn_resume_flags() {
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            let adapter = GeminiAdapter { default_model: "gemini-2.5-pro".into() };
+            let adapter = GeminiAdapter {
+                default_model: "gemini-2.5-pro".into(),
+            };
             let config = SpawnConfig {
                 model: "gemini-2.5-pro".into(),
                 system_prompt: None,

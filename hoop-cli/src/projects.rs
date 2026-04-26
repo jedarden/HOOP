@@ -3,13 +3,22 @@
 //! Handles the `hoop projects` subcommands for managing the ~/.hoop/projects.yaml registry.
 
 use anyhow::{Context, Result};
+use hoop_daemon::fleet::{self, ActionResult};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::borrow::Cow;
+use std::collections::HashSet;
 use std::fmt;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+
+/// Get the current actor identity (OS user for CLI operations)
+fn get_actor() -> String {
+    let user = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "unknown".to_string());
+    format!("os:{}", user)
+}
 
 /// Path to the projects registry file
 fn registry_path() -> Result<PathBuf> {
@@ -121,11 +130,9 @@ impl ProjectEntry {
     /// Iterate over all workspace canonical paths (for joins/dedup).
     /// Falls back to raw path when canonical_path is absent (legacy data).
     pub fn all_canonical_paths(&self) -> impl Iterator<Item = Cow<'_, Path>> {
-        self.workspaces.iter().map(|w| {
-            match &w.canonical_path {
-                Some(cp) => Cow::Borrowed(cp.as_path()),
-                None => Cow::Borrowed(w.path.as_path()),
-            }
+        self.workspaces.iter().map(|w| match &w.canonical_path {
+            Some(cp) => Cow::Borrowed(cp.as_path()),
+            None => Cow::Borrowed(w.path.as_path()),
         })
     }
 
@@ -134,10 +141,7 @@ impl ProjectEntry {
     #[allow(dead_code)]
     pub fn validate_workspaces(&self) -> Result<Vec<String>> {
         if self.workspaces.is_empty() {
-            anyhow::bail!(
-                "Project '{}': workspaces array cannot be empty",
-                self.name
-            );
+            anyhow::bail!("Project '{}': workspaces array cannot be empty", self.name);
         }
 
         let mut warnings = Vec::new();
@@ -337,7 +341,11 @@ impl ProjectsRegistry {
         }
 
         // raw = original input (or canonical if they're the same)
-        let raw = if path == canonical { canonical.clone() } else { path };
+        let raw = if path == canonical {
+            canonical.clone()
+        } else {
+            path
+        };
 
         let entry = ProjectEntry {
             name,
@@ -403,8 +411,30 @@ pub fn add_project(path: &str) -> Result<ProjectEntry> {
     let raw_path = PathBuf::from(path);
 
     let mut registry = ProjectsRegistry::load()?;
-    let entry = registry.add(raw_path, None)?;
+    let entry = registry.add(raw_path.clone(), None)?;
     registry.save()?;
+
+    // Write audit row
+    let canonical = entry.workspaces[0]
+        .canonical_path
+        .as_ref()
+        .unwrap_or(&raw_path);
+    let args = serde_json::json!({
+        "path": raw_path.to_string_lossy(),
+        "canonical_path": canonical.to_string_lossy(),
+    });
+    let _ = fleet::write_audit_row(
+        &get_actor(),
+        fleet::ActionKind::ProjectAdded,
+        &entry.name,
+        Some(&entry.name),
+        Some(args.to_string()),
+        ActionResult::Success,
+        None,
+        None,
+        None,
+        None,
+    );
 
     Ok(entry)
 }
@@ -418,9 +448,36 @@ pub fn list_projects() -> Result<Vec<ProjectEntry>> {
 /// Remove a project from the registry
 pub fn remove_project(name: &str) -> Result<bool> {
     let mut registry = ProjectsRegistry::load()?;
+
+    // Capture project details for audit before removal
+    let project = registry.get(name).cloned();
+
     let removed = registry.remove(name)?;
+    if !removed {
+        return Ok(false);
+    }
     registry.save()?;
-    Ok(removed)
+
+    // Write audit row
+    if let Some(proj) = project {
+        let args = serde_json::json!({
+            "name": name,
+        });
+        let _ = fleet::write_audit_row(
+            &get_actor(),
+            fleet::ActionKind::ProjectRemoved,
+            name,
+            Some(name),
+            Some(args.to_string()),
+            ActionResult::Success,
+            None,
+            None,
+            None,
+            None,
+        );
+    }
+
+    Ok(true)
 }
 
 /// Show details for a single project
@@ -530,6 +587,30 @@ pub fn scan_projects(root: &str, auto_yes: bool) -> Result<()> {
             match registry.add(path.clone(), None) {
                 Ok(entry) => {
                     println!("    Registered '{}' -> {}", entry.name, path.display());
+
+                    // Write audit row for this discovery
+                    let canonical = entry.workspaces[0]
+                        .canonical_path
+                        .as_ref()
+                        .unwrap_or(path);
+                    let args = serde_json::json!({
+                        "path": path.to_string_lossy(),
+                        "canonical_path": canonical.to_string_lossy(),
+                        "scan_root": root,
+                    });
+                    let _ = fleet::write_audit_row(
+                        &get_actor(),
+                        fleet::ActionKind::ProjectAdded,
+                        &entry.name,
+                        Some(&entry.name),
+                        Some(args.to_string()),
+                        ActionResult::Success,
+                        None,
+                        None,
+                        None,
+                        None,
+                    );
+
                     new_count += 1;
                 }
                 Err(e) => {
@@ -565,6 +646,30 @@ pub fn scan_projects(root: &str, auto_yes: bool) -> Result<()> {
             match registry.add(path.clone(), name_opt) {
                 Ok(entry) => {
                     println!("    Registered '{}' -> {}", entry.name, path.display());
+
+                    // Write audit row for this discovery
+                    let canonical = entry.workspaces[0]
+                        .canonical_path
+                        .as_ref()
+                        .unwrap_or(path);
+                    let args = serde_json::json!({
+                        "path": path.to_string_lossy(),
+                        "canonical_path": canonical.to_string_lossy(),
+                        "scan_root": root,
+                    });
+                    let _ = fleet::write_audit_row(
+                        &get_actor(),
+                        fleet::ActionKind::ProjectAdded,
+                        &entry.name,
+                        Some(&entry.name),
+                        Some(args.to_string()),
+                        ActionResult::Success,
+                        None,
+                        None,
+                        None,
+                        None,
+                    );
+
                     new_count += 1;
                 }
                 Err(e) => {
@@ -649,8 +754,14 @@ mod tests {
         );
 
         let reserialized = serde_yaml::to_string(&parsed).expect("serialize");
-        assert!(reserialized.contains("path:"), "should re-serialize as shorthand");
-        assert!(!reserialized.contains("workspaces:"), "should not emit workspaces key");
+        assert!(
+            reserialized.contains("path:"),
+            "should re-serialize as shorthand"
+        );
+        assert!(
+            !reserialized.contains("workspaces:"),
+            "should not emit workspaces key"
+        );
     }
 
     #[test]
@@ -670,8 +781,14 @@ workspaces:
         assert_eq!(parsed.workspaces[1].role, WorkspaceRole::Manifests);
 
         let reserialized = serde_yaml::to_string(&parsed).expect("serialize");
-        assert!(reserialized.contains("workspaces:"), "should emit workspaces key");
-        assert!(!reserialized.contains("\npath:"), "should not use shorthand form");
+        assert!(
+            reserialized.contains("workspaces:"),
+            "should emit workspaces key"
+        );
+        assert!(
+            !reserialized.contains("\npath:"),
+            "should not use shorthand form"
+        );
     }
 
     #[test]
@@ -687,7 +804,10 @@ workspaces:
             }],
         };
         let yaml = serde_yaml::to_string(&entry).expect("serialize");
-        assert!(yaml.contains("workspaces:"), "label/color forces multi-workspace form");
+        assert!(
+            yaml.contains("workspaces:"),
+            "label/color forces multi-workspace form"
+        );
         assert!(yaml.contains("label:"));
         assert!(yaml.contains("color:"));
 
@@ -704,7 +824,11 @@ workspaces:
         let result: Result<ProjectEntry, _> = serde_yaml::from_str(yaml);
         assert!(result.is_err(), "empty workspaces array must be rejected");
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("empty"), "error should mention 'empty': {}", msg);
+        assert!(
+            msg.contains("empty"),
+            "error should mention 'empty': {}",
+            msg
+        );
     }
 
     #[test]
@@ -860,7 +984,9 @@ workspaces:
     #[test]
     fn remove_existing_project() {
         let mut registry = ProjectsRegistry::default();
-        registry.projects.push(make_entry("to-remove", PathBuf::from("/tmp/to-remove")));
+        registry
+            .projects
+            .push(make_entry("to-remove", PathBuf::from("/tmp/to-remove")));
 
         assert!(registry.remove("to-remove").expect("remove"));
         assert!(registry.projects.is_empty());
@@ -1052,7 +1178,10 @@ workspaces:
         let entry = registry.add(link.clone(), None).expect("add via symlink");
 
         // raw = symlink path, canonical = real resolved path
-        assert_eq!(entry.workspaces[0].path, link, "raw path should be the symlink");
+        assert_eq!(
+            entry.workspaces[0].path, link,
+            "raw path should be the symlink"
+        );
         assert_eq!(
             entry.workspaces[0].canonical_path.as_ref(),
             Some(&canonical),
@@ -1070,12 +1199,17 @@ workspaces:
         std::os::unix::fs::symlink(&real, &link).expect("symlink");
 
         let mut registry = ProjectsRegistry::default();
-        registry.add(real.clone(), Some("via-real")).expect("add via real");
+        registry
+            .add(real.clone(), Some("via-real"))
+            .expect("add via real");
 
         let result = registry.add(link, Some("via-link"));
         assert!(result.is_err(), "should reject duplicate canonical path");
         assert!(
-            result.unwrap_err().to_string().contains("already registered"),
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("already registered"),
             "error should reference the existing project"
         );
     }
@@ -1105,8 +1239,14 @@ workspaces:
         // Serialize as shorthand
         let yaml = serde_yaml::to_string(&entry).expect("serialize");
         assert!(yaml.contains("path:"), "should use shorthand form");
-        assert!(yaml.contains("canonical_path:"), "should include canonical_path");
-        assert!(!yaml.contains("workspaces:"), "should not use multi-workspace form");
+        assert!(
+            yaml.contains("canonical_path:"),
+            "should include canonical_path"
+        );
+        assert!(
+            !yaml.contains("workspaces:"),
+            "should not use multi-workspace form"
+        );
 
         // Deserialize back
         let parsed: ProjectEntry = serde_yaml::from_str(&yaml).expect("deserialize");
@@ -1125,8 +1265,10 @@ workspaces:
         assert!(parsed.workspaces[0].canonical_path.is_none());
 
         let reserialized = serde_yaml::to_string(&parsed).expect("serialize");
-        assert!(!reserialized.contains("canonical_path:"),
-            "should not emit canonical_path when None");
+        assert!(
+            !reserialized.contains("canonical_path:"),
+            "should not emit canonical_path when None"
+        );
     }
 
     #[test]
@@ -1164,6 +1306,9 @@ workspaces:
         // by canonical path, so only one entry
         let canonical = fs::canonicalize(&real).expect("canonicalize");
         let canonical_count = found.iter().filter(|p| **p == canonical).count();
-        assert_eq!(canonical_count, 1, "dedup by canonical should collapse symlink alias");
+        assert_eq!(
+            canonical_count, 1,
+            "dedup by canonical should collapse symlink alias"
+        );
     }
 }

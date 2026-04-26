@@ -15,7 +15,10 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use futures_util::{stream::StreamExt, SinkExt};
-use hoop_schema::{ParsedSession, ParsedSessionKind, ParsedSessionKindVariant1, ParsedSessionKindVariant2, ParsedSessionKindVariant3, ParsedSessionMessagesItem, ParsedSessionMessagesItemUsage};
+use hoop_schema::{
+    ParsedSession, ParsedSessionKind, ParsedSessionKindVariant1, ParsedSessionKindVariant2,
+    ParsedSessionKindVariant3, ParsedSessionMessagesItem, ParsedSessionMessagesItemUsage,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -94,11 +97,19 @@ struct WsOutMsg {
 
 impl WsOutMsg {
     fn new(json: String) -> Self {
-        Self { topic: None, json, queued_at: Instant::now() }
+        Self {
+            topic: None,
+            json,
+            queued_at: Instant::now(),
+        }
     }
 
     fn with_topic(json: String, topic: impl Into<String>) -> Self {
-        Self { topic: Some(topic.into()), json, queued_at: Instant::now() }
+        Self {
+            topic: Some(topic.into()),
+            json,
+            queued_at: Instant::now(),
+        }
     }
 }
 
@@ -325,17 +336,39 @@ fn load_dictated_note(stitch_id: &str) -> Option<DictatedNoteData> {
             let language: Option<String> = row.get(4)?;
             let recorded_at: String = row.get(5)?;
             let status_str: String = row.get(6)?;
-            Ok((audio_filename, transcript, words_json, duration_secs, language, recorded_at, status_str))
+            Ok((
+                audio_filename,
+                transcript,
+                words_json,
+                duration_secs,
+                language,
+                recorded_at,
+                status_str,
+            ))
         },
     );
 
     match result {
-        Ok((_audio_filename, transcript, words_json, duration_secs, language, recorded_at, status_str)) => {
+        Ok((
+            _audio_filename,
+            transcript,
+            words_json,
+            duration_secs,
+            language,
+            recorded_at,
+            status_str,
+        )) => {
             let transcript_words: Vec<TranscriptWordData> = words_json
-                .and_then(|j| serde_json::from_str::<Vec<crate::dictated_notes::TranscriptWord>>(&j).ok())
+                .and_then(|j| {
+                    serde_json::from_str::<Vec<crate::dictated_notes::TranscriptWord>>(&j).ok()
+                })
                 .unwrap_or_default()
                 .into_iter()
-                .map(|w| TranscriptWordData { word: w.word, start: w.start, end: w.end })
+                .map(|w| TranscriptWordData {
+                    word: w.word,
+                    start: w.start,
+                    end: w.end,
+                })
                 .collect();
 
             let audio_url = format!("/api/dictated-notes/{}/audio", stitch_id);
@@ -362,12 +395,23 @@ fn load_dictated_note(stitch_id: &str) -> Option<DictatedNoteData> {
 
 impl From<ParsedSession> for ConversationData {
     fn from(s: ParsedSession) -> Self {
-        let is_dictated = matches!(s.kind, ParsedSessionKind::Variant1(ParsedSessionKindVariant1::Dictated));
+        let is_dictated = matches!(
+            s.kind,
+            ParsedSessionKind::Variant1(ParsedSessionKindVariant1::Dictated)
+        );
 
         let (worker_metadata, kind_str) = match &s.kind {
-            ParsedSessionKind::Variant3(ParsedSessionKindVariant3::Operator) => (None, "operator".to_string()),
-            ParsedSessionKind::Variant1(ParsedSessionKindVariant1::Dictated) => (None, "dictated".to_string()),
-            ParsedSessionKind::Variant0 { worker, bead, strand } => (
+            ParsedSessionKind::Variant3(ParsedSessionKindVariant3::Operator) => {
+                (None, "operator".to_string())
+            }
+            ParsedSessionKind::Variant1(ParsedSessionKindVariant1::Dictated) => {
+                (None, "dictated".to_string())
+            }
+            ParsedSessionKind::Variant0 {
+                worker,
+                bead,
+                strand,
+            } => (
                 Some(WorkerMetadataData {
                     worker: worker.clone(),
                     bead: bead.clone(),
@@ -375,13 +419,14 @@ impl From<ParsedSession> for ConversationData {
                 }),
                 "worker".to_string(),
             ),
-            ParsedSessionKind::Variant2(ParsedSessionKindVariant2::AdHoc) => (None, "ad-hoc".to_string()),
+            ParsedSessionKind::Variant2(ParsedSessionKindVariant2::AdHoc) => {
+                (None, "ad-hoc".to_string())
+            }
         };
 
         // For dictated sessions try session_id first, then id (in case they differ)
         let dictated_note = if is_dictated {
-            load_dictated_note(&s.session_id)
-                .or_else(|| load_dictated_note(&s.id))
+            load_dictated_note(&s.session_id).or_else(|| load_dictated_note(&s.id))
         } else {
             None
         };
@@ -394,7 +439,11 @@ impl From<ParsedSession> for ConversationData {
             worker_metadata,
             cwd: s.cwd,
             title: s.title,
-            messages: s.messages.into_iter().map(SessionMessageData::from).collect(),
+            messages: s
+                .messages
+                .into_iter()
+                .map(SessionMessageData::from)
+                .collect(),
             total_tokens: (s.total_usage.input_tokens + s.total_usage.output_tokens) as u64,
             created_at: s.created_at.to_rfc3339(),
             updated_at: s.updated_at.to_rfc3339(),
@@ -566,6 +615,25 @@ pub struct CollisionAlertData {
     pub overlapping_files: Vec<String>,
 }
 
+/// Pattern saved query synced event data (§4.7)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PatternSavedQuerySyncedData {
+    /// Pattern ID
+    pub pattern_id: String,
+    /// Stitch ID
+    pub stitch_id: String,
+    /// Project name
+    pub project: String,
+    /// Bead title
+    pub title: String,
+    /// Query duration in milliseconds
+    pub query_duration_ms: u128,
+    /// Whether the query matched
+    pub matched: bool,
+    /// ISO 8601 timestamp of sync
+    pub synced_at: String,
+}
+
 /// WebSocket event sent to clients
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -608,6 +676,11 @@ pub struct WsEvent {
     pub collision_alert: Option<CollisionAlertData>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bead_created_by_hoop: Option<BeadCreatedByHoopData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pattern_saved_query_synced: Option<PatternSavedQuerySyncedData>,
+    /// Stuck detector alert (§C1, hoop-ttb.3.25)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stuck_alert: Option<crate::stuck_detector::StuckAlert>,
     /// Present only on `init` events; the server-authoritative subscription list.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subscriptions: Option<Vec<String>>,
@@ -1080,6 +1153,34 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: Some(data),
+            stuck_alert: None,
+            subscriptions: None,
+        }
+    }
+
+    /// Create a stuck detector alert event (§C1, hoop-ttb.3.25)
+    pub fn stuck_alert_event(alert: crate::stuck_detector::StuckAlert) -> Self {
+        Self {
+            event_type: "stuck_alert".to_string(),
+            worker: None,
+            workers: None,
+            beads: None,
+            conversations: None,
+            conversation: None,
+            streaming: None,
+            projects: None,
+            config_status: None,
+            capacity: None,
+            bead_event: None,
+            bead_events: None,
+            stitch_created: None,
+            agent_session: None,
+            morning_brief: None,
+            draft_update: None,
+            spawn_ack_alert: None,
+            collision_alert: None,
+            bead_created_by_hoop: None,
+            stuck_alert: Some(alert),
             subscriptions: None,
         }
     }
@@ -1109,6 +1210,7 @@ impl WsEvent {
             spawn_ack_alert: None,
             collision_alert: None,
             bead_created_by_hoop: None,
+            stuck_alert: None,
             subscriptions: Some(subs),
         }
     }
@@ -1128,7 +1230,10 @@ pub struct WorkerRegistry {
 }
 
 impl WorkerRegistry {
-    pub fn new(monitor: broadcast::Sender<MonitorEvent>, sessions: broadcast::Sender<SessionEvent>) -> Self {
+    pub fn new(
+        monitor: broadcast::Sender<MonitorEvent>,
+        sessions: broadcast::Sender<SessionEvent>,
+    ) -> Self {
         Self {
             workers: Arc::new(RwLock::new(Vec::new())),
             conversations: Arc::new(RwLock::new(Vec::new())),
@@ -1152,7 +1257,8 @@ impl WorkerRegistry {
     /// Update conversations with new batch
     pub async fn update_conversations(&self, sessions: Vec<ParsedSession>) {
         let mut convos = self.conversations.write().await;
-        let new_data: Vec<ConversationData> = sessions.into_iter().map(ConversationData::from).collect();
+        let new_data: Vec<ConversationData> =
+            sessions.into_iter().map(ConversationData::from).collect();
 
         // Merge with existing: update existing, add new
         for new_convo in &new_data {
@@ -1187,11 +1293,18 @@ impl WorkerRegistry {
     }
 
     /// Update or insert a worker entry, tracking the latest observed PID.
-    pub async fn update_worker(&self, heartbeat: crate::heartbeats::WorkerHeartbeat, liveness: crate::heartbeats::WorkerLiveness) {
+    pub async fn update_worker(
+        &self,
+        heartbeat: crate::heartbeats::WorkerHeartbeat,
+        liveness: crate::heartbeats::WorkerLiveness,
+    ) {
         // Track PID when the worker is in Executing state.
         if let crate::WorkerState::Executing { pid, .. } = &heartbeat.state {
             if *pid > 0 {
-                self.worker_pids.write().await.insert(heartbeat.worker.clone(), *pid);
+                self.worker_pids
+                    .write()
+                    .await
+                    .insert(heartbeat.worker.clone(), *pid);
             }
         }
 
@@ -1233,7 +1346,12 @@ impl WorkerRegistry {
 
     /// Get bead events for a specific bead
     pub async fn get_bead_events(&self, bead_id: &str) -> Vec<BeadEventData> {
-        self.bead_events.read().await.get(bead_id).cloned().unwrap_or_default()
+        self.bead_events
+            .read()
+            .await
+            .get(bead_id)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Get all bead events
@@ -1299,6 +1417,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
     let mut draft_rx = state.draft_tx.subscribe();
     let mut collision_rx = state.collision_alert_tx.subscribe();
     let mut bead_created_by_hoop_rx = state.bead_created_by_hoop_tx.subscribe();
+    let mut stuck_rx = state.stuck_detector.lock().unwrap().subscribe();
     let mut shutdown_rx = state.shutdown.subscribe();
 
     // Per-connection subscription set.  Starts with "global"; clients may
@@ -1415,7 +1534,9 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
             let subs = subs_for_fwd.read().await;
             if should_deliver(msg.topic.as_deref(), &subs) {
                 let lag_seconds = msg.queued_at.elapsed().as_secs_f64();
-                metrics.hoop_ws_broadcast_lag_seconds.observe(&[], lag_seconds);
+                metrics
+                    .hoop_ws_broadcast_lag_seconds
+                    .observe(&[], lag_seconds);
                 drop(subs);
                 if sender.send(Message::Text(msg.json)).await.is_err() {
                     break;
@@ -1470,33 +1591,32 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
 
                     if let Some(mut w) = worker {
                         w.liveness = transition.new_state;
-                        registry_tx.update_worker(
-                            WorkerHeartbeat {
-                                ts: w.last_heartbeat,
-                                worker: w.worker.clone(),
-                                state: match &w.state {
-                                    WorkerDisplayState::Executing { bead, adapter, .. } => {
-                                        WorkerState::Executing {
-                                            bead: bead.clone(),
-                                            pid: 0,
-                                            adapter: adapter.clone(),
+                        registry_tx
+                            .update_worker(
+                                WorkerHeartbeat {
+                                    ts: w.last_heartbeat,
+                                    worker: w.worker.clone(),
+                                    state: match &w.state {
+                                        WorkerDisplayState::Executing { bead, adapter, .. } => {
+                                            WorkerState::Executing {
+                                                bead: bead.clone(),
+                                                pid: 0,
+                                                adapter: adapter.clone(),
+                                            }
                                         }
-                                    }
-                                    WorkerDisplayState::Idle { last_strand } => {
-                                        WorkerState::Idle {
-                                            last_strand: last_strand.clone(),
+                                        WorkerDisplayState::Idle { last_strand } => {
+                                            WorkerState::Idle {
+                                                last_strand: last_strand.clone(),
+                                            }
                                         }
-                                    }
-                                    WorkerDisplayState::Knot { reason } => {
-                                        WorkerState::Knot {
+                                        WorkerDisplayState::Knot { reason } => WorkerState::Knot {
                                             reason: reason.clone(),
-                                        }
-                                    }
+                                        },
+                                    },
                                 },
-                            },
-                            transition.new_state,
-                        )
-                        .await;
+                                transition.new_state,
+                            )
+                            .await;
 
                         if let Ok(json) = serde_json::to_string(&WsEvent::worker_update(w)) {
                             let _ = ws_tx_monitor.send(WsOutMsg::new(json)).await;
@@ -1547,7 +1667,9 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         while let Ok(data) = bead_created_by_hoop_rx.recv().await {
             if let Ok(json) = serde_json::to_string(&WsEvent::bead_created_by_hoop(data.clone())) {
                 let topic = format!("project:{}", data.project);
-                let _ = ws_tx_bead_created.send(WsOutMsg::with_topic(json, topic)).await;
+                let _ = ws_tx_bead_created
+                    .send(WsOutMsg::with_topic(json, topic))
+                    .await;
             }
         }
     });
@@ -1594,7 +1716,8 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         loop {
             match capacity_rx.recv().await {
                 Ok(capacities) => {
-                    if let Ok(json) = serde_json::to_string(&WsEvent::capacity_snapshot(capacities)) {
+                    if let Ok(json) = serde_json::to_string(&WsEvent::capacity_snapshot(capacities))
+                    {
                         let _ = ws_tx_capacity.send(WsOutMsg::new(json)).await;
                     }
                 }
@@ -1610,7 +1733,9 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
     let ws_tx_agent = ws_tx.clone();
     let agent_session_manager = state.agent_session_manager.clone();
     let agent_task = tokio::spawn(async move {
-        let Some(mgr) = agent_session_manager else { return };
+        let Some(mgr) = agent_session_manager else {
+            return;
+        };
         let mut agent_rx = mgr.subscribe();
         loop {
             match agent_rx.recv().await {
@@ -1689,8 +1814,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         loop {
             match ack_rx.recv().await {
                 Ok(crate::worker_ack::AckEvent::MissingAck(alert)) => {
-                    if let Ok(json) =
-                        serde_json::to_string(&WsEvent::spawn_ack_alert_event(alert))
+                    if let Ok(json) = serde_json::to_string(&WsEvent::spawn_ack_alert_event(alert))
                     {
                         let _ = ws_tx_ack.send(WsOutMsg::new(json)).await;
                     }
@@ -1700,6 +1824,28 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
                 }
                 Err(broadcast::error::RecvError::Lagged(n)) => {
                     debug!("Ack monitor broadcast lagged by {}, continuing", n);
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+
+    // Stuck detector alerts (§C1, hoop-ttb.3.25) — global
+    let ws_tx_stuck = ws_tx.clone();
+    let _stuck_task = tokio::spawn(async move {
+        loop {
+            match stuck_rx.recv().await {
+                Ok(crate::stuck_detector::StuckDetectorEvent::Stuck(alert)) => {
+                    if let Ok(json) = serde_json::to_string(&WsEvent::stuck_alert_event(alert)) {
+                        let _ = ws_tx_stuck.send(WsOutMsg::new(json)).await;
+                    }
+                }
+                Ok(crate::stuck_detector::StuckDetectorEvent::Cleared { .. }) => {
+                    // Cleared events are informational; alert card remains visible
+                    // with cleared state in UI until dismissed by operator.
+                }
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    debug!("Stuck detector broadcast lagged by {}, continuing", n);
                 }
                 Err(broadcast::error::RecvError::Closed) => break,
             }
@@ -1777,6 +1923,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         _ = brief_task => {},
         _ = draft_task => {},
         _ = collision_task => {},
+        _ = _stuck_task => {},
         _ = recv_task => {},
         _ = shutdown_task => {},
     }
@@ -1790,16 +1937,17 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        should_deliver, ClientMessage, WsEvent, WsTopic,
-    };
+    use super::{should_deliver, ClientMessage, WsEvent, WsTopic};
     use std::collections::HashSet;
 
     // ── WsTopic::parse ───────────────────────────────────────────────────────
 
     #[test]
     fn topic_parse_global() {
-        assert_eq!(WsTopic::parse("global"), Some(WsTopic("global".to_string())));
+        assert_eq!(
+            WsTopic::parse("global"),
+            Some(WsTopic("global".to_string()))
+        );
     }
 
     #[test]
@@ -1870,8 +2018,7 @@ mod tests {
 
     #[test]
     fn deliver_project_topic_when_subscribed() {
-        let subs: HashSet<String> =
-            ["global".to_string(), "project:kalshi".to_string()].into();
+        let subs: HashSet<String> = ["global".to_string(), "project:kalshi".to_string()].into();
         assert!(should_deliver(Some("project:kalshi"), &subs));
     }
 
@@ -1883,8 +2030,7 @@ mod tests {
 
     #[test]
     fn deliver_project_topic_not_delivered_after_unsubscribe() {
-        let mut subs: HashSet<String> =
-            ["global".to_string(), "project:kalshi".to_string()].into();
+        let mut subs: HashSet<String> = ["global".to_string(), "project:kalshi".to_string()].into();
         assert!(should_deliver(Some("project:kalshi"), &subs));
         subs.remove("project:kalshi");
         assert!(!should_deliver(Some("project:kalshi"), &subs));
@@ -1987,7 +2133,11 @@ mod tests {
 
         let snap_after = m.hoop_ws_broadcast_lag_seconds.snapshot();
         let count_after: u64 = snap_after.iter().map(|(_, c, _, _, _, _)| c).sum();
-        assert_eq!(count_after, count_before + 1, "observe must increment count");
+        assert_eq!(
+            count_after,
+            count_before + 1,
+            "observe must increment count"
+        );
 
         // Check that percentiles are available
         let p50 = snap_after.first().and_then(|(_, _, _, p50, _, _)| *p50);
@@ -2005,8 +2155,7 @@ mod tests {
 
     #[test]
     fn project_event_delivered_only_to_matching_project() {
-        let subs: HashSet<String> =
-            ["global".to_string(), "project:kalshi".to_string()].into();
+        let subs: HashSet<String> = ["global".to_string(), "project:kalshi".to_string()].into();
         assert!(should_deliver(Some("project:kalshi"), &subs));
         assert!(!should_deliver(Some("project:miroir"), &subs));
     }

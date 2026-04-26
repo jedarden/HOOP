@@ -217,7 +217,10 @@ mod tests {
         assert!(!result.truncated);
         assert_eq!(result.lines.len(), 3);
         // Lines should contain HTML spans from syntect
-        assert!(result.lines[0].contains("<span"), "expected HTML spans in output");
+        assert!(
+            result.lines[0].contains("<span"),
+            "expected HTML spans in output"
+        );
     }
 
     #[test]

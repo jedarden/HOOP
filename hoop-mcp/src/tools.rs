@@ -72,8 +72,8 @@ impl McpServerState {
         let projects = Self::load_projects()?;
 
         // Fleet db path
-        let mut home = dirs::home_dir()
-            .ok_or_else(|| anyhow!("Cannot determine home directory"))?;
+        let mut home =
+            dirs::home_dir().ok_or_else(|| anyhow!("Cannot determine home directory"))?;
         home.push(".hoop");
         home.push("fleet.db");
         let fleet_db_path = home;
@@ -94,7 +94,8 @@ impl McpServerState {
     fn require_project(&self, project: &str) -> Result<&str, String> {
         crate::id_validators::validate_project_name(project)
             .map_err(|e| format!("project: {}", e))?;
-        self.projects.get(project)
+        self.projects
+            .get(project)
             .map(|s| s.as_str())
             .ok_or_else(|| format!("Project '{}' not found", project))
     }
@@ -104,8 +105,8 @@ impl McpServerState {
     /// Uses `canonical_path` when available (for correct joins via resolved realpath),
     /// falling back to raw `path` for legacy entries that lack the field.
     fn load_projects() -> Result<HashMap<String, String>> {
-        let mut path = dirs::home_dir()
-            .ok_or_else(|| anyhow!("Cannot determine home directory"))?;
+        let mut path =
+            dirs::home_dir().ok_or_else(|| anyhow!("Cannot determine home directory"))?;
         path.push(".hoop");
         path.push("projects.yaml");
 
@@ -238,7 +239,11 @@ impl McpServerState {
     }
 
     /// Handle a tool call
-    pub fn call_tool(&self, name: &str, args: &Map<String, Value>) -> Result<ToolCallResult, String> {
+    pub fn call_tool(
+        &self,
+        name: &str,
+        args: &Map<String, Value>,
+    ) -> Result<ToolCallResult, String> {
         // Runtime guard: reject worker-steering verbs (these are NOT exposed via MCP)
         if is_forbidden_worker_steering_verb(name) {
             return Err(forbidden_worker_steering_error(name));
@@ -270,7 +275,9 @@ impl McpServerState {
         };
 
         let args_value = Value::Object(args.clone());
-        let _ = self.audit_log.record(&self.actor, name, Some(&args_value), &audit_result);
+        let _ = self
+            .audit_log
+            .record(&self.actor, name, Some(&args_value), &audit_result);
 
         result
     }
@@ -280,7 +287,8 @@ impl McpServerState {
     // -----------------------------------------------------------------------
 
     fn find_stitches(&self, args: &Map<String, Value>) -> Result<ToolCallResult, String> {
-        let project = args.get("project")
+        let project = args
+            .get("project")
             .and_then(|v| v.as_str())
             .ok_or("project parameter is required")?;
 
@@ -299,12 +307,12 @@ impl McpServerState {
     }
 
     fn read_stitch(&self, args: &Map<String, Value>) -> Result<ToolCallResult, String> {
-        let stitch_id = args.get("id")
+        let stitch_id = args
+            .get("id")
             .and_then(|v| v.as_str())
             .ok_or("id parameter is required")?;
 
-        crate::id_validators::validate_stitch_id(stitch_id)
-            .map_err(|e| format!("id: {}", e))?;
+        crate::id_validators::validate_stitch_id(stitch_id).map_err(|e| format!("id: {}", e))?;
 
         // Try the daemon's aggregated-read endpoint first (full data).
         // Fall back to direct DB query if daemon is not reachable.
@@ -319,7 +327,8 @@ impl McpServerState {
             }
             Err(_) => {
                 // Daemon not available — fall back to direct DB query
-                let stitch = self.query_stitch_detail_from_db(stitch_id)
+                let stitch = self
+                    .query_stitch_detail_from_db(stitch_id)
                     .map_err(|e| format!("Failed to read stitch: {}", e))?;
 
                 let content = serde_json::to_string_pretty(&stitch)
@@ -334,7 +343,8 @@ impl McpServerState {
     }
 
     fn find_beads(&self, args: &Map<String, Value>) -> Result<ToolCallResult, String> {
-        let project = args.get("project")
+        let project = args
+            .get("project")
             .and_then(|v| v.as_str())
             .ok_or("project parameter is required")?;
 
@@ -353,24 +363,28 @@ impl McpServerState {
     }
 
     fn read_bead(&self, args: &Map<String, Value>) -> Result<ToolCallResult, String> {
-        let project = args.get("project")
+        let project = args
+            .get("project")
             .and_then(|v| v.as_str())
             .ok_or("project parameter is required")?;
 
         let _project_path = self.require_project(project)?;
 
-        let bead_id = args.get("id")
+        let bead_id = args
+            .get("id")
             .and_then(|v| v.as_str())
             .ok_or("id parameter is required")?;
 
-        crate::id_validators::validate_bead_id(bead_id)
-            .map_err(|e| format!("id: {}", e))?;
+        crate::id_validators::validate_bead_id(bead_id).map_err(|e| format!("id: {}", e))?;
 
-        let project_path = self.projects.get(project)
+        let project_path = self
+            .projects
+            .get(project)
             .ok_or(format!("Project '{}' not found", project))?;
 
         // Read bead details using br get
-        let bead = self.get_bead_via_br(project_path, bead_id)
+        let bead = self
+            .get_bead_via_br(project_path, bead_id)
             .map_err(|e| format!("Failed to read bead: {}", e))?;
 
         let content = serde_json::to_string_pretty(&bead)
@@ -383,11 +397,13 @@ impl McpServerState {
     }
 
     fn read_file(&self, args: &Map<String, Value>) -> Result<ToolCallResult, String> {
-        let project = args.get("project")
+        let project = args
+            .get("project")
             .and_then(|v| v.as_str())
             .ok_or("project parameter is required")?;
 
-        let file_path = args.get("path")
+        let file_path = args
+            .get("path")
             .and_then(|v| v.as_str())
             .ok_or("path parameter is required")?;
 
@@ -395,15 +411,16 @@ impl McpServerState {
 
         // Path-traversal hardening (§13, §K2): canonicalize + allowlist check
         let allowlist = hoop_schema::path_security::PathAllowlist::for_workspace(
-            PathBuf::from(project_path).as_path()
-        ).map_err(|e| format!("Project path error: {}", e))?;
+            PathBuf::from(project_path).as_path(),
+        )
+        .map_err(|e| format!("Project path error: {}", e))?;
 
         let full_path = PathBuf::from(project_path).join(file_path);
         let canonical = hoop_schema::path_security::canonicalize_and_check(&full_path, &allowlist)
             .map_err(|_| "Invalid path parameter".to_string())?;
 
-        let content = fs::read_to_string(&canonical)
-            .map_err(|e| format!("Failed to read file: {}", e))?;
+        let content =
+            fs::read_to_string(&canonical).map_err(|e| format!("Failed to read file: {}", e))?;
 
         Ok(ToolCallResult {
             content: vec![Content::Text { text: content }],
@@ -412,17 +429,20 @@ impl McpServerState {
     }
 
     fn grep(&self, args: &Map<String, Value>) -> Result<ToolCallResult, String> {
-        let project = args.get("project")
+        let project = args
+            .get("project")
             .and_then(|v| v.as_str())
             .ok_or("project parameter is required")?;
 
-        let pattern = args.get("pattern")
+        let pattern = args
+            .get("pattern")
             .and_then(|v| v.as_str())
             .ok_or("pattern parameter is required")?;
 
         let project_path = self.require_project(project)?;
 
-        let results = self.grep_in_project(project_path, pattern, args)
+        let results = self
+            .grep_in_project(project_path, pattern, args)
             .map_err(|e| format!("Grep error: {}", e))?;
 
         let content = serde_json::to_string_pretty(&results)
@@ -435,12 +455,12 @@ impl McpServerState {
     }
 
     fn search_conversations(&self, args: &Map<String, Value>) -> Result<ToolCallResult, String> {
-        let query = args.get("query")
+        let query = args
+            .get("query")
             .and_then(|v| v.as_str())
             .ok_or("query parameter is required")?;
 
-        let project = args.get("project")
-            .and_then(|v| v.as_str());
+        let project = args.get("project").and_then(|v| v.as_str());
 
         // Validate project format when provided
         if let Some(proj) = project {
@@ -448,7 +468,8 @@ impl McpServerState {
                 .map_err(|e| format!("project: {}", e))?;
         }
 
-        let results = self.search_conversations_in_db(query, project)
+        let results = self
+            .search_conversations_in_db(query, project)
             .map_err(|e| format!("Search error: {}", e))?;
 
         let content = serde_json::to_string_pretty(&results)
@@ -461,13 +482,15 @@ impl McpServerState {
     }
 
     fn summarize_project(&self, args: &Map<String, Value>) -> Result<ToolCallResult, String> {
-        let project = args.get("project")
+        let project = args
+            .get("project")
             .and_then(|v| v.as_str())
             .ok_or("project parameter is required")?;
 
         let _project_path = self.require_project(project)?;
 
-        let summary = self.generate_project_summary(project)
+        let summary = self
+            .generate_project_summary(project)
             .map_err(|e| format!("Failed to generate summary: {}", e))?;
 
         let content = serde_json::to_string_pretty(&summary)
@@ -480,7 +503,8 @@ impl McpServerState {
     }
 
     fn summarize_day(&self, _args: &Map<String, Value>) -> Result<ToolCallResult, String> {
-        let summary = self.generate_day_summary()
+        let summary = self
+            .generate_day_summary()
             .map_err(|e| format!("Failed to generate summary: {}", e))?;
 
         let content = serde_json::to_string_pretty(&summary)
@@ -497,29 +521,31 @@ impl McpServerState {
     // -----------------------------------------------------------------------
 
     fn create_stitch(&self, args: &Map<String, Value>) -> Result<ToolCallResult, String> {
-        let project = args.get("project")
+        let project = args
+            .get("project")
             .and_then(|v| v.as_str())
             .ok_or("project parameter is required")?;
 
-        let title = args.get("title")
+        let title = args
+            .get("title")
             .and_then(|v| v.as_str())
             .ok_or("title parameter is required")?;
 
-        let kind = args.get("kind")
+        let kind = args
+            .get("kind")
             .and_then(|v| v.as_str())
             .unwrap_or("investigation");
 
-        let description = args.get("description")
-            .and_then(|v| v.as_str());
+        let description = args.get("description").and_then(|v| v.as_str());
 
-        let priority = args.get("priority")
-            .and_then(|v| v.as_i64());
+        let priority = args.get("priority").and_then(|v| v.as_i64());
 
         // Validate project format and existence
         let _project_path = self.require_project(project)?;
 
         // Call the daemon's draft API which performs deduplication check
-        let result = self.create_stitch_via_daemon(project, title, description, kind, priority)
+        let result = self
+            .create_stitch_via_daemon(project, title, description, kind, priority)
             .map_err(|e| format!("Failed to create stitch draft: {}", e))?;
 
         let content = serde_json::to_string_pretty(&result)
@@ -543,25 +569,27 @@ impl McpServerState {
             return Err("Bead creation is disabled in zero-write mode".to_string());
         }
 
-        let project = args.get("project")
+        let project = args
+            .get("project")
             .and_then(|v| v.as_str())
             .ok_or("project parameter is required")?;
 
-        let title = args.get("title")
+        let title = args
+            .get("title")
             .and_then(|v| v.as_str())
             .ok_or("title parameter is required")?;
 
-        let description = args.get("description")
-            .and_then(|v| v.as_str());
+        let description = args.get("description").and_then(|v| v.as_str());
 
-        let issue_type = args.get("issue_type")
+        let issue_type = args
+            .get("issue_type")
             .and_then(|v| v.as_str())
             .unwrap_or("task");
 
-        let priority = args.get("priority")
-            .and_then(|v| v.as_i64());
+        let priority = args.get("priority").and_then(|v| v.as_i64());
 
-        let labels: Vec<String> = args.get("labels")
+        let labels: Vec<String> = args
+            .get("labels")
             .and_then(|v| v.as_array())
             .map(|arr| {
                 arr.iter()
@@ -570,8 +598,7 @@ impl McpServerState {
             })
             .unwrap_or_default();
 
-        let parent_bead_id = args.get("parent_bead_id")
-            .and_then(|v| v.as_str());
+        let parent_bead_id = args.get("parent_bead_id").and_then(|v| v.as_str());
 
         // Validate parent bead ID
         if let Some(pid) = parent_bead_id {
@@ -616,7 +643,8 @@ impl McpServerState {
             cmd.arg("--actor").arg(&self.actor);
             cmd.arg("--silent");
 
-            let output = cmd.output()
+            let output = cmd
+                .output()
                 .map_err(|e| format!("Failed to run br create: {}", e))?;
 
             if !output.status.success() {
@@ -652,13 +680,13 @@ impl McpServerState {
     // -----------------------------------------------------------------------
 
     fn escalate_to_operator(&self, args: &Map<String, Value>) -> Result<ToolCallResult, String> {
-        let message = args.get("message")
+        let message = args
+            .get("message")
             .and_then(|v| v.as_str())
             .ok_or("message parameter is required")?;
 
         // Write escalation to ~/.hoop/escalations.jsonl
-        let mut path = dirs::home_dir()
-            .ok_or("Cannot determine home directory")?;
+        let mut path = dirs::home_dir().ok_or("Cannot determine home directory")?;
         path.push(".hoop");
         path.push("escalations.jsonl");
 
@@ -676,12 +704,11 @@ impl McpServerState {
             .map_err(|e| format!("Failed to open escalations file: {}", e))?;
 
         use std::io::Write;
-        writeln!(file, "{}", entry)
-            .map_err(|e| format!("Failed to write escalation: {}", e))?;
+        writeln!(file, "{}", entry).map_err(|e| format!("Failed to write escalation: {}", e))?;
 
         Ok(ToolCallResult {
             content: vec![Content::Text {
-                text: format!("Escalation sent: {}", message)
+                text: format!("Escalation sent: {}", message),
             }],
             is_error: None,
         })
@@ -718,7 +745,9 @@ impl McpServerState {
             return Err(format!("Stitch '{}' not found", stitch_id));
         }
         if !status.is_success() {
-            let error_text = response.text().unwrap_or_else(|_| format!("HTTP {}", status.as_u16()));
+            let error_text = response
+                .text()
+                .unwrap_or_else(|_| format!("HTTP {}", status.as_u16()));
             return Err(format!("Daemon returned error: {}", error_text));
         }
 
@@ -730,15 +759,19 @@ impl McpServerState {
         Ok(redact_stitch_response(data))
     }
 
-    fn query_stitches_from_db(&self, project: &str, args: &Map<String, Value>) -> Result<Vec<Value>, String> {
+    fn query_stitches_from_db(
+        &self,
+        project: &str,
+        args: &Map<String, Value>,
+    ) -> Result<Vec<Value>, String> {
         let conn = self.open_fleet_db()?;
 
         let kind_filter = args.get("kind").and_then(|v| v.as_str());
-        let limit = args.get("limit")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(50) as i64;
+        let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(50) as i64;
 
-        let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(kind) = kind_filter {
+        let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(kind) =
+            kind_filter
+        {
             (
                 "SELECT id, project, kind, title, created_by, created_at, last_activity_at, participants
                  FROM stitches
@@ -758,23 +791,27 @@ impl McpServerState {
             )
         };
 
-        let mut stmt = conn.prepare(&sql)
+        let mut stmt = conn
+            .prepare(&sql)
             .map_err(|e| format!("Failed to prepare query: {}", e))?;
 
-        let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
-        let rows = stmt.query_map(param_refs.as_slice(), |row| {
-            let participants: String = row.get(7).unwrap_or_default();
-            Ok(json!({
-                "id": row.get::<_, String>(0)?,
-                "project": row.get::<_, String>(1)?,
-                "kind": row.get::<_, String>(2)?,
-                "title": row.get::<_, String>(3)?,
-                "created_by": row.get::<_, String>(4)?,
-                "created_at": row.get::<_, String>(5)?,
-                "last_activity_at": row.get::<_, String>(6)?,
-                "participants": participants,
-            }))
-        }).map_err(|e| format!("Failed to execute query: {}", e))?;
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params.iter().map(|p| p.as_ref()).collect();
+        let rows = stmt
+            .query_map(param_refs.as_slice(), |row| {
+                let participants: String = row.get(7).unwrap_or_default();
+                Ok(json!({
+                    "id": row.get::<_, String>(0)?,
+                    "project": row.get::<_, String>(1)?,
+                    "kind": row.get::<_, String>(2)?,
+                    "title": row.get::<_, String>(3)?,
+                    "created_by": row.get::<_, String>(4)?,
+                    "created_at": row.get::<_, String>(5)?,
+                    "last_activity_at": row.get::<_, String>(6)?,
+                    "participants": participants,
+                }))
+            })
+            .map_err(|e| format!("Failed to execute query: {}", e))?;
 
         let mut results = Vec::new();
         for row in rows {
@@ -788,59 +825,69 @@ impl McpServerState {
         let conn = self.open_fleet_db()?;
 
         // Get stitch info
-        let stitch = conn.query_row(
-            "SELECT id, project, kind, title, created_by, created_at, last_activity_at
+        let stitch = conn
+            .query_row(
+                "SELECT id, project, kind, title, created_by, created_at, last_activity_at
              FROM stitches WHERE id = ?1",
-            [stitch_id],
-            |row| {
-                Ok(json!({
-                    "id": row.get::<_, String>(0)?,
-                    "project": row.get::<_, String>(1)?,
-                    "kind": row.get::<_, String>(2)?,
-                    "title": row.get::<_, String>(3)?,
-                    "created_by": row.get::<_, String>(4)?,
-                    "created_at": row.get::<_, String>(5)?,
-                    "last_activity_at": row.get::<_, String>(6)?,
-                }))
-            },
-        ).map_err(|e| format!("Stitch not found: {}", e))?;
+                [stitch_id],
+                |row| {
+                    Ok(json!({
+                        "id": row.get::<_, String>(0)?,
+                        "project": row.get::<_, String>(1)?,
+                        "kind": row.get::<_, String>(2)?,
+                        "title": row.get::<_, String>(3)?,
+                        "created_by": row.get::<_, String>(4)?,
+                        "created_at": row.get::<_, String>(5)?,
+                        "last_activity_at": row.get::<_, String>(6)?,
+                    }))
+                },
+            )
+            .map_err(|e| format!("Stitch not found: {}", e))?;
 
         // Get messages for this stitch
-        let mut stmt = conn.prepare(
-            "SELECT id, ts, role, content
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, ts, role, content
              FROM stitch_messages
              WHERE stitch_id = ?1
-             ORDER BY ts"
-        ).map_err(|e| format!("Failed to prepare messages query: {}", e))?;
+             ORDER BY ts",
+            )
+            .map_err(|e| format!("Failed to prepare messages query: {}", e))?;
 
-        let messages: Vec<Value> = stmt.query_map([stitch_id], |row| {
-            let content: String = row.get(3)?;
-            // §18.3: Redact secrets before forwarding to the agent.
-            let content = crate::redaction::redact_text(&content);
-            Ok(json!({
-                "id": row.get::<_, String>(0)?,
-                "ts": row.get::<_, String>(1)?,
-                "role": row.get::<_, String>(2)?,
-                "content": content,
-            }))
-        }).map_err(|e| format!("Failed to execute messages query: {}", e))?
+        let messages: Vec<Value> = stmt
+            .query_map([stitch_id], |row| {
+                let content: String = row.get(3)?;
+                // §18.3: Redact secrets before forwarding to the agent.
+                let content = crate::redaction::redact_text(&content);
+                Ok(json!({
+                    "id": row.get::<_, String>(0)?,
+                    "ts": row.get::<_, String>(1)?,
+                    "role": row.get::<_, String>(2)?,
+                    "content": content,
+                }))
+            })
+            .map_err(|e| format!("Failed to execute messages query: {}", e))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("Message row error: {}", e))?;
 
         // Get linked beads
-        let mut stmt = conn.prepare(
-            "SELECT bead_id, workspace, relationship
+        let mut stmt = conn
+            .prepare(
+                "SELECT bead_id, workspace, relationship
              FROM stitch_beads
-             WHERE stitch_id = ?1"
-        ).map_err(|e| format!("Failed to prepare beads query: {}", e))?;
+             WHERE stitch_id = ?1",
+            )
+            .map_err(|e| format!("Failed to prepare beads query: {}", e))?;
 
-        let beads: Vec<Value> = stmt.query_map([stitch_id], |row| {
-            Ok(json!({
-                "bead_id": row.get::<_, String>(0)?,
-                "workspace": row.get::<_, String>(1)?,
-                "relationship": row.get::<_, String>(2)?,
-            }))
-        }).map_err(|e| format!("Failed to execute beads query: {}", e))?
+        let beads: Vec<Value> = stmt
+            .query_map([stitch_id], |row| {
+                Ok(json!({
+                    "bead_id": row.get::<_, String>(0)?,
+                    "workspace": row.get::<_, String>(1)?,
+                    "relationship": row.get::<_, String>(2)?,
+                }))
+            })
+            .map_err(|e| format!("Failed to execute beads query: {}", e))?
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| format!("Bead row error: {}", e))?;
 
@@ -851,20 +898,19 @@ impl McpServerState {
         }))
     }
 
-    fn list_beads_via_br(&self, project_path: &str, args: &Map<String, Value>) -> Result<Vec<Value>, String> {
-        let limit = args.get("limit")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(50);
+    fn list_beads_via_br(
+        &self,
+        project_path: &str,
+        args: &Map<String, Value>,
+    ) -> Result<Vec<Value>, String> {
+        let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(50);
 
-        let status_filter = args.get("status")
-            .and_then(|v| v.as_str());
+        let status_filter = args.get("status").and_then(|v| v.as_str());
 
         // Call br list --json
-        let mut cmd = crate::br_verbs::invoke_br_read(
-            crate::br_verbs::ReadVerb::List,
-            &["--json"],
-        );
-        let output = cmd.current_dir(project_path)
+        let mut cmd = crate::br_verbs::invoke_br_read(crate::br_verbs::ReadVerb::List, &["--json"]);
+        let output = cmd
+            .current_dir(project_path)
             .output()
             .map_err(|e| format!("Failed to execute br: {}", e))?;
 
@@ -874,8 +920,7 @@ impl McpServerState {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let mut beads: Vec<Value> = serde_json::from_str(&stdout)
-            .unwrap_or_default();
+        let mut beads: Vec<Value> = serde_json::from_str(&stdout).unwrap_or_default();
 
         // Apply filters
         if let Some(status) = status_filter {
@@ -894,11 +939,10 @@ impl McpServerState {
     }
 
     fn get_bead_via_br(&self, project_path: &str, bead_id: &str) -> Result<Value, String> {
-        let mut cmd = crate::br_verbs::invoke_br_read(
-            crate::br_verbs::ReadVerb::Get,
-            &[bead_id, "--json"],
-        );
-        let output = cmd.current_dir(project_path)
+        let mut cmd =
+            crate::br_verbs::invoke_br_read(crate::br_verbs::ReadVerb::Get, &[bead_id, "--json"]);
+        let output = cmd
+            .current_dir(project_path)
             .output()
             .map_err(|e| format!("Failed to execute br: {}", e))?;
 
@@ -908,8 +952,7 @@ impl McpServerState {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        serde_json::from_str(&stdout)
-            .map_err(|e| format!("Failed to parse br output: {}", e))
+        serde_json::from_str(&stdout).map_err(|e| format!("Failed to parse br output: {}", e))
     }
 
     /// Look up a bead's labels via `br get --json`.
@@ -928,18 +971,24 @@ impl McpServerState {
             .ok_or_else(|| "No labels field on bead".to_string())
     }
 
-    fn grep_in_project(&self, project_path: &str, pattern: &str, args: &Map<String, Value>) -> Result<Vec<Value>, String> {
-        let max_results = args.get("max_results")
+    fn grep_in_project(
+        &self,
+        project_path: &str,
+        pattern: &str,
+        args: &Map<String, Value>,
+    ) -> Result<Vec<Value>, String> {
+        let max_results = args
+            .get("max_results")
             .and_then(|v| v.as_u64())
             .unwrap_or(100) as usize;
 
-        let path_arg = args.get("path")
-            .and_then(|v| v.as_str());
+        let path_arg = args.get("path").and_then(|v| v.as_str());
 
         // Path-traversal hardening (§13, §K2): canonicalize + allowlist check
         let allowlist = hoop_schema::path_security::PathAllowlist::for_workspace(
-            PathBuf::from(project_path).as_path()
-        ).map_err(|e| format!("Project path error: {}", e))?;
+            PathBuf::from(project_path).as_path(),
+        )
+        .map_err(|e| format!("Project path error: {}", e))?;
 
         let base_path = if let Some(p) = path_arg {
             let full = PathBuf::from(project_path).join(p);
@@ -950,8 +999,7 @@ impl McpServerState {
             PathBuf::from(project_path)
         };
 
-        let regex = Regex::new(pattern)
-            .map_err(|e| format!("Invalid regex: {}", e))?;
+        let regex = Regex::new(pattern).map_err(|e| format!("Invalid regex: {}", e))?;
 
         let mut results = Vec::new();
 
@@ -966,7 +1014,8 @@ impl McpServerState {
                 if let Ok(content) = fs::read_to_string(entry.path()) {
                     for (line_num, line) in content.lines().enumerate() {
                         if regex.is_match(line) {
-                            let display_path = entry.path()
+                            let display_path = entry
+                                .path()
                                 .strip_prefix(project_path)
                                 .unwrap_or(entry.path())
                                 .display()
@@ -993,7 +1042,11 @@ impl McpServerState {
         Ok(results)
     }
 
-    fn search_conversations_in_db(&self, query: &str, project: Option<&str>) -> Result<Vec<Value>, String> {
+    fn search_conversations_in_db(
+        &self,
+        query: &str,
+        project: Option<&str>,
+    ) -> Result<Vec<Value>, String> {
         let conn = self.open_fleet_db()?;
 
         let pattern = format!("%{}%", query);
@@ -1002,48 +1055,56 @@ impl McpServerState {
         let redact = |raw: String| crate::redaction::redact_text(&raw);
 
         if let Some(proj) = project {
-            let mut stmt = conn.prepare(
-                "SELECT sm.stitch_id, sm.ts, sm.role, sm.content, s.project
+            let mut stmt = conn
+                .prepare(
+                    "SELECT sm.stitch_id, sm.ts, sm.role, sm.content, s.project
                  FROM stitch_messages sm
                  JOIN stitches s ON sm.stitch_id = s.id
                  WHERE s.project = ?1 AND sm.content LIKE ?2
                  ORDER BY sm.ts DESC
-                 LIMIT 50"
-            ).map_err(|e| format!("Failed to prepare query: {}", e))?;
+                 LIMIT 50",
+                )
+                .map_err(|e| format!("Failed to prepare query: {}", e))?;
 
-            let rows: Result<Vec<Value>, _> = stmt.query_map([proj, &pattern], |row| {
-                let content: String = row.get(3)?;
-                Ok(json!({
-                    "stitch_id": row.get::<_, String>(0)?,
-                    "timestamp": row.get::<_, String>(1)?,
-                    "role": row.get::<_, String>(2)?,
-                    "content": redact(content),
-                    "project": row.get::<_, String>(4)?,
-                }))
-            }).map_err(|e| format!("Failed to execute query: {}", e))?
+            let rows: Result<Vec<Value>, _> = stmt
+                .query_map([proj, &pattern], |row| {
+                    let content: String = row.get(3)?;
+                    Ok(json!({
+                        "stitch_id": row.get::<_, String>(0)?,
+                        "timestamp": row.get::<_, String>(1)?,
+                        "role": row.get::<_, String>(2)?,
+                        "content": redact(content),
+                        "project": row.get::<_, String>(4)?,
+                    }))
+                })
+                .map_err(|e| format!("Failed to execute query: {}", e))?
                 .collect();
 
             Ok(rows.map_err(|e| format!("Row error: {}", e))?)
         } else {
-            let mut stmt = conn.prepare(
-                "SELECT sm.stitch_id, sm.ts, sm.role, sm.content, s.project
+            let mut stmt = conn
+                .prepare(
+                    "SELECT sm.stitch_id, sm.ts, sm.role, sm.content, s.project
                  FROM stitch_messages sm
                  JOIN stitches s ON sm.stitch_id = s.id
                  WHERE sm.content LIKE ?1
                  ORDER BY sm.ts DESC
-                 LIMIT 50"
-            ).map_err(|e| format!("Failed to prepare query: {}", e))?;
+                 LIMIT 50",
+                )
+                .map_err(|e| format!("Failed to prepare query: {}", e))?;
 
-            let rows: Result<Vec<Value>, _> = stmt.query_map([&pattern], |row| {
-                let content: String = row.get(3)?;
-                Ok(json!({
-                    "stitch_id": row.get::<_, String>(0)?,
-                    "timestamp": row.get::<_, String>(1)?,
-                    "role": row.get::<_, String>(2)?,
-                    "content": redact(content),
-                    "project": row.get::<_, String>(4)?,
-                }))
-            }).map_err(|e| format!("Failed to execute query: {}", e))?
+            let rows: Result<Vec<Value>, _> = stmt
+                .query_map([&pattern], |row| {
+                    let content: String = row.get(3)?;
+                    Ok(json!({
+                        "stitch_id": row.get::<_, String>(0)?,
+                        "timestamp": row.get::<_, String>(1)?,
+                        "role": row.get::<_, String>(2)?,
+                        "content": redact(content),
+                        "project": row.get::<_, String>(4)?,
+                    }))
+                })
+                .map_err(|e| format!("Failed to execute query: {}", e))?
                 .collect();
 
             Ok(rows.map_err(|e| format!("Row error: {}", e))?)
@@ -1054,11 +1115,13 @@ impl McpServerState {
         let conn = self.open_fleet_db()?;
 
         // Get stitch counts
-        let stitch_count: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM stitches WHERE project = ?1",
-            [project],
-            |row| row.get(0),
-        ).unwrap_or(0);
+        let stitch_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM stitches WHERE project = ?1",
+                [project],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
 
         // Get recent activity — try with project column first, fall back to count all
         let recent_actions: i64 = conn.query_row(
@@ -1085,18 +1148,18 @@ impl McpServerState {
         let conn = self.open_fleet_db()?;
 
         // Get today's action count
-        let today_actions: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM actions WHERE ts > datetime('now', 'start of day')",
-            [],
-            |row| row.get(0),
-        ).unwrap_or(0);
+        let today_actions: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM actions WHERE ts > datetime('now', 'start of day')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
 
         // Get stitch count
-        let total_stitches: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM stitches",
-            [],
-            |row| row.get(0),
-        ).unwrap_or(0);
+        let total_stitches: i64 = conn
+            .query_row("SELECT COUNT(*) FROM stitches", [], |row| row.get(0))
+            .unwrap_or(0);
 
         // Get active stitches (last 24h activity)
         let active_stitches: i64 = conn.query_row(
@@ -1161,7 +1224,12 @@ impl McpServerState {
             .post("http://127.0.0.1:3000/api/drafts")
             .json(&request_body)
             .send()
-            .map_err(|e| format!("Failed to connect to daemon: {}. Is hoop-daemon running on 127.0.0.1:3000?", e))?;
+            .map_err(|e| {
+                format!(
+                    "Failed to connect to daemon: {}. Is hoop-daemon running on 127.0.0.1:3000?",
+                    e
+                )
+            })?;
 
         let status = response.status();
 
@@ -1192,8 +1260,8 @@ impl McpServerState {
     /// Returns None if the file doesn't exist (e.g., no active turn or
     /// the daemon hasn't written it yet).
     fn read_turn_context(&self) -> Result<Option<TurnContext>, String> {
-        let mut path = dirs::home_dir()
-            .ok_or_else(|| "Cannot determine home directory".to_string())?;
+        let mut path =
+            dirs::home_dir().ok_or_else(|| "Cannot determine home directory".to_string())?;
         path.push(".hoop");
         path.push("agent-turn-context.json");
 
@@ -1262,19 +1330,28 @@ fn input_schema_find_stitches() -> InputSchema {
         schema_type: "object".to_string(),
         properties: {
             let mut props = serde_json::Map::new();
-            props.insert("project".to_string(), json!({
-                "type": "string",
-                "description": "Project name to search within"
-            }));
-            props.insert("limit".to_string(), json!({
-                "type": "number",
-                "description": "Maximum number of results to return (default: 50)"
-            }));
-            props.insert("kind".to_string(), json!({
-                "type": "string",
-                "description": "Filter by stitch kind (operator, dictated, worker, ad-hoc)",
-                "enum": ["operator", "dictated", "worker", "ad-hoc"]
-            }));
+            props.insert(
+                "project".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Project name to search within"
+                }),
+            );
+            props.insert(
+                "limit".to_string(),
+                json!({
+                    "type": "number",
+                    "description": "Maximum number of results to return (default: 50)"
+                }),
+            );
+            props.insert(
+                "kind".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Filter by stitch kind (operator, dictated, worker, ad-hoc)",
+                    "enum": ["operator", "dictated", "worker", "ad-hoc"]
+                }),
+            );
             props
         },
         required: Some(vec!["project".to_string()]),
@@ -1286,10 +1363,13 @@ fn input_schema_read_stitch() -> InputSchema {
         schema_type: "object".to_string(),
         properties: {
             let mut props = serde_json::Map::new();
-            props.insert("id".to_string(), json!({
-                "type": "string",
-                "description": "Stitch ID to read"
-            }));
+            props.insert(
+                "id".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Stitch ID to read"
+                }),
+            );
             props
         },
         required: Some(vec!["id".to_string()]),
@@ -1301,19 +1381,28 @@ fn input_schema_find_beads() -> InputSchema {
         schema_type: "object".to_string(),
         properties: {
             let mut props = serde_json::Map::new();
-            props.insert("project".to_string(), json!({
-                "type": "string",
-                "description": "Project name to search within"
-            }));
-            props.insert("limit".to_string(), json!({
-                "type": "number",
-                "description": "Maximum number of results to return (default: 50)"
-            }));
-            props.insert("status".to_string(), json!({
-                "type": "string",
-                "description": "Filter by bead status (open, closed)",
-                "enum": ["open", "closed"]
-            }));
+            props.insert(
+                "project".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Project name to search within"
+                }),
+            );
+            props.insert(
+                "limit".to_string(),
+                json!({
+                    "type": "number",
+                    "description": "Maximum number of results to return (default: 50)"
+                }),
+            );
+            props.insert(
+                "status".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Filter by bead status (open, closed)",
+                    "enum": ["open", "closed"]
+                }),
+            );
             props
         },
         required: Some(vec!["project".to_string()]),
@@ -1325,14 +1414,20 @@ fn input_schema_read_bead() -> InputSchema {
         schema_type: "object".to_string(),
         properties: {
             let mut props = serde_json::Map::new();
-            props.insert("project".to_string(), json!({
-                "type": "string",
-                "description": "Project name"
-            }));
-            props.insert("id".to_string(), json!({
-                "type": "string",
-                "description": "Bead ID to read"
-            }));
+            props.insert(
+                "project".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Project name"
+                }),
+            );
+            props.insert(
+                "id".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Bead ID to read"
+                }),
+            );
             props
         },
         required: Some(vec!["project".to_string(), "id".to_string()]),
@@ -1344,18 +1439,27 @@ fn input_schema_read_file() -> InputSchema {
         schema_type: "object".to_string(),
         properties: {
             let mut props = serde_json::Map::new();
-            props.insert("project".to_string(), json!({
-                "type": "string",
-                "description": "Project name"
-            }));
-            props.insert("path".to_string(), json!({
-                "type": "string",
-                "description": "File path relative to project root"
-            }));
-            props.insert("revision".to_string(), json!({
-                "type": "string",
-                "description": "Optional git revision (e.g., commit hash, branch name)"
-            }));
+            props.insert(
+                "project".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Project name"
+                }),
+            );
+            props.insert(
+                "path".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "File path relative to project root"
+                }),
+            );
+            props.insert(
+                "revision".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Optional git revision (e.g., commit hash, branch name)"
+                }),
+            );
             props
         },
         required: Some(vec!["project".to_string(), "path".to_string()]),
@@ -1367,22 +1471,34 @@ fn input_schema_grep() -> InputSchema {
         schema_type: "object".to_string(),
         properties: {
             let mut props = serde_json::Map::new();
-            props.insert("project".to_string(), json!({
-                "type": "string",
-                "description": "Project name to search within"
-            }));
-            props.insert("pattern".to_string(), json!({
-                "type": "string",
-                "description": "Regex pattern to search for"
-            }));
-            props.insert("path".to_string(), json!({
-                "type": "string",
-                "description": "Optional subdirectory path to limit search"
-            }));
-            props.insert("max_results".to_string(), json!({
-                "type": "number",
-                "description": "Maximum number of matches to return (default: 100)"
-            }));
+            props.insert(
+                "project".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Project name to search within"
+                }),
+            );
+            props.insert(
+                "pattern".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Regex pattern to search for"
+                }),
+            );
+            props.insert(
+                "path".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Optional subdirectory path to limit search"
+                }),
+            );
+            props.insert(
+                "max_results".to_string(),
+                json!({
+                    "type": "number",
+                    "description": "Maximum number of matches to return (default: 100)"
+                }),
+            );
             props
         },
         required: Some(vec!["project".to_string(), "pattern".to_string()]),
@@ -1394,14 +1510,20 @@ fn input_schema_search_conversations() -> InputSchema {
         schema_type: "object".to_string(),
         properties: {
             let mut props = serde_json::Map::new();
-            props.insert("query".to_string(), json!({
-                "type": "string",
-                "description": "Search query string"
-            }));
-            props.insert("project".to_string(), json!({
-                "type": "string",
-                "description": "Optional project filter"
-            }));
+            props.insert(
+                "query".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Search query string"
+                }),
+            );
+            props.insert(
+                "project".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Optional project filter"
+                }),
+            );
             props
         },
         required: Some(vec!["query".to_string()]),
@@ -1413,10 +1535,13 @@ fn input_schema_summarize_project() -> InputSchema {
         schema_type: "object".to_string(),
         properties: {
             let mut props = serde_json::Map::new();
-            props.insert("project".to_string(), json!({
-                "type": "string",
-                "description": "Project name to summarize"
-            }));
+            props.insert(
+                "project".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Project name to summarize"
+                }),
+            );
             props
         },
         required: Some(vec!["project".to_string()]),
@@ -1436,30 +1561,45 @@ fn input_schema_create_stitch() -> InputSchema {
         schema_type: "object".to_string(),
         properties: {
             let mut props = serde_json::Map::new();
-            props.insert("project".to_string(), json!({
-                "type": "string",
-                "description": "Target project for the stitch"
-            }));
-            props.insert("title".to_string(), json!({
-                "type": "string",
-                "description": "Stitch title"
-            }));
-            props.insert("description".to_string(), json!({
-                "type": "string",
-                "description": "Optional stitch description"
-            }));
-            props.insert("kind".to_string(), json!({
-                "type": "string",
-                "description": "Stitch kind",
-                "enum": ["investigation", "fix", "feature"],
-                "default": "investigation"
-            }));
-            props.insert("priority".to_string(), json!({
-                "type": "number",
-                "description": "Bead priority (0-9, default: 2)",
-                "minimum": 0,
-                "maximum": 9
-            }));
+            props.insert(
+                "project".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Target project for the stitch"
+                }),
+            );
+            props.insert(
+                "title".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Stitch title"
+                }),
+            );
+            props.insert(
+                "description".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Optional stitch description"
+                }),
+            );
+            props.insert(
+                "kind".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Stitch kind",
+                    "enum": ["investigation", "fix", "feature"],
+                    "default": "investigation"
+                }),
+            );
+            props.insert(
+                "priority".to_string(),
+                json!({
+                    "type": "number",
+                    "description": "Bead priority (0-9, default: 2)",
+                    "minimum": 0,
+                    "maximum": 9
+                }),
+            );
             props
         },
         required: Some(vec!["project".to_string(), "title".to_string()]),
@@ -1471,35 +1611,53 @@ fn input_schema_create_bead() -> InputSchema {
         schema_type: "object".to_string(),
         properties: {
             let mut props = serde_json::Map::new();
-            props.insert("project".to_string(), json!({
-                "type": "string",
-                "description": "Target project for the bead"
-            }));
-            props.insert("title".to_string(), json!({
-                "type": "string",
-                "description": "Bead title"
-            }));
-            props.insert("description".to_string(), json!({
-                "type": "string",
-                "description": "Optional bead description"
-            }));
-            props.insert("issue_type".to_string(), json!({
-                "type": "string",
-                "description": "Bead issue type",
-                "enum": ["task", "bug", "epic", "genesis", "review", "fix"],
-                "default": "task"
-            }));
-            props.insert("priority".to_string(), json!({
-                "type": "number",
-                "description": "Bead priority (0-9, default: 2)",
-                "minimum": 0,
-                "maximum": 9
-            }));
-            props.insert("labels".to_string(), json!({
-                "type": "array",
-                "items": { "type": "string" },
-                "description": "Labels for the bead"
-            }));
+            props.insert(
+                "project".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Target project for the bead"
+                }),
+            );
+            props.insert(
+                "title".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Bead title"
+                }),
+            );
+            props.insert(
+                "description".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Optional bead description"
+                }),
+            );
+            props.insert(
+                "issue_type".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Bead issue type",
+                    "enum": ["task", "bug", "epic", "genesis", "review", "fix"],
+                    "default": "task"
+                }),
+            );
+            props.insert(
+                "priority".to_string(),
+                json!({
+                    "type": "number",
+                    "description": "Bead priority (0-9, default: 2)",
+                    "minimum": 0,
+                    "maximum": 9
+                }),
+            );
+            props.insert(
+                "labels".to_string(),
+                json!({
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Labels for the bead"
+                }),
+            );
             props.insert("parent_bead_id".to_string(), json!({
                 "type": "string",
                 "description": "Parent bead ID to inherit stitch:* labels from (Hook 4). When set, stitch labels are automatically propagated to the new bead."
@@ -1515,10 +1673,13 @@ fn input_schema_escalate_to_operator() -> InputSchema {
         schema_type: "object".to_string(),
         properties: {
             let mut props = serde_json::Map::new();
-            props.insert("message".to_string(), json!({
-                "type": "string",
-                "description": "Message to display to the operator"
-            }));
+            props.insert(
+                "message".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Message to display to the operator"
+                }),
+            );
             props
         },
         required: Some(vec!["message".to_string()]),
@@ -1561,34 +1722,40 @@ fn output_schema_read_stitch() -> OutputSchema {
         schema_type: "object".to_string(),
         properties: {
             let mut props = serde_json::Map::new();
-            props.insert("stitch".to_string(), json!({
-                "type": "object",
-                "description": "Stitch metadata",
-                "properties": {
-                    "id": { "type": "string" },
-                    "project": { "type": "string" },
-                    "kind": { "type": "string" },
-                    "title": { "type": "string" },
-                    "created_by": { "type": "string" },
-                    "created_at": { "type": "string" },
-                    "last_activity_at": { "type": "string" },
-                    "participants": { "type": "array", "items": { "type": "string" } }
-                }
-            }));
-            props.insert("messages".to_string(), json!({
-                "type": "array",
-                "description": "Messages in this stitch",
-                "items": {
+            props.insert(
+                "stitch".to_string(),
+                json!({
                     "type": "object",
+                    "description": "Stitch metadata",
                     "properties": {
                         "id": { "type": "string" },
-                        "ts": { "type": "string" },
-                        "role": { "type": "string" },
-                        "content": { "type": "string" },
-                        "tokens": { "type": "number" }
+                        "project": { "type": "string" },
+                        "kind": { "type": "string" },
+                        "title": { "type": "string" },
+                        "created_by": { "type": "string" },
+                        "created_at": { "type": "string" },
+                        "last_activity_at": { "type": "string" },
+                        "participants": { "type": "array", "items": { "type": "string" } }
                     }
-                }
-            }));
+                }),
+            );
+            props.insert(
+                "messages".to_string(),
+                json!({
+                    "type": "array",
+                    "description": "Messages in this stitch",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "id": { "type": "string" },
+                            "ts": { "type": "string" },
+                            "role": { "type": "string" },
+                            "content": { "type": "string" },
+                            "tokens": { "type": "number" }
+                        }
+                    }
+                }),
+            );
             props.insert("linked_beads".to_string(), json!({
                 "type": "array",
                 "description": "Beads linked to this stitch with live status",
@@ -1613,60 +1780,72 @@ fn output_schema_read_stitch() -> OutputSchema {
                     }
                 }
             }));
-            props.insert("touched_files".to_string(), json!({
-                "type": "array",
-                "description": "Files mentioned in stitch messages, sorted by mention count",
-                "items": {
+            props.insert(
+                "touched_files".to_string(),
+                json!({
+                    "type": "array",
+                    "description": "Files mentioned in stitch messages, sorted by mention count",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "path": { "type": "string" },
+                            "mention_count": { "type": "number" }
+                        }
+                    }
+                }),
+            );
+            props.insert(
+                "cost_duration".to_string(),
+                json!({
                     "type": "object",
+                    "description": "Token and wall-clock cost/duration roll-up",
                     "properties": {
-                        "path": { "type": "string" },
-                        "mention_count": { "type": "number" }
+                        "total_tokens": { "type": "number" },
+                        "message_count": { "type": "number" },
+                        "wall_clock": { "type": "string" },
+                        "first_message_ts": { "type": "string" },
+                        "last_message_ts": { "type": "string" }
                     }
-                }
-            }));
-            props.insert("cost_duration".to_string(), json!({
-                "type": "object",
-                "description": "Token and wall-clock cost/duration roll-up",
-                "properties": {
-                    "total_tokens": { "type": "number" },
-                    "message_count": { "type": "number" },
-                    "wall_clock": { "type": "string" },
-                    "first_message_ts": { "type": "string" },
-                    "last_message_ts": { "type": "string" }
-                }
-            }));
-            props.insert("link_graph".to_string(), json!({
-                "type": "object",
-                "description": "Stitch-to-stitch link graph (incoming and outgoing)",
-                "properties": {
-                    "outgoing": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "stitch_id": { "type": "string" },
-                                "kind": { "type": "string" },
-                                "title": { "type": "string" }
+                }),
+            );
+            props.insert(
+                "link_graph".to_string(),
+                json!({
+                    "type": "object",
+                    "description": "Stitch-to-stitch link graph (incoming and outgoing)",
+                    "properties": {
+                        "outgoing": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "stitch_id": { "type": "string" },
+                                    "kind": { "type": "string" },
+                                    "title": { "type": "string" }
+                                }
                             }
-                        }
-                    },
-                    "incoming": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "stitch_id": { "type": "string" },
-                                "kind": { "type": "string" },
-                                "title": { "type": "string" }
+                        },
+                        "incoming": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "stitch_id": { "type": "string" },
+                                    "kind": { "type": "string" },
+                                    "title": { "type": "string" }
+                                }
                             }
                         }
                     }
-                }
-            }));
-            props.insert("elapsed_ms".to_string(), json!({
-                "type": "number",
-                "description": "Server-side processing time in milliseconds"
-            }));
+                }),
+            );
+            props.insert(
+                "elapsed_ms".to_string(),
+                json!({
+                    "type": "number",
+                    "description": "Server-side processing time in milliseconds"
+                }),
+            );
             props
         },
         required: Some(vec![
@@ -1716,10 +1895,13 @@ fn output_schema_read_bead() -> OutputSchema {
             props.insert("status".to_string(), json!({ "type": "string" }));
             props.insert("priority".to_string(), json!({ "type": "number" }));
             props.insert("issue_type".to_string(), json!({ "type": "string" }));
-            props.insert("dependencies".to_string(), json!({
-                "type": "array",
-                "items": { "type": "string" }
-            }));
+            props.insert(
+                "dependencies".to_string(),
+                json!({
+                    "type": "array",
+                    "items": { "type": "string" }
+                }),
+            );
             props
         },
         required: None,
@@ -1731,10 +1913,13 @@ fn output_schema_read_file() -> OutputSchema {
         schema_type: "object".to_string(),
         properties: {
             let mut props = serde_json::Map::new();
-            props.insert("content".to_string(), json!({
-                "type": "string",
-                "description": "File contents as UTF-8 text"
-            }));
+            props.insert(
+                "content".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "File contents as UTF-8 text"
+                }),
+            );
             props
         },
         required: Some(vec!["content".to_string()]),
@@ -1769,20 +1954,23 @@ fn output_schema_search_conversations() -> OutputSchema {
         schema_type: "object".to_string(),
         properties: {
             let mut props = serde_json::Map::new();
-            props.insert("results".to_string(), json!({
-                "type": "array",
-                "description": "Array of matching conversation messages",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "stitch_id": { "type": "string" },
-                        "timestamp": { "type": "string" },
-                        "role": { "type": "string" },
-                        "content": { "type": "string" },
-                        "project": { "type": "string" }
+            props.insert(
+                "results".to_string(),
+                json!({
+                    "type": "array",
+                    "description": "Array of matching conversation messages",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "stitch_id": { "type": "string" },
+                            "timestamp": { "type": "string" },
+                            "role": { "type": "string" },
+                            "content": { "type": "string" },
+                            "project": { "type": "string" }
+                        }
                     }
-                }
-            }));
+                }),
+            );
             props
         },
         required: Some(vec!["results".to_string()]),
@@ -1796,11 +1984,18 @@ fn output_schema_summarize_project() -> OutputSchema {
             let mut props = serde_json::Map::new();
             props.insert("project".to_string(), json!({ "type": "string" }));
             props.insert("stitch_count".to_string(), json!({ "type": "number" }));
-            props.insert("recent_actions_24h".to_string(), json!({ "type": "number" }));
+            props.insert(
+                "recent_actions_24h".to_string(),
+                json!({ "type": "number" }),
+            );
             props.insert("generated_at".to_string(), json!({ "type": "string" }));
             props
         },
-        required: Some(vec!["project".to_string(), "stitch_count".to_string(), "recent_actions_24h".to_string()]),
+        required: Some(vec![
+            "project".to_string(),
+            "stitch_count".to_string(),
+            "recent_actions_24h".to_string(),
+        ]),
     }
 }
 
@@ -1811,12 +2006,19 @@ fn output_schema_summarize_day() -> OutputSchema {
             let mut props = serde_json::Map::new();
             props.insert("date".to_string(), json!({ "type": "string" }));
             props.insert("total_stitches".to_string(), json!({ "type": "number" }));
-            props.insert("active_stitches_24h".to_string(), json!({ "type": "number" }));
+            props.insert(
+                "active_stitches_24h".to_string(),
+                json!({ "type": "number" }),
+            );
             props.insert("today_actions".to_string(), json!({ "type": "number" }));
             props.insert("generated_at".to_string(), json!({ "type": "string" }));
             props
         },
-        required: Some(vec!["date".to_string(), "total_stitches".to_string(), "active_stitches_24h".to_string()]),
+        required: Some(vec![
+            "date".to_string(),
+            "total_stitches".to_string(),
+            "active_stitches_24h".to_string(),
+        ]),
     }
 }
 
@@ -1825,25 +2027,38 @@ fn output_schema_create_stitch() -> OutputSchema {
         schema_type: "object".to_string(),
         properties: {
             let mut props = serde_json::Map::new();
-            props.insert("draft_id".to_string(), json!({
-                "type": "string",
-                "description": "ID of the created draft"
-            }));
-            props.insert("status".to_string(), json!({
-                "type": "string",
-                "description": "Draft status (always 'pending' on creation)"
-            }));
+            props.insert(
+                "draft_id".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "ID of the created draft"
+                }),
+            );
+            props.insert(
+                "status".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Draft status (always 'pending' on creation)"
+                }),
+            );
             props.insert("title".to_string(), json!({ "type": "string" }));
             props.insert("kind".to_string(), json!({ "type": "string" }));
             props.insert("project".to_string(), json!({ "type": "string" }));
             props.insert("created_at".to_string(), json!({ "type": "string" }));
-            props.insert("message".to_string(), json!({
-                "type": "string",
-                "description": "Explanation that the draft is pending operator review"
-            }));
+            props.insert(
+                "message".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Explanation that the draft is pending operator review"
+                }),
+            );
             props
         },
-        required: Some(vec!["draft_id".to_string(), "status".to_string(), "title".to_string()]),
+        required: Some(vec![
+            "draft_id".to_string(),
+            "status".to_string(),
+            "title".to_string(),
+        ]),
     }
 }
 
@@ -1852,24 +2067,37 @@ fn output_schema_create_bead() -> OutputSchema {
         schema_type: "object".to_string(),
         properties: {
             let mut props = serde_json::Map::new();
-            props.insert("id".to_string(), json!({
-                "type": "string",
-                "description": "ID of the created bead"
-            }));
+            props.insert(
+                "id".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "ID of the created bead"
+                }),
+            );
             props.insert("title".to_string(), json!({ "type": "string" }));
             props.insert("project".to_string(), json!({ "type": "string" }));
-            props.insert("labels".to_string(), json!({
-                "type": "array",
-                "items": { "type": "string" },
-                "description": "Labels on the created bead (including inherited stitch labels)"
-            }));
-            props.insert("parent_bead_id".to_string(), json!({
-                "type": "string",
-                "description": "Parent bead ID if stitch labels were inherited"
-            }));
+            props.insert(
+                "labels".to_string(),
+                json!({
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Labels on the created bead (including inherited stitch labels)"
+                }),
+            );
+            props.insert(
+                "parent_bead_id".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Parent bead ID if stitch labels were inherited"
+                }),
+            );
             props
         },
-        required: Some(vec!["id".to_string(), "title".to_string(), "project".to_string()]),
+        required: Some(vec![
+            "id".to_string(),
+            "title".to_string(),
+            "project".to_string(),
+        ]),
     }
 }
 
@@ -1878,10 +2106,13 @@ fn output_schema_escalate_to_operator() -> OutputSchema {
         schema_type: "object".to_string(),
         properties: {
             let mut props = serde_json::Map::new();
-            props.insert("message".to_string(), json!({
-                "type": "string",
-                "description": "Confirmation message"
-            }));
+            props.insert(
+                "message".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Confirmation message"
+                }),
+            );
             props
         },
         required: Some(vec!["message".to_string()]),

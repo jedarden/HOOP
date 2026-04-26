@@ -5,9 +5,9 @@
 //! via MCP tool responses so secrets in CLI session JSONL never reach the agent.
 
 use regex::Regex;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::collections::hash_map::DefaultHasher;
 use std::sync::{LazyLock, Mutex};
 
 const MAX_CACHE_ENTRIES: usize = 50_000;

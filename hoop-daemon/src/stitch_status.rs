@@ -151,9 +151,10 @@ impl StitchContext {
     /// - OR there was streaming activity in the last N minutes
     fn is_in_progress(&self) -> bool {
         // Check for claimed beads
-        let has_claimed = self.linked_beads.iter().any(|bead| {
-            bead.claimed_by.is_some() && bead.status == BeadStatus::Open
-        });
+        let has_claimed = self
+            .linked_beads
+            .iter()
+            .any(|bead| bead.claimed_by.is_some() && bead.status == BeadStatus::Open);
         if has_claimed {
             return true;
         }
@@ -172,9 +173,9 @@ impl StitchContext {
 
     /// Check if Stitch has open review beads
     fn has_open_review_beads(&self) -> bool {
-        self.linked_beads.iter().any(|bead| {
-            bead.issue_type == BeadType::Review && bead.status == BeadStatus::Open
-        })
+        self.linked_beads
+            .iter()
+            .any(|bead| bead.issue_type == BeadType::Review && bead.status == BeadStatus::Open)
     }
 
     /// Calculate days since last activity
@@ -366,7 +367,10 @@ mod tests {
     #[test]
     fn test_css_classes() {
         assert_eq!(StitchStatus::InProgress.css_class(), "status-in-progress");
-        assert_eq!(StitchStatus::AwaitingReview.css_class(), "status-awaiting-review");
+        assert_eq!(
+            StitchStatus::AwaitingReview.css_class(),
+            "status-awaiting-review"
+        );
         assert_eq!(StitchStatus::Quiet { days: 5 }.css_class(), "status-quiet");
     }
 
@@ -380,14 +384,22 @@ mod tests {
         for i in 0..20 {
             ctx.linked_beads.push(LinkedBead {
                 id: format!("bd-{}", i),
-                status: if i % 3 == 0 { BeadStatus::Closed } else { BeadStatus::Open },
+                status: if i % 3 == 0 {
+                    BeadStatus::Closed
+                } else {
+                    BeadStatus::Open
+                },
                 issue_type: match i % 4 {
                     0 => BeadType::Review,
                     1 => BeadType::Task,
                     2 => BeadType::Bug,
                     _ => BeadType::Fix,
                 },
-                claimed_by: if i % 5 == 0 { Some(format!("worker-{}", i)) } else { None },
+                claimed_by: if i % 5 == 0 {
+                    Some(format!("worker-{}", i))
+                } else {
+                    None
+                },
                 updated_at: days_ago(i as i64),
             });
         }

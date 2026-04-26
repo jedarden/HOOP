@@ -207,13 +207,25 @@ impl ContextIndex {
         // Recent activity
         prompt.push_str("## Recent Activity (Last 10 closed Stitches)\n");
         for stitch in &self.recent_activity.closed_stitches {
-            prompt.push_str(&format!("- [{}] {} - {}\n",
-                stitch.closed_at.split('T').next().unwrap_or(&stitch.closed_at),
+            prompt.push_str(&format!(
+                "- [{}] {} - {}\n",
+                stitch
+                    .closed_at
+                    .split('T')
+                    .next()
+                    .unwrap_or(&stitch.closed_at),
                 stitch.project,
-                stitch.title));
+                stitch.title
+            ));
         }
-        prompt.push_str(&format!("Closed today: {}\n", self.recent_activity.closed_today));
-        prompt.push_str(&format!("Created today: {}\n", self.recent_activity.created_today));
+        prompt.push_str(&format!(
+            "Closed today: {}\n",
+            self.recent_activity.closed_today
+        ));
+        prompt.push_str(&format!(
+            "Created today: {}\n",
+            self.recent_activity.created_today
+        ));
         prompt.push('\n');
 
         // Open Stitches (titles only)
@@ -222,10 +234,10 @@ impl ContextIndex {
             prompt.push_str("(No open stitches)\n");
         } else {
             for stitch in &self.open_stitches {
-                prompt.push_str(&format!("- [{}] {} - {}\n",
-                    stitch.kind,
-                    stitch.project,
-                    stitch.title));
+                prompt.push_str(&format!(
+                    "- [{}] {} - {}\n",
+                    stitch.kind, stitch.project, stitch.title
+                ));
             }
         }
         prompt.push('\n');
@@ -240,7 +252,10 @@ impl ContextIndex {
                     AlertLevel::Info => "INFO",
                 };
                 if let Some(ref project) = alert.project {
-                    prompt.push_str(&format!("- [{}] {}: {}\n", level_str, project, alert.message));
+                    prompt.push_str(&format!(
+                        "- [{}] {}: {}\n",
+                        level_str, project, alert.message
+                    ));
                 } else {
                     prompt.push_str(&format!("- [{}]: {}\n", level_str, alert.message));
                 }
@@ -250,7 +265,8 @@ impl ContextIndex {
 
         // Tools instruction
         prompt.push_str("## Accessing Full Details\n\n");
-        prompt.push_str("This index contains summaries only. Use MCP tools to fetch full details:\n");
+        prompt
+            .push_str("This index contains summaries only. Use MCP tools to fetch full details:\n");
         prompt.push_str("- summarize_day() — daily summary across all projects\n");
         prompt.push_str("- summarize_project(project=\"<name>\") — project-specific summary\n");
         prompt.push_str("- find_stitches(project=\"<name>\") — list stitches with filters\n");
@@ -278,7 +294,10 @@ impl ContextIndex {
         if let Some(project_list) = config.get("projects").and_then(|p| p.as_sequence()) {
             for project in project_list {
                 if let Some(name) = project.get("name").and_then(|n| n.as_str()) {
-                    let label = project.get("label").and_then(|l| l.as_str()).map(|s| s.to_string());
+                    let label = project
+                        .get("label")
+                        .and_then(|l| l.as_str())
+                        .map(|s| s.to_string());
                     projects.push(ProjectEntry {
                         name: name.to_string(),
                         label,
@@ -298,7 +317,7 @@ impl ContextIndex {
              FROM stitches
              WHERE last_activity_at < datetime('now', '-1 hour')
              ORDER BY last_activity_at DESC
-             LIMIT ?1"
+             LIMIT ?1",
         )?;
 
         let closed_stitches: Result<Vec<ClosedStitchEntry>, _> = stmt
@@ -322,11 +341,13 @@ impl ContextIndex {
         ).unwrap_or(0);
 
         // Count stitches created today
-        let created_today: usize = conn.query_row(
-            "SELECT COUNT(*) FROM stitches WHERE created_at >= datetime('now', 'start of day')",
-            [],
-            |row| row.get(0),
-        ).unwrap_or(0);
+        let created_today: usize = conn
+            .query_row(
+                "SELECT COUNT(*) FROM stitches WHERE created_at >= datetime('now', 'start of day')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
 
         Ok(RecentActivitySummary {
             closed_stitches,
@@ -341,7 +362,7 @@ impl ContextIndex {
             "SELECT id, project, kind, title, last_activity_at
              FROM stitches
              WHERE last_activity_at >= datetime('now', '-1 hour')
-             ORDER BY last_activity_at DESC"
+             ORDER BY last_activity_at DESC",
         )?;
 
         let stitches: Result<Vec<OpenStitchEntry>, _> = stmt
@@ -369,7 +390,7 @@ impl ContextIndex {
                 "SELECT project, error FROM actions
                  WHERE result = '\"Failure\"'
                  AND ts > datetime('now', '-24 hours')
-                 LIMIT 5"
+                 LIMIT 5",
             )?
             .query_map([], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
@@ -461,8 +482,8 @@ pub fn build_context_index(projects_config: &serde_yaml::Value) -> Result<Contex
 
 /// Load projects.yaml config from ~/.hoop/projects.yaml
 pub fn load_projects_config() -> Result<serde_yaml::Value> {
-    let mut path = dirs::home_dir()
-        .ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
+    let mut path =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
     path.push(".hoop");
     path.push("projects.yaml");
 
@@ -495,8 +516,9 @@ projects:
   - name: test-project
     label: "Test Project"
   - name: another-project
-"#
-        ).unwrap();
+"#,
+        )
+        .unwrap();
 
         let index = ContextIndex::build_for_test(&yaml);
 
@@ -512,8 +534,9 @@ projects:
 projects:
   - name: test-project
     label: "Test"
-"#
-        ).unwrap();
+"#,
+        )
+        .unwrap();
 
         let index = ContextIndex::build_for_test(&yaml);
         let prompt = index.to_system_prompt();

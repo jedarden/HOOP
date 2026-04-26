@@ -55,10 +55,9 @@ async fn serve_asset(AxumPath(path): AxumPath<String>) -> impl IntoResponse {
         Some(content) => {
             let mime = mime_type(path);
             let mut response = Response::new(Body::from(content.data.to_vec()));
-            response.headers_mut().insert(
-                "content-type",
-                mime.parse().unwrap(),
-            );
+            response
+                .headers_mut()
+                .insert("content-type", mime.parse().unwrap());
             response
         }
         None => {
@@ -67,10 +66,9 @@ async fn serve_asset(AxumPath(path): AxumPath<String>) -> impl IntoResponse {
             match index {
                 Some(content) => {
                     let mut response = Response::new(Body::from(content.data.to_vec()));
-                    response.headers_mut().insert(
-                        "content-type",
-                        "text/html".parse().unwrap(),
-                    );
+                    response
+                        .headers_mut()
+                        .insert("content-type", "text/html".parse().unwrap());
                     response
                 }
                 None => axum::http::StatusCode::NOT_FOUND.into_response(),

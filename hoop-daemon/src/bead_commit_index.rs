@@ -55,7 +55,11 @@ fn parse_git_log(text: &str) -> Vec<(String, String, String)> {
 }
 
 /// Flush a batch of `(sha, ts, bead_id)` records plus an updated cursor into fleet.db.
-fn flush_to_db(workspace: &str, commits: Vec<(String, String, String)>, head_sha: &str) -> Result<()> {
+fn flush_to_db(
+    workspace: &str,
+    commits: Vec<(String, String, String)>,
+    head_sha: &str,
+) -> Result<()> {
     let db_path = crate::fleet::db_path();
     let mut conn = Connection::open(&db_path)?;
     let tx = conn.transaction()?;
@@ -212,7 +216,9 @@ pub fn spawn_indexer(workspaces: Vec<String>) {
             interval.tick().await;
             for ws in &workspaces {
                 match incremental_index_workspace(ws).await {
-                    Ok(n) if n > 0 => info!("bead_commit_index: {} new commits indexed in {}", n, ws),
+                    Ok(n) if n > 0 => {
+                        info!("bead_commit_index: {} new commits indexed in {}", n, ws)
+                    }
                     Ok(_) => {}
                     Err(e) => warn!("bead_commit_index: incremental failed for {}: {}", ws, e),
                 }
@@ -238,7 +244,14 @@ ghi789|2024-01-13T08:00:00+00:00|hoop-ttb.3.10,hoop-ttb.3.11\n\
 ";
         let results = parse_git_log(input);
         assert_eq!(results.len(), 3);
-        assert_eq!(results[0], ("abc123".to_string(), "2024-01-15T10:30:00+00:00".to_string(), "hoop-ttb.3.35".to_string()));
+        assert_eq!(
+            results[0],
+            (
+                "abc123".to_string(),
+                "2024-01-15T10:30:00+00:00".to_string(),
+                "hoop-ttb.3.35".to_string()
+            )
+        );
         // def456 is skipped (no bead id)
         assert_eq!(results[1].2, "hoop-ttb.3.10");
         assert_eq!(results[2].2, "hoop-ttb.3.11");

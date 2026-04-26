@@ -76,9 +76,12 @@ fn test_create_draft_response_daemon_serializes_fixture_shape() {
     let serialized = serde_json::to_value(&resp).unwrap();
 
     for (key, expected) in fixture.as_object().unwrap() {
-        let actual = serialized
-            .get(key)
-            .unwrap_or_else(|| panic!("CreateDraftResponse missing field '{}' (fixture declares it)", key));
+        let actual = serialized.get(key).unwrap_or_else(|| {
+            panic!(
+                "CreateDraftResponse missing field '{}' (fixture declares it)",
+                key
+            )
+        });
         assert_eq!(actual, expected, "field '{}' value mismatch", key);
     }
 }
@@ -107,7 +110,10 @@ fn test_read_stitch_response_daemon_serializes_fixture_shape() {
             title: fixture_stitch["title"].as_str().unwrap().to_string(),
             created_by: fixture_stitch["created_by"].as_str().unwrap().to_string(),
             created_at: fixture_stitch["created_at"].as_str().unwrap().to_string(),
-            last_activity_at: fixture_stitch["last_activity_at"].as_str().unwrap().to_string(),
+            last_activity_at: fixture_stitch["last_activity_at"]
+                .as_str()
+                .unwrap()
+                .to_string(),
             participants: fixture_stitch["participants"].clone(),
         },
         messages: vec![hoop_daemon::api_stitch_read::StitchMessage {
@@ -123,8 +129,12 @@ fn test_read_stitch_response_daemon_serializes_fixture_shape() {
             total_tokens: fixture_cost["total_tokens"].as_i64().unwrap(),
             message_count: fixture_cost["message_count"].as_u64().unwrap() as usize,
             wall_clock: fixture_cost["wall_clock"].as_str().unwrap().to_string(),
-            first_message_ts: fixture_cost["first_message_ts"].as_str().map(|s| s.to_string()),
-            last_message_ts: fixture_cost["last_message_ts"].as_str().map(|s| s.to_string()),
+            first_message_ts: fixture_cost["first_message_ts"]
+                .as_str()
+                .map(|s| s.to_string()),
+            last_message_ts: fixture_cost["last_message_ts"]
+                .as_str()
+                .map(|s| s.to_string()),
         },
         link_graph: hoop_daemon::api_stitch_read::LinkGraph {
             outgoing: vec![],
@@ -288,10 +298,6 @@ fn test_all_daemon_fixtures_are_valid_json() {
     ];
     for path in &fixtures {
         let val = load_fixture(path);
-        assert!(
-            val.is_object(),
-            "fixture {} must be a JSON object",
-            path
-        );
+        assert!(val.is_object(), "fixture {} must be a JSON object", path);
     }
 }

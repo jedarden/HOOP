@@ -113,6 +113,23 @@
     },
     "pricing": {
       "$ref": "pricing_config.json"
+    },
+    "stuck_detector": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Stuck detector configuration for monitoring worker health (§C1)",
+      "properties": {
+        "default": {
+          "$ref": "agent_config.json"
+        },
+        "adapters": {
+          "type": "object",
+          "description": "Per-adapter stuck detector configuration (optional)",
+          "additionalProperties": {
+            "$ref": "agent_config.json"
+          }
+        }
+      }
     }
   }
 }

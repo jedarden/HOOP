@@ -27,10 +27,8 @@ fn redaction_regexes() -> &'static [Regex] {
         vec![
             Regex::new(r"sk-[a-zA-Z0-9_-]{20,}").unwrap(),
             Regex::new(r"Bearer\s+[A-Za-z0-9._-]+").unwrap(),
-            Regex::new(r"(?i)(api[_-]?key|secret|token|password|passwd)\s*[:=]\s*\S{8,}")
-                .unwrap(),
-            Regex::new(r#"(?i)"(api[_-]?key|secret|token|password)"\s*:\s*"[^"]{8,}""#)
-                .unwrap(),
+            Regex::new(r"(?i)(api[_-]?key|secret|token|password|passwd)\s*[:=]\s*\S{8,}").unwrap(),
+            Regex::new(r#"(?i)"(api[_-]?key|secret|token|password)"\s*:\s*"[^"]{8,}""#).unwrap(),
         ]
     })
 }

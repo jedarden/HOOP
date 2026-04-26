@@ -61,9 +61,9 @@ pub fn sanitize(input: &[u8]) -> Result<SanitizeResult> {
     let mut buf = Vec::new();
 
     loop {
-        let event = reader
-            .read_event_into(&mut buf)
-            .map_err(|e| anyhow::anyhow!("SVG parse error at byte {}: {}", reader.error_position(), e))?;
+        let event = reader.read_event_into(&mut buf).map_err(|e| {
+            anyhow::anyhow!("SVG parse error at byte {}: {}", reader.error_position(), e)
+        })?;
 
         match event {
             // ── Opening tags ─────────────────────────────────────────────────
@@ -198,10 +198,7 @@ pub fn sanitize(input: &[u8]) -> Result<SanitizeResult> {
     }
 
     let safe_bytes = out.into_inner().into_inner();
-    Ok(SanitizeResult {
-        safe_bytes,
-        record,
-    })
+    Ok(SanitizeResult { safe_bytes, record })
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -271,8 +268,7 @@ fn filter_attrs(
     let mut kept: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
 
     for attr_res in elem.attributes() {
-        let attr =
-            attr_res.map_err(|e| anyhow::anyhow!("SVG attribute error: {}", e))?;
+        let attr = attr_res.map_err(|e| anyhow::anyhow!("SVG attribute error: {}", e))?;
         let key: &[u8] = attr.key.as_ref();
         let val: &[u8] = &attr.value;
 
@@ -314,23 +310,24 @@ mod tests {
 
     fn sanitize_str(input: &str) -> (String, SanitizeRecord) {
         let result = sanitize(input.as_bytes()).expect("sanitize should not fail");
-        (
-            String::from_utf8(result.safe_bytes).unwrap(),
-            result.record,
-        )
+        (String::from_utf8(result.safe_bytes).unwrap(), result.record)
     }
 
     // ── XSS corpus — all should be modified ─────────────────────────────────
 
     #[test]
     fn strips_script_element() {
-        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><rect/></svg>"#;
+        let svg =
+            r#"<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><rect/></svg>"#;
         let (out, rec) = sanitize_str(svg);
         assert!(rec.was_modified);
         assert!(rec.removed_elements.contains(&"script".to_string()));
         assert!(!out.contains("script"), "output: {out}");
         assert!(!out.contains("alert"), "output: {out}");
-        assert!(out.contains("<rect/>") || out.contains("<rect />"), "output should still have rect: {out}");
+        assert!(
+            out.contains("<rect/>") || out.contains("<rect />"),
+            "output should still have rect: {out}"
+        );
     }
 
     #[test]
@@ -385,7 +382,10 @@ mod tests {
         let svg = r#"<svg xmlns:xlink="http://www.w3.org/1999/xlink"><use xlink:href="http://evil.com/icon.svg"/></svg>"#;
         let (out, rec) = sanitize_str(svg);
         assert!(rec.was_modified);
-        assert!(rec.removed_attrs.iter().any(|a| a.contains("href") && a.contains("http://evil.com")));
+        assert!(rec
+            .removed_attrs
+            .iter()
+            .any(|a| a.contains("href") && a.contains("http://evil.com")));
         assert!(!out.contains("http://evil.com"));
     }
 
@@ -421,13 +421,19 @@ mod tests {
         let (out, rec) = sanitize_str(svg);
         assert!(rec.was_modified);
         assert!(
-            rec.removed_elements.iter().any(|e| e.eq_ignore_ascii_case("foreignObject")),
-            "foreignObject should be in removed_elements: {:?}", rec.removed_elements
+            rec.removed_elements
+                .iter()
+                .any(|e| e.eq_ignore_ascii_case("foreignObject")),
+            "foreignObject should be in removed_elements: {:?}",
+            rec.removed_elements
         );
         assert!(!out.contains("foreignObject"), "output: {out}");
         assert!(!out.contains("<div"), "output: {out}");
         assert!(!out.contains("XSS"), "output: {out}");
-        assert!(out.contains("<rect/>") || out.contains("<rect />") || out.contains("rect"), "rect should survive: {out}");
+        assert!(
+            out.contains("<rect/>") || out.contains("<rect />") || out.contains("rect"),
+            "rect should survive: {out}"
+        );
     }
 
     #[test]

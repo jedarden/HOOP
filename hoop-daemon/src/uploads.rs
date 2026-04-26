@@ -9,9 +9,9 @@
 //!
 //! Chunk state is stored in ~/.hoop/uploads/{upload_id}/
 
-use anyhow::{Context, Result};
 use crate::id_validators::{ValidBeadId, ValidStitchId, ValidUploadId};
 use crate::path_security::{canonicalize_and_check, PathAllowlist};
+use anyhow::{Context, Result};
 use sha2::{Digest, Sha256};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -25,9 +25,9 @@ pub struct UploadMetadata {
     pub filename: String,
     pub total_size: u64,
     pub received_size: u64,
-    pub checksum: String,  // hex-encoded SHA-256
-    pub attachment_type: String,  // "bead" or "stitch"
-    pub resource_id: String,  // bead_id or stitch_id
+    pub checksum: String,        // hex-encoded SHA-256
+    pub attachment_type: String, // "bead" or "stitch"
+    pub resource_id: String,     // bead_id or stitch_id
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
@@ -65,9 +65,9 @@ impl Default for UploadConfig {
         home.push(".hoop");
         home.push("uploads");
         Self {
-            chunk_size: 5 * 1024 * 1024,  // 5 MB chunks
-            max_file_size: 2 * 1024 * 1024 * 1024,  // 2 GB max
-            upload_ttl_hours: 24,  // uploads expire after 24 hours
+            chunk_size: 5 * 1024 * 1024,           // 5 MB chunks
+            max_file_size: 2 * 1024 * 1024 * 1024, // 2 GB max
+            upload_ttl_hours: 24,                  // uploads expire after 24 hours
             uploads_dir: home,
         }
     }
@@ -117,8 +117,8 @@ impl UploadRegistry {
         let meta_path = self.metadata_path(upload_id)?;
         let content = fs::read_to_string(&meta_path)
             .with_context(|| format!("upload not found: {}", upload_id))?;
-        let meta: UploadMetadata = serde_json::from_str(&content)
-            .context("failed to parse upload metadata")?;
+        let meta: UploadMetadata =
+            serde_json::from_str(&content).context("failed to parse upload metadata")?;
         Ok(meta)
     }
 
@@ -126,8 +126,7 @@ impl UploadRegistry {
     fn save_metadata(&self, upload_id: &ValidUploadId, meta: &UploadMetadata) -> Result<()> {
         let meta_path = self.metadata_path(upload_id)?;
         let content = serde_json::to_string_pretty(meta)?;
-        fs::write(&meta_path, content)
-            .context("failed to write metadata")?;
+        fs::write(&meta_path, content).context("failed to write metadata")?;
         Ok(())
     }
 
@@ -142,7 +141,11 @@ impl UploadRegistry {
     ) -> Result<InitUploadResponse> {
         // Validate inputs
         if total_size > self.config.max_file_size {
-            anyhow::bail!("file size {} exceeds maximum {}", total_size, self.config.max_file_size);
+            anyhow::bail!(
+                "file size {} exceeds maximum {}",
+                total_size,
+                self.config.max_file_size
+            );
         }
         if total_size == 0 {
             anyhow::bail!("file size must be positive");
@@ -156,11 +159,10 @@ impl UploadRegistry {
         }
 
         let upload_id_str = Uuid::new_v4().to_string();
-        let upload_id = ValidUploadId::parse(&upload_id_str)
-            .context("generated invalid upload ID")?;
+        let upload_id =
+            ValidUploadId::parse(&upload_id_str).context("generated invalid upload ID")?;
         let upload_dir = self.upload_dir_raw(&upload_id);
-        fs::create_dir_all(&upload_dir)
-            .context("failed to create upload directory")?;
+        fs::create_dir_all(&upload_dir).context("failed to create upload directory")?;
         // Layer 2: canonicalize + allowlist check after directory creation
         canonicalize_and_check(&upload_dir, &self.allowlist)
             .context("upload directory failed path validation")?;
@@ -182,8 +184,7 @@ impl UploadRegistry {
 
         // Create empty partial file
         let partial_path = self.partial_path(&upload_id)?;
-        File::create(&partial_path)
-            .context("failed to create partial file")?;
+        File::create(&partial_path).context("failed to create partial file")?;
 
         let expires_at = now + chrono::Duration::hours(self.config.upload_ttl_hours);
         let upload_url = format!("/api/uploads/{}", upload_id_str);
@@ -234,10 +235,8 @@ impl UploadRegistry {
 
         file.seek(SeekFrom::Start(offset))
             .context("failed to seek in partial file")?;
-        file.write_all(data)
-            .context("failed to write chunk")?;
-        file.sync_all()
-            .context("failed to sync chunk to disk")?;
+        file.write_all(data).context("failed to write chunk")?;
+        file.sync_all().context("failed to sync chunk to disk")?;
 
         // Update metadata
         meta.received_size = new_size;
@@ -297,28 +296,26 @@ impl UploadRegistry {
             "bead" => {
                 let bead_id = ValidBeadId::parse(&meta.resource_id)
                     .context("invalid bead ID in upload metadata")?;
-                let workspace = std::env::current_dir()
-                    .context("failed to get current directory")?;
-                crate::attachments::bead_attachment_path(
-                    &workspace,
-                    &bead_id,
-                    &meta.filename,
-                )?
+                let workspace =
+                    std::env::current_dir().context("failed to get current directory")?;
+                crate::attachments::bead_attachment_path(&workspace, &bead_id, &meta.filename)?
             }
             "stitch" => {
                 let stitch_id = ValidStitchId::parse(&meta.resource_id)
                     .context("invalid stitch ID in upload metadata")?;
-                crate::attachments::stitch_attachment_path(
-                    &stitch_id,
-                    &meta.filename,
-                )?
+                crate::attachments::stitch_attachment_path(&stitch_id, &meta.filename)?
             }
             _ => anyhow::bail!("invalid attachment type: {}", meta.attachment_type),
         };
 
         // Atomic rename
-        fs::rename(&partial_path, &final_path)
-            .with_context(|| format!("failed to move {} to {}", partial_path.display(), final_path.display()))?;
+        fs::rename(&partial_path, &final_path).with_context(|| {
+            format!(
+                "failed to move {} to {}",
+                partial_path.display(),
+                final_path.display()
+            )
+        })?;
 
         // SVG sanitization (§13): strip scripts / event handlers / external refs.
         // Runs after rename so we always work on the final path.
@@ -335,8 +332,7 @@ impl UploadRegistry {
 
         // Clean up upload directory
         let upload_dir = self.upload_dir(upload_id)?;
-        fs::remove_dir_all(&upload_dir)
-            .context("failed to clean up upload directory")?;
+        fs::remove_dir_all(&upload_dir).context("failed to clean up upload directory")?;
 
         Ok(final_path)
     }
@@ -345,21 +341,20 @@ impl UploadRegistry {
     pub fn cancel_upload(&self, upload_id: &ValidUploadId) -> Result<()> {
         let upload_dir = self.upload_dir(upload_id)?;
         if upload_dir.exists() {
-            fs::remove_dir_all(&upload_dir)
-                .context("failed to remove upload directory")?;
+            fs::remove_dir_all(&upload_dir).context("failed to remove upload directory")?;
         }
         Ok(())
     }
 
     /// Compute SHA-256 checksum of a file
     fn compute_checksum(&self, path: &Path) -> Result<String> {
-        let mut file = File::open(path)
-            .context("failed to open file for checksum")?;
+        let mut file = File::open(path).context("failed to open file for checksum")?;
         let mut hasher = Sha256::new();
         let mut buffer = [0u8; 8192];
 
         loop {
-            let n = file.read(&mut buffer)
+            let n = file
+                .read(&mut buffer)
                 .context("failed to read file for checksum")?;
             if n == 0 {
                 break;
@@ -375,8 +370,8 @@ impl UploadRegistry {
         let now = chrono::Utc::now();
         let mut cleaned = Vec::new();
 
-        let entries = fs::read_dir(&self.config.uploads_dir)
-            .context("failed to read uploads directory")?;
+        let entries =
+            fs::read_dir(&self.config.uploads_dir).context("failed to read uploads directory")?;
 
         for entry in entries {
             let entry = entry?;
@@ -390,8 +385,9 @@ impl UploadRegistry {
                 if let Ok(meta) = serde_json::from_str::<UploadMetadata>(&content) {
                     let age = now.signed_duration_since(meta.updated_at);
                     if age.num_hours() > self.config.upload_ttl_hours {
-                        fs::remove_dir_all(&dir_path)
-                            .with_context(|| format!("failed to remove expired upload {}", meta.upload_id))?;
+                        fs::remove_dir_all(&dir_path).with_context(|| {
+                            format!("failed to remove expired upload {}", meta.upload_id)
+                        })?;
                         cleaned.push(meta.upload_id);
                     }
                 }
@@ -412,8 +408,12 @@ fn apply_svg_sanitization_after_store(
     upload_meta: &UploadMetadata,
     attach_meta: crate::attachments::AttachmentMetadata,
 ) -> Result<crate::attachments::AttachmentMetadata> {
-    let svg_data = fs::read(final_path)
-        .with_context(|| format!("failed to read SVG for sanitization: {}", final_path.display()))?;
+    let svg_data = fs::read(final_path).with_context(|| {
+        format!(
+            "failed to read SVG for sanitization: {}",
+            final_path.display()
+        )
+    })?;
 
     let result = crate::svg_sanitize::sanitize(&svg_data)
         .with_context(|| format!("SVG sanitization failed for {:?}", upload_meta.filename))?;
@@ -454,8 +454,7 @@ fn apply_svg_sanitization_after_store(
         .parent()
         .ok_or_else(|| anyhow::anyhow!("SVG path has no parent directory"))?
         .join(&tmp_name);
-    fs::write(&tmp_path, &result.safe_bytes)
-        .context("failed to write sanitized SVG to tmp")?;
+    fs::write(&tmp_path, &result.safe_bytes).context("failed to write sanitized SVG to tmp")?;
     fs::rename(&tmp_path, final_path)
         .with_context(|| format!("failed to rename sanitized SVG to {}", final_path.display()))?;
 
@@ -479,8 +478,12 @@ fn apply_pdf_sanitization_after_store(
     upload_meta: &UploadMetadata,
     attach_meta: crate::attachments::AttachmentMetadata,
 ) -> Result<crate::attachments::AttachmentMetadata> {
-    let pdf_data = fs::read(final_path)
-        .with_context(|| format!("failed to read PDF for sanitization: {}", final_path.display()))?;
+    let pdf_data = fs::read(final_path).with_context(|| {
+        format!(
+            "failed to read PDF for sanitization: {}",
+            final_path.display()
+        )
+    })?;
 
     let result = crate::pdf_sanitize::sanitize(&pdf_data)
         .with_context(|| format!("PDF sanitization failed for {:?}", upload_meta.filename))?;
@@ -521,8 +524,7 @@ fn apply_pdf_sanitization_after_store(
         .parent()
         .ok_or_else(|| anyhow::anyhow!("PDF path has no parent directory"))?
         .join(&tmp_name);
-    fs::write(&tmp_path, &result.safe_bytes)
-        .context("failed to write sanitized PDF to tmp")?;
+    fs::write(&tmp_path, &result.safe_bytes).context("failed to write sanitized PDF to tmp")?;
     fs::rename(&tmp_path, final_path)
         .with_context(|| format!("failed to rename sanitized PDF to {}", final_path.display()))?;
 
@@ -538,7 +540,8 @@ fn read_leading_bytes(path: &Path, n: usize) -> Result<Vec<u8>> {
     let mut buf = vec![0u8; n];
     let mut file = File::open(path)
         .with_context(|| format!("failed to open file for sniffing: {}", path.display()))?;
-    let bytes_read = file.read(&mut buf)
+    let bytes_read = file
+        .read(&mut buf)
         .context("failed to read leading bytes")?;
     buf.truncate(bytes_read);
     Ok(buf)
@@ -565,13 +568,15 @@ mod tests {
         let (config, _tmp) = test_config();
         let registry = UploadRegistry::new(config).unwrap();
 
-        let response = registry.initiate_upload(
-            "test.txt".to_string(),
-            100,
-            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
-            "bead".to_string(),
-            "test-bead.1".to_string(),
-        ).unwrap();
+        let response = registry
+            .initiate_upload(
+                "test.txt".to_string(),
+                100,
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+                "bead".to_string(),
+                "test-bead.1".to_string(),
+            )
+            .unwrap();
 
         assert_eq!(response.chunk_size, 1024);
         assert!(!response.upload_id.is_empty());
@@ -589,13 +594,15 @@ mod tests {
         let (config, _tmp) = test_config();
         let registry = UploadRegistry::new(config).unwrap();
 
-        let init = registry.initiate_upload(
-            "test.txt".to_string(),
-            100,
-            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
-            "bead".to_string(),
-            "test-bead.1".to_string(),
-        ).unwrap();
+        let init = registry
+            .initiate_upload(
+                "test.txt".to_string(),
+                100,
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+                "bead".to_string(),
+                "test-bead.1".to_string(),
+            )
+            .unwrap();
 
         let valid_id = ValidUploadId::parse(&init.upload_id).unwrap();
         let data = vec![b'a'; 50];
@@ -616,13 +623,15 @@ mod tests {
         let (config, _tmp) = test_config();
         let registry = UploadRegistry::new(config).unwrap();
 
-        let init = registry.initiate_upload(
-            "test.txt".to_string(),
-            100,
-            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
-            "bead".to_string(),
-            "test-bead.1".to_string(),
-        ).unwrap();
+        let init = registry
+            .initiate_upload(
+                "test.txt".to_string(),
+                100,
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+                "bead".to_string(),
+                "test-bead.1".to_string(),
+            )
+            .unwrap();
 
         let valid_id = ValidUploadId::parse(&init.upload_id).unwrap();
         let data = vec![b'a'; 50];
@@ -636,13 +645,15 @@ mod tests {
         let (config, _tmp) = test_config();
         let registry = UploadRegistry::new(config).unwrap();
 
-        let init = registry.initiate_upload(
-            "test.txt".to_string(),
-            100,
-            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
-            "bead".to_string(),
-            "test-bead.1".to_string(),
-        ).unwrap();
+        let init = registry
+            .initiate_upload(
+                "test.txt".to_string(),
+                100,
+                "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_string(),
+                "bead".to_string(),
+                "test-bead.1".to_string(),
+            )
+            .unwrap();
 
         let valid_id = ValidUploadId::parse(&init.upload_id).unwrap();
         let progress = registry.get_progress(&valid_id).unwrap();

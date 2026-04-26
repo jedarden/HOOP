@@ -92,7 +92,11 @@ fn all_scenarios_exist_for_each_adapter() {
                 })
                 .filter_map(|entry| entry.ok())
                 .filter(|entry| {
-                    entry.path().extension().map(|ext| ext == "jsonl").unwrap_or(false)
+                    entry
+                        .path()
+                        .extension()
+                        .map(|ext| ext == "jsonl")
+                        .unwrap_or(false)
                 })
                 .collect();
 
@@ -113,7 +117,12 @@ fn corpus_size_is_bounded() {
         .into_iter()
         .filter_map(|e| e.ok())
     {
-        if entry.path().extension().map(|ext| ext == "jsonl").unwrap_or(false) {
+        if entry
+            .path()
+            .extension()
+            .map(|ext| ext == "jsonl")
+            .unwrap_or(false)
+        {
             if let Ok(metadata) = entry.metadata() {
                 total_size += metadata.len();
             }
@@ -148,16 +157,15 @@ fn all_jsonl_files_contain_valid_json() {
                 if line.trim().is_empty() {
                     continue;
                 }
-                let _: serde_json::Value = serde_json::from_str(line)
-                    .unwrap_or_else(|e| {
-                        panic!(
-                            "Invalid JSON on line {} of {:?}: {}\n  Line: {}",
-                            i + 1,
-                            path,
-                            e,
-                            line
-                        )
-                    });
+                let _: serde_json::Value = serde_json::from_str(line).unwrap_or_else(|e| {
+                    panic!(
+                        "Invalid JSON on line {} of {:?}: {}\n  Line: {}",
+                        i + 1,
+                        path,
+                        e,
+                        line
+                    )
+                });
             }
         }
     }
@@ -174,7 +182,12 @@ fn all_scenario_files_have_content() {
             let entries: Vec<_> = fs::read_dir(&scenario_dir)
                 .unwrap_or_else(|e| panic!("Failed to read {:?}: {}", scenario_dir, e))
                 .filter_map(|e| e.ok())
-                .filter(|e| e.path().extension().map(|ext| ext == "jsonl").unwrap_or(false))
+                .filter(|e| {
+                    e.path()
+                        .extension()
+                        .map(|ext| ext == "jsonl")
+                        .unwrap_or(false)
+                })
                 .collect();
 
             for entry in entries {
@@ -183,10 +196,7 @@ fn all_scenario_files_have_content() {
                     .unwrap_or_else(|e| panic!("Failed to read {:?}: {}", path, e));
 
                 // Count non-empty, non-whitespace lines
-                let non_empty_lines = content
-                    .lines()
-                    .filter(|l| !l.trim().is_empty())
-                    .count();
+                let non_empty_lines = content.lines().filter(|l| !l.trim().is_empty()).count();
 
                 assert!(
                     non_empty_lines > 0,
@@ -208,7 +218,12 @@ fn simple_turn_scenarios_contain_text_events() {
         let entries: Vec<_> = fs::read_dir(&simple_dir)
             .unwrap_or_else(|e| panic!("Failed to read {:?}: {}", simple_dir, e))
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map(|ext| ext == "jsonl").unwrap_or(false))
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .map(|ext| ext == "jsonl")
+                    .unwrap_or(false)
+            })
             .collect();
 
         for entry in entries {
@@ -226,17 +241,21 @@ fn simple_turn_scenarios_contain_text_events() {
                     val.get("text").is_some()
                         || val.get("content").is_some()
                         || val.get("delta").and_then(|d| d.get("text")).is_some()
-                        || val.get("candidates").and_then(|c| c.as_array()).and_then(|arr| {
-                            arr.first().and_then(|cand| {
-                                cand.get("content").and_then(|content| {
-                                    content.get("parts").and_then(|parts| {
-                                        parts.as_array().and_then(|parts_arr| {
-                                            parts_arr.first().and_then(|part| part.get("text"))
+                        || val
+                            .get("candidates")
+                            .and_then(|c| c.as_array())
+                            .and_then(|arr| {
+                                arr.first().and_then(|cand| {
+                                    cand.get("content").and_then(|content| {
+                                        content.get("parts").and_then(|parts| {
+                                            parts.as_array().and_then(|parts_arr| {
+                                                parts_arr.first().and_then(|part| part.get("text"))
+                                            })
                                         })
                                     })
                                 })
                             })
-                        }).is_some()
+                            .is_some()
                 } else {
                     false
                 }
@@ -245,8 +264,7 @@ fn simple_turn_scenarios_contain_text_events() {
             assert!(
                 has_text,
                 "Simple turn scenario {:?} for adapter '{}' must contain at least one text event",
-                path,
-                adapter
+                path, adapter
             );
         }
     }
@@ -262,7 +280,12 @@ fn tool_heavy_scenarios_contain_tool_events() {
         let entries: Vec<_> = fs::read_dir(&tool_dir)
             .unwrap_or_else(|e| panic!("Failed to read {:?}: {}", tool_dir, e))
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map(|ext| ext == "jsonl").unwrap_or(false))
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .map(|ext| ext == "jsonl")
+                    .unwrap_or(false)
+            })
             .collect();
 
         for entry in entries {
@@ -281,14 +304,22 @@ fn tool_heavy_scenarios_contain_tool_events() {
                         || val.get("tool_call").is_some()
                         || val.get("functionCall").is_some()
                         || val.get("tool").is_some()
-                        || val.get("name").and_then(|n| n.as_str()).map(|s| {
-                            // Check if this looks like a tool name (common tool names)
-                            matches!(
-                                s,
-                                "read_file" | "write_file" | "list_files" | "browse"
-                                    | "search_files" | "run_command"
-                            )
-                        }).unwrap_or(false)
+                        || val
+                            .get("name")
+                            .and_then(|n| n.as_str())
+                            .map(|s| {
+                                // Check if this looks like a tool name (common tool names)
+                                matches!(
+                                    s,
+                                    "read_file"
+                                        | "write_file"
+                                        | "list_files"
+                                        | "browse"
+                                        | "search_files"
+                                        | "run_command"
+                                )
+                            })
+                            .unwrap_or(false)
                 } else {
                     false
                 }
@@ -297,8 +328,7 @@ fn tool_heavy_scenarios_contain_tool_events() {
             assert!(
                 has_tool,
                 "Tool-heavy scenario {:?} for adapter '{}' must contain at least one tool event",
-                path,
-                adapter
+                path, adapter
             );
         }
     }
@@ -314,7 +344,12 @@ fn failure_scenarios_contain_error_events() {
         let entries: Vec<_> = fs::read_dir(&failure_dir)
             .unwrap_or_else(|e| panic!("Failed to read {:?}: {}", failure_dir, e))
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map(|ext| ext == "jsonl").unwrap_or(false))
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .map(|ext| ext == "jsonl")
+                    .unwrap_or(false)
+            })
             .collect();
 
         for entry in entries {
@@ -340,8 +375,7 @@ fn failure_scenarios_contain_error_events() {
             assert!(
                 has_error,
                 "Failure scenario {:?} for adapter '{}' must contain at least one error indication",
-                path,
-                adapter
+                path, adapter
             );
         }
     }
@@ -479,7 +513,12 @@ fn simple_turn_scenarios_parse_to_text_delta() {
         let entries: Vec<_> = fs::read_dir(&simple_dir)
             .unwrap_or_else(|e| panic!("Failed to read {:?}: {}", simple_dir, e))
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map(|ext| ext == "jsonl").unwrap_or(false))
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .map(|ext| ext == "jsonl")
+                    .unwrap_or(false)
+            })
             .collect();
 
         for entry in entries {
@@ -493,7 +532,10 @@ fn simple_turn_scenarios_parse_to_text_delta() {
                     continue;
                 }
                 if let Ok(event) = parse_claude_stream_line(line) {
-                    if matches!(event, hoop_daemon::agent_adapter::AgentEvent::TextDelta { .. }) {
+                    if matches!(
+                        event,
+                        hoop_daemon::agent_adapter::AgentEvent::TextDelta { .. }
+                    ) {
                         has_text_delta = true;
                         break;
                     }
@@ -520,7 +562,12 @@ fn tool_heavy_scenarios_parse_to_tool_events() {
         let entries: Vec<_> = fs::read_dir(&tool_dir)
             .unwrap_or_else(|e| panic!("Failed to read {:?}: {}", tool_dir, e))
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map(|ext| ext == "jsonl").unwrap_or(false))
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .map(|ext| ext == "jsonl")
+                    .unwrap_or(false)
+            })
             .collect();
 
         for entry in entries {
@@ -536,8 +583,12 @@ fn tool_heavy_scenarios_parse_to_tool_events() {
                 }
                 if let Ok(event) = parse_claude_stream_line(line) {
                     match event {
-                        hoop_daemon::agent_adapter::AgentEvent::ToolUse { .. } => has_tool_use = true,
-                        hoop_daemon::agent_adapter::AgentEvent::ToolResult { .. } => has_tool_result = true,
+                        hoop_daemon::agent_adapter::AgentEvent::ToolUse { .. } => {
+                            has_tool_use = true
+                        }
+                        hoop_daemon::agent_adapter::AgentEvent::ToolResult { .. } => {
+                            has_tool_result = true
+                        }
                         _ => {}
                     }
                 }
@@ -569,7 +620,12 @@ fn failure_scenarios_parse_to_error_events() {
         let entries: Vec<_> = fs::read_dir(&failure_dir)
             .unwrap_or_else(|e| panic!("Failed to read {:?}: {}", failure_dir, e))
             .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().map(|ext| ext == "jsonl").unwrap_or(false))
+            .filter(|e| {
+                e.path()
+                    .extension()
+                    .map(|ext| ext == "jsonl")
+                    .unwrap_or(false)
+            })
             .collect();
 
         for entry in entries {
@@ -593,8 +649,7 @@ fn failure_scenarios_parse_to_error_events() {
             assert!(
                 has_error,
                 "Failure scenario {:?} for adapter '{}' must parse to at least one Error event",
-                path,
-                adapter
+                path, adapter
             );
         }
     }

@@ -3,12 +3,7 @@
 //! Endpoints:
 //! - GET /api/audit  — query audit log with optional filters
 
-use axum::{
-    extract::Query,
-    http::StatusCode,
-    routing::get,
-    Json,
-};
+use axum::{extract::Query, http::StatusCode, routing::get, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::fleet::{self, ActionKind, AuditRow as FleetAuditRow};

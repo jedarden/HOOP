@@ -8,7 +8,7 @@
 //! metrics (uptime, process stats, DB sizes) are appended by the HTTP
 //! handler in `api_metrics.rs`.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::RwLock;
@@ -25,7 +25,9 @@ pub struct Counter {
 
 impl Counter {
     pub fn new() -> Self {
-        Self { value: AtomicU64::new(0) }
+        Self {
+            value: AtomicU64::new(0),
+        }
     }
 
     pub fn inc(&self) {
@@ -49,7 +51,9 @@ pub struct Gauge {
 
 impl Gauge {
     pub fn new() -> Self {
-        Self { value: AtomicI64::new(0) }
+        Self {
+            value: AtomicI64::new(0),
+        }
     }
 
     pub fn set(&self, v: i64) {
@@ -81,7 +85,9 @@ pub struct FloatGauge {
 
 impl FloatGauge {
     pub fn new() -> Self {
-        Self { bits: AtomicU64::new(0) }
+        Self {
+            bits: AtomicU64::new(0),
+        }
     }
 
     pub fn set(&self, v: f64) {
@@ -171,6 +177,182 @@ impl LabeledCounter {
             .iter()
             .map(|(k, v)| (k.clone(), *v))
             .collect()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Cardinality budget enforcement (§16)
+// ---------------------------------------------------------------------------
+
+/// Per-label cardinality budget configuration.
+///
+/// For each label index, defines the maximum number of unique values allowed.
+/// Values beyond the budget are bucketed into "other".
+#[derive(Debug, Clone)]
+pub struct CardinalityBudget {
+    /// Label index -> maximum unique values (0 = no limit)
+    pub budgets: Vec<usize>,
+    /// Pre-approved values that never count toward the budget (per label index)
+    pub allowlist: Vec<HashSet<String>>,
+}
+
+impl CardinalityBudget {
+    /// Create a new budget with limits per label index.
+    ///
+    /// `budgets[i]` is the max unique values for label at index `i`.
+    /// A budget of 0 means no limit for that label.
+    pub fn new(budgets: &[usize]) -> Self {
+        Self {
+            budgets: budgets.to_vec(),
+            allowlist: vec![HashSet::new(); budgets.len()],
+        }
+    }
+
+    /// Add a pre-approved value for a specific label index.
+    /// Allowlisted values never count toward the budget.
+    pub fn allowlist_value(&mut self, label_index: usize, value: &str) {
+        if label_index < self.allowlist.len() {
+            self.allowlist[label_index].insert(value.to_string());
+        }
+    }
+
+    /// Check if a value is allowlisted for a given label index.
+    fn is_allowlisted(&self, label_index: usize, value: &str) -> bool {
+        if label_index >= self.allowlist.len() {
+            return false;
+        }
+        self.allowlist[label_index].contains(value)
+    }
+}
+
+/// Labeled counter with per-label cardinality budget enforcement.
+///
+/// Tracks unique values per label and buckets overflow into "other".
+/// When a value exceeds its budget, `hoop_metric_cardinality_budget_exceeded_total`
+/// is incremented.
+pub struct BoundedLabeledCounter {
+    /// Label names for Prometheus output
+    pub label_names: &'static [&'static str],
+    /// Cardinality budget configuration
+    budget: CardinalityBudget,
+    /// Actual counter data (label values -> count)
+    data: RwLock<HashMap<Vec<String>, u64>>,
+    /// Per-label index: set of unique values seen so far
+    seen_values: RwLock<Vec<HashSet<String>>>,
+    /// Number of times budget was exceeded (per-label)
+    budget_exceeded_counts: RwLock<Vec<AtomicU64>>,
+}
+
+impl BoundedLabeledCounter {
+    pub fn new(label_names: &'static [&'static str], budget: CardinalityBudget) -> Self {
+        let seen_values = (0..label_names.len())
+            .map(|_| HashSet::new())
+            .collect();
+        let budget_exceeded_counts = (0..label_names.len())
+            .map(|_| AtomicU64::new(0))
+            .collect();
+
+        Self {
+            label_names,
+            budget,
+            data: RwLock::new(HashMap::new()),
+            seen_values: RwLock::new(seen_values),
+            budget_exceeded_counts: RwLock::new(budget_exceeded_counts),
+        }
+    }
+
+    /// Increment the counter by 1, applying cardinality budgeting.
+    pub fn inc(&self, label_values: &[&str]) {
+        self.inc_by(label_values, 1);
+    }
+
+    /// Increment the counter by a specific amount, applying cardinality budgeting.
+    pub fn inc_by(&self, label_values: &[&str], amount: u64) {
+        // Apply budgeting to get the final label values
+        let (final_values, exceeded) = self.apply_budget(label_values);
+
+        // Store the count
+        let mut data = self.data.write().unwrap();
+        *data.entry(final_values).or_insert(0) += amount;
+
+        // Increment the global budget exceeded counter if any label was over budget
+        if exceeded {
+            metrics().hoop_metric_cardinality_budget_exceeded_total.inc();
+        }
+    }
+
+    /// Apply cardinality budgeting to label values.
+    /// Returns the possibly-modified label values (with "other" substitutions)
+    /// and a boolean indicating if any label exceeded its budget.
+    fn apply_budget(&self, label_values: &[&str]) -> (Vec<String>, bool) {
+        let mut seen = self.seen_values.write().unwrap();
+        let mut exceeded = false;
+        let mut result = Vec::with_capacity(label_values.len());
+
+        for (idx, &value) in label_values.iter().enumerate() {
+            // Skip budgeting if no budget set for this label
+            if idx >= self.budget.budgets.len() || self.budget.budgets[idx] == 0 {
+                result.push(value.to_string());
+                continue;
+            }
+
+            // Allowlisted values are always accepted
+            if self.budget.is_allowlisted(idx, value) {
+                result.push(value.to_string());
+                continue;
+            }
+
+            let budget_limit = self.budget.budgets[idx];
+            let seen_set = &mut seen[idx];
+
+            if seen_set.contains(value) {
+                // Already seen this value - accept it
+                result.push(value.to_string());
+            } else if seen_set.len() < budget_limit {
+                // Under budget - accept and track
+                seen_set.insert(value.to_string());
+                result.push(value.to_string());
+            } else {
+                // Over budget - bucket to "other"
+                result.push("other".to_string());
+                exceeded = true;
+                // Track per-label exceeded count
+                if let Some(counter) = self.budget_exceeded_counts.write().unwrap().get(idx) {
+                    counter.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        }
+
+        (result, exceeded)
+    }
+
+    pub fn snapshot(&self) -> Vec<(Vec<String>, u64)> {
+        self.data
+            .read()
+            .unwrap()
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect()
+    }
+
+    /// Get the number of unique values seen for a specific label index.
+    pub fn unique_count(&self, label_index: usize) -> usize {
+        self.seen_values
+            .read()
+            .unwrap()
+            .get(label_index)
+            .map(|s| s.len())
+            .unwrap_or(0)
+    }
+
+    /// Get the number of times the budget was exceeded for a specific label index.
+    pub fn exceeded_count(&self, label_index: usize) -> u64 {
+        self.budget_exceeded_counts
+            .read()
+            .unwrap()
+            .get(label_index)
+            .map(|c| c.load(Ordering::Relaxed))
+            .unwrap_or(0)
     }
 }
 
@@ -398,7 +580,10 @@ fn write_labeled_counter(
     let mut sorted = rows.to_vec();
     sorted.sort_by(|a, b| a.0.cmp(&b.0));
     for (values, count) in &sorted {
-        out.push_str(&format!("{name}{} {count}\n", labels_str(label_names, values)));
+        out.push_str(&format!(
+            "{name}{} {count}\n",
+            labels_str(label_names, values)
+        ));
     }
 }
 
@@ -413,7 +598,10 @@ fn write_labeled_gauge(
     let mut sorted = rows.to_vec();
     sorted.sort_by(|a, b| a.0.cmp(&b.0));
     for (values, val) in &sorted {
-        out.push_str(&format!("{name}{} {val}\n", labels_str(label_names, values)));
+        out.push_str(&format!(
+            "{name}{} {val}\n",
+            labels_str(label_names, values)
+        ));
     }
 }
 
@@ -465,9 +653,10 @@ fn write_labeled_histogram_percentiles(
 /// Global metrics registry.  All fields are thread-safe.
 pub struct Metrics {
     // ── Backward-compatible unlabeled metrics ───────────────────────────────
-
     /// Events dropped because no adapter parser recognised their type.
     pub hoop_unknown_event_total: Counter,
+    /// Cardinality budget violations - number of label values bucketed to "other".
+    pub hoop_metric_cardinality_budget_exceeded_total: Counter,
     /// Active WebSocket client connections (updated by ShutdownCoordinator).
     pub hoop_ws_clients_connected: Gauge,
     /// Wall-clock duration of graceful-shutdown sequences.
@@ -478,7 +667,6 @@ pub struct Metrics {
     pub hoop_shutdown_timeout_connections: Counter,
 
     // ── §16.1 Operational ──────────────────────────────────────────────────
-
     /// Panics caught and recovered, labelled by subsystem.
     pub hoop_panics_total: LabeledCounter,
     /// Application errors labelled by subsystem and kind.
@@ -487,20 +675,18 @@ pub struct Metrics {
     pub hoop_last_restart_reason: LabeledGauge,
 
     // ── §16.2 Event Ingestion ──────────────────────────────────────────────
-
     /// Seconds between an event being written to disk and broadcast by HOOP.
     pub hoop_event_tailer_lag_seconds: LabeledGauge,
     /// Seconds of lag in the session tailer, per CLI adapter.
     pub hoop_session_tailer_lag_seconds: LabeledGauge,
     /// Heartbeat freshness in seconds, per worker (p50/p95/p99).
     pub hoop_heartbeat_freshness_seconds: LabeledHistogramPercentiles,
-    /// Unknown-event drops with full adapter + event_kind context.
-    pub hoop_unknown_event_labeled_total: LabeledCounter,
+    /// Unknown-event drops with full adapter + event_kind context (budgeted).
+    pub hoop_unknown_event_labeled_total: BoundedLabeledCounter,
     /// Event parse errors per adapter.
     pub hoop_event_parse_errors_total: LabeledCounter,
 
     // ── §16.3 WebSocket & HTTP ─────────────────────────────────────────────
-
     /// WebSocket broadcast round-trip lag in seconds (p50/p95/p99 percentiles).
     pub hoop_ws_broadcast_lag_seconds: LabeledHistogramPercentiles,
     /// HTTP request totals by route template and HTTP status code.
@@ -509,7 +695,6 @@ pub struct Metrics {
     pub hoop_http_request_duration_ms: LabeledHistogram,
 
     // ── §16.4 Bead & Stitch Operations ────────────────────────────────────
-
     /// `br` subprocess invocations by verb (create/list/…) and result.
     pub hoop_br_subprocess_total: LabeledCounter,
     /// `br` subprocess wall-clock duration in milliseconds, by verb.
@@ -524,7 +709,6 @@ pub struct Metrics {
     pub hoop_orphan_bead_count: LabeledGauge,
 
     // ── §16.5 Agent & AI ───────────────────────────────────────────────────
-
     /// Agent turn wall-clock duration in ms, by adapter, model, and phase.
     pub hoop_agent_turn_duration_ms: LabeledHistogram,
     /// Agent tool-call invocations by tool name and result.
@@ -543,7 +727,6 @@ pub struct Metrics {
     pub hoop_reflection_approval_rate: FloatGauge,
 
     // ── §16.6 Storage ──────────────────────────────────────────────────────
-
     /// Schema migration duration in milliseconds, labelled by from/to version.
     pub hoop_schema_migration_duration_ms: LabeledHistogram,
     /// Unix timestamp of the last successful backup (seconds since epoch).
@@ -556,7 +739,6 @@ pub struct Metrics {
     pub hoop_backup_run_duration_seconds: Histogram,
 
     // ── §16.7 Business ─────────────────────────────────────────────────────
-
     /// Cost anomaly alerts fired.
     pub hoop_cost_anomaly_alerts_total: Counter,
     /// "Already started" deduplication hits (session reuse without new bead).
@@ -567,12 +749,10 @@ pub struct Metrics {
     pub hoop_stitches_created_per_day: Gauge,
 
     // ── §L3 JSONL Quarantine ──────────────────────────────────────────────────
-
     /// JSONL lines quarantined due to parse failures, labelled by source tag.
     pub hoop_jsonl_quarantined_lines_total: LabeledCounter,
 
     // ── §M5 Worker Spawn Ack ──────────────────────────────────────────────────
-
     /// Spawn-ack files received from NEEDLE workers on boot (§M5).
     pub hoop_worker_acks_seen_total: Counter,
 
@@ -580,7 +760,6 @@ pub struct Metrics {
     pub hoop_worker_spawn_missing_ack_total: Counter,
 
     // ── §17.5 Config hot-reload ───────────────────────────────────────────────
-
     /// Config reload attempts that were rejected due to validation failure (§17.5).
     pub hoop_config_reload_rejected_total: Counter,
 
@@ -590,8 +769,20 @@ pub struct Metrics {
 
 impl Metrics {
     pub fn new() -> Self {
+        // Create budget for unknown_event_labeled: adapter unlimited, event_kind limited to 50
+        let mut unknown_event_budget = CardinalityBudget::new(&[0, 50]);
+        // Allowlist common known event kinds
+        for kind in &[
+            "stitch_created", "stitch_updated", "bead_created", "bead_closed",
+            "agent_turn", "tool_call", "heartbeat", "session_start", "session_end",
+            "error", "warning",
+        ] {
+            unknown_event_budget.allowlist_value(1, kind);
+        }
+
         Self {
             hoop_unknown_event_total: Counter::new(),
+            hoop_metric_cardinality_budget_exceeded_total: Counter::new(),
             hoop_ws_clients_connected: Gauge::new(),
             hoop_shutdown_duration_seconds: Histogram::new(),
             hoop_shutdown_exceeded_grace_period: Counter::new(),
@@ -604,7 +795,10 @@ impl Metrics {
             hoop_event_tailer_lag_seconds: LabeledGauge::new(&["project"]),
             hoop_session_tailer_lag_seconds: LabeledGauge::new(&["adapter"]),
             hoop_heartbeat_freshness_seconds: LabeledHistogramPercentiles::new(&["worker"]),
-            hoop_unknown_event_labeled_total: LabeledCounter::new(&["adapter", "event_kind"]),
+            hoop_unknown_event_labeled_total: BoundedLabeledCounter::new(
+                &["adapter", "event_kind"],
+                unknown_event_budget,
+            ),
             hoop_event_parse_errors_total: LabeledCounter::new(&["adapter"]),
 
             hoop_ws_broadcast_lag_seconds: LabeledHistogramPercentiles::new(&[]),
@@ -661,6 +855,12 @@ impl Metrics {
             "hoop_unknown_event_total",
             "Events discarded because no adapter could parse them.",
             self.hoop_unknown_event_total.get(),
+        );
+        write_counter(
+            &mut out,
+            "hoop_metric_cardinality_budget_exceeded_total",
+            "Number of label values bucketed to 'other' due to cardinality budget limits.",
+            self.hoop_metric_cardinality_budget_exceeded_total.get(),
         );
         write_gauge_i64(
             &mut out,
@@ -920,8 +1120,11 @@ impl Metrics {
             &mut out,
             "hoop_capacity_meter_exhaustion_warnings_total",
             "Capacity-meter exhaustion warnings, labelled by account.",
-            self.hoop_capacity_meter_exhaustion_warnings_total.label_names,
-            &self.hoop_capacity_meter_exhaustion_warnings_total.snapshot(),
+            self.hoop_capacity_meter_exhaustion_warnings_total
+                .label_names,
+            &self
+                .hoop_capacity_meter_exhaustion_warnings_total
+                .snapshot(),
         );
         write_gauge_i64(
             &mut out,
@@ -1074,7 +1277,10 @@ mod tests {
 
         let snapshot = m.hoop_errors_total.snapshot();
         assert_eq!(snapshot.len(), 1);
-        assert_eq!(snapshot[0].0, vec!["agent_adapter".to_string(), "timeout".to_string()]);
+        assert_eq!(
+            snapshot[0].0,
+            vec!["agent_adapter".to_string(), "timeout".to_string()]
+        );
         assert_eq!(snapshot[0].1, 1);
 
         // Same subsystem, different kind
@@ -1141,5 +1347,171 @@ mod tests {
         let snapshot = m.hoop_last_restart_reason.snapshot();
         assert_eq!(snapshot.len(), 1);
         assert_eq!(snapshot[0].0, vec!["normal".to_string()]);
+    }
+
+    // -------------------------------------------------------------------------
+    // Cardinality budget enforcement tests (§16)
+    // -------------------------------------------------------------------------
+
+    /// Verify cardinality budget enforces limits and buckets to "other".
+    #[test]
+    fn bounded_counter_enforces_budget() {
+        // Budget: first label unlimited, second label max 3
+        let budget = CardinalityBudget::new(&[0, 3]);
+        let counter = BoundedLabeledCounter::new(&["adapter", "event_kind"], budget);
+
+        // Add first 3 unique event kinds - should be accepted
+        counter.inc(&["needle", "kind_1"]);
+        counter.inc(&["needle", "kind_2"]);
+        counter.inc(&["needle", "kind_3"]);
+
+        let snapshot = counter.snapshot();
+        assert_eq!(snapshot.len(), 3);
+        assert_eq!(counter.unique_count(1), 3);
+        assert_eq!(counter.exceeded_count(1), 0);
+
+        // Add 4th unique event kind - should be bucketed to "other"
+        counter.inc(&["needle", "kind_4"]);
+
+        let snapshot = counter.snapshot();
+        assert_eq!(snapshot.len(), 4); // kind_1, kind_2, kind_3, other
+        assert_eq!(counter.unique_count(1), 3); // still only 3 unique tracked
+        assert_eq!(counter.exceeded_count(1), 1);
+
+        // Verify "other" bucket exists and has count 1
+        let other_entry = snapshot
+            .iter()
+            .find(|(labels, _)| labels[1] == "other");
+        assert!(other_entry.is_some());
+        assert_eq!(other_entry.unwrap().1, 1);
+
+        // Add more unique event kinds - all should go to "other"
+        counter.inc(&["needle", "kind_5"]);
+        counter.inc(&["needle", "kind_6"]);
+
+        let snapshot = counter.snapshot();
+        let other_entry = snapshot
+            .iter()
+            .find(|(labels, _)| labels[1] == "other")
+            .unwrap();
+        assert_eq!(other_entry.1, 3); // kind_4, kind_5, kind_6
+        assert_eq!(counter.exceeded_count(1), 3);
+    }
+
+    /// Verify allowlisted values bypass budget counting.
+    #[test]
+    fn bounded_counter_allowlist_bypasses_budget() {
+        let mut budget = CardinalityBudget::new(&[0, 2]);
+        budget.allowlist_value(1, "known_kind_1");
+        budget.allowlist_value(1, "known_kind_2");
+
+        let counter = BoundedLabeledCounter::new(&["adapter", "event_kind"], budget);
+
+        // Allowlisted values should always be accepted
+        counter.inc(&["needle", "known_kind_1"]);
+        counter.inc(&["needle", "known_kind_2"]);
+
+        assert_eq!(counter.unique_count(1), 0); // allowlisted doesn't count toward budget
+        assert_eq!(counter.exceeded_count(1), 0);
+
+        // Add non-allowlisted values up to budget
+        counter.inc(&["needle", "unknown_1"]);
+        counter.inc(&["needle", "unknown_2"]);
+
+        assert_eq!(counter.unique_count(1), 2); // tracked 2 unknown values
+        assert_eq!(counter.exceeded_count(1), 0);
+
+        // Third unknown should be bucketed to "other"
+        counter.inc(&["needle", "unknown_3"]);
+        assert_eq!(counter.exceeded_count(1), 1);
+    }
+
+    /// Test with 10k unique event kinds to verify bucketing behavior.
+    #[test]
+    fn bounded_counter_10k_unique_bucketed_correctly() {
+        // Budget: first label unlimited, second label max 50
+        let budget = CardinalityBudget::new(&[0, 50]);
+        let counter = BoundedLabeledCounter::new(&["adapter", "event_kind"], budget);
+
+        // Simulate 10k unique event kinds
+        for i in 0..10_000 {
+            counter.inc(&["needle", &format!("event_kind_{}", i)]);
+        }
+
+        let snapshot = counter.snapshot();
+
+        // Should have exactly 51 unique label combinations:
+        // - 50 for the first 50 event kinds
+        // - 1 for "other" bucket (containing the remaining 9950)
+        assert_eq!(counter.unique_count(1), 50);
+        assert_eq!(counter.exceeded_count(1), 9950); // 10_000 - 50
+
+        // Count entries in snapshot
+        assert_eq!(snapshot.len(), 51);
+
+        // Verify "other" bucket contains 9950 events
+        let other_count: u64 = snapshot
+            .iter()
+            .filter(|(labels, _)| labels[1] == "other")
+            .map(|(_, count)| *count)
+            .sum();
+        assert_eq!(other_count, 9950);
+
+        // Verify first 50 event kinds each have count 1
+        let normal_count: u64 = snapshot
+            .iter()
+            .filter(|(labels, _)| labels[1] != "other")
+            .map(|(_, count)| *count)
+            .sum();
+        assert_eq!(normal_count, 50);
+    }
+
+    /// Verify first label (adapter) is not budgeted when budget is 0.
+    #[test]
+    fn bounded_counter_unlimited_first_label() {
+        // Budget: first label unlimited (0), second label max 5
+        let budget = CardinalityBudget::new(&[0, 5]);
+        let counter = BoundedLabeledCounter::new(&["adapter", "event_kind"], budget);
+
+        // Different adapters should all be accepted
+        for i in 0..100 {
+            counter.inc(&[&format!("adapter_{}", i), "kind_1"]);
+        }
+
+        let snapshot = counter.snapshot();
+        // 100 unique adapters * 1 event kind = 100 entries
+        assert_eq!(snapshot.len(), 100);
+        assert_eq!(counter.unique_count(0), 100); // all 100 adapters tracked
+        assert_eq!(counter.unique_count(1), 1);  // only 1 event kind
+        assert_eq!(counter.exceeded_count(0), 0); // no budget exceeded on first label
+        assert_eq!(counter.exceeded_count(1), 0); // no budget exceeded on second label
+    }
+
+    /// Verify inc_by works correctly with budgeting.
+    #[test]
+    fn bounded_counter_inc_by_with_budgeting() {
+        let budget = CardinalityBudget::new(&[0, 2]);
+        let counter = BoundedLabeledCounter::new(&["adapter", "event_kind"], budget);
+
+        // Add first 2 unique event kinds with larger increments
+        counter.inc_by(&["needle", "kind_1"], 5);
+        counter.inc_by(&["needle", "kind_2"], 10);
+
+        let snapshot = counter.snapshot();
+        assert_eq!(snapshot.len(), 2);
+
+        // Find entries and verify counts
+        let kind1 = snapshot.iter().find(|(l, _)| l[1] == "kind_1");
+        let kind2 = snapshot.iter().find(|(l, _)| l[1] == "kind_2");
+        assert_eq!(kind1.unwrap().1, 5);
+        assert_eq!(kind2.unwrap().1, 10);
+
+        // Third unique kind should be bucketed to "other"
+        counter.inc_by(&["needle", "kind_3"], 7);
+
+        let snapshot = counter.snapshot();
+        let other = snapshot.iter().find(|(l, _)| l[1] == "other");
+        assert_eq!(other.unwrap().1, 7);
+        assert_eq!(counter.exceeded_count(1), 1);
     }
 }

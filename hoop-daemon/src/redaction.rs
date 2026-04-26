@@ -11,9 +11,9 @@
 
 use regex::Regex;
 use serde_json::Value;
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::collections::hash_map::DefaultHasher;
 use std::sync::{LazyLock, Mutex};
 
 /// Maximum cached entries before the cache is cleared.
@@ -159,8 +159,7 @@ pub struct SecretFinding {
 
 /// Named patterns for detection. Each tuple is `(name, Regex)`.
 /// Mirrors `build_patterns` but retains the pattern name for reporting.
-static NAMED_PATTERNS: LazyLock<Vec<(&'static str, Regex)>> =
-    LazyLock::new(build_named_patterns);
+static NAMED_PATTERNS: LazyLock<Vec<(&'static str, Regex)>> = LazyLock::new(build_named_patterns);
 
 fn build_named_patterns() -> Vec<(&'static str, Regex)> {
     vec![
@@ -290,7 +289,8 @@ pub fn audit_findings(
     project: Option<&str>,
     operator: &str,
 ) -> usize {
-    use crate::fleet::{self, RedactionAction};
+    use crate::fleet;
+    use crate::redaction_policy::RedactionAction;
     use std::collections::HashSet;
 
     if findings.is_empty() {
@@ -298,14 +298,14 @@ pub fn audit_findings(
     }
 
     // Collect unique pattern names
-    let unique_patterns: HashSet<&'static str> = findings
-        .iter()
-        .map(|f| f.pattern_name)
-        .collect();
+    let unique_patterns: HashSet<&'static str> = findings.iter().map(|f| f.pattern_name).collect();
 
     let mut written = 0;
     for pattern_name in unique_patterns {
-        let match_count = findings.iter().filter(|f| f.pattern_name == pattern_name).count();
+        let match_count = findings
+            .iter()
+            .filter(|f| f.pattern_name == pattern_name)
+            .count();
 
         // Build metadata with match count and positions
         let metadata = serde_json::json!({
@@ -357,10 +357,14 @@ mod tests {
 
     #[test]
     fn test_anthropic_key_redacted() {
-        let input = "ANTHROPIC_API_KEY=sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666";
+        let input =
+            "ANTHROPIC_API_KEY=sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666";
         let out = redact(input);
         assert!(out.contains("[REDACTED]"), "expected redaction, got: {out}");
-        assert!(!out.contains("sk-ant-"), "raw key must not appear in output");
+        assert!(
+            !out.contains("sk-ant-"),
+            "raw key must not appear in output"
+        );
     }
 
     #[test]

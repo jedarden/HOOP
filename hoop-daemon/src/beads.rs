@@ -4,8 +4,8 @@
 //! Uses file watching for real-time updates.
 //! Survives log rotation and handles partial lines.
 
-use anyhow::{Context, Result};
 use crate::Bead;
+use anyhow::{Context, Result};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use std::fs::{File, Metadata};
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
@@ -115,13 +115,19 @@ impl BeadReader {
     }
 
     pub fn start(&mut self) -> Result<()> {
-        let issues_path = self.config.workspace_path.join(".beads").join("issues.jsonl");
+        let issues_path = self
+            .config
+            .workspace_path
+            .join(".beads")
+            .join("issues.jsonl");
         let issues_path_for_watch = issues_path.clone();
         let event_tx = self.event_tx.clone();
         let position = self.position.clone();
 
         let mut watcher = notify::recommended_watcher(move |res| {
-            if let Err(e) = Self::handle_watch_event(res, &issues_path_for_watch, &event_tx, position.clone()) {
+            if let Err(e) =
+                Self::handle_watch_event(res, &issues_path_for_watch, &event_tx, position.clone())
+            {
                 warn!("Error handling bead watch event: {}", e);
             }
         })
@@ -156,11 +162,15 @@ impl BeadReader {
     }
 
     pub fn replay_file(&self) -> Result<()> {
-        let issues_path = self.config.workspace_path.join(".beads").join("issues.jsonl");
-        let file = File::open(&issues_path)
-            .context("Failed to open beads file for replay")?;
+        let issues_path = self
+            .config
+            .workspace_path
+            .join(".beads")
+            .join("issues.jsonl");
+        let file = File::open(&issues_path).context("Failed to open beads file for replay")?;
 
-        let metadata = file.metadata()
+        let metadata = file
+            .metadata()
             .context("Failed to get beads file metadata")?;
 
         let reader = BufReader::new(file);
@@ -214,7 +224,8 @@ impl BeadReader {
         let file = File::open(issues_path)
             .with_context(|| format!("Failed to open beads file {}", issues_path.display()))?;
 
-        let metadata = file.metadata()
+        let metadata = file
+            .metadata()
             .with_context(|| format!("Failed to get metadata for {}", issues_path.display()))?;
 
         {
@@ -236,8 +247,13 @@ impl BeadReader {
         }
 
         let mut file = file;
-        file.seek(SeekFrom::Start(offset))
-            .with_context(|| format!("Failed to seek to offset {} in {}", offset, issues_path.display()))?;
+        file.seek(SeekFrom::Start(offset)).with_context(|| {
+            format!(
+                "Failed to seek to offset {} in {}",
+                offset,
+                issues_path.display()
+            )
+        })?;
 
         let reader = BufReader::new(file);
         let beads = Self::parse_all(reader, &issues_path)?;

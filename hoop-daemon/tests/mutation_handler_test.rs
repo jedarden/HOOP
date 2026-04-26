@@ -9,7 +9,9 @@
 //! "Reject paths are the least-tested code. Reusing the happy path (receive
 //! authoritative state) keeps them honest."
 
-use hoop_daemon::mutation_handler::{ErrorKind, MutationHandler, MutationReject, MutationResult, WithRejectError};
+use hoop_daemon::mutation_handler::{
+    ErrorKind, MutationHandler, MutationReject, MutationResult, WithRejectError,
+};
 use hoop_daemon::ws::{BeadData, ConfigErrorData, DraftUpdateData};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -168,7 +170,10 @@ async fn test_reject_field_validation_emits_error_and_authoritative_state() {
     assert_eq!(broadcast_state.id, "draft-123");
     assert_eq!(broadcast_state.status, "pending"); // State unchanged
     assert_eq!(broadcast_state.version, 1); // Version unchanged
-    assert!(broadcast_state.error.is_some(), "Should include error in broadcast state");
+    assert!(
+        broadcast_state.error.is_some(),
+        "Should include error in broadcast state"
+    );
 
     let error = broadcast_state.error.unwrap();
     assert_eq!(error.field, Some("title".to_string()));
@@ -286,7 +291,10 @@ async fn test_client_reducer_single_rendering_path_accept_vs_reject() {
 
     let client_state_after_reject = client_reducer(client_state_before, reject_event);
     assert_eq!(client_state_after_reject.status, "pending"); // State unchanged
-    assert!(client_state_after_reject.error.is_some(), "Error present for UI to display");
+    assert!(
+        client_state_after_reject.error.is_some(),
+        "Error present for UI to display"
+    );
 
     // Verify: same reducer, different outcome based on incoming state
     // No conditional logic needed for "reject" vs "accept"
@@ -327,9 +335,20 @@ async fn test_multiple_rejections_each_emit_error_and_state() {
     assert_eq!(event3.status, "pending"); // Still unchanged
 
     // Verify each error has appropriate kind
-    assert_eq!(event1.error.as_ref().unwrap().message, "Title cannot be empty");
-    assert_eq!(event2.error.as_ref().unwrap().message, "Title cannot be empty");
-    assert!(event3.error.as_ref().unwrap().message.contains("permission"));
+    assert_eq!(
+        event1.error.as_ref().unwrap().message,
+        "Title cannot be empty"
+    );
+    assert_eq!(
+        event2.error.as_ref().unwrap().message,
+        "Title cannot be empty"
+    );
+    assert!(event3
+        .error
+        .as_ref()
+        .unwrap()
+        .message
+        .contains("permission"));
 }
 
 // ---------------------------------------------------------------------------
@@ -384,7 +403,9 @@ async fn test_reject_populates_all_error_details() {
     .with_entity_id("draft-details");
 
     let handler = MutationHandler::new(&service.tx, "draft", "test-user".to_string());
-    handler.reject(reject.clone(), service.current_state().await).await;
+    handler
+        .reject(reject.clone(), service.current_state().await)
+        .await;
 
     let event = rx.recv().await.unwrap();
     let error = event.error.unwrap();
@@ -406,10 +427,8 @@ async fn test_reject_internal_error() {
 
     *service.state.write().await = MockDraftState::new("draft-internal", "Title", "pending", 1);
 
-    let reject = MutationReject::internal(
-        "draft-internal",
-        "Database connection lost during approval",
-    );
+    let reject =
+        MutationReject::internal("draft-internal", "Database connection lost during approval");
 
     let handler = MutationHandler::new(&service.tx, "draft", "test-user".to_string());
     handler.reject(reject, service.current_state().await).await;

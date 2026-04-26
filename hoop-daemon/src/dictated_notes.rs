@@ -159,9 +159,7 @@ pub fn transcript_preview(transcript: &str, max_len: usize) -> String {
     if transcript.len() <= max_len {
         transcript.to_string()
     } else {
-        let end = transcript[..max_len]
-            .rfind(' ')
-            .unwrap_or(max_len);
+        let end = transcript[..max_len].rfind(' ').unwrap_or(max_len);
         format!("{}…", &transcript[..end])
     }
 }
@@ -172,7 +170,10 @@ pub fn store_audio(
     audio_filename: &str,
     audio_data: &[u8],
 ) -> Result<PathBuf> {
-    if audio_filename.contains('/') || audio_filename.contains('\\') || audio_filename.contains("..") {
+    if audio_filename.contains('/')
+        || audio_filename.contains('\\')
+        || audio_filename.contains("..")
+    {
         anyhow::bail!("Invalid audio filename: {}", audio_filename);
     }
 
@@ -202,7 +203,10 @@ pub fn stitch_attachment_dir(stitch_id: &ValidStitchId) -> Result<PathBuf> {
         .context("failed to build path allowlist for stitch attachments")?;
 
     let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
-    let dir = home.join(".hoop").join("attachments").join(stitch_id.as_str());
+    let dir = home
+        .join(".hoop")
+        .join("attachments")
+        .join(stitch_id.as_str());
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("failed to create attachment dir: {}", dir.display()))?;
 
@@ -217,7 +221,10 @@ pub fn stitch_attachment_dir(stitch_id: &ValidStitchId) -> Result<PathBuf> {
 /// Accepts a `ValidStitchId` to enforce compile-time proof that the ID has been
 /// validated before reaching any filesystem path construction.
 pub fn audio_path(stitch_id: &ValidStitchId, audio_filename: &str) -> Result<PathBuf> {
-    if audio_filename.contains('/') || audio_filename.contains('\\') || audio_filename.contains("..") {
+    if audio_filename.contains('/')
+        || audio_filename.contains('\\')
+        || audio_filename.contains("..")
+    {
         anyhow::bail!("Invalid audio filename: {}", audio_filename);
     }
     Ok(stitch_attachment_dir(stitch_id)?.join(audio_filename))
@@ -227,8 +234,7 @@ pub fn audio_path(stitch_id: &ValidStitchId, audio_filename: &str) -> Result<Pat
 pub fn insert_note(conn: &Connection, note: &DictatedNote) -> Result<()> {
     let words_json = serde_json::to_string(&note.transcript_words)
         .context("Failed to serialize transcript_words")?;
-    let tags_json = serde_json::to_string(&note.tags)
-        .context("Failed to serialize tags")?;
+    let tags_json = serde_json::to_string(&note.tags).context("Failed to serialize tags")?;
     let status_str = serde_json::to_string(&note.transcription_status)
         .context("Failed to serialize transcription_status")?;
     let redacted_words_json = serde_json::to_string(&note.redacted_words)
@@ -328,17 +334,30 @@ pub fn get_note(conn: &Connection, stitch_id: &str) -> Result<Option<DictatedNot
 
         let recorded_at = DateTime::parse_from_rfc3339(&recorded_at_str)
             .map(|dt| dt.with_timezone(&Utc))
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
+            .map_err(|e| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    0,
+                    rusqlite::types::Type::Text,
+                    Box::new(e),
+                )
+            })?;
         let transcribed_at = DateTime::parse_from_rfc3339(&transcribed_at_str)
             .map(|dt| dt.with_timezone(&Utc))
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
+            .map_err(|e| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    0,
+                    rusqlite::types::Type::Text,
+                    Box::new(e),
+                )
+            })?;
 
         let transcript_words: Vec<TranscriptWord> = words_json
             .and_then(|j| serde_json::from_str(&j).ok())
             .unwrap_or_default();
         let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
         let transcription_status = parse_transcription_status(&status_str);
-        let redacted_words: Vec<RedactedWord> = serde_json::from_str(&redacted_words_json).unwrap_or_default();
+        let redacted_words: Vec<RedactedWord> =
+            serde_json::from_str(&redacted_words_json).unwrap_or_default();
 
         Ok(DictatedNote {
             stitch_id: stitch_id.to_string(),
@@ -395,16 +414,40 @@ pub fn list_notes_for_project(conn: &Connection, project: &str) -> Result<Vec<No
 
             let recorded_at = DateTime::parse_from_rfc3339(&recorded_at_str)
                 .map(|dt| dt.with_timezone(&Utc))
-                .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
+                .map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?;
             let transcribed_at = DateTime::parse_from_rfc3339(&transcribed_at_str)
                 .map(|dt| dt.with_timezone(&Utc))
-                .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
+                .map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?;
             let last_activity_at = DateTime::parse_from_rfc3339(&last_activity_at_str)
                 .map(|dt| dt.with_timezone(&Utc))
-                .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
+                .map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?;
             let created_at = DateTime::parse_from_rfc3339(&created_at_str)
                 .map(|dt| dt.with_timezone(&Utc))
-                .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
+                .map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?;
 
             let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
             let preview = transcript_preview(&transcript, 120);
@@ -438,8 +481,7 @@ pub fn list_notes_for_project(conn: &Connection, project: &str) -> Result<Vec<No
 pub fn update_note(conn: &Connection, note: &DictatedNote) -> Result<()> {
     let words_json = serde_json::to_string(&note.transcript_words)
         .context("Failed to serialize transcript_words")?;
-    let tags_json = serde_json::to_string(&note.tags)
-        .context("Failed to serialize tags")?;
+    let tags_json = serde_json::to_string(&note.tags).context("Failed to serialize tags")?;
     let status_str = serde_json::to_string(&note.transcription_status)
         .context("Failed to serialize transcription_status")?;
     let redacted_words_json = serde_json::to_string(&note.redacted_words)
@@ -507,16 +549,40 @@ pub fn list_all_notes(conn: &Connection) -> Result<Vec<NoteSummary>> {
 
             let recorded_at = DateTime::parse_from_rfc3339(&recorded_at_str)
                 .map(|dt| dt.with_timezone(&Utc))
-                .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
+                .map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?;
             let transcribed_at = DateTime::parse_from_rfc3339(&transcribed_at_str)
                 .map(|dt| dt.with_timezone(&Utc))
-                .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
+                .map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?;
             let last_activity_at = DateTime::parse_from_rfc3339(&last_activity_at_str)
                 .map(|dt| dt.with_timezone(&Utc))
-                .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
+                .map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?;
             let created_at = DateTime::parse_from_rfc3339(&created_at_str)
                 .map(|dt| dt.with_timezone(&Utc))
-                .map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
+                .map_err(|e| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0,
+                        rusqlite::types::Type::Text,
+                        Box::new(e),
+                    )
+                })?;
 
             let tags: Vec<String> = serde_json::from_str(&tags_json).unwrap_or_default();
             let preview = transcript_preview(&transcript, 120);
@@ -685,7 +751,9 @@ mod tests {
         let project_a = list_notes_for_project(&conn, "project-a").unwrap();
         assert_eq!(project_a.len(), 2);
         assert!(project_a.iter().all(|n| n.project == "project-a"));
-        assert!(project_a.iter().all(|n| n.transcription_status == TranscriptionStatus::Pending));
+        assert!(project_a
+            .iter()
+            .all(|n| n.transcription_status == TranscriptionStatus::Pending));
 
         let project_b = list_notes_for_project(&conn, "project-b").unwrap();
         assert_eq!(project_b.len(), 1);

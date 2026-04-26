@@ -10,7 +10,7 @@
 //! 2. Fleet notification is received by agents
 //! 3. WebSocket forwarding would deliver to project subscribers
 
-use hoop_daemon::fleet_notifications::{FleetNotification, FleetNotificationKind, notifications};
+use hoop_daemon::fleet_notifications::{notifications, FleetNotification, FleetNotificationKind};
 use hoop_daemon::ws::BeadCreatedByHoopData;
 use std::time::Duration;
 use tokio::sync::broadcast;
@@ -65,13 +65,10 @@ async fn test_bead_created_by_hoop_broadcast_to_fleet_notification() {
     let _ = tx.send(event);
 
     // Wait for fleet notification (with timeout)
-    let notification = tokio::time::timeout(
-        Duration::from_millis(200),
-        fleet_rx.recv()
-    )
-    .await
-    .expect("Fleet notification should be received within 200ms")
-    .expect("Fleet notification channel should not be closed");
+    let notification = tokio::time::timeout(Duration::from_millis(200), fleet_rx.recv())
+        .await
+        .expect("Fleet notification should be received within 200ms")
+        .expect("Fleet notification channel should not be closed");
 
     let elapsed = start.elapsed();
 
@@ -148,5 +145,8 @@ fn test_fleet_notification_ring_retains_bead_created_by_hoop() {
     let found = new_snapshot
         .iter()
         .any(|n| n.kind == FleetNotificationKind::BeadCreatedByHoop);
-    assert!(found, "Fleet notification ring should contain bead_created_by_hoop event");
+    assert!(
+        found,
+        "Fleet notification ring should contain bead_created_by_hoop event"
+    );
 }

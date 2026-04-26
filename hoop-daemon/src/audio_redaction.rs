@@ -43,17 +43,14 @@ pub fn mute_audio_segments(
     // Build ffmpeg volume filter chain
     let filter_chain = build_volume_filter_chain(redacted_words);
 
-    debug!(
-        "Applying audio redaction filter: {}",
-        filter_chain
-    );
+    debug!("Applying audio redaction filter: {}", filter_chain);
 
     let output = Command::new("ffmpeg")
         .arg("-i")
         .arg(input_path)
         .arg("-af")
         .arg(&filter_chain)
-        .arg("-y")  // Overwrite output file
+        .arg("-y") // Overwrite output file
         .arg(output_path)
         .output()
         .context("Failed to execute ffmpeg for audio redaction")?;
@@ -187,10 +184,8 @@ pub fn atomic_redact_words(
     }
 
     // Build set of already redacted word indices for deduplication
-    let already_redacted: HashSet<usize> = existing_redacted
-        .iter()
-        .map(|rw| rw.word_index)
-        .collect();
+    let already_redacted: HashSet<usize> =
+        existing_redacted.iter().map(|rw| rw.word_index).collect();
 
     // Filter out already redacted words (idempotency)
     let new_indices: Vec<usize> = new_word_indices
@@ -210,15 +205,15 @@ pub fn atomic_redact_words(
     // Create new RedactedWord entries
     let mut new_redacted: Vec<RedactedWord> = new_indices
         .iter()
-        .filter_map(|&idx| transcript_words.get(idx).map(|w| {
-            RedactedWord {
+        .filter_map(|&idx| {
+            transcript_words.get(idx).map(|w| RedactedWord {
                 word_index: idx,
                 original_word: w.word.clone(),
                 start: w.start,
                 end: w.end,
                 redacted_at: now.clone(),
-            }
-        }))
+            })
+        })
         .collect();
 
     // Combine existing and new redactions
@@ -259,10 +254,7 @@ fn reconstruct_transcript(
     redacted_words: &[RedactedWord],
 ) -> String {
     // Build set of redacted indices for quick lookup
-    let redacted_indices: HashSet<usize> = redacted_words
-        .iter()
-        .map(|rw| rw.word_index)
-        .collect();
+    let redacted_indices: HashSet<usize> = redacted_words.iter().map(|rw| rw.word_index).collect();
 
     // Reconstruct transcript word by word
     transcript_words
@@ -284,7 +276,10 @@ fn reconstruct_transcript(
 /// Redacted audio files are stored with a "_redacted" suffix before the extension.
 pub fn redacted_audio_path(original_path: &Path) -> PathBuf {
     let stem = original_path.file_stem().unwrap_or_default();
-    let ext = original_path.extension().and_then(|e| e.to_str()).unwrap_or("webm");
+    let ext = original_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("webm");
     let parent = original_path.parent().unwrap_or_else(|| Path::new(""));
 
     parent.join(format!("{}_redacted.{}", stem.to_string_lossy(), ext))
@@ -294,7 +289,12 @@ pub fn redacted_audio_path(original_path: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
-    fn make_redacted_word(word_index: usize, original_word: &str, start: f64, end: f64) -> RedactedWord {
+    fn make_redacted_word(
+        word_index: usize,
+        original_word: &str,
+        start: f64,
+        end: f64,
+    ) -> RedactedWord {
         RedactedWord {
             word_index,
             original_word: original_word.to_string(),
@@ -359,7 +359,7 @@ mod tests {
 
         let findings = vec![crate::redaction::SecretFinding {
             pattern_name: "test",
-            match_start: 6,  // "secret" starts at index 6
+            match_start: 6, // "secret" starts at index 6
             match_len: 6,
         }];
 
@@ -374,8 +374,16 @@ mod tests {
     #[test]
     fn test_reconstruct_transcript_no_redactions() {
         let words = vec![
-            TranscriptWord { word: "hello".to_string(), start: 0.0, end: 0.5 },
-            TranscriptWord { word: "world".to_string(), start: 0.5, end: 1.0 },
+            TranscriptWord {
+                word: "hello".to_string(),
+                start: 0.0,
+                end: 0.5,
+            },
+            TranscriptWord {
+                word: "world".to_string(),
+                start: 0.5,
+                end: 1.0,
+            },
         ];
         let redacted = vec![];
         let result = reconstruct_transcript(&words, &redacted);
@@ -385,9 +393,21 @@ mod tests {
     #[test]
     fn test_reconstruct_transcript_with_redactions() {
         let words = vec![
-            TranscriptWord { word: "hello".to_string(), start: 0.0, end: 0.5 },
-            TranscriptWord { word: "secret".to_string(), start: 0.5, end: 1.0 },
-            TranscriptWord { word: "world".to_string(), start: 1.0, end: 1.5 },
+            TranscriptWord {
+                word: "hello".to_string(),
+                start: 0.0,
+                end: 0.5,
+            },
+            TranscriptWord {
+                word: "secret".to_string(),
+                start: 0.5,
+                end: 1.0,
+            },
+            TranscriptWord {
+                word: "world".to_string(),
+                start: 1.0,
+                end: 1.5,
+            },
         ];
         let redacted = vec![make_redacted_word(1, "secret", 0.5, 1.0)];
         let result = reconstruct_transcript(&words, &redacted);
@@ -397,11 +417,31 @@ mod tests {
     #[test]
     fn test_reconstruct_transcript_multiple_redactions() {
         let words = vec![
-            TranscriptWord { word: "my".to_string(), start: 0.0, end: 0.2 },
-            TranscriptWord { word: "secret".to_string(), start: 0.2, end: 0.5 },
-            TranscriptWord { word: "key".to_string(), start: 0.5, end: 0.7 },
-            TranscriptWord { word: "is".to_string(), start: 0.7, end: 0.9 },
-            TranscriptWord { word: "password".to_string(), start: 0.9, end: 1.2 },
+            TranscriptWord {
+                word: "my".to_string(),
+                start: 0.0,
+                end: 0.2,
+            },
+            TranscriptWord {
+                word: "secret".to_string(),
+                start: 0.2,
+                end: 0.5,
+            },
+            TranscriptWord {
+                word: "key".to_string(),
+                start: 0.5,
+                end: 0.7,
+            },
+            TranscriptWord {
+                word: "is".to_string(),
+                start: 0.7,
+                end: 0.9,
+            },
+            TranscriptWord {
+                word: "password".to_string(),
+                start: 0.9,
+                end: 1.2,
+            },
         ];
         let redacted = vec![
             make_redacted_word(1, "secret", 0.2, 0.5),
@@ -414,37 +454,55 @@ mod tests {
     #[test]
     fn test_atomic_redact_words_idempotent() {
         let words = vec![
-            TranscriptWord { word: "hello".to_string(), start: 0.0, end: 0.5 },
-            TranscriptWord { word: "secret".to_string(), start: 0.5, end: 1.0 },
-            TranscriptWord { word: "world".to_string(), start: 1.0, end: 1.5 },
+            TranscriptWord {
+                word: "hello".to_string(),
+                start: 0.0,
+                end: 0.5,
+            },
+            TranscriptWord {
+                word: "secret".to_string(),
+                start: 0.5,
+                end: 1.0,
+            },
+            TranscriptWord {
+                word: "world".to_string(),
+                start: 1.0,
+                end: 1.5,
+            },
         ];
         let existing = vec![make_redacted_word(1, "secret", 0.5, 1.0)];
         let new_indices = vec![1]; // Already redacted
 
         // This would fail without a real audio file, so we just check the logic
         // by verifying that passing an already-redacted index would be filtered
-        let already_redacted: std::collections::HashSet<usize> = existing
-            .iter()
-            .map(|rw| rw.word_index)
-            .collect();
+        let already_redacted: std::collections::HashSet<usize> =
+            existing.iter().map(|rw| rw.word_index).collect();
         let filtered: Vec<usize> = new_indices
             .iter()
             .filter(|&&idx| !already_redacted.contains(&idx))
             .cloned()
             .collect();
-        assert!(filtered.is_empty(), "Already-redacted words should be filtered out");
+        assert!(
+            filtered.is_empty(),
+            "Already-redacted words should be filtered out"
+        );
     }
 
     #[test]
     fn test_atomic_redact_words_invalid_index() {
-        let words = vec![
-            TranscriptWord { word: "hello".to_string(), start: 0.0, end: 0.5 },
-        ];
+        let words = vec![TranscriptWord {
+            word: "hello".to_string(),
+            start: 0.0,
+            end: 0.5,
+        }];
         let existing = vec![];
         let new_indices = vec![5]; // Out of bounds
 
         let result = atomic_redact_words(Path::new("/fake/path"), &words, &existing, &new_indices);
         assert!(result.is_err(), "Invalid word index should return error");
-        assert!(result.unwrap_err().to_string().contains("Invalid word index"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid word index"));
     }
 }

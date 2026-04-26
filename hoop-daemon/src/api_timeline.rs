@@ -11,7 +11,10 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::{DaemonState, ws::{BeadEventData, WorkerData}};
+use crate::{
+    ws::{BeadEventData, WorkerData},
+    DaemonState,
+};
 
 /// Query parameters for the timeline endpoint
 #[derive(Debug, Deserialize)]
@@ -162,11 +165,12 @@ pub async fn get_worker_timeline(
                 } else {
                     // Worker is idle/knot — segment ended
                     seg.end = Some(wdata.last_heartbeat.to_rfc3339());
-                    seg.outcome = if matches!(wdata.state, crate::ws::WorkerDisplayState::Knot { .. }) {
-                        "knot".to_string()
-                    } else {
-                        "released".to_string()
-                    };
+                    seg.outcome =
+                        if matches!(wdata.state, crate::ws::WorkerDisplayState::Knot { .. }) {
+                            "knot".to_string()
+                        } else {
+                            "released".to_string()
+                        };
                     segments.push(current_segment.take().unwrap());
                 }
             } else {

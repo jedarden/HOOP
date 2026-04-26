@@ -335,13 +335,21 @@ pub fn validate_bead_id(id: &str) -> Result<(), IdValidationError> {
     }
     let first = id.as_bytes()[0];
     if first == b'-' || first == b'.' {
-        return Err(IdValidationError::new("bead_id", id, "starts with '-' or '.'"));
+        return Err(IdValidationError::new(
+            "bead_id",
+            id,
+            "starts with '-' or '.'",
+        ));
     }
     if !id
         .chars()
         .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '.' || c == '_')
     {
-        return Err(IdValidationError::new("bead_id", id, "contains invalid characters"));
+        return Err(IdValidationError::new(
+            "bead_id",
+            id,
+            "contains invalid characters",
+        ));
     }
     Ok(())
 }
@@ -366,7 +374,11 @@ pub fn validate_pattern_id(id: &str) -> Result<(), IdValidationError> {
 pub fn validate_draft_id(id: &str) -> Result<(), IdValidationError> {
     let prefix = "draft-";
     if !id.starts_with(prefix) {
-        return Err(IdValidationError::new("draft_id", id, "must start with 'draft-'"));
+        return Err(IdValidationError::new(
+            "draft_id",
+            id,
+            "must start with 'draft-'",
+        ));
     }
     validate_uuid("draft_id", &id[prefix.len()..])
 }
@@ -397,10 +409,21 @@ pub fn validate_worker_name(name: &str) -> Result<(), IdValidationError> {
     }
     let first = name.as_bytes()[0];
     if !first.is_ascii_lowercase() {
-        return Err(IdValidationError::new("worker_name", name, "must start with a lowercase letter"));
+        return Err(IdValidationError::new(
+            "worker_name",
+            name,
+            "must start with a lowercase letter",
+        ));
     }
-    if !name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) {
-        return Err(IdValidationError::new("worker_name", name, "contains invalid characters"));
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+    {
+        return Err(IdValidationError::new(
+            "worker_name",
+            name,
+            "contains invalid characters",
+        ));
     }
     Ok(())
 }
@@ -420,13 +443,21 @@ pub fn validate_project_name(name: &str) -> Result<(), IdValidationError> {
     }
     let first = name.as_bytes()[0];
     if first == b'-' || first == b'.' {
-        return Err(IdValidationError::new("project_name", name, "starts with '-' or '.'"));
+        return Err(IdValidationError::new(
+            "project_name",
+            name,
+            "starts with '-' or '.'",
+        ));
     }
     if !name
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '.' || c == '_')
     {
-        return Err(IdValidationError::new("project_name", name, "contains invalid characters"));
+        return Err(IdValidationError::new(
+            "project_name",
+            name,
+            "contains invalid characters",
+        ));
     }
     Ok(())
 }
@@ -435,7 +466,11 @@ pub fn validate_project_name(name: &str) -> Result<(), IdValidationError> {
 fn validate_uuid(label: &'static str, id: &str) -> Result<(), IdValidationError> {
     let b = id.as_bytes();
     if b.len() != 36 {
-        return Err(IdValidationError::new(label, id, "must be 36 characters (UUID format)"));
+        return Err(IdValidationError::new(
+            label,
+            id,
+            "must be 36 characters (UUID format)",
+        ));
     }
     let dashes = [8, 13, 18, 23];
     for (i, &byte) in b.iter().enumerate() {
@@ -444,7 +479,11 @@ fn validate_uuid(label: &'static str, id: &str) -> Result<(), IdValidationError>
                 return Err(IdValidationError::new(label, id, "invalid UUID format"));
             }
         } else if !byte.is_ascii_hexdigit() {
-            return Err(IdValidationError::new(label, id, "contains non-hex characters"));
+            return Err(IdValidationError::new(
+                label,
+                id,
+                "contains non-hex characters",
+            ));
         } else if byte.is_ascii_uppercase() {
             return Err(IdValidationError::new(label, id, "must be lowercase"));
         }

@@ -105,16 +105,13 @@ fn load_commits_for_beads(bead_ids: &[String]) -> Result<Vec<CommitEntry>> {
         placeholders
     );
     let mut stmt = conn.prepare(&sql)?;
-    let rows = stmt.query_map(
-        rusqlite::params_from_iter(bead_ids.iter()),
-        |row| {
-            Ok(CommitEntry {
-                workspace: row.get(0)?,
-                sha: row.get(1)?,
-                ts: row.get(2)?,
-            })
-        },
-    )?;
+    let rows = stmt.query_map(rusqlite::params_from_iter(bead_ids.iter()), |row| {
+        Ok(CommitEntry {
+            workspace: row.get(0)?,
+            sha: row.get(1)?,
+            ts: row.get(2)?,
+        })
+    })?;
     let mut out = Vec::new();
     for row in rows {
         out.push(row?);
@@ -125,9 +122,8 @@ fn load_commits_for_beads(bead_ids: &[String]) -> Result<Vec<CommitEntry>> {
 /// Query the bead_ids linked to a stitch from `stitch_beads`.
 fn bead_ids_for_stitch(stitch_id: &str) -> Result<Vec<String>> {
     let conn = Connection::open(fleet::db_path())?;
-    let mut stmt = conn.prepare(
-        "SELECT DISTINCT bead_id FROM stitch_beads WHERE stitch_id = ?1",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT DISTINCT bead_id FROM stitch_beads WHERE stitch_id = ?1")?;
     let rows = stmt.query_map(params![stitch_id], |row| row.get(0))?;
     let mut out = Vec::new();
     for row in rows {
@@ -139,9 +135,8 @@ fn bead_ids_for_stitch(stitch_id: &str) -> Result<Vec<String>> {
 /// Query stitch_ids belonging to a pattern from `pattern_members`.
 fn stitch_ids_for_pattern(pattern_id: &str) -> Result<Vec<String>> {
     let conn = Connection::open(fleet::db_path())?;
-    let mut stmt = conn.prepare(
-        "SELECT DISTINCT stitch_id FROM pattern_members WHERE pattern_id = ?1",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT DISTINCT stitch_id FROM pattern_members WHERE pattern_id = ?1")?;
     let rows = stmt.query_map(params![pattern_id], |row| row.get(0))?;
     let mut out = Vec::new();
     for row in rows {
@@ -189,7 +184,10 @@ pub fn compute_net_diff(bead_ids: &[String], max_lines: usize) -> Result<NetDiff
             .filter(|e| {
                 let ok = sha_reachable(&workspace, &e.sha);
                 if !ok {
-                    warn!("net_diff: SHA {} unreachable in {}, skipping", e.sha, workspace);
+                    warn!(
+                        "net_diff: SHA {} unreachable in {}, skipping",
+                        e.sha, workspace
+                    );
                 }
                 ok
             })
@@ -238,7 +236,14 @@ pub fn compute_net_diff(bead_ids: &[String], max_lines: usize) -> Result<NetDiff
 
 fn run_git_diff(workspace: &str, ref_range: &str) -> Result<String> {
     let out = Command::new("git")
-        .args(["-C", workspace, "diff", "--no-color", "--unified=3", ref_range])
+        .args([
+            "-C",
+            workspace,
+            "diff",
+            "--no-color",
+            "--unified=3",
+            ref_range,
+        ])
         .output()?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
@@ -309,8 +314,14 @@ async fn get_pattern_net_diff(
 
 pub fn router() -> Router<DaemonState> {
     Router::new()
-        .route("/api/stitches/:stitch_id/net-diff", get(get_stitch_net_diff))
-        .route("/api/patterns/:pattern_id/net-diff", get(get_pattern_net_diff))
+        .route(
+            "/api/stitches/:stitch_id/net-diff",
+            get(get_stitch_net_diff),
+        )
+        .route(
+            "/api/patterns/:pattern_id/net-diff",
+            get(get_pattern_net_diff),
+        )
 }
 
 // ---------------------------------------------------------------------------
@@ -406,7 +417,10 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let dir = tmp.path().to_str().unwrap();
         init_repo(dir);
-        assert!(!sha_reachable(dir, "0000000000000000000000000000000000000000"));
+        assert!(!sha_reachable(
+            dir,
+            "0000000000000000000000000000000000000000"
+        ));
     }
 
     #[test]
@@ -427,15 +441,35 @@ mod tests {
         init_repo(dir);
 
         // Write two files as part of "bead-1"
-        write_commit(dir, "foo.txt", "hello\nworld\n", "2024-01-02T00:00:00+00:00", "add foo");
+        write_commit(
+            dir,
+            "foo.txt",
+            "hello\nworld\n",
+            "2024-01-02T00:00:00+00:00",
+            "add foo",
+        );
         let sha1 = head_sha(dir);
-        write_commit(dir, "bar.txt", "bar content\n", "2024-01-03T00:00:00+00:00", "add bar");
+        write_commit(
+            dir,
+            "bar.txt",
+            "bar content\n",
+            "2024-01-03T00:00:00+00:00",
+            "add bar",
+        );
         let sha2 = head_sha(dir);
 
         // Simulate what bead_commits table would give us
         let entries = vec![
-            CommitEntry { workspace: dir.to_string(), sha: sha1.clone(), ts: "2024-01-02T00:00:00+00:00".to_string() },
-            CommitEntry { workspace: dir.to_string(), sha: sha2.clone(), ts: "2024-01-03T00:00:00+00:00".to_string() },
+            CommitEntry {
+                workspace: dir.to_string(),
+                sha: sha1.clone(),
+                ts: "2024-01-02T00:00:00+00:00".to_string(),
+            },
+            CommitEntry {
+                workspace: dir.to_string(),
+                sha: sha2.clone(),
+                ts: "2024-01-03T00:00:00+00:00".to_string(),
+            },
         ];
 
         // Build the ref range manually as the function would
@@ -446,8 +480,16 @@ mod tests {
         assert!(!truncated);
         // Should see foo.txt (from sha1) and bar.txt (from sha2)
         let paths: Vec<&str> = files.iter().map(|f| f.new_path.as_str()).collect();
-        assert!(paths.contains(&"foo.txt"), "expected foo.txt in {:?}", paths);
-        assert!(paths.contains(&"bar.txt"), "expected bar.txt in {:?}", paths);
+        assert!(
+            paths.contains(&"foo.txt"),
+            "expected foo.txt in {:?}",
+            paths
+        );
+        assert!(
+            paths.contains(&"bar.txt"),
+            "expected bar.txt in {:?}",
+            paths
+        );
         assert!(files.iter().map(|f| f.added).sum::<usize>() > 0);
     }
 
@@ -457,9 +499,21 @@ mod tests {
         let dir = tmp.path().to_str().unwrap();
         init_repo(dir);
 
-        write_commit(dir, "a.txt", "aaa\n", "2024-01-05T00:00:00+00:00", "commit a");
+        write_commit(
+            dir,
+            "a.txt",
+            "aaa\n",
+            "2024-01-05T00:00:00+00:00",
+            "commit a",
+        );
         let sha_a = head_sha(dir);
-        write_commit(dir, "b.txt", "bbb\n", "2024-01-03T00:00:00+00:00", "commit b (older ts)");
+        write_commit(
+            dir,
+            "b.txt",
+            "bbb\n",
+            "2024-01-03T00:00:00+00:00",
+            "commit b (older ts)",
+        );
         let sha_b = head_sha(dir);
 
         // Both SHAs are reachable
@@ -468,8 +522,16 @@ mod tests {
 
         // Timestamps are provided out-of-order: b has older ts but was committed later
         let mut commits = vec![
-            CommitEntry { workspace: dir.to_string(), sha: sha_a.clone(), ts: "2024-01-05T00:00:00+00:00".to_string() },
-            CommitEntry { workspace: dir.to_string(), sha: sha_b.clone(), ts: "2024-01-03T00:00:00+00:00".to_string() },
+            CommitEntry {
+                workspace: dir.to_string(),
+                sha: sha_a.clone(),
+                ts: "2024-01-05T00:00:00+00:00".to_string(),
+            },
+            CommitEntry {
+                workspace: dir.to_string(),
+                sha: sha_b.clone(),
+                ts: "2024-01-03T00:00:00+00:00".to_string(),
+            },
         ];
         // Sort as the function does (oldest first by ts)
         commits.sort_by(|a, b| a.ts.cmp(&b.ts));
@@ -505,33 +567,52 @@ mod tests {
 
         // 5 beads: 3+2+2+2+2 = 11 commits
         let bead_commit_plan: &[(&str, &[(&str, &str)])] = &[
-            ("bead-1", &[
-                ("2024-01-02T00:00:00+00:00", "f1.txt"),
-                ("2024-01-03T00:00:00+00:00", "f2.txt"),
-                ("2024-01-04T00:00:00+00:00", "f3.txt"),
-            ]),
-            ("bead-2", &[
-                ("2024-01-05T00:00:00+00:00", "f4.txt"),
-                ("2024-01-06T00:00:00+00:00", "f5.txt"),
-            ]),
-            ("bead-3", &[
-                ("2024-01-07T00:00:00+00:00", "f6.txt"),
-                ("2024-01-08T00:00:00+00:00", "f7.txt"),
-            ]),
-            ("bead-4", &[
-                ("2024-01-09T00:00:00+00:00", "f8.txt"),
-                ("2024-01-10T00:00:00+00:00", "f9.txt"),
-            ]),
-            ("bead-5", &[
-                ("2024-01-11T00:00:00+00:00", "f10.txt"),
-                ("2024-01-12T00:00:00+00:00", "f11.txt"),
-            ]),
+            (
+                "bead-1",
+                &[
+                    ("2024-01-02T00:00:00+00:00", "f1.txt"),
+                    ("2024-01-03T00:00:00+00:00", "f2.txt"),
+                    ("2024-01-04T00:00:00+00:00", "f3.txt"),
+                ],
+            ),
+            (
+                "bead-2",
+                &[
+                    ("2024-01-05T00:00:00+00:00", "f4.txt"),
+                    ("2024-01-06T00:00:00+00:00", "f5.txt"),
+                ],
+            ),
+            (
+                "bead-3",
+                &[
+                    ("2024-01-07T00:00:00+00:00", "f6.txt"),
+                    ("2024-01-08T00:00:00+00:00", "f7.txt"),
+                ],
+            ),
+            (
+                "bead-4",
+                &[
+                    ("2024-01-09T00:00:00+00:00", "f8.txt"),
+                    ("2024-01-10T00:00:00+00:00", "f9.txt"),
+                ],
+            ),
+            (
+                "bead-5",
+                &[
+                    ("2024-01-11T00:00:00+00:00", "f10.txt"),
+                    ("2024-01-12T00:00:00+00:00", "f11.txt"),
+                ],
+            ),
         ];
 
         for (bead_id, commits) in bead_commit_plan {
             let mut bead_shas = Vec::new();
             for (ts, filename) in *commits {
-                fs::write(format!("{}/{}", dir, filename), format!("{} content\n", filename)).unwrap();
+                fs::write(
+                    format!("{}/{}", dir, filename),
+                    format!("{} content\n", filename),
+                )
+                .unwrap();
                 git(dir, &["add", filename]);
                 git_commit_with_ts(dir, ts, &format!("add {}", filename), None);
                 let sha = head_sha(dir);
@@ -551,7 +632,11 @@ mod tests {
             .enumerate()
             .map(|(i, (bead_id, sha))| {
                 let ts = format!("2024-01-{:02}T00:00:00+00:00", i + 2);
-                CommitEntry { workspace: dir.to_string(), sha: sha.clone(), ts }
+                CommitEntry {
+                    workspace: dir.to_string(),
+                    sha: sha.clone(),
+                    ts,
+                }
             })
             .collect();
         entries.sort_by(|a, b| a.ts.cmp(&b.ts));
@@ -573,7 +658,12 @@ mod tests {
         // 11 commits adding 1 file each → 11 new files visible in diff
         // (plus potentially f1-f12 files: 11 bead files + initial README isn't modified)
         // 11 bead commits → 11 new files (f1.txt … f11.txt), each adding 1 line
-        assert_eq!(files.len(), 11, "expected 11 new files in aggregate diff, got {}", files.len());
+        assert_eq!(
+            files.len(),
+            11,
+            "expected 11 new files in aggregate diff, got {}",
+            files.len()
+        );
         assert!(files.iter().all(|f| f.is_new), "all files should be new");
         assert_eq!(files.iter().map(|f| f.added).sum::<usize>(), 11);
     }
@@ -607,7 +697,11 @@ mod tests {
                 let mut parts = l.splitn(2, '|');
                 let sha = parts.next()?.trim().to_string();
                 let ts = parts.next()?.trim().to_string();
-                Some(CommitEntry { workspace: dir.to_string(), sha, ts })
+                Some(CommitEntry {
+                    workspace: dir.to_string(),
+                    sha,
+                    ts,
+                })
             })
             // Skip the initial commit (no parent available for diff)
             .skip(1)

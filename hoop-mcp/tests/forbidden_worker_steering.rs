@@ -3,7 +3,10 @@
 //! Verifies that the MCP server rejects worker-steering actions with clear
 //! error messages, as specified in plan §6 Phase 5 deliverable 3 and §8.2.
 
-use hoop_mcp::tools::{is_forbidden_worker_steering_verb, forbidden_worker_steering_error, FORBIDDEN_WORKER_STEERING_VERBS};
+use hoop_mcp::tools::{
+    forbidden_worker_steering_error, is_forbidden_worker_steering_verb,
+    FORBIDDEN_WORKER_STEERING_VERBS,
+};
 
 #[test]
 fn test_forbidden_list_contains_all_required_verbs() {
@@ -91,8 +94,15 @@ fn test_forbidden_worker_steering_error_message() {
 fn test_each_forbidden_verb_has_distinct_error() {
     for verb in FORBIDDEN_WORKER_STEERING_VERBS {
         let error = forbidden_worker_steering_error(verb);
-        assert!(error.contains(verb), "Error message for '{}' should mention the tool name", verb);
-        assert!(error.contains("worker-steering"), "Error should mention 'worker-steering'");
+        assert!(
+            error.contains(verb),
+            "Error message for '{}' should mention the tool name",
+            verb
+        );
+        assert!(
+            error.contains("worker-steering"),
+            "Error should mention 'worker-steering'"
+        );
     }
 }
 
@@ -139,10 +149,8 @@ fn test_runtime_guard_allows_legitimate_tools() {
         .expect("Failed to create McpServerState for test");
 
     // escalate_to_operator doesn't require project context
-    let args: Map<String, serde_json::Value> = json!({"message": "test"})
-        .as_object()
-        .unwrap()
-        .clone();
+    let args: Map<String, serde_json::Value> =
+        json!({"message": "test"}).as_object().unwrap().clone();
     let result = state.call_tool("escalate_to_operator", &args);
     // This should fail because escalate_to_operator writes to a file, but NOT because of the forbidden guard
     // The key is that it shouldn't return the "worker-steering" error
@@ -157,7 +165,7 @@ fn test_runtime_guard_allows_legitimate_tools() {
 
 #[test]
 fn test_unknown_tool_not_confused_with_forbidden() {
-    use hoop_mcp::tools::{is_forbidden_worker_steering_verb, forbidden_worker_steering_error};
+    use hoop_mcp::tools::{forbidden_worker_steering_error, is_forbidden_worker_steering_verb};
 
     let unknown_tool = "some_random_tool_that_does_not_exist";
 

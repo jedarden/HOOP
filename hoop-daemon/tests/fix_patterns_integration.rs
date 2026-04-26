@@ -162,13 +162,16 @@ fn fix_pattern_signature_matching() {
     // Test matching: Query vector should match "Exact Match Pattern" perfectly
     let query = vec![1.0, 0.5, 0.2];
     let matches = hoop_daemon::fix_patterns::FixPatternService::match_by_signature(
-        &query,
-        0.5, // threshold
+        &query, 0.5, // threshold
         10,  // limit
     )
     .unwrap();
 
-    assert_eq!(matches.len(), 3, "should match all 3 patterns above threshold 0.5");
+    assert_eq!(
+        matches.len(),
+        3,
+        "should match all 3 patterns above threshold 0.5"
+    );
 
     // Top 2 matches should be the exact match and scaled version (both have similarity 1.0)
     let names: Vec<_> = matches.iter().map(|m| &m.pattern.name).collect();
@@ -176,38 +179,51 @@ fn fix_pattern_signature_matching() {
     assert!(names.contains(&&"Similar Pattern".to_string()));
 
     // First two matches should both have similarity ~1.0 (order not deterministic)
-    assert!(matches[0].similarity > 0.99, "first match similarity should be > 0.99");
-    assert!(matches[1].similarity > 0.99, "second match similarity should be > 0.99");
+    assert!(
+        matches[0].similarity > 0.99,
+        "first match similarity should be > 0.99"
+    );
+    assert!(
+        matches[1].similarity > 0.99,
+        "second match similarity should be > 0.99"
+    );
 
     // Third match is "Different Pattern" - still has similarity > 0.5
     assert_eq!(matches[2].pattern.name, "Different Pattern");
-    assert!(matches[2].similarity > 0.5, "different pattern should have similarity > 0.5");
+    assert!(
+        matches[2].similarity > 0.5,
+        "different pattern should have similarity > 0.5"
+    );
 
     // Test with higher threshold - only the highly similar patterns match
     let matches_strict = hoop_daemon::fix_patterns::FixPatternService::match_by_signature(
-        &query,
-        0.99, // higher threshold
+        &query, 0.99, // higher threshold
         10,
     )
     .unwrap();
 
-    assert_eq!(matches_strict.len(), 2, "should match 2 patterns with threshold 0.99");
+    assert_eq!(
+        matches_strict.len(),
+        2,
+        "should match 2 patterns with threshold 0.99"
+    );
 
     // Test with lower threshold - should include the different pattern too
     let matches_loose = hoop_daemon::fix_patterns::FixPatternService::match_by_signature(
-        &query,
-        0.0, // no threshold
+        &query, 0.0, // no threshold
         10,
     )
     .unwrap();
 
-    assert_eq!(matches_loose.len(), 3, "should match all patterns with zero threshold");
+    assert_eq!(
+        matches_loose.len(),
+        3,
+        "should match all patterns with zero threshold"
+    );
 
     // Test limit
     let matches_limited = hoop_daemon::fix_patterns::FixPatternService::match_by_signature(
-        &query,
-        0.0,
-        2, // limit to 2
+        &query, 0.0, 2, // limit to 2
     )
     .unwrap();
 
@@ -272,8 +288,8 @@ fn fix_pattern_keyword_search() {
     }
 
     // Test keyword search
-    let results = hoop_daemon::fix_patterns::FixPatternService::search_by_keywords("panic")
-        .unwrap();
+    let results =
+        hoop_daemon::fix_patterns::FixPatternService::search_by_keywords("panic").unwrap();
 
     assert_eq!(results.len(), 2, "should find 2 patterns with 'panic'");
     let names: Vec<_> = results.iter().map(|p| &p.name).collect();
@@ -281,15 +297,14 @@ fn fix_pattern_keyword_search() {
     assert!(names.contains(&&"Index Out of Bounds".to_string()));
 
     // Test name search
-    let results = hoop_daemon::fix_patterns::FixPatternService::search_by_keywords("bounds")
-        .unwrap();
+    let results =
+        hoop_daemon::fix_patterns::FixPatternService::search_by_keywords("bounds").unwrap();
 
     assert_eq!(results.len(), 1, "should find 1 pattern with 'bounds'");
     assert_eq!(results[0].name, "Index Out of Bounds");
 
     // Test case-insensitive search
-    let results = hoop_daemon::fix_patterns::FixPatternService::search_by_keywords("TYPE")
-        .unwrap();
+    let results = hoop_daemon::fix_patterns::FixPatternService::search_by_keywords("TYPE").unwrap();
 
     assert_eq!(results.len(), 1, "case-insensitive search should work");
     assert_eq!(results[0].name, "Type Mismatch");
@@ -346,7 +361,10 @@ fn fix_pattern_cosine_similarity_edge_cases() {
 
     // Orthogonal vectors have cosine similarity of 0.0
     if !matches.is_empty() {
-        assert!(matches[0].similarity < 0.01, "orthogonal vectors should have near-zero similarity");
+        assert!(
+            matches[0].similarity < 0.01,
+            "orthogonal vectors should have near-zero similarity"
+        );
     }
 
     std::env::remove_var("_HOOP_FLEET_DB_PATH");

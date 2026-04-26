@@ -1,9 +1,4 @@
-use std::{
-    collections::HashMap,
-    env,
-    fs,
-    path::Path,
-};
+use std::{collections::HashMap, env, fs, path::Path};
 use typify::{TypeSpace, TypeSpaceSettings};
 
 fn main() {
@@ -23,7 +18,12 @@ fn main() {
     let entries = fs::read_dir(schemas_dir).expect("Failed to read schemas directory");
     let schema_files: Vec<_> = entries
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map(|ext| ext == "json").unwrap_or(false))
+        .filter(|e| {
+            e.path()
+                .extension()
+                .map(|ext| ext == "json")
+                .unwrap_or(false)
+        })
         .collect();
 
     for entry in &schema_files {
@@ -32,10 +32,8 @@ fn main() {
         let schema_content = fs::read_to_string(&path)
             .unwrap_or_else(|_| panic!("Failed to read schema: {:?}", path));
 
-        let schema_value: serde_json::Value =
-            serde_json::from_str(&schema_content).unwrap_or_else(|_| {
-                panic!("Failed to parse schema JSON: {:?}", path)
-            });
+        let schema_value: serde_json::Value = serde_json::from_str(&schema_content)
+            .unwrap_or_else(|_| panic!("Failed to parse schema JSON: {:?}", path));
 
         schema_map.insert(file_name, schema_value);
     }
@@ -50,10 +48,8 @@ fn main() {
         resolve_refs(&mut schema_value, &schema_map, schemas_dir);
 
         // Convert to schemars Schema
-        let schema: schemars::schema::Schema =
-            serde_json::from_value(schema_value).unwrap_or_else(|e| {
-                panic!("Failed to convert to Schema for {:?}: {}", path, e)
-            });
+        let schema: schemars::schema::Schema = serde_json::from_value(schema_value)
+            .unwrap_or_else(|e| panic!("Failed to convert to Schema for {:?}: {}", path, e));
 
         // Add the type
         type_space
@@ -65,11 +61,10 @@ fn main() {
     let content = type_space.to_stream();
 
     // Format the code
-    let formatted =
-        rustfmt_wrapper::rustfmt(content.to_string()).unwrap_or_else(|e| {
-            eprintln!("rustfmt failed: {}", e);
-            content.to_string()
-        });
+    let formatted = rustfmt_wrapper::rustfmt(content.to_string()).unwrap_or_else(|e| {
+        eprintln!("rustfmt failed: {}", e);
+        content.to_string()
+    });
 
     // Add PartialEq derives to all structs for round-trip tests
     let with_derives = add_partial_eq_derives(&formatted);
@@ -84,8 +79,7 @@ fn main() {
         .unwrap_or_else(|_| panic!("Failed to write {:?}", output_path));
 
     // Parse br-compat.toml and emit the pinned minimum br version
-    let compat_toml = fs::read_to_string("br-compat.toml")
-        .expect("Failed to read br-compat.toml");
+    let compat_toml = fs::read_to_string("br-compat.toml").expect("Failed to read br-compat.toml");
     let br_min_version = compat_toml
         .lines()
         .find(|line| line.trim().starts_with("br_min_version"))
@@ -96,8 +90,7 @@ fn main() {
         "/// Minimum pinned br version (from br-compat.toml)\npub const BR_MIN_VERSION: &str = \"{}\";\n",
         br_min_version
     );
-    fs::write(out_path.join("br_compat.rs"), compat_rs)
-        .expect("Failed to write br_compat.rs");
+    fs::write(out_path.join("br_compat.rs"), compat_rs).expect("Failed to write br_compat.rs");
 }
 
 /// Resolve $ref references in a JSON Schema by inlining the referenced schemas
@@ -124,7 +117,11 @@ fn resolve_refs(
                         // Merge all properties from the referenced schema
                         for (key, val) in referenced_obj {
                             // Skip $schema and $id as they're metadata
-                            if key != "$schema" && key != "$id" && key != "title" && key != "description" {
+                            if key != "$schema"
+                                && key != "$id"
+                                && key != "title"
+                                && key != "description"
+                            {
                                 map.insert(key.clone(), val.clone());
                             }
                         }

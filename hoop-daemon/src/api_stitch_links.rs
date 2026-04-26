@@ -57,7 +57,10 @@ pub struct StitchSearchResult {
 pub fn router() -> Router<crate::DaemonState> {
     Router::new()
         .route("/api/stitches/:id/links", post(create_link))
-        .route("/api/stitches/:id/links/:to_stitch_id", axum::routing::delete(delete_link))
+        .route(
+            "/api/stitches/:id/links/:to_stitch_id",
+            axum::routing::delete(delete_link),
+        )
         .route("/api/stitches/search", get(search_stitches))
 }
 
@@ -70,14 +73,19 @@ async fn create_link(
     State(state): State<crate::DaemonState>,
     Json(req): Json<CreateLinkRequest>,
 ) -> Result<Json<CreateLinkResponse>, (StatusCode, String)> {
-    crate::id_validators::validate_stitch_id(&from_stitch_id).map_err(crate::id_validators::rejection)?;
-    crate::id_validators::validate_stitch_id(&req.to_stitch_id).map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_stitch_id(&from_stitch_id)
+        .map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_stitch_id(&req.to_stitch_id)
+        .map_err(crate::id_validators::rejection)?;
 
     let start = Instant::now();
 
     // Validate kind
     if req.kind != "references" {
-        return Err((StatusCode::BAD_REQUEST, format!("Invalid link kind: {}", req.kind)));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Invalid link kind: {}", req.kind),
+        ));
     }
 
     let db_path = fleet::db_path();
@@ -85,26 +93,50 @@ async fn create_link(
         &db_path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to open fleet.db: {}", e)))?;
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to open fleet.db: {}", e),
+        )
+    })?;
 
     // Check for self-reference
     if from_stitch_id == req.to_stitch_id {
-        return Err((StatusCode::BAD_REQUEST, "Cannot link a stitch to itself".to_string()));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "Cannot link a stitch to itself".to_string(),
+        ));
     }
 
     // Check if both stitches exist
     let from_exists: bool = conn
-        .query_row("SELECT COUNT(*) FROM stitches WHERE id = ?1", [&from_stitch_id], |row| row.get(0))
-        .unwrap_or(0) > 0;
+        .query_row(
+            "SELECT COUNT(*) FROM stitches WHERE id = ?1",
+            [&from_stitch_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0)
+        > 0;
     let to_exists: bool = conn
-        .query_row("SELECT COUNT(*) FROM stitches WHERE id = ?1", [&req.to_stitch_id], |row| row.get(0))
-        .unwrap_or(0) > 0;
+        .query_row(
+            "SELECT COUNT(*) FROM stitches WHERE id = ?1",
+            [&req.to_stitch_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0)
+        > 0;
 
     if !from_exists {
-        return Err((StatusCode::NOT_FOUND, format!("Source stitch '{}' not found", from_stitch_id)));
+        return Err((
+            StatusCode::NOT_FOUND,
+            format!("Source stitch '{}' not found", from_stitch_id),
+        ));
     }
     if !to_exists {
-        return Err((StatusCode::NOT_FOUND, format!("Target stitch '{}' not found", req.to_stitch_id)));
+        return Err((
+            StatusCode::NOT_FOUND,
+            format!("Target stitch '{}' not found", req.to_stitch_id),
+        ));
     }
 
     let mut warning = None;
@@ -137,7 +169,10 @@ async fn create_link(
     if link_exists {
         return Err((
             StatusCode::CONFLICT,
-            format!("Link from '{}' to '{}' already exists", from_stitch_id, req.to_stitch_id),
+            format!(
+                "Link from '{}' to '{}' already exists",
+                from_stitch_id, req.to_stitch_id
+            ),
         ));
     }
 
@@ -146,7 +181,12 @@ async fn create_link(
         "INSERT INTO stitch_links (from_stitch, to_stitch, kind) VALUES (?1, ?2, ?3)",
         [&from_stitch_id, &req.to_stitch_id, &req.kind],
     )
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create link: {}", e)))?;
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to create link: {}", e),
+        )
+    })?;
 
     let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
 
@@ -163,27 +203,42 @@ async fn delete_link(
     Path((from_stitch_id, to_stitch_id)): Path<(String, String)>,
     State(_state): State<crate::DaemonState>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    crate::id_validators::validate_stitch_id(&from_stitch_id).map_err(crate::id_validators::rejection)?;
-    crate::id_validators::validate_stitch_id(&to_stitch_id).map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_stitch_id(&from_stitch_id)
+        .map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_stitch_id(&to_stitch_id)
+        .map_err(crate::id_validators::rejection)?;
 
     let db_path = fleet::db_path();
     let conn = rusqlite::Connection::open_with_flags(
         &db_path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to open fleet.db: {}", e)))?;
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to open fleet.db: {}", e),
+        )
+    })?;
 
     let rows_affected = conn
         .execute(
             "DELETE FROM stitch_links WHERE from_stitch = ?1 AND to_stitch = ?2",
             [&from_stitch_id, &to_stitch_id],
         )
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to delete link: {}", e)))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to delete link: {}", e),
+            )
+        })?;
 
     if rows_affected == 0 {
         return Err((
             StatusCode::NOT_FOUND,
-            format!("Link from '{}' to '{}' not found", from_stitch_id, to_stitch_id),
+            format!(
+                "Link from '{}' to '{}' not found",
+                from_stitch_id, to_stitch_id
+            ),
         ));
     }
 
@@ -208,7 +263,12 @@ async fn search_stitches(
         &db_path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to open fleet.db: {}", e)))?;
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to open fleet.db: {}", e),
+        )
+    })?;
 
     let search_pattern = format!("%{}%", params.q);
     let project_filter = params.project.as_ref().map(|p| format!("{}", p));
@@ -222,10 +282,16 @@ async fn search_stitches(
                  ORDER BY last_activity_at DESC \
                  LIMIT ?3",
             )
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Prepare search: {}", e)))?;
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Prepare search: {}", e),
+                )
+            })?;
 
+        let limit = params.limit;
         let rows = stmt
-            .query_map([&project, &search_pattern, &params.limit], |row| {
+            .query_map(rusqlite::params![project, search_pattern, limit], |row| {
                 Ok(StitchSearchResult {
                     id: row.get(0)?,
                     project: row.get(1)?,
@@ -235,11 +301,21 @@ async fn search_stitches(
                     last_activity_at: row.get(5)?,
                 })
             })
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Query search: {}", e)))?;
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Query search: {}", e),
+                )
+            })?;
 
         let mut out = Vec::new();
         for row in rows {
-            out.push(row.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Row error: {}", e)))?);
+            out.push(row.map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Row error: {}", e),
+                )
+            })?);
         }
         out
     } else {
@@ -251,10 +327,16 @@ async fn search_stitches(
                  ORDER BY last_activity_at DESC \
                  LIMIT ?2",
             )
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Prepare search: {}", e)))?;
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Prepare search: {}", e),
+                )
+            })?;
 
+        let limit = params.limit;
         let rows = stmt
-            .query_map([&search_pattern, &params.limit], |row| {
+            .query_map(rusqlite::params![search_pattern, limit], |row| {
                 Ok(StitchSearchResult {
                     id: row.get(0)?,
                     project: row.get(1)?,
@@ -264,11 +346,21 @@ async fn search_stitches(
                     last_activity_at: row.get(5)?,
                 })
             })
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Query search: {}", e)))?;
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Query search: {}", e),
+                )
+            })?;
 
         let mut out = Vec::new();
         for row in rows {
-            out.push(row.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Row error: {}", e)))?);
+            out.push(row.map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Row error: {}", e),
+                )
+            })?);
         }
         out
     };

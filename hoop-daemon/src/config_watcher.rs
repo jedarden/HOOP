@@ -3,7 +3,7 @@
 //! Watches ~/.hoop/config.yml for changes and emits events when the
 //! configuration is updated. Handles schema validation and rollback on error.
 
-use crate::config_resolver::{ConfigError, CliOverrides, ResolvedConfig, resolve_from_raw};
+use crate::config_resolver::{resolve_from_raw, CliOverrides, ConfigError, ResolvedConfig};
 use crate::metrics::metrics;
 use anyhow::{Context, Result};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
@@ -73,9 +73,12 @@ impl ConfigWatcher {
         let (shutdown_tx, _) = mpsc::channel(1);
 
         let initial_raw = Self::read_config_file()?;
-        let initial_config = resolve_from_raw(cli_overrides.clone(), &initial_raw)
-            .unwrap_or_else(|e| {
-                warn!("Initial config.yml parse error, using defaults: {}", e.message);
+        let initial_config =
+            resolve_from_raw(cli_overrides.clone(), &initial_raw).unwrap_or_else(|e| {
+                warn!(
+                    "Initial config.yml parse error, using defaults: {}",
+                    e.message
+                );
                 crate::config_resolver::resolve(cli_overrides.clone())
             });
 
@@ -122,8 +125,7 @@ impl ConfigWatcher {
         // Ensure the .hoop directory exists
         if let Some(parent) = watch_path.parent() {
             if !parent.exists() {
-                fs::create_dir_all(parent)
-                    .context("Failed to create .hoop directory")?;
+                fs::create_dir_all(parent).context("Failed to create .hoop directory")?;
             }
         }
 
@@ -158,7 +160,8 @@ impl ConfigWatcher {
             PathBuf::from(".")
         };
 
-        watcher.watch(&watch_dir, RecursiveMode::NonRecursive)
+        watcher
+            .watch(&watch_dir, RecursiveMode::NonRecursive)
             .context("Failed to watch config directory")?;
 
         self.watcher = Some(watcher);
@@ -246,10 +249,7 @@ impl ConfigWatcher {
                 let msg = error.message.clone();
                 // Record rejection metric
                 metrics().hoop_config_reload_rejected_total.inc();
-                let _ = event_tx.send(ConfigEvent::ConfigError {
-                    error,
-                    prev_hash,
-                });
+                let _ = event_tx.send(ConfigEvent::ConfigError { error, prev_hash });
                 warn!("Config.yml read error: {}", msg);
                 return;
             }
@@ -262,10 +262,7 @@ impl ConfigWatcher {
                 let msg = error.message.clone();
                 // Record rejection metric
                 metrics().hoop_config_reload_rejected_total.inc();
-                let _ = event_tx.send(ConfigEvent::ConfigError {
-                    error,
-                    prev_hash,
-                });
+                let _ = event_tx.send(ConfigEvent::ConfigError { error, prev_hash });
                 warn!("Config.yml rejected (schema): {}", msg);
                 return;
             }
@@ -301,15 +298,13 @@ impl ConfigWatcher {
         if !path.exists() {
             return Ok(String::new());
         }
-        fs::read_to_string(path)
-            .context("Failed to read config.yml")
+        fs::read_to_string(path).context("Failed to read config.yml")
     }
 }
 
 /// Get the path to the config.yml file
 fn config_path() -> Result<PathBuf> {
-    let mut home = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."));
+    let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     home.push(".hoop");
     home.push("config.yml");
     Ok(home)
@@ -334,21 +329,30 @@ agent:
     /// Write an invalid YAML file (semantic error - wrong type for boolean field)
     fn write_invalid_yaml(path: &Path) {
         // Wrong type for metrics.enabled (string instead of boolean)
-        fs::write(path, "schema_version: \"1.0.0\"\nmetrics:\n  enabled: \"yes\"\n")
-            .expect("write invalid yaml");
+        fs::write(
+            path,
+            "schema_version: \"1.0.0\"\nmetrics:\n  enabled: \"yes\"\n",
+        )
+        .expect("write invalid yaml");
     }
 
     /// Write a YAML with a schema-level error (invalid adapter value)
     fn write_schema_invalid(path: &Path) {
         // Invalid adapter value that will be rejected by semantic validation
-        fs::write(path, "schema_version: \"1.0.0\"\nagent:\n  adapter: unknown_adapter\n")
-            .expect("write schema-invalid yaml");
+        fs::write(
+            path,
+            "schema_version: \"1.0.0\"\nagent:\n  adapter: unknown_adapter\n",
+        )
+        .expect("write schema-invalid yaml");
     }
 
     /// Write a YAML with an invalid adapter value
     fn write_invalid_adapter(path: &Path) {
-        fs::write(path, "schema_version: \"1.0.0\"\nagent:\n  adapter: unknown_adapter\n")
-            .expect("write invalid-adapter yaml");
+        fs::write(
+            path,
+            "schema_version: \"1.0.0\"\nagent:\n  adapter: unknown_adapter\n",
+        )
+        .expect("write invalid-adapter yaml");
     }
 
     /// Write a YAML with an invalid theme value
@@ -576,7 +580,7 @@ agent:
 
         // Don't create any file - test with missing file
         let shared_config = Arc::new(Mutex::new(
-            resolve_from_raw(cli_overrides.clone(), "").expect("empty should use defaults")
+            resolve_from_raw(cli_overrides.clone(), "").expect("empty should use defaults"),
         ));
 
         let mut rx = event_tx.subscribe();
@@ -620,8 +624,11 @@ agent:
 
         // Write integer schema_version - serde_yaml coerces to string "1"
         // This is accepted even though it doesn't match the semver pattern ^\d+\.\d+\.\d+$
-        fs::write(&config_path, "schema_version: 1\nagent:\n  adapter: claude\n")
-            .expect("write integer version");
+        fs::write(
+            &config_path,
+            "schema_version: 1\nagent:\n  adapter: claude\n",
+        )
+        .expect("write integer version");
 
         ConfigWatcher::reload_config(
             &config_path,
@@ -636,7 +643,10 @@ agent:
             Ok(ConfigEvent::ConfigReloaded { config, .. }) => {
                 assert_eq!(config.agent_adapter.value, "claude");
             }
-            other => panic!("expected ConfigReloaded (YAML coerces integer to string), got {:?}", other),
+            other => panic!(
+                "expected ConfigReloaded (YAML coerces integer to string), got {:?}",
+                other
+            ),
         }
     }
 
@@ -655,8 +665,11 @@ agent:
         let mut rx = event_tx.subscribe();
 
         // Write string value for metrics.port (should be integer)
-        fs::write(&config_path, "schema_version: \"1.0.0\"\nmetrics:\n  port: \"not-a-number\"\n")
-            .expect("write invalid port");
+        fs::write(
+            &config_path,
+            "schema_version: \"1.0.0\"\nmetrics:\n  port: \"not-a-number\"\n",
+        )
+        .expect("write invalid port");
 
         ConfigWatcher::reload_config(
             &config_path,
@@ -694,8 +707,11 @@ agent:
         let mut rx = event_tx.subscribe();
 
         // Write string value for audit.retention_days (should be integer)
-        fs::write(&config_path, "schema_version: \"1.0.0\"\naudit:\n  retention_days: \"ninety\"\n")
-            .expect("write invalid retention");
+        fs::write(
+            &config_path,
+            "schema_version: \"1.0.0\"\naudit:\n  retention_days: \"ninety\"\n",
+        )
+        .expect("write invalid retention");
 
         ConfigWatcher::reload_config(
             &config_path,
@@ -732,8 +748,11 @@ agent:
         let mut rx = event_tx.subscribe();
 
         // Write string value for reflection.detection_threshold (should be float)
-        fs::write(&config_path, "schema_version: \"1.0.0\"\nreflection:\n  detection_threshold: \"high\"\n")
-            .expect("write invalid threshold");
+        fs::write(
+            &config_path,
+            "schema_version: \"1.0.0\"\nreflection:\n  detection_threshold: \"high\"\n",
+        )
+        .expect("write invalid threshold");
 
         ConfigWatcher::reload_config(
             &config_path,
@@ -770,8 +789,11 @@ agent:
         let mut rx = event_tx.subscribe();
 
         // Write string value for ui.archive_after_days (should be integer)
-        fs::write(&config_path, "schema_version: \"1.0.0\"\nui:\n  archive_after_days: \"thirty\"\n")
-            .expect("write invalid archive days");
+        fs::write(
+            &config_path,
+            "schema_version: \"1.0.0\"\nui:\n  archive_after_days: \"thirty\"\n",
+        )
+        .expect("write invalid archive days");
 
         ConfigWatcher::reload_config(
             &config_path,
@@ -808,8 +830,11 @@ agent:
         let mut rx = event_tx.subscribe();
 
         // Write boolean value for voice.max_recording_seconds (should be integer)
-        fs::write(&config_path, "schema_version: \"1.0.0\"\nvoice:\n  max_recording_seconds: true\n")
-            .expect("write invalid max seconds");
+        fs::write(
+            &config_path,
+            "schema_version: \"1.0.0\"\nvoice:\n  max_recording_seconds: true\n",
+        )
+        .expect("write invalid max seconds");
 
         ConfigWatcher::reload_config(
             &config_path,
@@ -846,8 +871,11 @@ agent:
         let mut rx = event_tx.subscribe();
 
         // Write integer value for audit.hash_chain (should be boolean)
-        fs::write(&config_path, "schema_version: \"1.0.0\"\naudit:\n  hash_chain: 1\n")
-            .expect("write invalid hash chain");
+        fs::write(
+            &config_path,
+            "schema_version: \"1.0.0\"\naudit:\n  hash_chain: 1\n",
+        )
+        .expect("write invalid hash chain");
 
         ConfigWatcher::reload_config(
             &config_path,
@@ -860,7 +888,9 @@ agent:
         match rx.try_recv() {
             Ok(ConfigEvent::ConfigError { error, .. }) => {
                 assert!(
-                    error.message.contains("invalid type") || error.message.contains("integer") || error.message.contains("boolean"),
+                    error.message.contains("invalid type")
+                        || error.message.contains("integer")
+                        || error.message.contains("boolean"),
                     "error should mention type mismatch: {}",
                     error.message
                 );
@@ -884,8 +914,11 @@ agent:
         let mut rx = event_tx.subscribe();
 
         // Write string value for reflection.enabled (should be boolean)
-        fs::write(&config_path, "schema_version: \"1.0.0\"\nreflection:\n  enabled: \"yes\"\n")
-            .expect("write invalid reflection enabled");
+        fs::write(
+            &config_path,
+            "schema_version: \"1.0.0\"\nreflection:\n  enabled: \"yes\"\n",
+        )
+        .expect("write invalid reflection enabled");
 
         ConfigWatcher::reload_config(
             &config_path,
@@ -898,7 +931,9 @@ agent:
         match rx.try_recv() {
             Ok(ConfigEvent::ConfigError { error, .. }) => {
                 assert!(
-                    error.message.contains("invalid type") || error.message.contains("string") || error.message.contains("boolean"),
+                    error.message.contains("invalid type")
+                        || error.message.contains("string")
+                        || error.message.contains("boolean"),
                     "error should mention type mismatch: {}",
                     error.message
                 );
@@ -922,8 +957,11 @@ agent:
         let mut rx = event_tx.subscribe();
 
         // Write integer value for metrics.enabled (should be boolean)
-        fs::write(&config_path, "schema_version: \"1.0.0\"\nmetrics:\n  enabled: 1\n")
-            .expect("write invalid metrics enabled");
+        fs::write(
+            &config_path,
+            "schema_version: \"1.0.0\"\nmetrics:\n  enabled: 1\n",
+        )
+        .expect("write invalid metrics enabled");
 
         ConfigWatcher::reload_config(
             &config_path,
@@ -936,7 +974,9 @@ agent:
         match rx.try_recv() {
             Ok(ConfigEvent::ConfigError { error, .. }) => {
                 assert!(
-                    error.message.contains("invalid type") || error.message.contains("integer") || error.message.contains("boolean"),
+                    error.message.contains("invalid type")
+                        || error.message.contains("integer")
+                        || error.message.contains("boolean"),
                     "error should mention type mismatch: {}",
                     error.message
                 );

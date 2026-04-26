@@ -85,7 +85,8 @@ impl ShutdownCoordinator {
 
     /// Check if shutdown is in progress
     pub fn is_shutting_down(&self) -> bool {
-        self.is_shutting_down.load(std::sync::atomic::Ordering::Relaxed)
+        self.is_shutting_down
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Register an active WebSocket connection
@@ -93,7 +94,9 @@ impl ShutdownCoordinator {
     /// Returns a token that should be dropped when the connection closes.
     pub fn register_connection(&self) -> ConnectionToken {
         self.active_connections.fetch_add(1, Ordering::Relaxed);
-        metrics::metrics().hoop_ws_clients_connected.set(self.active_connections.load(Ordering::Relaxed) as i64);
+        metrics::metrics()
+            .hoop_ws_clients_connected
+            .set(self.active_connections.load(Ordering::Relaxed) as i64);
         ConnectionToken {
             coordinator: self.clone(),
         }
@@ -116,10 +119,7 @@ impl ShutdownCoordinator {
             Ok(_) => Ok(()),
             Err(_) => {
                 let remaining = self.active_connections();
-                warn!(
-                    "Timeout waiting for {} connections to close",
-                    remaining
-                );
+                warn!("Timeout waiting for {} connections to close", remaining);
                 metrics::metrics()
                     .hoop_shutdown_timeout_connections
                     .inc_by(remaining as u64);
@@ -136,8 +136,10 @@ impl ShutdownCoordinator {
     /// Runs through each shutdown phase with a timeout, then sends SIGKILL
     /// to the current process as a backstop.
     pub async fn shutdown(&self, grace_period_secs: Option<u64>) -> Result<()> {
-        self.is_shutting_down.store(true, std::sync::atomic::Ordering::SeqCst);
-        let grace_period = Duration::from_secs(grace_period_secs.unwrap_or(DEFAULT_GRACE_PERIOD_SECS));
+        self.is_shutting_down
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+        let grace_period =
+            Duration::from_secs(grace_period_secs.unwrap_or(DEFAULT_GRACE_PERIOD_SECS));
 
         // Record shutdown start time for metrics
         {
@@ -158,7 +160,8 @@ impl ShutdownCoordinator {
         tokio::time::sleep(Duration::from_millis(100)).await;
 
         // Phase 2: Close new connections
-        self.broadcast_phase(ShutdownPhase::CloseNewConnections).await;
+        self.broadcast_phase(ShutdownPhase::CloseNewConnections)
+            .await;
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         // Phase 3: Drain in-flight work
@@ -174,8 +177,14 @@ impl ShutdownCoordinator {
 
         // Wait a bit for clients to receive close frame and disconnect
         if initial_connections > 0 {
-            info!("Waiting for {} WebSocket connections to close...", initial_connections);
-            if let Err(e) = self.wait_for_connections_closed(Duration::from_millis(500)).await {
+            info!(
+                "Waiting for {} WebSocket connections to close...",
+                initial_connections
+            );
+            if let Err(e) = self
+                .wait_for_connections_closed(Duration::from_millis(500))
+                .await
+            {
                 warn!("Error waiting for connections to close: {}", e);
             }
         }
@@ -218,7 +227,9 @@ impl ShutdownCoordinator {
     /// Decrement the active connection count (called by ConnectionToken on drop)
     fn connection_closed(&self) {
         let count = self.active_connections.fetch_sub(1, Ordering::Relaxed) - 1;
-        metrics::metrics().hoop_ws_clients_connected.set(count as i64);
+        metrics::metrics()
+            .hoop_ws_clients_connected
+            .set(count as i64);
 
         if count == 0 {
             info!("All WebSocket connections closed");
@@ -317,14 +328,21 @@ impl DbCheckpointHandle {
         use rusqlite::Connection;
 
         if !self.fleet_db_path.exists() {
-            debug!("No fleet.db to checkpoint at {}", self.fleet_db_path.display());
+            debug!(
+                "No fleet.db to checkpoint at {}",
+                self.fleet_db_path.display()
+            );
             return Ok(());
         }
 
         debug!("Checkpointing fleet.db at {}", self.fleet_db_path.display());
 
-        let conn = Connection::open(&self.fleet_db_path)
-            .with_context(|| format!("Failed to open fleet.db at {}", self.fleet_db_path.display()))?;
+        let conn = Connection::open(&self.fleet_db_path).with_context(|| {
+            format!(
+                "Failed to open fleet.db at {}",
+                self.fleet_db_path.display()
+            )
+        })?;
 
         // Run WAL checkpoint in TRUNCATE mode
         // This ensures all WAL entries are applied and the WAL file is truncated
@@ -379,8 +397,9 @@ impl SocketCleanupHandle {
     pub fn cleanup(&self) -> Result<()> {
         if self.socket_path.exists() {
             debug!("Removing socket file at {}", self.socket_path.display());
-            std::fs::remove_file(&self.socket_path)
-                .with_context(|| format!("Failed to remove socket at {}", self.socket_path.display()))?;
+            std::fs::remove_file(&self.socket_path).with_context(|| {
+                format!("Failed to remove socket at {}", self.socket_path.display())
+            })?;
             info!("Socket file removed: {}", self.socket_path.display());
         }
         Ok(())
@@ -423,8 +442,10 @@ pub async fn spawn_shutdown_listener(
         {
             use tokio::signal::unix::{signal, SignalKind};
 
-            let mut sigterm = signal(SignalKind::terminate()).expect("Failed to setup SIGTERM handler");
-            let mut sigint = signal(SignalKind::interrupt()).expect("Failed to setup SIGINT handler");
+            let mut sigterm =
+                signal(SignalKind::terminate()).expect("Failed to setup SIGTERM handler");
+            let mut sigint =
+                signal(SignalKind::interrupt()).expect("Failed to setup SIGINT handler");
 
             tokio::select! {
                 _ = sigterm.recv() => {
@@ -443,7 +464,9 @@ pub async fn spawn_shutdown_listener(
         #[cfg(not(unix))]
         {
             // On non-Unix, just listen for Ctrl-C
-            tokio::signal::ctrl_c().await.expect("Failed to setup Ctrl-C handler");
+            tokio::signal::ctrl_c()
+                .await
+                .expect("Failed to setup Ctrl-C handler");
             info!("Received Ctrl-C, initiating graceful shutdown");
             let _ = coordinator.shutdown(None).await;
             on_shutdown();
@@ -529,7 +552,9 @@ mod tests {
 
         // Database should still be valid after checkpoint
         let conn = rusqlite::Connection::open(&db_path).unwrap();
-        let count: i64 = conn.query_row("SELECT COUNT(*) FROM test", [], |r| r.get(0)).unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM test", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(count, 0);
     }
 

@@ -13,8 +13,8 @@
 //!   cargo test -p hoop-daemon --test privacy_surface_audit
 
 use hoop_daemon::redaction::{
-    scan_draft_body, scan_morning_brief, scan_propagation_draft,
-    scan_screen_capture_text, scan_voice_transcript, SecretFinding,
+    scan_draft_body, scan_morning_brief, scan_propagation_draft, scan_screen_capture_text,
+    scan_voice_transcript, SecretFinding,
 };
 
 // ── Synthetic secrets ──────────────────────────────────────────────────────────
@@ -39,9 +39,7 @@ fn is_flagged(findings: &[SecretFinding]) -> bool {
 /// Screen-capture frame text containing an Anthropic API key is flagged.
 #[test]
 fn phase3_screen_capture_frame_flags_anthropic_key() {
-    let frame_text = format!(
-        "Terminal window showing: export ANTHROPIC_API_KEY={ANTHROPIC_KEY}"
-    );
+    let frame_text = format!("Terminal window showing: export ANTHROPIC_API_KEY={ANTHROPIC_KEY}");
     let findings = scan_screen_capture_text(&frame_text);
     assert!(
         is_flagged(&findings),
@@ -56,7 +54,8 @@ fn phase3_screen_capture_frame_flags_anthropic_key() {
 /// Screen-capture frame text containing a GitHub token is flagged.
 #[test]
 fn phase3_screen_capture_frame_flags_github_token() {
-    let frame_text = format!("git remote set-url origin https://{GITHUB_TOKEN}@github.com/org/repo");
+    let frame_text =
+        format!("git remote set-url origin https://{GITHUB_TOKEN}@github.com/org/repo");
     let findings = scan_screen_capture_text(&frame_text);
     assert!(
         is_flagged(&findings),
@@ -82,9 +81,7 @@ fn phase3_screen_capture_frame_clean_text_no_findings() {
 /// Voice transcript containing an Anthropic API key is flagged (§18.2).
 #[test]
 fn phase3_voice_transcript_flags_anthropic_key() {
-    let transcript = format!(
-        "And then I set the key to {ANTHROPIC_KEY} in the environment file."
-    );
+    let transcript = format!("And then I set the key to {ANTHROPIC_KEY} in the environment file.");
     let findings = scan_voice_transcript(&transcript);
     assert!(
         is_flagged(&findings),
@@ -114,9 +111,8 @@ fn phase3_voice_transcript_flags_jwt() {
 /// Voice transcript with env-var style secret is flagged.
 #[test]
 fn phase3_voice_transcript_flags_env_var_style_secret() {
-    let transcript = format!(
-        "So the config has OPENAI_API_KEY={ANTHROPIC_KEY} in the dotenv file."
-    );
+    let transcript =
+        format!("So the config has OPENAI_API_KEY={ANTHROPIC_KEY} in the dotenv file.");
     let findings = scan_voice_transcript(&transcript);
     assert!(
         is_flagged(&findings),
@@ -127,7 +123,8 @@ fn phase3_voice_transcript_flags_env_var_style_secret() {
 /// Clean voice transcript produces no findings.
 #[test]
 fn phase3_voice_transcript_clean_no_findings() {
-    let transcript = "Today I reviewed the pull request and everything looks good. The tests all pass.";
+    let transcript =
+        "Today I reviewed the pull request and everything looks good. The tests all pass.";
     let findings = scan_voice_transcript(transcript);
     assert!(
         findings.is_empty(),
@@ -145,7 +142,10 @@ fn phase3_finding_position_metadata_accurate() {
 
     // At least one finding should start at or after the prefix
     let any_in_range = findings.iter().any(|f| f.match_start >= prefix.len() - 1);
-    assert!(any_in_range, "at least one finding should overlap the key portion");
+    assert!(
+        any_in_range,
+        "at least one finding should overlap the key portion"
+    );
 
     // Each finding should have non-zero length
     for f in &findings {
@@ -212,7 +212,11 @@ fn phase4_bulk_import_markdown_list_flags_secret_item() {
         .enumerate()
         .filter_map(|(i, (title, body))| {
             let findings = scan_draft_body(title, body.as_deref());
-            if !findings.is_empty() { Some(i) } else { None }
+            if !findings.is_empty() {
+                Some(i)
+            } else {
+                None
+            }
         })
         .collect();
 
@@ -374,9 +378,7 @@ fn phase5_propagation_draft_clean_no_findings() {
 #[test]
 fn phase5_propagation_draft_jwt_lateral_leak_blocked() {
     let title = "Propagate session config to rs-manager";
-    let body = format!(
-        "Copy the session token from the source project's context: {JWT_TOKEN}"
-    );
+    let body = format!("Copy the session token from the source project's context: {JWT_TOKEN}");
     let findings = scan_propagation_draft(title, &body);
     assert!(
         is_flagged(&findings),
@@ -475,5 +477,9 @@ fn coverage_report_all_surfaces_accounted_for() {
     }
     println!("=== {} surfaces enumerated ===\n", surfaces.len());
 
-    assert_eq!(surfaces.len(), 7, "update this count when adding new surfaces");
+    assert_eq!(
+        surfaces.len(),
+        7,
+        "update this count when adding new surfaces"
+    );
 }

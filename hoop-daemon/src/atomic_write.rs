@@ -88,9 +88,7 @@ pub fn atomic_write_file(dest: &Path, data: &[u8]) -> Result<()> {
     // Using UUID ensures uniqueness even with concurrent writes
     let tmp_name = format!(
         "{}.{}.tmp",
-        dest.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("file"),
+        dest.file_name().and_then(|n| n.to_str()).unwrap_or("file"),
         uuid::Uuid::new_v4()
     );
     let tmp_path = parent.join(tmp_name);
@@ -104,8 +102,13 @@ pub fn atomic_write_file(dest: &Path, data: &[u8]) -> Result<()> {
         .with_context(|| format!("failed to fsync tmp file: {}", tmp_path.display()))?;
 
     // Atomic rename into place
-    std::fs::rename(&tmp_path, dest)
-        .with_context(|| format!("failed to rename {} -> {}", tmp_path.display(), dest.display()))?;
+    std::fs::rename(&tmp_path, dest).with_context(|| {
+        format!(
+            "failed to rename {} -> {}",
+            tmp_path.display(),
+            dest.display()
+        )
+    })?;
 
     Ok(())
 }
@@ -169,8 +172,9 @@ impl AtomicWriteBuilder {
             .ok_or_else(|| anyhow::anyhow!("destination path has no parent: {}", dest.display()))?;
 
         if !parent.exists() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("failed to create parent directory: {}", parent.display()))?;
+            std::fs::create_dir_all(parent).with_context(|| {
+                format!("failed to create parent directory: {}", parent.display())
+            })?;
         }
 
         let tmp_name = if let Some(prefix) = &self.tmp_prefix {
@@ -178,9 +182,7 @@ impl AtomicWriteBuilder {
         } else {
             format!(
                 "{}.{}.tmp",
-                dest.file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("file"),
+                dest.file_name().and_then(|n| n.to_str()).unwrap_or("file"),
                 uuid::Uuid::new_v4()
             )
         };
@@ -194,8 +196,13 @@ impl AtomicWriteBuilder {
         file.sync_all()
             .with_context(|| format!("failed to fsync tmp file: {}", tmp_path.display()))?;
 
-        std::fs::rename(&tmp_path, dest)
-            .with_context(|| format!("failed to rename {} -> {}", tmp_path.display(), dest.display()))?;
+        std::fs::rename(&tmp_path, dest).with_context(|| {
+            format!(
+                "failed to rename {} -> {}",
+                tmp_path.display(),
+                dest.display()
+            )
+        })?;
 
         Ok(())
     }
@@ -380,8 +387,10 @@ mod tests {
 
         // Verify: either old or new content, never partial
         let content = std::fs::read(&dest).unwrap();
-        assert!(content == vec![0xAA; 1000] || content == vec![0xBB; 2000],
-            "file should be either old or new, never partial");
+        assert!(
+            content == vec![0xAA; 1000] || content == vec![0xBB; 2000],
+            "file should be either old or new, never partial"
+        );
         assert_eq!(content.len(), new_data.len(), "new content fully present");
     }
 
@@ -408,7 +417,9 @@ mod tests {
         let _ = std::fs::remove_file(&tmp_path);
 
         // Crash point 3: after write but before fsync
-        let tmp_path = tmp.path().join(format!("{}.{}.tmp", "critical.dat", uuid::Uuid::new_v4()));
+        let tmp_path = tmp
+            .path()
+            .join(format!("{}.{}.tmp", "critical.dat", uuid::Uuid::new_v4()));
         let mut file = File::create(&tmp_path).unwrap();
         file.write_all(b"written but not synced").unwrap();
         // Crash here: dest unchanged
@@ -416,7 +427,9 @@ mod tests {
         let _ = std::fs::remove_file(&tmp_path);
 
         // Crash point 4: after fsync but before rename
-        let tmp_path = tmp.path().join(format!("{}.{}.tmp", "critical.dat", uuid::Uuid::new_v4()));
+        let tmp_path = tmp
+            .path()
+            .join(format!("{}.{}.tmp", "critical.dat", uuid::Uuid::new_v4()));
         {
             let mut file = File::create(&tmp_path).unwrap();
             file.write_all(b"synced but not renamed").unwrap();
@@ -431,8 +444,10 @@ mod tests {
         atomic_write_file(&dest, b"fully committed").unwrap();
         // After rename: either old or new, never partial
         let content = std::fs::read(&dest).unwrap();
-        assert!(content == b"initial" || content == b"fully committed",
-            "content should be complete");
+        assert!(
+            content == b"initial" || content == b"fully committed",
+            "content should be complete"
+        );
     }
 
     /// Test that concurrent writes don't interfere (UUID prevents collisions).
@@ -520,11 +535,15 @@ mod tests {
         let tmp_name = format!("{}.{}.tmp", "manifest.json", uuid::Uuid::new_v4());
         let tmp_path = tmp.path().join(tmp_name);
         let mut file = File::create(&tmp_path).unwrap();
-        file.write_all(b"{\"version\":2,\"files\":{\"incomplete\":").unwrap();
+        file.write_all(b"{\"version\":2,\"files\":{\"incomplete\":")
+            .unwrap();
         // Crash here: incomplete JSON, not synced
 
         // Verify: old manifest still intact
-        assert_eq!(std::fs::read_to_string(&manifest_path).unwrap(), old_manifest);
+        assert_eq!(
+            std::fs::read_to_string(&manifest_path).unwrap(),
+            old_manifest
+        );
 
         // Cleanup tmp
         let _ = std::fs::remove_file(&tmp_path);
@@ -558,7 +577,8 @@ mod tests {
         let tmp_path = tmp.path().join(tmp_name);
         let mut file = File::create(&tmp_path).unwrap();
         // Write partial zstd frame (would fail decompression)
-        file.write_all(&[0x28, 0xb5, 0x2f, 0xfd, 0x00, 0x01, 0x00, 0x00]).unwrap();
+        file.write_all(&[0x28, 0xb5, 0x2f, 0xfd, 0x00, 0x01, 0x00, 0x00])
+            .unwrap();
         // Crash here: incomplete compressed data
 
         // Verify: no backup file exists
@@ -593,17 +613,22 @@ mod tests {
         let tmp_name = format!("{}.{}.tmp", "projects.yaml", uuid::Uuid::new_v4());
         let tmp_path = tmp.path().join(tmp_name);
         let mut file = File::create(&tmp_path).unwrap();
-        file.write_all(b"projects:\n  - name: new\n    path: /new\n  - name: inc").unwrap();
+        file.write_all(b"projects:\n  - name: new\n    path: /new\n  - name: inc")
+            .unwrap();
         // Crash here: incomplete YAML (missing path for last entry)
 
         // Verify: old registry still valid
-        assert_eq!(std::fs::read_to_string(&registry_path).unwrap(), old_registry);
+        assert_eq!(
+            std::fs::read_to_string(&registry_path).unwrap(),
+            old_registry
+        );
 
         // Cleanup tmp
         let _ = std::fs::remove_file(&tmp_path);
 
         // Successful write
-        let new_registry = "projects:\n  - name: test\n    path: /tmp\n  - name: new\n    path: /new\n";
+        let new_registry =
+            "projects:\n  - name: test\n    path: /tmp\n  - name: new\n    path: /new\n";
         atomic_write_file_str(&registry_path, new_registry).unwrap();
 
         // Verify: valid YAML

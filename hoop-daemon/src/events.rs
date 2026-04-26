@@ -143,7 +143,12 @@ impl BeadEventData {
     /// Convert a NeedleEvent to BeadEventData, returning None for unknown events
     pub fn from_event(event: &NeedleEvent) -> Option<Self> {
         match event {
-            NeedleEvent::Claim { ts, worker, bead, strand } => Some(BeadEventData {
+            NeedleEvent::Claim {
+                ts,
+                worker,
+                bead,
+                strand,
+            } => Some(BeadEventData {
                 timestamp: ts.clone(),
                 event_type: "claim".to_string(),
                 bead_id: bead.clone(),
@@ -156,7 +161,13 @@ impl BeadEventData {
                 exit_code: None,
                 error: None,
             }),
-            NeedleEvent::Dispatch { ts, worker, bead, adapter, model } => Some(BeadEventData {
+            NeedleEvent::Dispatch {
+                ts,
+                worker,
+                bead,
+                adapter,
+                model,
+            } => Some(BeadEventData {
                 timestamp: ts.clone(),
                 event_type: "dispatch".to_string(),
                 bead_id: bead.clone(),
@@ -169,7 +180,14 @@ impl BeadEventData {
                 exit_code: None,
                 error: None,
             }),
-            NeedleEvent::Complete { ts, worker, bead, outcome, duration_ms, exit_code } => Some(BeadEventData {
+            NeedleEvent::Complete {
+                ts,
+                worker,
+                bead,
+                outcome,
+                duration_ms,
+                exit_code,
+            } => Some(BeadEventData {
                 timestamp: ts.clone(),
                 event_type: "complete".to_string(),
                 bead_id: bead.clone(),
@@ -182,7 +200,13 @@ impl BeadEventData {
                 exit_code: *exit_code,
                 error: None,
             }),
-            NeedleEvent::Fail { ts, worker, bead, error, duration_ms } => Some(BeadEventData {
+            NeedleEvent::Fail {
+                ts,
+                worker,
+                bead,
+                error,
+                duration_ms,
+            } => Some(BeadEventData {
                 timestamp: ts.clone(),
                 event_type: "fail".to_string(),
                 bead_id: bead.clone(),
@@ -208,7 +232,12 @@ impl BeadEventData {
                 exit_code: None,
                 error: None,
             }),
-            NeedleEvent::Crash { ts, worker, bead, exit_code } => Some(BeadEventData {
+            NeedleEvent::Crash {
+                ts,
+                worker,
+                bead,
+                exit_code,
+            } => Some(BeadEventData {
                 timestamp: ts.clone(),
                 event_type: "crash".to_string(),
                 bead_id: bead.clone(),
@@ -386,7 +415,13 @@ impl EventTailer {
         // Create the watcher
         let bead_event_tx_for_watch = self.config.bead_event_tx.clone();
         let mut watcher = notify::recommended_watcher(move |res| {
-            if let Err(e) = Self::handle_watch_event(res, &events_path_for_watch, &event_tx, position.clone(), bead_event_tx_for_watch.clone()) {
+            if let Err(e) = Self::handle_watch_event(
+                res,
+                &events_path_for_watch,
+                &event_tx,
+                position.clone(),
+                bead_event_tx_for_watch.clone(),
+            ) {
                 warn!("Error handling watch event: {}", e);
             }
         })
@@ -429,10 +464,10 @@ impl EventTailer {
     /// Replay all events from the existing file
     fn replay_file(&self) -> Result<()> {
         let events_path = &self.config.events_path;
-        let file = File::open(events_path)
-            .context("Failed to open events file for replay")?;
+        let file = File::open(events_path).context("Failed to open events file for replay")?;
 
-        let metadata = file.metadata()
+        let metadata = file
+            .metadata()
             .context("Failed to get events file metadata")?;
 
         let reader = BufReader::new(file);
@@ -467,10 +502,7 @@ impl EventTailer {
         // Handle any remaining partial line
         if let Some(partial) = parser.finish() {
             if !partial.is_empty() {
-                warn!(
-                    "Incomplete final line in events file: {}",
-                    partial.trim()
-                );
+                warn!("Incomplete final line in events file: {}", partial.trim());
             }
         }
 
@@ -504,7 +536,9 @@ impl EventTailer {
         match event.kind {
             // File created or modified - read new lines
             Access(_) | Create(_) | Modify(_) => {
-                if let Err(e) = Self::read_new_events(events_path, event_tx, position.clone(), bead_event_tx) {
+                if let Err(e) =
+                    Self::read_new_events(events_path, event_tx, position.clone(), bead_event_tx)
+                {
                     warn!("Error reading new events: {}", e);
                 }
             }
@@ -531,7 +565,8 @@ impl EventTailer {
         let file = File::open(events_path)
             .with_context(|| format!("Failed to open events file {}", events_path.display()))?;
 
-        let metadata = file.metadata()
+        let metadata = file
+            .metadata()
             .with_context(|| format!("Failed to get metadata for {}", events_path.display()))?;
 
         // Check for log rotation
@@ -558,8 +593,13 @@ impl EventTailer {
 
         // Seek to our last position
         let mut file = file;
-        file.seek(SeekFrom::Start(offset))
-            .with_context(|| format!("Failed to seek to offset {} in {}", offset, events_path.display()))?;
+        file.seek(SeekFrom::Start(offset)).with_context(|| {
+            format!(
+                "Failed to seek to offset {} in {}",
+                offset,
+                events_path.display()
+            )
+        })?;
 
         let reader = BufReader::new(file);
         let mut parser = NdjsonParser::new();
@@ -600,10 +640,7 @@ impl EventTailer {
         // Handle any remaining partial line
         if let Some(partial) = parser.finish() {
             if !partial.is_empty() {
-                warn!(
-                    "Incomplete final line in events file: {}",
-                    partial.trim()
-                );
+                warn!("Incomplete final line in events file: {}", partial.trim());
             }
         }
 
@@ -635,7 +672,12 @@ impl NdjsonParser {
     ///
     /// Returns None if the line was incomplete (carried over).
     /// Returns Some(parsed) if a complete event was parsed.
-    fn parse_line(&mut self, line: &str, line_number: usize, source: &crate::parse_jsonl_safe::LineSource) -> Result<Option<ParsedEvent>> {
+    fn parse_line(
+        &mut self,
+        line: &str,
+        line_number: usize,
+        source: &crate::parse_jsonl_safe::LineSource,
+    ) -> Result<Option<ParsedEvent>> {
         let mut input = line;
 
         // If we have a partial line from before, prepend it
@@ -741,7 +783,8 @@ mod tests {
     fn test_ndjson_parser_complete_line() {
         let mut parser = NdjsonParser::new();
 
-        let json = r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-abc123"}"#;
+        let json =
+            r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-abc123"}"#;
         let result = parser.parse_line(json, 1, &test_source()).unwrap().unwrap();
 
         match result.event {
@@ -759,11 +802,17 @@ mod tests {
 
         // First part is incomplete
         let partial = r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha""#;
-        assert!(parser.parse_line(partial, 1, &test_source()).unwrap().is_none());
+        assert!(parser
+            .parse_line(partial, 1, &test_source())
+            .unwrap()
+            .is_none());
 
         // Second part completes it
         let completion = r#","bead":"bd-abc123"}"#;
-        let result = parser.parse_line(completion, 2, &test_source()).unwrap().unwrap();
+        let result = parser
+            .parse_line(completion, 2, &test_source())
+            .unwrap()
+            .unwrap();
 
         match result.event {
             NeedleEvent::Claim { worker, bead, .. } => {
@@ -784,7 +833,10 @@ mod tests {
         // This is clearly malformed (missing closing brace and long enough to not be partial)
         // Using a long string to exceed the 256-char threshold for partial line detection
         let malformed = r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-abc123","very_long_field_that_makes_this_line_exceed_256_characters_threshold_so_it_will_be_treated_as_malformed_instead_of_partial":"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident."#;
-        let result = parser.parse_line(malformed, 1, &test_source()).unwrap().unwrap();
+        let result = parser
+            .parse_line(malformed, 1, &test_source())
+            .unwrap()
+            .unwrap();
 
         // Should return Unknown event
         assert!(matches!(result.event, NeedleEvent::Unknown));

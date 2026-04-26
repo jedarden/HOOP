@@ -76,14 +76,8 @@ fn orphan_bead_detection_and_attachment() {
 #[test]
 fn stitch_label_detection() {
     // Verify that labels starting with "stitch:" are correctly identified
-    let labels_with_stitch = vec![
-        "stitch:abc123".to_string(),
-        "urgent".to_string(),
-    ];
-    let labels_without = vec![
-        "urgent".to_string(),
-        "bug".to_string(),
-    ];
+    let labels_with_stitch = vec!["stitch:abc123".to_string(), "urgent".to_string()];
+    let labels_without = vec!["urgent".to_string(), "bug".to_string()];
 
     assert!(labels_with_stitch.iter().any(|l| l.starts_with("stitch:")));
     assert!(!labels_without.iter().any(|l| l.starts_with("stitch:")));

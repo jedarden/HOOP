@@ -47,8 +47,7 @@ async fn list_orphans(
     Path(project): Path<String>,
     State(state): State<crate::DaemonState>,
 ) -> Result<Json<OrphansResponse>, (StatusCode, String)> {
-    id_validators::validate_project_name(&project)
-        .map_err(id_validators::rejection)?;
+    id_validators::validate_project_name(&project).map_err(id_validators::rejection)?;
 
     let project_path = {
         let projects = state.projects.read().unwrap();
@@ -65,17 +64,24 @@ async fn list_orphans(
     };
 
     let project_for_log = project.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        detect_orphans(&project, &project_path)
-    })
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Task join failed: {}", e)))?
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Detection failed: {}", e)))?;
+    let result = tokio::task::spawn_blocking(move || detect_orphans(&project, &project_path))
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Task join failed: {}", e),
+            )
+        })?
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Detection failed: {}", e),
+            )
+        })?;
 
     info!(
         "Listed {} orphan beads for project '{}'",
-        result.total_count,
-        project_for_log
+        result.total_count, project_for_log
     );
 
     Ok(Json(result))
@@ -91,14 +97,11 @@ async fn attach_orphan(
     State(state): State<crate::DaemonState>,
     Json(req): Json<AttachOrphanRequest>,
 ) -> Result<Json<AttachOrphanResponse>, (StatusCode, String)> {
-    id_validators::validate_project_name(&project)
-        .map_err(id_validators::rejection)?;
+    id_validators::validate_project_name(&project).map_err(id_validators::rejection)?;
 
-    id_validators::validate_bead_id(&req.bead_id)
-        .map_err(id_validators::rejection)?;
+    id_validators::validate_bead_id(&req.bead_id).map_err(id_validators::rejection)?;
 
-    id_validators::validate_stitch_id(&req.stitch_id)
-        .map_err(id_validators::rejection)?;
+    id_validators::validate_stitch_id(&req.stitch_id).map_err(id_validators::rejection)?;
 
     let project_path = {
         let projects = state.projects.read().unwrap();
@@ -129,7 +132,12 @@ async fn attach_orphan(
         }
     })
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Task failed: {}", e)))?
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Task failed: {}", e),
+        )
+    })?
     .unwrap_or(false);
 
     if !bead_exists {
@@ -153,7 +161,12 @@ async fn attach_orphan(
         attach_orphan_to_stitch(&stitch_id_for_closure, &bead_id_for_closure, &workspace)
     })
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Task failed: {}", e)))?
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Task failed: {}", e),
+        )
+    })?
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     info!(
@@ -161,10 +174,7 @@ async fn attach_orphan(
         bead_id, stitch_id, project_for_log
     );
 
-    let message = format!(
-        "Bead {} attached to Stitch {}",
-        bead_id, stitch_id
-    );
+    let message = format!("Bead {} attached to Stitch {}", bead_id, stitch_id);
 
     Ok(Json(AttachOrphanResponse {
         bead_id,

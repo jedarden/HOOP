@@ -76,7 +76,11 @@ impl FakeBr {
 }
 
 fn path_with_fake(fake: &FakeBr) -> String {
-    format!("{}:{}", fake.path_prefix(), std::env::var("PATH").unwrap_or_default())
+    format!(
+        "{}:{}",
+        fake.path_prefix(),
+        std::env::var("PATH").unwrap_or_default()
+    )
 }
 
 #[test]
@@ -93,7 +97,12 @@ fn test_invoke_br_create_calls_only_create_verb() {
         assert!(output.status.success(), "fake br should succeed");
 
         let verbs = fake.verbs();
-        assert_eq!(verbs.len(), 1, "expected exactly one invocation, got {:?}", verbs);
+        assert_eq!(
+            verbs.len(),
+            1,
+            "expected exactly one invocation, got {:?}",
+            verbs
+        );
         assert_eq!(verbs[0], "create");
     }
 
@@ -127,7 +136,11 @@ fn test_invoke_br_create_multiple_invocations_all_create() {
         let verbs = fake.verbs();
         assert_eq!(verbs.len(), 3, "expected 3 invocations, got {:?}", verbs);
         for verb in &verbs {
-            assert_eq!(verb, "create", "only 'create' verb should be called, got '{}'", verb);
+            assert_eq!(
+                verb, "create",
+                "only 'create' verb should be called, got '{}'",
+                verb
+            );
         }
     }
 
@@ -170,13 +183,25 @@ fn test_invoke_br_read_verbs_never_write() {
 fn test_forbidden_verbs_never_called() {
     let forbidden = hoop_mcp::br_verbs::FORBIDDEN_WRITE_VERBS;
     let expected_forbidden = ["close", "update", "release", "claim", "depend"];
-    assert_eq!(forbidden.len(), expected_forbidden.len(),
+    assert_eq!(
+        forbidden.len(),
+        expected_forbidden.len(),
         "FORBIDDEN_WRITE_VERBS has {} entries, expected {}",
-        forbidden.len(), expected_forbidden.len());
+        forbidden.len(),
+        expected_forbidden.len()
+    );
 
     for verb in &expected_forbidden {
-        assert!(forbidden.contains(verb), "'{}' missing from FORBIDDEN_WRITE_VERBS", verb);
-        assert!(hoop_mcp::br_verbs::is_forbidden_verb(verb), "'{}' not detected as forbidden", verb);
+        assert!(
+            forbidden.contains(verb),
+            "'{}' missing from FORBIDDEN_WRITE_VERBS",
+            verb
+        );
+        assert!(
+            hoop_mcp::br_verbs::is_forbidden_verb(verb),
+            "'{}' not detected as forbidden",
+            verb
+        );
     }
 
     assert!(!hoop_mcp::br_verbs::is_forbidden_verb("create"));
@@ -189,7 +214,11 @@ fn test_runtime_guard_rejects_forbidden_verbs() {
         let result = std::panic::catch_unwind(|| {
             hoop_mcp::br_verbs::assert_create_only(verb);
         });
-        assert!(result.is_err(), "assert_create_only('{}') should have panicked", verb);
+        assert!(
+            result.is_err(),
+            "assert_create_only('{}') should have panicked",
+            verb
+        );
     }
 }
 
@@ -207,8 +236,11 @@ fn test_subprocess_arg_validation_rejects_forbidden_commands() {
             cmd.arg(verb).arg("bd-test123");
             hoop_mcp::br_verbs::validate_br_subprocess_args(&cmd);
         });
-        assert!(result.is_err(),
-            "validate_br_subprocess_args should reject raw '{}' command", verb);
+        assert!(
+            result.is_err(),
+            "validate_br_subprocess_args should reject raw '{}' command",
+            verb
+        );
     }
 }
 
@@ -232,19 +264,32 @@ fn test_invoke_br_create_end_to_end_with_stub() {
             cmd.arg("--silent");
             cmd.env("PATH", &path_env);
             let output = cmd.output().expect("run fake br");
-            assert!(output.status.success(), "fake br should succeed for '{}'", title);
+            assert!(
+                output.status.success(),
+                "fake br should succeed for '{}'",
+                title
+            );
         }
 
         let verbs = fake.verbs();
         assert_eq!(verbs.len(), 3, "expected 3 invocations, got {:?}", verbs);
         for (i, verb) in verbs.iter().enumerate() {
-            assert_eq!(verb, "create",
-                "invocation {} should be 'create', got '{}'", i, verb);
+            assert_eq!(
+                verb, "create",
+                "invocation {} should be 'create', got '{}'",
+                i, verb
+            );
         }
 
         let invocations = fake.invocations();
-        assert!(invocations[0].contains("Fix auth race"), "first invocation should contain title");
-        assert!(invocations[1].contains("stitch:test-stitch"), "should contain stitch label");
+        assert!(
+            invocations[0].contains("Fix auth race"),
+            "first invocation should contain title"
+        );
+        assert!(
+            invocations[1].contains("stitch:test-stitch"),
+            "should contain stitch label"
+        );
     }
 }
 

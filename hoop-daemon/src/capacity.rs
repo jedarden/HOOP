@@ -172,10 +172,7 @@ impl ParsedTurn {
         let cache_write = self.cache_write_tokens as f64;
         let output = self.output_tokens as f64;
 
-        let weighted = input
-            + cache_read * 0.10
-            + cache_write * 0.25
-            + output * 5.0;
+        let weighted = input + cache_read * 0.10 + cache_write * 0.25 + output * 5.0;
 
         weighted as u64
     }
@@ -259,7 +256,9 @@ impl Default for CapacityMeterConfig {
             for entry in entries.flatten() {
                 let name = entry.file_name();
                 let name_str = name.to_string_lossy();
-                if name_str.starts_with(".claude-") && entry.path().join(".credentials.json").exists() {
+                if name_str.starts_with(".claude-")
+                    && entry.path().join(".credentials.json").exists()
+                {
                     account_dirs.push(entry.path());
                 }
             }
@@ -343,7 +342,8 @@ impl CapacityMeter {
         let (plan_type, rate_limit_tier) = Self::read_credentials(&paths.credential_dir)?;
 
         // Try cached API response first (exact numbers matching /status)
-        let cached = Self::read_cached_usage(&paths.cached_usage_path, self.config.cache_max_age_secs);
+        let cached =
+            Self::read_cached_usage(&paths.cached_usage_path, self.config.cache_max_age_secs);
 
         // Parse JSONL for token counts (used for burn rate and as fallback)
         let turns = Self::parse_all_jsonl(&paths.projects_dir)?;
@@ -435,8 +435,16 @@ impl CapacityMeter {
         // Determine utilization: prefer cached API, fall back to JSONL estimate
         let (util_5h, util_7d, resets_5h, resets_7d, model_windows, source) =
             if let Some(ref cached) = cached {
-                let u5 = cached.five_hour.as_ref().map(|w| w.utilization).unwrap_or(0.0);
-                let u7 = cached.seven_day.as_ref().map(|w| w.utilization).unwrap_or(0.0);
+                let u5 = cached
+                    .five_hour
+                    .as_ref()
+                    .map(|w| w.utilization)
+                    .unwrap_or(0.0);
+                let u7 = cached
+                    .seven_day
+                    .as_ref()
+                    .map(|w| w.utilization)
+                    .unwrap_or(0.0);
                 let r5 = parse_resets_at(cached.five_hour.as_ref());
                 let r7 = parse_resets_at(cached.seven_day.as_ref());
 
@@ -598,8 +606,12 @@ impl CapacityMeter {
         });
 
         Ok((
-            oauth.subscription_type.unwrap_or_else(|| "unknown".to_string()),
-            oauth.rate_limit_tier.unwrap_or_else(|| "unknown".to_string()),
+            oauth
+                .subscription_type
+                .unwrap_or_else(|| "unknown".to_string()),
+            oauth
+                .rate_limit_tier
+                .unwrap_or_else(|| "unknown".to_string()),
         ))
     }
 
@@ -690,10 +702,11 @@ impl CapacityMeter {
                 line_number,
             };
 
-            let entry: serde_json::Value = match crate::parse_jsonl_safe::parse_line(line.trim(), &source) {
-                crate::parse_jsonl_safe::ParseResult::Ok(v) => v,
-                _ => continue,
-            };
+            let entry: serde_json::Value =
+                match crate::parse_jsonl_safe::parse_line(line.trim(), &source) {
+                    crate::parse_jsonl_safe::ParseResult::Ok(v) => v,
+                    _ => continue,
+                };
 
             if entry.get("type").and_then(|v| v.as_str()) != Some("assistant") {
                 continue;
@@ -730,16 +743,29 @@ impl CapacityMeter {
                 None => continue,
             };
 
-            let input_tokens = usage.get("input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-            let output_tokens = usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-            let cache_read = usage.get("cache_read_input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
-            let cache_write = usage.get("cache_creation_input_tokens").and_then(|v| v.as_u64()).unwrap_or(0);
+            let input_tokens = usage
+                .get("input_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let output_tokens = usage
+                .get("output_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let cache_read = usage
+                .get("cache_read_input_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let cache_write = usage
+                .get("cache_creation_input_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
 
             if input_tokens == 0 && output_tokens == 0 && cache_read == 0 && cache_write == 0 {
                 continue;
             }
 
-            let session_id = entry.get("sessionId")
+            let session_id = entry
+                .get("sessionId")
                 .and_then(|v| v.as_str())
                 .filter(|s| !s.is_empty())
                 .map(|s| s.to_string());
@@ -834,11 +860,38 @@ mod tests {
         let jsonl_path = dir.path().join("test.jsonl");
 
         let mut f = fs::File::create(&jsonl_path).unwrap();
-        writeln!(f, "{}", make_assistant_jsonl("2026-04-22T20:00:00Z", 100, 50, 200, 10, "claude-sonnet-4-6")).unwrap();
+        writeln!(
+            f,
+            "{}",
+            make_assistant_jsonl(
+                "2026-04-22T20:00:00Z",
+                100,
+                50,
+                200,
+                10,
+                "claude-sonnet-4-6"
+            )
+        )
+        .unwrap();
         writeln!(f, r#"{{"type":"user","timestamp":"2026-04-22T20:00:01Z"}}"#).unwrap();
-        writeln!(f, "{}", make_assistant_jsonl("2026-04-22T20:01:00Z", 200, 100, 0, 0, "claude-opus-4-7")).unwrap();
-        writeln!(f, "{}", make_assistant_jsonl("2026-04-22T20:02:00Z", 0, 0, 0, 0, "<synthetic>")).unwrap();
-        writeln!(f, "{}", make_assistant_jsonl("2026-04-22T20:03:00Z", 0, 0, 0, 0, "claude-sonnet-4-6")).unwrap();
+        writeln!(
+            f,
+            "{}",
+            make_assistant_jsonl("2026-04-22T20:01:00Z", 200, 100, 0, 0, "claude-opus-4-7")
+        )
+        .unwrap();
+        writeln!(
+            f,
+            "{}",
+            make_assistant_jsonl("2026-04-22T20:02:00Z", 0, 0, 0, 0, "<synthetic>")
+        )
+        .unwrap();
+        writeln!(
+            f,
+            "{}",
+            make_assistant_jsonl("2026-04-22T20:03:00Z", 0, 0, 0, 0, "claude-sonnet-4-6")
+        )
+        .unwrap();
 
         let mut turns = Vec::new();
         CapacityMeter::parse_jsonl_file(&jsonl_path, &mut turns).unwrap();
@@ -868,7 +921,11 @@ mod tests {
         let weighted = turn.cost_equivalent_tokens();
         // Expected: 1000 + 5000*0.1 + 500*0.25 + 300*5.0
         // = 1000 + 500 + 125 + 1500 = 3125
-        assert!(weighted > 2500 && weighted < 3500, "cost equivalent = {}", weighted);
+        assert!(
+            weighted > 2500 && weighted < 3500,
+            "cost equivalent = {}",
+            weighted
+        );
     }
 
     #[test]
@@ -880,13 +937,28 @@ mod tests {
         let mut f = fs::File::create(&jsonl_path).unwrap();
 
         let ts_3h = (now - Duration::hours(3)).to_rfc3339();
-        writeln!(f, "{}", make_assistant_jsonl(&ts_3h, 1000, 100, 0, 0, "claude-sonnet-4-6")).unwrap();
+        writeln!(
+            f,
+            "{}",
+            make_assistant_jsonl(&ts_3h, 1000, 100, 0, 0, "claude-sonnet-4-6")
+        )
+        .unwrap();
 
         let ts_6h = (now - Duration::hours(6)).to_rfc3339();
-        writeln!(f, "{}", make_assistant_jsonl(&ts_6h, 2000, 200, 0, 0, "claude-sonnet-4-6")).unwrap();
+        writeln!(
+            f,
+            "{}",
+            make_assistant_jsonl(&ts_6h, 2000, 200, 0, 0, "claude-sonnet-4-6")
+        )
+        .unwrap();
 
         let ts_8d = (now - Duration::days(8)).to_rfc3339();
-        writeln!(f, "{}", make_assistant_jsonl(&ts_8d, 5000, 500, 0, 0, "claude-sonnet-4-6")).unwrap();
+        writeln!(
+            f,
+            "{}",
+            make_assistant_jsonl(&ts_8d, 5000, 500, 0, 0, "claude-sonnet-4-6")
+        )
+        .unwrap();
 
         let mut turns = Vec::new();
         CapacityMeter::parse_jsonl_file(&jsonl_path, &mut turns).unwrap();
@@ -897,8 +969,16 @@ mod tests {
         let in_5h: Vec<_> = turns.iter().filter(|t| t.ts > cutoff_5h).collect();
         let in_7d: Vec<_> = turns.iter().filter(|t| t.ts > cutoff_7d).collect();
 
-        assert_eq!(in_5h.len(), 1, "Only the 3h-ago entry should be in the 5h window");
-        assert_eq!(in_7d.len(), 2, "3h-ago and 6h-ago entries should be in the 7d window");
+        assert_eq!(
+            in_5h.len(),
+            1,
+            "Only the 3h-ago entry should be in the 5h window"
+        );
+        assert_eq!(
+            in_7d.len(),
+            2,
+            "3h-ago and 6h-ago entries should be in the 7d window"
+        );
     }
 
     #[test]
@@ -932,13 +1012,18 @@ mod tests {
         let jsonl_path = dir.path().join("test.jsonl");
 
         let mut f = fs::File::create(&jsonl_path).unwrap();
-        let entry = make_assistant_jsonl("2026-04-22T20:00:00Z", 100, 50, 0, 0, "claude-sonnet-4-6");
+        let entry =
+            make_assistant_jsonl("2026-04-22T20:00:00Z", 100, 50, 0, 0, "claude-sonnet-4-6");
         writeln!(f, "{}", entry).unwrap();
         writeln!(f, "{}", entry).unwrap();
 
         let mut turns = Vec::new();
         CapacityMeter::parse_jsonl_file(&jsonl_path, &mut turns).unwrap();
-        assert_eq!(turns.len(), 1, "Duplicate message IDs should be deduplicated");
+        assert_eq!(
+            turns.len(),
+            1,
+            "Duplicate message IDs should be deduplicated"
+        );
     }
 
     #[test]
@@ -1019,7 +1104,12 @@ mod tests {
         let now = Utc::now();
         let ts = (now - Duration::hours(1)).to_rfc3339();
         let mut f = fs::File::create(projects_dir.join("test.jsonl")).unwrap();
-        writeln!(f, "{}", make_assistant_jsonl(&ts, 50000, 5000, 0, 0, "claude-sonnet-4-6")).unwrap();
+        writeln!(
+            f,
+            "{}",
+            make_assistant_jsonl(&ts, 50000, 5000, 0, 0, "claude-sonnet-4-6")
+        )
+        .unwrap();
 
         let config = CapacityMeterConfig {
             account_dirs: vec![claude_dir],
@@ -1034,8 +1124,14 @@ mod tests {
 
         let acct = &accounts[0];
         assert_eq!(acct.source, "jsonl_estimate");
-        assert!(acct.utilization_5h > 0.0, "Should have nonzero 5h utilization");
-        assert!(acct.utilization_7d > 0.0, "Should have nonzero 7d utilization");
+        assert!(
+            acct.utilization_5h > 0.0,
+            "Should have nonzero 5h utilization"
+        );
+        assert!(
+            acct.utilization_7d > 0.0,
+            "Should have nonzero 7d utilization"
+        );
         assert_eq!(acct.turns_5h, 1);
         assert_eq!(acct.turns_7d, 1);
     }
@@ -1058,7 +1154,12 @@ mod tests {
         let ts1 = (now - Duration::hours(1)).to_rfc3339();
         let mut f1 = fs::File::create(projects1.join("account1.jsonl")).unwrap();
         // Heavy usage: 100K input, 20K output
-        writeln!(f1, "{}", make_assistant_jsonl(&ts1, 100000, 20000, 0, 0, "claude-sonnet-4-6")).unwrap();
+        writeln!(
+            f1,
+            "{}",
+            make_assistant_jsonl(&ts1, 100000, 20000, 0, 0, "claude-sonnet-4-6")
+        )
+        .unwrap();
 
         // Account 2: ~/.claude-work with Max 10x plan
         let claude2 = dir.path().join(".claude-work");
@@ -1073,7 +1174,12 @@ mod tests {
         let ts2 = (now - Duration::hours(2)).to_rfc3339();
         let mut f2 = fs::File::create(projects2.join("account2.jsonl")).unwrap();
         // Light usage: 10K input, 1K output
-        writeln!(f2, "{}", make_assistant_jsonl(&ts2, 10000, 1000, 0, 0, "claude-sonnet-4-6")).unwrap();
+        writeln!(
+            f2,
+            "{}",
+            make_assistant_jsonl(&ts2, 10000, 1000, 0, 0, "claude-sonnet-4-6")
+        )
+        .unwrap();
 
         let config = CapacityMeterConfig {
             account_dirs: vec![claude1, claude2],
@@ -1087,15 +1193,24 @@ mod tests {
         assert_eq!(accounts.len(), 2, "Should have two accounts");
 
         // Find each account
-        let acct1 = accounts.iter().find(|a| a.account_id == "claude-default").expect("account 1");
-        let acct2 = accounts.iter().find(|a| a.account_id == ".claude-work").expect("account 2");
+        let acct1 = accounts
+            .iter()
+            .find(|a| a.account_id == "claude-default")
+            .expect("account 1");
+        let acct2 = accounts
+            .iter()
+            .find(|a| a.account_id == ".claude-work")
+            .expect("account 2");
 
         // Both should use JSONL fallback (no cached usage)
         assert_eq!(acct1.source, "jsonl_estimate");
         assert_eq!(acct2.source, "jsonl_estimate");
 
         // Account 1 has more usage than account 2
-        assert!(acct1.tokens_5h > acct2.tokens_5h, "Account 1 should have more 5h tokens");
+        assert!(
+            acct1.tokens_5h > acct2.tokens_5h,
+            "Account 1 should have more 5h tokens"
+        );
 
         // Each account should have independent token counts
         // Account 1: 100000 + 20000*5 = 200000 weighted tokens
@@ -1132,7 +1247,10 @@ mod tests {
         let paths = config.resolve_account_paths(&home.join(".claude-work"));
 
         assert_eq!(paths.credential_dir, home.join(".claude-work"));
-        assert_eq!(paths.projects_dir, home.join(".claude-work").join("projects"));
+        assert_eq!(
+            paths.projects_dir,
+            home.join(".claude-work").join("projects")
+        );
         assert_eq!(
             paths.cached_usage_path,
             home.join(".cache")
@@ -1150,22 +1268,41 @@ mod tests {
 
         // Exactly 5h ago — should be OUTSIDE the window (> not >=)
         let ts_5h = (now - Duration::hours(5)).to_rfc3339();
-        writeln!(f, "{}", make_assistant_jsonl(&ts_5h, 1000, 100, 0, 0, "claude-sonnet-4-6")).unwrap();
+        writeln!(
+            f,
+            "{}",
+            make_assistant_jsonl(&ts_5h, 1000, 100, 0, 0, "claude-sonnet-4-6")
+        )
+        .unwrap();
 
         // Just inside 5h window
         let ts_4h59 = (now - Duration::hours(4) - Duration::minutes(59)).to_rfc3339();
-        writeln!(f, "{}", make_assistant_jsonl(&ts_4h59, 1000, 100, 0, 0, "claude-sonnet-4-6")).unwrap();
+        writeln!(
+            f,
+            "{}",
+            make_assistant_jsonl(&ts_4h59, 1000, 100, 0, 0, "claude-sonnet-4-6")
+        )
+        .unwrap();
 
         // Well inside
         let ts_1h = (now - Duration::hours(1)).to_rfc3339();
-        writeln!(f, "{}", make_assistant_jsonl(&ts_1h, 1000, 100, 0, 0, "claude-sonnet-4-6")).unwrap();
+        writeln!(
+            f,
+            "{}",
+            make_assistant_jsonl(&ts_1h, 1000, 100, 0, 0, "claude-sonnet-4-6")
+        )
+        .unwrap();
 
         let turns = CapacityMeter::parse_all_jsonl(dir.path()).unwrap();
         let cutoff_5h = now - Duration::hours(5);
         let in_5h: Vec<_> = turns.iter().filter(|t| t.ts > cutoff_5h).collect();
 
         // Only 4h59 and 1h entries should be in window
-        assert_eq!(in_5h.len(), 2, "Exactly 5h-ago should be excluded, 4h59 and 1h included");
+        assert_eq!(
+            in_5h.len(),
+            2,
+            "Exactly 5h-ago should be excluded, 4h59 and 1h included"
+        );
     }
 
     #[test]
@@ -1177,17 +1314,31 @@ mod tests {
 
         // Exactly 7d ago — should be OUTSIDE
         let ts_7d = (now - Duration::days(7)).to_rfc3339();
-        writeln!(f, "{}", make_assistant_jsonl(&ts_7d, 1000, 100, 0, 0, "claude-sonnet-4-6")).unwrap();
+        writeln!(
+            f,
+            "{}",
+            make_assistant_jsonl(&ts_7d, 1000, 100, 0, 0, "claude-sonnet-4-6")
+        )
+        .unwrap();
 
         // Just inside 7d window
         let ts_6d23h = (now - Duration::days(6) - Duration::hours(23)).to_rfc3339();
-        writeln!(f, "{}", make_assistant_jsonl(&ts_6d23h, 1000, 100, 0, 0, "claude-sonnet-4-6")).unwrap();
+        writeln!(
+            f,
+            "{}",
+            make_assistant_jsonl(&ts_6d23h, 1000, 100, 0, 0, "claude-sonnet-4-6")
+        )
+        .unwrap();
 
         let turns = CapacityMeter::parse_all_jsonl(dir.path()).unwrap();
         let cutoff_7d = now - Duration::days(7);
         let in_7d: Vec<_> = turns.iter().filter(|t| t.ts > cutoff_7d).collect();
 
-        assert_eq!(in_7d.len(), 1, "Exactly 7d-ago should be excluded, 6d23h included");
+        assert_eq!(
+            in_7d.len(),
+            1,
+            "Exactly 7d-ago should be excluded, 6d23h included"
+        );
     }
 
     #[test]
@@ -1223,7 +1374,12 @@ mod tests {
         for i in 0..3 {
             let ts = (now - Duration::minutes(10 * (i + 1))).to_rfc3339();
             // input=800, output=40 → weighted = 800 + 40*5 = 1000
-            writeln!(f, "{}", make_assistant_jsonl(&ts, 800, 40, 0, 0, "claude-sonnet-4-6")).unwrap();
+            writeln!(
+                f,
+                "{}",
+                make_assistant_jsonl(&ts, 800, 40, 0, 0, "claude-sonnet-4-6")
+            )
+            .unwrap();
         }
 
         let config = CapacityMeterConfig {
@@ -1244,7 +1400,10 @@ mod tests {
         // With calibrated formula: remaining_5h = tokens_5h * 60 / 40
         // ETA = remaining_5h / burn_rate_per_min
         // burn_rate > 0 so forecast should be Some
-        assert!(acct.forecast_full_5h_min.is_some(), "Should have a 5h token forecast");
+        assert!(
+            acct.forecast_full_5h_min.is_some(),
+            "Should have a 5h token forecast"
+        );
         let eta_5h = acct.forecast_full_5h_min.unwrap();
         assert!(eta_5h > 0.0, "ETA should be positive: {}", eta_5h);
 
@@ -1257,7 +1416,9 @@ mod tests {
             let expected_eta = expected_remaining / acct.burn_rate_per_min;
             assert!(
                 (eta_5h - expected_eta).abs() < 0.1,
-                "ETA mismatch: got {}, expected {} (calibrated formula)", eta_5h, expected_eta
+                "ETA mismatch: got {}, expected {} (calibrated formula)",
+                eta_5h,
+                expected_eta
             );
         }
     }
@@ -1291,7 +1452,12 @@ mod tests {
         let ts = (now - Duration::hours(1)).to_rfc3339();
         let mut f = fs::File::create(projects_dir.join("test.jsonl")).unwrap();
         // This would give very different utilization if used, but cached API takes priority
-        writeln!(f, "{}", make_assistant_jsonl(&ts, 500000, 50000, 0, 0, "claude-sonnet-4-6")).unwrap();
+        writeln!(
+            f,
+            "{}",
+            make_assistant_jsonl(&ts, 500000, 50000, 0, 0, "claude-sonnet-4-6")
+        )
+        .unwrap();
 
         let config = CapacityMeterConfig {
             account_dirs: vec![claude_dir],
@@ -1347,7 +1513,12 @@ mod tests {
         let now = Utc::now();
         let ts = (now - Duration::hours(1)).to_rfc3339();
         let mut f = fs::File::create(projects2.join("test.jsonl")).unwrap();
-        writeln!(f, "{}", make_assistant_jsonl(&ts, 50000, 5000, 0, 0, "claude-sonnet-4-6")).unwrap();
+        writeln!(
+            f,
+            "{}",
+            make_assistant_jsonl(&ts, 50000, 5000, 0, 0, "claude-sonnet-4-6")
+        )
+        .unwrap();
 
         // Build config with custom cache paths for account 1
         let config = CapacityMeterConfig {
@@ -1361,8 +1532,14 @@ mod tests {
         let accounts = meter.compute();
         assert_eq!(accounts.len(), 2);
 
-        let _acct1 = accounts.iter().find(|a| a.account_id == "claude-default").unwrap();
-        let acct2 = accounts.iter().find(|a| a.account_id == ".claude-alt").unwrap();
+        let _acct1 = accounts
+            .iter()
+            .find(|a| a.account_id == "claude-default")
+            .unwrap();
+        let acct2 = accounts
+            .iter()
+            .find(|a| a.account_id == ".claude-alt")
+            .unwrap();
 
         // Account 1 has no cache at its resolved path (the cache is at our temp dir,
         // not the real ~/.cache), so it falls back to JSONL with no JSONL files.

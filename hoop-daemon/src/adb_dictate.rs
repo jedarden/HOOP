@@ -83,19 +83,23 @@ async fn adb_dictate(
     }
 
     let stitch_id = Uuid::new_v4().to_string();
-    let valid_stitch_id = crate::id_validators::ValidStitchId::parse(&stitch_id)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Generated invalid UUID: {}", e)))?;
+    let valid_stitch_id = crate::id_validators::ValidStitchId::parse(&stitch_id).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Generated invalid UUID: {}", e),
+        )
+    })?;
     let now = Utc::now();
     let audio_data = body.to_vec();
 
     // Store audio atomically
     let audio_path = crate::dictated_notes::store_audio(&valid_stitch_id, &filename, &audio_data)
         .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to store audio: {}", e),
-            )
-        })?;
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to store audio: {}", e),
+        )
+    })?;
 
     let title = format!("ADB note {}", now.format("%Y-%m-%d %H:%M"));
 
@@ -106,14 +110,13 @@ async fn adb_dictate(
     conn.pragma_update(None, "journal_mode", "WAL")
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("DB WAL: {}", e)))?;
 
-    crate::dictated_notes::insert_stitch(&conn, &valid_stitch_id, &project, &title, "adb").map_err(
-        |e| {
+    crate::dictated_notes::insert_stitch(&conn, &valid_stitch_id, &project, &title, "adb")
+        .map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Failed to create stitch: {}", e),
             )
-        },
-    )?;
+        })?;
 
     let note = crate::dictated_notes::DictatedNote {
         stitch_id: stitch_id.clone(),
@@ -122,6 +125,7 @@ async fn adb_dictate(
         audio_filename: filename,
         transcript: String::new(),
         transcript_words: vec![],
+        redacted_words: vec![],
         duration_secs: None,
         language: None,
         tags: vec!["adb".to_string()],
@@ -154,7 +158,11 @@ async fn adb_dictate(
         }
     }
 
-    tracing::info!("Created ADB dictated note {} in project {}", stitch_id, project);
+    tracing::info!(
+        "Created ADB dictated note {} in project {}",
+        stitch_id,
+        project
+    );
 
     Ok((
         StatusCode::CREATED,
@@ -254,7 +262,9 @@ async fn set_active_project(
 /// GET /api/ui/active-project
 ///
 /// Returns the currently active project (for debugging and UI sync).
-async fn get_active_project(State(state): State<crate::DaemonState>) -> Json<ActiveProjectResponse> {
+async fn get_active_project(
+    State(state): State<crate::DaemonState>,
+) -> Json<ActiveProjectResponse> {
     let project = state.active_project.read().unwrap().clone();
     Json(ActiveProjectResponse { project })
 }

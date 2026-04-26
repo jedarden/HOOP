@@ -74,7 +74,10 @@ async fn main() -> anyhow::Result<()> {
     println!("Performance budgets:");
     println!("  API latency: <{}ms", config.api_latency_budget_ms);
     println!("  WS fan-out lag: <{}ms", config.ws_fanout_lag_budget_ms);
-    println!("  Memory ceiling: <{}MB", config.memory_ceiling_bytes / 1024 / 1024);
+    println!(
+        "  Memory ceiling: <{}MB",
+        config.memory_ceiling_bytes / 1024 / 1024
+    );
     println!();
 
     // Run the load test

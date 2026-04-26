@@ -176,14 +176,21 @@ pub fn make_unsafe_pdf_filename(filename: &str) -> String {
 pub fn write_attachment_meta(dest: &Path, meta: &AttachmentMetadata) -> Result<()> {
     let meta_name = format!(
         "{}.meta.json",
-        dest.file_name().and_then(|n| n.to_str()).unwrap_or("attachment")
+        dest.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("attachment")
     );
-    let meta_path = dest.parent()
+    let meta_path = dest
+        .parent()
         .ok_or_else(|| anyhow::anyhow!("attachment path has no parent"))?
         .join(meta_name);
     let json = serde_json::to_string_pretty(meta)?;
-    std::fs::write(&meta_path, json)
-        .with_context(|| format!("failed to write attachment metadata: {}", meta_path.display()))?;
+    std::fs::write(&meta_path, json).with_context(|| {
+        format!(
+            "failed to write attachment metadata: {}",
+            meta_path.display()
+        )
+    })?;
     Ok(())
 }
 
@@ -201,10 +208,10 @@ pub struct SizeLimits {
 impl Default for SizeLimits {
     fn default() -> Self {
         Self {
-            image_bytes: 50 * 1024 * 1024,   //  50 MB
-            audio_bytes: 100 * 1024 * 1024,  // 100 MB
-            video_bytes: 500 * 1024 * 1024,  // 500 MB
-            pdf_bytes: 50 * 1024 * 1024,     //  50 MB
+            image_bytes: 50 * 1024 * 1024,  //  50 MB
+            audio_bytes: 100 * 1024 * 1024, // 100 MB
+            video_bytes: 500 * 1024 * 1024, // 500 MB
+            pdf_bytes: 50 * 1024 * 1024,    //  50 MB
         }
     }
 }
@@ -342,7 +349,10 @@ pub fn stitch_attachment_dir(stitch_id: &ValidStitchId) -> Result<PathBuf> {
         .context("failed to build path allowlist for stitch attachments")?;
 
     let home = dirs::home_dir().ok_or_else(|| anyhow::anyhow!("home directory not found"))?;
-    let dir = home.join(".hoop").join("attachments").join(stitch_id.as_str());
+    let dir = home
+        .join(".hoop")
+        .join("attachments")
+        .join(stitch_id.as_str());
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("failed to create stitch attachment dir: {}", dir.display()))?;
 
@@ -636,12 +646,8 @@ mod tests {
 
     #[test]
     fn stitch_id_valid() {
-        assert!(validate_stitch_id(
-            "550e8400-e29b-41d4-a716-446655440000"
-        ).is_ok());
-        assert!(validate_stitch_id(
-            "00000000-0000-0000-0000-000000000000"
-        ).is_ok());
+        assert!(validate_stitch_id("550e8400-e29b-41d4-a716-446655440000").is_ok());
+        assert!(validate_stitch_id("00000000-0000-0000-0000-000000000000").is_ok());
     }
 
     #[test]
@@ -650,13 +656,16 @@ mod tests {
         assert!(validate_stitch_id("not-a-uuid").is_err());
         assert!(validate_stitch_id(
             "550e8400-e29b-41d4-a716-44665544000g" // 'g' not hex
-        ).is_err());
+        )
+        .is_err());
         assert!(validate_stitch_id(
             "550e8400e29b41d4a716446655440000" // no dashes
-        ).is_err());
+        )
+        .is_err());
         assert!(validate_stitch_id(
             "550e8400-e29b-41d4-a716-4466554400" // too short
-        ).is_err());
+        )
+        .is_err());
     }
 
     #[test]
@@ -683,7 +692,10 @@ mod tests {
     #[test]
     fn magic_jpeg() {
         let jpeg = b"\xff\xd8\xff\xe0\x00\x10JFIF";
-        assert_eq!(AttachmentKind::from_magic(jpeg), Some(AttachmentKind::Image));
+        assert_eq!(
+            AttachmentKind::from_magic(jpeg),
+            Some(AttachmentKind::Image)
+        );
     }
 
     #[test]
@@ -871,11 +883,7 @@ mod tests {
         let tmps: Vec<_> = std::fs::read_dir(parent)
             .unwrap()
             .filter_map(|e| e.ok())
-            .filter(|e| {
-                e.file_name()
-                    .to_string_lossy()
-                    .contains(".tmp")
-            })
+            .filter(|e| e.file_name().to_string_lossy().contains(".tmp"))
             .collect();
         assert!(tmps.is_empty(), "stale tmp files left: {:?}", tmps);
     }
@@ -911,7 +919,10 @@ mod tests {
         // Windows PE (MZ header)
         let exe = b"\x4d\x5a\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
         assert!(sniff_mime(exe).is_some());
-        assert!(sniff_mime(exe).unwrap().contains("dosexec") || sniff_mime(exe).unwrap().contains("executable"));
+        assert!(
+            sniff_mime(exe).unwrap().contains("dosexec")
+                || sniff_mime(exe).unwrap().contains("executable")
+        );
     }
 
     #[test]
@@ -1044,8 +1055,14 @@ mod tests {
         // Neither the attachment nor the sidecar should exist
         let dir = ws.join(".beads").join("attachments").join("bead.1");
         if dir.exists() {
-            let entries: Vec<_> = std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).collect();
-            assert!(entries.is_empty(), "no files should be written on rejection");
+            let entries: Vec<_> = std::fs::read_dir(&dir)
+                .unwrap()
+                .filter_map(|e| e.ok())
+                .collect();
+            assert!(
+                entries.is_empty(),
+                "no files should be written on rejection"
+            );
         }
     }
 
@@ -1064,14 +1081,22 @@ mod tests {
         // The sanitized file should NOT contain script or alert
         let stored = std::fs::read_to_string(&dest).unwrap();
         assert!(!stored.contains("script"), "script tag should be stripped");
-        assert!(!stored.contains("alert"), "script content should be stripped");
-        assert!(stored.contains("rect"), "non-dangerous content should survive");
+        assert!(
+            !stored.contains("alert"),
+            "script content should be stripped"
+        );
+        assert!(
+            stored.contains("rect"),
+            "non-dangerous content should survive"
+        );
 
         // The sidecar metadata should record what was removed
         let meta_path = dest.parent().unwrap().join("diagram.svg.meta.json");
         let meta: AttachmentMetadata =
             serde_json::from_str(&std::fs::read_to_string(&meta_path).unwrap()).unwrap();
-        let rec = meta.svg_sanitize.expect("SVG sanitize record should be present");
+        let rec = meta
+            .svg_sanitize
+            .expect("SVG sanitize record should be present");
         assert!(rec.removed_elements.iter().any(|e| e == "script"));
         assert!(!rec.unsafe_filename.is_empty());
 
@@ -1079,7 +1104,10 @@ mod tests {
         let unsafe_path = dest.parent().unwrap().join(&rec.unsafe_filename);
         assert!(unsafe_path.exists(), "unsafe copy should be preserved");
         let unsafe_content = std::fs::read_to_string(&unsafe_path).unwrap();
-        assert!(unsafe_content.contains("script"), "unsafe copy should have original script");
+        assert!(
+            unsafe_content.contains("script"),
+            "unsafe copy should have original script"
+        );
     }
 
     // ── §13 Acceptance: mismatch (claimed PNG, actual EXE) rejected ────────────
@@ -1120,21 +1148,32 @@ mod tests {
         // The sanitized PDF should not contain JavaScript or alert
         let stored = std::fs::read(&dest).unwrap();
         let stored_str = String::from_utf8_lossy(&stored);
-        assert!(!stored_str.contains("/JavaScript"), "JS action should be neutralised");
+        assert!(
+            !stored_str.contains("/JavaScript"),
+            "JS action should be neutralised"
+        );
         assert!(!stored_str.contains("alert"), "JS code should be stripped");
 
         // Sidecar metadata should record the sanitization
         let meta_path = dest.parent().unwrap().join("doc.pdf.meta.json");
         let meta: AttachmentMetadata =
             serde_json::from_str(&std::fs::read_to_string(&meta_path).unwrap()).unwrap();
-        let rec = meta.pdf_sanitize.expect("PDF sanitize record should be present");
-        assert!(!rec.removed_threats.is_empty(), "should record removed threats");
+        let rec = meta
+            .pdf_sanitize
+            .expect("PDF sanitize record should be present");
+        assert!(
+            !rec.removed_threats.is_empty(),
+            "should record removed threats"
+        );
         assert!(!rec.unsafe_filename.is_empty());
 
         // The unsafe original should contain the original JS
         let unsafe_path = dest.parent().unwrap().join(&rec.unsafe_filename);
         assert!(unsafe_path.exists());
         let unsafe_content = std::fs::read_to_string(&unsafe_path).unwrap();
-        assert!(unsafe_content.contains("/JavaScript"), "unsafe copy should preserve JS");
+        assert!(
+            unsafe_content.contains("/JavaScript"),
+            "unsafe copy should preserve JS"
+        );
     }
 }

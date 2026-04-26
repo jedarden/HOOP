@@ -7,6 +7,7 @@
 mod new;
 mod projects;
 mod restore;
+mod script;
 
 use clap::Parser;
 use hoop_daemon::{audit, fleet, serve, Config as DaemonConfig};
@@ -104,6 +105,9 @@ enum Commands {
         #[arg(long)]
         confirm: bool,
     },
+    /// Manage and run scripts
+    #[command(subcommand)]
+    Script(script::ScriptCommands),
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -240,8 +244,12 @@ async fn main() -> anyhow::Result<()> {
             confirm,
         } => {
             if !confirm {
-                eprintln!("hoop migrate: --confirm is required to prevent accidental data migration.");
-                eprintln!("  Re-run with --confirm once you have verified you have a current backup.");
+                eprintln!(
+                    "hoop migrate: --confirm is required to prevent accidental data migration."
+                );
+                eprintln!(
+                    "  Re-run with --confirm once you have verified you have a current backup."
+                );
                 std::process::exit(1);
             }
             if !from_1 && !major_upgrade {
@@ -256,6 +264,12 @@ async fn main() -> anyhow::Result<()> {
             }
             println!("Migration complete. You can now start the daemon with `hoop serve`.");
         }
+        Commands::Script(cmd) => {
+            if let Err(e) = script::handle_script(cmd).await {
+                eprintln!("hoop script: {}", e);
+                std::process::exit(1);
+            }
+        }
     }
 
     Ok(())
@@ -266,7 +280,9 @@ fn handle_projects(cmd: ProjectsCommands) -> anyhow::Result<()> {
     match cmd {
         ProjectsCommands::Add { path } => {
             let entry = projects::add_project(&path)?;
-            let ws_path = entry.primary_path().unwrap_or_else(|| std::path::Path::new("?"));
+            let ws_path = entry
+                .primary_path()
+                .unwrap_or_else(|| std::path::Path::new("?"));
             println!("Added project '{}': {}", entry.name, ws_path.display());
         }
         ProjectsCommands::Scan { root, yes } => {
@@ -285,7 +301,9 @@ fn handle_projects(cmd: ProjectsCommands) -> anyhow::Result<()> {
                 } else {
                     println!("Registered projects:");
                     for proj in &projects {
-                        let ws_path = proj.primary_path().unwrap_or_else(|| std::path::Path::new("?"));
+                        let ws_path = proj
+                            .primary_path()
+                            .unwrap_or_else(|| std::path::Path::new("?"));
                         println!("  {} - {}", proj.name, ws_path.display());
                     }
                 }
@@ -357,34 +375,38 @@ fn handle_audit(cmd: AuditCommands) -> anyhow::Result<()> {
                 std::process::exit(1);
             }
         }
-        AuditCommands::Verify { json } => {
-            match fleet::verify_hash_chain() {
-                Ok(()) => {
-                    let final_hash = fleet::get_final_audit_hash()?;
-                    if json {
-                        println!("{}", serde_json::json!({
+        AuditCommands::Verify { json } => match fleet::verify_hash_chain() {
+            Ok(()) => {
+                let final_hash = fleet::get_final_audit_hash()?;
+                if json {
+                    println!(
+                        "{}",
+                        serde_json::json!({
                             "status": "ok",
                             "message": "Audit log hash chain is intact",
                             "final_hash": final_hash
-                        }));
-                    } else {
-                        println!("Audit log hash chain is intact");
-                        println!("Final hash: {}", final_hash);
-                    }
-                }
-                Err(e) => {
-                    if json {
-                        eprintln!("{}", serde_json::json!({
-                            "status": "error",
-                            "message": e.to_string()
-                        }));
-                    } else {
-                        eprintln!("Hash chain verification failed: {}", e);
-                    }
-                    std::process::exit(1);
+                        })
+                    );
+                } else {
+                    println!("Audit log hash chain is intact");
+                    println!("Final hash: {}", final_hash);
                 }
             }
-        }
+            Err(e) => {
+                if json {
+                    eprintln!(
+                        "{}",
+                        serde_json::json!({
+                            "status": "error",
+                            "message": e.to_string()
+                        })
+                    );
+                } else {
+                    eprintln!("Hash chain verification failed: {}", e);
+                }
+                std::process::exit(1);
+            }
+        },
     }
     Ok(())
 }
@@ -502,14 +524,18 @@ fn install_systemd() -> anyhow::Result<()> {
 
     // Get the hoop binary path
     let hoop_path = std::env::current_exe()?;
-    let hoop_path_str = hoop_path.to_str().ok_or_else(|| anyhow::anyhow!("Invalid hoop binary path"))?;
+    let hoop_path_str = hoop_path
+        .to_str()
+        .ok_or_else(|| anyhow::anyhow!("Invalid hoop binary path"))?;
 
     // Get the username
     let _username = std::env::var("USER").unwrap_or_else(|_| "user".to_string());
 
     // Get the home directory for environment variables
     let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    let home_dir_str = home_dir.to_str().ok_or_else(|| anyhow::anyhow!("Invalid home directory"))?;
+    let home_dir_str = home_dir
+        .to_str()
+        .ok_or_else(|| anyhow::anyhow!("Invalid home directory"))?;
 
     // Create the systemd unit file content
     let unit_content = format!(

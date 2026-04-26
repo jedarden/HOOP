@@ -10,8 +10,8 @@
 
 use std::path::PathBuf;
 
-use hoop_daemon::supervisor::{ProjectRuntimeState, ProjectSupervisor};
 use hoop_daemon::projects::ProjectsConfig;
+use hoop_daemon::supervisor::{ProjectRuntimeState, ProjectSupervisor};
 use hoop_schema::{ProjectsRegistry, ProjectsRegistryProjectsItem};
 
 /// Create a test project with workspace path (shorthand single-workspace variant)
@@ -100,12 +100,8 @@ async fn test_permanent_error_no_restart() {
     ));
 
     // Verify that transient errors are not considered permanent
-    assert!(!ProjectSupervisor::is_permanent_error(
-        "Connection refused"
-    ));
-    assert!(!ProjectSupervisor::is_permanent_error(
-        "Timeout"
-    ));
+    assert!(!ProjectSupervisor::is_permanent_error("Connection refused"));
+    assert!(!ProjectSupervisor::is_permanent_error("Timeout"));
     assert!(!ProjectSupervisor::is_permanent_error(
         "Panic: synthetic panic"
     ));
@@ -136,7 +132,10 @@ async fn test_exponential_backoff_calculation() {
 
     // Verify the cap at MAX_RESTART_DELAY_SECS
     let max_delay = BASE_RESTART_DELAY_SECS * 2_u64.pow(20);
-    assert_eq!(max_delay.min(MAX_RESTART_DELAY_SECS), MAX_RESTART_DELAY_SECS);
+    assert_eq!(
+        max_delay.min(MAX_RESTART_DELAY_SECS),
+        MAX_RESTART_DELAY_SECS
+    );
 }
 
 #[tokio::test]

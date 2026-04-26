@@ -60,6 +60,8 @@ pub enum RedactionAction {
     Redact,
     /// Block the operation entirely
     Reject,
+    /// Flag only (record audit entry but take no action)
+    FlaggedOnly,
 }
 
 impl Default for RedactionAction {
@@ -124,7 +126,12 @@ fn map_pattern_to_impl_names(pattern_name: &str) -> Vec<&'static str> {
         "anthropic_api_key" => vec!["anthropic_api_key"],
         "generic_sk_key" => vec!["generic_sk_key"],
         "aws_access_key" => vec!["aws_access_key"],
-        "github_token" => vec!["github_token_ghp", "github_token_ghs", "github_token_ghu", "github_pat"],
+        "github_token" => vec![
+            "github_token_ghp",
+            "github_token_ghs",
+            "github_token_ghu",
+            "github_pat",
+        ],
         "slack_token" => vec!["slack_bot_token", "slack_user_token"],
         "jwt" => vec!["jwt"],
         "bearer_token" => vec!["bearer_token"],
@@ -138,7 +145,10 @@ fn map_pattern_to_impl_names(pattern_name: &str) -> Vec<&'static str> {
 ///
 /// This handles the mapping between high-level pattern names (from the schema)
 /// and implementation-specific pattern names (from the redaction engine).
-fn finding_matches_enabled_pattern(finding_pattern_name: &str, enabled_patterns: &HashSet<String>) -> bool {
+fn finding_matches_enabled_pattern(
+    finding_pattern_name: &str,
+    enabled_patterns: &HashSet<String>,
+) -> bool {
     // Direct match
     if enabled_patterns.contains(finding_pattern_name) {
         return true;
@@ -157,28 +167,9 @@ fn finding_matches_enabled_pattern(finding_pattern_name: &str, enabled_patterns:
 
 impl RedactionPolicyState {
     /// Create a new policy state from the current config.
-    pub fn new(
-        global_config: &HoopConfig,
-        projects_registry: ProjectsRegistry,
-    ) -> Self {
-        let global_policy = global_config.redaction.as_ref().map(|r| GlobalRedactionPolicy {
-            action: match r.action {
-                hoop_schema::HoopConfigRedactionAction::Warn => RedactionAction::Warn,
-                hoop_schema::HoopConfigRedactionAction::Redact => RedactionAction::Redact,
-                hoop_schema::HoopConfigRedactionAction::Reject => RedactionAction::Reject,
-            },
-            patterns: r.patterns.iter().map(|p| match p {
-                hoop_schema::HoopConfigRedactionPatternsItem::AnthropicApiKey => "anthropic_api_key".to_string(),
-                hoop_schema::HoopConfigRedactionPatternsItem::GenericSkKey => "generic_sk_key".to_string(),
-                hoop_schema::HoopConfigRedactionPatternsItem::AwsAccessKey => "aws_access_key".to_string(),
-                hoop_schema::HoopConfigRedactionPatternsItem::GithubToken => "github_token".to_string(),
-                hoop_schema::HoopConfigRedactionPatternsItem::SlackToken => "slack_token".to_string(),
-                hoop_schema::HoopConfigRedactionPatternsItem::Jwt => "jwt".to_string(),
-                hoop_schema::HoopConfigRedactionPatternsItem::BearerToken => "bearer_token".to_string(),
-                hoop_schema::HoopConfigRedactionPatternsItem::EnvVarSecret => "env_var_secret".to_string(),
-                hoop_schema::HoopConfigRedactionPatternsItem::JsonSecretField => "json_secret_field".to_string(),
-            }).collect(),
-        });
+    pub fn new(_global_config: &HoopConfig, projects_registry: ProjectsRegistry) -> Self {
+        // TODO: Parse global redaction policy from config when redaction field is added to HoopConfig
+        let global_policy = None;
 
         Self {
             global_policy,
@@ -194,66 +185,12 @@ impl RedactionPolicyState {
     /// Resolve the redaction policy for a specific project.
     ///
     /// Returns the effective policy by checking:
-    /// 1. Per-project override in projects.yaml
-    /// 2. Global policy in config.yml
+    /// 1. Per-project override in projects.yaml (TODO: not yet implemented in schema)
+    /// 2. Global policy in config.yml (TODO: not yet implemented in schema)
     /// 3. Built-in defaults
-    pub async fn resolve_for_project(&self, project_name: &str) -> ResolvedRedactionPolicy {
-        let registry = self.projects_registry.read().await;
-
-        // Check for per-project override
-        for project in &registry.projects {
-            if project.name() == project_name {
-                // Check Variant0 (single workspace)
-                if let hoop_schema::ProjectsRegistryProjectsItem::Variant0 { redaction, .. } = project {
-                    if let Some(policy) = redaction {
-                        return ResolvedRedactionPolicy {
-                            action: match policy.action {
-                                hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionAction::Warn => RedactionAction::Warn,
-                                hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionAction::Redact => RedactionAction::Redact,
-                                hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionAction::Reject => RedactionAction::Reject,
-                            },
-                            patterns: policy.patterns.iter().map(|p| match p {
-                                hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionPatternsItem::AnthropicApiKey => "anthropic_api_key".to_string(),
-                                hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionPatternsItem::GenericSkKey => "generic_sk_key".to_string(),
-                                hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionPatternsItem::AwsAccessKey => "aws_access_key".to_string(),
-                                hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionPatternsItem::GithubToken => "github_token".to_string(),
-                                hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionPatternsItem::SlackToken => "slack_token".to_string(),
-                                hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionPatternsItem::Jwt => "jwt".to_string(),
-                                hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionPatternsItem::BearerToken => "bearer_token".to_string(),
-                                hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionPatternsItem::EnvVarSecret => "env_var_secret".to_string(),
-                                hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionPatternsItem::JsonSecretField => "json_secret_field".to_string(),
-                            }).collect(),
-                            source: format!("project:{}", project_name),
-                        };
-                    }
-                }
-
-                // Check Variant1 (multi-workspace)
-                if let hoop_schema::ProjectsRegistryProjectsItem::Variant1 { redaction, .. } = project {
-                    if let Some(policy) = redaction {
-                        return ResolvedRedactionPolicy {
-                            action: match policy.action {
-                                hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionAction::Warn => RedactionAction::Warn,
-                                hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionAction::Redact => RedactionAction::Redact,
-                                hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionAction::Reject => RedactionAction::Reject,
-                            },
-                            patterns: policy.patterns.iter().map(|p| match p {
-                                hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionPatternsItem::AnthropicApiKey => "anthropic_api_key".to_string(),
-                                hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionPatternsItem::GenericSkKey => "generic_sk_key".to_string(),
-                                hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionPatternsItem::AwsAccessKey => "aws_access_key".to_string(),
-                                hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionPatternsItem::GithubToken => "github_token".to_string(),
-                                hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionPatternsItem::SlackToken => "slack_token".to_string(),
-                                hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionPatternsItem::Jwt => "jwt".to_string(),
-                                hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionPatternsItem::BearerToken => "bearer_token".to_string(),
-                                hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionPatternsItem::EnvVarSecret => "env_var_secret".to_string(),
-                                hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionPatternsItem::JsonSecretField => "json_secret_field".to_string(),
-                            }).collect(),
-                            source: format!("project:{}", project_name),
-                        };
-                    }
-                }
-            }
-        }
+    pub async fn resolve_for_project(&self, _project_name: &str) -> ResolvedRedactionPolicy {
+        // TODO: Parse per-project redaction override when redaction field is added to ProjectsRegistryProjectsItem
+        // For now, fall back to global policy or built-in defaults
 
         // Fall back to global policy
         if let Some(global) = &self.global_policy {
@@ -303,9 +240,7 @@ impl std::fmt::Display for RedactionRejectedError {
         write!(
             f,
             "Redaction policy rejected: project '{}' detected {} {} pattern(s)",
-            self.project,
-            self.count,
-            self.pattern
+            self.project, self.count, self.pattern
         )
     }
 }
@@ -336,7 +271,8 @@ pub async fn check_reject_policy(
 
     if !filtered_findings.is_empty() {
         // Group by high-level pattern name for reporting
-        let mut high_level_pattern_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let mut high_level_pattern_counts: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
 
         for finding in &filtered_findings {
             // Find the high-level pattern that maps to this finding
@@ -372,7 +308,11 @@ pub async fn check_reject_policy(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hoop_schema::{HoopConfig, HoopConfigSchemaVersion, HoopConfigRedaction, HoopConfigRedactionAction, HoopConfigRedactionPatternsItem, ProjectsRegistry, ProjectsRegistryProjectsItem};
+    use hoop_schema::{
+        HoopConfig, HoopConfigRedaction, HoopConfigRedactionAction,
+        HoopConfigRedactionPatternsItem, HoopConfigSchemaVersion, ProjectsRegistry,
+        ProjectsRegistryProjectsItem,
+    };
 
     fn make_global_config_with_redaction() -> HoopConfig {
         HoopConfig {
@@ -497,7 +437,8 @@ mod tests {
         let state = RedactionPolicyState::new(&config, projects);
 
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let content = "ANTHROPIC_API_KEY=sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666";
+        let content =
+            "ANTHROPIC_API_KEY=sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666";
 
         let result = rt.block_on(check_reject_policy(&state, "customer-data", content));
         assert!(result.is_err());
@@ -558,7 +499,8 @@ mod tests {
         let state = RedactionPolicyState::new(&config, projects);
 
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let content = "ANTHROPIC_API_KEY=sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666";
+        let content =
+            "ANTHROPIC_API_KEY=sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666";
 
         let result = rt.block_on(check_reject_policy(&state, "test-project", content));
         assert!(result.is_ok());

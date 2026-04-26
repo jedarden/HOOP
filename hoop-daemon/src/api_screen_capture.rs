@@ -5,18 +5,15 @@
 //! GET /api/screen-capture/:stitch_id/video       — range-aware video stream
 
 use crate::screen_capture;
-use axum::{
-    extract::Path,
-    http::StatusCode,
-    response::IntoResponse,
-    routing::get,
-    Json, Router,
-};
+use axum::{extract::Path, http::StatusCode, response::IntoResponse, routing::get, Json, Router};
 use tower::ServiceExt;
 
 pub fn router() -> Router<crate::DaemonState> {
     Router::new()
-        .route("/api/p/{project}/screen-captures", get(list_screen_captures))
+        .route(
+            "/api/p/{project}/screen-captures",
+            get(list_screen_captures),
+        )
         .route("/api/screen-capture/{stitch_id}", get(get_metadata))
         .route("/api/screen-capture/{stitch_id}/video", get(get_video))
 }

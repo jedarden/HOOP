@@ -382,7 +382,9 @@ mod tests {
         let matches = lib.match_draft("Large codegen refactor", None, &[]);
 
         assert!(!matches.is_empty());
-        let codegen_match = matches.iter().find(|m| m.pattern.id == "large_codegen_stack_overflow");
+        let codegen_match = matches
+            .iter()
+            .find(|m| m.pattern.id == "large_codegen_stack_overflow");
         assert!(codegen_match.is_some());
     }
 
@@ -391,7 +393,9 @@ mod tests {
         let lib = FixLineageLibrary::from_patterns(default_risk_patterns());
         let matches = lib.match_draft("Add feature", None, &["feature".to_string()]);
 
-        let test_match = matches.iter().find(|m| m.pattern.id == "missing_test_coverage");
+        let test_match = matches
+            .iter()
+            .find(|m| m.pattern.id == "missing_test_coverage");
         assert!(test_match.is_some());
     }
 
@@ -404,7 +408,10 @@ mod tests {
             &["codegen".to_string()],
         );
 
-        let codegen_match = matches.iter().find(|m| m.pattern.id == "large_codegen_stack_overflow").unwrap();
+        let codegen_match = matches
+            .iter()
+            .find(|m| m.pattern.id == "large_codegen_stack_overflow")
+            .unwrap();
         // Should have high confidence due to multiple keyword matches
         assert!(codegen_match.confidence > 0.5);
     }
@@ -445,8 +452,12 @@ mod tests {
         assert!(!patterns.is_empty());
 
         // Check for expected patterns
-        assert!(patterns.iter().any(|p| p.id == "large_codegen_stack_overflow"));
+        assert!(patterns
+            .iter()
+            .any(|p| p.id == "large_codegen_stack_overflow"));
         assert!(patterns.iter().any(|p| p.id == "missing_test_coverage"));
-        assert!(patterns.iter().any(|p| p.id == "race_condition_concurrency"));
+        assert!(patterns
+            .iter()
+            .any(|p| p.id == "race_condition_concurrency"));
     }
 }

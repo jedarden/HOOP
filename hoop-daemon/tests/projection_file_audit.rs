@@ -38,11 +38,7 @@ use std::path::{Path, PathBuf};
 ///                        fleet_state.yaml, …).  Fleet state is a projection of
 ///                        bead events; writing it to disk produces the class of
 ///                        bug documented in §A4.
-const FORBIDDEN_PATTERNS: &[&str] = &[
-    r"_status\.json",
-    r"live-[^/\\]*\.json",
-    r"fleet_state\.",
-];
+const FORBIDDEN_PATTERNS: &[&str] = &[r"_status\.json", r"live-[^/\\]*\.json", r"fleet_state\."];
 
 // ── Allowlist ────────────────────────────────────────────────────────────────
 
@@ -116,10 +112,9 @@ fn scan_content_with_path(
                 continue;
             }
             let allowed = allowlist.iter().any(|entry| {
-                let file_ok = entry.file_contains.is_empty()
-                    || path_str.contains(entry.file_contains);
-                let line_ok = entry.line_contains.is_empty()
-                    || line.contains(entry.line_contains);
+                let file_ok =
+                    entry.file_contains.is_empty() || path_str.contains(entry.file_contains);
+                let line_ok = entry.line_contains.is_empty() || line.contains(entry.line_contains);
                 file_ok && line_ok
             });
             if !allowed {
@@ -176,8 +171,7 @@ fn production_source_paths(workspace_root: &Path) -> Vec<PathBuf> {
 fn workspace_root() -> PathBuf {
     // CARGO_MANIFEST_DIR points to hoop-daemon/ (the package running this test).
     // The workspace root is one level up.
-    let manifest_dir =
-        std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
     Path::new(&manifest_dir)
         .parent()
         .expect("workspace root is the parent of hoop-daemon/")
@@ -215,8 +209,7 @@ fn no_projection_file_writes_in_workspace() {
             };
             // Use the path relative to workspace root for cleaner diagnostics.
             let relative = file.strip_prefix(&workspace).unwrap_or(&file);
-            let violations =
-                scan_content_with_path(relative, &content, &patterns, ALLOWLIST);
+            let violations = scan_content_with_path(relative, &content, &patterns, ALLOWLIST);
             all_violations.extend(violations);
         }
     }
@@ -275,7 +268,9 @@ fn scanner_detects_worker_state_json_write() {
         "scanner failed to detect worker_state.json write — scanner is broken"
     );
     assert!(
-        violations.iter().any(|v| v.line.contains("worker_state.json")),
+        violations
+            .iter()
+            .any(|v| v.line.contains("worker_state.json")),
         "violation must be on the worker_state.json line, got: {:?}",
         violations.iter().map(|v| v.line.trim()).collect::<Vec<_>>()
     );
@@ -288,7 +283,10 @@ fn scanner_detects_fleet_status_json_write() {
     let path = Path::new("synthetic_fleet_status.rs");
     let code = r#"std::fs::write("fleet_status.json", &encoded).unwrap();"#;
     let violations = scan_content_with_path(path, code, &patterns, &[]);
-    assert!(!violations.is_empty(), "fleet_status.json write must be detected");
+    assert!(
+        !violations.is_empty(),
+        "fleet_status.json write must be detected"
+    );
 }
 
 /// `live-*.json` writes are forbidden — this covers `live-workers.json`.
@@ -298,7 +296,10 @@ fn scanner_detects_live_dash_json_write() {
     let path = Path::new("synthetic_live.rs");
     let code = r#"std::fs::write("live-workers.json", &bytes).unwrap();"#;
     let violations = scan_content_with_path(path, code, &patterns, &[]);
-    assert!(!violations.is_empty(), "live-workers.json write must be detected");
+    assert!(
+        !violations.is_empty(),
+        "live-workers.json write must be detected"
+    );
 }
 
 /// `fleet_state.*` writes are forbidden — this covers `fleet_state.json`.
@@ -308,7 +309,10 @@ fn scanner_detects_fleet_state_write() {
     let path = Path::new("synthetic_fleet_state.rs");
     let code = r#"std::fs::File::create("fleet_state.json").unwrap();"#;
     let violations = scan_content_with_path(path, code, &patterns, &[]);
-    assert!(!violations.is_empty(), "fleet_state.json create must be detected");
+    assert!(
+        !violations.is_empty(),
+        "fleet_state.json create must be detected"
+    );
 }
 
 /// `fleet_state.yaml` is also forbidden — pattern is extension-agnostic.
@@ -318,7 +322,10 @@ fn scanner_detects_fleet_state_yaml_write() {
     let path = Path::new("synthetic_fleet_state_yaml.rs");
     let code = r#"std::fs::write("fleet_state.yaml", &serialized).unwrap();"#;
     let violations = scan_content_with_path(path, code, &patterns, &[]);
-    assert!(!violations.is_empty(), "fleet_state.yaml write must be detected");
+    assert!(
+        !violations.is_empty(),
+        "fleet_state.yaml write must be detected"
+    );
 }
 
 /// `live-fleet.json` — a variant of the live- pattern.
@@ -328,7 +335,10 @@ fn scanner_detects_live_fleet_json() {
     let path = Path::new("synthetic_live_fleet.rs");
     let code = r#"std::fs::write("live-fleet.json", data).unwrap();"#;
     let violations = scan_content_with_path(path, code, &patterns, &[]);
-    assert!(!violations.is_empty(), "live-fleet.json write must be detected");
+    assert!(
+        !violations.is_empty(),
+        "live-fleet.json write must be detected"
+    );
 }
 
 // ── Negative tests: innocent filenames must not trigger ──────────────────────

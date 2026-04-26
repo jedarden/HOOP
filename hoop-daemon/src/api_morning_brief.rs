@@ -87,9 +87,7 @@ struct StatusResponse {
 }
 
 /// GET /api/agent/morning-brief/status
-async fn get_status(
-    State(state): State<DaemonState>,
-) -> Json<StatusResponse> {
+async fn get_status(State(state): State<DaemonState>) -> Json<StatusResponse> {
     let running = match &state.morning_brief_runner {
         Some(runner) => runner.is_running().await,
         None => false,
