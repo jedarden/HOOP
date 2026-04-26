@@ -66,6 +66,42 @@
       },
       "description": "Optional tags for categorization"
     },
+    "transcription_status": {
+      "type": "string",
+      "enum": ["Pending", "Completed", "Failed"],
+      "description": "Whether transcription is pending, completed, or failed"
+    },
+    "redacted_words": {
+      "type": "array",
+      "description": "Words that have been redacted from the transcript (with timestamps for audio muting)",
+      "items": {
+        "type": "object",
+        "properties": {
+          "word_index": {
+            "type": "number",
+            "description": "Index into the original transcript_words array"
+          },
+          "original_word": {
+            "type": "string",
+            "description": "The original word that was redacted (for audit trail)"
+          },
+          "start": {
+            "type": "number",
+            "description": "Start timestamp of the word (for audio muting)"
+          },
+          "end": {
+            "type": "number",
+            "description": "End timestamp of the word (for audio muting)"
+          },
+          "redacted_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the redaction was performed"
+          }
+        },
+        "required": ["word_index", "original_word", "start", "end", "redacted_at"]
+      }
+    },
     "schema_version": {
       "type": "string",
       "pattern": "^\\d+\\.\\d+\\.\\d+$"

@@ -526,7 +526,8 @@ export interface WebSocketEvent {
     | "conversations_snapshot"
     | "conversation_update"
     | "streaming_content"
-    | "config_status";
+    | "config_status"
+    | "bead_created_by_hoop";
   worker?: {
     /**
      * Worker name (NATO phonetic: alpha, bravo, etc.)
@@ -738,6 +739,29 @@ export interface WebSocketEvent {
       col: number;
       [k: string]: unknown;
     };
+    [k: string]: unknown;
+  };
+  bead_created_by_hoop?: {
+    /**
+     * Project name where the bead was created
+     */
+    project: string;
+    /**
+     * ID of the created bead
+     */
+    bead_id: string;
+    /**
+     * Identity that created the bead (e.g., 'tailscale:user@example.com' or 'os:username')
+     */
+    actor: string;
+    /**
+     * Source of the bead creation (e.g., 'form', 'chat', 'bulk', 'template:<name>')
+     */
+    source: string;
+    /**
+     * ISO 8601 timestamp of when the bead was created
+     */
+    ts: string;
     [k: string]: unknown;
   };
   [k: string]: unknown;
@@ -1080,6 +1104,26 @@ export interface AgentConfig {
    * Optional cost cap per session
    */
   cost_cap_per_session_usd?: number;
+  /**
+   * Idle timeout: no events, any type, for N seconds (default: 180)
+   */
+  idle_timeout_secs?: number;
+  /**
+   * Hard ceiling on total turn duration regardless of activity (default: 3600)
+   */
+  max_runtime_secs?: number;
+  /**
+   * Extended idle tolerance once real content appeared (default: 600)
+   */
+  content_seen_grace_secs?: number;
+  /**
+   * No heartbeat state transition (Live<->Hung) for N seconds (default: 300 = 5 minutes)
+   */
+  heartbeat_transition_threshold_secs?: number;
+  /**
+   * Maximum retry attempts on the same bead before alerting (default: 3)
+   */
+  retry_threshold?: number;
 }
 
 
@@ -1241,9 +1285,18 @@ export interface CostBucket {
 
 
 /**
- * HOOP daemon configuration from config.yml
+ * HOOP daemon configuration from config.yml. See §17.4 for hot-reload semantics.
  */
 export interface HoopConfig {
+  /**
+   * Server configuration. Keys marked restart_required require daemon restart to take effect (§17.4).
+   */
+  server?: {
+    /**
+     * Socket address for the HTTP server (default: 127.0.0.1:3000). REQUIRES RESTART - socket binding is established at daemon startup (§17.4).
+     */
+    bind_addr?: string;
+  };
   /**
    * Schema version for compatibility tracking (SemVer)
    */
@@ -1265,6 +1318,26 @@ export interface HoopConfig {
      * Optional cost cap per session
      */
     cost_cap_per_session_usd?: number;
+    /**
+     * Idle timeout: no events, any type, for N seconds (default: 180)
+     */
+    idle_timeout_secs?: number;
+    /**
+     * Hard ceiling on total turn duration regardless of activity (default: 3600)
+     */
+    max_runtime_secs?: number;
+    /**
+     * Extended idle tolerance once real content appeared (default: 600)
+     */
+    content_seen_grace_secs?: number;
+    /**
+     * No heartbeat state transition (Live<->Hung) for N seconds (default: 300 = 5 minutes)
+     */
+    heartbeat_transition_threshold_secs?: number;
+    /**
+     * Maximum retry attempts on the same bead before alerting (default: 3)
+     */
+    retry_threshold?: number;
   };
   /**
    * Path to projects.yaml (default ~/.hoop/projects.yaml)
@@ -1332,6 +1405,9 @@ export interface HoopConfig {
   };
   metrics?: {
     enabled?: boolean;
+    /**
+     * Metrics server port (default: 9091). REQUIRES RESTART when metrics.enabled=true - server binding is established at daemon startup (§17.4).
+     */
     port?: number;
   };
   audit?: {
@@ -1376,6 +1452,18 @@ export interface HoopConfig {
       };
     };
   };
+  /**
+   * Stuck detector configuration for monitoring worker health (§C1)
+   */
+  stuck_detector?: {
+    default?: unknown;
+    /**
+     * Per-adapter stuck detector configuration (optional)
+     */
+    adapters?: {
+      [k: string]: unknown;
+    };
+  };
 }
 
 
@@ -1398,7 +1486,19 @@ export interface AuditRow {
   /**
    * Action kind
    */
-  kind: "bead_created" | "stitch_created" | "config_changed" | "project_added" | "project_removed";
+  kind:
+    | "bead_created"
+    | "stitch_created"
+    | "config_changed"
+    | "project_added"
+    | "project_removed"
+    | "schema_migrated"
+    | "backup_started"
+    | "backup_finished"
+    | "backup_failed"
+    | "restore_started"
+    | "restore_finished"
+    | "restore_failed";
   /**
    * Target identifier (bead ID, stitch ID, etc.)
    */
@@ -1525,13 +1625,9 @@ export interface StitchBead {
    */
   bead_id: string;
   /**
-   * Raw workspace path (display-only)
+   * Workspace path
    */
   workspace: string;
-  /**
-   * Realpath-resolved workspace path (for joins and dedup)
-   */
-  canonical_workspace?: string;
   /**
    * Relationship type
    */
