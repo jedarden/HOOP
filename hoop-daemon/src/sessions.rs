@@ -832,14 +832,33 @@ impl SessionTailer {
     ) -> Result<Vec<ParsedSession>> {
         // Use rayon for parallel processing
         let project_path = project_path.map(|p| p.to_path_buf());
+        let now = std::time::SystemTime::now();
 
         let sessions: Vec<_> = files
             .par_iter()
             .filter_map(|file| {
+                // Calculate session tailer lag for this file
+                let lag_secs = file
+                    .mtime
+                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                    .ok()
+                    .and_then(|d| {
+                        now.duration_since(std::time::SystemTime::UNIX_EPOCH)
+                            .ok()
+                            .map(|now_secs| now_secs.saturating_sub(d).as_secs() as i64)
+                    })
+                    .unwrap_or(0);
+
                 // Try each adapter until one succeeds
                 for adapter in adapters {
                     match adapter.parse_session_file(&file.path, project_path.as_deref()) {
-                        Ok(Some(session)) => return Some(session),
+                        Ok(Some(session)) => {
+                            // Record session tailer lag for this adapter
+                            crate::metrics::metrics()
+                                .hoop_session_tailer_lag_seconds
+                                .set(&[adapter.name().as_str()], lag_secs);
+                            return Some(session);
+                        }
                         Ok(None) => continue, // This adapter doesn't recognize the file
                         Err(e) => {
                             debug!(
@@ -848,6 +867,10 @@ impl SessionTailer {
                                 file.path.display(),
                                 e
                             );
+                            // Record parse error for this adapter
+                            crate::metrics::metrics()
+                                .hoop_event_parse_errors_total
+                                .inc(&[adapter.name().as_str()]);
                             continue;
                         }
                     }

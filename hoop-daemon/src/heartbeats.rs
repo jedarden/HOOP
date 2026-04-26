@@ -493,6 +493,14 @@ impl HeartbeatMonitor {
         workers: &Arc<Mutex<HashMap<String, WorkerHeartbeatState>>>,
         event_tx: &broadcast::Sender<MonitorEvent>,
     ) {
+        // Record heartbeat freshness metric
+        let now = Utc::now();
+        let freshness = now.signed_duration_since(heartbeat.ts).num_seconds().max(0) as f64;
+        metrics::metrics().hoop_heartbeat_freshness_seconds.observe(
+            &[&heartbeat.worker],
+            freshness,
+        );
+
         // Extract PID from the heartbeat state
         let pid = match &heartbeat.state {
             WorkerState::Executing { pid, .. } => Some(*pid),
