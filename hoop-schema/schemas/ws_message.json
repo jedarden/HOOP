@@ -8,7 +8,7 @@
   "properties": {
     "type": {
       "type": "string",
-      "enum": ["worker_update", "workers_snapshot", "beads_snapshot", "conversations_snapshot", "conversation_update", "streaming_content", "config_status"]
+      "enum": ["worker_update", "workers_snapshot", "beads_snapshot", "conversations_snapshot", "conversation_update", "streaming_content", "config_status", "bead_created_by_hoop"]
     },
     "worker": {
       "$ref": "worker_data.json"
@@ -39,6 +39,9 @@
     },
     "config_status": {
       "$ref": "project_config_status.json"
+    },
+    "bead_created_by_hoop": {
+      "$ref": "bead_created_by_hoop.json"
     }
   },
   "schema_version": "1.0.0"

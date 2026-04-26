@@ -78,6 +78,8 @@ pub fn router() -> Router<crate::DaemonState> {
         .route("/api/p/{project}/beads", post(create_bead))
         .route("/api/p/{project}/beads/dedup", post(check_dedup))
         .route("/api/p/{project}/beads/dedup-dismiss", post(dismiss_dedup))
+        .route("/api/vector-index/query", post(query_vector_index))
+        .route("/api/vector-index/stats", get(get_vector_index_stats))
 }
 
 /// Request body for dedup check
@@ -103,6 +105,51 @@ pub struct DedupCheckResponse {
     pub matches: Vec<DedupMatchRef>,
     pub threshold: f64,
     pub message: Option<String>,
+}
+
+/// Vector index statistics (hoop-ttb.5.9.1)
+#[derive(Debug, Serialize)]
+pub struct VectorIndexStats {
+    pub num_entries: usize,
+    pub rebuild_progress_current: usize,
+    pub rebuild_progress_total: usize,
+    pub is_rebuilding: bool,
+    pub model_name: String,
+    pub model_version: String,
+    pub false_positive_rate: f64,
+    pub false_positive_rate_30d: f64,
+}
+
+/// POST /api/vector-index/query — cross-project dedup query
+///
+/// Returns potential duplicates across all projects above the configured threshold.
+/// Used by Already-Started Detection and Cross-Project Propagation (hoop-ttb.5.9.1).
+async fn query_vector_index(
+    State(state): State<crate::DaemonState>,
+    Json(req): Json<DedupCheckRequest>,
+) -> Result<Json<DedupCheckResponse>, (StatusCode, String)> {
+    let title = req.title.trim().to_string();
+    if title.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "title is required".to_string()));
+    }
+
+    let index = state.vector_index.read().unwrap();
+    let matches = index.check_duplicate(&title, req.description.as_deref());
+
+    Ok(Json(DedupCheckResponse {
+        matches: matches
+            .into_iter()
+            .map(|m| DedupMatchRef {
+                id: m.item.id,
+                project: m.item.project,
+                title: m.item.title,
+                kind: m.item.kind,
+                similarity: m.similarity,
+            })
+            .collect(),
+        threshold: index.threshold(),
+        message: None,
+    }))
 }
 
 /// POST /api/p/:project/beads/dedup — check for similar existing work
@@ -161,6 +208,27 @@ async fn dismiss_dedup(
     let _ = resolve_project_path(&project, &state)?;
     state.vector_index.read().unwrap().report_false_positive();
     Ok(Json(serde_json::json!({"status": "ok"})))
+}
+
+/// GET /api/vector-index/stats — get vector index statistics and rebuild progress
+///
+/// Returns index size, rebuild progress, model info, and false positive rate.
+/// Used by the UI to show rebuild progress during model changes (hoop-ttb.5.9.1).
+async fn get_vector_index_stats(
+    State(state): State<crate::DaemonState>,
+) -> Json<VectorIndexStats> {
+    let index = state.vector_index.read().unwrap();
+    let (current, total) = index.rebuild_progress();
+    Json(VectorIndexStats {
+        num_entries: index.len(),
+        rebuild_progress_current: current,
+        rebuild_progress_total: total,
+        is_rebuilding: total > 0 && current < total,
+        model_name: index.model_name(),
+        model_version: index.model_version(),
+        false_positive_rate: index.false_positive_rate(),
+        false_positive_rate_30d: index.false_positive_rate_30d(),
+    })
 }
 
 /// Resolve the actor identity for audit purposes.
@@ -553,10 +621,20 @@ async fn create_bead(
         priority: priority.unwrap_or(2),
         issue_type: req.issue_type.clone().unwrap_or_else(|| "task".to_string()),
         created_at: created_at.clone(),
-        updated_at: created_at,
+        updated_at: created_at.clone(),
         created_by: actor.clone(),
         dependencies: req.dependencies.clone().unwrap_or_default(),
     });
+
+    // Broadcast bead_created_by_hoop event
+    let bead_created_by_hoop_event = crate::ws::BeadCreatedByHoopData {
+        project: project.clone(),
+        bead_id: id.clone(),
+        actor: actor.clone(),
+        source: source_str.clone(),
+        ts: created_at.clone(),
+    };
+    let _ = state.bead_created_by_hoop_tx.send(bead_created_by_hoop_event);
 
     // 5.5. Evaluate pattern queries for auto-including stitches
     if let Some(sid) = &stitch_id {

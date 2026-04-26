@@ -522,6 +522,16 @@ pub struct StitchCreatedData {
     pub created_at: String,
 }
 
+/// Bead created by HOOP event data broadcast after each successful br create via HOOP
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BeadCreatedByHoopData {
+    pub project: String,
+    pub bead_id: String,
+    pub actor: String,
+    pub source: String,
+    pub ts: String,
+}
+
 /// Draft queue event data sent to WS clients when a draft is created, edited, approved, or rejected.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DraftUpdateData {
@@ -596,6 +606,8 @@ pub struct WsEvent {
     pub spawn_ack_alert: Option<crate::worker_ack::SpawnAckAlert>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub collision_alert: Option<CollisionAlertData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bead_created_by_hoop: Option<BeadCreatedByHoopData>,
     /// Present only on `init` events; the server-authoritative subscription list.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subscriptions: Option<Vec<String>>,
@@ -623,6 +635,7 @@ impl WsEvent {
             draft_update: None,
             spawn_ack_alert: None,
             collision_alert: None,
+            bead_created_by_hoop: None,
             subscriptions: None,
         }
     }
@@ -648,6 +661,7 @@ impl WsEvent {
             draft_update: None,
             spawn_ack_alert: None,
             collision_alert: None,
+            bead_created_by_hoop: None,
             subscriptions: None,
         }
     }
@@ -673,6 +687,7 @@ impl WsEvent {
             draft_update: None,
             spawn_ack_alert: None,
             collision_alert: None,
+            bead_created_by_hoop: None,
             subscriptions: None,
         }
     }
@@ -698,6 +713,7 @@ impl WsEvent {
             draft_update: None,
             spawn_ack_alert: None,
             collision_alert: None,
+            bead_created_by_hoop: None,
             subscriptions: None,
         }
     }
@@ -724,6 +740,7 @@ impl WsEvent {
             draft_update: None,
             spawn_ack_alert: None,
             collision_alert: None,
+            bead_created_by_hoop: None,
             subscriptions: None,
         }
     }
@@ -750,6 +767,7 @@ impl WsEvent {
             draft_update: None,
             spawn_ack_alert: None,
             collision_alert: None,
+            bead_created_by_hoop: None,
             subscriptions: None,
         }
     }
@@ -775,6 +793,7 @@ impl WsEvent {
             draft_update: None,
             spawn_ack_alert: None,
             collision_alert: None,
+            bead_created_by_hoop: None,
             subscriptions: None,
         }
     }
@@ -800,6 +819,7 @@ impl WsEvent {
             draft_update: None,
             spawn_ack_alert: None,
             collision_alert: None,
+            bead_created_by_hoop: None,
             subscriptions: None,
         }
     }
@@ -825,6 +845,7 @@ impl WsEvent {
             draft_update: None,
             spawn_ack_alert: None,
             collision_alert: None,
+            bead_created_by_hoop: None,
             subscriptions: None,
         }
     }
@@ -850,6 +871,7 @@ impl WsEvent {
             draft_update: None,
             spawn_ack_alert: None,
             collision_alert: None,
+            bead_created_by_hoop: None,
             subscriptions: None,
         }
     }
@@ -875,6 +897,7 @@ impl WsEvent {
             draft_update: None,
             spawn_ack_alert: None,
             collision_alert: None,
+            bead_created_by_hoop: None,
             subscriptions: None,
         }
     }
@@ -900,6 +923,7 @@ impl WsEvent {
             draft_update: None,
             spawn_ack_alert: None,
             collision_alert: None,
+            bead_created_by_hoop: None,
             subscriptions: None,
         }
     }
@@ -925,6 +949,7 @@ impl WsEvent {
             draft_update: None,
             spawn_ack_alert: None,
             collision_alert: None,
+            bead_created_by_hoop: None,
             subscriptions: None,
         }
     }
@@ -950,6 +975,7 @@ impl WsEvent {
             draft_update: None,
             spawn_ack_alert: None,
             collision_alert: None,
+            bead_created_by_hoop: None,
             subscriptions: None,
         }
     }
@@ -975,6 +1001,7 @@ impl WsEvent {
             draft_update: None,
             spawn_ack_alert: Some(alert),
             collision_alert: None,
+            bead_created_by_hoop: None,
             subscriptions: None,
         }
     }
@@ -1000,6 +1027,7 @@ impl WsEvent {
             draft_update: Some(data),
             spawn_ack_alert: None,
             collision_alert: None,
+            bead_created_by_hoop: None,
             subscriptions: None,
         }
     }
@@ -1025,6 +1053,33 @@ impl WsEvent {
             draft_update: None,
             spawn_ack_alert: None,
             collision_alert: Some(data),
+            bead_created_by_hoop: None,
+            subscriptions: None,
+        }
+    }
+
+    /// Create a bead_created_by_hoop event emitted after each successful br create via HOOP
+    pub fn bead_created_by_hoop(data: BeadCreatedByHoopData) -> Self {
+        Self {
+            event_type: "bead_created_by_hoop".to_string(),
+            worker: None,
+            workers: None,
+            beads: None,
+            conversations: None,
+            conversation: None,
+            streaming: None,
+            projects: None,
+            config_status: None,
+            capacity: None,
+            bead_event: None,
+            bead_events: None,
+            stitch_created: None,
+            agent_session: None,
+            morning_brief: None,
+            draft_update: None,
+            spawn_ack_alert: None,
+            collision_alert: None,
+            bead_created_by_hoop: Some(data),
             subscriptions: None,
         }
     }
@@ -1242,6 +1297,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
     let mut brief_rx = state.brief_tx.subscribe();
     let mut draft_rx = state.draft_tx.subscribe();
     let mut collision_rx = state.collision_alert_tx.subscribe();
+    let mut bead_created_by_hoop_rx = state.bead_created_by_hoop_tx.subscribe();
     let mut shutdown_rx = state.shutdown.subscribe();
 
     // Per-connection subscription set.  Starts with "global"; clients may
@@ -1484,6 +1540,17 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         }
     });
 
+    // Bead created by HOOP — routed to the project topic carried in the event
+    let ws_tx_bead_created = ws_tx.clone();
+    let bead_created_by_hoop_task = tokio::spawn(async move {
+        while let Ok(data) = bead_created_by_hoop_rx.recv().await {
+            if let Ok(json) = serde_json::to_string(&WsEvent::bead_created_by_hoop(data.clone())) {
+                let topic = format!("project:{}", data.project);
+                let _ = ws_tx_bead_created.send(WsOutMsg::with_topic(json, topic)).await;
+            }
+        }
+    });
+
     // Session events placeholder
     let _registry_for_sessions = registry.clone();
     let session_task = tokio::spawn(async move {
@@ -1700,6 +1767,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         _ = monitor_task => {},
         _ = bead_task => {},
         _ = stitch_task => {},
+        _ = bead_created_by_hoop_task => {},
         _ = session_task => {},
         _ = config_task => {},
         _ = project_task => {},

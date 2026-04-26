@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/bead_created_by_hoop.json",
+  "title": "BeadCreatedByHoop",
+  "description": "Event broadcast after each successful br create via HOOP",
+  "type": "object",
+  "required": ["project", "bead_id", "actor", "source", "ts"],
+  "properties": {
+    "project": {
+      "type": "string",
+      "description": "Project name where the bead was created"
+    },
+    "bead_id": {
+      "type": "string",
+      "description": "ID of the created bead"
+    },
+    "actor": {
+      "type": "string",
+      "description": "Identity that created the bead (e.g., 'tailscale:user@example.com' or 'os:username')"
+    },
+    "source": {
+      "type": "string",
+      "description": "Source of the bead creation (e.g., 'form', 'chat', 'bulk', 'template:<name>')"
+    },
+    "ts": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of when the bead was created"
+    }
+  },
+  "schema_version": "1.0.0"
+}

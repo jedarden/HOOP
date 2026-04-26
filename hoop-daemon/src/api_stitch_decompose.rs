@@ -573,6 +573,21 @@ pub async fn submit_stitch_internal(
         warn!("Failed to persist stitch row for {}: {}", stitch_id, e);
     }
 
+    // Add stitch to vector index for deduplication (hoop-ttb.5.9.1)
+    {
+        let mut index = state.vector_index.write().unwrap();
+        let stitch_item = crate::vector_index::IndexedItem {
+            id: stitch_id.clone(),
+            project: project.to_string(),
+            title: req.title.clone(),
+            kind: req.kind.clone(),
+            description: req.description.clone(),
+        };
+        if let Err(e) = index.add_to_db(stitch_item) {
+            warn!("Failed to add stitch to vector index: {}", e);
+        }
+    }
+
     // Emit stitch creation metrics
     metrics::metrics().hoop_stitch_created_total.inc(&[project, &req.kind]);
     metrics::metrics().hoop_stitches_created_per_day.inc();
@@ -618,9 +633,17 @@ pub async fn submit_stitch_internal(
             priority: req.priority.unwrap_or(2),
             issue_type: created.issue_type.clone(),
             created_at: created_at.clone(),
-            updated_at: created_at,
+            updated_at: created_at.clone(),
             created_by: actor.to_string(),
             dependencies: vec![],
+        });
+        // Broadcast bead_created_by_hoop event
+        let _ = state.bead_created_by_hoop_tx.send(crate::ws::BeadCreatedByHoopData {
+            project: project.to_string(),
+            bead_id: created.id.clone(),
+            actor: actor.to_string(),
+            source: source_str.clone(),
+            ts: created_at.clone(),
         });
     }
 
