@@ -1418,8 +1418,11 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     let vector_index = Arc::new(std::sync::RwLock::new(vector_index::VectorIndex::new()));
 
     // Initialize stuck detector (§C1, hoop-ttb.3.25)
-    let stuck_detector = Arc::new(std::sync::Mutex::new(stuck_detector::StuckDetector::new()));
-    info!("Stuck detector initialized");
+    let stuck_detector_config = stuck_detector::StuckDetector::load_config();
+    let stuck_detector = Arc::new(std::sync::Mutex::new(
+        stuck_detector::StuckDetector::with_config_map(stuck_detector_config),
+    ));
+    info!("Stuck detector initialized with config from config.yml");
 
     // Initialize project supervisor
     info!("Initializing project supervisor...");
@@ -1570,6 +1573,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
 
     // Spawn task to handle config.yml changes
     let config_tx_for_config = config_status_tx.clone();
+    let stuck_detector_for_reload = stuck_detector.clone();
     tokio::spawn(async move {
         let mut rx = config_watcher.subscribe();
         while let Ok(event) = rx.recv().await {
@@ -1579,6 +1583,15 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                     prev_hash,
                 } => {
                     info!("config.yml reloaded successfully");
+
+                    // Reload stuck detector configuration (§C1, hoop-ttb.3.25)
+                    let new_sd_config = stuck_detector::StuckDetector::load_config();
+                    stuck_detector_for_reload
+                        .lock()
+                        .unwrap()
+                        .update_config_map(new_sd_config);
+                    info!("Stuck detector configuration reloaded");
+
                     // Note: config.yml changes don't trigger runtime reconcile
                     // because they only affect defaults for new sessions
 
@@ -1811,6 +1824,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                             .await;
                     }
                     // Track heartbeat state transition for stuck detection (§C1, hoop-ttb.3.25)
+                    use chrono::Utc;
                     let now = Utc::now();
                     stuck_detector_for_hb
                         .lock()
@@ -1823,10 +1837,10 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     });
 
     // Wire up heartbeat monitor events to stuck detector (§C1, hoop-ttb.3.25)
-    let stuck_detector_for_hb_monitor = Arc::clone(&state.stuck_detector);
+    let stuck_detector_for_hb_monitor = Arc::clone(&stuck_detector);
     tokio::spawn(async move {
         use heartbeats::MonitorEvent;
-        let mut rx = heartbeat_monitor.subscribe().unwrap();
+        let mut rx = heartbeat_monitor.subscribe();
         while let Ok(event) = rx.recv().await {
             match event {
                 MonitorEvent::Heartbeat(hb) => {
@@ -1930,6 +1944,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         zai_api_key: adapter_config.zai_api_key.clone(),
         rate_limit_rpm: adapter_config.rate_limit_rpm,
         cost_cap_usd: adapter_config.cost_cap_usd,
+        system_prompt_budget_bytes: agent_adapter::load_system_prompt_budget_bytes(),
     };
     let agent_session_manager = match agent_session::AgentSessionManager::new(session_config).await
     {
@@ -1969,7 +1984,6 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
             audit: None,
             reflection: None,
             pricing: None,
-            redaction: None,
             server: None,
         };
 
@@ -1991,7 +2005,6 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                 audit: None,
                 reflection: None,
                 pricing: None,
-                redaction: None,
                 server: None,
             };
 

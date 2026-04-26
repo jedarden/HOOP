@@ -323,7 +323,7 @@ impl StuckDetector {
         let state = guard.entry(worker.to_string()).or_default();
 
         // Check if this is a retry (same bead as before)
-        let is_retry = state.previous_bead.as_ref() == Some(bead);
+        let is_retry = state.previous_bead.as_deref() == Some(bead);
         let retry_count = if is_retry {
             state.retry_count + 1
         } else {
@@ -650,6 +650,88 @@ impl StuckDetector {
             })
             .collect()
     }
+
+    /// Load stuck detector configuration from `~/.hoop/config.yml`.
+    ///
+    /// Reads the `stuck_detector` section. Falls back to defaults if the section or file
+    /// is missing, so the daemon always starts with a valid configuration.
+    ///
+    /// The config structure:
+    /// ```yaml
+    /// stuck_detector:
+    ///   default:
+    ///     idle_timeout_secs: 180
+    ///     max_runtime_secs: 3600
+    ///     content_seen_grace_secs: 600
+    ///     heartbeat_transition_threshold_secs: 300
+    ///     retry_threshold: 3
+    ///   adapters:
+    ///     claude:
+    ///       idle_timeout_secs: 120
+    ///       heartbeat_transition_threshold_secs: 180
+    ///     zai:
+    ///       idle_timeout_secs: 300
+    /// ```
+    pub fn load_config() -> StuckDetectorConfigMap {
+        let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+        let config_path = home.join(".hoop").join("config.yml");
+
+        if !config_path.exists() {
+            debug!(
+                "Config file not found at {}, using default stuck detector config",
+                config_path.display()
+            );
+            return StuckDetectorConfigMap::default();
+        }
+
+        match std::fs::read_to_string(&config_path) {
+            Ok(contents) => {
+                match serde_yaml::from_str::<serde_yaml::Value>(&contents) {
+                    Ok(root) => {
+                        // Look for the stuck_detector section
+                        if let Some(sd_value) = root.get("stuck_detector") {
+                            match serde_yaml::from_value::<StuckDetectorConfigMap>(
+                                sd_value.clone(),
+                            ) {
+                                Ok(config_map) => {
+                                    info!(
+                                        "Loaded stuck detector config from {} ({} adapter configs)",
+                                        config_path.display(),
+                                        config_map.adapters.len()
+                                    );
+                                    config_map
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        "Failed to parse stuck_detector config from {}: {}, using defaults",
+                                        config_path.display(), e
+                                    );
+                                    StuckDetectorConfigMap::default()
+                                }
+                            }
+                        } else {
+                            debug!("No stuck_detector section in config.yml, using defaults");
+                            StuckDetectorConfigMap::default()
+                        }
+                    }
+                    Err(e) => {
+                        warn!(
+                            "Failed to parse config.yml from {}: {}, using defaults",
+                            config_path.display(), e
+                        );
+                        StuckDetectorConfigMap::default()
+                    }
+                }
+            }
+            Err(e) => {
+                warn!(
+                    "Failed to read config.yml from {}: {}, using defaults",
+                    config_path.display(), e
+                );
+                StuckDetectorConfigMap::default()
+            }
+        }
+    }
 }
 
 impl Default for StuckDetector {
@@ -758,6 +840,8 @@ mod tests {
             idle_timeout_secs: 1,
             max_runtime_secs: 3600,
             content_seen_grace_secs: 600,
+            heartbeat_transition_threshold_secs: DEFAULT_HEARTBEAT_TRANSITION_THRESHOLD_SECS,
+            retry_threshold: DEFAULT_RETRY_THRESHOLD,
         };
         let detector = StuckDetector::with_config(config);
         let worker = "alpha";
@@ -781,6 +865,8 @@ mod tests {
             idle_timeout_secs: 180,
             max_runtime_secs: 1,
             content_seen_grace_secs: 600,
+            heartbeat_transition_threshold_secs: DEFAULT_HEARTBEAT_TRANSITION_THRESHOLD_SECS,
+            retry_threshold: DEFAULT_RETRY_THRESHOLD,
         };
         let detector = StuckDetector::with_config(config);
         let worker = "alpha";
@@ -805,6 +891,8 @@ mod tests {
             idle_timeout_secs: 1,
             max_runtime_secs: 3600,
             content_seen_grace_secs: 10,
+            heartbeat_transition_threshold_secs: DEFAULT_HEARTBEAT_TRANSITION_THRESHOLD_SECS,
+            retry_threshold: DEFAULT_RETRY_THRESHOLD,
         };
         let detector = StuckDetector::with_config(config);
         let worker = "alpha";
@@ -835,6 +923,8 @@ mod tests {
             idle_timeout_secs: 1, // Short timeout for no content
             max_runtime_secs: 3600,
             content_seen_grace_secs: 10, // Longer grace after content seen
+            heartbeat_transition_threshold_secs: DEFAULT_HEARTBEAT_TRANSITION_THRESHOLD_SECS,
+            retry_threshold: DEFAULT_RETRY_THRESHOLD,
         };
         let detector = StuckDetector::with_config(config);
         let worker = "alpha";
@@ -873,6 +963,8 @@ mod tests {
                 idle_timeout_secs: 1,
                 max_runtime_secs: 3600,
                 content_seen_grace_secs: 5,
+                heartbeat_transition_threshold_secs: DEFAULT_HEARTBEAT_TRANSITION_THRESHOLD_SECS,
+                retry_threshold: DEFAULT_RETRY_THRESHOLD,
             },
         );
         // Configure zai with much longer idle timeout
@@ -882,6 +974,8 @@ mod tests {
                 idle_timeout_secs: 10,
                 max_runtime_secs: 3600,
                 content_seen_grace_secs: 20,
+                heartbeat_transition_threshold_secs: DEFAULT_HEARTBEAT_TRANSITION_THRESHOLD_SECS,
+                retry_threshold: DEFAULT_RETRY_THRESHOLD,
             },
         );
 
@@ -920,6 +1014,8 @@ mod tests {
             idle_timeout_secs: 1,
             max_runtime_secs: 3600,
             content_seen_grace_secs: 600,
+            heartbeat_transition_threshold_secs: DEFAULT_HEARTBEAT_TRANSITION_THRESHOLD_SECS,
+            retry_threshold: DEFAULT_RETRY_THRESHOLD,
         };
         let detector = StuckDetector::with_config(config);
         let worker = "alpha";
@@ -951,6 +1047,8 @@ mod tests {
             idle_timeout_secs: 1,
             max_runtime_secs: 3600,
             content_seen_grace_secs: 600,
+            heartbeat_transition_threshold_secs: DEFAULT_HEARTBEAT_TRANSITION_THRESHOLD_SECS,
+            retry_threshold: DEFAULT_RETRY_THRESHOLD,
         };
         detector.update_config(config);
 
@@ -965,5 +1063,293 @@ mod tests {
         // Should receive an event
         let event = rx.try_recv();
         assert!(event.is_ok());
+    }
+
+    /// Test: default config includes heartbeat transition and retry thresholds
+    #[test]
+    fn test_default_config_includes_new_fields() {
+        let config = StuckDetectorConfig::default();
+        assert_eq!(
+            config.heartbeat_transition_threshold_secs,
+            DEFAULT_HEARTBEAT_TRANSITION_THRESHOLD_SECS
+        );
+        assert_eq!(config.retry_threshold, DEFAULT_RETRY_THRESHOLD);
+    }
+
+    /// Test: heartbeat transition silence detection (§C1, hoop-ttb.3.25)
+    ///
+    /// Verifies that a worker with no heartbeat state transition (Live<->Hung)
+    /// for the configured threshold triggers a stuck alert.
+    #[test]
+    fn test_heartbeat_transition_silence_detection() {
+        let config = StuckDetectorConfig {
+            idle_timeout_secs: 60, // Longer than transition threshold
+            max_runtime_secs: 3600,
+            content_seen_grace_secs: 600,
+            heartbeat_transition_threshold_secs: 1, // Short threshold for testing
+            retry_threshold: 3,
+        };
+        let detector = StuckDetector::with_config(config);
+        let worker = "alpha";
+        let bead = "bd-test";
+        let started_at = Utc::now();
+
+        // Worker starts executing
+        detector.on_worker_started(worker, bead, Some("claude"), started_at);
+
+        // Simulate a heartbeat state transition (Live -> Hung)
+        let transition_time = Utc::now();
+        detector.on_heartbeat_state_transition(
+            worker,
+            transition_time,
+            crate::heartbeats::WorkerLiveness::Live,
+            crate::heartbeats::WorkerLiveness::Hung,
+        );
+
+        // Wait for transition threshold to expire
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        detector.check_stuck_workers();
+
+        let status = detector.status_all();
+        assert_eq!(status.len(), 1);
+        assert!(
+            status[0].alert_fired,
+            "Heartbeat transition silence should trigger alert"
+        );
+    }
+
+    /// Test: repeated retry detection (§C1, hoop-ttb.3.25)
+    ///
+    /// Verifies that a worker retrying the same bead more than the configured
+    /// threshold triggers a stuck alert.
+    #[test]
+    fn test_repeated_retry_detection() {
+        let config = StuckDetectorConfig {
+            idle_timeout_secs: 60,
+            max_runtime_secs: 3600,
+            content_seen_grace_secs: 600,
+            heartbeat_transition_threshold_secs: 300,
+            retry_threshold: 2, // Low threshold for testing
+        };
+        let detector = StuckDetector::with_config(config);
+        let worker = "alpha";
+        let bead = "bd-test";
+
+        // First attempt
+        detector.on_worker_started(worker, bead, Some("claude"), Utc::now());
+        detector.on_worker_complete(worker); // Complete
+
+        // Second attempt (same bead)
+        detector.on_worker_started(worker, bead, Some("claude"), Utc::now());
+        detector.on_worker_complete(worker); // Complete
+
+        // Third attempt (same bead - should trigger alert)
+        detector.on_worker_started(worker, bead, Some("claude"), Utc::now());
+        detector.check_stuck_workers();
+
+        let status = detector.status_all();
+        assert_eq!(status.len(), 1);
+        assert!(
+            status[0].alert_fired,
+            "Repeated retry should trigger alert after threshold exceeded"
+        );
+    }
+
+    /// Test: new bead resets retry count
+    ///
+    /// Verifies that starting a different bead resets the retry counter.
+    #[test]
+    fn test_new_bead_resets_retry_count() {
+        let config = StuckDetectorConfig {
+            idle_timeout_secs: 60,
+            max_runtime_secs: 3600,
+            content_seen_grace_secs: 600,
+            heartbeat_transition_threshold_secs: 300,
+            retry_threshold: 2,
+        };
+        let detector = StuckDetector::with_config(config);
+        let worker = "alpha";
+
+        // Retry bead-1 twice
+        detector.on_worker_started(worker, "bd-1", Some("claude"), Utc::now());
+        detector.on_worker_complete(worker);
+
+        detector.on_worker_started(worker, "bd-1", Some("claude"), Utc::now());
+        detector.on_worker_complete(worker);
+
+        // Switch to a different bead - should reset retry count
+        detector.on_worker_started(worker, "bd-2", Some("claude"), Utc::now());
+        detector.check_stuck_workers();
+
+        let status = detector.status_all();
+        assert_eq!(status.len(), 1);
+        assert!(
+            !status[0].alert_fired,
+            "Switching to a new bead should reset retry count"
+        );
+    }
+
+    /// Test: heartbeat without transition doesn't reset transition timer
+    ///
+    /// Verifies that regular heartbeats (without state change) don't update
+    /// the last_transition_at timestamp.
+    #[test]
+    fn test_heartbeat_without_transition_doesnt_reset_transition_timer() {
+        let config = StuckDetectorConfig {
+            idle_timeout_secs: 60,
+            max_runtime_secs: 3600,
+            content_seen_grace_secs: 600,
+            heartbeat_transition_threshold_secs: 1,
+            retry_threshold: 3,
+        };
+        let detector = StuckDetector::with_config(config);
+        let worker = "alpha";
+        let bead = "bd-test";
+        let started_at = Utc::now();
+
+        detector.on_worker_started(worker, bead, Some("claude"), started_at);
+
+        // Initial transition
+        let transition_time = Utc::now();
+        detector.on_heartbeat_state_transition(
+            worker,
+            transition_time,
+            crate::heartbeats::WorkerLiveness::Live,
+            crate::heartbeats::WorkerLiveness::Hung,
+        );
+
+        // Send regular heartbeats (no state change)
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        detector.on_heartbeat(worker, Utc::now());
+
+        // Wait for transition threshold to expire
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        detector.check_stuck_workers();
+
+        let status = detector.status_all();
+        assert_eq!(status.len(), 1);
+        assert!(
+            status[0].alert_fired,
+            "Regular heartbeats should not reset transition silence timer"
+        );
+    }
+
+    /// Test: per-worker-type configuration for heartbeat transition threshold
+    ///
+    /// Verifies that different adapter types can have different transition thresholds.
+    #[test]
+    fn test_per_worker_type_heartbeat_transition_config() {
+        let mut config_map = StuckDetectorConfigMap::default();
+        // Configure claude with very short transition threshold
+        config_map.adapters.insert(
+            "claude".to_string(),
+            StuckDetectorConfig {
+                idle_timeout_secs: 60,
+                max_runtime_secs: 3600,
+                content_seen_grace_secs: 600,
+                heartbeat_transition_threshold_secs: 1,
+                retry_threshold: 3,
+            },
+        );
+        // Configure zai with much longer transition threshold
+        config_map.adapters.insert(
+            "zai".to_string(),
+            StuckDetectorConfig {
+                idle_timeout_secs: 60,
+                max_runtime_secs: 3600,
+                content_seen_grace_secs: 600,
+                heartbeat_transition_threshold_secs: 10,
+                retry_threshold: 3,
+            },
+        );
+
+        let detector = StuckDetector::with_config_map(config_map);
+
+        // Claude worker should trigger transition silence quickly
+        let started_at = Utc::now();
+        detector.on_worker_started("alpha", "bd-1", Some("claude"), started_at);
+        detector.on_heartbeat_state_transition(
+            "alpha",
+            started_at,
+            crate::heartbeats::WorkerLiveness::Live,
+            crate::heartbeats::WorkerLiveness::Hung,
+        );
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        detector.check_stuck_workers();
+
+        let status = detector.status_all();
+        let claude_status = status.iter().find(|s| s.worker == "alpha").unwrap();
+        assert!(
+            claude_status.alert_fired,
+            "Claude worker should trigger transition silence alert with 1s threshold"
+        );
+
+        // Zai worker should NOT trigger yet
+        let started_at = Utc::now();
+        detector.on_worker_started("beta", "bd-2", Some("zai"), started_at);
+        detector.on_heartbeat_state_transition(
+            "beta",
+            started_at,
+            crate::heartbeats::WorkerLiveness::Live,
+            crate::heartbeats::WorkerLiveness::Hung,
+        );
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        detector.check_stuck_workers();
+
+        let status = detector.status_all();
+        let zai_status = status.iter().find(|s| s.worker == "beta").unwrap();
+        assert!(
+            !zai_status.alert_fired,
+            "Zai worker should NOT trigger transition silence alert with 10s threshold after only 2s"
+        );
+    }
+
+    /// Test: stuck alert includes all required fields (§C1, hoop-ttb.3.25)
+    ///
+    /// Verifies that StuckAlert includes last_heartbeat_at, last_transition_at,
+    /// and retry_count for operator visibility.
+    #[test]
+    fn test_stuck_alert_includes_all_required_fields() {
+        let mut rx = StuckDetector::new().subscribe();
+
+        let config = StuckDetectorConfig {
+            idle_timeout_secs: 1,
+            max_runtime_secs: 3600,
+            content_seen_grace_secs: 600,
+            heartbeat_transition_threshold_secs: 300,
+            retry_threshold: 3,
+        };
+        let detector = StuckDetector::with_config(config);
+        let worker = "alpha";
+        let bead = "bd-test";
+        let started_at = Utc::now();
+
+        detector.on_worker_started(worker, bead, Some("claude"), started_at);
+
+        // Add a heartbeat and transition
+        let hb_time = Utc::now();
+        detector.on_heartbeat(worker, hb_time);
+        detector.on_heartbeat_state_transition(
+            worker,
+            hb_time,
+            crate::heartbeats::WorkerLiveness::Live,
+            crate::heartbeats::WorkerLiveness::Hung,
+        );
+
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        detector.check_stuck_workers();
+
+        // Check that we received an alert with all required fields
+        let event = rx.try_recv();
+        assert!(event.is_ok());
+        if let Ok(StuckDetectorEvent::Stuck(alert)) = event {
+            assert_eq!(alert.worker, worker);
+            assert_eq!(alert.bead, bead);
+            assert!(alert.last_heartbeat_at.is_some());
+            assert!(alert.last_transition_at.is_some());
+            assert_eq!(alert.retry_count, 1);
+        } else {
+            panic!("Expected Stuck event");
+        }
     }
 }
