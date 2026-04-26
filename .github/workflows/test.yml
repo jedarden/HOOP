@@ -1,0 +1,97 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo build
+      uses: actions/cache@v4
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Run unit tests
+      run: cargo test --lib --verbose -- --test-threads=1
+
+    - name: Check formatting
+      run: cargo fmt --all -- --check
+
+    - name: Run clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
+
+    - name: Verify tests complete within time budget
+      run: |
+        echo "Checking test execution time..."
+        timeout 60s cargo test --lib 2>&1 | tee test-output.log
+        if grep -q "test result:.*passed.*finished in" test-output.log; then
+          TIME=$(grep "test result:.*finished in" test-output.log | sed -E 's/.*finished in ([0-9.]+)s.*/\1/')
+          echo "Tests completed in ${TIME}s"
+          if (( $(echo "$TIME < 60" | bc -l) )); then
+            echo "✓ Tests completed within 60s budget"
+          else
+            echo "✗ Tests exceeded 60s budget"
+            exit 1
+          fi
+        fi
+
+  coverage:
+    name: Coverage Check
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Install cargo-llvm-cov
+      uses: taiki-e/install-action@v2
+      with:
+        tool: cargo-llvm-cov
+
+    - name: Generate coverage report
+      run: cargo llvm-cov --lib --lcov --output-path lcov.info
+
+    - name: Check coverage threshold
+      run: |
+        COVERAGE=$(cargo llvm-cov --lib --percentage --output-path lcov.info 2>&1 | grep -E '[0-9]+\.[0-9]+%' | sed -E 's/.*([0-9]+\.[0-9]+)%.*/\1/')
+        echo "Coverage: ${COVERAGE}%"
+        if (( $(echo "$COVERAGE >= 80.0" | bc -l) )); then
+          echo "✓ Coverage meets 80% threshold"
+        else
+          echo "✗ Coverage below 80% threshold"
+          exit 1
+        fi
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        files: ./lcov.info
+        fail_ci_if_error: false
