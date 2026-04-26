@@ -14,6 +14,7 @@ use anyhow::Result;
 use chrono::{DateTime, Duration, Timelike, Utc};
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
 use tracing::{info, warn};
@@ -57,6 +58,52 @@ impl Default for MorningBriefConfig {
             window_hours: 24,
             schedule_hour: 7,
             auto_run_enabled: true,
+        }
+    }
+}
+
+impl MorningBriefConfig {
+    /// Load morning brief configuration from ~/.hoop/config.yml.
+    ///
+    /// Reads the `morning_brief` section if present, otherwise returns defaults.
+    pub fn load_config() -> Self {
+        let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        let config_path = home.join(".hoop").join("config.yml");
+
+        if !config_path.exists() {
+            return Self::default();
+        }
+
+        match std::fs::read_to_string(&config_path) {
+            Ok(contents) => {
+                match serde_yaml::from_str::<serde_yaml::Value>(&contents) {
+                    Ok(yml) => {
+                        // Extract morning_brief section if present
+                        if let Some(mb_section) = yml.get("morning_brief") {
+                            match serde_yaml::from_value::<MorningBriefConfig>(mb_section.clone()) {
+                                Ok(config) => config,
+                                Err(e) => {
+                                    tracing::warn!(
+                                        "Failed to parse morning_brief section from config.yml: {}, using defaults",
+                                        e
+                                    );
+                                    Self::default()
+                                }
+                            }
+                        } else {
+                            Self::default()
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to parse config.yml: {}, using defaults", e);
+                        Self::default()
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Failed to read config.yml: {}, using defaults", e);
+                Self::default()
+            }
         }
     }
 }

@@ -24,6 +24,16 @@ use tracing::{debug, error, info, warn};
 
 use crate::dictated_notes::{TranscriptWord, TranscriptionResult, TranscriptionStatus};
 
+/// Callback type invoked when a transcription completes successfully.
+///
+/// Receives the stitch ID and project name, and can trigger follow-up
+/// actions like agent synthesis.
+pub type TranscriptionCompleteCallback = Arc<
+    dyn Fn(String, String) -> futures_util::future::BoxFuture<'static, anyhow::Result<()>>
+        + Send
+        + Sync,
+>;
+
 /// Supported audio formats for input
 pub const SUPPORTED_AUDIO_FORMATS: &[&str] = &["wav", "mp3", "m4a", "ogg", "flac", "webm", "opus"];
 

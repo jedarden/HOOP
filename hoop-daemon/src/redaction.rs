@@ -56,6 +56,33 @@ pub fn clear_cache() {
     }
 }
 
+/// Update the redaction patterns from a list of regex strings.
+///
+/// Compiles each pattern string into a Regex and replaces the current
+/// pattern set in the global REDACTOR. Invalid patterns are logged and skipped.
+pub fn update_patterns(pattern_strings: &[String]) {
+    let mut new_patterns = Vec::new();
+    for (i, pat_str) in pattern_strings.iter().enumerate() {
+        match Regex::new(pat_str) {
+            Ok(re) => new_patterns.push(re),
+            Err(e) => {
+                tracing::warn!(
+                    "Invalid redaction pattern at index {}: '{}' - {}. Skipping.",
+                    i,
+                    pat_str,
+                    e
+                );
+            }
+        }
+    }
+
+    if let Ok(mut r) = REDACTOR.lock() {
+        r.patterns = new_patterns;
+        r.cache.clear(); // Clear cache to avoid stale matches
+        tracing::info!("Redaction patterns updated: {} patterns loaded", r.patterns.len());
+    }
+}
+
 // ── Redactor ──────────────────────────────────────────────────────────────────
 
 struct Redactor {
