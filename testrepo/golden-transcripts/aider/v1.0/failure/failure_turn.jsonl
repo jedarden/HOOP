@@ -1,1 +1,1 @@
-{"role":"error","error":"Git repository has uncommitted changes. Please commit or stash them first."}
+{"type":"error","error":{"type":"git_error","message":"Git repository has uncommitted changes. Please commit or stash them first."}}

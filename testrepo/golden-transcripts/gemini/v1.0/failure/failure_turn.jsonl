@@ -1,1 +1,1 @@
-{"error":{"code":429,"message":"Quota exceeded. Try again after 24 hours."}}
+{"type":"error","error":{"code":429,"message":"Quota exceeded. Try again after 24 hours."}}

@@ -1,3 +1,4 @@
-{"role":"assistant","content":"I can help you with that. Let me make the necessary changes."}
-{"role":"assistant","content":"Here's what I'll do:"}
-{"role":"assistant","content":"1. Review the code\n2. Make the changes\n3. Test them"}
+{"type":"content_block_delta","delta":{"text":"I can help you with that. Let me make the necessary changes."}}
+{"type":"content_block_delta","delta":{"text":"Here's what I'll do:"}}
+{"type":"content_block_delta","delta":{"text":"1. Review the code\n2. Make the changes\n3. Test them"}}
+{"type":"message_stop"}

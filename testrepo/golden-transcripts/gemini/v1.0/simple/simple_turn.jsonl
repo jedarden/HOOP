@@ -1,2 +1,3 @@
-{"candidates": [{"content": {"parts": [{"text": "I understand your request. Let me help you with that."}]}}], "finishReason": "STOP"}
-{"candidates": [{"content": {"parts": [{"text": " Is there anything specific you'd like me to focus on?"}]}}], "finishReason": "STOP"}
+{"type":"content_block_delta","delta":{"text":"I understand your request. Let me help you with that."}}
+{"type":"content_block_delta","delta":{"text":" Is there anything specific you'd like me to focus on?"}}
+{"type":"message_stop"}

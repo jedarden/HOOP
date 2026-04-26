@@ -432,3 +432,170 @@ fn golden_transcripts_has_readme() {
         "testrepo/golden-transcripts/README.md must exist — document the fixture format"
     );
 }
+
+// ── Parser regression tests ─────────────────────────────────────────────────────
+
+use hoop_daemon::agent_adapter::parse_claude_stream_line;
+
+/// All golden transcript lines should parse successfully to AgentEvent.
+#[test]
+fn all_golden_transcripts_parse_successfully() {
+    let root = golden_transcripts_root();
+
+    for entry in walkdir::WalkDir::new(&root)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
+        let path = entry.path();
+        if path.extension().map(|ext| ext == "jsonl").unwrap_or(false) {
+            let content = fs::read_to_string(path)
+                .unwrap_or_else(|e| panic!("Failed to read {:?}: {}", path, e));
+
+            for (i, line) in content.lines().enumerate() {
+                if line.trim().is_empty() {
+                    continue;
+                }
+                let result = parse_claude_stream_line(line);
+                assert!(
+                    result.is_ok(),
+                    "Failed to parse line {} of {:?}:\n  Line: {}\n  Error: {:?}",
+                    i + 1,
+                    path,
+                    line,
+                    result.err()
+                );
+            }
+        }
+    }
+}
+
+/// Simple turn scenarios should parse to TextDelta events.
+#[test]
+fn simple_turn_scenarios_parse_to_text_delta() {
+    let root = golden_transcripts_root();
+
+    for &adapter in ADAPTERS {
+        let simple_dir = root.join(adapter).join(VERSION).join("simple");
+        let entries: Vec<_> = fs::read_dir(&simple_dir)
+            .unwrap_or_else(|e| panic!("Failed to read {:?}: {}", simple_dir, e))
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map(|ext| ext == "jsonl").unwrap_or(false))
+            .collect();
+
+        for entry in entries {
+            let path = entry.path();
+            let content = fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("Failed to read {:?}: {}", path, e));
+
+            let mut has_text_delta = false;
+            for line in content.lines() {
+                if line.trim().is_empty() {
+                    continue;
+                }
+                if let Ok(event) = parse_claude_stream_line(line) {
+                    if matches!(event, hoop_daemon::agent_adapter::AgentEvent::TextDelta { .. }) {
+                        has_text_delta = true;
+                        break;
+                    }
+                }
+            }
+
+            assert!(
+                has_text_delta,
+                "Simple turn scenario {:?} for adapter '{}' must parse to at least one TextDelta event",
+                path,
+                adapter
+            );
+        }
+    }
+}
+
+/// Tool-heavy scenarios should parse to ToolUse and ToolResult events.
+#[test]
+fn tool_heavy_scenarios_parse_to_tool_events() {
+    let root = golden_transcripts_root();
+
+    for &adapter in ADAPTERS {
+        let tool_dir = root.join(adapter).join(VERSION).join("tool_heavy");
+        let entries: Vec<_> = fs::read_dir(&tool_dir)
+            .unwrap_or_else(|e| panic!("Failed to read {:?}: {}", tool_dir, e))
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map(|ext| ext == "jsonl").unwrap_or(false))
+            .collect();
+
+        for entry in entries {
+            let path = entry.path();
+            let content = fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("Failed to read {:?}: {}", path, e));
+
+            let mut has_tool_use = false;
+            let mut has_tool_result = false;
+            for line in content.lines() {
+                if line.trim().is_empty() {
+                    continue;
+                }
+                if let Ok(event) = parse_claude_stream_line(line) {
+                    match event {
+                        hoop_daemon::agent_adapter::AgentEvent::ToolUse { .. } => has_tool_use = true,
+                        hoop_daemon::agent_adapter::AgentEvent::ToolResult { .. } => has_tool_result = true,
+                        _ => {}
+                    }
+                }
+            }
+
+            assert!(
+                has_tool_use,
+                "Tool-heavy scenario {:?} for adapter '{}' must parse to at least one ToolUse event",
+                path,
+                adapter
+            );
+            assert!(
+                has_tool_result,
+                "Tool-heavy scenario {:?} for adapter '{}' must parse to at least one ToolResult event",
+                path,
+                adapter
+            );
+        }
+    }
+}
+
+/// Failure scenarios should parse to Error events.
+#[test]
+fn failure_scenarios_parse_to_error_events() {
+    let root = golden_transcripts_root();
+
+    for &adapter in ADAPTERS {
+        let failure_dir = root.join(adapter).join(VERSION).join("failure");
+        let entries: Vec<_> = fs::read_dir(&failure_dir)
+            .unwrap_or_else(|e| panic!("Failed to read {:?}: {}", failure_dir, e))
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().extension().map(|ext| ext == "jsonl").unwrap_or(false))
+            .collect();
+
+        for entry in entries {
+            let path = entry.path();
+            let content = fs::read_to_string(&path)
+                .unwrap_or_else(|e| panic!("Failed to read {:?}: {}", path, e));
+
+            let mut has_error = false;
+            for line in content.lines() {
+                if line.trim().is_empty() {
+                    continue;
+                }
+                if let Ok(event) = parse_claude_stream_line(line) {
+                    if matches!(event, hoop_daemon::agent_adapter::AgentEvent::Error { .. }) {
+                        has_error = true;
+                        break;
+                    }
+                }
+            }
+
+            assert!(
+                has_error,
+                "Failure scenario {:?} for adapter '{}' must parse to at least one Error event",
+                path,
+                adapter
+            );
+        }
+    }
+}

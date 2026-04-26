@@ -1,10 +1,11 @@
-{"candidates":[{"content":{"parts":[{"text":"I'll analyze the codebase for you."}]}}],"finishReason":"STOP"}
-{"functionCall":{"name":"search_files","args":{"query":"*.rs","path":"."}}}
-{"functionResponse":{"name":"search_files","response":{"matches":["src/main.rs","src/lib.rs"]}}}
-{"candidates":[{"content":{"parts":[{"text":"Let me read the main file."}]}}],"finishReason":"STOP"}
-{"functionCall":{"name":"read_file","args":{"path":"src/main.rs"}}}
-{"functionResponse":{"name":"read_file","response":{"content":"fn main() { println!(\"Hello\"); }"}}}
-{"candidates":[{"content":{"parts":[{"text":"Now let me check the library file."}]}}],"finishReason":"STOP"}
-{"functionCall":{"name":"read_file","args":{"path":"src/lib.rs"}}}
-{"functionResponse":{"name":"read_file","response":{"content":"pub fn greet() { println!(\"Hi\"); }"}}}
-{"candidates":[{"content":{"parts":[{"text":"I've reviewed the code. It's a simple Rust project with basic functionality."}]}}],"finishReason":"STOP"}
+{"type":"content_block_delta","delta":{"text":"I'll analyze the codebase for you."}}
+{"type":"tool_use","id":"gemini_1","name":"search_files","input":{"query":"*.rs","path":"."}}
+{"type":"tool_result","id":"gemini_1","output":{"matches":["src/main.rs","src/lib.rs"]},"is_error":false}
+{"type":"content_block_delta","delta":{"text":"Let me read the main file."}}
+{"type":"tool_use","id":"gemini_2","name":"read_file","input":{"path":"src/main.rs"}}
+{"type":"tool_result","id":"gemini_2","output":{"content":"fn main() { println!(\"Hello\"); }"},"is_error":false}
+{"type":"content_block_delta","delta":{"text":"Now let me check the library file."}}
+{"type":"tool_use","id":"gemini_3","name":"read_file","input":{"path":"src/lib.rs"}}
+{"type":"tool_result","id":"gemini_3","output":{"content":"pub fn greet() { println!(\"Hi\"); }"},"is_error":false}
+{"type":"content_block_delta","delta":{"text":"I've reviewed the code. It's a simple Rust project with basic functionality."}}
+{"type":"message_stop"}

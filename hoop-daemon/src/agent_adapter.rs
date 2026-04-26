@@ -121,6 +121,7 @@ pub enum AdapterKind {
     Codex,
     OpenCode,
     Gemini,
+    Aider,
 }
 
 impl AdapterKind {
@@ -132,6 +133,7 @@ impl AdapterKind {
             Self::Codex => "codex",
             Self::OpenCode => "opencode",
             Self::Gemini => "gemini",
+            Self::Aider => "aider",
         }
     }
 
@@ -143,6 +145,7 @@ impl AdapterKind {
             "codex" => Some(Self::Codex),
             "opencode" => Some(Self::OpenCode),
             "gemini" => Some(Self::Gemini),
+            "aider" => Some(Self::Aider),
             _ => None,
         }
     }
@@ -203,6 +206,11 @@ impl AdapterKind {
             Self::Gemini => {
                 // Sandbox-native: single prompt arg, no session-id vs resume distinction.
                 Some(vec!["-p".to_string(), prompt.to_string()])
+            }
+            Self::Aider => {
+                // Aider is a CLI adapter similar to Codex
+                let mut args = vec!["-p".to_string(), prompt.to_string()];
+                Some(args)
             }
             Self::Anthropic | Self::Zai => None,
         }
@@ -329,6 +337,9 @@ pub fn build_adapter(config: &AgentAdapterConfig) -> Result<Box<dyn AgentAdapter
             default_model: config.model.clone(),
         }),
         AdapterKind::Gemini => Box::new(GeminiAdapter {
+            default_model: config.model.clone(),
+        }),
+        AdapterKind::Aider => Box::new(AiderAdapter {
             default_model: config.model.clone(),
         }),
     };
@@ -491,7 +502,7 @@ impl AgentAdapter for ClaudeCodeAdapter {
 }
 
 /// Parse a single NDJSON line from `claude --output-format stream-json` into an AgentEvent.
-fn parse_claude_stream_line(line: &str) -> Result<AgentEvent> {
+pub fn parse_claude_stream_line(line: &str) -> Result<AgentEvent> {
     let val: serde_json::Value = serde_json::from_str(line)?;
 
     let event_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("");
@@ -1010,6 +1021,103 @@ impl AgentAdapter for GeminiAdapter {
             .expect("Gemini always produces CLI args");
 
         let mut cmd = tokio::process::Command::new("gemini");
+        cmd.args(&args)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+
+        if let Some(ref dir) = session.working_dir {
+            cmd.current_dir(dir);
+        }
+
+        let mut child = cmd.spawn()?;
+        let stdout = child.stdout.take().expect("stdout piped");
+        let reader = tokio::io::BufReader::new(stdout);
+        let child_handle = Arc::new(Mutex::new(Some(child)));
+
+        use tokio::io::AsyncBufReadExt;
+
+        let stream = futures_util::stream::unfold(
+            (reader, child_handle),
+            |(mut reader, child_handle)| async move {
+                let mut line = String::new();
+                match reader.read_line(&mut line).await {
+                    Ok(0) => {
+                        let _child = child_handle.lock().await.take();
+                        None
+                    }
+                    Ok(_) => {
+                        let line = line.trim().to_string();
+                        let event = parse_claude_stream_line(&line);
+                        Some((event, (reader, child_handle)))
+                    }
+                    Err(e) => Some((Err(anyhow::anyhow!("read error: {}", e)), (reader, child_handle))),
+                }
+            },
+        );
+
+        Ok(Box::pin(stream))
+    }
+
+    async fn close_session(&self, _session: &AgentSession) -> Result<()> {
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AiderAdapter — CLI adapter for Aider
+// ---------------------------------------------------------------------------
+
+/// Aider CLI adapter.
+///
+/// Aider is a CLI tool that handles AI pair programming.
+/// Turn 1: `aider -p <prompt>`
+/// Turn N: `aider -p <prompt>` (aider manages continuity internally)
+pub struct AiderAdapter {
+    default_model: String,
+}
+
+#[async_trait]
+impl AgentAdapter for AiderAdapter {
+    fn kind(&self) -> AdapterKind {
+        AdapterKind::Aider
+    }
+
+    async fn spawn_session(&self, config: SpawnConfig) -> Result<AgentSession> {
+        let id = uuid::Uuid::new_v4().to_string();
+        Ok(AgentSession {
+            id: SessionId(id),
+            adapter: AdapterKind::Aider,
+            model: config.model,
+            system_prompt: config.system_prompt.clone(),
+            working_dir: config.working_dir.clone(),
+            history: Arc::new(Mutex::new(Vec::new())),
+            has_started_session: false,
+        })
+    }
+
+    async fn resume_session(&self, id: &SessionId) -> Result<AgentSession> {
+        Ok(AgentSession {
+            id: id.clone(),
+            adapter: AdapterKind::Aider,
+            model: self.default_model.clone(),
+            system_prompt: None,
+            working_dir: None,
+            history: Arc::new(Mutex::new(Vec::new())),
+            has_started_session: true,
+        })
+    }
+
+    async fn send_turn(
+        &self,
+        session: &AgentSession,
+        prompt: &str,
+        _attachments: Vec<Attachment>,
+    ) -> Result<EventStream> {
+        let args = AdapterKind::Aider
+            .build_turn_args(&session.id.0, prompt, session.has_started_session)
+            .expect("Aider always produces CLI args");
+
+        let mut cmd = tokio::process::Command::new("aider");
         cmd.args(&args)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
