@@ -5,11 +5,12 @@
 //! `GET /api/stitches/search` - Search stitches across all projects
 
 use axum::{
-    extract::{Path, State},
+    extract::{ConnectInfo, Path, State},
     http::StatusCode,
     routing::{get, post},
     Json, Router,
 };
+use std::net::SocketAddr;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
@@ -71,8 +72,17 @@ pub fn router() -> Router<crate::DaemonState> {
 async fn create_link(
     Path(from_stitch_id): Path<String>,
     State(state): State<crate::DaemonState>,
+    connect_info: Option<ConnectInfo<SocketAddr>>,
     Json(req): Json<CreateLinkRequest>,
 ) -> Result<Json<CreateLinkResponse>, (StatusCode, String)> {
+    // Role check: link creation requires drafter role
+    crate::auth::check_role_for_addr(
+        &state.role_resolver,
+        connect_info.map(|ci| ci.0),
+        crate::auth::Role::Drafter,
+    )
+    .map_err(|e| (e.0, serde_json::to_string(e.1).unwrap_or_else(|_| e.0.to_string())))?;
+
     crate::id_validators::validate_stitch_id(&from_stitch_id)
         .map_err(crate::id_validators::rejection)?;
     crate::id_validators::validate_stitch_id(&req.to_stitch_id)
@@ -201,8 +211,17 @@ async fn create_link(
 
 async fn delete_link(
     Path((from_stitch_id, to_stitch_id)): Path<(String, String)>,
-    State(_state): State<crate::DaemonState>,
+    State(state): State<crate::DaemonState>,
+    connect_info: Option<ConnectInfo<SocketAddr>>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    // Role check: link deletion requires drafter role
+    crate::auth::check_role_for_addr(
+        &state.role_resolver,
+        connect_info.map(|ci| ci.0),
+        crate::auth::Role::Drafter,
+    )
+    .map_err(|e| (e.0, serde_json::to_string(e.1).unwrap_or_else(|_| e.0.to_string())))?;
+
     crate::id_validators::validate_stitch_id(&from_stitch_id)
         .map_err(crate::id_validators::rejection)?;
     crate::id_validators::validate_stitch_id(&to_stitch_id)

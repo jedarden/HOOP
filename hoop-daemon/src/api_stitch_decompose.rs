@@ -26,12 +26,26 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Instant;
 use tracing::warn;
 
 // ---------------------------------------------------------------------------
 // Request / response types
 // ---------------------------------------------------------------------------
+
+/// Agent metadata for audit trail tracking.
+///
+/// When a stitch is created from an agent-drafted stitch, this structure
+/// carries the information needed to reconstruct the origin back to the
+/// agent session and turn that created it.
+#[derive(Debug, Clone)]
+pub struct AgentMetadata {
+    pub session_id: String,
+    pub adapter: String,
+    pub model: String,
+    pub turn_id: Option<String>,
+}
 
 /// Request to preview a decomposition
 #[derive(Debug, Deserialize)]
@@ -259,6 +273,14 @@ async fn submit_stitch(
     connect_info: Option<ConnectInfo<SocketAddr>>,
     Json(req): Json<StitchSubmitRequest>,
 ) -> Result<Json<StitchSubmitResponse>, (StatusCode, String)> {
+    // Role check: stitch submission requires drafter role
+    crate::auth::check_role_for_addr(
+        &state.role_resolver,
+        connect_info.map(|ci| ci.0),
+        crate::auth::Role::Drafter,
+    )
+    .map_err(|e| (e.0, serde_json::to_string(e.1).unwrap_or_else(|_| e.0.to_string())))?;
+
     // 1. Validate draft against schema
     validate_stitch_draft(&req)?;
 
@@ -321,9 +343,10 @@ async fn submit_stitch(
         ));
     }
 
-    let actor = resolve_actor(connect_info.map(|ci| ci.0));
+    // Resolve actor identity (cached per connection via IdentityCache)
+    let actor = resolve_actor(connect_info.map(|ci| ci.0), &state);
 
-    let result = submit_stitch_internal(&project, &project_path, &req, &state, &actor).await?;
+    let result = submit_stitch_internal(&project, &project_path, &req, &state, &actor, None).await?;
 
     Ok(Json(StitchSubmitResponse {
         stitch_id: result.stitch_id,
@@ -344,6 +367,7 @@ pub async fn submit_stitch_internal(
     req: &StitchSubmitRequest,
     state: &crate::DaemonState,
     actor: &str,
+    agent_metadata: Option<&AgentMetadata>,
 ) -> Result<SubmitResult, (StatusCode, String)> {
     // Zero-write guard: stitch submit creates beads via br create
     #[cfg(feature = "zero-write-v01")]
@@ -395,6 +419,13 @@ pub async fn submit_stitch_internal(
     };
     let (source, _) = crate::api_beads::parse_source(&source_str);
 
+    // Determine effective actor: agent actor if available, otherwise operator
+    let effective_actor = if let Some(agent) = agent_metadata {
+        format!("hoop:agent:{}", agent.session_id)
+    } else {
+        actor.to_string()
+    };
+
     // Create beads in dependency order, with audit
     let mut created_beads: Vec<CreatedBead> = Vec::new();
     let mut errors: Vec<String> = Vec::new();
@@ -410,7 +441,7 @@ pub async fn submit_stitch_internal(
         let bead_key = bead.key.clone();
         let bead_depends_on = bead.depends_on.clone();
         let stitch_id_clone = stitch_id.clone();
-        let actor_clone = actor.to_string();
+        let actor_clone = effective_actor.clone();
         let cwd = project_path.to_path_buf();
 
         let bead_title_for_audit = bead_title.clone();
@@ -496,23 +527,41 @@ pub async fn submit_stitch_internal(
             break;
         }
 
+        // Build audit args with agent metadata if available
+        let audit_args_json = if let Some(agent) = agent_metadata {
+            serde_json::json!({
+                "source": source,
+                "stitch_id": stitch_id.clone(),
+                "title": bead_title_for_audit,
+                "issue_type": bead_issue_type_for_audit,
+                "priority": bead_priority,
+                "dependencies": bead_depends_on,
+                "labels": bead.labels,
+                "agent_session_id": agent.session_id,
+                "agent_adapter": agent.adapter,
+                "agent_model": agent.model,
+                "turn_id": agent.turn_id,
+            })
+            .to_string()
+        } else {
+            serde_json::to_string(&BeadActionArgs {
+                source: source.clone(),
+                stitch_id: Some(stitch_id.clone()),
+                title: bead_title_for_audit.clone(),
+                issue_type: bead_issue_type_for_audit.clone(),
+                priority: bead_priority,
+                dependencies: bead_depends_on,
+                labels: bead.labels.clone(),
+            })
+            .unwrap_or_default()
+        };
+
         if let Err(e) = fleet::write_audit_row(
-            actor,
+            &effective_actor,
             ActionKind::BeadCreated,
             &id,
             Some(project),
-            Some(
-                serde_json::to_string(&BeadActionArgs {
-                    source: source.clone(),
-                    stitch_id: Some(stitch_id.clone()),
-                    title: bead_title_for_audit.clone(),
-                    issue_type: bead_issue_type_for_audit.clone(),
-                    priority: bead_priority,
-                    dependencies: bead_depends_on,
-                    labels: bead.labels.clone(),
-                })
-                .unwrap_or_default(),
-            ),
+            Some(audit_args_json),
             ActionResult::Success,
             None,
             Some(&source_str),
@@ -636,7 +685,15 @@ pub async fn submit_stitch_internal(
         .iter()
         .map(|b| (b.id.as_str(), project))
         .collect();
-    if let Err(e) = fleet::create_stitch(
+
+    // Build audit fields from agent metadata
+    let audit_actor = agent_metadata.map(|m| format!("hoop:agent:{}", m.session_id));
+    let audit_session_id = agent_metadata.map(|m| m.session_id.as_str());
+    let audit_adapter = agent_metadata.map(|m| m.adapter.as_str());
+    let audit_model = agent_metadata.map(|m| m.model.as_str());
+    let audit_turn_id = agent_metadata.and_then(|m| m.turn_id.as_deref());
+
+    if let Err(e) = fleet::create_stitch_with_audit(
         &stitch_id,
         project,
         "operator",
@@ -644,6 +701,11 @@ pub async fn submit_stitch_internal(
         actor,
         &bead_links,
         "operator",
+        audit_actor.as_deref(),
+        audit_session_id,
+        audit_adapter,
+        audit_model,
+        audit_turn_id,
     ) {
         warn!("Failed to persist stitch row for {}: {}", stitch_id, e);
     }
@@ -669,22 +731,37 @@ pub async fn submit_stitch_internal(
         .inc(&[project, &req.kind]);
     metrics::metrics().hoop_stitches_created_per_day.inc();
 
-    // Write StitchCreated audit row
+    // Write StitchCreated audit row with agent metadata
+    let stitch_audit_args = if let Some(agent) = agent_metadata {
+        serde_json::json!({
+            "source": source_str,
+            "kind": req.kind,
+            "title": req.title,
+            "bead_count": created_beads.len(),
+            "bead_ids": created_beads.iter().map(|b| &b.id).collect::<Vec<_>>(),
+            "agent_session_id": agent.session_id,
+            "agent_adapter": agent.adapter,
+            "agent_model": agent.model,
+            "turn_id": agent.turn_id,
+        })
+        .to_string()
+    } else {
+        serde_json::json!({
+            "source": source_str,
+            "kind": req.kind,
+            "title": req.title,
+            "bead_count": created_beads.len(),
+            "bead_ids": created_beads.iter().map(|b| &b.id).collect::<Vec<_>>(),
+        })
+        .to_string()
+    };
+
     if let Err(e) = fleet::write_audit_row(
-        actor,
+        &effective_actor,
         ActionKind::StitchCreated,
         &stitch_id,
         Some(project),
-        Some(
-            serde_json::json!({
-                "source": source_str,
-                "kind": req.kind,
-                "title": req.title,
-                "bead_count": created_beads.len(),
-                "bead_ids": created_beads.iter().map(|b| &b.id).collect::<Vec<_>>(),
-            })
-            .to_string(),
-        ),
+        Some(stitch_audit_args),
         ActionResult::Success,
         None,
         Some(&source_str),
@@ -921,29 +998,23 @@ fn resolve_project_path(
         })
 }
 
-/// Resolve actor identity via Tailscale whois (§13), falling back to OS username
-fn resolve_actor(remote_addr: Option<SocketAddr>) -> String {
-    if let Some(addr) = remote_addr {
-        let ip = addr.ip();
-        let output = std::process::Command::new("tailscale")
-            .arg("whois")
-            .arg(ip.to_string())
-            .output();
+/// Resolve actor identity via Tailscale whois (cached per connection, §13),
+/// falling back to OS username.
+///
+/// Uses the shared IdentityCache from DaemonState to ensure whois results are
+/// cached per IP address (5-minute TTL) rather than running a subprocess for
+/// every request.
+pub fn resolve_actor(remote_addr: Option<SocketAddr>, state: &crate::DaemonState) -> String {
+    state.identity_cache.resolve(remote_addr)
+}
 
-        if let Ok(out) = output {
-            if out.status.success() {
-                let identity = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if !identity.is_empty() {
-                    return format!("tailscale:{}", identity);
-                }
-            }
-        }
-    }
-
-    let user = std::env::var("USER")
+/// Resolve actor identity without DaemonState (fallback to OS username only).
+/// Used when state is not available.
+pub fn resolve_actor_no_state(_remote_addr: Option<SocketAddr>) -> String {
+    // Fallback to OS username when no state available
+    std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))
-        .unwrap_or_else(|_| "unknown".to_string());
-    format!("os:{}", user)
+        .unwrap_or_else(|_| "unknown".to_string())
 }
 
 #[cfg(test)]
@@ -1093,7 +1164,56 @@ mod tests {
 
     #[test]
     fn test_resolve_actor_fallback() {
-        let actor = resolve_actor(None);
+        // Create a minimal DaemonState with an IdentityCache
+        let identity_cache = Arc::new(crate::identity::IdentityCache::new());
+        let role_resolver = Arc::new(
+            crate::auth::RoleResolver::unprivileged()
+                .with_identity_cache(identity_cache.clone()),
+        );
+        let state = crate::DaemonState {
+            config: crate::Config::default(),
+            started_at: std::time::Instant::now(),
+            worker_registry: Arc::new(crate::ws::WorkerRegistry::new(
+                tokio::sync::broadcast::channel(1).0,
+                tokio::sync::broadcast::channel(1).0,
+            )),
+            beads: Arc::new(std::sync::RwLock::new(Vec::new())),
+            bead_tx: tokio::sync::broadcast::channel(1).0,
+            stitch_tx: tokio::sync::broadcast::channel(1).0,
+            shutdown: Arc::new(crate::shutdown::ShutdownCoordinator::new()),
+            supervisor: Arc::new(crate::supervisor::ProjectSupervisor::new()),
+            projects: Arc::new(std::sync::RwLock::new(Vec::new())),
+            project_metadata: Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+            config_status_tx: tokio::sync::broadcast::channel(1).0,
+            project_status_tx: tokio::sync::broadcast::channel(1).0,
+            capacity_tx: tokio::sync::broadcast::channel(1).0,
+            cost_aggregator: Arc::new(std::sync::RwLock::new(crate::cost::CostAggregator::new())),
+            transcription_service: None,
+            upload_registry: Arc::new(crate::uploads::UploadRegistry::new()),
+            active_project: Arc::new(std::sync::RwLock::new(None)),
+            vector_index: Arc::new(std::sync::RwLock::new(crate::vector_index::VectorIndex::new())),
+            agent_session_manager: None,
+            morning_brief_runner: None,
+            script_scheduler: None,
+            brief_tx: tokio::sync::broadcast::channel(1).0,
+            draft_tx: tokio::sync::broadcast::channel(1).0,
+            resolved_config: Arc::new(crate::config_resolver::ResolvedConfig::default()),
+            ws_connection_tracker: Arc::new(crate::ws::WsConnectionTracker::new()),
+            worker_ack_monitor: Arc::new(crate::worker_ack::WorkerAckMonitor::new()),
+            collision_alert_tx: tokio::sync::broadcast::channel(1).0,
+            pattern_tx: tokio::sync::broadcast::channel(1).0,
+            bead_created_by_hoop_tx: tokio::sync::broadcast::channel(1).0,
+            redaction_policy_state: Arc::new(tokio::sync::RwLock::new(
+                crate::redaction_policy::RedactionPolicyState::default(),
+            )),
+            stuck_detector: Arc::new(std::sync::Mutex::new(crate::stuck_detector::StuckDetector::new())),
+            backup_runner: None,
+            template_library: crate::template_library::TemplateStore::default(),
+            identity_cache: identity_cache.clone(),
+            role_resolver,
+        };
+
+        let actor = resolve_actor(None, &state);
         assert!(actor.starts_with("os:"));
     }
 }

@@ -233,31 +233,14 @@ async fn get_vector_index_stats(State(state): State<crate::DaemonState>) -> Json
 
 /// Resolve the actor identity for audit purposes.
 ///
-/// Per §13: identity from Tailscale whois where available,
+/// Per §13: identity from Tailscale whois (cached per connection) where available,
 /// falling back to the OS user running the HOOP process.
-fn resolve_actor(remote_addr: Option<SocketAddr>) -> String {
-    if let Some(addr) = remote_addr {
-        let ip = addr.ip();
-        let output = std::process::Command::new("tailscale")
-            .arg("whois")
-            .arg(ip.to_string())
-            .output();
-
-        if let Ok(out) = output {
-            if out.status.success() {
-                let identity = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if !identity.is_empty() {
-                    return format!("tailscale:{}", identity);
-                }
-            }
-        }
-    }
-
-    // Fallback: OS username
-    let user = std::env::var("USER")
-        .or_else(|_| std::env::var("USERNAME"))
-        .unwrap_or_else(|_| "unknown".to_string());
-    format!("os:{}", user)
+///
+/// Uses the shared IdentityCache from DaemonState to ensure whois results are
+/// cached per IP address (5-minute TTL) rather than running a subprocess for
+/// every request.
+fn resolve_actor(remote_addr: Option<SocketAddr>, state: &crate::DaemonState) -> String {
+    state.identity_cache.resolve(remote_addr)
 }
 
 /// Parse the source field into a BeadSource enum.
@@ -411,6 +394,14 @@ async fn create_bead(
         ));
     }
 
+    // Role check: bead creation requires drafter role
+    crate::auth::check_role_for_addr(
+        &state.role_resolver,
+        connect_info.map(|ci| ci.0),
+        crate::auth::Role::Drafter,
+    )
+    .map_err(|e| (e.0, serde_json::to_string(e.1).unwrap_or_else(|_| e.0.to_string())))?;
+
     // 1. Validate draft against schema
     validate_draft(&req)?;
 
@@ -473,8 +464,8 @@ async fn create_bead(
         ));
     }
 
-    // Resolve actor identity
-    let actor = resolve_actor(connect_info.map(|ci| ci.0));
+    // Resolve actor identity (cached per connection via IdentityCache)
+    let actor = resolve_actor(connect_info.map(|ci| ci.0), &state);
 
     let title = req.title.clone();
     let description = req.description.clone();

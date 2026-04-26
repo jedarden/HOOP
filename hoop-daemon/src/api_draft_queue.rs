@@ -276,6 +276,14 @@ async fn create_draft(
     connect_info: Option<ConnectInfo<SocketAddr>>,
     Json(req): Json<CreateDraftRequest>,
 ) -> Result<Json<CreateDraftResponse>, (StatusCode, String)> {
+    // Role check: draft creation requires drafter role
+    crate::auth::check_role_for_addr(
+        &state.role_resolver,
+        connect_info.map(|ci| ci.0),
+        crate::auth::Role::Drafter,
+    )
+    .map_err(|e| (e.0, serde_json::to_string(e.1).unwrap_or_else(|_| e.0.to_string())))?;
+
     // Validate project name from request body
     crate::id_validators::validate_project_name(&req.project)
         .map_err(crate::id_validators::rejection)?;
@@ -303,7 +311,14 @@ async fn create_draft(
         }
     }
 
-    let actor = resolve_actor(connect_info.map(|ci| ci.0));
+    // Resolve actor identity
+    let base_actor = state.identity_cache.resolve(connect_info.map(|ci| ci.0));
+    // For agent-created drafts, use hoop:agent:<session-id> as the actor for audit trail
+    let actor = if let Some(ref session_id) = req.agent_session_id {
+        format!("hoop:agent:{}", session_id)
+    } else {
+        base_actor.clone()
+    };
     let now = chrono::Utc::now().to_rfc3339();
     let draft_id = format!("draft-{}", Uuid::new_v4());
 
@@ -330,7 +345,8 @@ async fn create_draft(
         has_acceptance_criteria: req.has_acceptance_criteria.unwrap_or(false),
         priority: req.priority,
         labels: req.labels.clone().unwrap_or_default(),
-        created_by: actor.clone(),
+        // created_by should be the operator who initiated the action, not the agent
+        created_by: base_actor.clone(),
         created_at: now.clone(),
         source: if req.source.is_empty() {
             "chat".to_string()
@@ -348,10 +364,12 @@ async fn create_draft(
         stitch_id: None,
         preview_json: None,
         // §19.1 Draft concurrency fields
-        opened_by: Some(actor.clone()),
+        opened_by: Some(base_actor.clone()),
         opened_at: Some(now.clone()),
         last_autosave_at: None,
         abandoned_at: None,
+        dependencies: Vec::new(),
+        assignee: None,
     };
 
     // Insert the draft into the queue
@@ -360,19 +378,50 @@ async fn create_draft(
 
     // Audit: draft created
     let audit_source = if req.source.is_empty() { "agent" } else { &req.source };
+
+    // Build audit args with agent metadata for traceability
+    let audit_args_json = if let Some(ref session_id) = req.agent_session_id {
+        // Load agent session to get adapter and model info
+        let agent_info = fleet::load_agent_session_by_id(session_id)
+            .ok()
+            .flatten()
+            .map(|session| {
+                serde_json::json!({
+                    "title": req.title,
+                    "kind": req.kind,
+                    "source": req.source,
+                    "agent_session_id": session_id,
+                    "agent_adapter": session.adapter,
+                    "agent_model": session.model,
+                    "turn_id": req.turn_id,
+                })
+                .to_string()
+            });
+        agent_info.unwrap_or_else(|| {
+            serde_json::json!({
+                "title": req.title,
+                "kind": req.kind,
+                "source": req.source,
+                "agent_session_id": session_id,
+                "turn_id": req.turn_id,
+            })
+            .to_string()
+        })
+    } else {
+        serde_json::json!({
+            "title": req.title,
+            "kind": req.kind,
+            "source": req.source,
+        })
+        .to_string()
+    };
+
     if let Err(e) = fleet::write_audit_row(
         &actor,
         fleet::ActionKind::DraftCreated,
         &draft_id,
         Some(&req.project),
-        Some(
-            serde_json::json!({
-                "title": req.title,
-                "kind": req.kind,
-                "source": req.source,
-            })
-            .to_string(),
-        ),
+        Some(audit_args_json),
         fleet::ActionResult::Success,
         None,
         Some(audit_source),
@@ -396,7 +445,7 @@ async fn create_draft(
         status: "pending".to_string(),
         action: "created".to_string(),
         actor: actor.clone(),
-        created_by: actor,
+        created_by: base_actor,
         version: 1,
         rejection_reason: None,
     });
@@ -417,6 +466,14 @@ async fn approve_draft(
     connect_info: Option<ConnectInfo<SocketAddr>>,
     Json(req): Json<ApproveRequest>,
 ) -> Result<Json<ApproveResponse>, (StatusCode, String)> {
+    // Role check: draft approval requires drafter role
+    crate::auth::check_role_for_addr(
+        &state.role_resolver,
+        connect_info.map(|ci| ci.0),
+        crate::auth::Role::Drafter,
+    )
+    .map_err(|e| (e.0, serde_json::to_string(e.1).unwrap_or_else(|_| e.0.to_string())))?;
+
     crate::id_validators::validate_draft_id(&draft_id).map_err(crate::id_validators::rejection)?;
 
     let draft = fleet::get_draft(&draft_id)
@@ -438,7 +495,7 @@ async fn approve_draft(
         ));
     }
 
-    let actor = resolve_actor(connect_info.map(|ci| ci.0));
+    let actor = state.identity_cache.resolve(connect_info.map(|ci| ci.0));
     let now = chrono::Utc::now().to_rfc3339();
 
     // Mark draft as approved
@@ -512,6 +569,29 @@ async fn approve_draft(
         ));
     }
 
+    // Extract agent metadata from draft for audit trail
+    let agent_metadata = if let Some(ref session_id) = draft.agent_session_id {
+        // Query the agent_sessions table to get adapter and model
+        match fleet::load_agent_session_by_id(session_id) {
+            Ok(Some(session)) => Some(crate::api_stitch_decompose::AgentMetadata {
+                session_id: session.id.clone(),
+                adapter: session.adapter,
+                model: session.model,
+                turn_id: draft.turn_id.clone(),
+            }),
+            Ok(None) => {
+                warn!("Agent session {} not found in database", session_id);
+                None
+            }
+            Err(e) => {
+                warn!("Failed to load agent session {}: {}", session_id, e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     // Use the internal submit logic
     let submit_result = crate::api_stitch_decompose::submit_stitch_internal(
         &draft.project,
@@ -519,6 +599,7 @@ async fn approve_draft(
         &submit_req,
         &state,
         &actor,
+        agent_metadata.as_ref(),
     )
     .await?;
 
@@ -663,7 +744,7 @@ async fn edit_draft(
         })?;
 
     // Audit: draft edited
-    let actor = resolve_actor(connect_info.map(|ci| ci.0));
+    let actor = _state.identity_cache.resolve(connect_info.map(|ci| ci.0));
     let ws_state = _state;
     if let Err(e) = fleet::write_audit_row(
         &actor,
@@ -735,7 +816,7 @@ async fn reject_draft(
         ));
     }
 
-    let actor = resolve_actor(connect_info.map(|ci| ci.0));
+    let actor = state.identity_cache.resolve(connect_info.map(|ci| ci.0));
     let now = chrono::Utc::now().to_rfc3339();
 
     fleet::update_draft_status(
@@ -812,7 +893,7 @@ async fn reject_draft(
 /// the opened_by/opened_at fields and clears any abandoned_at.
 async fn open_draft(
     Path(draft_id): Path<String>,
-    State(_state): State<crate::DaemonState>,
+    State(state): State<crate::DaemonState>,
     connect_info: Option<ConnectInfo<SocketAddr>>,
     Json(req): Json<OpenDraftRequest>,
 ) -> Result<Json<OpenDraftResponse>, (StatusCode, String)> {
@@ -820,7 +901,7 @@ async fn open_draft(
     crate::id_validators::validate_project_name(&req.project)
         .map_err(crate::id_validators::rejection)?;
 
-    let actor = resolve_actor(connect_info.map(|ci| ci.0));
+    let actor = state.identity_cache.resolve(connect_info.map(|ci| ci.0));
     let now = chrono::Utc::now().to_rfc3339();
 
     fleet::open_draft(&draft_id, &req.project, &actor)
@@ -914,7 +995,7 @@ async fn autosave_draft(
 /// Sets abandoned_at timestamp. Drafts are retained for 7 days before cleanup.
 async fn abandon_draft(
     Path(draft_id): Path<String>,
-    State(_state): State<crate::DaemonState>,
+    State(state): State<crate::DaemonState>,
     connect_info: Option<ConnectInfo<SocketAddr>>,
 ) -> Result<Json<AbandonDraftResponse>, (StatusCode, String)> {
     crate::id_validators::validate_draft_id(&draft_id).map_err(crate::id_validators::rejection)?;
@@ -939,7 +1020,7 @@ async fn abandon_draft(
         ));
     }
 
-    let actor = resolve_actor(connect_info.map(|ci| ci.0));
+    let actor = state.identity_cache.resolve(connect_info.map(|ci| ci.0));
     let now = chrono::Utc::now().to_rfc3339();
 
     fleet::abandon_draft(&draft_id)
@@ -1046,29 +1127,4 @@ pub fn resolve_project_path(
                 format!("Project '{}' not found", project),
             )
         })
-}
-
-/// Resolve actor identity via Tailscale whois, falling back to OS username
-fn resolve_actor(remote_addr: Option<SocketAddr>) -> String {
-    if let Some(addr) = remote_addr {
-        let ip = addr.ip();
-        let output = std::process::Command::new("tailscale")
-            .arg("whois")
-            .arg(ip.to_string())
-            .output();
-
-        if let Ok(out) = output {
-            if out.status.success() {
-                let identity = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if !identity.is_empty() {
-                    return format!("tailscale:{}", identity);
-                }
-            }
-        }
-    }
-
-    let user = std::env::var("USER")
-        .or_else(|_| std::env::var("USERNAME"))
-        .unwrap_or_else(|_| "unknown".to_string());
-    format!("os:{}", user)
 }
