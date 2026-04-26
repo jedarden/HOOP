@@ -29,6 +29,7 @@
 
 use std::fmt;
 use std::ops::Deref;
+use http::StatusCode;
 
 /// Maximum bead ID length.
 const BEAD_ID_MAX_LEN: usize = 256;
@@ -523,6 +524,16 @@ fn truncate_for_display(s: &str, max: usize) -> String {
     } else {
         format!("{}…", &s[..max])
     }
+}
+
+/// Convert an ID validation error into an HTTP 400 response.
+///
+/// This function is used by API handlers to return safe error messages
+/// that never echo the raw user input or filesystem path (§13).
+///
+/// Returns a tuple of `(StatusCode, String)` suitable for axum error responses.
+pub fn rejection(err: IdValidationError) -> (StatusCode, String) {
+    (StatusCode::BAD_REQUEST, err.to_string())
 }
 
 #[cfg(test)]
