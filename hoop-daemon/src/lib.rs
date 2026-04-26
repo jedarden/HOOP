@@ -10,6 +10,7 @@ pub mod agent_context;
 pub mod agent_session;
 pub mod ansi_strip;
 pub mod api_agent;
+pub mod api_backup;
 pub mod api_attachments;
 pub mod api_audit;
 pub mod api_beads;
@@ -49,6 +50,7 @@ pub mod fleet;
 pub mod fleet_notifications;
 pub mod heartbeats;
 pub mod id_validators;
+pub mod identity;
 pub mod log_rotation;
 pub mod metrics;
 pub mod morning_brief;
@@ -74,14 +76,16 @@ pub mod stuck_detector;
 pub mod supervisor;
 pub mod svg_sanitize;
 pub mod syntax_highlight;
+pub mod syntax_highlight_stream;
+pub mod template_library;
 pub mod tag_join;
 pub mod transcription;
+pub mod unknown_event_sink;
 pub mod uploads;
 pub mod vector_index;
 pub mod worker_ack;
 pub mod ws;
-// TODO: Uncomment when collision_detector is complete
-// pub mod collision_detector;
+pub mod collision_detector;
 pub mod api_blame;
 pub mod api_diff;
 pub mod api_fix_patterns;
@@ -91,9 +95,9 @@ pub mod bead_commit_index;
 pub mod net_diff;
 pub mod orphan_beads;
 pub mod screen_capture;
-// TODO: Uncomment when observer is complete
-// pub mod observer;
+pub mod observer;
 pub mod cost_anomaly;
+pub mod reflection_detector;
 pub mod fix_patterns;
 pub mod stitch_percentile_index;
 
@@ -291,6 +295,12 @@ pub struct DaemonState {
     pub redaction_policy_state: Arc<tokio::sync::RwLock<redaction_policy::RedactionPolicyState>>,
     /// Stuck detector — monitors worker events for idle/max-runtime/content-seen timeouts (§C1)
     pub stuck_detector: Arc<std::sync::Mutex<stuck_detector::StuckDetector>>,
+    /// Backup runner — handles scheduled and manual fleet.db snapshots to S3 (§15)
+    pub backup_runner: Option<Arc<backup_pipeline::BackupPipeline>>,
+    /// Template library — reusable stitch templates (§22)
+    pub template_library: template_library::TemplateStore,
+    /// Identity cache for Tailscale whois lookups (§13 Security)
+    pub identity_cache: Arc<identity::IdentityCache>,
 }
 
 /// Health check endpoint handler — returns 200 if the process is responsive.
@@ -741,6 +751,106 @@ async fn get_file_content(
         .unwrap())
 }
 
+/// Server-Sent Events (SSE) streaming endpoint for large file syntax highlighting.
+///
+/// Streams highlighted line chunks for files >50KB. Client receives:
+/// - Header: language, line count, theme colors
+/// - Chunk(s): batches of highlighted HTML lines
+/// - Trailer: completion status, truncated flag
+///
+/// Query parameters:
+/// - path: Relative path from project root (required)
+/// - theme: Theme alias (default: "dark")
+async fn get_file_content_stream(
+    axum::extract::Path(project): axum::extract::Path<String>,
+    axum::extract::Query(params): axum::extract::Query<FileContentQuery>,
+    axum::extract::State(state): axum::extract::State<DaemonState>,
+) -> Result<axum::response::Sse<impl futures_util::Stream<Item = Result<String, axum::Error>> + Send + 'static>, (axum::http::StatusCode, String)> {
+    use futures_util::stream;
+
+    if id_validators::validate_project_name(&project).is_err() {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            "invalid project name".into(),
+        ));
+    }
+
+    let project_root = {
+        let projects = state.projects.read().unwrap();
+        projects
+            .iter()
+            .find(|p| p.name == project)
+            .map(|p| std::path::PathBuf::from(&p.path))
+            .ok_or((
+                axum::http::StatusCode::NOT_FOUND,
+                "project not found".into(),
+            ))?
+    };
+
+    let rel_path = params.path;
+    if !files::is_safe_rel_path(&rel_path) {
+        return Err((axum::http::StatusCode::FORBIDDEN, "unsafe path".into()));
+    }
+
+    let theme = params.theme.unwrap_or_else(|| "dark".to_owned());
+
+    // Resolve path and read content in blocking task
+    let (abs_path, filename, content) = tokio::task::spawn_blocking(move || -> anyhow::Result<(std::path::PathBuf, String, String)> {
+        use crate::path_security::{canonicalize_and_check, PathAllowlist};
+        let allowlist = PathAllowlist::for_workspace(&project_root)
+            .map_err(|e| anyhow::anyhow!("workspace allowlist: {e}"))?;
+        let abs_path = canonicalize_and_check(&project_root.join(&rel_path), &allowlist)
+            .map_err(|e| anyhow::anyhow!("path traversal: {e}"))?;
+        if !abs_path.is_file() {
+            anyhow::bail!("not a file");
+        }
+        let meta = std::fs::metadata(&abs_path)?;
+        if meta.len() > 100 * 1024 * 1024 {
+            anyhow::bail!("file too large (>100 MB)");
+        }
+        let content = std::fs::read_to_string(&abs_path).map_err(|e| anyhow::anyhow!("read: {e}"))?;
+        let filename = abs_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+        Ok((abs_path, filename, content))
+    })
+    .await
+    .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .map_err(|e| {
+        let msg = e.to_string();
+        let status = if msg.contains("not a file") || msg.contains("not found") {
+            axum::http::StatusCode::NOT_FOUND
+        } else if msg.contains("too large") {
+            axum::http::StatusCode::PAYLOAD_TOO_LARGE
+        } else {
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+        };
+        (status, msg)
+    })?;
+
+    // Create the highlighting stream
+    let highlight_stream = syntax_highlight_stream::highlight_stream(content, &filename, &theme);
+
+    // Convert to SSE stream
+    let sse_stream = stream::unfold(highlight_stream, |mut stream| async move {
+        match futures_util::StreamExt::next(&mut stream).await {
+            Some(item) => {
+                let sse_data = syntax_highlight_stream::item_to_sse(&item);
+                Some((Ok(sse_data), stream))
+            }
+            None => None,
+        }
+    });
+
+    Ok(axum::response::Sse::new(sse_stream).keep_alive(
+        axum::response::sse::KeepAlive::new()
+            .interval(std::time::Duration::from_secs(15))
+            .text("keepalive"),
+    ))
+}
+
 /// Get bead events for a specific bead (from events.jsonl)
 async fn get_bead_events(
     axum::extract::Path(bead_id): axum::extract::Path<String>,
@@ -1020,6 +1130,10 @@ pub fn router() -> Router<DaemonState> {
             get(get_file_content),
         )
         .route(
+            "/api/projects/:project/files/content/stream",
+            get(get_file_content_stream),
+        )
+        .route(
             "/api/attachments/:attachment_type/:id/:filename",
             get(api_attachments::serve_attachment),
         )
@@ -1043,11 +1157,13 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_orphans::router())
         .merge(api_fix_patterns::router())
         .merge(net_diff::router())
+        .merge(template_library::router())
         .route(
             "/api/workers/timeline",
             get(api_timeline::get_worker_timeline),
         )
         .merge(api_agent::router())
+        .merge(api_backup::router())
         .merge(api_morning_brief::router())
         .merge(api_metrics::router())
         .merge(api_config::router())
@@ -1183,9 +1299,7 @@ async fn run_control_socket(
 pub async fn serve(config: Config) -> anyhow::Result<()> {
     // Observer mode: run read-only attach to primary daemon
     if config.observer_mode {
-        // TODO: Uncomment when observer is complete
-        // return observer::serve_observer(config).await;
-        return Err(anyhow::anyhow!("Observer mode is not yet implemented"));
+        return observer::serve_observer(config).await;
     }
 
     log_rotation::init_logging();
@@ -1348,6 +1462,83 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         info!("Percentile index updater started (listens to bead close events)");
     }
 
+    // Check for cost anomalies on bead close events
+    {
+        let mut bead_close_rx = bead_tx.subscribe();
+        tokio::spawn(async move {
+            loop {
+                match bead_close_rx.recv().await {
+                    Ok(bead) if bead.status == "closed" => {
+                        // Check if this bead belongs to a Stitch and run cost anomaly detection
+                        if let Some(stitch_id) = find_stitch_for_bead(&bead.id).await {
+                            tokio::task::spawn_blocking(move || {
+                                if let Err(e) = crate::cost_anomaly::check_on_stitch_close(&stitch_id)
+                                {
+                                    tracing::debug!(
+                                        "Failed to check cost anomaly for stitch {}: {}",
+                                        stitch_id,
+                                        e
+                                    );
+                                }
+                            })
+                            .await
+                            .ok();
+                        }
+                    }
+                    Ok(_) => {}
+                    Err(broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        });
+        info!("Cost anomaly detector started (listens to bead close events)");
+    }
+
+    // Check for repeated patterns on bead close events (reflection detector)
+    {
+        let mut bead_close_rx = bead_tx.subscribe();
+        tokio::spawn(async move {
+            loop {
+                match bead_close_rx.recv().await {
+                    Ok(bead) if bead.status == "closed" => {
+                        // Check if this bead belongs to an operator Stitch and run reflection detection
+                        if let Some(stitch_id) = find_stitch_for_bead(&bead.id).await {
+                            let stitch_id_clone = stitch_id.clone();
+                            tokio::task::spawn_blocking(move || {
+                                use crate::reflection_detector;
+                                let config = reflection_detector::ReflectionDetectorConfig::default();
+                                match reflection_detector::run_detection(&config) {
+                                    Ok(count) => {
+                                        if count > 0 {
+                                            tracing::info!(
+                                                "Reflection detector: {} new patterns proposed (stitch={})",
+                                                count,
+                                                stitch_id_clone
+                                            );
+                                        }
+                                    }
+                                    Err(e) => {
+                                        tracing::debug!(
+                                            "Reflection detector failed for stitch {}: {}",
+                                            stitch_id_clone,
+                                            e
+                                        );
+                                    }
+                                }
+                            })
+                            .await
+                            .ok();
+                        }
+                    }
+                    Ok(_) => {}
+                    Err(broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        });
+        info!("Reflection detector started (listens to bead close events)");
+    }
+
     // Initialize cost aggregator
     let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     home.push(".hoop");
@@ -1356,51 +1547,6 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     let cost_aggregator: Arc<std::sync::RwLock<cost::CostAggregator>> =
         Arc::new(std::sync::RwLock::new(cost_aggregator));
     info!("Cost aggregator initialized");
-
-    // Initialize transcription service
-    let voice_config = transcription::load_voice_config();
-    let transcription_config = transcription::build_transcription_config(&voice_config);
-    let whisper_model_path = transcription_config.whisper_model_path.clone();
-    let transcription_service = Arc::new(transcription::TranscriptionService::new(
-        transcription_config.clone(),
-    ));
-
-    // Ensure models directory exists
-    if let Some(model_dir) = whisper_model_path.parent() {
-        if !model_dir.exists() {
-            if let Err(e) = std::fs::create_dir_all(model_dir) {
-                warn!(
-                    "Failed to create models directory {}: {}",
-                    model_dir.display(),
-                    e
-                );
-            } else {
-                info!("Created models directory at {}", model_dir.display());
-                info!(
-                    "Whisper models should be placed at {}",
-                    whisper_model_path.display()
-                );
-                info!("Download from: https://huggingface.co/ggerganov/whisper.cpp");
-            }
-        }
-    }
-
-    // Check if model exists
-    if !whisper_model_path.exists() {
-        warn!(
-            "Whisper model not found at {}",
-            whisper_model_path.display()
-        );
-        warn!("Transcription will fail until model is downloaded");
-        warn!("Download from: https://huggingface.co/ggerganov/whisper.cpp");
-    } else {
-        info!("Whisper model found at {}", whisper_model_path.display());
-    }
-    info!(
-        "Transcription service initialized (cli: {}, model: {})",
-        transcription_config.whisper_cli_path.display(),
-        transcription_config.whisper_model_path.display()
-    );
 
     // Initialize upload registry
     let upload_config = uploads::UploadConfig::default();
@@ -1572,6 +1718,19 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     let mut config_watcher = config_watcher::ConfigWatcher::new(cli_overrides)?;
     config_watcher.start()?;
 
+    // Initialize redaction patterns from initial config (§18)
+    // Ensure the redaction module uses the configured patterns from config.yml
+    // (or defaults if not configured) instead of its built-in patterns.
+    {
+        let initial_config = config_watcher.config().await;
+        redaction::update_patterns(&initial_config.secrets_patterns.value);
+        info!(
+            "Redaction patterns initialized: {} patterns from {}",
+            initial_config.secrets_patterns.value.len(),
+            initial_config.secrets_patterns.attribution
+        );
+    }
+
     // Spawn task to handle config.yml changes
     let config_tx_for_config = config_status_tx.clone();
     let stuck_detector_for_reload = stuck_detector.clone();
@@ -1580,10 +1739,18 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         while let Ok(event) = rx.recv().await {
             match event {
                 config_watcher::ConfigEvent::ConfigReloaded {
-                    config: _,
+                    config,
                     prev_hash,
                 } => {
                     info!("config.yml reloaded successfully");
+
+                    // Update redaction patterns from new config (§18)
+                    redaction::update_patterns(&config.secrets_patterns.value);
+                    info!(
+                        "Redaction patterns reloaded: {} patterns from {}",
+                        config.secrets_patterns.value.len(),
+                        config.secrets_patterns.attribution
+                    );
 
                     // Reload stuck detector configuration (§C1, hoop-ttb.3.25)
                     let new_sd_config = stuck_detector::StuckDetector::load_config();
@@ -1965,6 +2132,158 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         }
     };
 
+    // Initialize transcription service (after agent session manager for callback)
+    let voice_config = transcription::load_voice_config();
+    let transcription_config = transcription::build_transcription_config(&voice_config);
+    let whisper_model_path = transcription_config.whisper_model_path.clone();
+
+    // Create synthesis callback for transcription completion
+    let synthesis_callback: transcription::TranscriptionCompleteCallback = {
+        let agent_mgr = agent_session_manager.clone();
+        Arc::new(move |stitch_id: String, project: String| {
+            let mgr = agent_mgr.clone();
+            Box::pin(async move {
+                if let Some(ref mgr) = mgr {
+                    // Trigger synthesis via agent
+                    let synthesis_prompt = format!(
+                        r#"Analyze the following voice transcript and synthesize a concise Stitch title and body.
+
+The dictated note (stitch_id: {}) has completed transcription.
+
+Requirements:
+1. Title: Maximum 280 characters, capture the core intent
+2. Body: Structured markdown with:
+   - Brief context (what triggered this)
+   - Key points or action items
+   - Any relevant details mentioned
+3. Infer the kind: "fix" (bug/error), "task" (feature/work), or "investigation" (needs research)
+4. Output ONLY valid JSON matching this schema:
+   {{"title": "...", "body": "...", "kind": "fix|task|investigation", "confidence": "high|medium|low"}}
+
+Be concise and actionable. Focus on what needs to be done.
+
+Note: This is an automated synthesis from voice dictation."#,
+                        stitch_id
+                    );
+
+                    match mgr.send_turn(synthesis_prompt, vec![]).await {
+                        Ok(mut stream) => {
+                            use futures_util::StreamExt;
+                            let mut full_response = String::new();
+                            while let Some(item) = stream.next().await {
+                                match item {
+                                    crate::agent_adapter::AgentEvent::TextDelta { text } => {
+                                        full_response.push_str(&text);
+                                    }
+                                    crate::agent_adapter::AgentEvent::TurnComplete { .. } => break,
+                                    crate::agent_adapter::AgentEvent::Error { message } => {
+                                        tracing::warn!(
+                                            "Agent error during synthesis for {}: {}",
+                                            stitch_id,
+                                            message
+                                        );
+                                        return Ok(());
+                                    }
+                                    _ => {}
+                                }
+                            }
+
+                            // Parse and store synthesis result
+                            let response_text = full_response.trim();
+                            let json_str = if let Some(start) = response_text.find('{') {
+                                if let Some(end) = response_text.rfind('}') {
+                                    &response_text[start..=end]
+                                } else {
+                                    response_text
+                                }
+                            } else {
+                                response_text
+                            };
+
+                            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str) {
+                                let title = parsed["title"].as_str().unwrap_or("Voice note").to_string();
+                                let body = parsed["body"].as_str().unwrap_or("").to_string();
+                                let kind = parsed["kind"].as_str().unwrap_or("task").to_string();
+
+                                // Store synthesis result in dictated_notes for later use
+                                tokio::task::spawn_blocking(move || {
+                                    use rusqlite::{params, Connection};
+                                    let db_path = crate::fleet::db_path();
+                                    if let Ok(conn) = Connection::open(&db_path) {
+                                        let synthesis_json = serde_json::json!({
+                                            "title": title,
+                                            "body": body,
+                                            "kind": kind,
+                                            "synthesized_at": chrono::Utc::now().to_rfc3339()
+                                        }).to_string();
+
+                                        let _ = conn.execute(
+                                            "UPDATE dictated_notes SET synthesis_result = ?1 WHERE stitch_id = ?2",
+                                            params![synthesis_json, stitch_id],
+                                        );
+                                    }
+                                }).await.ok();
+
+                                tracing::info!(
+                                    "Synthesis complete for {}: {} ({})",
+                                    stitch_id,
+                                    title,
+                                    kind
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to send synthesis request for {}: {}", stitch_id, e);
+                        }
+                    }
+                }
+                Ok(())
+            })
+        })
+    };
+
+    let transcription_service = Arc::new(transcription::TranscriptionService::with_callback(
+        transcription_config.clone(),
+        Some(synthesis_callback),
+    ));
+
+    // Ensure models directory exists
+    if let Some(model_dir) = whisper_model_path.parent() {
+        if !model_dir.exists() {
+            if let Err(e) = std::fs::create_dir_all(model_dir) {
+                warn!(
+                    "Failed to create models directory {}: {}",
+                    model_dir.display(),
+                    e
+                );
+            } else {
+                info!("Created models directory at {}", model_dir.display());
+                info!(
+                    "Whisper models should be placed at {}",
+                    whisper_model_path.display()
+                );
+                info!("Download from: https://huggingface.co/ggerganov/whisper.cpp");
+            }
+        }
+    }
+
+    // Check if model exists
+    if !whisper_model_path.exists() {
+        warn!(
+            "Whisper model not found at {}",
+            whisper_model_path.display()
+        );
+        warn!("Transcription will fail until model is downloaded");
+        warn!("Download from: https://huggingface.co/ggerganov/whisper.cpp");
+    } else {
+        info!("Whisper model found at {}", whisper_model_path.display());
+    }
+    info!(
+        "Transcription service initialized with synthesis callback (cli: {}, model: {})",
+        transcription_config.whisper_cli_path.display(),
+        transcription_config.whisper_model_path.display()
+    );
+
     // Initialize morning brief broadcast channel and runner
     let (brief_tx, _) = broadcast::channel::<ws::MorningBriefData>(64);
 
@@ -1987,6 +2306,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
             pricing: None,
             server: None,
             stuck_detector: None,
+            morning_brief: None,
         };
 
         tokio::task::spawn_blocking(|| {
@@ -2009,6 +2329,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                 pricing: None,
                 server: None,
                 stuck_detector: None,
+                morning_brief: None,
             };
 
             if !config_path.exists() {
@@ -2043,11 +2364,16 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
 
     let morning_brief_runner = match &agent_session_manager {
         Some(mgr) => {
-            let config = morning_brief::MorningBriefConfig::default();
+            let config = morning_brief::MorningBriefConfig::load_config();
+            let scripts_dir = dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(".hoop")
+                .join("scripts");
             let runner = Arc::new(morning_brief::MorningBriefRunner::new(
                 config,
                 mgr.clone(),
                 brief_tx.clone(),
+                scripts_dir,
             ));
             info!("Morning brief runner initialized");
             Some(runner)
@@ -2083,16 +2409,19 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     }
 
     // Start backup scheduler when fully configured
-    if let backup::BackupState::Ready {
+    let backup_runner = if let backup::BackupState::Ready {
         config,
         credentials,
     } = backup_state
     {
-        let pipeline = backup_pipeline::BackupPipeline::new(config, credentials);
+        let pipeline = Arc::new(backup_pipeline::BackupPipeline::new(config, credentials));
         let sched_shutdown = shutdown_coordinator.subscribe();
-        pipeline.start_scheduler(sched_shutdown);
+        pipeline.clone().start_scheduler(sched_shutdown);
         info!("Backup scheduler started");
-    }
+        Some(pipeline)
+    } else {
+        None
+    };
 
     // Initialize script scheduler (§22.3)
     let scripts_dir = dirs::home_dir()
@@ -2103,6 +2432,42 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     let sched_shutdown = shutdown_coordinator.subscribe();
     script_scheduler.clone().start_scheduler(sched_shutdown);
     info!("Script scheduler started");
+
+    // Initialize template library (§22)
+    let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    home.push(".hoop");
+    let templates_dir = template_library::ensure_global_templates_dir(&home);
+    let template_library = Arc::new(std::sync::RwLock::new(template_library::TemplateLibrary::new()));
+
+    // Load initial templates
+    {
+        let mut lib = template_library.write().unwrap();
+        let project_dirs: Vec<PathBuf> = initial_config
+            .registry
+            .projects
+            .iter()
+            .filter_map(|p| p.path.as_ref())
+            .map(|p| PathBuf::from(p))
+            .collect();
+        if let Err(e) = lib.load(&templates_dir, &project_dirs) {
+            warn!("Failed to load initial templates: {}", e);
+        }
+    }
+
+    // Start template file watcher for hot-reload
+    let project_dirs: Vec<PathBuf> = initial_config
+        .registry
+        .projects
+        .iter()
+        .filter_map(|p| p.path.as_ref())
+        .map(|p| PathBuf::from(p))
+        .collect();
+    let _template_watcher = template_library::start_watcher(
+        templates_dir,
+        template_library.clone(),
+        project_dirs,
+    );
+    info!("Template library initialized and watcher started");
 
     let bead_tx_for_rebuild = bead_tx.clone();
     let stitch_tx_for_rebuild = stitch_tx.clone();
@@ -2142,6 +2507,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         bead_created_by_hoop_tx: broadcast::channel::<ws::BeadCreatedByHoopData>(64).0,
         redaction_policy_state,
         stuck_detector,
+        backup_runner,
+        template_library,
+        identity_cache: Arc::new(identity::IdentityCache::new()),
     };
 
     // Forward project runtime status updates to shared store and broadcast
@@ -2512,6 +2880,28 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                             cap.account_id, e
                         );
                     }
+
+                    // Emit capacity alert if 5h utilization exceeds threshold
+                    use crate::fleet_notifications::{self, FleetNotificationKind};
+                    const CAPACITY_ALERT_THRESHOLD_PCT: f64 = 80.0;
+                    if cap.utilization_5h >= CAPACITY_ALERT_THRESHOLD_PCT {
+                        let notification = fleet_notifications::FleetNotification::new(
+                            FleetNotificationKind::CapacityAlert,
+                            None,
+                            format!(
+                                "Account '{}' 5h utilization at {:.1}%",
+                                cap.account_id, cap.utilization_5h
+                            ),
+                            serde_json::json!({
+                                "account_id": cap.account_id,
+                                "adapter": cap.adapter,
+                                "utilization_5h": cap.utilization_5h,
+                                "utilization_7d": cap.utilization_7d,
+                                "threshold_pct": CAPACITY_ALERT_THRESHOLD_PCT,
+                            }),
+                        );
+                        fleet_notifications::notifications().push(notification);
+                    }
                 }
             }
         });
@@ -2528,6 +2918,17 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
             }
         });
         info!("Stuck worker checker started (60s interval)");
+    }
+
+    // Collision detector — checks for overlapping file edits across active workers (§6 Phase 2, deliverable 12)
+    {
+        let detector = Arc::new(collision_detector::CollisionDetector::new(
+            state.worker_registry.clone(),
+            state.collision_alert_tx.clone(),
+        ));
+        let mut shutdown_rx = state.shutdown.subscribe();
+        detector.clone().spawn(15, shutdown_rx);
+        info!("Collision detector started (15s interval)");
     }
 
     let app = router()
@@ -2855,6 +3256,7 @@ async fn load_hoop_config() -> Option<hoop_schema::HoopConfig> {
             pricing: None,
             server: None,
             stuck_detector: None,
+            morning_brief: None,
         };
 
         if !config_path.exists() {
@@ -2911,4 +3313,261 @@ async fn find_stitch_for_bead(bead_id: &str) -> Option<String> {
     .await
     .ok()
     .flatten()
+}
+
+/// Check if all beads linked to a stitch are closed and emit notification if so.
+///
+/// This function is called when a bead is closed to determine if its stitch
+/// is now complete (all linked beads closed). If so, emits a StitchBeadsClosed
+/// notification to the agent.
+fn check_and_emit_stitch_beads_closed(
+    stitch_id: &str,
+    beads: &[Bead],
+) -> Result<()> {
+    use rusqlite::Connection;
+
+    let db_path = std::path::PathBuf::from(
+        dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")),
+    )
+    .join(".hoop")
+    .join("fleet.db");
+
+    if !db_path.exists() {
+        return Ok(());
+    }
+
+    let conn = Connection::open(&db_path)?;
+
+    // Query all beads linked to this stitch
+    let mut stmt = conn.prepare(
+        "SELECT bead_id FROM stitch_beads WHERE stitch_id = ?1"
+    )?;
+
+    let linked_bead_ids: Vec<String> = stmt
+        .query_map(rusqlite::params![stitch_id], |row| row.get::<_, String>(0))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    if linked_bead_ids.is_empty() {
+        return Ok(());
+    }
+
+    // Check if all linked beads are closed
+    let all_closed = linked_bead_ids.iter().all(|bid| {
+        beads.iter().any(|b| &b.id == bid && b.status == BeadStatus::Closed)
+    });
+
+    if !all_closed {
+        return Ok(());
+    }
+
+    // Get stitch title and project for the notification
+    let stitch_info: Option<(String, Option<String>)> = conn
+        .query_row(
+            "SELECT title, project FROM stitches WHERE id = ?1",
+            rusqlite::params![stitch_id],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?)),
+        )
+        .ok();
+
+    let (stitch_title, project) = match stitch_info {
+        Some((title, proj)) => (title, proj),
+        None => return Ok(()),
+    };
+
+    let notification = crate::fleet_notifications::FleetNotification::new(
+        crate::fleet_notifications::FleetNotificationKind::StitchBeadsClosed,
+        project.clone(),
+        format!("All beads linked to Stitch '{}' are now closed", stitch_title),
+        serde_json::json!({
+            "stitch_id": stitch_id,
+            "stitch_title": stitch_title,
+            "bead_ids": linked_bead_ids,
+            "bead_count": linked_bead_ids.len(),
+        }),
+    );
+
+    // Push notification to the ring
+    crate::fleet_notifications::notifications().push(notification);
+
+    Ok(())
+}
+
+/// Check if all workers for a stitch have completed and emit notification if so.
+///
+/// This function is called when a worker reaches a terminal state to determine
+/// if all workers for the stitch are complete. If so, emits a ConvoyComplete
+/// notification to the agent.
+fn check_and_emit_convoy_complete(
+    stitch_id: &str,
+) -> Result<()> {
+    use rusqlite::Connection;
+
+    let db_path = std::path::PathBuf::from(
+        dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")),
+    )
+    .join(".hoop")
+    .join("fleet.db");
+
+    if !db_path.exists() {
+        return Ok(());
+    }
+
+    let conn = Connection::open(&db_path)?;
+
+    // Query all beads linked to this stitch
+    let mut stmt = conn.prepare(
+        "SELECT bead_id FROM stitch_beads WHERE stitch_id = ?1"
+    )?;
+
+    let linked_bead_ids: Vec<String> = stmt
+        .query_map(rusqlite::params![stitch_id], |row| row.get::<_, String>(0))?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    if linked_bead_ids.is_empty() {
+        return Ok(());
+    }
+
+    // Check if all linked beads have terminal events in events.jsonl
+    // Terminal events: Complete, Close, Fail, Timeout, Crash, Release
+    let events_path = std::path::PathBuf::from(
+        dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
+    )
+    .join(".hoop")
+    .join("events.jsonl");
+
+    if !events_path.exists() {
+        return Ok(());
+    }
+
+    // Read events and track which beads have terminal events
+    let mut beads_with_terminal: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    if let Ok(file) = std::fs::File::open(&events_path) {
+        use std::io::BufRead;
+        let reader = std::io::BufReader::new(file);
+        for line in reader.lines() {
+            if let Ok(line) = line {
+                if let Ok(event) = serde_json::from_str::<crate::events::NeedleEvent>(&line) {
+                    let (bead_id, is_terminal) = match &event {
+                        crate::events::NeedleEvent::Complete { bead, .. }
+                        | crate::events::NeedleEvent::Close { bead, .. }
+                        | crate::events::NeedleEvent::Fail { bead, .. }
+                        | crate::events::NeedleEvent::Timeout { bead, .. }
+                        | crate::events::NeedleEvent::Crash { bead, .. }
+                        | crate::events::NeedleEvent::Release { bead, .. } => (bead.clone(), true),
+                        _ => continue,
+                    };
+
+                    if linked_bead_ids.contains(&bead_id) && is_terminal {
+                        beads_with_terminal.insert(bead_id);
+                    }
+                }
+            }
+        }
+    }
+
+    // Check if all linked beads have terminal events
+    if beads_with_terminal.len() != linked_bead_ids.len() {
+        return Ok(());
+    }
+
+    // Get stitch title and project for the notification
+    let stitch_info: Option<(String, Option<String>)> = conn
+        .query_row(
+            "SELECT title, project FROM stitches WHERE id = ?1",
+            rusqlite::params![stitch_id],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?)),
+        )
+        .ok();
+
+    let (stitch_title, project) = match stitch_info {
+        Some((title, proj)) => (title, proj),
+        None => return Ok(()),
+    };
+
+    let notification = crate::fleet_notifications::FleetNotification::new(
+        crate::fleet_notifications::FleetNotificationKind::ConvoyComplete,
+        project.clone(),
+        format!("All workers for Stitch '{}' have completed", stitch_title),
+        serde_json::json!({
+            "stitch_id": stitch_id,
+            "stitch_title": stitch_title,
+            "bead_ids": linked_bead_ids,
+            "bead_count": linked_bead_ids.len(),
+        }),
+    );
+
+    // Push notification to the ring
+    crate::fleet_notifications::notifications().push(notification);
+
+    Ok(())
+}
+
+/// Check 5-hour capacity utilization and emit alert if threshold exceeded.
+///
+/// This function should be called periodically to check if account utilization
+/// has exceeded the threshold (default 80%) over a 5-hour sliding window.
+fn check_and_emit_capacity_alert() -> Result<()> {
+    use rusqlite::Connection;
+
+    let db_path = std::path::PathBuf::from(
+        dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")),
+    )
+    .join(".hoop")
+    .join("fleet.db");
+
+    if !db_path.exists() {
+        return Ok(());
+    }
+
+    let conn = Connection::open(&db_path)?;
+
+    // Query capacity usage over the last 5 hours
+    // This checks codex_account_daily_spend for recent utilization
+    let threshold_pct = crate::fleet_notifications::CAPACITY_ALERT_THRESHOLD_PCT;
+
+    // Get the most recent utilization data
+    let (account_id, current_util_pct): (Option<String>, Option<f64>) = conn
+        .query_row(
+            "SELECT account_id, (spend_usd / limit_usd * 100.0) as util_pct
+             FROM codex_capacity
+             WHERE updated_at > datetime('now', '-5 hours')
+             ORDER BY updated_at DESC
+             LIMIT 1",
+            [],
+            |row| Ok((
+                row.get::<_, String>(0).ok(),
+                row.get::<_, f64>(1).ok()
+            )),
+        )
+        .unwrap_or((None, None));
+
+    let util_pct = match current_util_pct {
+        Some(pct) => pct,
+        None => return Ok(()), // No data available
+    };
+
+    // Only emit alert if threshold exceeded
+    if util_pct < threshold_pct {
+        return Ok(());
+    }
+
+    let notification = crate::fleet_notifications::FleetNotification::new(
+        crate::fleet_notifications::FleetNotificationKind::CapacityAlert,
+        None, // Capacity alerts are account-level, not project-specific
+        format!("Capacity utilization at {:.1}% exceeds threshold of {:.0}%", util_pct, threshold_pct),
+        serde_json::json!({
+            "account_id": account_id,
+            "utilization_percent": util_pct,
+            "threshold_percent": threshold_pct,
+            "window_hours": 5,
+        }),
+    );
+
+    // Push notification to the ring
+    crate::fleet_notifications::notifications().push(notification);
+
+    Ok(())
 }

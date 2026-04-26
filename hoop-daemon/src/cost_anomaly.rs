@@ -11,6 +11,7 @@
 //! Phase 3 will replace the lexical component with embedding-based similarity.
 
 use chrono::{DateTime, Duration, Utc};
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 
 use crate::similarity::text_similarity;
@@ -211,6 +212,224 @@ pub fn check_cost_anomaly(
         band,
         similar_stitch_ids: similar_ids,
     }
+}
+
+// ---------------------------------------------------------------------------
+// Integration: check on Stitch close
+// ---------------------------------------------------------------------------
+
+/// Check for cost anomalies when a Stitch is closed.
+///
+/// This is called from the bead close event handler in lib.rs.
+/// Returns Ok(false) if the Stitch is not fully closed yet.
+pub fn check_on_stitch_close(stitch_id: &str) -> anyhow::Result<bool> {
+    let db_path = std::path::PathBuf::from(dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")))
+        .join(".hoop")
+        .join("fleet.db");
+
+    if !db_path.exists() {
+        return Ok(false);
+    }
+
+    let conn = Connection::open(&db_path)?;
+
+    // Check if this Stitch is "closed" (no recent activity)
+    let last_activity_at: String = match conn.query_row(
+        "SELECT last_activity_at FROM stitches WHERE id = ?1",
+        params![stitch_id],
+        |row| row.get(0),
+    ) {
+        Ok(ts) => ts,
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            return Ok(false);
+        }
+        Err(e) => return Err(e.into()),
+    };
+
+    let last_activity_dt = chrono::DateTime::parse_from_rfc3339(&last_activity_at)
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+        .unwrap_or_else(|_| chrono::Utc::now());
+
+    let now = chrono::Utc::now();
+    let inactive_seconds = (now - last_activity_dt).num_seconds().max(0);
+
+    // Stitch must be inactive for at least 5 minutes to be considered closed
+    const STITCH_CLOSED_THRESHOLD_SECONDS: i64 = 300;
+    if inactive_seconds < STITCH_CLOSED_THRESHOLD_SECONDS {
+        return Ok(false);
+    }
+
+    // Load the current Stitch's data
+    let current = load_stitch_for_anomaly(&conn, stitch_id)?;
+
+    // Load historical Stitches within the 90-day window
+    let historical = load_historical_stitches(&conn, DEFAULT_WINDOW_DAYS)?;
+
+    // Run the anomaly check
+    let result = check_cost_anomaly(
+        &current,
+        &historical,
+        DEFAULT_WINDOW_DAYS,
+        DEFAULT_MIN_SIMILARITY,
+    );
+
+    // Log if anomalous
+    if result.is_anomaly {
+        tracing::warn!(
+            stitch_id = %stitch_id,
+            stitch_title = %current.title,
+            cost_usd = result.cost_usd,
+            mean_usd = result.band.as_ref().map(|b| b.mean_usd),
+            std_dev_usd = result.band.as_ref().map(|b| b.std_dev_usd),
+            upper_2sigma_usd = result.band.as_ref().map(|b| b.upper_2sigma_usd),
+            similar_count = result.band.as_ref().map(|b| b.similar_count),
+            similar_stitch_ids = ?result.similar_stitch_ids,
+            "Cost anomaly detected: Stitch cost exceeds 2σ band"
+        );
+    }
+
+    Ok(true)
+}
+
+/// Load a Stitch's data for anomaly detection.
+fn load_stitch_for_anomaly(conn: &Connection, stitch_id: &str) -> anyhow::Result<CostAnomalyStitch> {
+    // Load the Stitch row
+    let (title, last_activity_at): (String, String) = conn.query_row(
+        "SELECT title, last_activity_at FROM stitches WHERE id = ?1",
+        params![stitch_id],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+
+    // Parse timestamp
+    let closed_at = chrono::DateTime::parse_from_rfc3339(&last_activity_at)
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+        .unwrap_or_else(|_| chrono::Utc::now());
+
+    // Load the body from the first user message
+    let body: Option<String> = conn
+        .query_row(
+            r#"
+            SELECT sm.content
+            FROM stitch_messages sm
+            WHERE sm.stitch_id = ?1 AND sm.role = 'user'
+            ORDER BY sm.ts ASC LIMIT 1
+            "#,
+            params![stitch_id],
+            |row| row.get(0),
+        )
+        .ok();
+
+    // Load attachments count
+    let attachments_path: Option<String> = conn
+        .query_row(
+            "SELECT attachments_path FROM stitches WHERE id = ?1",
+            params![stitch_id],
+            |row| row.get(0),
+        )
+        .ok();
+    let attachment_count = attachments_path
+        .as_deref()
+        .map(count_attachments)
+        .unwrap_or(0);
+
+    // Calculate cost from total tokens
+    let total_tokens: i64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(tokens), 0) FROM stitch_messages WHERE stitch_id = ?1",
+            params![stitch_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+    let cost_usd = (total_tokens as f64) * 30.0 / 1_000_000.0;
+
+    Ok(CostAnomalyStitch {
+        id: stitch_id.to_string(),
+        title,
+        body,
+        cost_usd,
+        closed_at,
+        attachment_count,
+    })
+}
+
+/// Load historical Stitches within the given look-back window.
+fn load_historical_stitches(
+    conn: &Connection,
+    window_days: i64,
+) -> anyhow::Result<Vec<CostAnomalyStitch>> {
+    let cutoff = chrono::Utc::now() - chrono::Duration::days(window_days);
+    let cutoff_str = cutoff.to_rfc3339();
+
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT
+            s.id,
+            s.title,
+            s.last_activity_at,
+            (SELECT sm.content FROM stitch_messages sm
+             WHERE sm.stitch_id = s.id AND sm.role = 'user'
+             ORDER BY sm.ts ASC LIMIT 1) AS body,
+            s.attachments_path,
+            (SELECT COALESCE(SUM(sm.tokens), 0) FROM stitch_messages sm
+             WHERE sm.stitch_id = s.id) AS total_tokens
+        FROM stitches s
+        WHERE s.last_activity_at >= ?1
+        ORDER BY s.last_activity_at DESC
+        "#,
+    )?;
+
+    let rows = stmt.query_map(params![cutoff_str], |row| {
+        let id: String = row.get(0)?;
+        let title: String = row.get(1)?;
+        let last_activity_at: String = row.get(2)?;
+        let body: Option<String> = row.get(3).unwrap_or(None);
+        let attachments_path: Option<String> = row.get(4).unwrap_or(None);
+        let total_tokens: i64 = row.get(5).unwrap_or(0);
+
+        let closed_at = chrono::DateTime::parse_from_rfc3339(&last_activity_at)
+            .map(|dt| dt.with_timezone(&chrono::Utc))
+            .unwrap_or_else(|_| chrono::Utc::now());
+
+        let cost_usd = (total_tokens as f64) * 30.0 / 1_000_000.0;
+
+        let attachment_count = attachments_path
+            .as_deref()
+            .map(count_attachments)
+            .unwrap_or(0);
+
+        Ok(CostAnomalyStitch {
+            id,
+            title,
+            body,
+            cost_usd,
+            closed_at,
+            attachment_count,
+        })
+    })?;
+
+    let mut stitches = Vec::new();
+    for row in rows {
+        stitches.push(row?);
+    }
+
+    Ok(stitches)
+}
+
+/// Count the number of files in an attachments directory.
+fn count_attachments(attachments_path: &str) -> usize {
+    let path = std::path::Path::new(attachments_path);
+    if !path.exists() {
+        return 0;
+    }
+
+    path.read_dir()
+        .map(|entries| {
+            entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().is_file())
+                .count()
+        })
+        .unwrap_or(0)
 }
 
 // ---------------------------------------------------------------------------
