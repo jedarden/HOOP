@@ -57,6 +57,11 @@ jobs:
     - name: Run projection file audit (static check for forbidden writes)
       run: cargo test -p hoop-daemon --test projection_file_audit --verbose
 
+    - name: Run protocol contract tests (daemon ↔ hoop-mcp socket)
+      run: |
+        cargo test -p hoop-mcp --test protocol_contract --verbose
+        cargo test -p hoop-daemon --test protocol_contract --verbose
+
     - name: Check formatting
       run: cargo fmt --all -- --check
 
