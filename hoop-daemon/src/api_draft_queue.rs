@@ -359,6 +359,7 @@ async fn create_draft(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // Audit: draft created
+    let audit_source = if req.source.is_empty() { "agent" } else { &req.source };
     if let Err(e) = fleet::write_audit_row(
         &actor,
         fleet::ActionKind::DraftCreated,
@@ -374,7 +375,7 @@ async fn create_draft(
         ),
         fleet::ActionResult::Success,
         None,
-        Some("agent"),
+        Some(audit_source),
         None,
         None,
     ) {
