@@ -458,10 +458,21 @@ pub fn remove_project(name: &str) -> Result<bool> {
     }
     registry.save()?;
 
-    // Write audit row
+    // Write audit row with path information
     if let Some(proj) = project {
+        // Include all workspace paths in the audit args
+        let paths: Vec<serde_json::Value> = proj.workspaces.iter().map(|ws| {
+            let canonical = ws.canonical_path.as_ref().unwrap_or(&ws.path);
+            serde_json::json!({
+                "path": ws.path.to_string_lossy(),
+                "canonical_path": canonical.to_string_lossy(),
+                "role": ws.role.to_string(),
+            })
+        }).collect();
+
         let args = serde_json::json!({
             "name": name,
+            "workspaces": paths,
         });
         let _ = fleet::write_audit_row(
             &get_actor(),
