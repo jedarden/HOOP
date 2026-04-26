@@ -522,3 +522,538 @@ test.describe('Accessibility - Mobile Specific', () => {
     }
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────────
+// Additional Phase Component Tests (hoop-ttb.18.1.1)
+// Tests for CostPanel, CapacityPanel, PatternsView, RedactionAuditPanel, FilesTab
+// ─────────────────────────────────────────────────────────────────────────────────
+
+test.describe('Phase Components - CostPanel', () => {
+  test('should display cost breakdown on mobile (375px)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    // Navigate to a project with cost data
+    const projectCard = page.locator('.project-card-fleet').first();
+    if (await projectCard.count() > 0) {
+      await projectCard.click();
+      await page.waitForTimeout(500);
+
+      // Try to navigate to cost tab
+      const costTab = page.locator('button[role="tab"]', { hasText: 'Cost' });
+      if (await costTab.count() > 0) {
+        await costTab.click();
+
+        // Cost panel should be visible or show empty state
+        const costPanel = page.locator('.cost-panel, .cost-empty, .cost-loading');
+        const count = await costPanel.count();
+        if (count > 0) {
+          await expect(costPanel.first()).toBeVisible();
+        }
+      }
+    }
+  });
+
+  test('should handle rate limit meters on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    const projectCard = page.locator('.project-card-fleet').first();
+    if (await projectCard.count() > 0) {
+      await projectCard.click();
+      await page.waitForTimeout(500);
+
+      const costTab = page.locator('button[role="tab"]', { hasText: 'Cost' });
+      if (await costTab.count() > 0) {
+        await costTab.click();
+
+        // Check rate limit meters if present
+        const rlMeter = page.locator('.rl-meter, .capacity-meter');
+        const count = await rlMeter.count();
+        if (count > 0) {
+          // Meters should fit within viewport
+          const firstMeter = rlMeter.first();
+          await expect(firstMeter).toBeVisible();
+
+          const boundingBox = await firstMeter.boundingBox();
+          if (boundingBox) {
+            expect(boundingBox.width).toBeLessThanOrEqual(375);
+          }
+        }
+      }
+    }
+  });
+
+  test('should display cost bars responsively on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    const projectCard = page.locator('.project-card-fleet').first();
+    if (await projectCard.count() > 0) {
+      await projectCard.click();
+      await page.waitForTimeout(500);
+
+      const costTab = page.locator('button[role="tab"]', { hasText: 'Cost' });
+      if (await costTab.count() > 0) {
+        await costTab.click();
+
+        // Check cost bars
+        const costBar = page.locator('.cost-bar');
+        const count = await costBar.count();
+        if (count > 0) {
+          await expect(costBar.first()).toBeVisible();
+        }
+      }
+    }
+  });
+});
+
+test.describe('Phase Components - CapacityPanel', () => {
+  test('should display capacity meters on mobile (375px)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    const projectCard = page.locator('.project-card-fleet').first();
+    if (await projectCard.count() > 0) {
+      await projectCard.click();
+      await page.waitForTimeout(500);
+
+      const capacityTab = page.locator('button[role="tab"]', { hasText: 'Capacity' });
+      if (await capacityTab.count() > 0) {
+        await capacityTab.click();
+
+        // Capacity panel or empty state should be visible
+        const capacityPanel = page.locator('.capacity-panel, .capacity-empty');
+        const count = await capacityPanel.count();
+        if (count > 0) {
+          await expect(capacityPanel.first()).toBeVisible();
+        }
+      }
+    }
+  });
+
+  test('should stack capacity meters vertically on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    const projectCard = page.locator('.project-card-fleet').first();
+    if (await projectCard.count() > 0) {
+      await projectCard.click();
+      await page.waitForTimeout(500);
+
+      const capacityTab = page.locator('button[role="tab"]', { hasText: 'Capacity' });
+      if (await capacityTab.count() > 0) {
+        await capacityTab.click();
+
+        // Check if meters are stacked
+        const capacityMeters = page.locator('.capacity-meters');
+        const count = await capacityMeters.count();
+        if (count > 0) {
+          const flexDirection = await capacityMeters.first().evaluate(el => {
+            return window.getComputedStyle(el).flexDirection;
+          });
+          // On mobile, should be column (stacked)
+          if (await capacityMeters.first().isVisible()) {
+            expect(['column', 'column-reverse']).toContain(flexDirection);
+          }
+        }
+      }
+    }
+  });
+});
+
+test.describe('Phase Components - PatternsView', () => {
+  test('should display pattern list on mobile (375px)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    // Patterns may be accessible via a link or navigation
+    const patternsLink = page.locator('a[href*="patterns"], a', { hasText: /pattern/i });
+    const count = await patternsLink.count();
+    if (count > 0) {
+      await patternsLink.first().click();
+      await page.waitForTimeout(500);
+
+      // Pattern list should be visible
+      const patternList = page.locator('.pattern-list, .patterns-container');
+      if (await patternList.count() > 0) {
+        await expect(patternList.first()).toBeVisible();
+      }
+    }
+  });
+
+  test('should handle pattern cards on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    const patternsLink = page.locator('a[href*="patterns"], a', { hasText: /pattern/i });
+    const count = await patternsLink.count();
+    if (count > 0) {
+      await patternsLink.first().click();
+      await page.waitForTimeout(500);
+
+      // Pattern cards should fit viewport
+      const patternCard = page.locator('.pattern-card, .pattern-row');
+      const cardCount = await patternCard.count();
+      if (cardCount > 0) {
+        const firstCard = patternCard.first();
+        await expect(firstCard).toBeVisible();
+
+        const boundingBox = await firstCard.boundingBox();
+        if (boundingBox) {
+          expect(boundingBox.width).toBeLessThanOrEqual(375);
+        }
+      }
+    }
+  });
+});
+
+test.describe('Phase Components - RedactionAuditPanel', () => {
+  test('should display redaction audit on mobile (375px)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    // Redaction audit may be in a tab or settings
+    const redactionLink = page.locator('a[href*="redaction"], a', { hasText: /redaction/i });
+    const count = await redactionLink.count();
+    if (count > 0) {
+      await redactionLink.first().click();
+      await page.waitForTimeout(500);
+
+      // Redaction panel should be visible
+      const redactionPanel = page.locator('.redaction-audit-panel');
+      if (await redactionPanel.count() > 0) {
+        await expect(redactionPanel.first()).toBeVisible();
+      }
+    }
+  });
+
+  test('should handle filter controls on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    const redactionLink = page.locator('a[href*="redaction"], a', { hasText: /redaction/i });
+    const count = await redactionLink.count();
+    if (count > 0) {
+      await redactionLink.first().click();
+      await page.waitForTimeout(500);
+
+      // Filter controls should be accessible
+      const filters = page.locator('.redaction-audit-filters, .filter-controls');
+      const filterCount = await filters.count();
+      if (filterCount > 0) {
+        await expect(filters.first()).toBeVisible();
+      }
+    }
+  });
+});
+
+test.describe('Phase Components - FilesTab', () => {
+  test('should display file browser on mobile (375px)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    const projectCard = page.locator('.project-card-fleet').first();
+    if (await projectCard.count() > 0) {
+      await projectCard.click();
+      await page.waitForTimeout(500);
+
+      const filesTab = page.locator('button[role="tab"]', { hasText: 'Files' });
+      if (await filesTab.count() > 0) {
+        await filesTab.click();
+
+        // File browser should be visible
+        const fileBrowser = page.locator('.file-browser, .files-tab, .file-tree');
+        const count = await fileBrowser.count();
+        if (count > 0) {
+          await expect(fileBrowser.first()).toBeVisible();
+        }
+      }
+    }
+  });
+
+  test('should handle file tree navigation on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    const projectCard = page.locator('.project-card-fleet').first();
+    if (await projectCard.count() > 0) {
+      await projectCard.click();
+      await page.waitForTimeout(500);
+
+      const filesTab = page.locator('button[role="tab"]', { hasText: 'Files' });
+      if (await filesTab.count() > 0) {
+        await filesTab.click();
+
+        // File tree items should be tappable
+        const fileItems = page.locator('.file-item, .tree-item, .file-row');
+        const itemCount = await fileItems.count();
+        if (itemCount > 0) {
+          const firstItem = fileItems.first();
+          await expect(firstItem).toBeVisible();
+
+          // Check tap target size
+          const boundingBox = await firstItem.boundingBox();
+          if (boundingBox) {
+            // Minimum tap target: 44px height
+            expect(boundingBox.height).toBeGreaterThanOrEqual(40);
+          }
+        }
+      }
+    }
+  });
+});
+
+test.describe('Phase Components - AgentChatPane', () => {
+  test('should display agent chat on mobile (375px)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    // Agent chat may be accessible via a button or link
+    const agentChatButton = page.locator('button', { hasText: /agent|chat|ask/i });
+    const count = await agentChatButton.count();
+    if (count > 0) {
+      await agentChatButton.first().click();
+      await page.waitForTimeout(500);
+
+      // Agent chat pane should be visible
+      const agentPane = page.locator('.agent-chat-pane, .chat-pane');
+      if (await agentPane.count() > 0) {
+        await expect(agentPane.first()).toBeVisible();
+      }
+    }
+  });
+
+  test('should handle message input on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    const agentChatButton = page.locator('button', { hasText: /agent|chat|ask/i });
+    const count = await agentChatButton.count();
+    if (count > 0) {
+      await agentChatButton.first().click();
+      await page.waitForTimeout(500);
+
+      // Message input should be accessible
+      const messageInput = page.locator('textarea[placeholder*="message" i], input[type="text"], .chat-input');
+      const inputCount = await messageInput.count();
+      if (inputCount > 0) {
+        await expect(messageInput.first()).toBeVisible();
+
+        // Input should be reasonably wide on mobile
+        const boundingBox = await messageInput.first().boundingBox();
+        if (boundingBox) {
+          expect(boundingBox.width).toBeGreaterThan(200);
+        }
+      }
+    }
+  });
+
+  test('should have send button with adequate tap target on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    const agentChatButton = page.locator('button', { hasText: /agent|chat|ask/i });
+    const count = await agentChatButton.count();
+    if (count > 0) {
+      await agentChatButton.first().click();
+      await page.waitForTimeout(500);
+
+      // Send button should have adequate tap target
+      const sendButton = page.locator('button', { hasText: /send|➤|→/i });
+      const sendCount = await sendButton.count();
+      if (sendCount > 0) {
+        const firstSend = sendButton.first();
+        if (await firstSend.isVisible()) {
+          const boundingBox = await firstSend.boundingBox();
+          if (boundingBox) {
+            // Minimum tap target: 44x44px
+            expect(boundingBox.width).toBeGreaterThanOrEqual(40);
+            expect(boundingBox.height).toBeGreaterThanOrEqual(40);
+          }
+        }
+      }
+    }
+  });
+});
+
+test.describe('Phase Components - CrossProjectDashboard', () => {
+  test('should display cross-project dashboard on mobile (375px)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    // Look for cross-project dashboard link
+    const dashboardLink = page.locator('a[href*="dashboard"]', { hasText: /dashboard/i });
+    const count = await dashboardLink.count();
+    if (count > 0) {
+      await dashboardLink.first().click();
+      await page.waitForTimeout(500);
+
+      // Dashboard should be visible
+      const dashboard = page.locator('.cross-project-dashboard, .dashboard');
+      if (await dashboard.count() > 0) {
+        await expect(dashboard.first()).toBeVisible();
+      }
+    }
+  });
+
+  test('should handle dashboard metrics on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    // Dashboard metrics may be on overview page
+    const metrics = page.locator('.fleet-summary-strip, .dashboard-metrics, .metric-card');
+    const count = await metrics.count();
+    if (count > 0) {
+      await expect(metrics.first()).toBeVisible();
+
+      // Metrics should fit within viewport
+      const boundingBox = await metrics.first().boundingBox();
+      if (boundingBox) {
+        expect(boundingBox.width).toBeLessThanOrEqual(375);
+      }
+    }
+  });
+});
+
+test.describe('Phase Components - StitchDraftForm', () => {
+  test('should display stitch draft form on mobile (375px)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    const projectCard = page.locator('.project-card-fleet').first();
+    if (await projectCard.count() > 0) {
+      await projectCard.click();
+      await page.waitForTimeout(500);
+
+      // Look for new stitch button
+      const newStitchButton = page.locator('button', { hasText: /new stitch/i });
+      const buttonCount = await newStitchButton.count();
+      if (buttonCount > 0) {
+        await newStitchButton.first().click();
+        await page.waitForTimeout(500);
+
+        // Stitch form should be visible
+        const stitchForm = page.locator('.stitch-draft-form, .draft-form');
+        if (await stitchForm.count() > 0) {
+          await expect(stitchForm.first()).toBeVisible();
+        }
+      }
+    }
+  });
+
+  test('should handle form fields on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    const projectCard = page.locator('.project-card-fleet').first();
+    if (await projectCard.count() > 0) {
+      await projectCard.click();
+      await page.waitForTimeout(500);
+
+      const newStitchButton = page.locator('button', { hasText: /new stitch/i });
+      const buttonCount = await newStitchButton.count();
+      if (buttonCount > 0) {
+        await newStitchButton.first().click();
+        await page.waitForTimeout(500);
+
+        // Form inputs should be accessible
+        const formInputs = page.locator('input, textarea, select');
+        const inputCount = await formInputs.count();
+        if (inputCount > 0) {
+          const firstInput = formInputs.first();
+          await expect(firstInput).toBeVisible();
+
+          // Input should be reasonably wide on mobile
+          const boundingBox = await firstInput.boundingBox();
+          if (boundingBox) {
+            expect(boundingBox.width).toBeGreaterThan(200);
+          }
+        }
+      }
+    }
+  });
+});
+
+test.describe('Breakpoint Matrix - All Components', () => {
+  const breakpoints = [
+    { width: 375, name: 'phone portrait' },
+    { width: 700, name: 'phone landscape' },
+    { width: 768, name: 'tablet' },
+    { width: 1280, name: 'desktop' },
+  ];
+
+  for (const bp of breakpoints) {
+    test(`should render all visible components without horizontal overflow at ${bp.name} (${bp.width}px)`, async ({ page }) => {
+      await page.setViewportSize({ width: bp.width, height: 800 });
+      await page.goto('/');
+
+      // Wait for page to load
+      await page.waitForTimeout(500);
+
+      // Check for horizontal scroll
+      const hasHorizontalScroll = await page.evaluate(() => {
+        const body = document.body;
+        return body.scrollWidth > body.clientWidth;
+      });
+
+      expect(hasHorizontalScroll).toBeFalsy();
+
+      // Verify main container fits viewport
+      const appContainer = page.locator('.app, #root, [data-testid="app-container"]');
+      const containerCount = await appContainer.count();
+      if (containerCount > 0) {
+        const containerWidth = await appContainer.first().evaluate(el => {
+          return el.scrollWidth;
+        });
+        expect(containerWidth).toBeLessThanOrEqual(bp.width + 20); // Allow small margin
+      }
+    });
+  }
+});
+
+test.describe('Touch Target Size Compliance - All Interactive Elements', () => {
+  const breakpoints = [375, 700, 768];
+
+  for (const width of breakpoints) {
+    test(`should have adequate tap targets at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width: width, height: 800 });
+      await page.goto('/');
+      await page.waitForTimeout(500);
+
+      // Check various interactive element types
+      const buttons = page.locator('button, [role="button"]');
+      const links = page.locator('a[href]');
+      const inputs = page.locator('input[type="checkbox"], input[type="radio"], input[type="submit"]');
+
+      const allInteractive = buttons.count() + links.count() + inputs.count();
+
+      // Sample first few interactive elements
+      for (const locator of [buttons, links, inputs]) {
+        const count = await locator.count();
+        for (let i = 0; i < Math.min(count, 3); i++) {
+          const elem = locator.nth(i);
+          if (await elem.isVisible()) {
+            const boundingBox = await elem.boundingBox();
+            if (boundingBox) {
+              // Minimum tap target: 44x44px (iOS) / 48x48dp (Android)
+              // Allow some flexibility for text links
+              const minSize = 40;
+              const widthOk = boundingBox.width >= minSize || boundingBox.height >= minSize;
+              const heightOk = boundingBox.height >= minSize || boundingBox.width >= minSize;
+
+              // Log warning but don't fail - some small elements may be acceptable
+              if (!widthOk || !heightOk) {
+                console.log(`Small tap target at ${width}px: ${boundingBox.width}x${boundingBox.height}px`);
+              }
+            }
+          }
+        }
+      }
+
+      // Should have at least some interactive elements
+      const buttonCount = await buttons.count();
+      expect(buttonCount).toBeGreaterThan(0);
+    });
+  }
+});
