@@ -6,6 +6,7 @@
 
 pub mod adb_dictate;
 pub mod agent_adapter;
+pub mod ansi_strip;
 pub mod atomic_write;
 pub mod agent_context;
 pub mod agent_session;
@@ -42,6 +43,7 @@ pub mod dictated_notes;
 pub mod events;
 pub mod files;
 pub mod fleet;
+pub mod fleet_notifications;
 pub mod heartbeats;
 pub mod id_validators;
 pub mod log_rotation;
@@ -51,6 +53,8 @@ pub mod parse_jsonl_safe;
 pub mod path_security;
 pub mod pattern_query_evaluator;
 pub mod projects;
+pub mod script_scheduler;
+pub mod script_trigger;
 pub mod sessions;
 pub mod shutdown;
 pub mod stitch_status;
@@ -62,6 +66,7 @@ pub mod uploads;
 pub mod ws;
 pub mod similarity;
 pub mod snapshot_manifest;
+pub mod stuck_detector;
 pub mod svg_sanitize;
 pub mod pdf_sanitize;
 pub mod predictor;
@@ -273,6 +278,8 @@ pub struct DaemonState {
     pub agent_session_manager: Option<Arc<agent_session::AgentSessionManager>>,
     /// Morning brief runner — orchestrates scheduled + on-demand brief generation
     pub morning_brief_runner: Option<Arc<morning_brief::MorningBriefRunner>>,
+    /// Script scheduler — cron-based automatic script execution
+    pub script_scheduler: Option<Arc<script_scheduler::ScriptScheduler>>,
     /// Broadcast channel for morning brief events sent to WS clients
     pub brief_tx: broadcast::Sender<ws::MorningBriefData>,
     /// Broadcast channel for draft queue events sent to WS clients
@@ -998,6 +1005,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_morning_brief::router())
         .merge(api_metrics::router())
         .merge(api_config::router())
+        .merge(api_scripts::router())
         .nest_service("/assets", AssetsHandler::router())
         .fallback_service(AssetsHandler::router())
         .layer(TraceLayer::new_for_http())
@@ -1332,6 +1340,13 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         shutdown_coordinator.clone(),
         cost_aggregator.clone(),
     ));
+
+    // Set scripts directory for event-triggered scripts (§22.3)
+    let scripts_dir_for_events = dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".hoop")
+        .join("scripts");
+    supervisor.set_scripts_dir(scripts_dir_for_events);
 
     // Start global event tailer (for bead claim/close/release/update events)
     if let Err(e) = supervisor.start_event_tailer().await {
@@ -1875,6 +1890,16 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         info!("Backup scheduler started");
     }
 
+    // Initialize script scheduler (§22.3)
+    let scripts_dir = dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".hoop")
+        .join("scripts");
+    let script_scheduler = Arc::new(script_scheduler::ScriptScheduler::new(scripts_dir));
+    let sched_shutdown = shutdown_coordinator.subscribe();
+    script_scheduler.clone().start_scheduler(sched_shutdown);
+    info!("Script scheduler started");
+
     let bead_tx_for_rebuild = bead_tx.clone();
     let stitch_tx_for_rebuild = stitch_tx.clone();
     let vector_index_for_rebuild = vector_index.clone();
@@ -1902,6 +1927,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         vector_index,
         agent_session_manager,
         morning_brief_runner,
+        script_scheduler: Some(script_scheduler),
         brief_tx,
         draft_tx: broadcast::channel::<ws::DraftUpdateData>(64).0,
         resolved_config,
@@ -2031,6 +2057,38 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
             }
         });
         info!("Orphan metrics updater started (listens to bead/Stitch events)");
+    }
+
+    // Fleet notification integration: bead_created_by_hoop events → agent ring (hoop-ttb.3.53)
+    {
+        let mut bead_created_rx = state.bead_created_by_hoop_tx.subscribe();
+        tokio::spawn(async move {
+            use fleet_notifications::{FleetNotification, FleetNotificationKind};
+            loop {
+                match bead_created_rx.recv().await {
+                    Ok(data) => {
+                        let notification = FleetNotification::new(
+                            FleetNotificationKind::BeadCreatedByHoop,
+                            Some(data.project.clone()),
+                            format!("Bead {} created via HOOP by {}", data.bead_id, data.actor),
+                            serde_json::json!({
+                                "bead_id": data.bead_id,
+                                "project": data.project,
+                                "actor": data.actor,
+                                "source": data.source,
+                                "ts": data.ts,
+                            }),
+                        );
+                        fleet_notifications::notifications().push(notification);
+                    }
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        debug!("Bead created by hoop broadcast lagged by {}, continuing", n);
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                }
+            }
+        });
+        info!("Fleet notification integration started (listens to bead_created_by_hoop events)");
     }
 
     // Periodic project card refresh for live metrics (every 5s)
