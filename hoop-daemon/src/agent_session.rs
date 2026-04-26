@@ -14,6 +14,8 @@ use crate::fleet;
 use crate::metrics;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
 use tracing::{info, warn};
@@ -464,6 +466,12 @@ impl AgentSessionManager {
             turn_id: turn_id.clone(),
         });
 
+        // Write turn context to ~/.hoop/agent-turn-context.json for MCP tools
+        // This enables agent-created drafts to include session_id and turn_id in audit trail
+        if let Err(e) = write_turn_context(&session_id, &turn_id) {
+            warn!("Failed to write turn context: {}", e);
+        }
+
         // Re-acquire lock for the rest of the function
         let inner = self.inner.lock().await;
 
@@ -587,6 +595,11 @@ impl AgentSessionManager {
 
                     // Clear the current turn_id after turn completes
                     inner.current_turn_id = None;
+
+                    // Clear turn context file when turn completes
+                    if let Err(e) = clear_turn_context() {
+                        warn!("Failed to clear turn context: {}", e);
+                    }
                 }
             }
             AgentEvent::Error { message } => {
@@ -603,6 +616,11 @@ impl AgentSessionManager {
                     session_id: session_id.clone(),
                     reason: reason.clone(),
                 });
+
+                // Clear turn context when session ends
+                if let Err(e) = clear_turn_context() {
+                    warn!("Failed to clear turn context on session end: {}", e);
+                }
             }
             AgentEvent::SessionStarted { .. } => {
                 // Already handled at spawn time.
@@ -731,6 +749,12 @@ impl AgentSessionManager {
             info!("Agent session disabled and archived");
         }
 
+        // Clear turn context when agent is disabled
+        drop(inner);
+        if let Err(e) = clear_turn_context() {
+            warn!("Failed to clear turn context on disable: {}", e);
+        }
+
         Ok(())
     }
 
@@ -804,6 +828,69 @@ fn build_handoff_context() -> String {
         }
         ctx
     }
+}
+
+/// Turn context written to ~/.hoop/agent-turn-context.json for MCP tools.
+///
+/// The MCP server reads this file to include agent session and turn ID
+/// in draft creation requests for audit trail purposes.
+#[derive(Debug, Serialize, Deserialize)]
+struct TurnContext {
+    session_id: String,
+    turn_id: String,
+}
+
+/// Get the path to the turn context file.
+fn turn_context_path() -> Result<PathBuf> {
+    let mut path = dirs::home_dir()
+        .ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
+    path.push(".hoop");
+    path.push("agent-turn-context.json");
+    Ok(path)
+}
+
+/// Write turn context to ~/.hoop/agent-turn-context.json.
+///
+/// This is called when a turn starts so that MCP tools can read the context
+/// and include it in draft creation requests.
+fn write_turn_context(session_id: &str, turn_id: &str) -> Result<()> {
+    let path = turn_context_path()?;
+
+    // Ensure .hoop directory exists
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let ctx = TurnContext {
+        session_id: session_id.to_string(),
+        turn_id: turn_id.to_string(),
+    };
+
+    let json = serde_json::to_string_pretty(&ctx)
+        .map_err(|e| anyhow::anyhow!("Failed to serialize turn context: {}", e))?;
+
+    fs::write(&path, json)
+        .map_err(|e| anyhow::anyhow!("Failed to write turn context: {}", e))?;
+
+    info!(
+        "Wrote turn context: session_id={}, turn_id={}",
+        session_id, turn_id
+    );
+
+    Ok(())
+}
+
+/// Remove the turn context file when a turn completes.
+fn clear_turn_context() -> Result<()> {
+    let path = turn_context_path()?;
+
+    if path.exists() {
+        fs::remove_file(&path)
+            .map_err(|e| anyhow::anyhow!("Failed to clear turn context: {}", e))?;
+        info!("Cleared turn context file");
+    }
+
+    Ok(())
 }
 
 /// Rough cost estimation. Real pricing comes from `~/.hoop/pricing.yml`, but
