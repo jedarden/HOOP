@@ -41,6 +41,22 @@ pub struct SnapshotManifest {
     /// between backup and restore by comparing this against the current chain.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub final_audit_hash: Option<String>,
+    /// Config file backup metadata (config.yml and projects.yaml).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config_backup: Option<ConfigBackupMetadata>,
+}
+
+/// Metadata about backed-up config files.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ConfigBackupMetadata {
+    /// SHA-256 hash of config.yml at backup time.
+    pub config_yml_hash: String,
+    /// Size of config.yml in bytes.
+    pub config_yml_size: u64,
+    /// SHA-256 hash of projects.yaml at backup time.
+    pub projects_yaml_hash: String,
+    /// Size of projects.yaml in bytes.
+    pub projects_yaml_size: u64,
 }
 
 impl SnapshotManifest {
@@ -101,6 +117,7 @@ mod tests {
             final_audit_hash: Some(
                 "deadbeef0000000000000000000000000000000000000000000000000000000000".into(),
             ),
+            config_backup: None,
         };
         let json = serde_json::to_string(&m).unwrap();
         assert!(json.contains("\"snapshot_id\""));
@@ -122,11 +139,13 @@ mod tests {
             fleet_db_sha256: None,
             fleet_db_size: None,
             final_audit_hash: None,
+            config_backup: None,
         };
         let json = serde_json::to_string(&m).unwrap();
         assert!(!json.contains("attachments_manifest_key"));
         assert!(!json.contains("fleet_db_sha256"));
         assert!(!json.contains("final_audit_hash"));
+        assert!(!json.contains("config_backup"));
     }
 
     #[test]
@@ -142,6 +161,7 @@ mod tests {
             fleet_db_sha256: Some("deadbeef".into()),
             fleet_db_size: Some(2048),
             final_audit_hash: Some("feedface00000000000000000000000000000000000000000000000000000000".into()),
+            config_backup: None,
         };
         let json = serde_json::to_string(&m).unwrap();
         let parsed: SnapshotManifest = serde_json::from_str(&json).unwrap();
@@ -161,6 +181,7 @@ mod tests {
             fleet_db_sha256: None,
             fleet_db_size: None,
             final_audit_hash: None,
+            config_backup: None,
         };
         assert!(m.validate("1.11.0").is_ok());
         assert!(m.validate("2.0.0").is_ok());
@@ -179,6 +200,7 @@ mod tests {
             fleet_db_sha256: None,
             fleet_db_size: None,
             final_audit_hash: None,
+            config_backup: None,
         };
         let err = m.validate("1.11.0").unwrap_err();
         assert!(err.to_string().contains("newer than"));
