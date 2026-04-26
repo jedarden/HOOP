@@ -23,6 +23,7 @@ use crate::beads::{BeadEvent, BeadReader, BeadReaderConfig};
 use crate::cost::CostAggregator;
 use crate::events::{BeadEventData, EventTailer, EventTailerConfig, TailerEvent};
 use crate::projects::ProjectsConfig;
+use crate::script_trigger::{EventContext, trigger_matching_scripts};
 use crate::sessions::{SessionEvent, SessionTailer, SessionTailerConfig};
 use crate::shutdown::ShutdownPhase;
 use crate::Bead;
@@ -147,6 +148,10 @@ pub struct ProjectSupervisor {
     event_tailer: Arc<std::sync::Mutex<Option<EventTailer>>>,
     /// Cost aggregator for session usage
     cost_aggregator: Arc<std::sync::RwLock<CostAggregator>>,
+    /// Vector index for semantic deduplication (hoop-ttb.5.9.1)
+    vector_index: Arc<std::sync::RwLock<crate::vector_index::VectorIndex>>,
+    /// Scripts directory for event-triggered scripts
+    scripts_dir: PathBuf,
 }
 
 impl std::fmt::Debug for ProjectSupervisor {
@@ -166,6 +171,8 @@ impl ProjectSupervisor {
         beads: Arc<std::sync::RwLock<Vec<Bead>>>,
         shutdown: Arc<crate::shutdown::ShutdownCoordinator>,
         cost_aggregator: Arc<std::sync::RwLock<CostAggregator>>,
+        vector_index: Arc<std::sync::RwLock<crate::vector_index::VectorIndex>>,
+        scripts_dir: PathBuf,
     ) -> Self {
         let (status_tx, _) = broadcast::channel(64);
 
@@ -179,7 +186,14 @@ impl ProjectSupervisor {
             shutdown,
             event_tailer: Arc::new(std::sync::Mutex::new(None)),
             cost_aggregator,
+            vector_index,
+            scripts_dir,
         }
+    }
+
+    /// Set the scripts directory (for event-triggered scripts)
+    pub fn set_scripts_dir(&mut self, scripts_dir: PathBuf) {
+        self.scripts_dir = scripts_dir;
     }
 
     /// Start the global event tailer (events.jsonl)
@@ -195,6 +209,7 @@ impl ProjectSupervisor {
         let mut event_rx = event_tailer.subscribe();
         let worker_registry = self.worker_registry.clone();
         let beads = self.beads.clone();
+        let scripts_dir = self.scripts_dir.clone();
 
         tokio::spawn(async move {
             while let Ok(event) = event_rx.recv().await {
@@ -214,6 +229,39 @@ impl ProjectSupervisor {
                         }
                         // Update fleet.db cross-project tables from this event
                         update_fleet_from_event(&parsed.event, &beads);
+
+                        // Trigger event-subscribed scripts
+                        let bead_id = match &parsed.event {
+                            crate::events::NeedleEvent::Claim { bead, .. }
+                            | crate::events::NeedleEvent::Dispatch { bead, .. }
+                            | crate::events::NeedleEvent::Complete { bead, .. }
+                            | crate::events::NeedleEvent::Fail { bead, .. }
+                            | crate::events::NeedleEvent::Timeout { bead, .. }
+                            | crate::events::NeedleEvent::Crash { bead, .. }
+                            | crate::events::NeedleEvent::Close { bead, .. }
+                            | crate::events::NeedleEvent::Release { bead, .. }
+                            | crate::events::NeedleEvent::Update { bead, .. } => bead.clone(),
+                            crate::events::NeedleEvent::Unknown => continue,
+                        };
+
+                        // Look up bead info for project/kind filtering
+                        let (project, kind) = lookup_bead_info(&bead_id, &beads);
+
+                        // Build EventContext and trigger matching scripts
+                        let mut ctx = EventContext::from_event(&parsed.event, &parsed.raw);
+                        ctx.project = project;
+                        ctx.kind = kind;
+
+                        let results = trigger_matching_scripts(&scripts_dir, &ctx).await;
+                        for result in results {
+                            if result.attempted && !result.succeeded {
+                                warn!(
+                                    "Event-triggered script '{}' failed: {}",
+                                    result.script_name,
+                                    result.error.unwrap_or_default()
+                                );
+                            }
+                        }
                     }
                     TailerEvent::Rotated => {
                         debug!("Event log rotated");
@@ -619,6 +667,7 @@ impl ProjectSupervisor {
             let bead_tx_clone = bead_tx.clone();
             let project_name_clone = project_name.clone();
             let error_tx_clone = error_tx.clone();
+            let vector_index_clone = vector_index.clone();
 
             tokio::spawn(async move {
                 while let Ok(event) = rx.recv().await {
@@ -628,6 +677,13 @@ impl ProjectSupervisor {
                             let new_beads: Vec<Bead> = new_beads
                                 .into_iter()
                                 .map(|mut b| { b.project = project_name_clone.clone(); b })
+                                .collect();
+
+                            // Track which beads were open before this update (for vector index removal)
+                            let old_beads: std::collections::HashSet<String> = beads_clone.read().unwrap()
+                                .iter()
+                                .filter(|b| b.project == project_name_clone && b.status == crate::BeadStatus::Open)
+                                .map(|b| b.id.clone())
                                 .collect();
 
                             // Update shared beads store
@@ -645,6 +701,33 @@ impl ProjectSupervisor {
                             all_beads.sort_by_key(|b| std::cmp::Reverse(b.created_at));
 
                             *beads_clone.write().unwrap() = all_beads.clone();
+
+                            // Update vector index: remove closed beads, add new open beads (hoop-ttb.5.9.1)
+                            let mut index = vector_index_clone.write().unwrap();
+                            let new_open_bead_ids: std::collections::HashSet<String> = new_beads
+                                .iter()
+                                .filter(|b| b.status == crate::BeadStatus::Open)
+                                .map(|b| b.id.clone())
+                                .collect();
+
+                            // Remove beads that are no longer open
+                            for bead_id in old_beads.difference(&new_open_bead_ids) {
+                                let _ = index.remove_from_db(bead_id);
+                            }
+
+                            // Add new open beads to vector index
+                            for bead in &new_beads {
+                                if bead.status == crate::BeadStatus::Open && !old_beads.contains(&bead.id) {
+                                    let item = crate::vector_index::IndexedItem {
+                                        id: bead.id.clone(),
+                                        project: bead.project.clone(),
+                                        title: bead.title.clone(),
+                                        kind: format!("{:?}", bead.issue_type).to_lowercase(),
+                                        description: bead.description.clone(),
+                                    };
+                                    let _ = index.add_to_db(item);
+                                }
+                            }
 
                             // Forward to broadcast
                             let _ = bead_tx_clone.send(BeadEvent::BeadsUpdated { beads: new_beads });
@@ -778,6 +861,20 @@ fn lookup_project_for_bead(
 ) -> Option<String> {
     let guard = beads.read().unwrap();
     guard.iter().find(|b| b.id == bead_id).map(|b| b.project.clone())
+}
+
+/// Look up project and kind for a given bead ID from the shared beads store.
+fn lookup_bead_info(
+    bead_id: &str,
+    beads: &Arc<std::sync::RwLock<Vec<Bead>>>,
+) -> (Option<String>, Option<String>) {
+    let guard = beads.read().unwrap();
+    if let Some(bead) = guard.iter().find(|b| b.id == bead_id) {
+        let kind = format!("{:?}", bead.issue_type).to_lowercase();
+        (Some(bead.project.clone()), Some(kind))
+    } else {
+        (None, None)
+    }
 }
 
 /// Update fleet.db cross-project tables on receipt of a NEEDLE event.
