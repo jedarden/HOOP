@@ -10,6 +10,7 @@ pub mod agent_context;
 pub mod agent_session;
 pub mod api_agent;
 pub mod attachment_sync;
+pub mod audio_redaction;
 pub mod backup;
 pub mod backup_pipeline;
 pub mod config_resolver;
@@ -22,6 +23,7 @@ pub mod api_draft_queue;
 pub mod api_metrics;
 pub mod api_preview;
 pub mod api_stitch_decompose;
+pub mod api_stitch_links;
 pub mod api_stitch_read;
 pub mod api_timeline;
 pub mod api_transcription;
@@ -72,6 +74,8 @@ pub mod bead_commit_index;
 pub mod api_diff;
 pub mod api_blame;
 pub mod api_screen_capture;
+pub mod api_orphans;
+pub mod orphan_beads;
 pub mod net_diff;
 pub mod screen_capture;
 pub mod observer;
@@ -963,10 +967,12 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_preview::router())
         .merge(api_stitch_decompose::router())
         .merge(api_stitch_read::router())
+        .merge(api_stitch_links::router())
         .merge(api_patterns::router())
         .merge(api_diff::router())
         .merge(api_blame::router())
         .merge(api_screen_capture::router())
+        .merge(api_orphans::router())
         .merge(net_diff::router())
         .route("/api/workers/timeline", get(api_timeline::get_worker_timeline))
         .merge(api_agent::router())
@@ -1870,6 +1876,39 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
             }
         });
         info!("Vector index rebuilder started (listens to bead/Stitch events)");
+    }
+
+    // Orphan bead count updater: update metrics on stitch/bead events
+    {
+        let projects_ref = state.projects.clone();
+        let mut stitch_rx = stitch_tx.subscribe();
+        let mut bead_rx = bead_tx.subscribe();
+
+        tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    // Update orphan metrics on stitch events (bead created/updated via HOOP)
+                    result = stitch_rx.recv() => {
+                        if result.is_ok() {
+                            let projects = projects_ref.read().unwrap().clone();
+                            tokio::task::spawn_blocking(move || {
+                                crate::orphan_beads::update_all_orphan_metrics(&projects);
+                            }).await.ok();
+                        }
+                    }
+                    // Update orphan metrics on bead events (external bead changes)
+                    result = bead_rx.recv() => {
+                        if result.is_ok() {
+                            let projects = projects_ref.read().unwrap().clone();
+                            tokio::task::spawn_blocking(move || {
+                                crate::orphan_beads::update_all_orphan_metrics(&projects);
+                            }).await.ok();
+                        }
+                    }
+                }
+            }
+        });
+        info!("Orphan metrics updater started (listens to bead/Stitch events)");
     }
 
     // Periodic project card refresh for live metrics (every 5s)

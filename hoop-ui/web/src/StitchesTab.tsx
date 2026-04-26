@@ -6,6 +6,7 @@ import VideoPlayer from './components/VideoPlayer';
 import { scanForSecrets, getSecretSeverity, truncateSecret } from './components/secretsScanner';
 import BeadDraftForm from './BeadDraftForm';
 import StitchDraftForm from './StitchDraftForm';
+import { StitchLinker } from './components/StitchLinker';
 import { TabId } from './ProjectDetail';
 
 const PAGE_SIZE = 50;
@@ -564,6 +565,76 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
   const [lastStitchIds, setLastStitchIds] = useState<string[] | null>(null);
   const [lastStitchId, setLastStitchId] = useState<string | null>(null);
 
+  // Link graph state
+  interface LinkGraph {
+    outgoing: Array<{ stitch_id: string; kind: string; title?: string }>;
+    incoming: Array<{ stitch_id: string; kind: string; title?: string }>;
+  }
+  const [linkGraphs, setLinkGraphs] = useState<Map<string, LinkGraph>>(new Map());
+
+  // Fetch link graph when a stitch is selected
+  useEffect(() => {
+    if (!selectedId) return;
+
+    const fetchLinkGraph = async () => {
+      try {
+        const response = await fetch(`/api/stitches/${encodeURIComponent(selectedId)}`);
+        if (response.ok) {
+          const data = await response.json();
+          setLinkGraphs(prev => {
+            const next = new Map(prev);
+            next.set(selectedId, data.link_graph || { outgoing: [], incoming: [] });
+            return next;
+          });
+        }
+      } catch (e) {
+        console.error('Failed to fetch link graph:', e);
+      }
+    };
+
+    fetchLinkGraph();
+  }, [selectedId]);
+
+  const handleLinkCreated = useCallback((toStitchId: string) => {
+    if (!selectedId) return;
+    // Refetch link graph after creating a link
+    fetch(`/api/stitches/${encodeURIComponent(selectedId)}`)
+      .then(r => r.ok ? r.json() : Promise.reject('Failed'))
+      .then(data => {
+        setLinkGraphs(prev => {
+          const next = new Map(prev);
+          next.set(selectedId, data.link_graph || { outgoing: [], incoming: [] });
+          return next;
+        });
+      })
+      .catch(() => {});
+  }, [selectedId]);
+
+  const handleRemoveLink = useCallback(async (toStitchId: string) => {
+    if (!selectedId) return;
+
+    try {
+      const response = await fetch(`/api/stitches/${encodeURIComponent(selectedId)}/links/${encodeURIComponent(toStitchId)}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        setLinkGraphs(prev => {
+          const next = new Map(prev);
+          const current = next.get(selectedId);
+          if (current) {
+            next.set(selectedId, {
+              ...current,
+              outgoing: current.outgoing.filter(l => l.stitch_id !== toStitchId),
+            });
+          }
+          return next;
+        });
+      }
+    } catch (e) {
+      console.error('Failed to remove link:', e);
+    }
+  }, [selectedId]);
+
   // Merge conversations + dictated notes into unified stitch items
   const stitchItems = useMemo(() => {
     const items: StitchItem[] = [];
@@ -938,7 +1009,57 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
                       <span className="stitch-detail-created">
                         Created {formatTimeAgo(item.createdAt)} ago
                       </span>
+                      <StitchLinker stitchId={item.id} stitchProject={item.project} onLinkCreated={handleLinkCreated} />
                     </div>
+                    {/* See also: stitch links */}
+                    {(() => {
+                      const links = linkGraphs.get(item.id);
+                      if (!links || (links.outgoing.length === 0 && links.incoming.length === 0)) return null;
+                      return (
+                        <div className="stitch-links-section">
+                          <div className="stitch-links-header">See also</div>
+                          {links.outgoing.length > 0 && (
+                            <div className="stitch-links-group">
+                              <span className="stitch-links-label">Links to:</span>
+                              {links.outgoing.map(link => (
+                                <div key={link.stitch_id} className="stitch-link-item">
+                                  <a
+                                    href="#"
+                                    onClick={(e) => { e.preventDefault(); setSelectedId(link.stitch_id); }}
+                                    className="stitch-link-title"
+                                  >
+                                    {link.title || link.stitch_id}
+                                  </a>
+                                  <button
+                                    className="stitch-link-remove"
+                                    onClick={() => handleRemoveLink(link.stitch_id)}
+                                    title="Remove link"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {links.incoming.length > 0 && (
+                            <div className="stitch-links-group">
+                              <span className="stitch-links-label">Referenced by:</span>
+                              {links.incoming.map(link => (
+                                <div key={link.stitch_id} className="stitch-link-item stitch-link-item--incoming">
+                                  <a
+                                    href="#"
+                                    onClick={(e) => { e.preventDefault(); setSelectedId(link.stitch_id); }}
+                                    className="stitch-link-title"
+                                  >
+                                    {link.title || link.stitch_id}
+                                  </a>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <DictatedNoteDetail note={item.dictatedNote} onUpdate={handleNoteUpdate} />
                   </div>
                 )}
@@ -950,7 +1071,57 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
                       <span className="stitch-detail-created">
                         Created {formatTimeAgo(item.createdAt)} ago
                       </span>
+                      <StitchLinker stitchId={item.id} stitchProject={item.project} onLinkCreated={handleLinkCreated} />
                     </div>
+                    {/* See also: stitch links */}
+                    {(() => {
+                      const links = linkGraphs.get(item.id);
+                      if (!links || (links.outgoing.length === 0 && links.incoming.length === 0)) return null;
+                      return (
+                        <div className="stitch-links-section">
+                          <div className="stitch-links-header">See also</div>
+                          {links.outgoing.length > 0 && (
+                            <div className="stitch-links-group">
+                              <span className="stitch-links-label">Links to:</span>
+                              {links.outgoing.map(link => (
+                                <div key={link.stitch_id} className="stitch-link-item">
+                                  <a
+                                    href="#"
+                                    onClick={(e) => { e.preventDefault(); setSelectedId(link.stitch_id); }}
+                                    className="stitch-link-title"
+                                  >
+                                    {link.title || link.stitch_id}
+                                  </a>
+                                  <button
+                                    className="stitch-link-remove"
+                                    onClick={() => handleRemoveLink(link.stitch_id)}
+                                    title="Remove link"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {links.incoming.length > 0 && (
+                            <div className="stitch-links-group">
+                              <span className="stitch-links-label">Referenced by:</span>
+                              {links.incoming.map(link => (
+                                <div key={link.stitch_id} className="stitch-link-item stitch-link-item--incoming">
+                                  <a
+                                    href="#"
+                                    onClick={(e) => { e.preventDefault(); setSelectedId(link.stitch_id); }}
+                                    className="stitch-link-title"
+                                  >
+                                    {link.title || link.stitch_id}
+                                  </a>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <ScreenCaptureDetail summary={item.screenCapture} />
                   </div>
                 )}
@@ -962,7 +1133,57 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
                       <span className="stitch-detail-created">
                         Created {formatTimeAgo(item.createdAt)} ago
                       </span>
+                      <StitchLinker stitchId={item.id} stitchProject={item.project} onLinkCreated={handleLinkCreated} />
                     </div>
+                    {/* See also: stitch links */}
+                    {(() => {
+                      const links = linkGraphs.get(item.id);
+                      if (!links || (links.outgoing.length === 0 && links.incoming.length === 0)) return null;
+                      return (
+                        <div className="stitch-links-section">
+                          <div className="stitch-links-header">See also</div>
+                          {links.outgoing.length > 0 && (
+                            <div className="stitch-links-group">
+                              <span className="stitch-links-label">Links to:</span>
+                              {links.outgoing.map(link => (
+                                <div key={link.stitch_id} className="stitch-link-item">
+                                  <a
+                                    href="#"
+                                    onClick={(e) => { e.preventDefault(); setSelectedId(link.stitch_id); }}
+                                    className="stitch-link-title"
+                                  >
+                                    {link.title || link.stitch_id}
+                                  </a>
+                                  <button
+                                    className="stitch-link-remove"
+                                    onClick={() => handleRemoveLink(link.stitch_id)}
+                                    title="Remove link"
+                                  >
+                                    ×
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {links.incoming.length > 0 && (
+                            <div className="stitch-links-group">
+                              <span className="stitch-links-label">Referenced by:</span>
+                              {links.incoming.map(link => (
+                                <div key={link.stitch_id} className="stitch-link-item stitch-link-item--incoming">
+                                  <a
+                                    href="#"
+                                    onClick={(e) => { e.preventDefault(); setSelectedId(link.stitch_id); }}
+                                    className="stitch-link-title"
+                                  >
+                                    {link.title || link.stitch_id}
+                                  </a>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <div className="stitch-detail-messages">
                       {selectedConv.messages.slice(-5).map((msg, i) => (
                         <div
