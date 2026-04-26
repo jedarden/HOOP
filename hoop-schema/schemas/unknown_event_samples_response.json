@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.jedarden.dev/schemas/unknown_event_samples_response.json",
+  "title": "UnknownEventSamplesResponse",
+  "description": "Samples response for GET /api/diagnostics/unknown-events/samples",
+  "type": "object",
+  "required": ["samples", "total_count", "daemon_version", "schema_version"],
+  "additionalProperties": false,
+  "properties": {
+    "samples": {
+      "type": "array",
+      "description": "Buffered unknown event samples (last N events)",
+      "items": {
+        "type": "object",
+        "required": ["adapter", "event_kind", "raw_event", "timestamp"],
+        "additionalProperties": false,
+        "properties": {
+          "adapter": {
+            "type": "string",
+            "description": "Adapter name (e.g., 'needle', 'heartbeats', 'claude')"
+          },
+          "event_kind": {
+            "type": "string",
+            "description": "Unknown event kind/type"
+          },
+          "raw_event": {
+            "type": "string",
+            "description": "Raw event payload (truncated if too long)"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO 8601 timestamp when the unknown event was recorded"
+          },
+          "source_path": {
+            "type": "string",
+            "description": "Source file path (if applicable)"
+          },
+          "line_number": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Line number in source file (if applicable)"
+          }
+        }
+      }
+    },
+    "total_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total count of unknown events (hoop_unknown_event_total metric)"
+    },
+    "daemon_version": {
+      "type": "string",
+      "description": "HOOP daemon version (e.g., '0.1.0')"
+    },
+    "schema_version": {
+      "type": "string",
+      "description": "Schema version (e.g., '1.0.0')"
+    }
+  }
+}

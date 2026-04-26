@@ -24,7 +24,13 @@ use axum::{
 };
 use serde::Serialize;
 
-use crate::{heartbeats::WorkerLiveness, metrics, ws::WorkerDisplayState, BeadStatus, DaemonState};
+use crate::{
+    heartbeats::WorkerLiveness,
+    metrics,
+    unknown_event_sink::global_registry,
+    ws::WorkerDisplayState,
+    BeadStatus, DaemonState,
+};
 
 /// Debug-state payload schema version (§20: bump on any field addition/removal).
 const DEBUG_STATE_SCHEMA_VERSION: &str = "1.0.0";
@@ -561,6 +567,41 @@ struct UnknownEventsResponse {
     schema_version: String,
 }
 
+/// Response for GET /api/diagnostics/unknown-events/samples
+#[derive(Serialize)]
+struct UnknownEventSamplesResponse {
+    samples: Vec<UnknownEventSampleDto>,
+    total_count: u64,
+    daemon_version: String,
+    schema_version: String,
+}
+
+/// DTO for unknown event samples (matches frontend interface).
+#[derive(Serialize)]
+struct UnknownEventSampleDto {
+    adapter: String,
+    event_kind: String,
+    raw_event: String,
+    timestamp: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    line_number: Option<usize>,
+}
+
+impl From<crate::unknown_event_sink::UnknownEventSample> for UnknownEventSampleDto {
+    fn from(sample: crate::unknown_event_sink::UnknownEventSample) -> Self {
+        Self {
+            adapter: sample.adapter,
+            event_kind: sample.event_kind,
+            raw_event: sample.raw_event,
+            timestamp: sample.timestamp.to_rfc3339(),
+            source_path: sample.source_path,
+            line_number: sample.line_number,
+        }
+    }
+}
+
 #[derive(Serialize)]
 struct LabeledEntry {
     adapter: String,
@@ -592,11 +633,29 @@ async fn get_unknown_events() -> Json<UnknownEventsResponse> {
     })
 }
 
+async fn get_unknown_event_samples() -> Json<UnknownEventSamplesResponse> {
+    let m = metrics::metrics();
+    let registry = global_registry();
+    let samples = registry
+        .get_all_samples()
+        .into_iter()
+        .map(UnknownEventSampleDto::from)
+        .collect();
+
+    Json(UnknownEventSamplesResponse {
+        samples,
+        total_count: m.hoop_unknown_event_total.get(),
+        daemon_version: env!("CARGO_PKG_VERSION").to_string(),
+        schema_version: hoop_schema::version::SCHEMA_VERSION.to_string(),
+    })
+}
+
 pub fn router() -> Router<DaemonState> {
     Router::new()
         .route("/metrics", get(get_metrics))
         .route("/debug/state", get(debug_state))
         .route("/api/diagnostics/unknown-events", get(get_unknown_events))
+        .route("/api/diagnostics/unknown-events/samples", get(get_unknown_event_samples))
 }
 
 // ---------------------------------------------------------------------------

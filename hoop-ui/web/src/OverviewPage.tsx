@@ -8,6 +8,7 @@ import {
   currentTimeAtom,
   ProjectCardData,
 } from './atoms';
+import { SettingsMenu } from './components/SettingsMenu';
 
 function formatRelativeTime(iso?: string, now?: number): string {
   if (!iso) return '--';
@@ -145,9 +146,12 @@ export default function OverviewPage({ onNavigateProject }: { onNavigateProject:
       <header>
         <div className="header-top">
           <h1>HOOP</h1>
-          <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
-            <span className="indicator-dot" />
-            {wsConnected ? 'Connected' : 'Connecting...'}
+          <div className="header-right">
+            <SettingsMenu />
+            <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
+              <span className="indicator-dot" />
+              {wsConnected ? 'Connected' : 'Connecting...'}
+            </div>
           </div>
         </div>
         <p>The operator's pane of glass and conversational handle.</p>

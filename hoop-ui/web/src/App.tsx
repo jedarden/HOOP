@@ -19,6 +19,8 @@ import { DictationWidget } from './components/DictationWidget';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import { StuckAlertBanner } from './components/StuckAlertBanner';
 import { CollisionAlertBanner } from './components/CollisionAlertBanner';
+import { WelcomeTour } from './components/WelcomeTour';
+import { SettingsMenu } from './components/SettingsMenu';
 import DraftsTab from './DraftsTab';
 import UnknownEventsDiagnostics from './UnknownEventsDiagnostics';
 
@@ -103,6 +105,69 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler);
   }, [setSearchOpen]);
 
+  // Handle welcome tour starter prompt actions
+  useEffect(() => {
+    const handleStartDictation = () => {
+      // Navigate to the first available project, then trigger dictation
+      const firstProject = projectCards[0];
+      if (firstProject) {
+        window.location.hash = `#/${firstProject.name}`;
+        // Delay dictation trigger to allow navigation to complete
+        setTimeout(() => {
+          const hotkeyEvent = new KeyboardEvent('keydown', {
+            key: 'd',
+            metaKey: true,
+            ctrlKey: false,
+            shiftKey: true,
+            altKey: false,
+            bubbles: true,
+          });
+          window.dispatchEvent(hotkeyEvent);
+        }, 500);
+      } else {
+        // No projects available, navigate to fleet view
+        window.location.hash = '#/fleet';
+      }
+    };
+
+    const handleRegisterProject = () => {
+      // Show instructions for registering a project via CLI
+      alert(
+        'To register a new project:\n\n' +
+        '1. Open your terminal\n' +
+        '2. Navigate to your project directory\n' +
+        '3. Run: hoop-cli project register\n\n' +
+        'Or scan a directory for all projects:\n' +
+        '  hoop-cli project scan <directory>\n\n' +
+        'The project will appear in HOOP automatically.'
+      );
+    };
+
+    const handleOpenAgentChat = () => {
+      // Navigate to fleet view which includes AgentChatPane and show guidance
+      window.location.hash = '#/fleet';
+      // Show a toast message pointing to the chat interface
+      setTimeout(() => {
+        const toast = document.createElement('div');
+        toast.className = 'restore-toast agent-chat-hint';
+        toast.textContent = '💬 Agent chat is available in the right panel — start typing to ask questions!';
+        toast.style.cssText = 'background: #3b82f6; color: white; padding: 12px 20px; border-radius: 8px; margin: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);';
+        document.querySelector('.app-project-detail main')?.appendChild(toast);
+        setTimeout(() => toast.remove(), 5000);
+      }, 300);
+    };
+
+    window.addEventListener('hoop-start-dictation', handleStartDictation);
+    window.addEventListener('hoop-register-project', handleRegisterProject);
+    window.addEventListener('hoop-open-agent-chat', handleOpenAgentChat);
+
+    return () => {
+      window.removeEventListener('hoop-start-dictation', handleStartDictation);
+      window.removeEventListener('hoop-register-project', handleRegisterProject);
+      window.removeEventListener('hoop-open-agent-chat', handleOpenAgentChat);
+    };
+  }, [projectCards]);
+
   // Hash-based routing
   useEffect(() => {
     const handleHashChange = () => {
@@ -169,6 +234,8 @@ export default function App() {
         <DictationWidget />
         <StuckAlertBanner />
         <CollisionAlertBanner />
+        <SettingsMenu />
+        <WelcomeTour />
       </>
     );
   }
@@ -352,6 +419,10 @@ export default function App() {
         <OverviewPage onNavigateProject={navigateToProject} />
         <SearchPalette />
         <DictationWidget />
+        <StuckAlertBanner />
+        <CollisionAlertBanner />
+        <SettingsMenu />
+        <WelcomeTour />
       </>
     );
   }

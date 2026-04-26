@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.jedarden.dev/schemas/unknown_events_response.json",
+  "title": "UnknownEventsResponse",
+  "description": "Summary response for GET /api/diagnostics/unknown-events",
+  "type": "object",
+  "required": ["total_count", "labeled_totals", "daemon_version", "schema_version"],
+  "additionalProperties": false,
+  "properties": {
+    "total_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total count of unknown events (hoop_unknown_event_total metric)"
+    },
+    "labeled_totals": {
+      "type": "array",
+      "description": "Breakdown of unknown events by adapter and event kind",
+      "items": {
+        "type": "object",
+        "required": ["adapter", "event_kind", "count"],
+        "additionalProperties": false,
+        "properties": {
+          "adapter": {
+            "type": "string",
+            "description": "Adapter name (e.g., 'needle', 'heartbeats', 'claude')"
+          },
+          "event_kind": {
+            "type": "string",
+            "description": "Unknown event kind/type"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Count of unknown events for this adapter/kind pair"
+          }
+        }
+      }
+    },
+    "daemon_version": {
+      "type": "string",
+      "description": "HOOP daemon version (e.g., '0.1.0')"
+    },
+    "schema_version": {
+      "type": "string",
+      "description": "Schema version (e.g., '1.0.0')"
+    }
+  }
+}
