@@ -1336,6 +1336,17 @@ function StepDetail({ step, stepNumber, totalSteps }: { step: TimelineStep; step
 
   // Render bead event step from events.jsonl
   if (step.type.startsWith('bead_')) {
+    // Try to parse stash_sha from raw event for fail events
+    let stashSha: string | undefined;
+    if (step.eventType === 'fail' && step.rawEvent) {
+      try {
+        const parsed = JSON.parse(step.rawEvent);
+        stashSha = parsed.stash_sha;
+      } catch {
+        // Ignore parse errors
+      }
+    }
+
     return (
       <div className="debug-step-detail debug-bead-event-step">
         <div className="debug-step-detail-header">
@@ -1356,6 +1367,15 @@ function StepDetail({ step, stepNumber, totalSteps }: { step: TimelineStep; step
         <div className="debug-step-content">
           <h4>Event Description</h4>
           <p className="bead-event-description">{contentStr}</p>
+          {stashSha && (
+            <div className="bead-event-stash-sha">
+              <h4>Git Stash SHA (for Stitch Replay)</h4>
+              <code className="stash-sha-code">{stashSha}</code>
+              <p className="stash-sha-hint">
+                This stash captures the worktree state at failure time. Use with <code>git stash show</code> to inspect.
+              </p>
+            </div>
+          )}
           {step.rawEvent && (
             <details className="raw-event-details">
               <summary>Raw Event</summary>

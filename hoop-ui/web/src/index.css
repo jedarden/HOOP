@@ -4627,6 +4627,43 @@ body:has(.connection-banner) main {
 	color: #333;
   }
 
+  /* Bead Event Stash SHA (hoop-ttb.5.11) */
+  .bead-event-stash-sha {
+	margin-bottom: 1rem;
+  }
+
+  .bead-event-stash-sha h4 {
+	font-size: 0.875rem;
+	margin: 0 0 0.5rem 0;
+	color: #333;
+  }
+
+  .stash-sha-code {
+	display: inline-block;
+	background: #f0f7ff;
+	border: 1px solid #a8c7fa;
+	border-radius: 4px;
+	padding: 0.25rem 0.5rem;
+	font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Droid Sans Mono', 'Source Code Pro', monospace;
+	font-size: 0.875rem;
+	color: #1976d2;
+	margin-bottom: 0.5rem;
+  }
+
+  .stash-sha-hint {
+	font-size: 0.8125rem;
+	color: #666;
+	margin: 0;
+  }
+
+  .stash-sha-hint code {
+	background: #f0f0f0;
+	padding: 0.125rem 0.25rem;
+	border-radius: 3px;
+	font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Droid Sans Mono', 'Source Code Pro', monospace;
+	font-size: 0.8125rem;
+  }
+
   /* All Steps List */
   .debug-all-steps {
 	padding: 1.5rem;
