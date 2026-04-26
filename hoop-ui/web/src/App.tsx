@@ -1,6 +1,6 @@
 import { useAtom, useAtomValue, useSetAtom } from 'jotai';
-import { useState, useEffect, useCallback } from 'react';
-import { wsConnectedAtom, configStatusAtom, projectCardsAtom, searchPaletteOpenAtom, activeProjectNameAtom, ProjectCardData } from './atoms';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { wsConnectedAtom, connectionStatusAtom, configStatusAtom, projectCardsAtom, searchPaletteOpenAtom, activeProjectNameAtom, ProjectCardData } from './atoms';
 import { useWebSocket } from './useWebSocket';
 import OverviewPage from './OverviewPage';
 import ProjectDetail from './ProjectDetail';
@@ -16,6 +16,11 @@ import CrossProjectDashboard from './CrossProjectDashboard';
 import PatternsView from './PatternsView';
 import ConversationsView from './ConversationsView';
 import { DictationWidget } from './components/DictationWidget';
+import { ConnectionBanner } from './components/ConnectionBanner';
+import { StuckAlertBanner } from './components/StuckAlertBanner';
+import { CollisionAlertBanner } from './components/CollisionAlertBanner';
+import DraftsTab from './DraftsTab';
+import UnknownEventsDiagnostics from './UnknownEventsDiagnostics';
 
 type Route =
   | { view: 'overview' }
@@ -25,7 +30,9 @@ type Route =
   | { view: 'audit' }
   | { view: 'dashboard' }
   | { view: 'patterns'; patternId?: string }
-  | { view: 'conversations' };
+  | { view: 'conversations' }
+  | { view: 'drafts' }
+  | { view: 'diagnostics' };
 
 function ConfigBanner({ error }: { error: { message: string; line: number; col: number; field?: string; expected?: string; got?: string } }) {
   return (
@@ -53,6 +60,8 @@ function parseHash(hash: string): Route {
   if (path === 'dashboard') return { view: 'dashboard' };
   if (path === 'patterns') return { view: 'patterns' };
   if (path === 'conversations') return { view: 'conversations' };
+  if (path === 'drafts') return { view: 'drafts' };
+  if (path === 'diagnostics') return { view: 'diagnostics' };
   if (path.startsWith('patterns/')) {
     const patternId = path.slice('patterns/'.length);
     if (patternId) return { view: 'patterns', patternId };
@@ -62,13 +71,25 @@ function parseHash(hash: string): Route {
 
 export default function App() {
   const [wsConnected] = useAtom(wsConnectedAtom);
+  const [connectionStatus] = useAtom(connectionStatusAtom);
   const [configStatus] = useAtom(configStatusAtom);
   const projectCards = useAtomValue(projectCardsAtom);
   const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
   const setSearchOpen = useSetAtom(searchPaletteOpenAtom);
   const setActiveProject = useSetAtom(activeProjectNameAtom);
+  const [showRestoreToast, setShowRestoreToast] = useState(false);
+  const prevConnectionStatusRef = useRef(connectionStatus);
 
   useWebSocket();
+
+  // Show "restoring state" toast when transitioning from disconnected to connected
+  useEffect(() => {
+    if (prevConnectionStatusRef.current === 'disconnected' && connectionStatus === 'connected') {
+      setShowRestoreToast(true);
+      setTimeout(() => setShowRestoreToast(false), 3000);
+    }
+    prevConnectionStatusRef.current = connectionStatus;
+  }, [connectionStatus]);
 
   // cmd-K (or ctrl-K) opens the search palette
   useEffect(() => {
@@ -114,6 +135,12 @@ export default function App() {
   if (route.view === 'patterns') {
     return (
       <>
+        <ConnectionBanner />
+        {showRestoreToast && (
+          <div className="restore-toast" role="status">
+            Restoring state...
+          </div>
+        )}
         <div className="app app-project-detail">
           {configStatus.error && <ConfigBanner error={configStatus.error} />}
           <header className="app-header-mini">
@@ -121,6 +148,7 @@ export default function App() {
               <div className="header-nav">
                 <a href="#/" className="back-link">&larr; All Projects</a>
                 <a href="#/dashboard" className="header-nav-link">Dashboard</a>
+                <a href="#/drafts" className="header-nav-link">Drafts</a>
                 <a href="#/fleet" className="header-nav-link">Fleet</a>
                 <a href="#/audit" className="header-nav-link">Audit</a>
               </div>
@@ -139,6 +167,8 @@ export default function App() {
         </div>
         <SearchPalette />
         <DictationWidget />
+        <StuckAlertBanner />
+        <CollisionAlertBanner />
       </>
     );
   }
@@ -147,6 +177,12 @@ export default function App() {
   if (route.view === 'dashboard') {
     return (
       <>
+        <ConnectionBanner />
+        {showRestoreToast && (
+          <div className="restore-toast" role="status">
+            Restoring state...
+          </div>
+        )}
         <div className="app app-project-detail">
           {configStatus.error && <ConfigBanner error={configStatus.error} />}
           <header className="app-header-mini">
@@ -155,6 +191,7 @@ export default function App() {
                 <a href="#/" className="back-link">&larr; All Projects</a>
                 <a href="#/patterns" className="header-nav-link">Patterns</a>
                 <a href="#/conversations" className="header-nav-link">Conversations</a>
+                <a href="#/drafts" className="header-nav-link">Drafts</a>
                 <a href="#/fleet" className="header-nav-link">Fleet</a>
                 <a href="#/timeline" className="header-nav-link">Timeline</a>
                 <a href="#/audit" className="header-nav-link">Audit</a>
@@ -174,6 +211,8 @@ export default function App() {
         </div>
         <SearchPalette />
         <DictationWidget />
+        <StuckAlertBanner />
+        <CollisionAlertBanner />
       </>
     );
   }
@@ -182,6 +221,12 @@ export default function App() {
   if (route.view === 'conversations') {
     return (
       <>
+        <ConnectionBanner />
+        {showRestoreToast && (
+          <div className="restore-toast" role="status">
+            Restoring state...
+          </div>
+        )}
         <div className="app app-project-detail">
           {configStatus.error && <ConfigBanner error={configStatus.error} />}
           <header className="app-header-mini">
@@ -193,6 +238,7 @@ export default function App() {
                 <a href="#/fleet" className="header-nav-link">Fleet</a>
                 <a href="#/timeline" className="header-nav-link">Timeline</a>
                 <a href="#/audit" className="header-nav-link">Audit</a>
+                <a href="#/drafts" className="header-nav-link">Drafts</a>
               </div>
               <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
                 <span className="indicator-dot" />
@@ -210,10 +256,99 @@ export default function App() {
     );
   }
 
+  // Drafts view — agent-created stitch preview queue (hoop-ttb.6.6)
+  if (route.view === 'drafts') {
+    return (
+      <>
+        <ConnectionBanner />
+        {showRestoreToast && (
+          <div className="restore-toast" role="status">
+            Restoring state...
+          </div>
+        )}
+        <div className="app app-project-detail">
+          {configStatus.error && <ConfigBanner error={configStatus.error} />}
+          <header className="app-header-mini">
+            <div className="header-top">
+              <div className="header-nav">
+                <a href="#/" className="back-link">&larr; All Projects</a>
+                <a href="#/dashboard" className="header-nav-link">Dashboard</a>
+                <a href="#/patterns" className="header-nav-link">Patterns</a>
+                <a href="#/conversations" className="header-nav-link">Conversations</a>
+                <a href="#/fleet" className="header-nav-link">Fleet</a>
+                <a href="#/timeline" className="header-nav-link">Timeline</a>
+                <a href="#/audit" className="header-nav-link">Audit</a>
+              </div>
+              <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
+                <span className="indicator-dot" />
+                {wsConnected ? 'Connected' : 'Connecting...'}
+              </div>
+            </div>
+          </header>
+          <main>
+            <DraftsTab />
+          </main>
+        </div>
+        <SearchPalette />
+        <DictationWidget />
+        <StuckAlertBanner />
+        <CollisionAlertBanner />
+      </>
+    );
+  }
+
+  // Diagnostics view — unknown events, never-silent-drop invariant
+  if (route.view === 'diagnostics') {
+    return (
+      <>
+        <ConnectionBanner />
+        {showRestoreToast && (
+          <div className="restore-toast" role="status">
+            Restoring state...
+          </div>
+        )}
+        <div className="app app-project-detail">
+          {configStatus.error && <ConfigBanner error={configStatus.error} />}
+          <header className="app-header-mini">
+            <div className="header-top">
+              <div className="header-nav">
+                <a href="#/" className="back-link">&larr; All Projects</a>
+                <a href="#/dashboard" className="header-nav-link">Dashboard</a>
+                <a href="#/patterns" className="header-nav-link">Patterns</a>
+                <a href="#/conversations" className="header-nav-link">Conversations</a>
+                <a href="#/drafts" className="header-nav-link">Drafts</a>
+                <a href="#/fleet" className="header-nav-link">Fleet</a>
+                <a href="#/timeline" className="header-nav-link">Timeline</a>
+                <a href="#/audit" className="header-nav-link">Audit</a>
+              </div>
+              <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
+                <span className="indicator-dot" />
+                {wsConnected ? 'Connected' : 'Connecting...'}
+              </div>
+            </div>
+          </header>
+          <main>
+            <UnknownEventsDiagnostics />
+          </main>
+        </div>
+        <SearchPalette />
+        <DictationWidget />
+        <StuckAlertBanner />
+        <CollisionAlertBanner />
+      </>
+    );
+  }
+
   // Overview — home route
   if (route.view === 'overview') {
     return (
       <>
+        <ConnectionBanner />
+        {showRestoreToast && (
+          <div className="restore-toast" role="status">
+            Restoring state...
+          </div>
+        )}
         <OverviewPage onNavigateProject={navigateToProject} />
         <SearchPalette />
         <DictationWidget />
@@ -225,12 +360,19 @@ export default function App() {
   if (route.view === 'timeline') {
     return (
       <>
+        <ConnectionBanner />
+        {showRestoreToast && (
+          <div className="restore-toast" role="status">
+            Restoring state...
+          </div>
+        )}
         <div className="app app-project-detail">
           {configStatus.error && <ConfigBanner error={configStatus.error} />}
           <header className="app-header-mini">
             <div className="header-top">
               <div className="header-nav">
                 <a href="#/" className="back-link">&larr; All Projects</a>
+                <a href="#/drafts" className="header-nav-link">Drafts</a>
                 <a href="#/fleet" className="header-nav-link">Fleet</a>
                 <a href="#/audit" className="header-nav-link">Audit Log &rarr;</a>
               </div>
@@ -254,12 +396,19 @@ export default function App() {
   if (route.view === 'audit') {
     return (
       <>
+        <ConnectionBanner />
+        {showRestoreToast && (
+          <div className="restore-toast" role="status">
+            Restoring state...
+          </div>
+        )}
         <div className="app app-project-detail">
           {configStatus.error && <ConfigBanner error={configStatus.error} />}
           <header className="app-header-mini">
             <div className="header-top">
               <div className="header-nav">
                 <a href="#/" className="back-link">&larr; All Projects</a>
+                <a href="#/drafts" className="header-nav-link">Drafts</a>
                 <a href="#/fleet" className="header-nav-link">Fleet</a>
               </div>
               <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
@@ -282,12 +431,19 @@ export default function App() {
   if (route.view === 'fleet') {
     return (
       <>
+        <ConnectionBanner />
+        {showRestoreToast && (
+          <div className="restore-toast" role="status">
+            Restoring state...
+          </div>
+        )}
         <div className="app app-project-detail">
           {configStatus.error && <ConfigBanner error={configStatus.error} />}
           <header className="app-header-mini">
             <div className="header-top">
               <div className="header-nav">
                 <a href="#/" className="back-link">&larr; All Projects</a>
+                <a href="#/drafts" className="header-nav-link">Drafts</a>
                 <a href="#/timeline" className="header-nav-link">Worker Timeline &rarr;</a>
                 <a href="#/audit" className="header-nav-link">Audit Log &rarr;</a>
               </div>
@@ -316,6 +472,12 @@ export default function App() {
   if (!card) {
     return (
       <>
+        <ConnectionBanner />
+        {showRestoreToast && (
+          <div className="restore-toast" role="status">
+            Restoring state...
+          </div>
+        )}
         <div className="app">
           <header className="app-header-mini">
             <div className="header-top">
@@ -338,6 +500,12 @@ export default function App() {
 
   return (
     <>
+      <ConnectionBanner />
+      {showRestoreToast && (
+        <div className="restore-toast" role="status">
+          Restoring state...
+        </div>
+      )}
       <div className="app app-project-detail">
         {configStatus.error && <ConfigBanner error={configStatus.error} />}
         <header className="app-header-mini">
