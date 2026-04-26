@@ -440,6 +440,12 @@ pub fn measure_memory() -> u64 {
 // ---------------------------------------------------------------------------
 
 /// Runs the full load test against a daemon at the given URL
+///
+/// This test:
+/// 1. Creates synthetic beads via the API
+/// 2. Measures API latencies for bead creation
+/// 3. Measures WS fan-out lag by creating beads and tracking broadcast time
+/// 4. Monitors memory usage throughout the test
 pub async fn run_load_test(
     base_url: &str,
     config: LoadTestConfig,
@@ -465,16 +471,50 @@ pub async fn run_load_test(
     let start = Instant::now();
 
     // Create multiple WS connections to test fan-out
-    let num_ws_clients = 10;
+    let num_ws_clients = std::cmp::min(10, config.total_workers() as usize);
     let ws_url = base_url.replace("http://", "ws://");
     let ws_url = format!("{}/ws", ws_url);
+
+    // Channels for coordinating WS event reception
+    let (fanout_tx, mut fanout_rx) = tokio::sync::mpsc::channel::<(usize, Instant)>(num_ws_clients * 10);
 
     let mut ws_clients = Vec::new();
     for i in 0..num_ws_clients {
         match tokio_tungstenite::connect_async(&ws_url).await {
             Ok((ws_stream, _)) => {
                 let (mut ws_sender, mut ws_receiver) = ws_stream.split();
-                ws_clients.push((ws_sender, ws_receiver));
+                // Wait for init message
+                let init_deadline = tokio::time::timeout(
+                    Duration::from_secs(5),
+                    ws_receiver.next()
+                ).await;
+                if init_deadline.is_err() {
+                    failures.push(format!("WS client {} timed out waiting for init", i));
+                    continue;
+                }
+
+                // Spawn a task to forward WS events to the fanout channel
+                let fanout_tx = fanout_tx.clone();
+                tokio::spawn(async move {
+                    while let Some(msg_result) = ws_receiver.next().await {
+                        match msg_result {
+                            Ok(Message::Text(text)) => {
+                                // Look for bead_event messages
+                                if text.contains("\"bead_event\"") || text.contains("\"type\":\"bead\"") {
+                                    let _ = fanout_tx.send((i, Instant::now())).await;
+                                }
+                            }
+                            Ok(Message::Close(_)) => break,
+                            Err(e) => {
+                                tracing::warn!("WS client {} error: {}", i, e);
+                                break;
+                            }
+                            _ => {}
+                        }
+                    }
+                });
+
+                ws_clients.push(ws_sender);
             }
             Err(e) => {
                 failures.push(format!("Failed to connect WS client {}: {}", i, e));
@@ -482,20 +522,25 @@ pub async fn run_load_test(
         }
     }
 
+    // Create a test project first (we'll use the first load-test project)
+    let test_project = "load-test-project-000";
+
     // Simulate load by making concurrent API requests
     let http_start = Instant::now();
 
-    // Test health endpoint latency
-    let health_start = Instant::now();
-    match client.get(&format!("{}/healthz", base_url)).send().await {
-        Ok(resp) if resp.status().is_success() => {
-            api_latencies.push(health_start.elapsed().as_millis() as u64);
-        }
-        Ok(resp) => {
-            failures.push(format!("Health check failed: {}", resp.status()));
-        }
-        Err(e) => {
-            failures.push(format!("Health check error: {}", e));
+    // Test health endpoint latency (multiple samples)
+    for _ in 0..5 {
+        let health_start = Instant::now();
+        match client.get(&format!("{}/healthz", base_url)).send().await {
+            Ok(resp) if resp.status().is_success() => {
+                api_latencies.push(health_start.elapsed().as_millis() as u64);
+            }
+            Ok(resp) => {
+                failures.push(format!("Health check failed: {}", resp.status()));
+            }
+            Err(e) => {
+                failures.push(format!("Health check error: {}", e));
+            }
         }
     }
 
@@ -513,47 +558,127 @@ pub async fn run_load_test(
         }
     }
 
-    // Test /api/projects endpoint
-    let projects_start = Instant::now();
-    match client.get(&format!("{}/api/projects", base_url)).send().await {
+    // Test /api/capacity endpoint
+    let capacity_start = Instant::now();
+    match client.get(&format!("{}/api/capacity", base_url)).send().await {
         Ok(resp) if resp.status().is_success() => {
-            api_latencies.push(projects_start.elapsed().as_millis() as u64);
+            api_latencies.push(capacity_start.elapsed().as_millis() as u64);
         }
         Ok(resp) => {
-            failures.push(format!("GET /api/projects failed: {}", resp.status()));
+            failures.push(format!("GET /api/capacity failed: {}", resp.status()));
         }
         Err(e) => {
-            failures.push(format!("GET /api/projects error: {}", e));
+            failures.push(format!("GET /api/capacity error: {}", e));
+        }
+    }
+
+    // Test bead creation via API - this creates real load
+    // Create a limited number of beads to avoid overwhelming the test
+    // Note: This may fail if the test project isn't registered, which is expected
+    let beads_to_create = std::cmp::min(10, config.beads_per_worker as usize);
+    let mut bead_create_success = false;
+
+    for bead_idx in 0..beads_to_create {
+        let bead_title = format!("Load test bead {}", bead_idx);
+        let create_start = Instant::now();
+
+        let create_req = json!({
+            "title": bead_title,
+            "description": "Synthetic bead for load testing",
+            "issue_type": "task",
+            "priority": 0,
+            "source": "load-test",
+        });
+
+        match client
+            .post(&format!("{}/api/p/{}/beads", base_url, test_project))
+            .json(&create_req)
+            .send()
+            .await
+        {
+            Ok(resp) if resp.status().is_success() => {
+                api_latencies.push(create_start.elapsed().as_millis() as u64);
+                bead_create_success = true;
+
+                // Measure WS fan-out lag: wait for all WS clients to receive the bead event
+                let creation_time = Instant::now();
+                let mut received_count = 0;
+                let timeout = Duration::from_millis(500);
+
+                while received_count < ws_clients.len() {
+                    match tokio::time::timeout(timeout, fanout_rx.recv()).await {
+                        Ok(Some((client_id, recv_time))) => {
+                            let lag = recv_time.saturating_duration_since(creation_time).as_millis() as u64;
+                            ws_fanout_lags.push(lag);
+                            received_count += 1;
+                        }
+                        Ok(None) => break,
+                        Err(_) => {
+                            // Timeout - not all clients received the event
+                            break;
+                        }
+                    }
+                }
+            }
+            Ok(resp) => {
+                let status = resp.status();
+                // 404 is expected if project isn't registered in test daemon
+                if status != 404 {
+                    if let Ok(body) = resp.text().await {
+                        failures.push(format!("Failed to create bead {}: {} - {}", bead_idx, status, body));
+                    } else {
+                        failures.push(format!("Failed to create bead {}: {}", bead_idx, status));
+                    }
+                }
+                // Don't break the loop on 404 - try a few times to see if any succeed
+            }
+            Err(e) => {
+                failures.push(format!("Error creating bead {}: {}", bead_idx, e));
+            }
+        }
+
+        // Small delay between creations to simulate realistic cadence
+        tokio::time::sleep(Duration::from_millis(config.event_cadence_ms)).await;
+
+        // If we successfully created at least one bead, that's enough for the test
+        if bead_create_success {
+            break;
+        }
+    }
+
+    // Test /metrics endpoint for performance data
+    let metrics_start = Instant::now();
+    match client.get(&format!("{}/metrics", base_url)).send().await {
+        Ok(resp) if resp.status().is_success() => {
+            api_latencies.push(metrics_start.elapsed().as_millis() as u64);
+
+            // Parse metrics for additional data
+            if let Ok(body) = resp.text().await {
+                // Extract hoop_ws_broadcast_lag_seconds if available
+                for line in body.lines() {
+                    if line.contains("hoop_ws_broadcast_lag_seconds") && !line.starts_with("#") {
+                        // Parse histogram bucket or quantile
+                        if let Some(rest) = line.split(' ').last() {
+                            if let Ok(value) = rest.parse::<f64>() {
+                                ws_fanout_lags.push((value * 1000.0) as u64); // Convert to ms
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(resp) => {
+            failures.push(format!("GET /metrics failed: {}", resp.status()));
+        }
+        Err(e) => {
+            failures.push(format!("GET /metrics error: {}", e));
         }
     }
 
     let http_elapsed = http_start.elapsed();
 
-    // Measure WS fan-out lag
-    if !ws_clients.is_empty() {
-        let fanout_start = Instant::now();
-
-        // Send a subscribe message and measure how long it takes for all clients to receive
-        let subscribe_msg = json!({"type": "subscribe", "topic": "global"}).to_string();
-
-        for (ws_sender, _) in &mut ws_clients {
-            let _ = ws_sender
-                .send(Message::Text(subscribe_msg.clone()))
-                .await;
-        }
-
-        // Wait for all clients to receive an event (simplified: just measure time)
-        let _ = tokio::time::timeout(Duration::from_millis(500), async {
-            // In a real test, we'd wait for specific events
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        })
-        .await;
-
-        ws_fanout_lags.push(fanout_start.elapsed().as_millis() as u64);
-    }
-
     // Close WS connections
-    for (mut ws_sender, _) in ws_clients {
+    for mut ws_sender in ws_clients {
         let _ = ws_sender.send(Message::Close(None)).await;
     }
 

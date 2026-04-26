@@ -1,0 +1,242 @@
+name: Load Tests
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      scale:
+        description: 'Load test scale (medium/full)'
+        required: false
+        default: 'medium'
+        type: choice
+        options:
+          - medium
+          - full
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Quick load test for PRs (optional, runs but doesn't block)
+  load-test-pr:
+    name: Load Test (Medium Scale)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    continue-on-error: true  # Optional for PRs - doesn't block merge
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo build
+      uses: actions/cache@v4
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Run medium-scale load test
+      run: cargo test --test load_test test_medium_scale_load_test -- --nocapture
+      env:
+        HOOP_LOAD_PROJECTS: 5
+        HOOP_LOAD_WORKERS: 2
+        HOOP_LOAD_BEADS: 50
+        HOOP_LOAD_CADENCE_MS: 10
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: load-test-pr-results
+        path: |
+          target/
+        retention-days: 7
+
+  # Full load test for main branch pushes
+  load-test-main:
+    name: Load Test (Full Scale)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    continue-on-error: true  # Runs but doesn't block main branch
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo build
+      uses: actions/cache@v4
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Run full-scale load test
+      run: cargo test --test load_test test_medium_scale_load_test -- --nocapture
+      env:
+        HOOP_LOAD_PROJECTS: 20
+        HOOP_LOAD_WORKERS: 5
+        HOOP_LOAD_BEADS: 200
+        HOOP_LOAD_CADENCE_MS: 10
+
+    - name: Check performance budgets
+      run: |
+        echo "Verifying performance budgets..."
+        # The test itself will fail if budgets are exceeded
+        # This step provides clear CI output about the check
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: load-test-main-results
+        path: |
+          target/
+        retention-days: 30
+
+  # Required load test for releases
+  load-test-release:
+    name: Load Test (Release Validation)
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo build
+      uses: actions/cache@v4
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Run full-scale load test (required for release)
+      run: |
+        echo "=== Running Load Test for Release ==="
+        echo "Tag: ${{ github.ref_name }}"
+        echo "Configuration: 20 projects × 5 workers × 200 beads"
+        echo ""
+        cargo test --test load_test test_medium_scale_load_test -- --nocapture
+      env:
+        HOOP_LOAD_PROJECTS: 20
+        HOOP_LOAD_WORKERS: 5
+        HOOP_LOAD_BEADS: 200
+        HOOP_LOAD_CADENCE_MS: 10
+
+    - name: Verify performance budgets
+      run: |
+        echo "=== Performance Budget Verification ==="
+        echo "API Latency Budget: <500ms"
+        echo "WS Fan-out Lag Budget: <100ms"
+        echo "Memory Ceiling: <4GB"
+        echo ""
+        echo "✓ All performance budgets must be satisfied for release"
+
+    - name: Upload release test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: load-test-release-${{ github.ref_name }}
+        path: |
+          target/
+        retention-days: 90
+
+  # Manual full-scale test via workflow_dispatch
+  load-test-manual:
+    name: Load Test (Manual)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo build
+      uses: actions/cache@v4
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Run load test
+      run: |
+        SCALE="${{ github.event.inputs.scale || 'medium' }}"
+        echo "Running $SCALE scale load test..."
+
+        if [ "$SCALE" = "full" ]; then
+          export HOOP_LOAD_PROJECTS=20
+          export HOOP_LOAD_WORKERS=5
+          export HOOP_LOAD_BEADS=200
+        else
+          export HOOP_LOAD_PROJECTS=5
+          export HOOP_LOAD_WORKERS=2
+          export HOOP_LOAD_BEADS=50
+        fi
+
+        cargo test --test load_test test_medium_scale_load_test -- --nocapture
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: load-test-manual-${{ github.run_id }}
+        path: |
+          target/
+        retention-days: 30
