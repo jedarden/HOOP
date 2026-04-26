@@ -11,7 +11,7 @@
 
 use anyhow::Result;
 use chrono::Utc;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -193,6 +193,9 @@ pub struct PercentileQuery {
     pub sample_count: usize,
 }
 
+/// Current schema version for the percentile index
+const INDEX_SCHEMA_VERSION: &str = "1.0.0";
+
 /// Initialize the percentile index table
 pub fn init_index(conn: &mut Connection) -> Result<()> {
     conn.execute(
@@ -214,6 +217,17 @@ pub fn init_index(conn: &mut Connection) -> Result<()> {
         [],
     )?;
 
+    // Metadata table for schema version tracking
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS stitch_percentile_index_meta (
+            key TEXT PRIMARY KEY NOT NULL,
+            value TEXT NOT NULL
+        )
+        "#,
+        [],
+    )?;
+
     // Index for lookup by bucket features
     conn.execute(
         r#"
@@ -224,6 +238,37 @@ pub fn init_index(conn: &mut Connection) -> Result<()> {
     )?;
 
     Ok(())
+}
+
+/// Check if the index schema version matches the expected version
+pub fn check_schema_version(conn: &Connection) -> Result<bool> {
+    let current_version: Option<String> = conn
+        .query_row(
+            "SELECT value FROM stitch_percentile_index_meta WHERE key = 'schema_version'",
+            [],
+            |row| row.get(0),
+        )
+        .ok();
+
+    Ok(current_version.as_deref() == Some(INDEX_SCHEMA_VERSION))
+}
+
+/// Update the index schema version
+pub fn update_schema_version(conn: &Connection) -> Result<()> {
+    conn.execute(
+        r#"
+        INSERT INTO stitch_percentile_index_meta (key, value)
+        VALUES ('schema_version', ?1)
+        ON CONFLICT (key) DO UPDATE SET value = excluded.value
+        "#,
+        params![INDEX_SCHEMA_VERSION],
+    )?;
+    Ok(())
+}
+
+/// Check if the index needs rebuilding due to schema version mismatch
+pub fn needs_rebuild(conn: &Connection) -> Result<bool> {
+    Ok(!check_schema_version(conn)?)
 }
 
 /// Update the percentile index with a new closed Stitch
@@ -432,6 +477,8 @@ pub fn rebuild_index(conn: &mut Connection) -> Result<()> {
         SELECT
             s.id,
             s.title,
+            s.created_at,
+            s.last_activity_at,
             (SELECT sm.content FROM stitch_messages sm
              WHERE sm.stitch_id = s.id AND sm.role = 'user'
              ORDER BY sm.ts ASC LIMIT 1) AS body,
@@ -447,54 +494,79 @@ pub fn rebuild_index(conn: &mut Connection) -> Result<()> {
     let rows = stmt.query_map([], |row| {
         let id: String = row.get(0)?;
         let title: String = row.get(1)?;
-        let body: Option<String> = row.get(2).unwrap_or(None);
-        let total_tokens: i64 = row.get(3).unwrap_or(0);
-        let attachments_path: Option<String> = row.get(4).unwrap_or(None);
+        let created_at: String = row.get(2)?;
+        let last_activity_at: String = row.get(3)?;
+        let body: Option<String> = row.get(4).unwrap_or(None);
+        let total_tokens: i64 = row.get(5).unwrap_or(0);
+        let attachments_path: Option<String> = row.get(6).unwrap_or(None);
 
-        // Derive cost and duration from the Stitch
+        // Parse timestamps for duration calculation
+        let created_dt = chrono::DateTime::parse_from_rfc3339(&created_at)
+            .map(|dt| dt.with_timezone(&chrono::Utc))
+            .unwrap_or_else(|_| chrono::Utc::now());
+        let last_activity_dt = chrono::DateTime::parse_from_rfc3339(&last_activity_at)
+            .map(|dt| dt.with_timezone(&chrono::Utc))
+            .unwrap_or_else(|_| chrono::Utc::now());
+        let duration_seconds = (last_activity_dt - created_dt).num_seconds().max(0);
+
+        // Derive cost from tokens
         let cost_usd = (total_tokens as f64) * 30.0 / 1_000_000.0;
-        let duration_seconds = 0; // Would be computed from timestamps
 
-        // Extract labels from audit log
-        let labels = Vec::new(); // TODO: load from actions table
-
-        Ok(StitchFeatures {
-            stitch_id: id,
-            title,
-            body_length: body.as_ref().map(|b| b.len()).unwrap_or(0),
-            labels,
-            attachments_count: if attachments_path.is_some() { 1 } else { 0 },
-            cost_usd,
-            duration_seconds,
-        })
+        Ok((id, title, body, attachments_path, cost_usd, duration_seconds))
     })?;
 
+    // Collect all stitch IDs first, then load labels in bulk
+    let mut stitches: Vec<(String, String, Option<String>, Option<String>, f64, i64)> = Vec::new();
     for row in rows {
-        let stitch = row?;
+        stitches.push(row?);
+    }
+
+    // Drop the statement to release the immutable borrow on conn
+    drop(stmt);
+
+    // Load labels for all stitches
+    for (id, title, body, attachments_path, cost_usd, duration_seconds) in stitches {
+        let labels = load_labels_for_stitch_rebuild(&id, conn);
+        let body_length = body.as_ref().map(|b| b.len()).unwrap_or(0);
+        let attachments_count = attachments_path
+            .as_deref()
+            .map(count_attachments)
+            .unwrap_or(0);
+
+        let features = StitchFeatures {
+            stitch_id: id.clone(),
+            title,
+            body_length,
+            labels,
+            attachments_count,
+            cost_usd,
+            duration_seconds,
+        };
+
         let bucket_id = BucketId::from_features(
-            &stitch.title,
-            stitch.body_length,
-            &stitch.labels,
-            stitch.attachments_count,
+            &features.title,
+            features.body_length,
+            &features.labels,
+            features.attachments_count,
         );
-        stitches_by_bucket.entry(bucket_id).or_default().push(stitch);
+        stitches_by_bucket.entry(bucket_id).or_default().push(features);
     }
 
     // Compute percentiles for each bucket
-    for (bucket_id, mut stitches) in stitches_by_bucket {
-        if stitches.is_empty() {
+    for (bucket_id, mut bucket_stitches) in stitches_by_bucket {
+        if bucket_stitches.is_empty() {
             continue;
         }
 
         // Sort by cost and duration
-        stitches.sort_by(|a, b| a.cost_usd.partial_cmp(&b.cost_usd).unwrap());
+        bucket_stitches.sort_by(|a, b| a.cost_usd.partial_cmp(&b.cost_usd).unwrap());
 
-        let cost_p50 = percentile_at(&stitches, 0.5, |s| s.cost_usd);
-        let cost_p90 = percentile_at(&stitches, 0.9, |s| s.cost_usd);
+        let cost_p50 = percentile_at(&bucket_stitches, 0.5, |s| s.cost_usd);
+        let cost_p90 = percentile_at(&bucket_stitches, 0.9, |s| s.cost_usd);
 
-        stitches.sort_by_key(|s| s.duration_seconds);
-        let duration_p50 = percentile_at(&stitches, 0.5, |s| s.duration_seconds as f64);
-        let duration_p90 = percentile_at(&stitches, 0.9, |s| s.duration_seconds as f64);
+        bucket_stitches.sort_by_key(|s| s.duration_seconds);
+        let duration_p50 = percentile_at(&bucket_stitches, 0.5, |s| s.duration_seconds as f64);
+        let duration_p90 = percentile_at(&bucket_stitches, 0.9, |s| s.duration_seconds as f64);
 
         let bucket_key = bucket_id.to_key();
         let now = Utc::now().to_rfc3339();
@@ -516,13 +588,33 @@ pub fn rebuild_index(conn: &mut Connection) -> Result<()> {
                 cost_p90,
                 duration_p50,
                 duration_p90,
-                stitches.len() as i64,
+                bucket_stitches.len() as i64,
                 now,
             ],
         )?;
     }
 
+    // Update the schema version to mark the index as current
+    update_schema_version(conn)?;
+
     Ok(())
+}
+
+/// Count the number of files in an attachments directory
+fn count_attachments(attachments_path: &str) -> usize {
+    let path = std::path::Path::new(attachments_path);
+    if !path.exists() {
+        return 0;
+    }
+
+    path.read_dir()
+        .map(|entries| {
+            entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().is_file())
+                .count()
+        })
+        .unwrap_or(0)
 }
 
 /// Compute percentile at a given quantile from a sorted slice
@@ -536,6 +628,183 @@ where
     let idx = (data.len() as f64 * quantile).floor() as usize;
     let idx = idx.min(data.len() - 1);
     f(&data[idx])
+}
+
+/// Update the percentile index when a Stitch is closed.
+///
+/// This loads the Stitch's features from fleet.db and updates the rolling
+/// percentiles for its similarity bucket. Returns Ok(false) if the Stitch
+/// is not fully closed yet (still has recent activity).
+///
+/// A Stitch is considered "closed" for indexing purposes when its
+/// last_activity_at is older than STITCH_CLOSED_THRESHOLD_SECONDS.
+/// This avoids the need to query the beads table (which is in a different database).
+pub fn update_on_stitch_close(stitch_id: &str) -> Result<bool> {
+    use rusqlite::Connection;
+
+    let db_path = std::path::PathBuf::from(
+        dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
+    ).join(".hoop").join("fleet.db");
+
+    if !db_path.exists() {
+        return Ok(false);
+    }
+
+    let conn = Connection::open(&db_path)?;
+
+    // Check if this Stitch is "closed" (no recent activity)
+    // We use a time-based threshold instead of checking bead status
+    // because the beads table is in a separate database
+    let last_activity_at: String = match conn.query_row(
+        "SELECT last_activity_at FROM stitches WHERE id = ?1",
+        params![stitch_id],
+        |row| row.get(0),
+    ) {
+        Ok(ts) => ts,
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            return Ok(false);
+        }
+        Err(e) => return Err(e.into()),
+    };
+
+    let last_activity_dt = chrono::DateTime::parse_from_rfc3339(&last_activity_at)
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+        .unwrap_or_else(|_| chrono::Utc::now());
+
+    let now = chrono::Utc::now();
+    let inactive_seconds = (now - last_activity_dt).num_seconds().max(0);
+
+    // Stitch must be inactive for at least 5 minutes to be considered closed
+    const STITCH_CLOSED_THRESHOLD_SECONDS: i64 = 300;
+    if inactive_seconds < STITCH_CLOSED_THRESHOLD_SECONDS {
+        return Ok(false);
+    }
+
+    // Load Stitch features
+    let features = load_stitch_features(&conn, stitch_id)?;
+
+    // Update the index
+    update_index(&conn, &features)?;
+
+    Ok(true)
+}
+
+/// Load a Stitch's features for percentile indexing.
+fn load_stitch_features(conn: &Connection, stitch_id: &str) -> Result<StitchFeatures> {
+    // Load the Stitch row
+    let (title, created_at, last_activity_at): (String, String, String) = conn.query_row(
+        "SELECT title, created_at, last_activity_at FROM stitches WHERE id = ?1",
+        params![stitch_id],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    )?;
+
+    // Parse timestamps for duration calculation
+    let created_dt = chrono::DateTime::parse_from_rfc3339(&created_at)
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+        .unwrap_or_else(|_| chrono::Utc::now());
+    let last_activity_dt = chrono::DateTime::parse_from_rfc3339(&last_activity_at)
+        .map(|dt| dt.with_timezone(&chrono::Utc))
+        .unwrap_or_else(|_| chrono::Utc::now());
+    let duration_seconds = (last_activity_dt - created_dt).num_seconds().max(0);
+
+    // Load the body from the first user message
+    let body: Option<String> = conn.query_row(
+        r#"
+        SELECT sm.content
+        FROM stitch_messages sm
+        WHERE sm.stitch_id = ?1 AND sm.role = 'user'
+        ORDER BY sm.ts ASC LIMIT 1
+        "#,
+        params![stitch_id],
+        |row| row.get(0),
+    ).ok();
+    let body_length = body.as_ref().map(|b| b.len()).unwrap_or(0);
+
+    // Load labels from audit log
+    let labels = load_labels_for_stitch(stitch_id, &conn);
+
+    // Load attachments count (attachments_path is a column on stitches table)
+    let attachments_path: Option<String> = conn.query_row(
+        "SELECT attachments_path FROM stitches WHERE id = ?1",
+        params![stitch_id],
+        |row| row.get(0),
+    ).ok();
+    let attachments_count = attachments_path
+        .as_deref()
+        .map(count_attachments)
+        .unwrap_or(0);
+
+    // Calculate cost from total tokens
+    let total_tokens: i64 = conn.query_row(
+        "SELECT COALESCE(SUM(tokens), 0) FROM stitch_messages WHERE stitch_id = ?1",
+        params![stitch_id],
+        |row| row.get(0),
+    ).unwrap_or(0);
+    let cost_usd = (total_tokens as f64) * 30.0 / 1_000_000.0;
+
+    Ok(StitchFeatures {
+        stitch_id: stitch_id.to_string(),
+        title,
+        body_length,
+        labels,
+        attachments_count: attachments_count as usize,
+        cost_usd,
+        duration_seconds,
+    })
+}
+
+/// Load labels for a stitch from the audit log.
+fn load_labels_for_stitch(stitch_id: &str, conn: &Connection) -> Vec<String> {
+    let mut stmt = match conn.prepare(
+        "SELECT args_json FROM actions WHERE stitch_id = ?1 AND kind = 'stitch_created' ORDER BY ts DESC LIMIT 1"
+    ) {
+        Ok(s) => s,
+        Err(_) => return vec![],
+    };
+
+    let args_json: Option<String> = stmt
+        .query_row(params![stitch_id], |row| row.get(0))
+        .ok();
+
+    args_json
+        .and_then(|json| {
+            let v: serde_json::Value = serde_json::from_str(&json).ok()?;
+            v.get("labels")
+                .and_then(|l| l.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|l| l.as_str().map(String::from))
+                        .collect()
+                })
+        })
+        .unwrap_or_default()
+}
+
+/// Load labels for a stitch from the audit log (rebuild variant with &mut Connection).
+fn load_labels_for_stitch_rebuild(stitch_id: &str, conn: &mut Connection) -> Vec<String> {
+    let mut stmt = match conn.prepare(
+        "SELECT args_json FROM actions WHERE stitch_id = ?1 AND kind = 'stitch_created' ORDER BY ts DESC LIMIT 1"
+    ) {
+        Ok(s) => s,
+        Err(_) => return vec![],
+    };
+
+    let args_json: Option<String> = stmt
+        .query_row(params![stitch_id], |row| row.get(0))
+        .ok();
+
+    args_json
+        .and_then(|json| {
+            let v: serde_json::Value = serde_json::from_str(&json).ok()?;
+            v.get("labels")
+                .and_then(|l| l.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|l| l.as_str().map(String::from))
+                        .collect()
+                })
+        })
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
