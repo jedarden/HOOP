@@ -9,7 +9,7 @@
 //! Plan reference: §20 Schema migration
 
 use crate::fleet::{
-    get_schema_version, update_schema_version, write_schema_migration_audit, SCHEMA_VERSION,
+    get_schema_version, update_schema_version, write_schema_migration_audit,
     // Migration functions from fleet.rs
     migrate_v01_to_v11,
     migrate_v11_to_v12,
@@ -40,6 +40,7 @@ use crate::fleet::{
 use anyhow::{bail, Result};
 use rusqlite::Connection;
 use std::collections::HashMap;
+use tracing::info;
 
 /// A single schema migration
 pub struct Migration {
@@ -144,11 +145,11 @@ pub fn run_pending_migrations(
     let pending = registry.pending_migrations(current_version)?;
 
     if pending.is_empty() {
-        log::info!("No pending migrations (at version {})", current_version);
+        info!("No pending migrations (at version {})", current_version);
         return Ok(());
     }
 
-    log::info!(
+    info!(
         "Running {} pending migration(s) from {}",
         pending.len(),
         current_version
@@ -159,7 +160,7 @@ pub fn run_pending_migrations(
     for migration in pending {
         let start = std::time::Instant::now();
 
-        log::info!(
+        info!(
             "Running migration {} → {}: {}",
             from_version,
             migration.version,
@@ -178,7 +179,7 @@ pub fn run_pending_migrations(
         // Update schema version
         update_schema_version(conn, migration.version)?;
 
-        log::info!(
+        info!(
             "Migration {} → {} completed in {:.2} ms ({} rows touched)",
             from_version,
             migration.version,
@@ -220,7 +221,7 @@ pub fn rollback_migration(
 
     let start = std::time::Instant::now();
 
-    log::info!(
+    info!(
         "Rolling back migration {} → {}: {}",
         current_version,
         target_version,
@@ -239,7 +240,7 @@ pub fn rollback_migration(
     // Update schema version
     update_schema_version(conn, target_version)?;
 
-    log::info!(
+    info!(
         "Rollback {} → {} completed in {:.2} ms ({} rows touched)",
         current_version,
         target_version,
@@ -504,7 +505,7 @@ pub fn get_migration_registry() -> MigrationRegistry {
 
 /// Rollback 1.1.0 → 0.1.0: Drop Stitch service tables
 fn rollback_v11_to_v01(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.1.0 → 0.1.0: Dropping Stitch service tables");
+    info!("Rolling back migration 1.1.0 → 0.1.0: Dropping Stitch service tables");
 
     // Drop tables in reverse order of creation (due to foreign keys)
     conn.execute("DROP TABLE IF EXISTS stitch_links", [])?;
@@ -516,7 +517,7 @@ fn rollback_v11_to_v01(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.2.0 → 1.1.0: Drop Pattern service tables
 fn rollback_v12_to_v11(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.2.0 → 1.1.0: Dropping Pattern service tables");
+    info!("Rolling back migration 1.2.0 → 1.1.0: Dropping Pattern service tables");
 
     conn.execute("DROP TABLE IF EXISTS pattern_query_matches", [])?;
     conn.execute("DROP TABLE IF EXISTS pattern_queries", [])?;
@@ -528,7 +529,7 @@ fn rollback_v12_to_v11(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.3.0 → 1.2.0: Drop dictated_notes table
 fn rollback_v13_to_v12(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.3.0 → 1.2.0: Dropping dictated_notes table");
+    info!("Rolling back migration 1.3.0 → 1.2.0: Dropping dictated_notes table");
 
     conn.execute("DROP TABLE IF EXISTS dictated_notes", [])?;
 
@@ -537,7 +538,7 @@ fn rollback_v13_to_v12(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.4.0 → 1.3.0: Remove transcript_words column
 fn rollback_v14_to_v13(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.4.0 → 1.3.0: Removing transcript_words column");
+    info!("Rolling back migration 1.4.0 → 1.3.0: Removing transcript_words column");
 
     // SQLite doesn't support DROP COLUMN, need to recreate table
     conn.execute(
@@ -564,7 +565,7 @@ fn rollback_v14_to_v13(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.5.0 → 1.4.0: Drop transcription_jobs table
 fn rollback_v15_to_v14(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.5.0 → 1.4.0: Dropping transcription_jobs table");
+    info!("Rolling back migration 1.5.0 → 1.4.0: Dropping transcription_jobs table");
 
     conn.execute("DROP TABLE IF EXISTS transcription_jobs", [])?;
 
@@ -573,7 +574,7 @@ fn rollback_v15_to_v14(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.6.0 → 1.5.0: Remove transcription_status column
 fn rollback_v16_to_v15(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.6.0 → 1.5.0: Removing transcription_status column");
+    info!("Rolling back migration 1.6.0 → 1.5.0: Removing transcription_status column");
 
     // SQLite doesn't support DROP COLUMN
     conn.execute(
@@ -601,7 +602,7 @@ fn rollback_v16_to_v15(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.7.0 → 1.6.0: Remove audit trail columns from actions
 fn rollback_v17_to_v16(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.7.0 → 1.6.0: Removing audit trail columns from actions");
+    info!("Rolling back migration 1.7.0 → 1.6.0: Removing audit trail columns from actions");
 
     // SQLite doesn't support DROP COLUMN
     conn.execute(
@@ -635,7 +636,7 @@ fn rollback_v17_to_v16(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.8.0 → 1.7.0: Drop agent_sessions table
 fn rollback_v18_to_v17(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.8.0 → 1.7.0: Dropping agent_sessions table");
+    info!("Rolling back migration 1.8.0 → 1.7.0: Dropping agent_sessions table");
 
     conn.execute("DROP TABLE IF EXISTS agent_sessions", [])?;
 
@@ -644,7 +645,7 @@ fn rollback_v18_to_v17(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.9.0 → 1.8.0: Drop reflection_ledger table
 fn rollback_v19_to_v18(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.9.0 → 1.8.0: Dropping reflection_ledger table");
+    info!("Rolling back migration 1.9.0 → 1.8.0: Dropping reflection_ledger table");
 
     conn.execute("DROP TABLE IF EXISTS reflection_ledger", [])?;
 
@@ -653,7 +654,7 @@ fn rollback_v19_to_v18(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.10.0 → 1.9.0: Drop draft_queue table
 fn rollback_v110_to_v19(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.10.0 → 1.9.0: Dropping draft_queue table");
+    info!("Rolling back migration 1.10.0 → 1.9.0: Dropping draft_queue table");
 
     conn.execute("DROP TABLE IF EXISTS draft_queue", [])?;
 
@@ -662,7 +663,7 @@ fn rollback_v110_to_v19(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.11.0 → 1.10.0: Drop morning_briefs table
 fn rollback_v111_to_v110(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.11.0 → 1.10.0: Dropping morning_briefs table");
+    info!("Rolling back migration 1.11.0 → 1.10.0: Dropping morning_briefs table");
 
     conn.execute("DROP TABLE IF EXISTS morning_briefs", [])?;
 
@@ -671,7 +672,7 @@ fn rollback_v111_to_v110(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.12.0 → 1.11.0: Remove has_started_session column
 fn rollback_v112_to_v111(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.12.0 → 1.11.0: Removing has_started_session column");
+    info!("Rolling back migration 1.12.0 → 1.11.0: Removing has_started_session column");
 
     // SQLite doesn't support DROP COLUMN
     conn.execute(
@@ -698,7 +699,7 @@ fn rollback_v112_to_v111(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.13.0 → 1.12.0: Drop cross-project state tables
 fn rollback_v113_to_v112(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.13.0 → 1.12.0: Dropping cross-project state tables");
+    info!("Rolling back migration 1.13.0 → 1.12.0: Dropping cross-project state tables");
 
     conn.execute("DROP TABLE IF EXISTS cross_project_state", [])?;
     conn.execute("DROP TABLE IF EXISTS cross_project_state_history", [])?;
@@ -708,7 +709,7 @@ fn rollback_v113_to_v112(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.14.0 → 1.13.0: Remove classification column from stitches
 fn rollback_v114_to_v113(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.14.0 → 1.13.0: Removing classification column from stitches");
+    info!("Rolling back migration 1.14.0 → 1.13.0: Removing classification column from stitches");
 
     // SQLite doesn't support DROP COLUMN
     conn.execute(
@@ -749,7 +750,7 @@ fn rollback_v114_to_v113(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.15.0 → 1.14.0: Drop codex_account_daily_spend table
 fn rollback_v115_to_v114(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.15.0 → 1.14.0: Dropping codex_account_daily_spend table");
+    info!("Rolling back migration 1.15.0 → 1.14.0: Dropping codex_account_daily_spend table");
 
     conn.execute("DROP TABLE IF EXISTS codex_account_daily_spend", [])?;
 
@@ -758,7 +759,7 @@ fn rollback_v115_to_v114(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.16.0 → 1.15.0: Remove stitch-based forecast columns
 fn rollback_v116_to_v115(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.16.0 → 1.15.0: Removing stitch-based forecast columns");
+    info!("Rolling back migration 1.16.0 → 1.15.0: Removing stitch-based forecast columns");
 
     // For column removal in SQLite, need to recreate table
     conn.execute(
@@ -794,7 +795,7 @@ fn rollback_v116_to_v115(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.17.0 → 1.16.0: Remove canonical_workspace column
 fn rollback_v117_to_v116(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.17.0 → 1.16.0: Removing canonical_workspace column");
+    info!("Rolling back migration 1.17.0 → 1.16.0: Removing canonical_workspace column");
 
     // SQLite doesn't support DROP COLUMN
     conn.execute(
@@ -828,7 +829,7 @@ fn rollback_v117_to_v116(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.18.0 → 1.17.0: Drop bead_commits index tables
 fn rollback_v118_to_v117(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.18.0 → 1.17.0: Dropping bead_commits index tables");
+    info!("Rolling back migration 1.18.0 → 1.17.0: Dropping bead_commits index tables");
 
     conn.execute("DROP TABLE IF EXISTS bead_commits", [])?;
     conn.execute("DROP TABLE IF EXISTS bead_commit_beads", [])?;
@@ -838,7 +839,7 @@ fn rollback_v118_to_v117(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.19.0 → 1.18.0: Remove turn_id from draft_queue
 fn rollback_v119_to_v118(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.19.0 → 1.18.0: Removing turn_id from draft_queue");
+    info!("Rolling back migration 1.19.0 → 1.18.0: Removing turn_id from draft_queue");
 
     // SQLite doesn't support DROP COLUMN
     conn.execute(
@@ -878,7 +879,7 @@ fn rollback_v119_to_v118(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.20.0 → 1.19.0: Remove audit fields from stitches
 fn rollback_v120_to_v119(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.20.0 → 1.19.0: Removing audit fields from stitches");
+    info!("Rolling back migration 1.20.0 → 1.19.0: Removing audit fields from stitches");
 
     // SQLite doesn't support DROP COLUMN
     conn.execute(
@@ -920,8 +921,8 @@ fn rollback_v120_to_v119(conn: &mut Connection) -> Result<()> {
 }
 
 /// Rollback 1.21.0 → 1.20.0: Remove turn_id from stitches
-fn rollback_v121_to_v120(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.21.0 → 1.20.0: Removing turn_id from stitches");
+fn rollback_v121_to_v120(_conn: &mut Connection) -> Result<()> {
+    info!("Rolling back migration 1.21.0 → 1.20.0: Removing turn_id from stitches");
 
     // The 1.21.0 migration added turn_id to stitches, but 1.20.0 already has it
     // This is essentially a no-op rollback since the column exists in both versions
@@ -930,7 +931,7 @@ fn rollback_v121_to_v120(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.22.0 → 1.21.0: Remove draft persistence fields
 fn rollback_v122_to_v121(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.22.0 → 1.21.0: Removing draft persistence fields");
+    info!("Rolling back migration 1.22.0 → 1.21.0: Removing draft persistence fields");
 
     // SQLite doesn't support DROP COLUMN
     conn.execute(
@@ -971,7 +972,7 @@ fn rollback_v122_to_v121(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.23.0 → 1.22.0: Remove redacted_words column
 fn rollback_v123_to_v122(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.23.0 → 1.22.0: Removing redacted_words column");
+    info!("Rolling back migration 1.23.0 → 1.22.0: Removing redacted_words column");
 
     // SQLite doesn't support DROP COLUMN
     conn.execute(
@@ -1000,7 +1001,7 @@ fn rollback_v123_to_v122(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.24.0 → 1.23.0: Drop vector_index table
 fn rollback_v124_to_v123(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.24.0 → 1.23.0: Dropping vector_index table");
+    info!("Rolling back migration 1.24.0 → 1.23.0: Dropping vector_index table");
 
     conn.execute("DROP TABLE IF EXISTS vector_index", [])?;
 
@@ -1009,7 +1010,7 @@ fn rollback_v124_to_v123(conn: &mut Connection) -> Result<()> {
 
 /// Rollback 1.25.0 → 1.24.0: Drop agent_turns table
 fn rollback_v125_to_v124(conn: &mut Connection) -> Result<()> {
-    log::info!("Rolling back migration 1.25.0 → 1.24.0: Dropping agent_turns table");
+    info!("Rolling back migration 1.25.0 → 1.24.0: Dropping agent_turns table");
 
     conn.execute("DROP TABLE IF EXISTS agent_turns", [])?;
 

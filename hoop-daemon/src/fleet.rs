@@ -1251,7 +1251,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
 ///
 /// All tables include proper indexes for Reddit-post ranking queries
 /// and foreign key constraints for referential integrity.
-fn migrate_v01_to_v11(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v01_to_v11(conn: &mut Connection) -> Result<()> {
     // Create stitches table
     conn.execute(
         r#"
@@ -1382,7 +1382,7 @@ fn migrate_v01_to_v11(conn: &mut Connection) -> Result<()> {
 ///
 /// Includes a recursive-CTE trigger to prevent parent_pattern cycles
 /// and indexes for efficient member lookups.
-fn migrate_v11_to_v12(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v11_to_v12(conn: &mut Connection) -> Result<()> {
     let start = std::time::Instant::now();
     info!("Running migration 1.1.0 → 1.2.0: Adding Pattern service tables");
 
@@ -1521,7 +1521,7 @@ fn migrate_v11_to_v12(conn: &mut Connection) -> Result<()> {
 /// Dictated notes are Stitches with `kind='dictated'`. This table stores
 /// note-specific metadata (audio filename, transcript, timestamps) that
 /// doesn't belong on the generic stitch row.
-fn migrate_v12_to_v13(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v12_to_v13(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.2.0 → 1.3.0: Adding dictated_notes table");
 
     conn.execute(
@@ -1557,7 +1557,7 @@ fn migrate_v12_to_v13(conn: &mut Connection) -> Result<()> {
 ///
 /// Adds transcript_words column for storing Whisper word-level timestamps
 /// to enable audio player with transcript sync functionality.
-fn migrate_v13_to_v14(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v13_to_v14(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.3.0 → 1.4.0: Adding transcript_words column");
 
     // Add transcript_words column (JSON array of word timestamps)
@@ -1575,7 +1575,7 @@ fn migrate_v13_to_v14(conn: &mut Connection) -> Result<()> {
 ///
 /// Creates the transcription_jobs table for async job queue management.
 /// Tracks transcription job status, retry attempts, and error messages.
-fn migrate_v14_to_v15(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v14_to_v15(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.4.0 → 1.5.0: Adding transcription_jobs table");
 
     conn.execute(
@@ -1620,7 +1620,7 @@ fn migrate_v14_to_v15(conn: &mut Connection) -> Result<()> {
 ///
 /// Tracks whether transcription is pending, completed, or failed so the UI
 /// can render warning cards for partial/failed transcriptions.
-fn migrate_v15_to_v16(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v15_to_v16(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.5.0 → 1.6.0: Adding transcription_status column");
 
     conn.execute(
@@ -1638,7 +1638,7 @@ fn migrate_v15_to_v16(conn: &mut Connection) -> Result<()> {
 /// trail per §5.2 / §13. The source field tracks form/chat/bulk/template,
 /// stitch_id links to the originating Stitch, and args_hash provides a
 /// quick integrity checksum of the serialized args.
-fn migrate_v16_to_v17(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v16_to_v17(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.6.0 → 1.7.0: Adding audit trail columns to actions");
 
     add_column_if_not_exists(conn, "actions", "error", "TEXT")?;
@@ -1686,7 +1686,7 @@ fn add_column_if_not_exists(
 /// cost and token accumulators, and the timestamps needed to compute session
 /// age. On daemon restart HOOP reads the most recent active row and reattaches
 /// via the adapter's native resume mechanism.
-fn migrate_v17_to_v18(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v17_to_v18(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.7.0 → 1.8.0: Adding agent_sessions table");
 
     conn.execute(
@@ -1737,7 +1737,7 @@ fn migrate_v17_to_v18(conn: &mut Connection) -> Result<()> {
 /// patterns in operator Stitches. Entries are scoped (global / project / pattern),
 /// carry a status lifecycle (proposed → approved → archived), and track how often
 /// they are injected into agent sessions.
-fn migrate_v18_to_v19(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v18_to_v19(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.8.0 → 1.9.0: Adding reflection_ledger table");
 
     conn.execute(
@@ -1777,7 +1777,7 @@ fn migrate_v18_to_v19(conn: &mut Connection) -> Result<()> {
 /// The draft queue holds agent-created stitch drafts pending operator review.
 /// Agent calls to `create_stitch` insert here instead of calling `br create`.
 /// The operator reviews, edits, approves, or rejects drafts through the UI.
-fn migrate_v19_to_v110(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v19_to_v110(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.9.0 → 1.10.0: Adding draft_queue table");
 
     conn.execute(
@@ -1832,7 +1832,7 @@ fn migrate_v19_to_v110(conn: &mut Connection) -> Result<()> {
 ///
 /// Stores generated morning briefs with their markdown content, headline,
 /// and references to any draft Stitches created during generation.
-fn migrate_v110_to_v111(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v110_to_v111(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.10.0 → 1.11.0: Adding morning_briefs table");
 
     conn.execute(
@@ -1868,7 +1868,7 @@ fn migrate_v110_to_v111(conn: &mut Connection) -> Result<()> {
 /// Per §A2: the flag gates whether the adapter emits a create-vs-resume invocation.
 /// It persists across daemon restarts so that a reattach after crash doesn't
 /// accidentally send `--session-id` when the provider already has the session.
-fn migrate_v111_to_v112(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v111_to_v112(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.11.0 → 1.12.0: Adding has_started_session to agent_sessions");
 
     add_column_if_not_exists(
@@ -1890,7 +1890,7 @@ fn migrate_v111_to_v112(conn: &mut Connection) -> Result<()> {
 /// - capacity_rollup: per-(account_id, adapter) capacity window snapshots
 /// - collision_index: per-bead file-path claims for concurrent-work safety
 /// - runtime_status: VIEW over project_status with liveness derived on read
-fn migrate_v112_to_v113(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v112_to_v113(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.12.0 → 1.13.0: Adding cross-project state tables");
 
     conn.execute(
@@ -2006,7 +2006,7 @@ fn migrate_v112_to_v113(conn: &mut Connection) -> Result<()> {
 /// Adds `classification TEXT NOT NULL DEFAULT 'operator' CHECK(...)` to the
 /// stitches table so every Stitch carries its fleet-vs-operator classification.
 /// Backfills existing rows: `kind = 'worker'` → `'fleet'`, all others → `'operator'`.
-fn migrate_v113_to_v114(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v113_to_v114(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.13.0 → 1.14.0: Adding classification column to stitches");
 
     add_column_if_not_exists(
@@ -2035,7 +2035,7 @@ fn migrate_v113_to_v114(conn: &mut Connection) -> Result<()> {
 ///
 /// Creates a per-(account_id, date) spend table for Codex sessions, enabling
 /// daily spend buckets and monthly rollups with plan-aware pricing tiers.
-fn migrate_v114_to_v115(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v114_to_v115(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.14.0 → 1.15.0: Adding codex_account_daily_spend table");
 
     conn.execute(
@@ -2067,7 +2067,7 @@ fn migrate_v114_to_v115(conn: &mut Connection) -> Result<()> {
 /// Adds four columns that store the burn-rate forecast derived from the stitch
 /// close rate (completed worker sessions per minute) and mean cost per stitch.
 /// These power the window-saturation ETA displayed in the Capacity widget.
-fn migrate_v115_to_v116(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v115_to_v116(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.15.0 → 1.16.0: Adding stitch forecast columns to capacity_rollup");
 
     add_column_if_not_exists(
@@ -2089,7 +2089,7 @@ fn migrate_v115_to_v116(conn: &mut Connection) -> Result<()> {
     Ok(())
 }
 
-fn migrate_v116_to_v117(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v116_to_v117(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.16.0 → 1.17.0: Adding canonical_workspace to stitch_beads");
 
     add_column_if_not_exists(
@@ -2108,7 +2108,7 @@ fn migrate_v116_to_v117(conn: &mut Connection) -> Result<()> {
 /// Creates two tables that back the bead-to-commit indexer (§6 Phase 2 #2):
 /// - `bead_commits`: indexed by bead_id or sha, one row per (sha, workspace) pair
 /// - `bead_commit_cursor`: per-workspace HEAD SHA cursor for incremental walks
-fn migrate_v117_to_v118(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v117_to_v118(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.17.0 → 1.18.0: Adding bead_commits index tables");
 
     conn.execute(
@@ -2159,7 +2159,7 @@ pub fn update_schema_version(conn: &mut Connection, version: &str) -> Result<()>
 /// Adds turn_id column to draft_queue table for tracking which agent turn
 /// created a draft. This enables reconstructing any drafted Stitch back to
 /// its origin chat turn per §6 Phase 5 deliverable 8.
-fn migrate_v118_to_v119(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v118_to_v119(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.18.0 → 1.19.0: Adding turn_id to draft_queue");
 
     add_column_if_not_exists(conn, "draft_queue", "turn_id", "TEXT")?;
@@ -2179,7 +2179,7 @@ fn migrate_v118_to_v119(conn: &mut Connection) -> Result<()> {
 /// Adds audit metadata fields to stitches table for tracking agent-originated
 /// stitches. This enables full audit trail reconstruction from any stitch back
 /// to the agent session and turn that created it.
-fn migrate_v119_to_v120(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v119_to_v120(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.19.0 → 1.20.0: Adding audit fields to stitches");
 
     add_column_if_not_exists(conn, "stitches", "created_by_actor", "TEXT")?;
@@ -2205,7 +2205,7 @@ fn migrate_v119_to_v120(conn: &mut Connection) -> Result<()> {
 /// Adds turn_id column to stitches table for tracking which agent turn
 /// created a stitch. This completes the audit trail for agent-originated
 /// stitches per §6 Phase 5 deliverable 8.
-fn migrate_v120_to_v121(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v120_to_v121(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.20.0 → 1.21.0: Adding turn_id to stitches");
 
     add_column_if_not_exists(conn, "stitches", "turn_id", "TEXT")?;
@@ -2227,7 +2227,7 @@ fn migrate_v120_to_v121(conn: &mut Connection) -> Result<()> {
 /// - opened_by, opened_at for tracking who opened a draft form
 /// - last_autosave_at for autosave tracking
 /// - abandoned_at for retention cleanup (7d)
-fn migrate_v121_to_v122(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v121_to_v122(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.21.0 → 1.22.0: Adding draft persistence fields for §19.1");
 
     add_column_if_not_exists(conn, "draft_queue", "opened_by", "TEXT")?;
@@ -2335,7 +2335,7 @@ fn migrate_v121_to_v122(conn: &mut Connection) -> Result<()> {
 /// Adds support for tracking redacted words in dictated notes (§18.2).
 /// Each redacted word stores the word index, timestamps for audio muting,
 /// and when the redaction was performed for audit trail purposes.
-fn migrate_v122_to_v123(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v122_to_v123(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.22.0 → 1.23.0: Adding redacted_words column to dictated_notes");
 
     add_column_if_not_exists(
@@ -2355,7 +2355,7 @@ fn migrate_v122_to_v123(conn: &mut Connection) -> Result<()> {
 /// Creates the vector_index table to persist embeddings across daemon restarts.
 /// This enables the vector index to survive restarts and only rebuild when the
 /// embedding model changes (hoop-ttb.5.9.1).
-fn migrate_v123_to_v124(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v123_to_v124(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.23.0 → 1.24.0: Adding vector_index table for semantic dedup persistence");
 
     conn.execute(
@@ -2426,7 +2426,7 @@ fn migrate_v123_to_v124(conn: &mut Connection) -> Result<()> {
 /// Creates a table to track each turn in an agent session, enabling
 /// reconstruction of any drafted Stitch back to its origin chat turn
 /// (§6 Phase 5 deliverable 8).
-fn migrate_v124_to_v125(conn: &mut Connection) -> Result<()> {
+pub fn migrate_v124_to_v125(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.24.0 → 1.25.0: Adding agent_turns table for audit trail");
 
     conn.execute(
@@ -4586,6 +4586,26 @@ pub fn propose_reflection_entry(
     )?;
 
     Ok(id)
+}
+
+/// Check if a Stitch is an operator Stitch.
+///
+/// Returns true if the Stitch has kind='operator' and classification='operator'.
+/// Used to filter which Stitches trigger reflection detection.
+pub fn is_operator_stitch(stitch_id: &str) -> Result<bool> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+
+    let result: Option<bool> = conn
+        .query_row(
+            "SELECT kind = 'operator' AND classification = 'operator'
+             FROM stitches WHERE id = ?1",
+            params![stitch_id],
+            |row| row.get(0),
+        )
+        .ok();
+
+    Ok(result.unwrap_or(false))
 }
 
 #[cfg(test)]
