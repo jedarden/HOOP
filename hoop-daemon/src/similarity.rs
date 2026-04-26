@@ -6,7 +6,7 @@
 use std::collections::HashSet;
 
 /// Tokenize text into lowercase word tokens, removing punctuation
-fn tokenize(text: &str) -> Vec<String> {
+pub fn tokenize(text: &str) -> Vec<String> {
     text.to_lowercase()
         .split_whitespace()
         .map(|s| s.trim_matches(|c: char| !c.is_alphanumeric()).to_string())
