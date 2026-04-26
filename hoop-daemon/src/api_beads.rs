@@ -11,6 +11,7 @@ use crate::br_verbs::{invoke_br_read, propagate_stitch_labels, ReadVerb};
 #[cfg(not(feature = "zero-write-v01"))]
 use crate::br_verbs::invoke_br_create;
 use crate::fleet::{self, ActionKind, ActionResult, BeadActionArgs, BeadSource};
+use crate::pattern_query_evaluator;
 use crate::ws::StitchCreatedData;
 use axum::{
     extract::{ConnectInfo, Path, State},
@@ -77,7 +78,6 @@ pub fn router() -> Router<crate::DaemonState> {
         .route("/api/p/{project}/beads", post(create_bead))
         .route("/api/p/{project}/beads/dedup", post(check_dedup))
         .route("/api/p/{project}/beads/dedup-dismiss", post(dismiss_dedup))
-        .route("/api/dedup/stats", get(dedup_stats))
 }
 
 /// Request body for dedup check
@@ -161,23 +161,6 @@ async fn dismiss_dedup(
     let _ = resolve_project_path(&project, &state)?;
     state.vector_index.read().unwrap().report_false_positive();
     Ok(Json(serde_json::json!({"status": "ok"})))
-}
-
-/// GET /api/dedup/stats — return dedup statistics including false positive rate
-async fn dedup_stats(
-    State(state): State<crate::DaemonState>,
-) -> Json<serde_json::Value> {
-    let index = state.vector_index.read().unwrap();
-    let stats = index.stats();
-    let fpr = index.false_positive_rate();
-    Json(serde_json::json!({
-        "total_checks": stats.total_checks,
-        "duplicates_found": stats.duplicates_found,
-        "false_positives_reported": stats.false_positives_reported,
-        "false_positive_rate": fpr,
-        "threshold": index.threshold(),
-        "index_size": index.len(),
-    }))
 }
 
 /// Resolve the actor identity for audit purposes.
@@ -574,6 +557,19 @@ async fn create_bead(
         created_by: actor.clone(),
         dependencies: req.dependencies.clone().unwrap_or_default(),
     });
+
+    // 5.5. Evaluate pattern queries for auto-including stitches
+    if let Some(sid) = &stitch_id {
+        if let Err(e) = pattern_query_evaluator::sync_and_emit_pattern_queries(
+            sid,
+            &project,
+            "operator",
+            &title,
+            &state.pattern_tx,
+        ) {
+            warn!("Failed to sync pattern queries for stitch {}: {}", sid, e);
+        }
+    }
 
     // 6. Return response
     Ok(Json(CreateBeadResponse {

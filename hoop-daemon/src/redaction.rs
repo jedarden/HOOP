@@ -266,6 +266,85 @@ pub fn scan_propagation_draft(title: &str, body: &str) -> Vec<SecretFinding> {
     scan_text_for_secrets(&combined)
 }
 
+// ── Audit integration (§18.5) ─────────────────────────────────────────────────────
+
+/// Write redaction audit entries for detected findings.
+///
+/// This helper function writes an audit entry for each unique pattern found
+/// in the scan results. Call this after any scan operation to record what
+/// was flagged for operator review.
+///
+/// # Arguments
+/// * `what_flagged` - What was scanned (e.g., "transcript", "attachment", "draft")
+/// * `findings` - Secret findings from a scan operation
+/// * `source_ref` - Reference to the source (stitch_id, attachment_id, etc.)
+/// * `project` - Optional project name
+/// * `operator` - Operator who triggered the scan (or "system" for automatic scans)
+///
+/// # Returns
+/// Number of audit entries written (one per unique pattern)
+pub fn audit_findings(
+    what_flagged: &str,
+    findings: &[SecretFinding],
+    source_ref: &str,
+    project: Option<&str>,
+    operator: &str,
+) -> usize {
+    use crate::fleet::{self, RedactionAction};
+    use std::collections::HashSet;
+
+    if findings.is_empty() {
+        return 0;
+    }
+
+    // Collect unique pattern names
+    let unique_patterns: HashSet<&'static str> = findings
+        .iter()
+        .map(|f| f.pattern_name)
+        .collect();
+
+    let mut written = 0;
+    for pattern_name in unique_patterns {
+        let match_count = findings.iter().filter(|f| f.pattern_name == pattern_name).count();
+
+        // Build metadata with match count and positions
+        let metadata = serde_json::json!({
+            "match_count": match_count,
+            "matches": findings.iter()
+                .filter(|f| f.pattern_name == pattern_name)
+                .map(|f| {
+                    serde_json::json!({
+                        "offset": f.match_start,
+                        "length": f.match_len,
+                    })
+                })
+                .collect::<Vec<_>>()
+        });
+
+        if let Err(e) = fleet::write_redaction_audit(
+            what_flagged,
+            pattern_name,
+            RedactionAction::FlaggedOnly,
+            operator,
+            source_ref,
+            project,
+            Some(metadata),
+        ) {
+            tracing::error!(
+                what_flagged,
+                pattern_name,
+                source_ref,
+                error = %e,
+                "Failed to write redaction audit entry"
+            );
+        } else {
+            written += 1;
+        }
+    }
+
+    written
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 #[cfg(test)]

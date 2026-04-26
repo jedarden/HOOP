@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/redaction_policy.json",
+  "title": "RedactionPolicy",
+  "description": "Per-project redaction policy override (§18.5). Controls how secrets are detected and handled in attachments, transcripts, and other content.",
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["warn", "redact", "reject"],
+      "default": "warn",
+      "description": "Action to take when secrets are detected: warn (log only), redact (replace with [REDACTED]), reject (block the operation)"
+    },
+    "patterns": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "anthropic_api_key",
+          "generic_sk_key",
+          "aws_access_key",
+          "github_token",
+          "slack_token",
+          "jwt",
+          "bearer_token",
+          "env_var_secret",
+          "json_secret_field"
+        ]
+      },
+      "default": [
+        "anthropic_api_key",
+        "generic_sk_key",
+        "aws_access_key",
+        "github_token",
+        "slack_token",
+        "jwt",
+        "bearer_token",
+        "env_var_secret",
+        "json_secret_field"
+      ],
+      "description": "Pattern sets to enable for this project. If omitted, all default patterns are enabled."
+    }
+  },
+  "schema_version": "1.0.0"
+}
