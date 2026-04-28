@@ -4,6 +4,7 @@
 //! single long-lived host that holds many repos, many NEEDLE fleets, and
 //! many native-CLI conversations.
 
+mod config;
 mod new;
 mod projects;
 mod restore;
@@ -105,6 +106,9 @@ enum Commands {
     /// Manage and run scripts
     #[command(subcommand)]
     Script(script::ScriptCommands),
+    /// Manage daemon configuration
+    #[command(subcommand)]
+    Config(config::ConfigCommands),
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -187,6 +191,12 @@ enum MigrateCommands {
         #[arg(long)]
         confirm: bool,
     },
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum ConfigCommands {
+    /// Show configuration diff (running vs config.yml)
+    Diff,
 }
 
 #[tokio::main]
@@ -288,6 +298,12 @@ async fn main() -> anyhow::Result<()> {
         Commands::Script(cmd) => {
             if let Err(e) = script::handle_script(cmd).await {
                 eprintln!("hoop script: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Config(cmd) => {
+            if let Err(e) = config::handle_config(cmd).await {
+                eprintln!("hoop config: {}", e);
                 std::process::exit(1);
             }
         }

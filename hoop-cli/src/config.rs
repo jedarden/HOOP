@@ -3,10 +3,26 @@
 //! Plan reference: §17.4
 
 use anyhow::{Context, Result};
+use clap::Subcommand;
 use reqwest::Client;
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::fs;
+
+/// Config subcommands
+#[derive(Subcommand, Debug)]
+pub enum ConfigCommands {
+    /// Show configuration diff (running vs config.yml)
+    Diff,
+}
+
+/// Handle the `hoop config` subcommands
+pub async fn handle_config(cmd: ConfigCommands) -> Result<()> {
+    match cmd {
+        ConfigCommands::Diff => run_diff().await?,
+    }
+    Ok(())
+}
 
 /// Configuration response from /api/config
 #[derive(Debug, Deserialize)]
