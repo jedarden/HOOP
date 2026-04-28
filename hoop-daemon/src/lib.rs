@@ -27,6 +27,7 @@ pub mod api_scripts;
 pub mod api_stitch_decompose;
 pub mod api_stitch_links;
 pub mod api_stitch_read;
+pub mod api_stitch_replay;
 pub mod api_timeline;
 pub mod api_transcription;
 pub mod api_uploads;
@@ -73,6 +74,7 @@ pub mod shutdown;
 pub mod similarity;
 pub mod snapshot_manifest;
 pub mod stitch_decompose;
+pub mod stitch_reconstruction;
 pub mod stitch_status;
 pub mod stuck_detector;
 pub mod supervisor;
@@ -88,6 +90,7 @@ pub mod vector_index;
 pub mod worker_ack;
 pub mod ws;
 pub mod collision_detector;
+pub mod config_backup;
 pub mod api_blame;
 pub mod api_diff;
 pub mod api_fix_patterns;
@@ -1155,6 +1158,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_preview::router())
         .merge(api_stitch_decompose::router())
         .merge(api_stitch_read::router())
+        .merge(api_stitch_replay::router())
         .merge(api_stitch_links::router())
         .merge(api_patterns::router())
         .merge(api_diff::router())

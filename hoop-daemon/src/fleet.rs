@@ -1178,6 +1178,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
         }
         "1.16.0" => {
             migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
@@ -1188,6 +1189,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
         }
         "1.17.0" => {
             migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
@@ -1197,6 +1199,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
         }
         "1.18.0" => {
             migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
@@ -4586,6 +4589,46 @@ pub fn propose_reflection_entry(
     )?;
 
     Ok(id)
+}
+
+/// Update the reflection approval rate metric based on a rolling window.
+///
+/// Computes the approval rate as: approved / (approved + rejected) over entries
+/// from the last 30 days. Updates the `hoop_reflection_approval_rate` gauge.
+pub fn update_reflection_approval_rate() -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+
+    // Count approved and rejected entries from the last 30 days
+    let cutoff = Utc::now() - chrono::Duration::days(30);
+    let cutoff_str = cutoff.to_rfc3339();
+
+    let approved_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM reflection_ledger
+         WHERE status = 'approved' AND created_at >= ?1",
+        params![cutoff_str],
+        |row| row.get(0),
+    ).unwrap_or(0);
+
+    let rejected_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM reflection_ledger
+         WHERE status = 'rejected' AND created_at >= ?1",
+        params![cutoff_str],
+        |row| row.get(0),
+    ).unwrap_or(0);
+
+    // Compute approval rate (0.0 - 1.0)
+    let total = approved_count + rejected_count;
+    let rate = if total > 0 {
+        approved_count as f64 / total as f64
+    } else {
+        0.0
+    };
+
+    // Update the gauge
+    crate::metrics::metrics().hoop_reflection_approval_rate.set(rate);
+
+    Ok(())
 }
 
 /// Check if a Stitch is an operator Stitch.

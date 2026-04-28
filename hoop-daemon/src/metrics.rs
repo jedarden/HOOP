@@ -386,36 +386,54 @@ impl LabeledGauge {
 }
 
 /// Histogram with a fixed set of label dimensions.  Observes values
-/// **in milliseconds** and emits `_count` / `_sum` (ms).
+/// **in milliseconds** and emits Prometheus histogram buckets.
+///
+/// Default buckets (ms): 1, 10, 50, 100, 500, 1000, 5000
 pub struct LabeledHistogram {
     pub label_names: &'static [&'static str],
-    // (count, sum_ms)
-    data: RwLock<HashMap<Vec<String>, (u64, f64)>>,
+    /// Prometheus histogram bucket boundaries (milliseconds)
+    pub buckets: Vec<f64>,
+    // (count, sum_ms, bucket_counts)
+    data: RwLock<HashMap<Vec<String>, (u64, f64, Vec<u64>)>>,
 }
 
 impl LabeledHistogram {
     pub fn new(label_names: &'static [&'static str]) -> Self {
         Self {
             label_names,
+            buckets: vec![1.0, 10.0, 50.0, 100.0, 500.0, 1000.0, 5000.0],
             data: RwLock::new(HashMap::new()),
         }
+    }
+
+    /// Create a histogram with custom bucket boundaries (in milliseconds).
+    pub fn with_buckets(mut self, buckets: Vec<f64>) -> Self {
+        self.buckets = buckets;
+        self
     }
 
     /// Observe a duration measured in **milliseconds**.
     pub fn observe(&self, label_values: &[&str], value_ms: f64) {
         let key: Vec<String> = label_values.iter().map(|s| (*s).to_string()).collect();
         let mut data = self.data.write().unwrap();
-        let entry = data.entry(key).or_insert((0, 0.0));
+        let entry = data.entry(key).or_insert((0, 0.0, vec![0; self.buckets.len()]));
         entry.0 += 1;
         entry.1 += value_ms;
+
+        // Update bucket counts
+        for (i, &bucket) in self.buckets.iter().enumerate() {
+            if value_ms <= bucket {
+                entry.2[i] += 1;
+            }
+        }
     }
 
-    pub fn snapshot(&self) -> Vec<(Vec<String>, u64, f64)> {
+    pub fn snapshot(&self) -> Vec<(Vec<String>, u64, f64, Vec<u64>)> {
         self.data
             .read()
             .unwrap()
             .iter()
-            .map(|(k, (c, s))| (k.clone(), *c, *s))
+            .map(|(k, (c, s, b))| (k.clone(), *c, *s, b.clone()))
             .collect()
     }
 }
@@ -426,8 +444,8 @@ impl LabeledHistogram {
 /// Computes percentiles on-demand during metric scraping.
 pub struct LabeledHistogramPercentiles {
     pub label_names: &'static [&'static str],
-    /// Per-label: (count, sum_seconds, sorted_observations)
-    /// Observations are stored as f64 seconds.
+    /// Per-label: (count, sum_ms, sorted_observations)
+    /// Observations are stored as f64 milliseconds.
     data: RwLock<HashMap<Vec<String>, (u64, f64, Vec<f64>)>>,
     /// Maximum observations to keep per label set
     max_observations: usize,
@@ -610,15 +628,25 @@ fn write_labeled_histogram(
     name: &str,
     help: &str,
     label_names: &[&'static str],
-    rows: &[(Vec<String>, u64, f64)],
+    buckets: &[f64],
+    rows: &[(Vec<String>, u64, f64, Vec<u64>)],
 ) {
     out.push_str(&format!("# HELP {name} {help}\n# TYPE {name} histogram\n"));
     let mut sorted = rows.to_vec();
     sorted.sort_by(|a, b| a.0.cmp(&b.0));
-    for (values, count, sum_ms) in &sorted {
+    for (values, count, sum_ms, bucket_counts) in &sorted {
         let ls = labels_str(label_names, values);
         out.push_str(&format!("{name}_count{ls} {count}\n"));
         out.push_str(&format!("{name}_sum{ls} {sum_ms:.3}\n"));
+
+        // Emit buckets
+        let mut cumulative = 0;
+        for (i, &bucket) in buckets.iter().enumerate() {
+            cumulative += bucket_counts[i];
+            out.push_str(&format!("{name}_bucket{{le=\"{}\"{}}} {}\n", bucket, ls, cumulative));
+        }
+        // +Inf bucket (count all observations)
+        out.push_str(&format!("{name}_bucket{{le=\"+Inf\"{}}} {}\n", ls, count));
     }
 }
 
@@ -687,8 +715,8 @@ pub struct Metrics {
     pub hoop_event_parse_errors_total: LabeledCounter,
 
     // ── §16.3 WebSocket & HTTP ─────────────────────────────────────────────
-    /// WebSocket broadcast round-trip lag in seconds (p50/p95/p99 percentiles).
-    pub hoop_ws_broadcast_lag_seconds: LabeledHistogramPercentiles,
+    /// WebSocket broadcast round-trip lag in milliseconds (p50/p95/p99 percentiles).
+    pub hoop_ws_broadcast_lag_ms: LabeledHistogramPercentiles,
     /// HTTP request totals by route template and HTTP status code.
     pub hoop_http_requests_total: LabeledCounter,
     /// HTTP request duration in milliseconds, by route template.
@@ -801,7 +829,7 @@ impl Metrics {
             ),
             hoop_event_parse_errors_total: LabeledCounter::new(&["adapter"]),
 
-            hoop_ws_broadcast_lag_seconds: LabeledHistogramPercentiles::new(&[]),
+            hoop_ws_broadcast_lag_ms: LabeledHistogramPercentiles::new(&[]),
             hoop_http_requests_total: LabeledCounter::new(&["route", "status"]),
             hoop_http_request_duration_ms: LabeledHistogram::new(&["route"]),
 
@@ -951,10 +979,10 @@ impl Metrics {
         // ── §16.3 WebSocket & HTTP ──────────────────────────────────────────
         write_labeled_histogram_percentiles(
             &mut out,
-            "hoop_ws_broadcast_lag_seconds",
-            "WebSocket broadcast round-trip lag in seconds (p50/p95/p99).",
-            self.hoop_ws_broadcast_lag_seconds.label_names,
-            &self.hoop_ws_broadcast_lag_seconds.snapshot(),
+            "hoop_ws_broadcast_lag_ms",
+            "WebSocket broadcast round-trip lag in milliseconds (p50/p95/p99).",
+            self.hoop_ws_broadcast_lag_ms.label_names,
+            &self.hoop_ws_broadcast_lag_ms.snapshot(),
         );
         write_labeled_counter(
             &mut out,
@@ -968,6 +996,7 @@ impl Metrics {
             "hoop_http_request_duration_ms",
             "HTTP request duration in milliseconds, by route template.",
             self.hoop_http_request_duration_ms.label_names,
+            &self.hoop_http_request_duration_ms.buckets,
             &self.hoop_http_request_duration_ms.snapshot(),
         );
 
@@ -984,6 +1013,7 @@ impl Metrics {
             "hoop_br_subprocess_duration_ms",
             "`br` subprocess wall-clock duration in milliseconds, by verb.",
             self.hoop_br_subprocess_duration_ms.label_names,
+            &self.hoop_br_subprocess_duration_ms.buckets,
             &self.hoop_br_subprocess_duration_ms.snapshot(),
         );
         write_labeled_counter(
@@ -1020,6 +1050,7 @@ impl Metrics {
             "hoop_agent_turn_duration_ms",
             "Agent turn wall-clock duration in ms, by adapter/model/phase.",
             self.hoop_agent_turn_duration_ms.label_names,
+            &self.hoop_agent_turn_duration_ms.buckets,
             &self.hoop_agent_turn_duration_ms.snapshot(),
         );
         write_labeled_counter(
@@ -1075,6 +1106,7 @@ impl Metrics {
             "hoop_schema_migration_duration_ms",
             "Schema migration duration in milliseconds, by from/to version.",
             self.hoop_schema_migration_duration_ms.label_names,
+            &self.hoop_schema_migration_duration_ms.buckets,
             &self.hoop_schema_migration_duration_ms.snapshot(),
         );
         write_gauge_i64(

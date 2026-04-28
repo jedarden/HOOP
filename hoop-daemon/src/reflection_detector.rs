@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use tracing::{debug, info, warn};
 
 use crate::fleet;
+use crate::metrics;
 
 /// Configuration for the reflection detector.
 #[derive(Debug, Clone)]
@@ -158,12 +159,19 @@ pub fn run_detection(config: &ReflectionDetectorConfig) -> anyhow::Result<usize>
                     &pattern.rule[..pattern.rule.len().min(80)],
                     id
                 );
+                // Emit proposal metric
+                metrics::metrics().hoop_reflection_proposal_total.inc(&["reflection_detector"]);
                 proposed += 1;
             }
             Err(e) => {
                 warn!("Reflection detector: failed to propose pattern: {}", e);
             }
         }
+    }
+
+    // Update approval rate metric after batch of proposals
+    if proposed > 0 {
+        let _ = fleet::update_reflection_approval_rate();
     }
 
     Ok(proposed)

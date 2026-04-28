@@ -23,6 +23,7 @@ use tokio::task::JoinSet;
 use tracing::{debug, error, info, warn};
 
 use crate::dictated_notes::{TranscriptWord, TranscriptionResult, TranscriptionStatus};
+use crate::metrics;
 
 /// Callback type invoked when a transcription completes successfully.
 ///
@@ -738,12 +739,17 @@ impl TranscriptionJobProcessor {
                 }
             }
 
+            let start = std::time::Instant::now();
             let transcription = transcribe_with_fallback(&audio_path, &config).await;
+            let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
+
             if !transcription.transcript.is_empty() {
                 info!(
                     "Transcription succeeded for job {} on attempt {}",
                     job_id, attempt
                 );
+                // Record successful transcription duration
+                metrics::metrics().hoop_whisper_transcription_duration_ms.observe(elapsed_ms / 1000.0);
                 result = Some(transcription);
                 break;
             } else {
@@ -752,6 +758,8 @@ impl TranscriptionJobProcessor {
                     attempt, job_id
                 );
                 last_error = Some("Empty transcript produced".to_string());
+                // Record error for this attempt
+                metrics::metrics().hoop_whisper_transcription_errors_total.inc();
             }
 
             if attempt < config.max_retries {
@@ -790,6 +798,11 @@ impl TranscriptionJobProcessor {
                     "Transcription failed for job {} after {} attempts: {}",
                     job_id, config.max_retries, error_msg
                 );
+
+                // Record final failure metric (if not already counted in retry loop)
+                if last_error.is_none() {
+                    metrics::metrics().hoop_whisper_transcription_errors_total.inc();
+                }
 
                 let partial_result = TranscriptionResult {
                     transcript: format!("[Transcription failed: {}]", error_msg),

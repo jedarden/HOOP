@@ -24,6 +24,7 @@ use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 
+use crate::metrics;
 use crate::WorkerState;
 
 /// Default heartbeat interval in seconds (from NEEDLE)

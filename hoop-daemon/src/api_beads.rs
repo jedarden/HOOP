@@ -685,7 +685,7 @@ async fn create_bead(
     }))
 }
 
-fn resolve_project_path(
+pub fn resolve_project_path(
     project: &str,
     state: &crate::DaemonState,
 ) -> Result<std::path::PathBuf, (StatusCode, String)> {

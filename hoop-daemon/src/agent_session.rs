@@ -95,13 +95,15 @@ pub enum AgentSessionEvent {
 
 /// The internal state held behind the Mutex.
 struct Inner {
-    adapter: Box<dyn AgentAdapter>,
+    adapter: Arc<dyn AgentAdapter>,
     adapter_kind: AdapterKind,
     session: Option<AgentSession>,
     db_row_id: Option<String>,
     config: AgentAdapterConfig,
     /// Current turn ID for audit trail - set when a turn starts
     current_turn_id: Option<String>,
+    /// When the current turn started (for metrics)
+    current_turn_start: Option<std::time::Instant>,
 }
 
 impl std::fmt::Debug for Inner {
@@ -237,11 +239,13 @@ impl AgentSessionManager {
 
         Ok(Self {
             inner: Arc::new(Mutex::new(Inner {
-                adapter,
+                adapter: adapter.into(),
                 adapter_kind,
                 session,
                 db_row_id,
                 config,
+                current_turn_id: None,
+                current_turn_start: None,
             })),
             event_tx,
             enabled,
@@ -452,11 +456,16 @@ impl AgentSessionManager {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("No active agent session"))?
             .clone();
-        let adapter = &inner.adapter;
+        let adapter_kind = inner.adapter_kind;
+        let model = inner.config.model.clone();
 
         // Generate a unique turn_id for this turn (audit trail)
         let turn_id = format!("turn-{}", uuid::Uuid::new_v4());
         inner.current_turn_id = Some(turn_id.clone());
+        inner.current_turn_start = Some(std::time::Instant::now());
+
+        // Clone adapter before releasing lock
+        let adapter = Arc::clone(&inner.adapter);
 
         // Emit TurnStarted event with turn_id
         let session_id = session.id.0.clone();
@@ -472,15 +481,12 @@ impl AgentSessionManager {
             warn!("Failed to write turn context: {}", e);
         }
 
-        // Re-acquire lock for the rest of the function
-        let inner = self.inner.lock().await;
-
         let start = std::time::Instant::now();
         let stream = adapter.send_turn(&session, &prompt, attachments).await?;
         // Record the time-to-first-byte (stream creation = model started responding)
         let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
         metrics::metrics().hoop_agent_turn_duration_ms.observe(
-            &[inner.adapter_kind.as_str(), &inner.config.model, "ttfb"],
+            &[adapter_kind.as_str(), &model, "to_first_token"],
             elapsed_ms,
         );
         Ok(stream)
@@ -561,10 +567,13 @@ impl AgentSessionManager {
                         usage.cache_write_tokens,
                     );
 
-                    // Agent metrics
+                    // Agent metrics - record turn completion duration
+                    let completion_duration_ms = inner.current_turn_start
+                        .map(|s| s.elapsed().as_secs_f64() * 1_000.0)
+                        .unwrap_or(0.0);
                     metrics::metrics().hoop_agent_turn_duration_ms.observe(
-                        &[adapter_str, model, "complete"],
-                        0.0, // duration tracked at send_turn level
+                        &[adapter_str, model, "to_completion"],
+                        completion_duration_ms,
                     );
                     metrics::metrics()
                         .hoop_agent_tokens_total
@@ -593,8 +602,9 @@ impl AgentSessionManager {
                         output_tokens: usage.output_tokens as i64,
                     });
 
-                    // Clear the current turn_id after turn completes
+                    // Clear the current turn_id and turn_start after turn completes
                     inner.current_turn_id = None;
+                    inner.current_turn_start = None;
 
                     // Clear turn context file when turn completes
                     if let Err(e) = clear_turn_context() {
@@ -710,7 +720,7 @@ impl AgentSessionManager {
         };
         fleet::insert_agent_session(&row)?;
 
-        inner.adapter = adapter;
+        inner.adapter = adapter.into();
         inner.adapter_kind = adapter_kind;
         inner.session = Some(session);
         inner.db_row_id = Some(db_id.clone());
