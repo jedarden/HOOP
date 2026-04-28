@@ -18,6 +18,8 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use crate::unknown_event_sink::truncate_for_log;
+
 // ---------------------------------------------------------------------------
 // Unified event types — identical shape regardless of adapter
 // ---------------------------------------------------------------------------
@@ -1414,11 +1416,21 @@ fn build_openai_user_content(prompt: &str, attachments: &[Attachment]) -> serde_
 
 /// Parse an Anthropic SSE response into AgentEvent stream.
 fn parse_sse_response(response: reqwest::Response) -> impl Stream<Item = Result<AgentEvent>> {
+    parse_sse_response_with_adapter(response, "anthropic")
+}
+
+/// Parse an Anthropic SSE response into AgentEvent stream with adapter context.
+/// Unknown event types are recorded via the global unknown event sink.
+fn parse_sse_response_with_adapter(
+    response: reqwest::Response,
+    adapter_name: &str,
+) -> impl Stream<Item = Result<AgentEvent>> {
     use futures_util::StreamExt;
 
     let stream = response.bytes_stream();
+    let adapter = adapter_name.to_string();
 
-    stream.flat_map(|chunk_result| {
+    stream.flat_map(move |chunk_result| {
         let chunk = match chunk_result {
             Ok(c) => c,
             Err(e) => {
@@ -1433,10 +1445,17 @@ fn parse_sse_response(response: reqwest::Response) -> impl Stream<Item = Result<
         let events: Vec<Result<AgentEvent>> = text
             .lines()
             .filter(|l| l.starts_with("data: "))
-            .filter_map(|l| l.strip_prefix("data: "))
-            .filter(|l| l.trim() != "[DONE]")
-            .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
-            .map(|val| anthropic_sse_to_event(&val))
+            .filter_map(|l| {
+                let raw_line = l.strip_prefix("data: ")?;
+                if raw_line.trim() == "[DONE]" {
+                    return None;
+                }
+                let raw = raw_line.to_string();
+                serde_json::from_str::<serde_json::Value>(raw_line)
+                    .ok()
+                    .map(|val| (val, raw))
+            })
+            .map(|(val, raw)| anthropic_sse_to_event(&val, &adapter, &raw))
             .collect();
 
         futures_util::stream::iter(events)
@@ -1497,11 +1516,21 @@ async fn track_assistant_response(
 fn parse_openai_sse_response(
     response: reqwest::Response,
 ) -> impl Stream<Item = Result<AgentEvent>> {
+    parse_openai_sse_response_with_adapter(response, "zai")
+}
+
+/// Parse an OpenAI-compatible SSE response into AgentEvent stream with adapter context.
+/// Unknown event types are recorded via the global unknown event sink.
+fn parse_openai_sse_response_with_adapter(
+    response: reqwest::Response,
+    adapter_name: &str,
+) -> impl Stream<Item = Result<AgentEvent>> {
     use futures_util::StreamExt;
 
     let stream = response.bytes_stream();
+    let adapter = adapter_name.to_string();
 
-    stream.flat_map(|chunk_result| {
+    stream.flat_map(move |chunk_result| {
         let chunk = match chunk_result {
             Ok(c) => c,
             Err(e) => {
@@ -1516,17 +1545,27 @@ fn parse_openai_sse_response(
         let events: Vec<Result<AgentEvent>> = text
             .lines()
             .filter(|l| l.starts_with("data: "))
-            .filter_map(|l| l.strip_prefix("data: "))
-            .filter(|l| l.trim() != "[DONE]")
-            .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
-            .map(|val| openai_sse_to_event(&val))
+            .filter_map(|l| {
+                let raw_line = l.strip_prefix("data: ")?;
+                if raw_line.trim() == "[DONE]" {
+                    return None;
+                }
+                let raw = raw_line.to_string();
+                serde_json::from_str::<serde_json::Value>(raw_line)
+                    .ok()
+                    .map(|val| (val, raw))
+            })
+            .map(|(val, raw)| openai_sse_to_event(&val, &adapter, &raw))
             .collect();
 
         futures_util::stream::iter(events)
     })
 }
 
-fn anthropic_sse_to_event(val: &serde_json::Value) -> Result<AgentEvent> {
+/// Parse a single Anthropic SSE event into an AgentEvent.
+///
+/// Unknown event types are recorded via the global unknown event sink.
+fn anthropic_sse_to_event(val: &serde_json::Value, adapter_name: &str, raw_line: &str) -> Result<AgentEvent> {
     let event_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
     match event_type {
@@ -1592,13 +1631,42 @@ fn anthropic_sse_to_event(val: &serde_json::Value) -> Result<AgentEvent> {
                 message: msg.to_string(),
             })
         }
-        _ => Ok(AgentEvent::TextDelta {
-            text: String::new(),
-        }),
+        _ => {
+            // Unknown event type - record via global sink
+            crate::unknown_event_sink::global_registry().register_sample(
+                crate::unknown_event_sink::UnknownEventSample::simple(
+                    adapter_name,
+                    event_type,
+                    raw_line,
+                )
+            );
+
+            // Increment the metric
+            crate::metrics::metrics().hoop_unknown_event_labeled_total.inc(&[
+                adapter_name,
+                event_type,
+            ]);
+
+            // Log a warning
+            tracing::warn!(
+                "Unknown SSE event type '{}' from adapter '{}': {}",
+                event_type,
+                adapter_name,
+                truncate_for_log(raw_line)
+            );
+
+            // Return empty TextDelta to continue stream processing
+            Ok(AgentEvent::TextDelta {
+                text: String::new(),
+            })
+        }
     }
 }
 
-fn openai_sse_to_event(val: &serde_json::Value) -> Result<AgentEvent> {
+/// Parse a single OpenAI-compatible SSE event into an AgentEvent.
+///
+/// Unknown event types are recorded via the global unknown event sink.
+fn openai_sse_to_event(val: &serde_json::Value, adapter_name: &str, raw_line: &str) -> Result<AgentEvent> {
     let choices = val.get("choices").and_then(|c| c.as_array());
     let choice = choices.and_then(|c| c.first());
 
@@ -1662,6 +1730,35 @@ fn openai_sse_to_event(val: &serde_json::Value) -> Result<AgentEvent> {
         }
     }
 
+    // Unknown event type - record via global sink
+    let event_kind = val.get("type")
+        .and_then(|v| v.as_str())
+        .or_else(|| val.get("object").and_then(|v| v.as_str()))
+        .unwrap_or("unknown");
+
+    crate::unknown_event_sink::global_registry().register_sample(
+        crate::unknown_event_sink::UnknownEventSample::simple(
+            adapter_name,
+            event_kind,
+            raw_line,
+        )
+    );
+
+    // Increment the metric
+    crate::metrics::metrics().hoop_unknown_event_labeled_total.inc(&[
+        adapter_name,
+        event_kind,
+    ]);
+
+    // Log a warning
+    tracing::warn!(
+        "Unknown SSE event type '{}' from adapter '{}': {}",
+        event_kind,
+        adapter_name,
+        truncate_for_log(raw_line)
+    );
+
+    // Return empty TextDelta to continue stream processing
     Ok(AgentEvent::TextDelta {
         text: String::new(),
     })
