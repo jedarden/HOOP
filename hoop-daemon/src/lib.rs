@@ -53,6 +53,14 @@ pub mod fleet_notifications;
 pub mod heartbeats;
 pub mod id_validators;
 pub mod identity;
+
+// Integration test utilities and load testing are only needed for tests
+// These are public for integration tests but not part of the stable API
+#[cfg(any(test, feature = "testing"))]
+pub mod integration_harness;
+#[cfg(any(test, feature = "testing"))]
+pub mod load_test;
+
 pub mod log_rotation;
 pub mod metrics;
 pub mod migrations;

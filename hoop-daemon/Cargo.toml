@@ -7,6 +7,8 @@ edition.workspace = true
 default = []
 zero-write-v01 = []
 create-only-write = []
+# Internal feature for integration tests and load testing
+testing = []
 
 [dependencies]
 anyhow = "1.0"
