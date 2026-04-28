@@ -150,6 +150,17 @@ async fn create_note(
         },
     )?;
 
+    // §4.7 Evaluate pattern queries for the new stitch
+    if let Err(e) = crate::pattern_query_evaluator::sync_and_emit_pattern_queries(
+        &stitch_id,
+        &project,
+        "dictated",
+        &title,
+        &state.pattern_tx,
+    ) {
+        tracing::warn!("Failed to sync pattern queries for stitch {}: {}", stitch_id, e);
+    }
+
     // Insert note metadata
     let note = DictatedNote {
         stitch_id: stitch_id.clone(),
@@ -342,6 +353,7 @@ struct UpdateNoteRequest {
 /// PATCH /api/dictated-notes/:stitch_id — update a note's transcript or tags
 async fn update_note(
     Path(stitch_id): Path<String>,
+    State(state): State<crate::DaemonState>,
     Json(req): Json<UpdateNoteRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let valid_id = ValidStitchId::parse(&stitch_id).map_err(crate::id_validators::rejection)?;
@@ -373,6 +385,30 @@ async fn update_note(
                 format!("Title update error: {}", e),
             )
         })?;
+
+        // Re-evaluate pattern queries after title change (§4.7)
+        let stitch_info: Option<(String, String)> = conn
+            .query_row(
+                "SELECT project, kind FROM stitches WHERE id = ?1",
+                params![valid_id.as_str()],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .ok();
+        if let Some((project, kind)) = stitch_info {
+            if let Err(e) = crate::pattern_query_evaluator::sync_and_emit_pattern_queries(
+                valid_id.as_str(),
+                &project,
+                &kind,
+                &title,
+                &state.pattern_tx,
+            ) {
+                tracing::warn!(
+                    "Failed to sync pattern queries after title update for stitch {}: {}",
+                    valid_id.as_str(),
+                    e
+                );
+            }
+        }
     }
     if let Some(transcript) = req.transcript {
         // §18.2 secrets scan: flag secrets in the updated transcript (Phase 3)

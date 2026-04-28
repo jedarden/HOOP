@@ -25,7 +25,6 @@ use chrono::Utc;
 use regex::Regex;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::time::Instant;
 use tokio::sync::broadcast;
 use tracing::{debug, info, warn};
@@ -518,6 +517,7 @@ pub fn sync_and_emit_pattern_queries(
                 project: project.to_string(),
                 title: title.to_string(),
                 query_duration_ms: result.query_duration_ms,
+                matched: result.matched,
                 synced_at: synced_at.clone(),
             };
             let _ = pattern_tx.send(event);
