@@ -487,7 +487,7 @@ impl HeartbeatMonitor {
         // Check for unknown worker state and record it
         if matches!(raw.state, WorkerState::Unknown) {
             // Extract the state string from the raw JSON for better diagnostics
-            let event_kind = extract_state_from_raw(line);
+            let event_kind = Self::extract_state_from_raw(line);
             unknown_sink.record_at_line(&event_kind, line, source.line_number);
 
             // Also register with global registry for diagnostics
