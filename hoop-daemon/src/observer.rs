@@ -55,7 +55,7 @@ impl ObserverClient {
 
         // Subscribe to all events (global + per-project)
         let subscribe_msg = r#"{"type":"subscribe","topic":"global"}"#;
-        ws_sender.send(Message::Text(subscribe_msg.to_string())).await?;
+        ws_sender.send(Message::Text(subscribe_msg.to_string().into())).await?;
         debug!("Observer subscribed to global events");
 
         // Forward events from primary to observer's clients
@@ -275,10 +275,10 @@ pub async fn observer_ws_handler(
     // Convert beads to BeadData
     let bead_data: Vec<crate::ws::BeadData> = beads.iter().map(crate::ws::bead_to_data).collect();
 
-    let _ = ws_sender.send(Message::Text(serde_json::to_string(&WsEvent::init(init_subs)).unwrap())).await;
-    let _ = ws_sender.send(Message::Text(serde_json::to_string(&WsEvent::workers_snapshot(workers)).unwrap())).await;
-    let _ = ws_sender.send(Message::Text(serde_json::to_string(&WsEvent::beads_snapshot(bead_data)).unwrap())).await;
-    let _ = ws_sender.send(Message::Text(serde_json::to_string(&WsEvent::projects_snapshot(projects)).unwrap())).await;
+    let _ = ws_sender.send(Message::Text(serde_json::to_string(&WsEvent::init(init_subs)).unwrap().into())).await;
+    let _ = ws_sender.send(Message::Text(serde_json::to_string(&WsEvent::workers_snapshot(workers)).unwrap().into())).await;
+    let _ = ws_sender.send(Message::Text(serde_json::to_string(&WsEvent::beads_snapshot(bead_data)).unwrap().into())).await;
+    let _ = ws_sender.send(Message::Text(serde_json::to_string(&WsEvent::projects_snapshot(projects)).unwrap().into())).await;
 
     // Subscribe to events
     let mut event_rx = state.event_tx.subscribe();

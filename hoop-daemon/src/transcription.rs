@@ -793,7 +793,7 @@ impl TranscriptionJobProcessor {
             }
             None => {
                 // All retries failed - store partial transcript if available
-                let error_msg = last_error.unwrap_or_else(|| "Unknown error".to_string());
+                let error_msg = last_error.clone().unwrap_or_else(|| "Unknown error".to_string());
                 error!(
                     "Transcription failed for job {} after {} attempts: {}",
                     job_id, config.max_retries, error_msg

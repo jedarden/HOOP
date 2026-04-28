@@ -18,8 +18,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::unknown_event_sink::truncate_for_log;
-
 // ---------------------------------------------------------------------------
 // Unified event types — identical shape regardless of adapter
 // ---------------------------------------------------------------------------
@@ -632,27 +630,9 @@ pub fn parse_claude_stream_line(line: &str) -> Result<AgentEvent> {
             Ok(AgentEvent::Error { message })
         }
         _ => {
-            // Unknown event type - record via global sink
-            crate::unknown_event_sink::global_registry().register_sample(
-                crate::unknown_event_sink::UnknownEventSample::simple(
-                    "claude",
-                    event_type,
-                    line,
-                )
-            );
-
-            // Increment the metric
-            crate::metrics::metrics().hoop_unknown_event_labeled_total.inc(&[
-                "claude",
-                event_type,
-            ]);
-
-            // Log a warning
-            tracing::warn!(
-                "Unknown SSE event type '{}' from claude adapter: {}",
-                event_type,
-                truncate_for_log(line)
-            );
+            // Unknown event type - record via UnknownEventSink
+            let sink = crate::unknown_event_sink::UnknownEventSink::new("claude");
+            sink.record(event_type, line);
 
             // Return empty TextDelta to continue stream processing
             Ok(AgentEvent::TextDelta {
@@ -1657,28 +1637,9 @@ fn anthropic_sse_to_event(val: &serde_json::Value, adapter_name: &str, raw_line:
             })
         }
         _ => {
-            // Unknown event type - record via global sink
-            crate::unknown_event_sink::global_registry().register_sample(
-                crate::unknown_event_sink::UnknownEventSample::simple(
-                    adapter_name,
-                    event_type,
-                    raw_line,
-                )
-            );
-
-            // Increment the metric
-            crate::metrics::metrics().hoop_unknown_event_labeled_total.inc(&[
-                adapter_name,
-                event_type,
-            ]);
-
-            // Log a warning
-            tracing::warn!(
-                "Unknown SSE event type '{}' from adapter '{}': {}",
-                event_type,
-                adapter_name,
-                truncate_for_log(raw_line)
-            );
+            // Unknown event type - record via UnknownEventSink
+            let sink = crate::unknown_event_sink::UnknownEventSink::new(adapter_name);
+            sink.record(event_type, raw_line);
 
             // Return empty TextDelta to continue stream processing
             Ok(AgentEvent::TextDelta {
@@ -1755,33 +1716,14 @@ fn openai_sse_to_event(val: &serde_json::Value, adapter_name: &str, raw_line: &s
         }
     }
 
-    // Unknown event type - record via global sink
+    // Unknown event type - record via UnknownEventSink
     let event_kind = val.get("type")
         .and_then(|v| v.as_str())
         .or_else(|| val.get("object").and_then(|v| v.as_str()))
         .unwrap_or("unknown");
 
-    crate::unknown_event_sink::global_registry().register_sample(
-        crate::unknown_event_sink::UnknownEventSample::simple(
-            adapter_name,
-            event_kind,
-            raw_line,
-        )
-    );
-
-    // Increment the metric
-    crate::metrics::metrics().hoop_unknown_event_labeled_total.inc(&[
-        adapter_name,
-        event_kind,
-    ]);
-
-    // Log a warning
-    tracing::warn!(
-        "Unknown SSE event type '{}' from adapter '{}': {}",
-        event_kind,
-        adapter_name,
-        truncate_for_log(raw_line)
-    );
+    let sink = crate::unknown_event_sink::UnknownEventSink::new(adapter_name);
+    sink.record(event_kind, raw_line);
 
     // Return empty TextDelta to continue stream processing
     Ok(AgentEvent::TextDelta {

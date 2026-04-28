@@ -442,7 +442,7 @@ impl BackupPipeline {
     }
 
     /// Upload raw bytes to S3 with retry (for attachment sync).
-    async fn upload_with_retry_from_bytes(&self, data: &[u8], s3_key: &str) -> Result<()> {
+    pub(crate) async fn upload_with_retry_from_bytes(&self, data: &[u8], s3_key: &str) -> Result<()> {
         let mut attempt = 0u32;
         let mut backoff_secs = INITIAL_BACKOFF_SECS;
 
@@ -563,7 +563,7 @@ impl BackupPipeline {
 
     // ── S3 key helpers ─────────────────────────────────────────────────
 
-    fn snapshot_prefix(&self, snapshot_id: &str) -> String {
+    pub(crate) fn snapshot_prefix(&self, snapshot_id: &str) -> String {
         format!(
             "{}/{}",
             self.config.prefix.trim_end_matches('/'),

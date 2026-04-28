@@ -119,6 +119,7 @@ impl UnknownEventSink {
     /// 1. Logs a WARN-level message with the raw event
     /// 2. Increments the `hoop_unknown_event_labeled_total` metric
     /// 3. Adds the sample to the circular buffer for diagnostics
+    /// 4. Registers the sample with the global registry for API access
     pub fn record(&self, event_kind: &str, raw_event: &str) {
         // Increment the metric with adapter and event_kind labels
         metrics::metrics().hoop_unknown_event_labeled_total.inc(&[
@@ -140,7 +141,7 @@ impl UnknownEventSink {
             truncate_for_log(raw_event)
         );
 
-        // Add sample to buffer
+        // Create sample and add to buffer
         let sample = UnknownEventSample::new(
             self.adapter.clone(),
             event_kind.to_string(),
@@ -154,10 +155,19 @@ impl UnknownEventSink {
             // Remove oldest sample (circular buffer)
             samples.remove(0);
         }
-        samples.push(sample);
+        samples.push(sample.clone());
+
+        // Also register with global registry for API access
+        global_registry().register_sample(sample);
     }
 
     /// Record an unknown event with line number context.
+    ///
+    /// This method:
+    /// 1. Logs a WARN-level message with the raw event
+    /// 2. Increments the `hoop_unknown_event_labeled_total` metric
+    /// 3. Adds the sample to the circular buffer for diagnostics
+    /// 4. Registers the sample with the global registry for API access
     pub fn record_at_line(&self, event_kind: &str, raw_event: &str, line_number: usize) {
         // Increment the metric
         metrics::metrics().hoop_unknown_event_labeled_total.inc(&[
@@ -179,7 +189,7 @@ impl UnknownEventSink {
             truncate_for_log(raw_event)
         );
 
-        // Add sample to buffer
+        // Create sample and add to buffer
         let sample = UnknownEventSample::new(
             self.adapter.clone(),
             event_kind.to_string(),
@@ -192,7 +202,10 @@ impl UnknownEventSink {
         if samples.len() >= self.max_samples {
             samples.remove(0);
         }
-        samples.push(sample);
+        samples.push(sample.clone());
+
+        // Also register with global registry for API access
+        global_registry().register_sample(sample);
     }
 
     /// Get all buffered samples.

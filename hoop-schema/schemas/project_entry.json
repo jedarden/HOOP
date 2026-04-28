@@ -28,6 +28,10 @@
           "type": "string",
           "pattern": "^#[0-9A-Fa-f]{6}$",
           "description": "Optional color hex code"
+        },
+        "redaction": {
+          "$ref": "redaction_policy.json",
+          "description": "Per-project redaction policy override (§18.5)"
         }
       }
     },
@@ -47,6 +51,10 @@
           "type": "string",
           "pattern": "^#[0-9A-Fa-f]{6}$",
           "description": "Optional color hex code"
+        },
+        "redaction": {
+          "$ref": "redaction_policy.json",
+          "description": "Per-project redaction policy override (§18.5)"
         },
         "workspaces": {
           "type": "array",

@@ -5,7 +5,7 @@
 //! - POST /api/p/:project/replay/:bead_id/resume-as-new — create new bead with reconstructed state
 //! - POST /api/p/:project/replay/:bead_id/restore-state — restore workspace from stash
 
-use crate::stitch_reconstruction::{self, FailureState, ReplayOptions};
+use crate::stitch_reconstruction::{self, ReplayOptions};
 use axum::{
     extract::{ConnectInfo, Path, State},
     http::StatusCode,
@@ -14,7 +14,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
-use tracing::{info, warn};
+use tracing::info;
 
 /// Request body for resume-as-new-bead
 #[derive(Debug, Deserialize)]
@@ -168,7 +168,7 @@ async fn resume_as_new_bead(
         connect_info.map(|ci| ci.0),
         crate::auth::Role::Drafter,
     )
-    .map_err(|e| (e.0, serde_json::to_string(e.1).unwrap_or_else(|_| e.0.to_string())))?;
+    .map_err(|e| (e.0, serde_json::to_string(&e.1 .0).unwrap_or_else(|_| e.0.to_string())))?;
 
     let project_path = crate::api_beads::resolve_project_path(&project, &state)?;
 
@@ -246,17 +246,19 @@ async fn resume_as_new_bead(
         (status, format!("Failed to create new bead: {}", msg))
     })?;
 
+    let new_bead_id = create_response.id.clone();
+
     info!(
         "Created new bead {} as replay for failed bead {} (stitch: {})",
-        create_response.id, bead_id, stitch_id
+        new_bead_id, bead_id, stitch_id
     );
 
     Ok(Json(ResumeAsNewResponse {
-        bead_id: create_response.id,
+        bead_id: new_bead_id.clone(),
         stitch_id,
         message: format!(
             "Created new bead {} to resume from failed bead {}",
-            create_response.id, bead_id
+            new_bead_id, bead_id
         ),
     }))
 }
@@ -286,8 +288,10 @@ async fn restore_workspace_state(
     }
 
     // Reconstruct failure state to get stash_sha
+    let bead_id_clone = bead_id.clone();
+    let project_path_clone = project_path.clone();
     let failure_state = tokio::task::spawn_blocking(move || {
-        stitch_reconstruction::reconstruct_failure_state(&bead_id, &project_path, &events_jsonl_path)
+        stitch_reconstruction::reconstruct_failure_state(&bead_id_clone, &project_path_clone, &events_jsonl_path)
     })
     .await
     .map_err(|e| {
@@ -314,8 +318,12 @@ async fn restore_workspace_state(
         })?;
 
     // Restore workspace state
-    tokio::task::spawn_blocking(move || {
-        stitch_reconstruction::restore_workspace_state(&stash_sha, &project_path)
+    let project_path_clone = project_path.clone();
+    tokio::task::spawn_blocking({
+        let stash_sha = stash_sha.clone();
+        move || {
+            stitch_reconstruction::restore_workspace_state(&stash_sha, &project_path_clone)
+        }
     })
     .await
     .map_err(|e| {

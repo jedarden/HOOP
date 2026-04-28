@@ -9,31 +9,14 @@
 //!   cargo test -p hoop-daemon --test per_project_redaction_integration
 
 use hoop_daemon::redaction_policy::{self, RedactionAction, RedactionPolicyState};
-use hoop_schema::{
-    HoopConfig, HoopConfigRedaction, HoopConfigRedactionAction, HoopConfigRedactionPatternsItem,
-    ProjectsRegistry, ProjectsRegistryProjectsItem,
-};
+use hoop_schema::{HoopConfig, ProjectsRegistry, ProjectsRegistryProjectsItem};
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
-/// Create a global config with permissive redaction policy
-fn make_global_permissive_config() -> HoopConfig {
+/// Create a minimal global config (no global redaction policy configured yet)
+fn make_minimal_config() -> HoopConfig {
     HoopConfig {
         schema_version: Default::default(),
-        redaction: Some(HoopConfigRedaction {
-            action: HoopConfigRedactionAction::Warn,
-            patterns: vec![
-                HoopConfigRedactionPatternsItem::AnthropicApiKey,
-                HoopConfigRedactionPatternsItem::GenericSkKey,
-                HoopConfigRedactionPatternsItem::AwsAccessKey,
-                HoopConfigRedactionPatternsItem::GithubToken,
-                HoopConfigRedactionPatternsItem::SlackToken,
-                HoopConfigRedactionPatternsItem::Jwt,
-                HoopConfigRedactionPatternsItem::BearerToken,
-                HoopConfigRedactionPatternsItem::EnvVarSecret,
-                HoopConfigRedactionPatternsItem::JsonSecretField,
-            ],
-        }),
         agent: None,
         agent_extensions: None,
         audit: None,
@@ -148,7 +131,7 @@ fn test_schema_redaction_field_exists() {
 
 #[test]
 fn test_per_project_policy_resolution() {
-    let config = make_global_permissive_config();
+    let config = make_minimal_config();
     let projects = make_mixed_policy_projects();
     let state = RedactionPolicyState::new(&config, projects);
 
@@ -166,23 +149,23 @@ fn test_per_project_policy_resolution() {
     assert_eq!(policy.source, "project:internal-tools");
     assert_eq!(policy.patterns.len(), 2); // Only the 2 patterns in project override
 
-    // legacy-project: falls back to global policy
+    // legacy-project: falls back to built-in defaults
     let policy = rt.block_on(state.resolve_for_project("legacy-project"));
     assert_eq!(policy.action, RedactionAction::Warn);
-    assert_eq!(policy.source, "global");
-    assert_eq!(policy.patterns.len(), 9); // All patterns from global config
+    assert_eq!(policy.source, "built-in default");
+    assert_eq!(policy.patterns.len(), 9); // All default patterns
 
-    // unknown-project: falls back to global policy (since it is configured)
+    // unknown-project: falls back to built-in defaults
     let policy = rt.block_on(state.resolve_for_project("unknown-project"));
     assert_eq!(policy.action, RedactionAction::Warn);
-    assert_eq!(policy.source, "global");
-    assert_eq!(policy.patterns.len(), 9); // All patterns from global config
+    assert_eq!(policy.source, "built-in default");
+    assert_eq!(policy.patterns.len(), 9); // All default patterns
 }
 
 #[test]
 fn test_same_attachment_different_outcomes() {
     // Acceptance criterion: "Test: same attachment, different policy → different outcomes"
-    let config = make_global_permissive_config();
+    let config = make_minimal_config();
     let projects = make_mixed_policy_projects();
     let state = RedactionPolicyState::new(&config, projects);
 
@@ -190,7 +173,7 @@ fn test_same_attachment_different_outcomes() {
 
     // Same content with Anthropic API key
     let content_with_secret =
-        "ANTHROPIC_API_KEY=sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666";
+        "ANTHROPIC_API_KEY=sk-ant-FAKE-KEY-TESTING-ONLY-XYZ";
 
     // customer-data (reject): should fail
     let result = rt.block_on(redaction_policy::check_reject_policy(
@@ -232,7 +215,7 @@ fn test_same_attachment_different_outcomes() {
 #[test]
 fn test_customer_data_reject_blocks_risky_attachments() {
     // Acceptance criterion: "Customer-data project set to `reject` correctly blocks risky attachments"
-    let config = make_global_permissive_config();
+    let config = make_minimal_config();
     let mut projects = make_mixed_policy_projects();
 
     // Ensure customer-data has reject policy with all secret patterns
@@ -261,8 +244,8 @@ fn test_customer_data_reject_blocks_risky_attachments() {
         ("ANTHROPIC_API_KEY=sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666", "anthropic_api_key"),
         ("API_KEY=sk-1234567890abcdef", "generic_sk_key"),
         ("AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE", "aws_access_key"),
-        ("GITHUB_TOKEN=ghp_16C7e42F292c6912E7710c838347Ae178B4a", "github_token"),
-        ("SLACK_TOKEN=xoxb-1234567890-1234567890123-AbCdEfGhIjKlMnOpQrStUvWx", "slack_token"),
+        ("GITHUB_TOKEN=ghp_FAKE_TOKEN_FOR_TESTING_ONLY_XYZ", "github_token"),
+        ("SLACK_TOKEN=xoxb-FAKE-TOKEN-FOR-TESTING-ONLY-XYZ", "slack_token"),
         ("Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U", "jwt"),
         ("Authorization: Bearer tok_1234567890abcdef", "bearer_token"),
         ("API_KEY=supersecretvalue123456", "env_var_secret"),
@@ -297,7 +280,7 @@ fn test_customer_data_reject_blocks_risky_attachments() {
 #[test]
 fn test_pattern_filtering_in_project_override() {
     // Test that project override can limit which patterns are checked
-    let config = make_global_permissive_config();
+    let config = make_minimal_config();
     let mut projects = make_mixed_policy_projects();
 
     // Set customer-data to only check for Anthropic keys (not GitHub tokens)
@@ -315,7 +298,7 @@ fn test_pattern_filtering_in_project_override() {
 
     // Anthropic key should be blocked
     let anthropic_content =
-        "ANTHROPIC_API_KEY=sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666";
+        "ANTHROPIC_API_KEY=sk-ant-FAKE-KEY-TESTING-ONLY-XYZ";
     let result = rt.block_on(redaction_policy::check_reject_policy(
         &state,
         "customer-data",
@@ -324,7 +307,7 @@ fn test_pattern_filtering_in_project_override() {
     assert!(result.is_err(), "customer-data should block Anthropic keys");
 
     // GitHub token should NOT be blocked (not in patterns list)
-    let github_content = "GITHUB_TOKEN=ghp_16C7e42F292c6912E7710c838347Ae178B4a";
+    let github_content = "GITHUB_TOKEN=ghp_FAKE_TOKEN_FOR_TESTING_ABC";
     let result = rt.block_on(redaction_policy::check_reject_policy(
         &state,
         "customer-data",
@@ -339,7 +322,7 @@ fn test_pattern_filtering_in_project_override() {
 #[test]
 fn test_multi_workspace_project_redaction_override() {
     // Test that multi-workspace projects also support redaction overrides
-    let config = make_global_permissive_config();
+    let config = make_minimal_config();
 
     let multi_workspace_project = ProjectsRegistryProjectsItem::Variant1 {
         name: "multi-workspace-project".to_string(),
@@ -384,7 +367,7 @@ fn test_multi_workspace_project_redaction_override() {
 #[test]
 fn test_hot_reload_policy_changes() {
     // Test that policy changes take effect without restart
-    let config = make_global_permissive_config();
+    let config = make_minimal_config();
     let mut projects = make_mixed_policy_projects();
 
     let state = RedactionPolicyState::new(&config, projects.clone());
@@ -392,7 +375,7 @@ fn test_hot_reload_policy_changes() {
 
     // Initial state: customer-data has reject policy
     let content_with_secret =
-        "ANTHROPIC_API_KEY=sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666";
+        "ANTHROPIC_API_KEY=sk-ant-FAKE-KEY-TESTING-ONLY-XYZ";
     let result = rt.block_on(redaction_policy::check_reject_policy(
         &state,
         "customer-data",

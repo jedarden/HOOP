@@ -112,10 +112,89 @@ fn default_pattern_names() -> HashSet<String> {
 /// Extract redaction policy from a ProjectsRegistryProjectsItem.
 ///
 /// Returns None if no redaction override is configured for the project.
-/// NOTE: Per-project redaction policy is not yet supported in the schema.
-fn extract_redaction_from_project(_project: &ProjectsRegistryProjectsItem) -> Option<ResolvedRedactionPolicy> {
-    // TODO: Implement per-project redaction policy when added to schema
-    None
+fn extract_redaction_from_project(project: &ProjectsRegistryProjectsItem) -> Option<ResolvedRedactionPolicy> {
+    match project {
+        hoop_schema::ProjectsRegistryProjectsItem::Variant0 { redaction, name, .. } => {
+            redaction.as_ref().map(|r| {
+                let patterns = convert_patterns(&r.patterns);
+                ResolvedRedactionPolicy {
+                    action: convert_action(&r.action),
+                    patterns,
+                    source: format!("project:{}", name),
+                }
+            })
+        }
+        hoop_schema::ProjectsRegistryProjectsItem::Variant1 { redaction, name, .. } => {
+            redaction.as_ref().map(|r| {
+                let patterns = convert_patterns_variant1(&r.patterns);
+                ResolvedRedactionPolicy {
+                    action: convert_action_variant1(&r.action),
+                    patterns,
+                    source: format!("project:{}", name),
+                }
+            })
+        }
+    }
+}
+
+/// Convert schema redaction action to internal RedactionAction.
+fn convert_action(action: &hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionAction) -> RedactionAction {
+    match action {
+        hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionAction::Warn => RedactionAction::Warn,
+        hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionAction::Redact => RedactionAction::Redact,
+        hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionAction::Reject => RedactionAction::Reject,
+    }
+}
+
+/// Convert schema redaction action from Variant1.
+fn convert_action_variant1(action: &hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionAction) -> RedactionAction {
+    match action {
+        hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionAction::Warn => RedactionAction::Warn,
+        hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionAction::Redact => RedactionAction::Redact,
+        hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionAction::Reject => RedactionAction::Reject,
+    }
+}
+
+/// Convert schema pattern enums to string pattern names.
+fn convert_patterns(
+    patterns: &[hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionPatternsItem],
+) -> HashSet<String> {
+    patterns
+        .iter()
+        .map(|p| match p {
+            hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionPatternsItem::AnthropicApiKey => "anthropic_api_key",
+            hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionPatternsItem::GenericSkKey => "generic_sk_key",
+            hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionPatternsItem::AwsAccessKey => "aws_access_key",
+            hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionPatternsItem::GithubToken => "github_token",
+            hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionPatternsItem::SlackToken => "slack_token",
+            hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionPatternsItem::Jwt => "jwt",
+            hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionPatternsItem::BearerToken => "bearer_token",
+            hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionPatternsItem::EnvVarSecret => "env_var_secret",
+            hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionPatternsItem::JsonSecretField => "json_secret_field",
+        })
+        .map(|s| s.to_string())
+        .collect()
+}
+
+/// Convert schema pattern enums from Variant1.
+fn convert_patterns_variant1(
+    patterns: &[hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionPatternsItem],
+) -> HashSet<String> {
+    patterns
+        .iter()
+        .map(|p| match p {
+            hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionPatternsItem::AnthropicApiKey => "anthropic_api_key",
+            hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionPatternsItem::GenericSkKey => "generic_sk_key",
+            hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionPatternsItem::AwsAccessKey => "aws_access_key",
+            hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionPatternsItem::GithubToken => "github_token",
+            hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionPatternsItem::SlackToken => "slack_token",
+            hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionPatternsItem::Jwt => "jwt",
+            hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionPatternsItem::BearerToken => "bearer_token",
+            hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionPatternsItem::EnvVarSecret => "env_var_secret",
+            hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionPatternsItem::JsonSecretField => "json_secret_field",
+        })
+        .map(|s| s.to_string())
+        .collect()
 }
 
 /// Map a high-level pattern name to its implementation-specific pattern names.
@@ -192,9 +271,22 @@ impl RedactionPolicyState {
     /// Resolve the redaction policy for a specific project.
     ///
     /// Returns the effective policy by checking:
-    /// 1. Global policy in config.yml (TODO: not yet implemented in schema)
-    /// 2. Built-in defaults
-    pub async fn resolve_for_project(&self, _project_name: &str) -> ResolvedRedactionPolicy {
+    /// 1. Per-project override in projects.yaml
+    /// 2. Global policy in config.yml (TODO: not yet implemented in schema)
+    /// 3. Built-in defaults
+    pub async fn resolve_for_project(&self, project_name: &str) -> ResolvedRedactionPolicy {
+        // Check for per-project override first
+        let registry = self._projects_registry.read().await;
+        if let Some(project) = registry
+            .projects
+            .iter()
+            .find(|p| p.name() == project_name)
+        {
+            if let Some(policy) = extract_redaction_from_project(project) {
+                return policy;
+            }
+        }
+
         // Fall back to global policy
         if let Some(global) = &self.global_policy {
             let patterns = if global.patterns.is_empty() {
