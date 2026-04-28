@@ -1377,6 +1377,10 @@ impl WorkerRegistry {
             crate::WorkerState::Knot { reason } => WorkerDisplayState::Knot {
                 reason: reason.clone(),
             },
+            // Unknown worker state - display as error state with diagnostic info
+            crate::WorkerState::Unknown => WorkerDisplayState::Knot {
+                reason: "Unknown worker state (recorded in diagnostics)".to_string(),
+            },
         };
         if let Some(existing) = workers.iter_mut().find(|w| w.worker == heartbeat.worker) {
             existing.state = state;
