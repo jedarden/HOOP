@@ -631,9 +631,34 @@ pub fn parse_claude_stream_line(line: &str) -> Result<AgentEvent> {
                 .to_string();
             Ok(AgentEvent::Error { message })
         }
-        _ => Ok(AgentEvent::TextDelta {
-            text: String::new(),
-        }),
+        _ => {
+            // Unknown event type - record via global sink
+            crate::unknown_event_sink::global_registry().register_sample(
+                crate::unknown_event_sink::UnknownEventSample::simple(
+                    "claude",
+                    event_type,
+                    line,
+                )
+            );
+
+            // Increment the metric
+            crate::metrics::metrics().hoop_unknown_event_labeled_total.inc(&[
+                "claude",
+                event_type,
+            ]);
+
+            // Log a warning
+            tracing::warn!(
+                "Unknown SSE event type '{}' from claude adapter: {}",
+                event_type,
+                truncate_for_log(line)
+            );
+
+            // Return empty TextDelta to continue stream processing
+            Ok(AgentEvent::TextDelta {
+                text: String::new(),
+            })
+        }
     }
 }
 

@@ -207,7 +207,7 @@ impl UnknownEventSink {
 }
 
 /// Truncate a string for logging (max 200 chars).
-fn truncate_for_log(s: &str) -> String {
+pub fn truncate_for_log(s: &str) -> String {
     if s.len() > 200 {
         format!("{}...", &s[..200])
     } else {
