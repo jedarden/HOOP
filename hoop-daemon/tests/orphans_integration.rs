@@ -7,6 +7,7 @@
 
 use std::fs;
 use tempfile::TempDir;
+use rusqlite::Connection;
 
 #[test]
 fn orphan_bead_detection_and_attachment() {
@@ -112,4 +113,129 @@ fn orphan_bead_serialization() {
     assert!(json.contains("hoop-ttb.1"));
     assert!(json.contains("Test orphan"));
     assert!(json.contains("urgent"));
+}
+
+#[test]
+fn orphan_attach_to_stitch_creates_referenced_link() {
+    let tmp = TempDir::new().unwrap();
+    let project_path = tmp.path();
+
+    // Set up a temporary fleet.db
+    let db_path = tmp.path().join("fleet.db");
+
+    // Create the stitch_beads table
+    let conn = Connection::open(&db_path).unwrap();
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS stitch_beads (
+            stitch_id TEXT NOT NULL,
+            bead_id TEXT NOT NULL,
+            workspace TEXT NOT NULL,
+            canonical_workspace TEXT NOT NULL DEFAULT '',
+            relationship TEXT NOT NULL CHECK(relationship IN ('created-here', 'executing', 'referenced')),
+            PRIMARY KEY (stitch_id, bead_id)
+        )",
+        [],
+    ).unwrap();
+
+    // Test attaching an orphan bead to a stitch
+    let stitch_id = "test-stitch-abc123";
+    let bead_id = "hoop-ttb.456";
+    let workspace = project_path.to_string_lossy().to_string();
+
+    let result = hoop_daemon::orphan_beads::attach_orphan_to_stitch(
+        stitch_id,
+        bead_id,
+        &workspace,
+    );
+
+    assert!(result.is_ok(), "attach_orphan_to_stitch should succeed");
+
+    // Verify the link was created in the database
+    let link_exists: bool = conn
+        .query_row(
+            "SELECT 1 FROM stitch_beads WHERE stitch_id = ?1 AND bead_id = ?2 AND relationship = 'referenced'",
+            [stitch_id, bead_id],
+            |_| Ok(true),
+        )
+        .unwrap_or(false);
+
+    assert!(link_exists, "stitch_beads link should exist with relationship='referenced'");
+
+    // Test duplicate attach (should be idempotent)
+    let result2 = hoop_daemon::orphan_beads::attach_orphan_to_stitch(
+        stitch_id,
+        bead_id,
+        &workspace,
+    );
+
+    assert!(result2.is_ok(), "duplicate attach should succeed (idempotent)");
+
+    // Verify we still have only one row
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM stitch_beads WHERE stitch_id = ?1 AND bead_id = ?2",
+            [stitch_id, bead_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+
+    assert_eq!(count, 1, "should have exactly one stitch_beads row");
+}
+
+#[test]
+fn orphan_attach_preserves_existing_relationships() {
+    let tmp = TempDir::new().unwrap();
+    let project_path = tmp.path();
+
+    // Set up a temporary fleet.db
+    let db_path = tmp.path().join("fleet.db");
+
+    // Create the stitch_beads table
+    let conn = Connection::open(&db_path).unwrap();
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS stitch_beads (
+            stitch_id TEXT NOT NULL,
+            bead_id TEXT NOT NULL,
+            workspace TEXT NOT NULL,
+            canonical_workspace TEXT NOT NULL DEFAULT '',
+            relationship TEXT NOT NULL CHECK(relationship IN ('created-here', 'executing', 'referenced')),
+            PRIMARY KEY (stitch_id, bead_id)
+        )",
+        [],
+    ).unwrap();
+
+    // Create an existing 'created-here' relationship
+    let stitch_id = "test-stitch-existing";
+    let bead_id = "hoop-ttb.789";
+    let workspace = project_path.to_string_lossy().to_string();
+    let canonical_ws = std::fs::canonicalize(project_path)
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|_| workspace.clone());
+
+    conn.execute(
+        "INSERT INTO stitch_beads (stitch_id, bead_id, workspace, canonical_workspace, relationship)
+         VALUES (?1, ?2, ?3, ?4, 'created-here')",
+        [stitch_id, bead_id, &workspace, &canonical_ws],
+    ).unwrap();
+
+    // Attempting to attach as 'referenced' should fail due to PRIMARY KEY constraint
+    let result = hoop_daemon::orphan_beads::attach_orphan_to_stitch(
+        stitch_id,
+        bead_id,
+        &workspace,
+    );
+
+    // The function should succeed (it checks for existence first), but verify
+    // the relationship is still 'created-here'
+    assert!(result.is_ok(), "attach should succeed when link already exists");
+
+    let relationship: String = conn
+        .query_row(
+            "SELECT relationship FROM stitch_beads WHERE stitch_id = ?1 AND bead_id = ?2",
+            [stitch_id, bead_id],
+            |row| row.get(0),
+        )
+        .unwrap();
+
+    assert_eq!(relationship, "created-here", "existing relationship should be preserved");
 }
