@@ -191,6 +191,8 @@ enum MigrateCommands {
         #[arg(long)]
         confirm: bool,
     },
+    /// Rebuild the percentile index from closed Stitches
+    RebuildPercentileIndex,
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -548,6 +550,38 @@ fn handle_migrate(cmd: MigrateCommands) -> anyhow::Result<()> {
             migrations::rollback_migration(conn, &registry, &version, &current_version)?;
 
             println!("Rollback complete. Schema version is now {}.", version);
+        }
+        MigrateCommands::RebuildPercentileIndex => {
+            let db_path = fleet::db_path();
+            let conn = &mut rusqlite::Connection::open(&db_path)?;
+
+            // Check if the percentile index table exists
+            let table_exists: bool = conn.query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='stitch_percentile_index'",
+                [],
+                |row| row.get(0),
+            ).unwrap_or(0) > 0;
+
+            if !table_exists {
+                eprintln!("hoop migrate rebuild-percentile-index: percentile index table does not exist.");
+                eprintln!("  Run pending migrations first: hoop migrate run --confirm");
+                std::process::exit(1);
+            }
+
+            println!("Rebuilding percentile index from closed Stitches...");
+            if let Err(e) = hoop_daemon::stitch_percentile_index::rebuild_index(conn) {
+                eprintln!("Failed to rebuild percentile index: {}", e);
+                std::process::exit(1);
+            }
+
+            let bucket_count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM stitch_percentile_index",
+                [],
+                |row| row.get(0),
+            ).unwrap_or(0);
+
+            println!("Percentile index rebuilt successfully.");
+            println!("Total buckets: {}", bucket_count);
         }
     }
 

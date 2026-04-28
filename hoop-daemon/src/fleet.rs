@@ -2607,6 +2607,28 @@ pub fn migrate_v125_to_v126(conn: &mut Connection) -> Result<()> {
     )?;
 
     info!("stitch_percentile_index table created successfully");
+
+    // Populate the index with historical data from closed Stitches
+    info!("Populating percentile index with historical Stitches...");
+    match crate::stitch_percentile_index::rebuild_index(conn) {
+        Ok(()) => {
+            let bucket_count: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM stitch_percentile_index",
+                [],
+                |row| row.get(0),
+            ).unwrap_or(0);
+            info!(
+                "Percentile index populated with {} buckets",
+                bucket_count
+            );
+        }
+        Err(e) => {
+            // Don't fail the migration if rebuild fails - the tables are still created correctly
+            // Users can rebuild later via CLI if needed
+            warn!("Failed to populate percentile index: {}. Rebuild can be run later via `hoop migrate rebuild-percentile-index`", e);
+        }
+    }
+
     update_schema_version(conn, "1.26.0")?;
     Ok(())
 }
