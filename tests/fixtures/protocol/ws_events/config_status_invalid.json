@@ -1,0 +1,14 @@
+{
+  "type": "config_status",
+  "config_status": {
+    "valid": false,
+    "error": {
+      "message": "Invalid project configuration",
+      "line": 15,
+      "col": 3,
+      "field": "projects[].name",
+      "expected": "string",
+      "got": "missing"
+    }
+  }
+}

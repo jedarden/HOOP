@@ -4,9 +4,10 @@
 //! Survives log rotation (handles file-moved events).
 //! Uses line-buffered NDJSON with partial-line carry-over.
 //! Malformed lines are logged with `warn`, never silent-dropped.
-//! Unknown event types emit a progress event + increment a metric.
+//! Unknown event types are recorded via UnknownEventSink.
 
 use anyhow::{Context, Result};
+use crate::unknown_event_sink;
 /// NEEDLE event types parsed from events.jsonl
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
@@ -509,7 +510,7 @@ impl EventTailer {
             .context("Failed to get events file metadata")?;
 
         let reader = BufReader::new(file);
-        let mut parser = NdjsonParser::new();
+        let mut parser = NdjsonParser::new(events_path.clone());
         let mut line_number = 0;
         let mut offset = 0u64;
         let source = crate::parse_jsonl_safe::LineSource {
@@ -640,7 +641,7 @@ impl EventTailer {
         })?;
 
         let reader = BufReader::new(file);
-        let mut parser = NdjsonParser::new();
+        let mut parser = NdjsonParser::new(events_path.to_path_buf());
         let mut line_number = 0;
         let mut current_offset = offset;
         let source = crate::parse_jsonl_safe::LineSource {
@@ -696,13 +697,19 @@ impl EventTailer {
 struct NdjsonParser {
     /// Carry-over buffer for partial lines
     partial: String,
+    /// Sink for recording unknown events
+    unknown_sink: unknown_event_sink::UnknownEventSink,
 }
 
 impl NdjsonParser {
     /// Create a new parser
-    fn new() -> Self {
+    fn new(events_path: std::path::PathBuf) -> Self {
         Self {
             partial: String::new(),
+            unknown_sink: unknown_event_sink::UnknownEventSink::with_source(
+                "needle",
+                events_path,
+            ),
         }
     }
 
@@ -778,14 +785,19 @@ impl NdjsonParser {
                         .unwrap_or("unknown");
                     Self::record_event_lag(&event, project);
                 } else {
-                    // Unknown event - increment the labeled metric with context
-                    // Try to infer event_kind from the raw JSON
+                    // Unknown event - use UnknownEventSink
                     let event_kind = extract_event_kind_from_raw(&raw);
-                    metrics::metrics().hoop_unknown_event_labeled_total.inc(&[
-                        "needle",
-                        &event_kind,
-                    ]);
-                    metrics::metrics().hoop_unknown_event_total.inc();
+                    self.unknown_sink.record_at_line(&event_kind, &raw, line_number);
+
+                    // Also register with global registry for diagnostics
+                    let sample = unknown_event_sink::UnknownEventSample::new(
+                        "needle".to_string(),
+                        event_kind,
+                        raw.clone(),
+                        Some(source.file_path.to_string_lossy().to_string()),
+                        Some(line_number),
+                    );
+                    unknown_event_sink::global_registry().register_sample(sample);
                 }
 
                 Ok(Some(ParsedEvent {
@@ -823,13 +835,19 @@ impl NdjsonParser {
                     self.partial.clear();
 
                     // Create an unknown event to preserve the raw data
-                    // Increment the unknown event metrics
+                    // Record via UnknownEventSink
                     let event_kind = extract_event_kind_from_raw(&raw);
-                    metrics::metrics().hoop_unknown_event_labeled_total.inc(&[
-                        "needle",
-                        &event_kind,
-                    ]);
-                    metrics::metrics().hoop_unknown_event_total.inc();
+                    self.unknown_sink.record_at_line(&event_kind, &raw, line_number);
+
+                    // Also register with global registry for diagnostics
+                    let sample = unknown_event_sink::UnknownEventSample::new(
+                        "needle".to_string(),
+                        event_kind,
+                        raw.clone(),
+                        Some(source.file_path.to_string_lossy().to_string()),
+                        Some(line_number),
+                    );
+                    unknown_event_sink::global_registry().register_sample(sample);
 
                     Ok(Some(ParsedEvent {
                         event: NeedleEvent::Unknown,
@@ -862,7 +880,7 @@ impl NdjsonParser {
 
 impl Default for NdjsonParser {
     fn default() -> Self {
-        Self::new()
+        Self::new(PathBuf::from(".beads/events.jsonl"))
     }
 }
 
@@ -880,7 +898,7 @@ mod tests {
 
     #[test]
     fn test_ndjson_parser_complete_line() {
-        let mut parser = NdjsonParser::new();
+        let mut parser = NdjsonParser::new(PathBuf::from("/tmp/test_events.jsonl"));
 
         let json =
             r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-abc123"}"#;
@@ -897,7 +915,7 @@ mod tests {
 
     #[test]
     fn test_ndjson_parser_partial_line() {
-        let mut parser = NdjsonParser::new();
+        let mut parser = NdjsonParser::new(PathBuf::from("/tmp/test_events.jsonl"));
 
         // First part is incomplete
         let partial = r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha""#;
@@ -927,7 +945,7 @@ mod tests {
 
     #[test]
     fn test_ndjson_parser_malformed_line() {
-        let mut parser = NdjsonParser::new();
+        let mut parser = NdjsonParser::new(PathBuf::from("/tmp/test_events.jsonl"));
 
         // This is clearly malformed (missing closing brace and long enough to not be partial)
         // Using a long string to exceed the 256-char threshold for partial line detection

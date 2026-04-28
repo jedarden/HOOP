@@ -1,0 +1,27 @@
+{
+  "type": "beads_snapshot",
+  "beads": [
+    {
+      "id": "bead-123",
+      "title": "Fix authentication timeout",
+      "status": "open",
+      "priority": 5,
+      "issue_type": "task",
+      "created_at": "2026-04-26T09:00:00Z",
+      "updated_at": "2026-04-26T10:00:00Z",
+      "created_by": "os:jedarden",
+      "dependencies": []
+    },
+    {
+      "id": "bead-456",
+      "title": "Add dark mode toggle",
+      "status": "closed",
+      "priority": 3,
+      "issue_type": "enhancement",
+      "created_at": "2026-04-25T14:00:00Z",
+      "updated_at": "2026-04-26T08:00:00Z",
+      "created_by": "hoop",
+      "dependencies": ["bead-123"]
+    }
+  ]
+}

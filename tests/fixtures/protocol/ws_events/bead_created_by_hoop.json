@@ -1,0 +1,10 @@
+{
+  "type": "bead_created_by_hoop",
+  "bead_created_by_hoop": {
+    "project": "test-project",
+    "bead_id": "bead-789",
+    "actor": "hoop",
+    "source": "hoop",
+    "ts": "2026-04-26T10:00:00Z"
+  }
+}

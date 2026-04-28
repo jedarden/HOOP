@@ -1,0 +1,9 @@
+{
+  "type": "agent_session",
+  "agent_session": {
+    "event": "attached",
+    "session_id": "agent-session-001",
+    "adapter": "claude",
+    "model": "claude-opus-4-7"
+  }
+}

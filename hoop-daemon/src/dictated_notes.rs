@@ -724,6 +724,8 @@ mod tests {
             language: Some("en".to_string()),
             tags: vec!["test".to_string()],
             transcription_status: TranscriptionStatus::Completed,
+            synthesis_result: None,
+            draft_id: None,
         };
 
         insert_note(&conn, &note).unwrap();

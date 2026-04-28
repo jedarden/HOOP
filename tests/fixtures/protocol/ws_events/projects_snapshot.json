@@ -1,0 +1,20 @@
+{
+  "type": "projects_snapshot",
+  "projects": [
+    {
+      "name": "test-project",
+      "label": "Test Project",
+      "color": "#3B82F6",
+      "path": "/home/coding/test-project",
+      "degraded": false,
+      "runtime_state": "healthy",
+      "runtime_error": null,
+      "bead_count": 5,
+      "worker_count": 2,
+      "active_stitch_count": 1,
+      "cost_today": 0.45,
+      "stuck_count": 0,
+      "last_activity": "2026-04-26T10:00:00Z"
+    }
+  ]
+}

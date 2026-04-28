@@ -51,6 +51,19 @@ function ConfigBanner({ error }: { error: { message: string; line: number; col: 
   );
 }
 
+function RestartRequiredBanner({ restart_required }: { restart_required: { keys: string[]; message: string } }) {
+  return (
+    <div className="config-restart-banner" role="alert">
+      <div className="banner-content">
+        <strong>⚠️ Restart Required</strong>
+        <span className="banner-message">{restart_required.message}</span>
+        <span className="banner-keys">Keys: {restart_required.keys.join(', ')}</span>
+        <span className="banner-action">Run: systemctl --user restart hoop</span>
+      </div>
+    </div>
+  );
+}
+
 function parseHash(hash: string): Route {
   const withoutPrefix = hash.replace(/^#\/?/, '');
   // Strip any ?filter=... query params embedded in the hash (used by FilesTab).
@@ -208,6 +221,7 @@ export default function App() {
         )}
         <div className="app app-project-detail">
           {configStatus.error && <ConfigBanner error={configStatus.error} />}
+          {configStatus.restart_required && <RestartRequiredBanner restart_required={configStatus.restart_required} />}
           <header className="app-header-mini">
             <div className="header-top">
               <div className="header-nav">
@@ -252,6 +266,7 @@ export default function App() {
         )}
         <div className="app app-project-detail">
           {configStatus.error && <ConfigBanner error={configStatus.error} />}
+          {configStatus.restart_required && <RestartRequiredBanner restart_required={configStatus.restart_required} />}
           <header className="app-header-mini">
             <div className="header-top">
               <div className="header-nav">
@@ -296,6 +311,7 @@ export default function App() {
         )}
         <div className="app app-project-detail">
           {configStatus.error && <ConfigBanner error={configStatus.error} />}
+          {configStatus.restart_required && <RestartRequiredBanner restart_required={configStatus.restart_required} />}
           <header className="app-header-mini">
             <div className="header-top">
               <div className="header-nav">
@@ -335,6 +351,7 @@ export default function App() {
         )}
         <div className="app app-project-detail">
           {configStatus.error && <ConfigBanner error={configStatus.error} />}
+          {configStatus.restart_required && <RestartRequiredBanner restart_required={configStatus.restart_required} />}
           <header className="app-header-mini">
             <div className="header-top">
               <div className="header-nav">
@@ -376,6 +393,7 @@ export default function App() {
         )}
         <div className="app app-project-detail">
           {configStatus.error && <ConfigBanner error={configStatus.error} />}
+          {configStatus.restart_required && <RestartRequiredBanner restart_required={configStatus.restart_required} />}
           <header className="app-header-mini">
             <div className="header-top">
               <div className="header-nav">
@@ -439,6 +457,7 @@ export default function App() {
         )}
         <div className="app app-project-detail">
           {configStatus.error && <ConfigBanner error={configStatus.error} />}
+          {configStatus.restart_required && <RestartRequiredBanner restart_required={configStatus.restart_required} />}
           <header className="app-header-mini">
             <div className="header-top">
               <div className="header-nav">
@@ -475,6 +494,7 @@ export default function App() {
         )}
         <div className="app app-project-detail">
           {configStatus.error && <ConfigBanner error={configStatus.error} />}
+          {configStatus.restart_required && <RestartRequiredBanner restart_required={configStatus.restart_required} />}
           <header className="app-header-mini">
             <div className="header-top">
               <div className="header-nav">
@@ -510,6 +530,7 @@ export default function App() {
         )}
         <div className="app app-project-detail">
           {configStatus.error && <ConfigBanner error={configStatus.error} />}
+          {configStatus.restart_required && <RestartRequiredBanner restart_required={configStatus.restart_required} />}
           <header className="app-header-mini">
             <div className="header-top">
               <div className="header-nav">
@@ -579,6 +600,7 @@ export default function App() {
       )}
       <div className="app app-project-detail">
         {configStatus.error && <ConfigBanner error={configStatus.error} />}
+        {configStatus.restart_required && <RestartRequiredBanner restart_required={configStatus.restart_required} />}
         <header className="app-header-mini">
           <div className="header-top">
             <a href="#/" className="back-link" onClick={(e) => { e.preventDefault(); window.location.hash = ''; }}>

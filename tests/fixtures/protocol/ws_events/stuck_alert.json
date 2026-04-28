@@ -1,0 +1,11 @@
+{
+  "type": "stuck_alert",
+  "stuck_alert": {
+    "alert_id": "stuck-001",
+    "detected_at": "2026-04-26T10:00:00Z",
+    "worker": "stuck-worker",
+    "bead": "bead-999",
+    "reason": "No heartbeat received for 300 seconds",
+    "state": "stuck"
+  }
+}

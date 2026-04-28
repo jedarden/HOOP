@@ -1,0 +1,12 @@
+{
+  "type": "bead_event",
+  "bead_event": {
+    "timestamp": "2026-04-26T10:00:00Z",
+    "event_type": "start",
+    "bead_id": "bead-123",
+    "worker": "test-worker",
+    "line_number": 42,
+    "raw": "start bead-123 on test-worker",
+    "stash_sha": null
+  }
+}

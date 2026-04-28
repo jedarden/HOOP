@@ -1,0 +1,15 @@
+{
+  "type": "worker_update",
+  "worker": {
+    "worker": "test-worker",
+    "state": {
+      "state": "executing",
+      "bead": "bead-123",
+      "adapter": "claude-opus-4-7",
+      "model": null
+    },
+    "liveness": "live",
+    "last_heartbeat": "2026-04-26T10:00:00Z",
+    "heartbeat_age_secs": 0
+  }
+}

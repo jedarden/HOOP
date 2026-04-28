@@ -286,6 +286,355 @@ fn test_control_response_error_round_trip() {
 }
 
 // ---------------------------------------------------------------------------
+// WebSocket events — daemon serializes events matching fixture schema
+// ---------------------------------------------------------------------------
+
+/// Daemon serializes `init` event with subscriptions array.
+///
+/// Fails if the init event structure changes.
+#[test]
+fn test_ws_event_init_serializes_fixture_shape() {
+    use hoop_daemon::ws::WsEvent;
+
+    let fixture = load_fixture("ws_events/init.json");
+
+    let subs = vec!["global".to_string(), "project:test-project".to_string()];
+    let event = WsEvent::init(subs);
+
+    let serialized = serde_json::to_value(&event).unwrap();
+
+    assert_eq!(serialized["type"], fixture["type"]);
+    assert!(
+        serialized.get("subscriptions").is_some(),
+        "init event must have 'subscriptions'"
+    );
+    assert!(
+        serialized["subscriptions"].is_array(),
+        "subscriptions must be an array"
+    );
+}
+
+/// Daemon serializes `worker_update` event matching fixture.
+#[test]
+fn test_ws_event_worker_update_serializes_fixture_shape() {
+    use hoop_daemon::ws::{WorkerData, WorkerDisplayState, WsEvent};
+    use hoop_daemon::WorkerLiveness;
+    use chrono::{DateTime, Utc};
+
+    let fixture = load_fixture("ws_events/worker_update.json");
+
+    let worker = WorkerData {
+        worker: "test-worker".to_string(),
+        state: WorkerDisplayState::Executing {
+            bead: "bead-123".to_string(),
+            adapter: "claude-opus-4-7".to_string(),
+            model: None,
+        },
+        liveness: WorkerLiveness::Live,
+        last_heartbeat: fixture["worker"]["last_heartbeat"].as_str().unwrap().parse().unwrap(),
+        heartbeat_age_secs: 0,
+    };
+
+    let event = WsEvent::worker_update(worker);
+    let serialized = serde_json::to_value(&event).unwrap();
+
+    assert_eq!(serialized["type"], fixture["type"]);
+    assert!(
+        serialized.get("worker").is_some(),
+        "worker_update must have 'worker'"
+    );
+    assert_eq!(
+        serialized["worker"]["worker"],
+        fixture["worker"]["worker"]
+    );
+}
+
+/// Daemon serializes `workers_snapshot` event matching fixture.
+#[test]
+fn test_ws_event_workers_snapshot_serializes_fixture_shape() {
+    use hoop_daemon::ws::{WorkerData, WorkerDisplayState, WsEvent};
+    use hoop_daemon::WorkerLiveness;
+
+    let fixture = load_fixture("ws_events/workers_snapshot.json");
+
+    let workers = vec![
+        WorkerData {
+            worker: "test-worker".to_string(),
+            state: WorkerDisplayState::Executing {
+                bead: "bead-123".to_string(),
+                adapter: "claude-opus-4-7".to_string(),
+                model: None,
+            },
+            liveness: WorkerLiveness::Live,
+            last_heartbeat: "2026-04-26T10:00:00Z".parse().unwrap(),
+            heartbeat_age_secs: 0,
+        },
+    ];
+
+    let event = WsEvent::workers_snapshot(workers);
+    let serialized = serde_json::to_value(&event).unwrap();
+
+    assert_eq!(serialized["type"], fixture["type"]);
+    assert!(
+        serialized.get("workers").is_some(),
+        "workers_snapshot must have 'workers'"
+    );
+}
+
+/// Daemon serializes `beads_snapshot` event matching fixture.
+#[test]
+fn test_ws_event_beads_snapshot_serializes_fixture_shape() {
+    use hoop_daemon::ws::{BeadData, WsEvent};
+
+    let fixture = load_fixture("ws_events/beads_snapshot.json");
+
+    let beads = vec![BeadData {
+        id: "bead-123".to_string(),
+        title: "Fix authentication timeout".to_string(),
+        status: "open".to_string(),
+        priority: 5,
+        issue_type: "task".to_string(),
+        created_at: "2026-04-26T09:00:00Z".to_string(),
+        updated_at: "2026-04-26T10:00:00Z".to_string(),
+        created_by: "os:jedarden".to_string(),
+        dependencies: vec![],
+    }];
+
+    let event = WsEvent::beads_snapshot(beads);
+    let serialized = serde_json::to_value(&event).unwrap();
+
+    assert_eq!(serialized["type"], fixture["type"]);
+    assert!(
+        serialized.get("beads").is_some(),
+        "beads_snapshot must have 'beads'"
+    );
+}
+
+/// Daemon serializes `config_status` event matching fixture.
+#[test]
+fn test_ws_event_config_status_serializes_fixture_shape() {
+    use hoop_daemon::ws::{ConfigStatusData, WsEvent};
+
+    let fixture = load_fixture("ws_events/config_status.json");
+
+    let status = ConfigStatusData {
+        valid: true,
+        error: None,
+    };
+
+    let event = WsEvent::config_status(status);
+    let serialized = serde_json::to_value(&event).unwrap();
+
+    assert_eq!(serialized["type"], fixture["type"]);
+    assert!(
+        serialized.get("config_status").is_some(),
+        "config_status must have 'config_status'"
+    );
+}
+
+/// Daemon serializes `stitch_created` event matching fixture.
+#[test]
+fn test_ws_event_stitch_created_serializes_fixture_shape() {
+    use hoop_daemon::ws::{StitchCreatedData, WsEvent};
+
+    let fixture = load_fixture("ws_events/stitch_created.json");
+
+    let data = StitchCreatedData {
+        bead_id: "bead-123".to_string(),
+        title: "Fix authentication timeout".to_string(),
+        project: "test-project".to_string(),
+        stitch_id: Some("stitch-abc456".to_string()),
+        source: "operator".to_string(),
+        actor: "os:jedarden".to_string(),
+        created_at: "2026-04-26T10:00:00Z".to_string(),
+    };
+
+    let event = WsEvent::stitch_created(data);
+    let serialized = serde_json::to_value(&event).unwrap();
+
+    assert_eq!(serialized["type"], fixture["type"]);
+    assert!(
+        serialized.get("stitch_created").is_some(),
+        "stitch_created must have 'stitch_created'"
+    );
+}
+
+/// Daemon serializes `bead_created_by_hoop` event matching fixture.
+#[test]
+fn test_ws_event_bead_created_by_hoop_serializes_fixture_shape() {
+    use hoop_daemon::ws::{BeadCreatedByHoopData, WsEvent};
+
+    let fixture = load_fixture("ws_events/bead_created_by_hoop.json");
+
+    let data = BeadCreatedByHoopData {
+        project: "test-project".to_string(),
+        bead_id: "bead-789".to_string(),
+        actor: "hoop".to_string(),
+        source: "hoop".to_string(),
+        ts: "2026-04-26T10:00:00Z".to_string(),
+    };
+
+    let event = WsEvent::bead_created_by_hoop(data);
+    let serialized = serde_json::to_value(&event).unwrap();
+
+    assert_eq!(serialized["type"], fixture["type"]);
+    assert!(
+        serialized.get("bead_created_by_hoop").is_some(),
+        "bead_created_by_hoop must have 'bead_created_by_hoop'"
+    );
+}
+
+/// Daemon serializes `draft_update` event matching fixture.
+#[test]
+fn test_ws_event_draft_update_serializes_fixture_shape() {
+    use hoop_daemon::ws::{DraftUpdateData, WsEvent};
+
+    let fixture = load_fixture("ws_events/draft_update.json");
+
+    let data = DraftUpdateData {
+        draft_id: "draft-abc123".to_string(),
+        project: "test-project".to_string(),
+        title: "Investigate API latency".to_string(),
+        kind: "task".to_string(),
+        status: "pending".to_string(),
+        action: "created".to_string(),
+        actor: "agent".to_string(),
+        created_by: "claude-code".to_string(),
+        version: 1,
+        rejection_reason: None,
+    };
+
+    let event = WsEvent::draft_update(data);
+    let serialized = serde_json::to_value(&event).unwrap();
+
+    assert_eq!(serialized["type"], fixture["type"]);
+    assert!(
+        serialized.get("draft_update").is_some(),
+        "draft_update must have 'draft_update'"
+    );
+}
+
+/// Daemon serializes `collision_alert` event matching fixture.
+#[test]
+fn test_ws_event_collision_alert_serializes_fixture_shape() {
+    use hoop_daemon::ws::{CollisionAlertData, WsEvent};
+
+    let fixture = load_fixture("ws_events/collision_alert.json");
+
+    let data = CollisionAlertData {
+        alert_id: "collision-001".to_string(),
+        detected_at: "2026-04-26T10:00:00Z".to_string(),
+        worker_a: "worker-alpha".to_string(),
+        bead_a: "bead-001".to_string(),
+        worker_b: "worker-bravo".to_string(),
+        bead_b: "bead-002".to_string(),
+        overlapping_files: vec!["src/auth.rs".to_string(), "src/auth/mod.rs".to_string()],
+    };
+
+    let event = WsEvent::collision_alert_event(data);
+    let serialized = serde_json::to_value(&event).unwrap();
+
+    assert_eq!(serialized["type"], fixture["type"]);
+    assert!(
+        serialized.get("collision_alert").is_some(),
+        "collision_alert must have 'collision_alert'"
+    );
+}
+
+/// Daemon serializes `morning_brief` event matching fixture.
+#[test]
+fn test_ws_event_morning_brief_serializes_fixture_shape() {
+    use hoop_daemon::ws::{MorningBriefData, WsEvent};
+
+    let fixture = load_fixture("ws_events/morning_brief.json");
+
+    let data = MorningBriefData {
+        id: "brief-001".to_string(),
+        headline: "3 high-priority drafts awaiting review".to_string(),
+        generated_at: "2026-04-26T08:00:00Z".to_string(),
+        draft_count: 3,
+        status: "active".to_string(),
+    };
+
+    let event = WsEvent::morning_brief(data);
+    let serialized = serde_json::to_value(&event).unwrap();
+
+    assert_eq!(serialized["type"], fixture["type"]);
+    assert!(
+        serialized.get("morning_brief").is_some(),
+        "morning_brief must have 'morning_brief'"
+    );
+}
+
+/// Daemon serializes `projects_snapshot` event matching fixture.
+#[test]
+fn test_ws_event_projects_snapshot_serializes_fixture_shape() {
+    use hoop_daemon::ws::{ProjectCardData, WsEvent};
+
+    let fixture = load_fixture("ws_events/projects_snapshot.json");
+
+    let projects = vec![ProjectCardData {
+        name: "test-project".to_string(),
+        label: "Test Project".to_string(),
+        color: "#3B82F6".to_string(),
+        path: "/home/coding/test-project".to_string(),
+        degraded: false,
+        runtime_state: Some("healthy".to_string()),
+        runtime_error: None,
+        bead_count: 5,
+        worker_count: 2,
+        active_stitch_count: 1,
+        cost_today: 0.45,
+        stuck_count: 0,
+        last_activity: Some("2026-04-26T10:00:00Z".to_string()),
+    }];
+
+    let event = WsEvent::projects_snapshot(projects);
+    let serialized = serde_json::to_value(&event).unwrap();
+
+    assert_eq!(serialized["type"], fixture["type"]);
+    assert!(
+        serialized.get("projects").is_some(),
+        "projects_snapshot must have 'projects'"
+    );
+}
+
+/// Daemon round-trips WsEvent through JSON (fixture validates deserialization).
+#[test]
+fn test_ws_event_round_trip_from_fixture() {
+    use hoop_daemon::ws::WsEvent;
+
+    let fixtures = [
+        "ws_events/init.json",
+        "ws_events/worker_update.json",
+        "ws_events/beads_snapshot.json",
+        "ws_events/config_status.json",
+        "ws_events/stitch_created.json",
+        "ws_events/bead_created_by_hoop.json",
+        "ws_events/draft_update.json",
+        "ws_events/collision_alert.json",
+        "ws_events/morning_brief.json",
+        "ws_events/projects_snapshot.json",
+    ];
+
+    for path in &fixtures {
+        let fixture = load_fixture(path);
+
+        // Verify fixture can be deserialized as WsEvent
+        let event: WsEvent = serde_json::from_value(fixture.clone())
+            .unwrap_or_else(|e| panic!("fixture {} must deserialize as WsEvent: {}", path, e));
+
+        // Verify re-serialized event matches fixture structure
+        let serialized = serde_json::to_value(&event).unwrap();
+        assert_eq!(
+            serialized["type"], fixture["type"],
+            "fixture {} event_type must round-trip",
+            path
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Fixture self-consistency: fixture files must be valid JSON and non-empty
 // ---------------------------------------------------------------------------
 
@@ -295,6 +644,25 @@ fn test_all_daemon_fixtures_are_valid_json() {
         "daemon_http/create_draft_request.json",
         "daemon_http/create_draft_response.json",
         "daemon_http/read_stitch_response.json",
+        "ws_events/init.json",
+        "ws_events/worker_update.json",
+        "ws_events/workers_snapshot.json",
+        "ws_events/beads_snapshot.json",
+        "ws_events/conversations_snapshot.json",
+        "ws_events/config_status.json",
+        "ws_events/config_status_invalid.json",
+        "ws_events/stitch_created.json",
+        "ws_events/bead_created_by_hoop.json",
+        "ws_events/draft_update.json",
+        "ws_events/collision_alert.json",
+        "ws_events/morning_brief.json",
+        "ws_events/projects_snapshot.json",
+        "ws_events/capacity_snapshot.json",
+        "ws_events/agent_session.json",
+        "ws_events/stuck_alert.json",
+        "ws_events/bead_event.json",
+        "ws_events/bead_events.json",
+        "ws_events/spawn_ack_alert.json",
     ];
     for path in &fixtures {
         let val = load_fixture(path);

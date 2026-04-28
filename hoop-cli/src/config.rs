@@ -32,17 +32,6 @@ struct RunningConfig {
     reflection_auto_archive_after_days: u32,
 }
 
-/// Config keys that require daemon restart to take effect (§17.4)
-const RESTART_REQUIRED_KEYS: &[&str] = &[
-    "server.bind_addr",
-    "metrics.port",
-];
-
-/// Check if a config key requires restart
-fn is_restart_required_key(key: &str) -> bool {
-    RESTART_REQUIRED_KEYS.contains(&key)
-}
-
 /// Display the diff between running config and config.yml, highlighting restart-required changes
 pub async fn run_diff() -> Result<()> {
     let config_path = get_config_path()?;
@@ -71,17 +60,12 @@ pub async fn run_diff() -> Result<()> {
     let mut has_changes = false;
     let mut has_restart_required = false;
 
-    // server.bind_addr
+    // server.bind_addr (restart-required)
     if let Some(yaml_val) = get_nested_yaml_value(&yaml, &["server", "bind_addr"]) {
         if yaml_val != running.config.server_bind_addr {
             has_changes = true;
-            let key = "server.bind_addr";
-            if is_restart_required_key(key) {
-                has_restart_required = true;
-                println!("  [RESTART REQUIRED] {}: {} → {}", key, running.config.server_bind_addr, yaml_val);
-            } else {
-                println!("  [HOT-RELOADABLE] {}: {} → {}", key, running.config.server_bind_addr, yaml_val);
-            }
+            has_restart_required = true;
+            println!("  [RESTART REQUIRED] server.bind_addr: {} → {}", running.config.server_bind_addr, yaml_val);
         }
     }
 
@@ -117,18 +101,13 @@ pub async fn run_diff() -> Result<()> {
         }
     }
 
-    // metrics.port
+    // metrics.port (restart-required)
     if let Some(yaml_val) = get_nested_yaml_value(&yaml, &["metrics", "port"]) {
         let yaml_port = yaml_val.parse::<u16>().unwrap_or(9091);
         if yaml_port != running.config.metrics_port {
             has_changes = true;
-            let key = "metrics.port";
-            if is_restart_required_key(key) {
-                has_restart_required = true;
-                println!("  [RESTART REQUIRED] {}: {} → {}", key, running.config.metrics_port, yaml_port);
-            } else {
-                println!("  [HOT-RELOADABLE] {}: {} → {}", key, running.config.metrics_port, yaml_port);
-            }
+            has_restart_required = true;
+            println!("  [RESTART REQUIRED] metrics.port: {} → {}", running.config.metrics_port, yaml_port);
         }
     }
 

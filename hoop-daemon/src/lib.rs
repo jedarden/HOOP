@@ -120,6 +120,9 @@ pub enum WorkerState {
     Idle { last_strand: Option<String> },
     /// Worker is in a knot state
     Knot { reason: String },
+    /// Unknown worker state (captures any unrecognized state values)
+    #[serde(other)]
+    Unknown,
 }
 
 /// Bead representation
@@ -1407,6 +1410,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     let config_status = Arc::new(std::sync::RwLock::new(ws::ConfigStatusData {
         valid: true,
         error: None,
+        restart_required: None,
     }));
 
     // Initialize project status broadcast channel
@@ -1682,6 +1686,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                     let status = ws::ConfigStatusData {
                         valid: true,
                         error: None,
+                        restart_required: None,
                     };
                     *config_status_for_reload.write().unwrap() = status.clone();
                     let _ = config_tx_for_reload.send(status);
@@ -1730,6 +1735,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                             expected: error.expected.clone(),
                             got: error.got.clone(),
                         }),
+                        restart_required: None,
                     };
                     *config_status_for_reload.write().unwrap() = status.clone();
                     let _ = config_tx_for_reload.send(status);
@@ -1747,10 +1753,11 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     // (or defaults if not configured) instead of its built-in patterns.
     {
         let initial_config = config_watcher.config().await;
-        redaction::update_patterns(&initial_config.secrets_patterns.value);
+        let pattern_strings = config_resolver::SecretPattern::flatten_patterns(&initial_config.secrets_patterns.value);
+        redaction::update_patterns(&pattern_strings);
         info!(
             "Redaction patterns initialized: {} patterns from {}",
-            initial_config.secrets_patterns.value.len(),
+            pattern_strings.len(),
             initial_config.secrets_patterns.attribution
         );
     }
@@ -1765,14 +1772,16 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                 config_watcher::ConfigEvent::ConfigReloaded {
                     config,
                     prev_hash,
+                    restart_required,
                 } => {
                     info!("config.yml reloaded successfully");
 
                     // Update redaction patterns from new config (§18)
-                    redaction::update_patterns(&config.secrets_patterns.value);
+                    let pattern_strings = config_resolver::SecretPattern::flatten_patterns(&config.secrets_patterns.value);
+                    redaction::update_patterns(&pattern_strings);
                     info!(
                         "Redaction patterns reloaded: {} patterns from {}",
-                        config.secrets_patterns.value.len(),
+                        pattern_strings.len(),
                         config.secrets_patterns.attribution
                     );
 
@@ -1822,10 +1831,11 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         }
                     }
 
-                    // Broadcast valid config status
+                    // Broadcast valid config status with restart-required warning if applicable (§17.4)
                     let _ = config_tx_for_config.send(ws::ConfigStatusData {
                         valid: true,
                         error: None,
+                        restart_required: restart_required.clone(),
                     });
                 }
                 config_watcher::ConfigEvent::ConfigError { error, prev_hash } => {
@@ -2331,6 +2341,7 @@ Note: This is an automated synthesis from voice dictation."#,
             server: None,
             stuck_detector: None,
             morning_brief: None,
+            roles: None,
         };
 
         tokio::task::spawn_blocking(|| {
@@ -2354,6 +2365,7 @@ Note: This is an automated synthesis from voice dictation."#,
                 server: None,
                 stuck_detector: None,
                 morning_brief: None,
+                roles: None,
             };
 
             if !config_path.exists() {

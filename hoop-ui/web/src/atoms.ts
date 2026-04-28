@@ -204,10 +204,17 @@ export interface ConfigError {
   got?: string;
 }
 
-// Config status from backend
+// Config status from backend (§17.4)
 export interface ConfigStatus {
   valid: boolean;
   error?: ConfigError;
+  restart_required?: RestartRequiredData;
+}
+
+// Restart-required keys that changed (§17.4)
+export interface RestartRequiredData {
+  keys: string[];
+  message: string;
 }
 
 // Per-account capacity data from backend

@@ -1,0 +1,11 @@
+{
+  "type": "spawn_ack_alert",
+  "spawn_ack_alert": {
+    "alert_id": "spawn-ack-001",
+    "detected_at": "2026-04-26T10:00:00Z",
+    "worker": "test-worker",
+    "bead": "bead-123",
+    "seconds_since_spawn": 30,
+    "expected_ack_secs": 10
+  }
+}

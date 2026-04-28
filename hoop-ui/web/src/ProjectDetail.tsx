@@ -11,8 +11,9 @@ import FilesTab from './FilesTab';
 import DebugPanel from './DebugPanel';
 import DiffViewer from './DiffViewer';
 import StitchNetDiff from './StitchNetDiff';
+import OrphansTab from './OrphansTab';
 
-export type TabId = 'stitches' | 'fleet' | 'graph' | 'conversations' | 'cost' | 'capacity' | 'files' | 'debug' | 'diff' | 'net-diff';
+export type TabId = 'stitches' | 'fleet' | 'graph' | 'conversations' | 'cost' | 'capacity' | 'files' | 'debug' | 'diff' | 'net-diff' | 'orphans';
 
 interface Tab {
   id: TabId;
@@ -21,7 +22,7 @@ interface Tab {
   keyboardShortcut: string;
 }
 
-const TABS: Tab[] = [
+const STANDARD_TABS: Tab[] = [
   { id: 'stitches', label: 'Stitches', description: 'Conversations and work items', keyboardShortcut: '1' },
   { id: 'fleet', label: 'Fleet Map', description: 'Worker status and liveness', keyboardShortcut: '2' },
   { id: 'graph', label: 'Bead Graph', description: 'Dependency graph visualization', keyboardShortcut: '3' },
@@ -34,6 +35,13 @@ const TABS: Tab[] = [
   { id: 'net-diff', label: 'Net-Diff', description: 'PR-like stitch net-diff review', keyboardShortcut: '0' },
 ];
 
+const EXPERT_TAB: Tab = {
+  id: 'orphans',
+  label: 'Orphans',
+  description: 'Beads created outside HOOP (no stitch:* label)',
+  keyboardShortcut: '',
+};
+
 export interface ProjectDetailProps {
   projectName: string;
   projectPath: string;
@@ -41,8 +49,21 @@ export interface ProjectDetailProps {
 
 export default function ProjectDetail({ projectName, projectPath }: ProjectDetailProps) {
   const [activeTab, setActiveTab] = useState<TabId>('stitches');
+  const [expertMode, setExpertMode] = useState(false);
   const tabsRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  // Tabs: include Orphans tab when in Expert mode
+  const TABS: Tab[] = useMemo(() => {
+    return expertMode ? [...STANDARD_TABS, EXPERT_TAB] : STANDARD_TABS;
+  }, [expertMode]);
+
+  // Switch away from orphans tab when Expert mode is disabled
+  useEffect(() => {
+    if (!expertMode && activeTab === 'orphans') {
+      setActiveTab('stitches');
+    }
+  }, [expertMode, activeTab]);
 
   // Move focus to tab panel on keyboard-driven tab switch
   useEffect(() => {
@@ -171,6 +192,14 @@ export default function ProjectDetail({ projectName, projectPath }: ProjectDetai
               <span className="stat-value">{projectConversations.length}</span>
               <span className="stat-label">Conversations</span>
             </div>
+            <label className="expert-toggle">
+              <input
+                type="checkbox"
+                checked={expertMode}
+                onChange={(e) => setExpertMode(e.target.checked)}
+              />
+              Expert Mode
+            </label>
           </div>
         </div>
 
@@ -263,6 +292,9 @@ export default function ProjectDetail({ projectName, projectPath }: ProjectDetai
                 conversations={projectConversations}
               />
             </div>
+          )}
+          {activeTab === 'orphans' && (
+            <OrphansTab projectName={projectName} />
           )}
         </div>
       </main>

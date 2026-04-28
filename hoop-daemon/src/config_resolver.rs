@@ -50,6 +50,17 @@ impl SecretPattern {
     pub fn is_valid_severity(&self) -> bool {
         matches!(self.severity.as_str(), "high" | "medium" | "low")
     }
+
+    /// Flatten a list of SecretPattern objects into a list of regex strings.
+    ///
+    /// This is used to convert the structured SecretPattern format into
+    /// the flat list of regex strings expected by the redaction module.
+    pub fn flatten_patterns(patterns: &[SecretPattern]) -> Vec<String> {
+        patterns
+            .iter()
+            .flat_map(|sp| sp.patterns.iter().cloned())
+            .collect()
+    }
 }
 
 /// Default secret patterns when none are configured.
@@ -159,6 +170,9 @@ pub struct Resolved<T: Clone + Serialize> {
     pub source: ConfigSource,
     #[serde(rename = "resolved_from")]
     pub attribution: String,
+    /// Whether this key requires daemon restart to take effect (§17.4)
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub restart_required: bool,
 }
 
 impl<T: Clone + Serialize> Resolved<T> {
@@ -167,7 +181,14 @@ impl<T: Clone + Serialize> Resolved<T> {
             value,
             source,
             attribution: attribution.into(),
+            restart_required: false,
         }
+    }
+
+    /// Mark this config key as requiring daemon restart to take effect (§17.4)
+    pub fn with_restart_required(mut self) -> Self {
+        self.restart_required = true;
+        self
     }
 }
 
@@ -710,6 +731,51 @@ fn yaml_get_secret_patterns(root: &serde_yaml::Value) -> Option<Vec<SecretPatter
         })
 }
 
+/// Helper to extract role configuration from a YAML value.
+///
+/// Parses the `roles` section from config.yml:
+/// ```yaml
+/// roles:
+///   viewers:
+///     - "viewer@example.com"
+///     - "read-only-machine"
+///   drafters:
+///     - "drafter@example.com"
+///     - "admin-machine"
+/// ```
+fn yaml_get_role_config(root: &serde_yaml::Value) -> Option<crate::auth::RoleConfig> {
+    root.get("roles").and_then(|v| {
+        // Parse viewers list
+        let viewers = v
+            .get("viewers")
+            .and_then(|vv| vv.as_sequence())
+            .map(|seq| {
+                seq.iter()
+                    .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Parse drafters list
+        let drafters = v
+            .get("drafters")
+            .and_then(|dv| dv.as_sequence())
+            .map(|seq| {
+                seq.iter()
+                    .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        // Only return Some if at least one role has members
+        if viewers.is_empty() && drafters.is_empty() {
+            None
+        } else {
+            Some(crate::auth::RoleConfig { viewers, drafters })
+        }
+    })
+}
+
 /// Helper to read an env var and parse it.
 fn env_parse<T: std::str::FromStr>(var: &str) -> Option<T> {
     std::env::var(var).ok().and_then(|v| v.parse().ok())
@@ -819,6 +885,102 @@ fn yaml_type_name(v: &serde_yaml::Value) -> &str {
         serde_yaml::Value::Mapping(_) => "object",
         serde_yaml::Value::Tagged(_) => "tagged",
     }
+}
+
+// ---------------------------------------------------------------------------
+// Range validation helpers for config hot-reload (§17.5)
+// These helpers check that numeric values are within valid ranges.
+// ---------------------------------------------------------------------------
+
+/// Validate a u64 value is within a specified range.
+fn yaml_validate_u64_range(
+    root: &serde_yaml::Value,
+    path: &str,
+    min: u64,
+    max: u64,
+) -> Result<Option<u64>, ConfigError> {
+    let value = match yaml_navigate(root, path) {
+        None => return Ok(None),
+        Some(v) => match v.as_u64() {
+            Some(n) => n,
+            None => {
+                return Err(ConfigError::validation(
+                    format!(
+                        "invalid type: expected integer, found {}",
+                        yaml_type_name(v)
+                    ),
+                    Some(path.to_string()),
+                    Some("integer".to_string()),
+                    Some(yaml_type_name(v).to_string()),
+                ))
+            }
+        },
+    };
+
+    if value < min || value > max {
+        Err(ConfigError::validation(
+            format!("value {} is out of valid range [{}-{}]", value, min, max),
+            Some(path.to_string()),
+            Some(format!("integer in range [{}-{}]", min, max)),
+            Some(value.to_string()),
+        ))
+    } else {
+        Ok(Some(value))
+    }
+}
+
+/// Validate an f64 value is within a specified range.
+fn yaml_validate_f64_range(
+    root: &serde_yaml::Value,
+    path: &str,
+    min: f64,
+    max: f64,
+) -> Result<Option<f64>, ConfigError> {
+    let value = match yaml_navigate(root, path) {
+        None => return Ok(None),
+        Some(v) => match v.as_f64() {
+            Some(n) => n,
+            None => {
+                return Err(ConfigError::validation(
+                    format!(
+                        "invalid type: expected number, found {}",
+                        yaml_type_name(v)
+                    ),
+                    Some(path.to_string()),
+                    Some("number".to_string()),
+                    Some(yaml_type_name(v).to_string()),
+                ))
+            }
+        },
+    };
+
+    if value < min || value > max {
+        Err(ConfigError::validation(
+            format!("value {} is out of valid range [{}-{}]", value, min, max),
+            Some(path.to_string()),
+            Some(format!("number in range [{}-{}]", min, max)),
+            Some(value.to_string()),
+        ))
+    } else {
+        Ok(Some(value))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Schema validation helpers (§17.5)
+// ---------------------------------------------------------------------------
+
+/// Validate schema_version follows semver pattern (X.Y.Z).
+fn validate_schema_version(value: &str) -> Result<(), String> {
+    // Basic semver pattern: digit.digit.digit (e.g., "1.0.0", "2.3.45")
+    let re = regex::Regex::new(r"^\d+\.\d+\.\d+$").unwrap();
+    if !re.is_match(value) {
+        return Err(format!(
+            "invalid schema_version format: \"{}\"; expected semver format X.Y.Z (e.g., \"1.0.0\")",
+            value
+        ));
+    }
+    Ok(())
 }
 
 /// Resolve the full daemon configuration.
@@ -1324,6 +1486,10 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
         )
     };
 
+    // Mark restart-required keys (§17.4)
+    let bind_addr = bind_addr.with_restart_required();
+    let metrics_port = metrics_port.with_restart_required();
+
     let config = ResolvedConfig {
         bind_addr,
         allow_br_mismatch,
@@ -1427,6 +1593,20 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
         }
     };
     let yml_ref = yml.as_ref();
+
+    // Validate schema_version format if present (§17.5)
+    if let Some(yml) = yml_ref {
+        if let Some(version_value) = yaml_get_str(yml, "schema_version") {
+            if let Err(e) = validate_schema_version(version_value) {
+                return Err(ConfigError::validation(
+                    e,
+                    Some("schema_version".to_string()),
+                    Some("semver format X.Y.Z".to_string()),
+                    Some(version_value.to_string()),
+                ));
+            }
+        }
+    }
 
     // ── Helper: resolve a string value with semantic validation ─────────────
     fn resolve_validated_str(
@@ -1989,6 +2169,83 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
             }
         }
     }
+
+    // ── Range validations (§17.5) ─────────────────────────────────────────────────────
+
+    // Validate metrics.port is in valid port range (1-65535)
+    if let Some(port) = metrics_port.value {
+        if port == 0 || port > 65535 {
+            return Err(ConfigError::validation(
+                format!("metrics.port {} is out of valid port range [1-65535]", port),
+                Some("metrics.port".to_string()),
+                Some("1-65535".to_string()),
+                Some(port.to_string()),
+            ));
+        }
+    }
+
+    // Validate days fields are positive
+    if audit_retention_days.value == 0 {
+        return Err(ConfigError::validation(
+            "audit.retention_days must be positive".to_string(),
+            Some("audit.retention_days".to_string()),
+            Some("positive integer".to_string()),
+            Some(audit_retention_days.value.to_string()),
+        ));
+    }
+
+    if ui_archive_after_days.value == 0 {
+        return Err(ConfigError::validation(
+            "ui.archive_after_days must be positive".to_string(),
+            Some("ui.archive_after_days".to_string()),
+            Some("positive integer".to_string()),
+            Some(ui_archive_after_days.value.to_string()),
+        ));
+    }
+
+    if reflection_auto_archive_after_days.value == 0 {
+        return Err(ConfigError::validation(
+            "reflection.auto_archive_after_days must be positive".to_string(),
+            Some("reflection.auto_archive_after_days".to_string()),
+            Some("positive integer".to_string()),
+            Some(reflection_auto_archive_after_days.value.to_string()),
+        ));
+    }
+
+    if backup_retention_days.value == 0 {
+        return Err(ConfigError::validation(
+            "backup.retention_days must be positive".to_string(),
+            Some("backup.retention_days".to_string()),
+            Some("positive integer".to_string()),
+            Some(backup_retention_days.value.to_string()),
+        ));
+    }
+
+    if voice_max_recording_seconds.value == 0 {
+        return Err(ConfigError::validation(
+            "voice.max_recording_seconds must be positive".to_string(),
+            Some("voice.max_recording_seconds".to_string()),
+            Some("positive integer".to_string()),
+            Some(voice_max_recording_seconds.value.to_string()),
+        ));
+    }
+
+    // Validate reflection.detection_threshold is in valid range [0-1]
+    if reflection_detection_threshold.value < 0.0 || reflection_detection_threshold.value > 1.0 {
+        return Err(ConfigError::validation(
+            format!(
+                "reflection.detection_threshold {} is out of valid range [0.0-1.0]",
+                reflection_detection_threshold.value
+            ),
+            Some("reflection.detection_threshold".to_string()),
+            Some("0.0-1.0".to_string()),
+            Some(reflection_detection_threshold.value.to_string()),
+        ));
+    }
+
+    // Mark restart-required keys (§17.4)
+    let bind_addr = bind_addr.with_restart_required();
+    let metrics_port = metrics_port.with_restart_required();
 
     Ok(ResolvedConfig {
         bind_addr,

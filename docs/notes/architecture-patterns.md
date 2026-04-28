@@ -60,7 +60,8 @@ When two sources of truth update the same entity (live WS stream + 5s disk polle
 **Implementation notes:**
 - The `init` event handler in `useWebSocket.ts` performs the wipe.
 - Subsequent snapshot events rebuild the store.
-- Integration test `epochSync.test.ts` verifies: disconnect → mutate server state → reconnect → stale rows gone.
+- Integration test `epochSync.test.ts` (client) verifies: disconnect → mutate server state → reconnect → stale rows gone.
+- Integration test `epoch_sync_invariant.rs` (server) verifies: init event always first, snapshots follow, reconnect works.
 - This pattern is enforced by tests; violation is caught by CI.
 
 **HOOP adaptation.** HOOP has *fewer* reconciliation problems than the reference because the bead queue is authoritative — NEEDLE owns that path, nobody else writes to it. But:

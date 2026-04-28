@@ -1,0 +1,15 @@
+{
+  "type": "collision_alert",
+  "collision_alert": {
+    "alert_id": "collision-001",
+    "detected_at": "2026-04-26T10:00:00Z",
+    "worker_a": "worker-alpha",
+    "bead_a": "bead-001",
+    "worker_b": "worker-bravo",
+    "bead_b": "bead-002",
+    "overlapping_files": [
+      "src/auth.rs",
+      "src/auth/mod.rs"
+    ]
+  }
+}

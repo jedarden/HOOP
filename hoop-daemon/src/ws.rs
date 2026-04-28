@@ -9,7 +9,7 @@ use crate::{Bead, DaemonState, WorkerState};
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        State,
+        ConnectInfo, State,
     },
     response::IntoResponse,
 };
@@ -123,6 +123,8 @@ pub struct WsClientRecord {
     pub conn_id: u64,
     pub connected_at: DateTime<Utc>,
     pub connected_secs: i64,
+    /// Tailscale identity or OS user fallback (e.g., "tailscale:user@example.com" or "os:username")
+    pub actor: String,
 }
 
 /// Registry of currently connected WebSocket clients.
@@ -132,7 +134,7 @@ pub struct WsClientRecord {
 #[derive(Debug, Clone)]
 pub struct WsConnectionTracker {
     next_id: Arc<AtomicU64>,
-    clients: Arc<std::sync::RwLock<Vec<(u64, DateTime<Utc>)>>>,
+    clients: Arc<std::sync::RwLock<Vec<(u64, DateTime<Utc>, String)>>>,
 }
 
 impl WsConnectionTracker {
@@ -145,10 +147,10 @@ impl WsConnectionTracker {
 
     /// Register a new WS connection. The returned guard must be held for the
     /// duration of the connection; dropping it deregisters the client.
-    pub fn register(&self) -> WsConnectionGuard {
+    pub fn register(&self, actor: String) -> WsConnectionGuard {
         let conn_id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let connected_at = Utc::now();
-        self.clients.write().unwrap().push((conn_id, connected_at));
+        self.clients.write().unwrap().push((conn_id, connected_at, actor.clone()));
         WsConnectionGuard {
             conn_id,
             clients: self.clients.clone(),
@@ -162,10 +164,11 @@ impl WsConnectionTracker {
             .read()
             .unwrap()
             .iter()
-            .map(|(id, connected_at)| WsClientRecord {
+            .map(|(id, connected_at, actor)| WsClientRecord {
                 conn_id: *id,
                 connected_at: *connected_at,
                 connected_secs: (now - *connected_at).num_seconds().max(0),
+                actor: actor.clone(),
             })
             .collect()
     }
@@ -185,7 +188,7 @@ impl Default for WsConnectionTracker {
 /// Removes the connection from the tracker on drop.
 pub struct WsConnectionGuard {
     conn_id: u64,
-    clients: Arc<std::sync::RwLock<Vec<(u64, DateTime<Utc>)>>>,
+    clients: Arc<std::sync::RwLock<Vec<(u64, DateTime<Utc>, String)>>>,
 }
 
 impl Drop for WsConnectionGuard {
@@ -519,6 +522,18 @@ pub struct ConfigStatusData {
     /// Error details if invalid
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<ConfigErrorData>,
+    /// Warning about restart-required keys that changed (§17.4)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub restart_required: Option<RestartRequiredData>,
+}
+
+/// Details about config keys that require daemon restart (§17.4)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RestartRequiredData {
+    /// Keys that changed and require restart
+    pub keys: Vec<String>,
+    /// Human-readable warning message
+    pub message: String,
 }
 
 /// Worker state for display (combines WorkerState with additional info)
@@ -719,7 +734,7 @@ impl WsEvent {
     }
 
     /// Create a full worker snapshot event
-    fn workers_snapshot(workers: Vec<WorkerData>) -> Self {
+    pub fn workers_snapshot(workers: Vec<WorkerData>) -> Self {
         Self {
             event_type: "workers_snapshot".to_string(),
             worker: None,
@@ -1433,16 +1448,19 @@ pub fn bead_to_data(bead: &Bead) -> BeadData {
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
     State(state): State<DaemonState>,
+    ConnectInfo(remote_addr): ConnectInfo<std::net::SocketAddr>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state))
+    // Resolve actor identity from remote address (cached per connection)
+    let actor = state.identity_cache.resolve(Some(remote_addr));
+    ws.on_upgrade(move |socket| handle_socket(socket, state, actor))
 }
 
 /// Handle a WebSocket connection
-async fn handle_socket(socket: WebSocket, state: DaemonState) {
+async fn handle_socket(socket: WebSocket, state: DaemonState, actor: String) {
     // Register with the shutdown coordinator (for graceful drain) and with the
     // WS connection tracker (for /debug/state "every WS client" requirement).
     let _conn_token = state.shutdown.register_connection();
-    let _ws_guard = state.ws_connection_tracker.register();
+    let _ws_guard = state.ws_connection_tracker.register(actor);
 
     let (mut sender, mut receiver) = socket.split();
     let registry = state.worker_registry.clone();
@@ -1570,10 +1588,10 @@ async fn handle_socket(socket: WebSocket, state: DaemonState) {
         while let Some(msg) = ws_rx.recv().await {
             let subs = subs_for_fwd.read().await;
             if should_deliver(msg.topic.as_deref(), &subs) {
-                let lag_seconds = msg.queued_at.elapsed().as_secs_f64();
+                let lag_ms = msg.queued_at.elapsed().as_secs_f64() * 1000.0;
                 metrics
-                    .hoop_ws_broadcast_lag_seconds
-                    .observe(&[], lag_seconds);
+                    .hoop_ws_broadcast_lag_ms
+                    .observe(&[], lag_ms);
                 drop(subs);
                 if sender.send(Message::Text(msg.json)).await.is_err() {
                     break;
@@ -2174,18 +2192,18 @@ mod tests {
         );
     }
 
-    // ── hoop_ws_broadcast_lag_seconds metric ─────────────────────────────────
+    // ── hoop_ws_broadcast_lag_ms metric ─────────────────────────────────
 
     #[test]
     fn broadcast_lag_metric_observed() {
         let m = crate::metrics::metrics();
-        let snap_before = m.hoop_ws_broadcast_lag_seconds.snapshot();
+        let snap_before = m.hoop_ws_broadcast_lag_ms.snapshot();
         let count_before: u64 = snap_before.iter().map(|(_, c, _, _, _, _)| c).sum();
 
-        // Simulate the observation the forwarder task performs (in seconds).
-        m.hoop_ws_broadcast_lag_seconds.observe(&[], 0.0037);
+        // Simulate the observation the forwarder task performs (in milliseconds).
+        m.hoop_ws_broadcast_lag_ms.observe(&[], 3.7);
 
-        let snap_after = m.hoop_ws_broadcast_lag_seconds.snapshot();
+        let snap_after = m.hoop_ws_broadcast_lag_ms.snapshot();
         let count_after: u64 = snap_after.iter().map(|(_, c, _, _, _, _)| c).sum();
         assert_eq!(
             count_after,

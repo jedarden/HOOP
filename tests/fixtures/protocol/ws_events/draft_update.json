@@ -1,0 +1,15 @@
+{
+  "type": "draft_update",
+  "draft_update": {
+    "draft_id": "draft-abc123",
+    "project": "test-project",
+    "title": "Investigate API latency",
+    "kind": "task",
+    "status": "pending",
+    "action": "created",
+    "actor": "agent",
+    "created_by": "claude-code",
+    "version": 1,
+    "rejection_reason": null
+  }
+}

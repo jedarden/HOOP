@@ -1,0 +1,7 @@
+{
+  "type": "config_status",
+  "config_status": {
+    "valid": true,
+    "error": null
+  }
+}

@@ -572,6 +572,8 @@ mod tests {
             morning_brief: None,
             // pricing (beyond §17.3, but part of config)
             pricing: None,
+            // roles (RBAC, §13 Security)
+            roles: None,
             // server (required)
             server: Some(HoopConfigServer {
                 bind_addr: Some("127.0.0.1:3000".to_string()),
@@ -613,6 +615,7 @@ mod tests {
             stuck_detector: None,
             morning_brief: None,
             pricing: None,
+            roles: None,
             server: None,
         };
 
@@ -715,6 +718,7 @@ mod tests {
             stuck_detector: None,
             morning_brief: None,
             pricing: None,
+            roles: None,
             server: None,
         });
 

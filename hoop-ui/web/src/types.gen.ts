@@ -1478,6 +1478,19 @@ export interface HoopConfig {
       [k: string]: unknown;
     };
   };
+  /**
+   * Role-based access control (RBAC) configuration. Maps Tailscale identities to viewer/drafter roles. (§13 Security)
+   */
+  roles?: {
+    /**
+     * Identities with viewer role (read-only access)
+     */
+    viewers?: string[];
+    /**
+     * Identities with drafter role (read + create access)
+     */
+    drafters?: string[];
+  };
 }
 
 

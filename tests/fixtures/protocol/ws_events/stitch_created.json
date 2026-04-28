@@ -1,0 +1,12 @@
+{
+  "type": "stitch_created",
+  "stitch_created": {
+    "bead_id": "bead-123",
+    "title": "Fix authentication timeout",
+    "project": "test-project",
+    "stitch_id": "stitch-abc456",
+    "source": "operator",
+    "actor": "os:jedarden",
+    "created_at": "2026-04-26T10:00:00Z"
+  }
+}

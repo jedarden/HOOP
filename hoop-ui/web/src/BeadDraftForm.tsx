@@ -1,7 +1,9 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useAtomValue } from 'jotai';
-import { projectCardsAtom, beadsAtom, BeadData } from './atoms';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { projectCardsAtom, beadsAtom, BeadData, templatesAtom, TemplateValues } from './atoms';
 import { UploadManager, formatBytes } from './components/UploadManager';
+import TemplatePicker from './TemplatePicker';
+import type { StitchTemplate } from './types.gen';
 
 export type BeadKind = 'task' | 'genesis' | 'review' | 'fix' | 'bug' | 'epic';
 export type StitchKind = 'investigation' | 'fix' | 'feature';
@@ -94,6 +96,10 @@ interface FormState {
   hasAcceptanceCriteria: boolean;
   /** If true, submit via stitch decomposition instead of single bead */
   stitchMode: boolean;
+  /** Selected template (if any) */
+  selectedTemplate: StitchTemplate | null;
+  /** Template field values for substitution */
+  templateValues: TemplateValues;
 }
 
 interface BeadDraftFormProps {
@@ -160,6 +166,16 @@ function inline(s: string): string {
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/`(.+?)`/g, '<code>$1</code>')
     .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2">$1</a>');
+}
+
+// Substitute template field values into a template body
+function substituteTemplateBody(body: string, values: TemplateValues): string {
+  let result = body;
+  for (const [key, value] of Object.entries(values)) {
+    const placeholder = `{{${key}}}`;
+    result = result.replaceAll(placeholder, value);
+  }
+  return result;
 }
 
 // Bead graph delta: new bead + its dependencies as a mini SVG
@@ -577,6 +593,8 @@ export default function BeadDraftForm({ projectName, onClose, onCreated }: BeadD
     dependencies: [],
     hasAcceptanceCriteria: false,
     stitchMode: false,
+    selectedTemplate: null,
+    templateValues: {},
   });
 
   const [selectedProject, setSelectedProject] = useState(projectName);
@@ -636,6 +654,77 @@ export default function BeadDraftForm({ projectName, onClose, onCreated }: BeadD
     if (openCount <= 8) return 1;
     return 2;
   }, [allBeads]);
+
+  // Apply template defaults when a template is selected
+  const handleTemplateSelect = useCallback((template: StitchTemplate | null) => {
+    setForm(f => {
+      if (!template) {
+        // Clear template - keep current values
+        return { ...f, selectedTemplate: null, templateValues: {} };
+      }
+
+      // Apply template defaults
+      const updates: Partial<FormState> = {
+        selectedTemplate: template,
+        templateValues: {},
+      };
+
+      // Apply kind if template has one
+      if (template.kind && ['task', 'genesis', 'review', 'fix', 'bug', 'epic'].includes(template.kind)) {
+        updates.kind = template.kind as BeadKind;
+      }
+
+      // Apply priority if template has one
+      if (template.priority !== null && template.priority !== undefined) {
+        updates.priority = String(template.priority);
+      }
+
+      // Apply labels if template has them
+      if (template.labels && template.labels.length > 0) {
+        updates.labels = template.labels;
+      }
+
+      // Apply description from template body (will be substituted when values are entered)
+      if (template.body) {
+        updates.description = template.body;
+      }
+
+      // Apply default bead IDs as dependencies (fetch full bead data)
+      if (template.default_beads && template.default_beads.length > 0) {
+        const newDeps: BeadSummary[] = [];
+        for (const beadId of template.default_beads) {
+          const existing = availableBeads.find(b => b.id === beadId);
+          if (existing) {
+            newDeps.push(existing);
+          }
+        }
+        if (newDeps.length > 0) {
+          updates.dependencies = newDeps;
+        }
+      }
+
+      return { ...f, ...updates };
+    });
+  }, [availableBeads]);
+
+  // Handle template field value changes - substitute into description
+  const handleTemplateValuesChange = useCallback((values: TemplateValues) => {
+    setForm(f => {
+      const template = f.selectedTemplate;
+      if (!template) {
+        return { ...f, templateValues: values };
+      }
+
+      // Substitute values into template body
+      const newDescription = substituteTemplateBody(template.body, values);
+
+      return {
+        ...f,
+        templateValues: values,
+        description: newDescription,
+      };
+    });
+  }, []);
 
   const titleValid = form.title.trim().length > 0;
   const projectValid = projectHasWorkspace;
@@ -862,6 +951,16 @@ export default function BeadDraftForm({ projectName, onClose, onCreated }: BeadD
               <p className="bdf-error-msg">This project has no valid workspace — cannot create beads.</p>
             )}
           </div>
+
+          {/* Template picker */}
+          {selectedProject && projectHasWorkspace && (
+            <TemplatePicker
+              projectName={selectedProject}
+              onTemplateSelect={handleTemplateSelect}
+              onValuesChange={handleTemplateValuesChange}
+              selectedTemplate={form.selectedTemplate}
+            />
+          )}
 
           {/* Title */}
           <div className="bdf-field">

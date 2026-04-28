@@ -1,0 +1,23 @@
+{
+  "type": "bead_events",
+  "bead_events": [
+    {
+      "timestamp": "2026-04-26T09:00:00Z",
+      "event_type": "start",
+      "bead_id": "bead-123",
+      "worker": "test-worker",
+      "line_number": 1,
+      "raw": "start bead-123 on test-worker",
+      "stash_sha": null
+    },
+    {
+      "timestamp": "2026-04-26T09:05:00Z",
+      "event_type": "fail",
+      "bead_id": "bead-123",
+      "worker": "test-worker",
+      "line_number": 42,
+      "raw": "fail bead-123: compilation error",
+      "stash_sha": "abc123def456"
+    }
+  ]
+}

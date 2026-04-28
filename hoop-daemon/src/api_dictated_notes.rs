@@ -163,6 +163,8 @@ async fn create_note(
         language: req.language,
         tags: req.tags.unwrap_or_default(),
         transcription_status: transcription_status.clone(),
+        synthesis_result: None,
+        draft_id: None,
     };
     dictated_notes::insert_note(&conn, &note).map_err(|e| {
         (
@@ -534,7 +536,7 @@ async fn redact_words(
 }
 
 /// Request to synthesize a title and body from a dictated note transcript
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 struct SynthesizeRequest {
     /// Optional override for the stitch kind (defaults to "task")
     #[serde(default)]
@@ -554,50 +556,16 @@ struct SynthesizeResponse {
     pub confidence: String,
 }
 
-/// POST /api/dictated-notes/:stitch_id/synthesize — synthesize title + body from transcript
+/// Helper function to synthesize a draft from a dictated note
 ///
-/// Uses the agent session to generate a concise title and structured body
-/// from the transcript. This is called after transcription completes to
-/// propose a Stitch draft.
-async fn synthesize_draft(
-    Path(stitch_id): Path<String>,
-    State(state): State<crate::DaemonState>,
-    Json(req): Json<SynthesizeRequest>,
-) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let valid_id = ValidStitchId::parse(&stitch_id).map_err(crate::id_validators::rejection)?;
-
-    let db_path = fleet::db_path();
-    let conn = rusqlite::Connection::open(&db_path).map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("DB error: {}", e),
-        )
-    })?;
-
-    let note = dictated_notes::get_note(&conn, valid_id.as_str()).map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Query error: {}", e),
-        )
-    })?
-    .ok_or_else(|| {
-        (
-            StatusCode::NOT_FOUND,
-            "Note not found".to_string(),
-        )
-    })?;
-
-    // Check if transcription is complete
-    if note.transcription_status != dictated_notes::TranscriptionStatus::Completed {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            format!(
-                "Note transcription is not complete (status: {:?}). Wait for transcription to finish.",
-                note.transcription_status
-            ),
-        ));
-    }
-
+/// This is shared by both the /synthesize endpoint and the /draft endpoint
+/// to avoid duplicating the synthesis logic.
+async fn perform_synthesis(
+    stitch_id: &str,
+    note: &dictated_notes::DictatedNote,
+    default_kind: &str,
+    state: &crate::DaemonState,
+) -> Result<SynthesizeResponse, (StatusCode, String)> {
     // Use agent session to synthesize title and body
     let mgr = state
         .agent_session_manager
@@ -675,28 +643,28 @@ Be concise and actionable. Focus on what needs to be done."#,
         response_text
     };
 
-    let parsed: serde_json::Value = serde_json::from_str(json_str).map_err(|e| {
+    let parsed: serde_json::Value = serde_json::from_str(json_str).unwrap_or_else(|e| {
         tracing::warn!("Failed to parse agent JSON response: {}, raw: {}", e, json_str);
         // Fallback to derived title
         serde_json::json!({
             "title": dictated_notes::derive_title(&note.transcript),
             "body": note.transcript.clone(),
-            "kind": req.kind.unwrap_or_else(|| "task".to_string()),
+            "kind": default_kind,
             "confidence": "low"
         })
-    })?;
+    });
 
     let title = parsed["title"]
         .as_str()
-        .unwrap_or_else(|| dictated_notes::derive_title(&note.transcript).as_str())
-        .to_string();
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| dictated_notes::derive_title(&note.transcript));
     let body = parsed["body"]
         .as_str()
         .unwrap_or_else(|| note.transcript.as_str())
         .to_string();
     let kind = parsed["kind"]
         .as_str()
-        .unwrap_or_else(|| req.kind.as_deref().unwrap_or("task"))
+        .unwrap_or_else(|| default_kind)
         .to_string();
     let confidence = parsed["confidence"]
         .as_str()
@@ -717,23 +685,73 @@ Be concise and actionable. Focus on what needs to be done."#,
         confidence
     );
 
+    Ok(SynthesizeResponse {
+        title,
+        body,
+        kind,
+        confidence,
+    })
+}
+
+/// POST /api/dictated-notes/:stitch_id/synthesize — synthesize title + body from transcript
+///
+/// Uses the agent session to generate a concise title and structured body
+/// from the transcript. This is called after transcription completes to
+/// propose a Stitch draft.
+async fn synthesize_draft(
+    Path(stitch_id): Path<String>,
+    State(state): State<crate::DaemonState>,
+    Json(req): Json<SynthesizeRequest>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let valid_id = ValidStitchId::parse(&stitch_id).map_err(crate::id_validators::rejection)?;
+
+    let db_path = fleet::db_path();
+    let conn = rusqlite::Connection::open(&db_path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("DB error: {}", e),
+        )
+    })?;
+
+    let note = dictated_notes::get_note(&conn, valid_id.as_str()).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Query error: {}", e),
+        )
+    })?
+    .ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            "Note not found".to_string(),
+        )
+    })?;
+
+    // Check if transcription is complete
+    if note.transcription_status != dictated_notes::TranscriptionStatus::Completed {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!(
+                "Note transcription is not complete (status: {:?}). Wait for transcription to finish.",
+                note.transcription_status
+            ),
+        ));
+    }
+
+    let default_kind = req.kind.as_deref().unwrap_or("task").to_string();
+    let synthesis = perform_synthesis(&stitch_id, &note, &default_kind, &state).await?;
+
     // Store synthesis result in dictated_notes for reference
     let synthesis_json = serde_json::json!({
-        "title": title,
-        "body": body,
-        "kind": kind,
-        "confidence": confidence
+        "title": synthesis.title,
+        "body": synthesis.body,
+        "kind": synthesis.kind,
+        "confidence": synthesis.confidence
     });
     if let Err(e) = dictated_notes::update_synthesis_result(&conn, &stitch_id, &synthesis_json.to_string()) {
         tracing::warn!("Failed to store synthesis_result for {}: {}", stitch_id, e);
     }
 
-    Ok(Json(SynthesizeResponse {
-        title,
-        body,
-        kind,
-        confidence,
-    }))
+    Ok(Json(synthesis))
 }
 
 /// POST /api/dictated-notes/:stitch_id/draft — create a Stitch draft from a dictated note
@@ -793,13 +811,9 @@ async fn create_draft_from_note(
         ));
     }
 
-    // First synthesize to get title/body
-    let synthesis = synthesize_draft(
-        Path(stitch_id.clone()),
-        State(state.clone()),
-        Json(req.clone()),
-    )
-    .await?;
+    // Synthesize to get title/body
+    let default_kind = req.kind.as_deref().unwrap_or("task").to_string();
+    let synthesis = perform_synthesis(&stitch_id, &note, &default_kind, &state).await?;
 
     // Create the draft using the draft queue API logic
     let draft_req = crate::api_draft_queue::CreateDraftRequest {

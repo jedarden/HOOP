@@ -25,6 +25,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 
 use crate::metrics;
+use crate::unknown_event_sink;
 use crate::WorkerState;
 
 /// Default heartbeat interval in seconds (from NEEDLE)
@@ -172,6 +173,8 @@ pub struct HeartbeatMonitor {
     workers: Arc<Mutex<HashMap<String, WorkerHeartbeatState>>>,
     /// File position tracking for efficient incremental reads
     position: Arc<Mutex<FilePosition>>,
+    /// Sink for recording unknown event types
+    unknown_sink: unknown_event_sink::UnknownEventSink,
 }
 
 impl HeartbeatMonitor {
@@ -180,6 +183,12 @@ impl HeartbeatMonitor {
         let (event_tx, _) = broadcast::channel(256);
         let (shutdown_tx, _) = mpsc::channel(1);
 
+        let heartbeats_path = config.heartbeats_path.clone();
+        let unknown_sink = unknown_event_sink::UnknownEventSink::with_source(
+            "heartbeats",
+            heartbeats_path,
+        );
+
         Ok(Self {
             config,
             event_tx,
@@ -187,6 +196,7 @@ impl HeartbeatMonitor {
             _shutdown_tx: shutdown_tx,
             workers: Arc::new(Mutex::new(HashMap::new())),
             position: Arc::new(Mutex::new(FilePosition::new())),
+            unknown_sink,
         })
     }
 
@@ -226,6 +236,7 @@ impl HeartbeatMonitor {
         let event_tx = self.event_tx.clone();
         let position = self.position.clone();
         let workers = self.workers.clone();
+        let unknown_sink = self.unknown_sink.clone();
 
         // Create the watcher
         let mut watcher = notify::recommended_watcher(move |res| {
@@ -235,6 +246,7 @@ impl HeartbeatMonitor {
                 &event_tx,
                 position.clone(),
                 workers.clone(),
+                &unknown_sink,
             ) {
                 warn!("Error handling heartbeat watch event: {}", e);
             }
@@ -311,6 +323,7 @@ impl HeartbeatMonitor {
         event_tx: &broadcast::Sender<MonitorEvent>,
         position: Arc<Mutex<FilePosition>>,
         workers: Arc<Mutex<HashMap<String, WorkerHeartbeatState>>>,
+        unknown_sink: &unknown_event_sink::UnknownEventSink,
     ) -> Result<()> {
         let event = res?;
 
@@ -325,7 +338,7 @@ impl HeartbeatMonitor {
 
         match event.kind {
             Access(_) | Create(_) | Modify(_) => {
-                let heartbeats = Self::read_new_heartbeats(heartbeats_path, position.clone())?;
+                let heartbeats = Self::read_new_heartbeats(heartbeats_path, position.clone(), unknown_sink)?;
                 // Process each heartbeat to update worker state and send events
                 for (heartbeat, _) in heartbeats {
                     // Update worker state
@@ -351,6 +364,7 @@ impl HeartbeatMonitor {
     fn read_new_heartbeats(
         heartbeats_path: &Path,
         position: Arc<Mutex<FilePosition>>,
+        unknown_sink: &unknown_event_sink::UnknownEventSink,
     ) -> Result<Vec<(WorkerHeartbeat, usize)>> {
         let file = File::open(heartbeats_path).with_context(|| {
             format!(
@@ -418,7 +432,7 @@ impl HeartbeatMonitor {
                 file_path: heartbeats_path.to_path_buf(),
                 line_number,
             };
-            if let Some(heartbeat) = Self::parse_heartbeat_line(&line, &source) {
+            if let Some(heartbeat) = Self::parse_heartbeat_line(&line, &source, unknown_sink) {
                 heartbeats.push((heartbeat, line_number));
             }
         }
@@ -434,9 +448,12 @@ impl HeartbeatMonitor {
     /// Returns `None` for empty/quarantined lines, `Some(hb)` on success.
     /// Additional validation failures (bad timestamp, invalid worker name) also
     /// quarantine the line.
+    ///
+    /// Unknown worker states are recorded via UnknownEventSink.
     pub fn parse_heartbeat_line(
         line: &str,
         source: &crate::parse_jsonl_safe::LineSource,
+        unknown_sink: &unknown_event_sink::UnknownEventSink,
     ) -> Option<WorkerHeartbeat> {
         #[derive(Debug, Deserialize)]
         struct HeartbeatRaw {
@@ -467,11 +484,44 @@ impl HeartbeatMonitor {
             return None;
         }
 
+        // Check for unknown worker state and record it
+        if matches!(raw.state, WorkerState::Unknown) {
+            // Extract the state string from the raw JSON for better diagnostics
+            let event_kind = extract_state_from_raw(line);
+            unknown_sink.record_at_line(&event_kind, line, source.line_number);
+
+            // Also register with global registry for diagnostics
+            let sample = unknown_event_sink::UnknownEventSample::new(
+                "heartbeats".to_string(),
+                event_kind,
+                line.to_string(),
+                Some(source.file_path.to_string_lossy().to_string()),
+                Some(source.line_number),
+            );
+            unknown_event_sink::global_registry().register_sample(sample);
+        }
+
         Some(WorkerHeartbeat {
             ts,
             worker: raw.worker,
             state: raw.state,
         })
+    }
+
+    /// Extract the state field from raw JSON for unknown state detection.
+    ///
+    /// This helps identify what unknown state value was encountered.
+    fn extract_state_from_raw(line: &str) -> String {
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(line) {
+            if let Some(obj) = value.as_object() {
+                if let Some(state) = obj.get("state") {
+                    if let Some(s) = state.as_str() {
+                        return s.to_string();
+                    }
+                }
+            }
+        }
+        "unknown".to_string()
     }
 
     /// Parse a heartbeat line and update worker state
@@ -481,7 +531,7 @@ impl HeartbeatMonitor {
             file_path: self.config.heartbeats_path.clone(),
             line_number,
         };
-        if let Some(heartbeat) = Self::parse_heartbeat_line(line, &source) {
+        if let Some(heartbeat) = Self::parse_heartbeat_line(line, &source, &self.unknown_sink) {
             Self::update_worker_state(&heartbeat, &self.workers, &self.event_tx);
         }
     }
@@ -724,8 +774,9 @@ mod tests {
 
     #[test]
     fn test_parse_heartbeat_line_executing() {
+        let unknown_sink = unknown_event_sink::UnknownEventSink::new("test_heartbeats");
         let json = r#"{"ts":"2026-04-21T18:42:10Z","worker":"alpha","state":"executing","bead":"bd-abc123","pid":12345,"adapter":"anthropic"}"#;
-        let heartbeat = HeartbeatMonitor::parse_heartbeat_line(json, &test_source()).unwrap();
+        let heartbeat = HeartbeatMonitor::parse_heartbeat_line(json, &test_source(), &unknown_sink).unwrap();
 
         assert_eq!(heartbeat.worker, "alpha");
         match heartbeat.state {
@@ -740,9 +791,10 @@ mod tests {
 
     #[test]
     fn test_parse_heartbeat_line_idle() {
+        let unknown_sink = unknown_event_sink::UnknownEventSink::new("test_heartbeats");
         let json =
             r#"{"ts":"2026-04-21T18:42:10Z","worker":"alpha","state":"idle","last_strand":null}"#;
-        let heartbeat = HeartbeatMonitor::parse_heartbeat_line(json, &test_source()).unwrap();
+        let heartbeat = HeartbeatMonitor::parse_heartbeat_line(json, &test_source(), &unknown_sink).unwrap();
 
         assert_eq!(heartbeat.worker, "alpha");
         match heartbeat.state {
@@ -755,8 +807,9 @@ mod tests {
 
     #[test]
     fn test_parse_heartbeat_line_knot() {
+        let unknown_sink = unknown_event_sink::UnknownEventSink::new("test_heartbeats");
         let json = r#"{"ts":"2026-04-21T18:42:10Z","worker":"alpha","state":"knot","reason":"out of capacity"}"#;
-        let heartbeat = HeartbeatMonitor::parse_heartbeat_line(json, &test_source()).unwrap();
+        let heartbeat = HeartbeatMonitor::parse_heartbeat_line(json, &test_source(), &unknown_sink).unwrap();
 
         assert_eq!(heartbeat.worker, "alpha");
         match heartbeat.state {
@@ -769,8 +822,26 @@ mod tests {
 
     #[test]
     fn test_parse_heartbeat_line_malformed() {
+        let unknown_sink = unknown_event_sink::UnknownEventSink::new("test_heartbeats");
         let json = r#"{"ts":"2026-04-21T18:42:10Z","worker":"alpha","state":"invalid"}"#;
-        assert!(HeartbeatMonitor::parse_heartbeat_line(json, &test_source()).is_none());
+        assert!(HeartbeatMonitor::parse_heartbeat_line(json, &test_source(), &unknown_sink).is_none());
+    }
+
+    #[test]
+    fn test_parse_heartbeat_line_unknown_state_records_via_sink() {
+        let unknown_sink = unknown_event_sink::UnknownEventSink::new("test_heartbeats");
+        let json = r#"{"ts":"2026-04-21T18:42:10Z","worker":"alpha","state":"weird_new_state"}"#;
+        let heartbeat = HeartbeatMonitor::parse_heartbeat_line(json, &test_source(), &unknown_sink).unwrap();
+
+        assert_eq!(heartbeat.worker, "alpha");
+        // Unknown state should be recorded via sink
+        assert!(matches!(heartbeat.state, WorkerState::Unknown));
+
+        // Verify the sink recorded the unknown event
+        let samples = unknown_sink.get_samples();
+        assert_eq!(samples.len(), 1);
+        assert_eq!(samples[0].event_kind, "weird_new_state");
+        assert_eq!(samples[0].adapter, "test_heartbeats");
     }
 
     #[test]

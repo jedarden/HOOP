@@ -1,0 +1,10 @@
+{
+  "type": "morning_brief",
+  "morning_brief": {
+    "id": "brief-001",
+    "headline": "3 high-priority drafts awaiting review",
+    "generated_at": "2026-04-26T08:00:00Z",
+    "draft_count": 3,
+    "status": "active"
+  }
+}

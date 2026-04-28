@@ -12,6 +12,7 @@ use crate::api_preview::FileConflict;
 use crate::br_verbs::invoke_br_create;
 use crate::fleet::{self, ActionKind, ActionResult, BeadActionArgs};
 use crate::metrics;
+use crate::pattern_query_evaluator;
 use crate::predictor::{predict_stitch, DateRange, PercentileEstimate};
 
 use crate::stitch_decompose::{
@@ -807,6 +808,20 @@ pub async fn submit_stitch_internal(
                 source: source_str.clone(),
                 ts: created_at.clone(),
             });
+    }
+
+    // Evaluate pattern queries for auto-including stitches into patterns (§4.7)
+    if let Err(e) = pattern_query_evaluator::sync_and_emit_pattern_queries(
+        &stitch_id,
+        project,
+        &req.kind,
+        &req.title,
+        &state.pattern_tx,
+    ) {
+        warn!(
+            "Failed to sync pattern queries for stitch {}: {}",
+            stitch_id, e
+        );
     }
 
     Ok(SubmitResult {

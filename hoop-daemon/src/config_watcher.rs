@@ -5,6 +5,7 @@
 
 use crate::config_resolver::{resolve_from_raw, CliOverrides, ConfigError, ResolvedConfig};
 use crate::metrics::metrics;
+use crate::ws::RestartRequiredData;
 use anyhow::{Context, Result};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
@@ -25,6 +26,8 @@ pub enum ConfigEvent {
         config: ResolvedConfig,
         /// Hash of the previous config file contents
         prev_hash: String,
+        /// Restart-required keys that changed (§17.4)
+        restart_required: Option<RestartRequiredData>,
     },
     /// Configuration failed to parse
     ConfigError {
@@ -225,13 +228,15 @@ impl ConfigWatcher {
     ) {
         debug!("Reloading config.yml from {}", path.display());
 
-        // Capture prev_hash before reload
-        let prev_hash = {
-            if let Ok(raw) = Self::read_config_file_from(path) {
+        // Capture prev_hash and old config before reload
+        let (prev_hash, old_config) = {
+            let cfg = config.lock().await;
+            let prev_hash = if let Ok(raw) = Self::read_config_file_from(path) {
                 hex::encode(Sha256::digest(raw.as_bytes()))
             } else {
                 String::new()
-            }
+            };
+            (prev_hash, cfg.clone())
         };
 
         // ── Phase 1: read and parse (YAML → structured) ───────────────────────
@@ -268,7 +273,10 @@ impl ConfigWatcher {
             }
         };
 
-        // ── Phase 3: apply (store new config) ───────────────────────────────────
+        // ── Phase 3: detect restart-required changes (§17.4) ───────────────────
+        let restart_required = detect_restart_required_changes(&old_config, &new_config);
+
+        // ── Phase 4: apply (store new config) ───────────────────────────────────
         let new_hash = hex::encode(Sha256::digest(raw.as_bytes()));
 
         *config.lock().await = new_config.clone();
@@ -276,12 +284,31 @@ impl ConfigWatcher {
         // Record success metric
         metrics().hoop_config_reload_success_total.inc();
 
+        // Log restart-required warnings with clear banner
+        if let Some(ref rr) = restart_required {
+            warn!("╔════════════════════════════════════════════════════════════════════════════════╗");
+            warn!("║ ⚠️  CONFIG RELOADED: RESTART REQUIRED                                          ║");
+            warn!("╠════════════════════════════════════════════════════════════════════════════════╣");
+            for key in &rr.keys {
+                warn!("║ • {} requires daemon restart to take effect", key);
+            }
+            warn!("║                                                                                ║");
+            warn!("║ Run the following to apply changes:                                          ║");
+            warn!("║   systemctl --user restart hoop                                               ║");
+            warn!("║                                                                                ║");
+            warn!("║ All other config changes are hot-reloadable and have been applied.            ║");
+            warn!("╚════════════════════════════════════════════════════════════════════════════════╝");
+        } else {
+            info!("✓ Config.yml reloaded successfully — all changes applied via hot-reload");
+        }
+
         let _ = event_tx.send(ConfigEvent::ConfigReloaded {
             config: new_config,
             prev_hash: prev_hash.clone(),
+            restart_required,
         });
         info!(
-            "Config.yml reloaded successfully ({} → {})",
+            "Config hash: {} → {}",
             &prev_hash[..8.min(prev_hash.len())],
             &new_hash[..8.min(new_hash.len())],
         );
@@ -308,6 +335,37 @@ fn config_path() -> Result<PathBuf> {
     home.push(".hoop");
     home.push("config.yml");
     Ok(home)
+}
+
+/// Detect which restart-required keys changed between two configs (§17.4)
+///
+/// Uses schema-level restart_required flags to automatically detect
+/// which keys need restart. Returns RestartRequiredData if any restart-required
+/// keys changed, or None if no such keys changed.
+fn detect_restart_required_changes(
+    old_config: &ResolvedConfig,
+    new_config: &ResolvedConfig,
+) -> Option<RestartRequiredData> {
+    let mut changed_keys = Vec::new();
+
+    // Check server.bind_addr (marked restart_required in schema)
+    if new_config.bind_addr.restart_required && old_config.bind_addr.value != new_config.bind_addr.value {
+        changed_keys.push("server.bind_addr".to_string());
+    }
+
+    // Check metrics.port (marked restart_required in schema, only when enabled)
+    if new_config.metrics_port.restart_required && new_config.metrics_enabled.value && old_config.metrics_port.value != new_config.metrics_port.value {
+        changed_keys.push("metrics.port".to_string());
+    }
+
+    if changed_keys.is_empty() {
+        None
+    } else {
+        Some(RestartRequiredData {
+            keys: changed_keys,
+            message: "Some changed keys require daemon restart to take effect. See hoop config diff for details.".to_string(),
+        })
+    }
 }
 
 #[cfg(test)]

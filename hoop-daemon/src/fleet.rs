@@ -1563,11 +1563,7 @@ pub fn migrate_v12_to_v13(conn: &mut Connection) -> Result<()> {
 pub fn migrate_v13_to_v14(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.3.0 → 1.4.0: Adding transcript_words column");
 
-    // Add transcript_words column (JSON array of word timestamps)
-    conn.execute(
-        "ALTER TABLE dictated_notes ADD COLUMN transcript_words TEXT",
-        [],
-    )?;
+    add_column_if_not_exists(conn, "dictated_notes", "transcript_words", "TEXT")?;
 
     info!("transcript_words column added successfully");
     update_schema_version(conn, "1.4.0")?;
@@ -1626,9 +1622,11 @@ pub fn migrate_v14_to_v15(conn: &mut Connection) -> Result<()> {
 pub fn migrate_v15_to_v16(conn: &mut Connection) -> Result<()> {
     info!("Running migration 1.5.0 → 1.6.0: Adding transcription_status column");
 
-    conn.execute(
-        "ALTER TABLE dictated_notes ADD COLUMN transcription_status TEXT NOT NULL DEFAULT 'pending'",
-        [],
+    add_column_if_not_exists(
+        conn,
+        "dictated_notes",
+        "transcription_status",
+        "TEXT NOT NULL DEFAULT 'pending'",
     )?;
 
     update_schema_version(conn, "1.6.0")?;
@@ -2495,7 +2493,7 @@ pub fn check_schema_major_gate(stored_version: &str, binary_version: &str) -> Re
     if binary_major > stored_major {
         anyhow::bail!(
             "Your data is schema version {stored_major}.x; this binary requires {binary_major}.x. \
-             Run `hoop migrate --from-{stored_major} --confirm` or restore from a pre-upgrade backup."
+             Run `hoop migrate major-upgrade --confirm` or restore from a pre-upgrade backup."
         );
     }
     Ok(())
@@ -2503,7 +2501,7 @@ pub fn check_schema_major_gate(stored_version: &str, binary_version: &str) -> Re
 
 /// Run the major-upgrade migration from the stored version to `binary_version`.
 ///
-/// Called by `hoop migrate --from-N --confirm` or `--major-upgrade --confirm`.
+/// Called by `hoop migrate major-upgrade --confirm`.
 /// Updates `schema_version` in the database.  When a real 2.x schema is
 /// defined, DDL migration steps should be added inside this function before
 /// the version update.
@@ -5802,7 +5800,7 @@ mod tests {
         assert_eq!(
             msg,
             "Your data is schema version 1.x; this binary requires 2.x. \
-             Run `hoop migrate --from-1 --confirm` or restore from a pre-upgrade backup.",
+             Run `hoop migrate major-upgrade --confirm` or restore from a pre-upgrade backup.",
             "Gate must emit the exact §20.1 diagnostic message"
         );
     }
@@ -5813,7 +5811,7 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("schema version 2.x"), "msg: {msg}");
         assert!(msg.contains("requires 3.x"), "msg: {msg}");
-        assert!(msg.contains("--from-2"), "msg: {msg}");
+        assert!(msg.contains("major-upgrade"), "msg: {msg}");
     }
 
     #[test]
@@ -5839,7 +5837,7 @@ mod tests {
         assert_eq!(
             msg,
             "Your data is schema version 1.x; this binary requires 2.x. \
-             Run `hoop migrate --from-1 --confirm` or restore from a pre-upgrade backup.",
+             Run `hoop migrate major-upgrade --confirm` or restore from a pre-upgrade backup.",
             "Startup refusal must carry the exact §20.1 message"
         );
         Ok(())

@@ -13,6 +13,7 @@
 //! discovery and parsing of its session file format.
 
 use crate::tag_join;
+use crate::unknown_event_sink;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use hoop_schema::{
@@ -1249,7 +1250,24 @@ impl SessionTailer {
                         .and_then(|s| s.parse().ok());
                 }
                 _ => {
-                    debug!("Unknown Codex event type: {:?}", event_type);
+                    // Unknown event type - record via UnknownEventSink
+                    let event_kind = event_type.unwrap_or("unknown").to_string();
+                    let raw_line = line.to_string();
+                    let sink = unknown_event_sink::UnknownEventSink::with_source(
+                        "codex",
+                        path.to_path_buf(),
+                    );
+                    sink.record_at_line(&event_kind, &raw_line, line_number);
+
+                    // Also register with global registry for diagnostics
+                    let sample = unknown_event_sink::UnknownEventSample::new(
+                        "codex".to_string(),
+                        event_kind,
+                        raw_line,
+                        Some(path.display().to_string()),
+                        Some(line_number),
+                    );
+                    unknown_event_sink::global_registry().register_sample(sample);
                 }
             }
         }
@@ -1730,7 +1748,26 @@ impl SessionTailer {
                         .and_then(|v| v.as_str())
                         .and_then(|s| s.parse().ok());
                 }
-                _ => {}
+                _ => {
+                    // Unknown event type - record via UnknownEventSink
+                    let event_kind = event_type.unwrap_or("unknown").to_string();
+                    let raw_line = line.to_string();
+                    let sink = unknown_event_sink::UnknownEventSink::with_source(
+                        "opencode",
+                        path.to_path_buf(),
+                    );
+                    sink.record_at_line(&event_kind, &raw_line, line_number);
+
+                    // Also register with global registry for diagnostics
+                    let sample = unknown_event_sink::UnknownEventSample::new(
+                        "opencode".to_string(),
+                        event_kind,
+                        raw_line,
+                        Some(path.display().to_string()),
+                        Some(line_number),
+                    );
+                    unknown_event_sink::global_registry().register_sample(sample);
+                }
             }
         }
 
@@ -1934,7 +1971,26 @@ impl SessionTailer {
                         .and_then(|v| v.as_str())
                         .and_then(|s| s.parse().ok());
                 }
-                _ => {}
+                _ => {
+                    // Unknown event type - record via UnknownEventSink
+                    let event_kind = event_type.unwrap_or("unknown").to_string();
+                    let raw_line = line.to_string();
+                    let sink = unknown_event_sink::UnknownEventSink::with_source(
+                        "gemini",
+                        path.to_path_buf(),
+                    );
+                    sink.record_at_line(&event_kind, &raw_line, line_number);
+
+                    // Also register with global registry for diagnostics
+                    let sample = unknown_event_sink::UnknownEventSample::new(
+                        "gemini".to_string(),
+                        event_kind,
+                        raw_line,
+                        Some(path.display().to_string()),
+                        Some(line_number),
+                    );
+                    unknown_event_sink::global_registry().register_sample(sample);
+                }
             }
         }
 
@@ -2063,7 +2119,25 @@ impl SessionTailer {
                     start_time = meta.start_time.and_then(|s| s.parse().ok());
                     end_time = meta.end_time.and_then(|s| s.parse().ok());
                 }
-                ClaudeEntry::Unknown => {}
+                ClaudeEntry::Unknown => {
+                    // Unknown entry type - record via UnknownEventSink
+                    let event_kind = extract_entry_kind_from_raw(&line);
+                    let sink = unknown_event_sink::UnknownEventSink::with_source(
+                        "aider",
+                        path.to_path_buf(),
+                    );
+                    sink.record_at_line(&event_kind, &line, line_number);
+
+                    // Also register with global registry for diagnostics
+                    let sample = unknown_event_sink::UnknownEventSample::new(
+                        "aider".to_string(),
+                        event_kind,
+                        line.to_string(),
+                        Some(path.display().to_string()),
+                        Some(line_number),
+                    );
+                    unknown_event_sink::global_registry().register_sample(sample);
+                }
             }
         }
 
@@ -2184,15 +2258,41 @@ fn maybe_emit_session_bound(
     }
 }
 
+/// Extract the event kind from raw JSON, returning "unknown" if not found.
+///
+/// This is used for labeling unknown events with their best-guess event kind.
+fn extract_entry_kind_from_raw(raw: &str) -> String {
+    if let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) {
+        if let Some(obj) = value.as_object() {
+            // Try to find "type" field (most common format)
+            if let Some(ty) = obj.get("type").and_then(|v| v.as_str()) {
+                return ty.to_string();
+            }
+            // Try to find "event" field
+            if let Some(event) = obj.get("event").and_then(|v| v.as_str()) {
+                return event.to_string();
+            }
+            // Try to find "kind" field
+            if let Some(kind) = obj.get("kind").and_then(|v| v.as_str()) {
+                return kind.to_string();
+            }
+        }
+    }
+    "unknown".to_string()
+}
+
 /// Line-buffered NDJSON parser for Claude Code sessions
 struct NdjsonParser {
     partial: String,
+    /// Sink for recording unknown events
+    unknown_sink: unknown_event_sink::UnknownEventSink,
 }
 
 impl NdjsonParser {
     fn new() -> Self {
         Self {
             partial: String::new(),
+            unknown_sink: unknown_event_sink::UnknownEventSink::new("claude"),
         }
     }
 
@@ -2210,6 +2310,22 @@ impl NdjsonParser {
 
         match serde_json::from_str::<ClaudeEntry>(input) {
             Ok(entry) => {
+                // Check if this is an unknown entry and record it
+                if matches!(entry, ClaudeEntry::Unknown) {
+                    let event_kind = extract_entry_kind_from_raw(input);
+                    self.unknown_sink.record_at_line(&event_kind, input, source.line_number);
+
+                    // Also register with global registry for diagnostics
+                    let sample = unknown_event_sink::UnknownEventSample::new(
+                        "claude".to_string(),
+                        event_kind,
+                        input.to_string(),
+                        Some(source.file_path.to_string_lossy().to_string()),
+                        Some(source.line_number),
+                    );
+                    unknown_event_sink::global_registry().register_sample(sample);
+                }
+
                 self.partial.clear();
                 Ok(Some(entry))
             }
@@ -2222,6 +2338,21 @@ impl NdjsonParser {
                     Ok(None)
                 } else {
                     crate::parse_jsonl_safe::quarantine_raw(input, &e.to_string(), source);
+
+                    // Record the malformed/unknown event via UnknownEventSink
+                    let event_kind = extract_entry_kind_from_raw(input);
+                    self.unknown_sink.record_at_line(&event_kind, input, source.line_number);
+
+                    // Also register with global registry for diagnostics
+                    let sample = unknown_event_sink::UnknownEventSample::new(
+                        "claude".to_string(),
+                        event_kind,
+                        input.to_string(),
+                        Some(source.file_path.to_string_lossy().to_string()),
+                        Some(source.line_number),
+                    );
+                    unknown_event_sink::global_registry().register_sample(sample);
+
                     self.partial.clear();
                     Ok(Some(ClaudeEntry::Unknown))
                 }
@@ -2838,3 +2969,274 @@ mod tests {
         assert_eq!(msg.usage.as_ref().unwrap().input_tokens, 200);
     }
 }
+
+    /// Synthetic unknown-event test for Claude adapter (§16.2 acceptance).
+    ///
+    /// Verifies that:
+    /// 1. Unknown ClaudeEntry types are recorded via UnknownEventSink
+    /// 2. The `hoop_unknown_event_labeled_total` metric is incremented
+    /// 3. The event is registered with the global registry for diagnostics
+    #[test]
+    fn claude_adapter_unknown_event_records_via_sink() {
+        use crate::unknown_event_sink;
+
+        // Clear global registry to avoid test interference
+        unknown_event_sink::global_registry().clear_all();
+
+        // Get initial metric value
+        let m = crate::metrics::metrics();
+        let initial_count = m.hoop_unknown_event_labeled_total.snapshot();
+
+        // Create a temporary session file with an unknown event type
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let session_file = tmp.path().join("test_unknown.jsonl");
+
+        // Write a session with an unknown event type
+        let session_data = vec![
+            r#"{"type":"metadata","session_id":"test-session-123","cwd":"/tmp","title":"Test Session"}"#,
+            r#"{"type":"message","role":"user","content":"Hello","timestamp":"2025-01-01T00:00:00Z"}"#,
+            // Unknown event type - should trigger UnknownEventSink
+            r#"{"type":"weird_new_event_type","foo":"bar","baz":123}"#,
+            r#"{"type":"message","role":"assistant","content":"Hi there","timestamp":"2025-01-01T00:00:01Z"}"#,
+        ];
+        fs::write(&session_file, session_data.join("\n")).expect("write session file");
+
+        // Parse the session file
+        let result = SessionTailer::parse_claude_session_file(&session_file, None)
+            .expect("parse should not error");
+
+        // Session should still parse successfully (unknown events are not fatal)
+        assert!(result.is_some());
+        let session = result.unwrap();
+        assert_eq!(session.session_id, "test-session-123");
+        // We should have 2 messages (unknown event is ignored for message list)
+        assert_eq!(session.messages.len(), 2);
+
+        // Verify the unknown event was recorded via UnknownEventSink
+        let samples = unknown_event_sink::global_registry().get_all_samples();
+        let claude_unknown: Vec<_> = samples
+            .iter()
+            .filter(|s| s.adapter == "claude")
+            .collect();
+
+        // Should have recorded the unknown event
+        assert!(!claude_unknown.is_empty(), "Expected unknown event to be recorded");
+
+        // Verify the event kind was extracted correctly
+        let unknown_sample = claude_unknown
+            .iter()
+            .find(|s| s.event_kind == "weird_new_event_type");
+        assert!(unknown_sample.is_some(), "Expected 'weird_new_event_type' to be recorded");
+
+        // Verify the metric was incremented
+        let final_count = m.hoop_unknown_event_labeled_total.snapshot();
+        assert!(final_count.len() > initial_count.len(), "Expected metric to increment");
+
+        // Verify the specific metric label exists
+        let unknown_metric = final_count
+            .iter()
+            .find(|(labels, _)| {
+                labels.first().map(|s| s.as_str()) == Some("claude")
+                    && labels.get(1).map(|s| s.as_str()) == Some("weird_new_event_type")
+            });
+        assert!(unknown_metric.is_some(), "Expected metric with (claude, weird_new_event_type) labels");
+    }
+
+    /// Synthetic unknown-event test for Codex adapter (§16.2 acceptance).
+    ///
+    /// Verifies that unknown Codex event types are recorded via UnknownEventSink.
+    #[test]
+    fn codex_adapter_unknown_event_records_via_sink() {
+        use crate::unknown_event_sink;
+
+        // Clear global registry to avoid test interference
+        unknown_event_sink::global_registry().clear_all();
+
+        // Get initial metric value
+        let m = crate::metrics::metrics();
+        let initial_count = m.hoop_unknown_event_labeled_total.snapshot();
+
+        // Create a temporary session file with an unknown event type
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let session_file = tmp.path().join("test_codex_unknown.jsonl");
+
+        // Write a session with an unknown event type
+        let session_data = vec![
+            r#"{"type":"session_start","session_id":"codex-session-456","cwd":"/tmp"}"#,
+            r#"{"type":"message","role":"user","content":"Help me","timestamp":"2025-01-01T00:00:00Z"}"#,
+            // Unknown event type - should trigger UnknownEventSink
+            r#"{"type":"codex_experimental_feature","data":{"nested":true}}"#,
+            r#"{"type":"session_end","end_time":"2025-01-01T00:01:00Z"}"#,
+        ];
+        fs::write(&session_file, session_data.join("\n")).expect("write session file");
+
+        // Parse the session file
+        let result = SessionTailer::parse_codex_session_file(&session_file, None)
+            .expect("parse should not error");
+
+        // Session should still parse successfully
+        assert!(result.is_some());
+        let session = result.unwrap();
+        assert_eq!(session.session_id, "codex-session-456");
+
+        // Verify the unknown event was recorded via UnknownEventSink
+        let samples = unknown_event_sink::global_registry().get_all_samples();
+        let codex_unknown: Vec<_> = samples
+            .iter()
+            .filter(|s| s.adapter == "codex")
+            .collect();
+
+        // Should have recorded the unknown event
+        assert!(!codex_unknown.is_empty(), "Expected unknown event to be recorded");
+
+        // Verify the metric was incremented
+        let final_count = m.hoop_unknown_event_labeled_total.snapshot();
+        assert!(final_count.len() > initial_count.len(), "Expected metric to increment");
+    }
+
+    /// Synthetic unknown-event test for Gemini adapter (§16.2 acceptance).
+    #[test]
+    fn gemini_adapter_unknown_event_records_via_sink() {
+        use crate::unknown_event_sink;
+
+        // Clear global registry to avoid test interference
+        unknown_event_sink::global_registry().clear_all();
+
+        // Get initial metric value
+        let m = crate::metrics::metrics();
+        let initial_count = m.hoop_unknown_event_labeled_total.snapshot();
+
+        // Create a temporary session file with an unknown event type
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let session_file = tmp.path().join("test_gemini_unknown.jsonl");
+
+        // Write a session with an unknown event type
+        let session_data = vec![
+            r#"{"type":"metadata","session_id":"gemini-session-789","cwd":"/tmp"}"#,
+            r#"{"type":"message","role":"user","content":"Hello Gemini","timestamp":"2025-01-01T00:00:00Z"}"#,
+            // Unknown event type - should trigger UnknownEventSink
+            r#"{"type":"gemini_beta_function","function_name":"test"}"#,
+        ];
+        fs::write(&session_file, session_data.join("\n")).expect("write session file");
+
+        // Parse the session file
+        let result = SessionTailer::parse_gemini_session_file(&session_file, None)
+            .expect("parse should not error");
+
+        // Session should still parse successfully
+        assert!(result.is_some());
+        let session = result.unwrap();
+        assert_eq!(session.session_id, "gemini-session-789");
+
+        // Verify the unknown event was recorded via UnknownEventSink
+        let samples = unknown_event_sink::global_registry().get_all_samples();
+        let gemini_unknown: Vec<_> = samples
+            .iter()
+            .filter(|s| s.adapter == "gemini")
+            .collect();
+
+        // Should have recorded the unknown event
+        assert!(!gemini_unknown.is_empty(), "Expected unknown event to be recorded");
+
+        // Verify the metric was incremented
+        let final_count = m.hoop_unknown_event_labeled_total.snapshot();
+        assert!(final_count.len() > initial_count.len(), "Expected metric to increment");
+    }
+
+    /// Synthetic unknown-event test for OpenCode adapter (§16.2 acceptance).
+    #[test]
+    fn opencode_adapter_unknown_event_records_via_sink() {
+        use crate::unknown_event_sink;
+
+        // Clear global registry to avoid test interference
+        unknown_event_sink::global_registry().clear_all();
+
+        // Get initial metric value
+        let m = crate::metrics::metrics();
+        let initial_count = m.hoop_unknown_event_labeled_total.snapshot();
+
+        // Create a temporary session file with an unknown event type
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let session_file = tmp.path().join("test_opencode_unknown.jsonl");
+
+        // Write a session with an unknown event type
+        let session_data = vec![
+            r#"{"type":"metadata","session_id":"opencode-session-999","cwd":"/tmp"}"#,
+            r#"{"type":"message","role":"user","content":"Hello OpenCode","timestamp":"2025-01-01T00:00:00Z"}"#,
+            // Unknown event type - should trigger UnknownEventSink
+            r#"{"type":"opencode_extension","extension_data":"test"}"#,
+        ];
+        fs::write(&session_file, session_data.join("\n")).expect("write session file");
+
+        // Parse the session file
+        let result = SessionTailer::parse_opencode_session_file(&session_file, None)
+            .expect("parse should not error");
+
+        // Session should still parse successfully
+        assert!(result.is_some());
+        let session = result.unwrap();
+        assert_eq!(session.session_id, "opencode-session-999");
+
+        // Verify the unknown event was recorded via UnknownEventSink
+        let samples = unknown_event_sink::global_registry().get_all_samples();
+        let opencode_unknown: Vec<_> = samples
+            .iter()
+            .filter(|s| s.adapter == "opencode")
+            .collect();
+
+        // Should have recorded the unknown event
+        assert!(!opencode_unknown.is_empty(), "Expected unknown event to be recorded");
+
+        // Verify the metric was incremented
+        let final_count = m.hoop_unknown_event_labeled_total.snapshot();
+        assert!(final_count.len() > initial_count.len(), "Expected metric to increment");
+    }
+
+    /// Synthetic unknown-event test for Aider adapter (§16.2 acceptance).
+    #[test]
+    fn aider_adapter_unknown_event_records_via_sink() {
+        use crate::unknown_event_sink;
+
+        // Clear global registry to avoid test interference
+        unknown_event_sink::global_registry().clear_all();
+
+        // Get initial metric value
+        let m = crate::metrics::metrics();
+        let initial_count = m.hoop_unknown_event_labeled_total.snapshot();
+
+        // Create a temporary session file with an unknown event type
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let session_file = tmp.path().join("test_aider_unknown.jsonl");
+
+        // Write a session with an unknown event type (using ClaudeEntry format)
+        let session_data = vec![
+            r#"{"type":"metadata","session_id":"aider-session-111","cwd":"/tmp"}"#,
+            r#"{"type":"message","role":"user","content":"Hello Aider","timestamp":"2025-01-01T00:00:00Z"}"#,
+            // Unknown event type - should trigger UnknownEventSink
+            r#"{"type":"aider_custom_event","custom_field":"value"}"#,
+        ];
+        fs::write(&session_file, session_data.join("\n")).expect("write session file");
+
+        // Parse the session file
+        let result = SessionTailer::parse_aider_session_file(&session_file, None)
+            .expect("parse should not error");
+
+        // Session should still parse successfully
+        assert!(result.is_some());
+        let session = result.unwrap();
+        assert_eq!(session.session_id, "aider-session-111");
+
+        // Verify the unknown event was recorded via UnknownEventSink
+        let samples = unknown_event_sink::global_registry().get_all_samples();
+        let aider_unknown: Vec<_> = samples
+            .iter()
+            .filter(|s| s.adapter == "aider")
+            .collect();
+
+        // Should have recorded the unknown event
+        assert!(!aider_unknown.is_empty(), "Expected unknown event to be recorded");
+
+        // Verify the metric was incremented
+        let final_count = m.hoop_unknown_event_labeled_total.snapshot();
+        assert!(final_count.len() > initial_count.len(), "Expected metric to increment");
+    }

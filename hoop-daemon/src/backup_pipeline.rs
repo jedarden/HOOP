@@ -194,7 +194,25 @@ impl BackupPipeline {
                 ))
             };
 
-        // 7. Build and upload manifest (LAST — after all pieces)
+        // 7. Config file backup (config.yml and projects.yaml)
+        let config_backup = if let Err(e) = crate::config_backup::upload_config_to_snapshot(self, snapshot_id).await {
+            warn!("Config backup failed (fleet.db backup succeeded): {}", e);
+            None
+        } else {
+            match crate::config_backup::ConfigBackup::from_hoop_dir() {
+                Ok(cb) if cb.config_yml_size > 0 || cb.projects_yaml_size > 0 => {
+                    Some(crate::snapshot_manifest::ConfigBackupMetadata {
+                        config_yml_hash: cb.config_yml_hash,
+                        config_yml_size: cb.config_yml_size,
+                        projects_yaml_hash: cb.projects_yaml_hash,
+                        projects_yaml_size: cb.projects_yaml_size,
+                    })
+                }
+                _ => None,
+            }
+        };
+
+        // 8. Build and upload manifest (LAST — after all pieces)
         let final_audit_hash = fleet::get_final_audit_hash().ok();
         let manifest = SnapshotManifest {
             snapshot_id: snapshot_id.to_string(),
@@ -207,6 +225,7 @@ impl BackupPipeline {
             fleet_db_sha256: Some(fleet_db_sha256),
             fleet_db_size: Some(file_size),
             final_audit_hash,
+            config_backup,
         };
 
         let manifest_json =
@@ -227,7 +246,7 @@ impl BackupPipeline {
                 .unwrap_or(&manifest_key),
         );
 
-        // 8. Record metrics
+        // 9. Record metrics
         let elapsed = start.elapsed();
         let m = metrics::metrics();
         m.hoop_backup_last_success_timestamp

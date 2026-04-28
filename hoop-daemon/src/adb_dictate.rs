@@ -130,6 +130,8 @@ async fn adb_dictate(
         language: None,
         tags: vec!["adb".to_string()],
         transcription_status: crate::dictated_notes::TranscriptionStatus::Pending,
+        synthesis_result: None,
+        draft_id: None,
     };
     crate::dictated_notes::insert_note(&conn, &note).map_err(|e| {
         (

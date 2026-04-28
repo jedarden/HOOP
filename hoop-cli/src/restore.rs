@@ -488,6 +488,46 @@ fn decrypt_with_age(data: &[u8]) -> Result<bytes::Bytes> {
     Ok(bytes::Bytes::from(output.stdout))
 }
 
+/// Restore config files from a snapshot.
+async fn restore_config_files(
+    s3_config: &S3Config,
+    bucket: &str,
+    prefix: &str,
+    hoop_dir: &Path,
+) -> Result<()> {
+    // Restore config.yml if it exists in the snapshot
+    let config_key = format!("{}/config.yml.zst", prefix.trim_end_matches('/'));
+    match s3_get(s3_config, bucket, &config_key).await {
+        Ok(data) => {
+            let decompressed = zstd::decode_all(&data[..])?;
+            let config_path = hoop_dir.join("config.yml");
+            std::fs::write(&config_path, decompressed)?;
+            println!("Restored config.yml");
+        }
+        Err(_) => {
+            // config.yml might not exist in older snapshots
+            println!("config.yml not found in snapshot (may not have existed at backup time)");
+        }
+    }
+
+    // Restore projects.yaml if it exists in the snapshot
+    let projects_key = format!("{}/projects.yaml.zst", prefix.trim_end_matches('/'));
+    match s3_get(s3_config, bucket, &projects_key).await {
+        Ok(data) => {
+            let decompressed = zstd::decode_all(&data[..])?;
+            let projects_path = hoop_dir.join("projects.yaml");
+            std::fs::write(&projects_path, decompressed)?;
+            println!("Restored projects.yaml");
+        }
+        Err(_) => {
+            // projects.yaml might not exist in older snapshots
+            println!("projects.yaml not found in snapshot (may not have existed at backup time)");
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

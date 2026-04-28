@@ -378,7 +378,7 @@ async fn list_open_beads(
 /// 4. Insert audit row with actor + source
 /// 5. Emit stitch_created event on WS
 /// 6. Return response with bead data
-async fn create_bead(
+pub async fn create_bead(
     Path(project): Path<String>,
     State(state): State<crate::DaemonState>,
     connect_info: Option<ConnectInfo<SocketAddr>>,
@@ -400,7 +400,7 @@ async fn create_bead(
         connect_info.map(|ci| ci.0),
         crate::auth::Role::Drafter,
     )
-    .map_err(|e| (e.0, serde_json::to_string(e.1).unwrap_or_else(|_| e.0.to_string())))?;
+    .map_err(|e| (e.0, serde_json::to_string(&e.1 .0).unwrap_or_else(|_| e.0.to_string())))?;
 
     // 1. Validate draft against schema
     validate_draft(&req)?;
