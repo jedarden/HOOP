@@ -21,7 +21,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 /// Current schema version
-pub const SCHEMA_VERSION: &str = "1.25.0";
+pub const SCHEMA_VERSION: &str = "1.27.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -908,6 +908,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.1.0" => {
             migrate!(conn, migrate_v11_to_v12, "1.1.0", "1.2.0", "Add Pattern service tables")?;
@@ -933,6 +936,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.2.0" => {
             migrate!(conn, migrate_v12_to_v13, "1.2.0", "1.3.0", "Add dictated_notes metadata table")?;
@@ -957,6 +963,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.3.0" => {
             migrate!(conn, migrate_v13_to_v14, "1.3.0", "1.4.0", "Add word-level timestamps to dictated_notes")?;
@@ -980,6 +989,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.4.0" => {
             migrate!(conn, migrate_v14_to_v15, "1.4.0", "1.5.0", "Add transcription_jobs table")?;
@@ -1002,6 +1014,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.5.0" => {
             migrate!(conn, migrate_v15_to_v16, "1.5.0", "1.6.0", "Add transcription_status to dictated_notes")?;
@@ -1023,6 +1038,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.6.0" => {
             migrate!(conn, migrate_v16_to_v17, "1.6.0", "1.7.0", "Add audit trail columns to actions")?;
@@ -1043,6 +1061,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.7.0" => {
             migrate!(conn, migrate_v17_to_v18, "1.7.0", "1.8.0", "Add agent_sessions table")?;
@@ -1062,6 +1083,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.8.0" => {
             migrate!(conn, migrate_v18_to_v19, "1.8.0", "1.9.0", "Add reflection_ledger table")?;
@@ -1080,6 +1104,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.9.0" => {
             migrate!(conn, migrate_v19_to_v110, "1.9.0", "1.10.0", "Add draft_queue table")?;
@@ -1097,6 +1124,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.10.0" => {
             migrate!(conn, migrate_v110_to_v111, "1.10.0", "1.11.0", "Add morning_briefs table")?;
@@ -1113,6 +1143,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.11.0" => {
             migrate!(conn, migrate_v111_to_v112, "1.11.0", "1.12.0", "Add has_started_session to agent_sessions")?;
@@ -1128,6 +1161,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.12.0" => {
             migrate!(conn, migrate_v112_to_v113, "1.12.0", "1.13.0", "Add cross-project state tables")?;
@@ -1142,6 +1178,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.13.0" => {
             migrate!(conn, migrate_v113_to_v114, "1.13.0", "1.14.0", "Add classification column to stitches")?;
@@ -1155,6 +1194,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.14.0" => {
             migrate!(conn, migrate_v114_to_v115, "1.14.0", "1.15.0", "Add codex_account_daily_spend table")?;
@@ -1179,6 +1221,8 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.16.0" => {
             migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
@@ -1190,6 +1234,8 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.17.0" => {
             migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
@@ -1200,6 +1246,8 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.18.0" => {
             migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
@@ -1208,6 +1256,9 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.19.0" => {
             migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
@@ -1215,27 +1266,55 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.20.0" => {
             migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
+            migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.21.0" => {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.22.0" => {
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         "1.23.0" => {
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+        }
+        "1.24.0" => {
+            migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+        }
+        "1.25.0" => {
+            migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+        }
+        "1.26.0" => {
+            migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
         }
         _ => {
             return Err(anyhow::anyhow!(
-                "Unsupported schema version: {}. Expected 0.1.0–1.24.0",
+                "Unsupported schema version: {}. Expected 0.1.0–1.26.0",
                 from_version
             ));
         }
@@ -2461,6 +2540,117 @@ pub fn migrate_v124_to_v125(conn: &mut Connection) -> Result<()> {
 
     info!("agent_turns table created with indexes");
     update_schema_version(conn, "1.25.0")?;
+    Ok(())
+}
+
+/// Migration 1.25.0 → 1.26.0: Add stitch_percentile_index table
+///
+/// Creates the percentile index table for What-Will-This-Take preview.
+/// The index maintains pre-computed cost and duration percentiles by
+/// similarity bucket (title tokens, body length, labels, attachments).
+/// Query path for preview API targets <50ms via indexed lookup.
+///
+/// §6 Phase 4 marquee #8 bullets 2-3
+pub fn migrate_v125_to_v126(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.25.0 → 1.26.0: Adding stitch_percentile_index table");
+
+    // Create the percentile index table
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS stitch_percentile_index (
+            bucket_key TEXT PRIMARY KEY NOT NULL,
+            title_tokens_hash TEXT NOT NULL,
+            body_length_bucket TEXT NOT NULL,
+            labels_hash TEXT NOT NULL,
+            attachments_bucket TEXT NOT NULL,
+            cost_p50 REAL NOT NULL DEFAULT 0.0,
+            cost_p90 REAL NOT NULL DEFAULT 0.0,
+            duration_p50 REAL NOT NULL DEFAULT 0.0,
+            duration_p90 REAL NOT NULL DEFAULT 0.0,
+            sample_count INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL
+        )
+        "#,
+        [],
+    )?;
+
+    // Create metadata table for schema version tracking
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS stitch_percentile_index_meta (
+            key TEXT PRIMARY KEY NOT NULL,
+            value TEXT NOT NULL
+        )
+        "#,
+        [],
+    )?;
+
+    // Create index for efficient lookup by bucket features
+    conn.execute(
+        r#"
+        CREATE INDEX IF NOT EXISTS idx_stitch_percentile_lookup
+        ON stitch_percentile_index(title_tokens_hash, body_length_bucket, labels_hash, attachments_bucket)
+        "#,
+        [],
+    )?;
+
+    // Initialize the schema version in metadata
+    let now = Utc::now().to_rfc3339();
+    conn.execute(
+        r#"
+        INSERT INTO stitch_percentile_index_meta (key, value)
+        VALUES ('schema_version', '1.0.0'),
+               ('initialized_at', ?1)
+        ON CONFLICT (key) DO UPDATE SET value = excluded.value
+        "#,
+        params![now],
+    )?;
+
+    info!("stitch_percentile_index table created successfully");
+    update_schema_version(conn, "1.26.0")?;
+    Ok(())
+}
+
+/// Migration 1.26.0 → 1.27.0: Add fix_patterns table
+///
+/// This migration creates the fix_patterns table for storing reusable
+/// code fix templates. Each pattern includes a signature vector for
+/// similarity matching, keywords for search, a markdown fix template,
+/// and example source stitches where the pattern applies.
+///
+/// Prerequisite for curation UI (hoop-ttb.3.40)
+/// Plan reference: §6 Phase 2 marquee #4
+pub fn migrate_v126_to_v127(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.26.0 → 1.27.0: Adding fix_patterns table");
+
+    // Create the fix_patterns table
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS fix_patterns (
+            id TEXT PRIMARY KEY NOT NULL,
+            name TEXT NOT NULL,
+            signature_vector_json TEXT NOT NULL,
+            keywords TEXT NOT NULL,
+            recommended_fix_template_md TEXT NOT NULL,
+            example_source_stitches_json TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            applied_count INTEGER NOT NULL DEFAULT 0
+        )
+        "#,
+        [],
+    )?;
+
+    // Create index for keyword search
+    conn.execute(
+        r#"
+        CREATE INDEX IF NOT EXISTS idx_fix_patterns_keywords
+        ON fix_patterns(keywords)
+        "#,
+        [],
+    )?;
+
+    info!("fix_patterns table created successfully");
+    update_schema_version(conn, "1.27.0")?;
     Ok(())
 }
 

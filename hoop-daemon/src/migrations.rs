@@ -36,6 +36,8 @@ use crate::fleet::{
     migrate_v122_to_v123,
     migrate_v123_to_v124,
     migrate_v124_to_v125,
+    migrate_v125_to_v126,
+    migrate_v126_to_v127,
 };
 use anyhow::{bail, Result};
 use rusqlite::Connection;
@@ -494,6 +496,20 @@ pub fn get_migration_registry() -> MigrationRegistry {
         description: "Add agent_turns table for audit trail",
         up: migrate_v124_to_v125,
         down: Some(rollback_v125_to_v124),
+    });
+
+    let _ = registry.register(Migration {
+        version: "1.26.0",
+        description: "Add stitch_percentile_index table",
+        up: migrate_v125_to_v126,
+        down: Some(rollback_v126_to_v125),
+    });
+
+    let _ = registry.register(Migration {
+        version: "1.27.0",
+        description: "Add fix_patterns table for reusable fix templates",
+        up: migrate_v126_to_v127,
+        down: Some(rollback_v127_to_v126),
     });
 
     registry
@@ -1013,6 +1029,25 @@ fn rollback_v125_to_v124(conn: &mut Connection) -> Result<()> {
     info!("Rolling back migration 1.25.0 → 1.24.0: Dropping agent_turns table");
 
     conn.execute("DROP TABLE IF EXISTS agent_turns", [])?;
+
+    Ok(())
+}
+
+/// Rollback 1.26.0 → 1.25.0: Drop stitch_percentile_index tables
+fn rollback_v126_to_v125(conn: &mut Connection) -> Result<()> {
+    info!("Rolling back migration 1.26.0 → 1.25.0: Dropping stitch_percentile_index tables");
+
+    conn.execute("DROP TABLE IF EXISTS stitch_percentile_index", [])?;
+    conn.execute("DROP TABLE IF EXISTS stitch_percentile_index_meta", [])?;
+
+    Ok(())
+}
+
+/// Rollback 1.27.0 → 1.26.0: Drop fix_patterns table
+fn rollback_v127_to_v126(conn: &mut Connection) -> Result<()> {
+    info!("Rolling back migration 1.27.0 → 1.26.0: Dropping fix_patterns table");
+
+    conn.execute("DROP TABLE IF EXISTS fix_patterns", [])?;
 
     Ok(())
 }
