@@ -1,13 +1,11 @@
 //! Per-project redaction policy resolver (§18.5)
 //!
-//! Resolves the effective redaction policy for a project by merging per-project
-//! overrides from projects.yaml with the global config.yml policy.
+//! Resolves the effective redaction policy for a project.
 //!
 //! ## Precedence
 //!
-//! 1. Per-project `redaction:` block in projects.yaml (highest priority)
-//! 2. Global `redaction:` block in config.yml (fallback)
-//! 3. Built-in defaults (if no global policy is configured)
+//! 1. Global `redaction:` block in config.yml (TODO: not yet implemented in schema)
+//! 2. Built-in defaults (if no global policy is configured)
 //!
 //! ## Actions
 //!
@@ -16,7 +14,7 @@
 //! - `reject`: Block the operation entirely (e.g., attachment upload)
 
 use anyhow::Result;
-use hoop_schema::{HoopConfig, ProjectsRegistry};
+use hoop_schema::{HoopConfig, ProjectsRegistry, ProjectsRegistryProjectsItem};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -27,15 +25,15 @@ use tokio::sync::RwLock;
 pub struct RedactionPolicyState {
     /// Global redaction policy from config.yml (may be None if not configured)
     global_policy: Option<GlobalRedactionPolicy>,
-    /// Projects registry for per-project overrides
-    projects_registry: Arc<RwLock<ProjectsRegistry>>,
+    /// Projects registry (kept for future per-project policy support)
+    _projects_registry: Arc<RwLock<ProjectsRegistry>>,
 }
 
 impl Clone for RedactionPolicyState {
     fn clone(&self) -> Self {
         Self {
             global_policy: self.global_policy.clone(),
-            projects_registry: self.projects_registry.clone(),
+            _projects_registry: self._projects_registry.clone(),
         }
     }
 }
@@ -79,7 +77,7 @@ pub struct ResolvedRedactionPolicy {
     pub action: RedactionAction,
     /// Enabled pattern names for this project
     pub patterns: HashSet<String>,
-    /// Source of the policy ("global" or "project:<name>")
+    /// Source of the policy ("global" or "built-in default")
     pub source: String,
 }
 
@@ -109,6 +107,15 @@ fn default_pattern_names() -> HashSet<String> {
     .iter()
     .map(|s| s.to_string())
     .collect()
+}
+
+/// Extract redaction policy from a ProjectsRegistryProjectsItem.
+///
+/// Returns None if no redaction override is configured for the project.
+/// NOTE: Per-project redaction policy is not yet supported in the schema.
+fn extract_redaction_from_project(_project: &ProjectsRegistryProjectsItem) -> Option<ResolvedRedactionPolicy> {
+    // TODO: Implement per-project redaction policy when added to schema
+    None
 }
 
 /// Map a high-level pattern name to its implementation-specific pattern names.
@@ -173,25 +180,21 @@ impl RedactionPolicyState {
 
         Self {
             global_policy,
-            projects_registry: Arc::new(RwLock::new(projects_registry)),
+            _projects_registry: Arc::new(RwLock::new(projects_registry)),
         }
     }
 
     /// Update the projects registry (called on hot-reload).
     pub async fn update_projects(&self, registry: ProjectsRegistry) {
-        *self.projects_registry.write().await = registry;
+        *self._projects_registry.write().await = registry;
     }
 
     /// Resolve the redaction policy for a specific project.
     ///
     /// Returns the effective policy by checking:
-    /// 1. Per-project override in projects.yaml (TODO: not yet implemented in schema)
-    /// 2. Global policy in config.yml (TODO: not yet implemented in schema)
-    /// 3. Built-in defaults
+    /// 1. Global policy in config.yml (TODO: not yet implemented in schema)
+    /// 2. Built-in defaults
     pub async fn resolve_for_project(&self, _project_name: &str) -> ResolvedRedactionPolicy {
-        // TODO: Parse per-project redaction override when redaction field is added to ProjectsRegistryProjectsItem
-        // For now, fall back to global policy or built-in defaults
-
         // Fall back to global policy
         if let Some(global) = &self.global_policy {
             let patterns = if global.patterns.is_empty() {
@@ -309,11 +312,6 @@ pub async fn check_reject_policy(
 mod tests {
     use super::*;
     use hoop_schema::{HoopConfig, HoopConfigSchemaVersion, ProjectsRegistry};
-
-    // NOTE: The redaction policy feature is not yet fully implemented in the schema.
-    // The tests below verify the default behavior only. Full tests will be added
-    // when the redaction field is added to HoopConfig and ProjectsRegistryProjectsItem.
-    // See TODO comments in RedactionPolicyState::new() and resolve_for_project().
 
     #[test]
     fn test_default_policy_returns_defaults() {

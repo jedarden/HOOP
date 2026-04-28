@@ -390,7 +390,9 @@ mod tests {
             args: serde_json::Map::new(),
             result: AuditRowResult::Success,
             error: None,
-            schema_version: AuditRowSchemaVersion("1.0.0".to_string()),
+            hash_prev: AuditRowHashPrev("0".repeat(64)),
+            hash_self: AuditRowHashSelf("0".repeat(64)),
+            schema_version: None,
         }
     );
 
@@ -644,7 +646,9 @@ mod tests {
             args: serde_json::Map::new(),
             result: AuditRowResult::Success,
             error: None,
-            schema_version: AuditRowSchemaVersion("1.0.0".to_string()),
+            hash_prev: AuditRowHashPrev("0".repeat(64)),
+            hash_self: AuditRowHashSelf("0".repeat(64)),
+            schema_version: None,
         });
 
         // Bead
