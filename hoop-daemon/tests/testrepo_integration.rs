@@ -233,7 +233,7 @@ impl WsSnapshots {
 #[tokio::test]
 async fn daemon_boots_successfully_against_testrepo() {
     // Acceptance: Daemon starts without errors against testrepo/
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _daemon) = spawn_test_daemon()
         .await
         .expect("Failed to spawn daemon");
 
@@ -251,7 +251,7 @@ async fn daemon_boots_successfully_against_testrepo() {
 #[tokio::test]
 async fn ws_init_event_is_first_message() {
     // Acceptance: First WS message is always init with subscriptions
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _daemon) = spawn_test_daemon()
         .await
         .expect("Failed to spawn daemon");
 
@@ -303,7 +303,7 @@ async fn ws_init_event_is_first_message() {
 #[tokio::test]
 async fn ws_receives_all_snapshot_events() {
     // Acceptance: WS client receives all expected snapshot events
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _daemon) = spawn_test_daemon()
         .await
         .expect("Failed to spawn daemon");
 
@@ -337,7 +337,7 @@ async fn ws_receives_all_snapshot_events() {
 #[tokio::test]
 async fn ws_and_rest_return_consistent_state() {
     // Acceptance: State projections are consistent across WS and REST
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _daemon) = spawn_test_daemon()
         .await
         .expect("Failed to spawn daemon");
 
@@ -385,7 +385,7 @@ async fn ws_and_rest_return_consistent_state() {
 #[tokio::test]
 async fn rest_api_endpoints_return_valid_state() {
     // Acceptance: REST API returns correct state projections
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _daemon) = spawn_test_daemon()
         .await
         .expect("Failed to spawn daemon");
 
@@ -421,7 +421,7 @@ async fn rest_api_endpoints_return_valid_state() {
 #[tokio::test]
 async fn metrics_endpoint_exposes_expected_metrics() {
     // Acceptance: /metrics returns Prometheus-style metrics
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _daemon) = spawn_test_daemon()
         .await
         .expect("Failed to spawn daemon");
 
@@ -456,7 +456,7 @@ async fn metrics_endpoint_exposes_expected_metrics() {
 #[tokio::test]
 async fn ws_subscribe_unsubscribe_works() {
     // Acceptance: Subscribe/unsubscribe messages are processed
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _daemon) = spawn_test_daemon()
         .await
         .expect("Failed to spawn daemon");
 
@@ -508,7 +508,7 @@ async fn ws_subscribe_unsubscribe_works() {
 #[tokio::test]
 async fn concurrent_websocket_connections() {
     // Acceptance: Multiple concurrent WS connections each receive init
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _daemon) = spawn_test_daemon()
         .await
         .expect("Failed to spawn daemon");
 
@@ -556,7 +556,7 @@ async fn concurrent_websocket_connections() {
 #[tokio::test]
 async fn ws_reconnect_rebuilds_state() {
     // Acceptance: Disconnect → reconnect → receive fresh init + snapshots
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _daemon) = spawn_test_daemon()
         .await
         .expect("Failed to spawn daemon");
 
@@ -625,7 +625,7 @@ async fn ws_reconnect_rebuilds_state() {
 #[tokio::test]
 async fn test_state_projections_contain_required_fields() {
     // Acceptance: State projections contain all required fields
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _daemon) = spawn_test_daemon()
         .await
         .expect("Failed to spawn daemon");
 

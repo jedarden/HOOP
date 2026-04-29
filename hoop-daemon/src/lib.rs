@@ -78,6 +78,8 @@ pub mod api_tour_project;
 #[cfg(any(test, feature = "testing"))]
 pub mod integration_harness;
 #[cfg(any(test, feature = "testing"))]
+pub mod integration_test_client;
+#[cfg(any(test, feature = "testing"))]
 pub mod load_test;
 
 pub mod log_rotation;
