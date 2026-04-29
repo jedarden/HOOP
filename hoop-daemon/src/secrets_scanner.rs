@@ -637,4 +637,150 @@ AWS: AKIA1234567890ABCDEF
         assert!(calculate_entropy(low) < ENTROPY_THRESHOLD);
         assert!(calculate_entropy(high) >= ENTROPY_THRESHOLD);
     }
+
+    // ── Synthetic secrets test fixtures (hoop-ttb.15.1) ─────────────────────────────
+    // These fixtures test detection of synthetic secrets that should always be caught.
+    // All patterns must match the default_secret_patterns() in config_resolver.rs.
+
+    const FIXTURE_SECRETS: &[(&str, &str)] = &[
+        // Stripe API keys
+        ("stripe_live_key", "My Stripe key is sk_live_51AbCdEf1234567890AbCdEf1234567890AbC please keep it safe"),
+        ("stripe_test_key", "Stripe test: sk_test_51AbCdEf1234567890AbCdEf1234567890AbC"),
+        ("stripe_ir_live", "IR key: ir_live_51AbCdEf1234567890AbCdEf1234567890AbCdEf123456"),
+        ("stripe_ir_test", "IR test: ir_test_51AbCdEf1234567890AbCdEf1234567890AbCdEf123456"),
+
+        // OpenAI API keys
+        ("openai_key", "My OpenAI key is sk-ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdefghijkl"),
+        ("openai_proj_key", "OpenAI project key: sk-proj-AbCdEf1234567890AbCdEf1234567890AbCdEf1234567890abc"),
+
+        // Anthropic API keys
+        ("anthropic_key", "Here is my key sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666 please keep it safe"),
+        ("anthropic_short", "Key: sk-ant-ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"),
+
+        // AWS access keys
+        ("aws_access_key", "aws_access_key_id = AKIAIOSFODNN7EXAMPLE"),
+        ("aws_temp_key", "ASIA1234567890ABCDEF"),
+        ("aws_secret_key", "aws_secret_access_key = ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890+/AB"),
+
+        // GitHub tokens
+        ("github_token_ghp", "token=ghp_16C7e42F292c6912E7710c838347Ae178B4a"),
+        ("github_pat", "My GitHub token is github_pat_1234567890abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ12345678901234567890"),
+
+        // JWT tokens
+        ("jwt_header", "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"),
+        ("jwt_standalone", "Token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"),
+
+        // Slack tokens
+        ("slack_bot", "SLACK_TOKEN=xoxb-1234567890-1234567890123-12345678901234567890123456"),
+        ("slack_user", "xoxp-1234567890-1234567890123-12345678901234567890123456"),
+
+        // Bearer tokens
+        ("bearer_token", "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"),
+
+        // Environment variable secrets
+        ("env_var_anthropic", "export ANTHROPIC_API_KEY=sk-ant-api03-TEST1234567890ABCDEFGHIJ1234567890ABCD"),
+        ("env_var_openai", "OPENAI_API_KEY=sk-proj-AbCdEf1234567890AbCdEf1234567890AbCdEf1234567890abc"),
+        ("env_var_generic", "API_KEY=sk-ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdefghijklmn"),
+
+        // JSON secret fields
+        ("json_password", r#"{"password": "s3cr3tP@ssw0rd!", "api_key": "abc123def456ghi789jkl"}"#),
+        ("json_api_key", r#"{"api_key": "sk-ant-api03-TEST1234567890ABCDEFGHIJ1234567890ABCD"}"#),
+        ("json_secret", r#"{"secret": "my-secret-key-value-1234567890"}"#),
+    ];
+
+    #[test]
+    fn test_synthetic_secrets_all_detected() {
+        init();
+        let mut detected = 0;
+        let mut missed = Vec::new();
+
+        for (name, text) in FIXTURE_SECRETS {
+            let findings = scan_text(text, None);
+            if !findings.is_empty() {
+                detected += 1;
+            } else {
+                missed.push(*name);
+            }
+        }
+
+        // All synthetic secrets should be detected
+        assert_eq!(
+            detected,
+            FIXTURE_SECRETS.len(),
+            "Not all synthetic secrets were detected. Missed: {:?}",
+            missed
+        );
+    }
+
+    #[test]
+    fn test_synthetic_secrets_stripe() {
+        init();
+        let findings = scan_text(FIXTURE_SECRETS[0].1, None);
+        assert!(!findings.is_empty(), "Stripe live key should be detected");
+        assert!(findings.iter().any(|f| f.pattern_id == "stripe_api_key" || f.pattern_id == "generic_sk_key"));
+    }
+
+    #[test]
+    fn test_synthetic_secrets_openai() {
+        init();
+        let findings = scan_text(FIXTURE_SECRETS[4].1, None);
+        assert!(!findings.is_empty(), "OpenAI key should be detected");
+        assert!(findings.iter().any(|f| f.pattern_id == "openai_api_key" || f.pattern_id == "generic_sk_key"));
+    }
+
+    #[test]
+    fn test_synthetic_secrets_anthropic() {
+        init();
+        let findings = scan_text(FIXTURE_SECRETS[6].1, None);
+        assert!(!findings.is_empty(), "Anthropic key should be detected");
+        assert!(findings.iter().any(|f| f.pattern_id == "anthropic_api_key"));
+    }
+
+    #[test]
+    fn test_synthetic_secrets_aws() {
+        init();
+        let findings = scan_text(FIXTURE_SECRETS[9].1, None);
+        assert!(!findings.is_empty(), "AWS access key should be detected");
+        assert!(findings.iter().any(|f| f.pattern_id == "aws_access_key"));
+    }
+
+    #[test]
+    fn test_synthetic_secrets_github() {
+        init();
+        let findings = scan_text(FIXTURE_SECRETS[12].1, None);
+        assert!(!findings.is_empty(), "GitHub token should be detected");
+        assert!(findings.iter().any(|f| f.pattern_id == "github_token"));
+    }
+
+    #[test]
+    fn test_synthetic_secrets_jwt() {
+        init();
+        let findings = scan_text(FIXTURE_SECRETS[14].1, None);
+        assert!(!findings.is_empty(), "JWT should be detected");
+        assert!(findings.iter().any(|f| f.pattern_id == "jwt" || f.pattern_id == "bearer_token"));
+    }
+
+    #[test]
+    fn test_synthetic_secrets_slack() {
+        init();
+        let findings = scan_text(FIXTURE_SECRETS[16].1, None);
+        assert!(!findings.is_empty(), "Slack token should be detected");
+        assert!(findings.iter().any(|f| f.pattern_id == "slack_token"));
+    }
+
+    #[test]
+    fn test_synthetic_secrets_env_var() {
+        init();
+        let findings = scan_text(FIXTURE_SECRETS[19].1, None);
+        assert!(!findings.is_empty(), "Environment variable secret should be detected");
+        assert!(findings.iter().any(|f| f.pattern_id == "env_var_secret"));
+    }
+
+    #[test]
+    fn test_synthetic_secrets_json() {
+        init();
+        let findings = scan_text(FIXTURE_SECRETS[22].1, None);
+        assert!(!findings.is_empty(), "JSON secret field should be detected");
+        assert!(findings.iter().any(|f| f.pattern_id == "json_secret_field"));
+    }
 }
