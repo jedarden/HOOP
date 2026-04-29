@@ -746,7 +746,7 @@ fn yaml_get_secret_patterns(root: &serde_yaml::Value) -> Option<Vec<SecretPatter
 fn yaml_get_role_config(root: &serde_yaml::Value) -> Option<crate::auth::RoleConfig> {
     root.get("roles").and_then(|v| {
         // Parse viewers list
-        let viewers = v
+        let viewers: Vec<String> = v
             .get("viewers")
             .and_then(|vv| vv.as_sequence())
             .map(|seq| {
@@ -2173,15 +2173,14 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
     // ── Range validations (§17.5) ─────────────────────────────────────────────────────
 
     // Validate metrics.port is in valid port range (1-65535)
-    if let Some(port) = metrics_port.value {
-        if port == 0 || port > 65535 {
-            return Err(ConfigError::validation(
-                format!("metrics.port {} is out of valid port range [1-65535]", port),
-                Some("metrics.port".to_string()),
-                Some("1-65535".to_string()),
-                Some(port.to_string()),
-            ));
-        }
+    let port = metrics_port.value;
+    if port == 0 || port > 65535 {
+        return Err(ConfigError::validation(
+            format!("metrics.port {} is out of valid port range [1-65535]", port),
+            Some("metrics.port".to_string()),
+            Some("1-65535".to_string()),
+            Some(port.to_string()),
+        ));
     }
 
     // Validate days fields are positive

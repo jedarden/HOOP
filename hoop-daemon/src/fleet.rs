@@ -21,7 +21,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 /// Current schema version
-pub const SCHEMA_VERSION: &str = "1.27.0";
+pub const SCHEMA_VERSION: &str = "1.28.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -127,6 +127,25 @@ pub struct AuditRow {
     pub args_hash: Option<String>,
     pub hash_prev: String,
     pub hash_self: String,
+}
+
+/// Audit row for the redaction_audit table
+///
+/// Tracks secret detection events (attachment scans, transcript redaction,
+/// session-filter hits). Records what was flagged, which pattern matched,
+/// what action was taken, who triggered it, and when.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RedactionAuditRow {
+    pub id: String,
+    pub ts: String,
+    pub what_flagged: String,
+    pub pattern_name: String,
+    pub action: String,
+    pub operator: String,
+    pub source_ref: Option<String>,
+    pub project: Option<String>,
+    pub metadata_json: Option<String>,
+    pub created_at: String,
 }
 
 /// Write an audit row to the actions table
@@ -271,6 +290,8 @@ pub fn query_audit_rows(
     offset: Option<usize>,
     project_filter: Option<&str>,
     kind_filter: Option<ActionKind>,
+    actor_filter: Option<&str>,
+    pattern_filter: Option<&str>,
 ) -> Result<Vec<AuditRow>> {
     let path = db_path();
     let conn = Connection::open(&path)?;
@@ -289,6 +310,18 @@ pub fn query_audit_rows(
         let kind_str = serde_json::to_string(&kind)?;
         query.push_str(&format!(" AND kind = ?{}", params.len() + 1));
         params.push(kind_str);
+    }
+
+    if let Some(actor) = actor_filter {
+        query.push_str(&format!(" AND actor = ?{}", params.len() + 1));
+        params.push(actor.to_string());
+    }
+
+    // For pattern filtering, we need to check the args_json field
+    // The pattern is stored as json_extract(args_json, '$.pattern')
+    if let Some(pattern) = pattern_filter {
+        query.push_str(&format!(" AND json_extract(args_json, '$.pattern') = ?{}", params.len() + 1));
+        params.push(pattern.to_string());
     }
 
     query.push_str(" ORDER BY ts DESC");
@@ -325,6 +358,81 @@ pub fn query_audit_rows(
             args_hash: row.get(11)?,
             hash_prev: row.get(12)?,
             hash_self: row.get(13)?,
+        })
+    })?;
+
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row?);
+    }
+
+    Ok(result)
+}
+
+/// Query redaction audit rows with optional filters
+///
+/// Returns redaction audit entries from the redaction_audit table,
+/// supporting filters by pattern, operator, project, and what_flagged.
+pub fn query_redaction_audit_rows(
+    limit: Option<usize>,
+    offset: Option<usize>,
+    project_filter: Option<&str>,
+    pattern_filter: Option<&str>,
+    operator_filter: Option<&str>,
+    what_flagged_filter: Option<&str>,
+) -> Result<Vec<RedactionAuditRow>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+
+    let mut query = String::from(
+        "SELECT id, ts, what_flagged, pattern_name, action, operator, source_ref, project, metadata_json, created_at FROM redaction_audit WHERE 1=1"
+    );
+    let mut params: Vec<String> = vec![];
+
+    if let Some(project) = project_filter {
+        query.push_str(&format!(" AND project = ?{}", params.len() + 1));
+        params.push(project.to_string());
+    }
+
+    if let Some(pattern) = pattern_filter {
+        query.push_str(&format!(" AND pattern_name = ?{}", params.len() + 1));
+        params.push(pattern.to_string());
+    }
+
+    if let Some(operator) = operator_filter {
+        query.push_str(&format!(" AND operator = ?{}", params.len() + 1));
+        params.push(operator.to_string());
+    }
+
+    if let Some(what_flagged) = what_flagged_filter {
+        query.push_str(&format!(" AND what_flagged = ?{}", params.len() + 1));
+        params.push(what_flagged.to_string());
+    }
+
+    query.push_str(" ORDER BY ts DESC");
+
+    if let Some(limit) = limit {
+        query.push_str(&format!(" LIMIT {}", limit));
+    }
+
+    if let Some(offset) = offset {
+        query.push_str(&format!(" OFFSET {}", offset));
+    }
+
+    let mut stmt = conn.prepare(&query)?;
+
+    let rows = stmt.query_map(rusqlite::params_from_iter(params.iter()), |row| {
+        Ok(RedactionAuditRow {
+            id: row.get(0)?,
+            ts: row.get(1)?,
+            what_flagged: row.get(2)?,
+            pattern_name: row.get(3)?,
+            action: row.get(4)?,
+            operator: row.get(5)?,
+            source_ref: row.get(6)?,
+            project: row.get(7)?,
+            metadata_json: row.get(8)?,
+            created_at: row.get(9)?,
         })
     })?;
 
@@ -911,6 +1019,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.1.0" => {
             migrate!(conn, migrate_v11_to_v12, "1.1.0", "1.2.0", "Add Pattern service tables")?;
@@ -939,6 +1048,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.2.0" => {
             migrate!(conn, migrate_v12_to_v13, "1.2.0", "1.3.0", "Add dictated_notes metadata table")?;
@@ -966,6 +1076,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.3.0" => {
             migrate!(conn, migrate_v13_to_v14, "1.3.0", "1.4.0", "Add word-level timestamps to dictated_notes")?;
@@ -992,6 +1103,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.4.0" => {
             migrate!(conn, migrate_v14_to_v15, "1.4.0", "1.5.0", "Add transcription_jobs table")?;
@@ -1017,6 +1129,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.5.0" => {
             migrate!(conn, migrate_v15_to_v16, "1.5.0", "1.6.0", "Add transcription_status to dictated_notes")?;
@@ -1041,6 +1154,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.6.0" => {
             migrate!(conn, migrate_v16_to_v17, "1.6.0", "1.7.0", "Add audit trail columns to actions")?;
@@ -1064,6 +1178,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.7.0" => {
             migrate!(conn, migrate_v17_to_v18, "1.7.0", "1.8.0", "Add agent_sessions table")?;
@@ -1086,6 +1201,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.8.0" => {
             migrate!(conn, migrate_v18_to_v19, "1.8.0", "1.9.0", "Add reflection_ledger table")?;
@@ -1107,6 +1223,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.9.0" => {
             migrate!(conn, migrate_v19_to_v110, "1.9.0", "1.10.0", "Add draft_queue table")?;
@@ -1127,6 +1244,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.10.0" => {
             migrate!(conn, migrate_v110_to_v111, "1.10.0", "1.11.0", "Add morning_briefs table")?;
@@ -1146,6 +1264,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.11.0" => {
             migrate!(conn, migrate_v111_to_v112, "1.11.0", "1.12.0", "Add has_started_session to agent_sessions")?;
@@ -1164,6 +1283,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.12.0" => {
             migrate!(conn, migrate_v112_to_v113, "1.12.0", "1.13.0", "Add cross-project state tables")?;
@@ -1181,6 +1301,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.13.0" => {
             migrate!(conn, migrate_v113_to_v114, "1.13.0", "1.14.0", "Add classification column to stitches")?;
@@ -1197,6 +1318,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.14.0" => {
             migrate!(conn, migrate_v114_to_v115, "1.14.0", "1.15.0", "Add codex_account_daily_spend table")?;
@@ -1223,6 +1345,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.16.0" => {
             migrate!(conn, migrate_v116_to_v117, "1.16.0", "1.17.0", "Add canonical_workspace to stitch_beads")?;
@@ -1236,6 +1359,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.17.0" => {
             migrate!(conn, migrate_v117_to_v118, "1.17.0", "1.18.0", "Add bead_commits index tables")?;
@@ -1248,6 +1372,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.18.0" => {
             migrate!(conn, migrate_v118_to_v119, "1.18.0", "1.19.0", "Add turn_id to draft_queue")?;
@@ -1259,6 +1384,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.19.0" => {
             migrate!(conn, migrate_v119_to_v120, "1.19.0", "1.20.0", "Add audit fields to stitches")?;
@@ -1269,6 +1395,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.20.0" => {
             migrate!(conn, migrate_v120_to_v121, "1.20.0", "1.21.0", "Add turn_id to stitches")?;
@@ -1278,6 +1405,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.21.0" => {
             migrate!(conn, migrate_v121_to_v122, "1.21.0", "1.22.0", "Add draft persistence fields")?;
@@ -1286,6 +1414,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.22.0" => {
             migrate!(conn, migrate_v122_to_v123, "1.22.0", "1.23.0", "Add redacted_words column to dictated_notes")?;
@@ -1293,24 +1422,29 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.23.0" => {
             migrate!(conn, migrate_v123_to_v124, "1.23.0", "1.24.0", "Add vector_index table for semantic dedup persistence")?;
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.24.0" => {
             migrate!(conn, migrate_v124_to_v125, "1.24.0", "1.25.0", "Add agent_turns table for audit trail")?;
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.25.0" => {
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         "1.26.0" => {
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
         }
         _ => {
             return Err(anyhow::anyhow!(
@@ -2676,6 +2810,74 @@ pub fn migrate_v126_to_v127(conn: &mut Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migration 1.27.0 → 1.28.0: Add redaction_audit table
+///
+/// This migration creates the redaction_audit table for tracking all
+/// secret detection events (attachment scans, transcript redaction,
+/// session-filter hits). Each entry records what was flagged, which
+/// pattern matched, what action was taken, who triggered it, and when.
+///
+/// Plan reference: §18.5 audit trail
+pub fn migrate_v127_to_v128(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.27.0 → 1.28.0: Adding redaction_audit table");
+
+    // Create the redaction_audit table
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS redaction_audit (
+            id TEXT PRIMARY KEY NOT NULL,
+            ts TEXT NOT NULL,
+            what_flagged TEXT NOT NULL,
+            pattern_name TEXT NOT NULL,
+            action TEXT NOT NULL,
+            operator TEXT NOT NULL,
+            source_ref TEXT,
+            project TEXT,
+            metadata_json TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        "#,
+        [],
+    )?;
+
+    // Create indexes for common queries
+    conn.execute(
+        r#"
+        CREATE INDEX IF NOT EXISTS idx_redaction_audit_ts
+        ON redaction_audit(ts DESC)
+        "#,
+        [],
+    )?;
+
+    conn.execute(
+        r#"
+        CREATE INDEX IF NOT EXISTS idx_redaction_audit_pattern
+        ON redaction_audit(pattern_name)
+        "#,
+        [],
+    )?;
+
+    conn.execute(
+        r#"
+        CREATE INDEX IF NOT EXISTS idx_redaction_audit_operator
+        ON redaction_audit(operator)
+        "#,
+        [],
+    )?;
+
+    conn.execute(
+        r#"
+        CREATE INDEX IF NOT EXISTS idx_redaction_audit_project
+        ON redaction_audit(project)
+        "#,
+        [],
+    )?;
+
+    info!("redaction_audit table created successfully");
+    update_schema_version(conn, "1.28.0")?;
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // §20.1 Major-upgrade gate
 // ---------------------------------------------------------------------------
@@ -3682,6 +3884,15 @@ pub fn insert_morning_brief(row: &MorningBriefRow) -> Result<()> {
                 brief_id = %row.id,
                 findings = findings.len(),
                 "Morning brief content contains potential secrets — lateral leak risk (§18.1)"
+            );
+            // Write audit entries for each unique pattern detected
+            // Morning briefs are cross-project, so no project filter
+            crate::redaction::audit_findings(
+                "morning_brief",
+                &findings,
+                &row.id,
+                None,  // Morning briefs are cross-project
+                "system",  // Morning brief generation is automatic
             );
         }
     }
