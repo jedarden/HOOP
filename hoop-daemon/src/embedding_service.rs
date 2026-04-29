@@ -269,6 +269,21 @@ impl EmbeddingService {
         Ok(())
     }
 
+    /// Get the current adapter name.
+    pub fn adapter(&self) -> &str {
+        &self.config.adapter
+    }
+
+    /// Get whether caching is enabled.
+    pub fn cache_enabled(&self) -> bool {
+        self.config.cache_enabled
+    }
+
+    /// Get the cache TTL in seconds.
+    pub fn cache_ttl_seconds(&self) -> u64 {
+        self.config.cache_ttl_seconds
+    }
+
     // -----------------------------------------------------------------------
     // Internal embedding methods
     // -----------------------------------------------------------------------
