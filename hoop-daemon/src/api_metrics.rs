@@ -301,6 +301,15 @@ async fn append_scrape_time_metrics(out: &mut String, state: &DaemonState) {
         "Number of JSONL lines quarantined in the current UTC day.",
         crate::parse_jsonl_safe::quarantine_today_count(),
     );
+
+    // ── §16.7 Business: stitches created today ───────────────────────────────
+    let stitches_today = stitches_created_today();
+    push_gauge_u64(
+        out,
+        "hoop_stitches_created_per_day",
+        "Number of Stitches created in the current UTC day.",
+        stitches_today,
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -730,6 +739,24 @@ fn dir_size_bytes(dir: &Path) -> u64 {
             acc + file_size_bytes(&path)
         }
     })
+}
+
+/// Count stitches created in the current UTC day (§16.7).
+fn stitches_created_today() -> u64 {
+    let db_path = crate::fleet::db_path();
+    let Ok(conn) = rusqlite::Connection::open_with_flags(
+        &db_path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    ) else {
+        return 0;
+    };
+
+    conn.query_row(
+        "SELECT COUNT(*) FROM stitches WHERE created_at >= datetime('now', 'start of day')",
+        [],
+        |row| row.get(0),
+    )
+    .unwrap_or(0)
 }
 
 // ---------------------------------------------------------------------------

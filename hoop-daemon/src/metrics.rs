@@ -878,7 +878,7 @@ impl Metrics {
             hoop_backup_run_duration_seconds: Histogram::new(),
 
             hoop_cost_per_stitch_usd: LabeledHistogramPercentiles::new(&["adapter"])
-                .with_time_window(30 * 24 * 3600), // 30-day window
+                .with_max_observations(10000), // 30-day rolling window (approx)
             hoop_cost_anomaly_alerts_total: Counter::new(),
             hoop_already_started_dedup_hits_total: Counter::new(),
             hoop_capacity_meter_exhaustion_warnings_total: LabeledCounter::new(&["account"]),
