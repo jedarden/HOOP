@@ -1,0 +1,232 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: hoop-load-test
+  namespace: argo-workflows
+  annotations:
+    descriptions: "Load-test driver: synthetic 20×5×200 activity generator vs daemon"
+    planReference: "§14.2 bullet 5"
+spec:
+  # Default workflow arguments - can be overridden when submitting
+  arguments:
+    parameters:
+      - name: repo
+        value: https://github.com/jedarden/HOOP.git
+      - name: branch
+        value: main
+      - name: scale
+        value: medium  # medium or full
+      - name: num_projects
+        value: "5"
+      - name: num_workers
+        value: "2"
+      - name: num_beads
+        value: "50"
+      - name: event_cadence_ms
+        value: "10"
+
+  templates:
+    - name: hoop-load-test
+      steps:
+        - - name: determine-scale
+            template: determine-scale
+
+        - - name: run-load-test
+            template: run-load-test
+            arguments:
+              parameters:
+                - name: test-name
+                  value: "{{steps.determine-scale.outputs.test-name}}"
+                - name: test-flags
+                  value: "{{steps.determine-scale.outputs.test-flags}}"
+                - name: num-projects
+                  value: "{{steps.determine-scale.outputs.num-projects}}"
+                - name: num-workers
+                  value: "{{steps.determine-scale.outputs.num-workers}}"
+                - name: num-beads
+                  value: "{{steps.determine-scale.outputs.num-beads}}"
+
+    - name: determine-scale
+      outputs:
+        parameters:
+          - name: test-name
+            valueFrom:
+              parameter: "{{steps.scale-choice.outputs.result}}"
+          - name: test-flags
+            valueFrom:
+              parameter: "{{steps.scale-flags.outputs.result}}"
+          - name: num-projects
+            valueFrom:
+              parameter: "{{steps.projects.outputs.result}}"
+          - name: num-workers
+            valueFrom:
+              parameter: "{{steps.workers.outputs.result}}"
+          - name: num-beads
+            valueFrom:
+              parameter: "{{steps.beads.outputs.result}}"
+      steps:
+        - - name: scale-choice
+            script:
+              image: alpine:3.19
+              command: [sh, -c]
+              source: |
+                if [ "{{workflow.parameters.scale}}" = "full" ]; then
+                  echo "test_full_scale_load_test"
+                else
+                  echo "test_medium_scale_load_test"
+                fi
+
+        - - name: scale-flags
+            script:
+              image: alpine:3.19
+              command: [sh, -c]
+              source: |
+                if [ "{{workflow.parameters.scale}}" = "full" ]; then
+                  echo "--ignored"
+                else
+                  echo ""
+                fi
+
+        - - name: projects
+            script:
+              image: alpine:3.19
+              command: [sh, -c]
+              source: |
+                if [ "{{workflow.parameters.scale}}" = "full" ]; then
+                  echo "20"
+                else
+                  echo "{{workflow.parameters.num_projects}}"
+                fi
+
+        - - name: workers
+            script:
+              image: alpine:3.19
+              command: [sh, -c]
+              source: |
+                if [ "{{workflow.parameters.scale}}" = "full" ]; then
+                  echo "5"
+                else
+                  echo "{{workflow.parameters.num_workers}}"
+                fi
+
+        - - name: beads
+            script:
+              image: alpine:3.19
+              command: [sh, -c]
+              source: |
+                if [ "{{workflow.parameters.scale}}" = "full" ]; then
+                  echo "200"
+                else
+                  echo "{{workflow.parameters.num_beads}}"
+                fi
+
+    - name: run-load-test
+      inputs:
+        parameters:
+          - name: test-name
+          - name: test-flags
+          - name: num-projects
+          - name: num-workers
+          - name: num-beads
+      retryStrategy:
+        limit: 1
+      container:
+        image: rust:1.83-bookworm
+        workingDir: /workspace
+        command:
+          - sh
+          - -c
+          - |
+            echo "=== HOOP Load Test ==="
+            echo "Test: {{inputs.parameters.test-name}}"
+            echo "Configuration: {{inputs.parameters.num-projects}} projects × {{inputs.parameters.num-workers}} workers × {{inputs.parameters.num-beads}} beads"
+            echo ""
+
+            # Install dependencies
+            apt-get update
+            apt-get install -y pkg-config libssl3
+
+            # Run load test
+            cargo test --test load_test {{inputs.parameters.test-name}} -- {{inputs.parameters.test-flags}} --nocapture
+
+            echo ""
+            echo "=== Load Test Complete ==="
+        env:
+          - name: CARGO_TERM_COLOR
+            value: "always"
+          - name: RUST_BACKTRACE
+            value: "1"
+          - name: HOOP_LOAD_PROJECTS
+            value: "{{inputs.parameters.num-projects}}"
+          - name: HOOP_LOAD_WORKERS
+            value: "{{inputs.parameters.num-workers}}"
+          - name: HOOP_LOAD_BEADS
+            value: "{{inputs.parameters.num-beads}}"
+          - name: HOOP_LOAD_CADENCE_MS
+            value: "{{workflow.parameters.event_cadence_ms}}"
+          # Enable full-scale test if needed
+          - name: HOOP_LOAD_TEST_FULL_SCALE
+            value: "{{inputs.parameters.test-flags}}"
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "8Gi"
+            cpu: "4000m"
+      volumes:
+        - name: workspace
+          emptyDir: {}
+      initContainers:
+        - name: checkout
+          image: alpine/git:2.47.0
+          command:
+            - sh
+            - -c
+            - |
+              git clone --depth 1 --branch "{{workflow.parameters.branch}}" "{{workflow.parameters.repo}}" /workspace
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+    # Medium-scale load test for quick validation (PRs, main branch)
+    - name: medium-scale
+      arguments:
+        parameters:
+          - name: repo
+            value: https://github.com/jedarden/HOOP.git
+          - name: branch
+            value: main
+      steps:
+        - - name: run-load-test
+            template: hoop-load-test
+            arguments:
+              parameters:
+                - name: scale
+                  value: medium
+
+    # Full-scale load test (releases, performance validation)
+    - name: full-scale
+      arguments:
+        parameters:
+          - name: repo
+            value: https://github.com/jedarden/HOOP.git
+          - name: branch
+            value: main
+      steps:
+        - - name: run-load-test
+            template: hoop-load-test
+            arguments:
+              parameters:
+                - name: scale
+                  value: full
