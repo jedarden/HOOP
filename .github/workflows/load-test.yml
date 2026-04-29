@@ -53,7 +53,7 @@ jobs:
         key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Run medium-scale load test
-      run: cargo test --test load_test test_medium_scale_load_test -- --nocapture
+      run: cargo test --package hoop-daemon --test load_test_integration load_test -- --nocapture
       env:
         HOOP_LOAD_PROJECTS: 5
         HOOP_LOAD_WORKERS: 2
@@ -103,7 +103,7 @@ jobs:
         key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Run full-scale load test
-      run: cargo test --test load_test test_full_scale_load_test -- --ignored --nocapture
+      run: cargo test --package hoop-daemon --test load_test_integration load_test_full_scale_performance_budgets -- --ignored --nocapture
       env:
         HOOP_LOAD_TEST_FULL_SCALE: 1
         HOOP_LOAD_PROJECTS: 20
@@ -159,7 +159,7 @@ jobs:
         echo "Tag: ${{ github.ref_name }}"
         echo "Configuration: 20 projects × 5 workers × 300 beads"
         echo ""
-        cargo test --test load_test test_full_scale_load_test -- --ignored --nocapture
+        cargo test --package hoop-daemon --test load_test_integration load_test_full_scale_performance_budgets -- --ignored --nocapture
       env:
         HOOP_LOAD_TEST_FULL_SCALE: 1
         HOOP_LOAD_PROJECTS: 20
@@ -219,17 +219,17 @@ jobs:
           export HOOP_LOAD_PROJECTS=20
           export HOOP_LOAD_WORKERS=5
           export HOOP_LOAD_BEADS=300
-          TEST="test_full_scale_load_test"
+          TEST="load_test_full_scale_performance_budgets"
           TEST_FLAGS="--ignored"
         else
           export HOOP_LOAD_PROJECTS=5
           export HOOP_LOAD_WORKERS=2
           export HOOP_LOAD_BEADS=50
-          TEST="test_medium_scale_load_test"
+          TEST="load_test"
           TEST_FLAGS=""
         fi
 
-        cargo test --test load_test "$TEST" -- $TEST_FLAGS --nocapture
+        cargo test --package hoop-daemon --test load_test_integration "$TEST" -- $TEST_FLAGS --nocapture
 
     - name: Upload test results
       if: always()
