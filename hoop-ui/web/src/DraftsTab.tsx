@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { DraftRow, DraftStatus } from './atoms';
+import { useAtomValue } from 'jotai';
+import { DraftRow, DraftStatus, projectCardsAtom } from './atoms';
 
 type DraftFilter = 'pending' | 'edited' | 'all';
 

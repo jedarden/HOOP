@@ -541,6 +541,8 @@ mod tests {
                 heartbeat_transition_threshold_secs: 300,
                 retry_threshold: 3,
             }),
+            // §17.3 §1.5: embedding
+            embedding: None,
             // §17.3 §2: projects_file
             projects_file: Some("~/.hoop/projects.yaml".to_string()),
             // §17.3 §3: backup

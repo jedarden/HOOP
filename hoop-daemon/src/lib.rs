@@ -17,6 +17,7 @@ pub mod accounts_config;
 pub mod auth;
 pub mod api_beads;
 pub mod api_bead_blockers;
+pub mod api_bead_files;
 pub mod api_config;
 pub mod api_cost_per_stitch;
 pub mod api_conversations;

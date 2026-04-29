@@ -122,8 +122,8 @@ async fn embed_text(
 
     // Determine if this was a cache hit based on the ratio before/after
     // (This is a simple heuristic; in production you'd track this per-request)
-    let adapter = service.config.adapter.clone();
-    let cache_hit = matches!(adapter.as_str(), "cached");
+    let adapter = service.adapter().to_string();
+    let cache_hit = matches!(service.adapter(), "cached");
 
     Ok(Json(EmbedResponse {
         embedding: embedding.to_vec(),
@@ -170,7 +170,7 @@ async fn embed_batch(
 
     Ok(Json(BatchEmbedResponse {
         embeddings: embeddings.into_iter().map(|e| e.to_vec()).collect(),
-        adapter: service.config.adapter.clone(),
+        adapter: service.adapter().to_string(),
     }))
 }
 
@@ -236,10 +236,10 @@ async fn get_config(
     let service = state.embedding_service.as_ref();
 
     Json(ServiceConfigResponse {
-        adapter: service.config.adapter.clone(),
-        cache_enabled: service.config.cache_enabled,
-        cache_ttl_seconds: service.config.cache_ttl_seconds,
-        rate_limit_rpm: service.config.rate_limit_rpm,
+        adapter: service.adapter().to_string(),
+        cache_enabled: service.cache_enabled(),
+        cache_ttl_seconds: service.cache_ttl_seconds(),
+        rate_limit_rpm: service.rate_limit_rpm(),
     })
 }
 

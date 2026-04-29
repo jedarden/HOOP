@@ -1,5 +1,6 @@
 import { useAtomValue } from 'jotai';
-import { presenceForProjectAtom, presenceForStitchAtom, presenceVisibilityAtom } from '../atoms';
+import { presenceForProjectAtom, presenceForStitchAtom } from '../atoms';
+import type { Presence } from '../types.gen';
 
 interface PresenceIndicatorProps {
   scope: 'project' | 'stitch';
@@ -7,12 +8,21 @@ interface PresenceIndicatorProps {
 }
 
 export function PresenceIndicator({ scope, id }: PresenceIndicatorProps) {
-  const myVisibility = useAtomValue(presenceVisibilityAtom);
-  const presenceAtom = scope === 'project' ? presenceForProjectAtom(id) : presenceForStitchAtom(id);
-  const presence = useAtomValue(presenceAtom);
+  const projectPresence = useAtomValue(presenceForProjectAtom);
+  const stitchPresence = useAtomValue(presenceForStitchAtom);
 
-  // Filter out hidden operators (privacy toggle) and removed entries
-  const visiblePresence = presence.filter(p => p.visibility === 'visible');
+  // Get the operator IDs for this scope
+  const operatorIds = scope === 'project'
+    ? projectPresence.get(id)
+    : stitchPresence.get(id);
+
+  if (!operatorIds || operatorIds.size === 0) return null;
+
+  // Convert Set of operator IDs to Presence-like objects for display
+  const visiblePresence = Array.from(operatorIds).map(operatorId => ({
+    operator_id: operatorId,
+    visibility: 'visible' as const,
+  }));
 
   if (visiblePresence.length === 0) return null;
 
@@ -52,7 +62,7 @@ export function PresenceIndicator({ scope, id }: PresenceIndicatorProps) {
             key={p.operator_id}
             className="presence-dot"
             style={{ backgroundColor: getOperatorColor(p.operator_id) }}
-            title={`${formatOperatorId(p.operator_id)}${p.visibility === 'hidden' ? ' (hidden)' : ''}`}
+            title={formatOperatorId(p.operator_id)}
           />
         ))}
         {extraCount > 0 && (

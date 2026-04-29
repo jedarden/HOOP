@@ -590,8 +590,8 @@ mod tests {
         };
 
         service.update_config(new_config).unwrap();
-        assert_eq!(service.config.adapter, "remote");
-        assert_eq!(service.config.cache_enabled, false);
-        assert_eq!(service.config.cache_ttl_seconds, 7200);
+        assert_eq!(service.adapter(), "remote");
+        assert_eq!(service.cache_enabled(), false);
+        assert_eq!(service.cache_ttl_seconds(), 7200);
     }
 }

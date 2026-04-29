@@ -1639,6 +1639,24 @@ export interface HoopConfig {
      */
     drafters?: string[];
   };
+  embedding?: {
+    /**
+     * Embedding adapter to use: 'local' (BGE-small transformer), 'remote' (Anthropic API), or 'cached' (local with caching). Hot-reloadable.
+     */
+    adapter?: "local" | "remote" | "cached";
+    /**
+     * Enable in-memory caching of embeddings keyed by content hash. Hot-reloadable.
+     */
+    cache_enabled?: boolean;
+    /**
+     * Cache entry TTL in seconds (default: 24 hours). Expired entries are evicted on next access. Hot-reloadable.
+     */
+    cache_ttl_seconds?: number;
+    /**
+     * Rate limit for remote embedding API calls in requests per minute. Null = no limit. Only applies to 'remote' adapter. Hot-reloadable.
+     */
+    rate_limit_rpm?: number | null;
+  };
   redaction?: {
     /**
      * Action to take when secrets are detected: warn (log only), redact (replace with [REDACTED]), reject (block the operation)

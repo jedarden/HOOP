@@ -5,6 +5,7 @@
 //! many native-CLI conversations.
 
 mod config;
+mod init;
 mod new;
 mod projects;
 mod restore;
@@ -113,6 +114,8 @@ enum Commands {
     /// Manage risk patterns
     #[command(subcommand)]
     RiskPatterns(risk_patterns::RiskPatternsCommands),
+    /// First-time setup wizard
+    Init,
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -323,6 +326,12 @@ async fn main() -> anyhow::Result<()> {
         Commands::RiskPatterns(cmd) => {
             if let Err(e) = risk_patterns::handle_risk_patterns(cmd).await {
                 eprintln!("hoop risk-patterns: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Init => {
+            if let Err(e) = init::run_init_wizard() {
+                eprintln!("hoop init: {}", e);
                 std::process::exit(1);
             }
         }

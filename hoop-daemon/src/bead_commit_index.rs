@@ -228,6 +228,75 @@ pub fn spawn_indexer(workspaces: Vec<String>) {
 }
 
 // ---------------------------------------------------------------------------
+// Query functions
+// ---------------------------------------------------------------------------
+
+/// Commit record from bead_commits index.
+#[derive(Debug, Clone)]
+pub struct BeadCommit {
+    pub bead_id: String,
+    pub workspace: String,
+    pub sha: String,
+    pub ts: String,
+}
+
+/// Get all commits for a specific bead from the bead_commits index.
+///
+/// Returns commits sorted by timestamp ascending (oldest first).
+pub fn get_commits_for_bead(bead_id: &str) -> Result<Vec<BeadCommit>> {
+    let db_path = crate::fleet::db_path();
+    let conn = Connection::open(&db_path)?;
+
+    let mut stmt = conn.prepare(
+        "SELECT bead_id, workspace, sha, ts FROM bead_commits WHERE bead_id = ?1 ORDER BY ts ASC"
+    )?;
+
+    let rows = stmt.query_map(params![bead_id], |row| {
+        Ok(BeadCommit {
+            bead_id: row.get(0)?,
+            workspace: row.get(1)?,
+            sha: row.get(2)?,
+            ts: row.get(3)?,
+        })
+    })?;
+
+    let mut commits = Vec::new();
+    for row in rows {
+        commits.push(row?);
+    }
+
+    Ok(commits)
+}
+
+/// Get all commits for a specific workspace from the bead_commits index.
+///
+/// Returns commits sorted by timestamp ascending (oldest first).
+pub fn get_commits_for_workspace(workspace: &str) -> Result<Vec<BeadCommit>> {
+    let db_path = crate::fleet::db_path();
+    let conn = Connection::open(&db_path)?;
+
+    let mut stmt = conn.prepare(
+        "SELECT bead_id, workspace, sha, ts FROM bead_commits WHERE workspace = ?1 ORDER BY ts ASC"
+    )?;
+
+    let rows = stmt.query_map(params![workspace], |row| {
+        Ok(BeadCommit {
+            bead_id: row.get(0)?,
+            workspace: row.get(1)?,
+            sha: row.get(2)?,
+            ts: row.get(3)?,
+        })
+    })?;
+
+    let mut commits = Vec::new();
+    for row in rows {
+        commits.push(row?);
+    }
+
+    Ok(commits)
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
