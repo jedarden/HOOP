@@ -16,6 +16,7 @@ use axum::{
     Json, Router,
 };
 use serde::Deserialize;
+use utoipa::ToSchema;
 
 /// Build the agent API router.
 pub fn router() -> Router<DaemonState> {
@@ -29,6 +30,15 @@ pub fn router() -> Router<DaemonState> {
 }
 
 /// GET /api/agent/status
+#[utoipa::path(
+    get,
+    path = "/api/agent/status",
+    tag = "agent",
+    responses(
+        (status = 200, description = "Agent session status", body = crate::agent_session::AgentSessionStatus),
+        (status = 404, description = "Agent session manager not available")
+    )
+)]
 async fn get_status(
     State(state): State<DaemonState>,
 ) -> Json<crate::agent_session::AgentSessionStatus> {
@@ -53,6 +63,16 @@ async fn get_status(
 }
 
 /// POST /api/agent/spawn
+#[utoipa::path(
+    post,
+    path = "/api/agent/spawn",
+    tag = "agent",
+    responses(
+        (status = 200, description = "Session spawned successfully"),
+        (status = 404, description = "Agent session manager not available"),
+        (status = 500, description = "Failed to spawn session")
+    )
+)]
 async fn spawn_session(
     State(state): State<DaemonState>,
 ) -> Result<Json<serde_json::Value>, axum::http::StatusCode> {
@@ -74,6 +94,16 @@ async fn spawn_session(
 }
 
 /// POST /api/agent/disable
+#[utoipa::path(
+    post,
+    path = "/api/agent/disable",
+    tag = "agent",
+    responses(
+        (status = 200, description = "Agent disabled successfully"),
+        (status = 404, description = "Agent session manager not available"),
+        (status = 500, description = "Failed to disable agent")
+    )
+)]
 async fn disable_agent(
     State(state): State<DaemonState>,
 ) -> Result<Json<serde_json::Value>, axum::http::StatusCode> {
@@ -94,7 +124,7 @@ async fn disable_agent(
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 struct SwitchRequest {
     adapter: String,
     model: Option<String>,
@@ -107,6 +137,17 @@ struct SwitchRequest {
 }
 
 /// POST /api/agent/switch
+#[utoipa::path(
+    post,
+    path = "/api/agent/switch",
+    tag = "agent",
+    request_body = SwitchRequest,
+    responses(
+        (status = 200, description = "Adapter switched successfully"),
+        (status = 404, description = "Agent session manager not available"),
+        (status = 500, description = "Failed to switch adapter")
+    )
+)]
 async fn switch_adapter(
     State(state): State<DaemonState>,
     Json(req): Json<SwitchRequest>,
@@ -141,7 +182,7 @@ async fn switch_adapter(
 }
 
 /// Inline attachment sent with a turn (base64-encoded file content).
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 struct TurnAttachment {
     name: String,
     /// Base64-encoded file content.
@@ -149,7 +190,7 @@ struct TurnAttachment {
     mime: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 struct TurnRequest {
     prompt: String,
     #[serde(default)]
@@ -161,6 +202,18 @@ struct TurnRequest {
 /// Sends a user turn to the active session. Events are streamed via the
 /// WebSocket `agent_session` channel, not in the HTTP response. The response
 /// confirms the turn was accepted.
+#[utoipa::path(
+    post,
+    path = "/api/agent/turn",
+    tag = "agent",
+    request_body = TurnRequest,
+    responses(
+        (status = 200, description = "Turn completed successfully"),
+        (status = 404, description = "Agent session manager not available"),
+        (status = 503, description = "Agent not enabled"),
+        (status = 500, description = "Failed to send turn")
+    )
+)]
 async fn send_turn(
     State(state): State<DaemonState>,
     Json(req): Json<TurnRequest>,
@@ -212,6 +265,15 @@ async fn send_turn(
 }
 
 /// GET /api/agent/sessions
+#[utoipa::path(
+    get,
+    path = "/api/agent/sessions",
+    tag = "agent",
+    responses(
+        (status = 200, description = "List of recent agent sessions", body = Vec<crate::fleet::AgentSessionRow>),
+        (status = 500, description = "Failed to list agent sessions")
+    )
+)]
 async fn list_sessions() -> Result<Json<Vec<crate::fleet::AgentSessionRow>>, axum::http::StatusCode>
 {
     match crate::fleet::list_agent_sessions(20) {

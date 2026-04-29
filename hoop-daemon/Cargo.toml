@@ -54,10 +54,12 @@ fastembed = { version = "5", default-features = false, features = ["online", "or
 flate2 = "1.0"
 tar = "0.4"
 glob = "0.3"
-utoipa = "5"
-utoipa-swagger-ui = "8"
-utoipa-redoc = "5"
-utoipa-rapidoc = "5"
+utoipa = { version = "5", features = ["axum_extras", "chrono", "uuid", "decimal"] }
+utoipa-swagger-ui = { version = "8", features = ["axum"] }
+utoipa-redoc = { version = "5", features = ["axum"] }
+utoipa-rapidoc = { version = "5", features = ["axum"] }
+fnv = "1"
+jsonschema = "0.18"
 
 [dev-dependencies]
 tempfile = "3"

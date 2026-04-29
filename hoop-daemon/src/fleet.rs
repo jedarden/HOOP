@@ -19,6 +19,7 @@ use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use tracing::{info, warn};
 use uuid::Uuid;
+use utoipa::ToSchema;
 
 /// Current schema version
 pub const SCHEMA_VERSION: &str = "1.29.0";
@@ -3081,7 +3082,7 @@ pub fn run_major_upgrade() -> Result<()> {
 // ---------------------------------------------------------------------------
 
 /// A row from the `agent_sessions` table.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AgentSessionRow {
     pub id: String,
     pub adapter_session_id: String,
