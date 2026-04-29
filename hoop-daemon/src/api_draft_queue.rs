@@ -470,7 +470,7 @@ async fn approve_draft(
         connect_info.map(|ci| ci.0),
         crate::auth::Role::Drafter,
     )
-    .map_err(|e| (e.0, serde_json::to_string(e.1).unwrap_or_else(|_| e.0.to_string())))?;
+    .map_err(|e| (e.0, serde_json::to_string(&e.1 .0).unwrap_or_else(|_| e.0.to_string())))?;
 
     crate::id_validators::validate_draft_id(&draft_id).map_err(crate::id_validators::rejection)?;
 
