@@ -4060,6 +4060,7 @@ pub fn insert_morning_brief(row: &MorningBriefRow) -> Result<()> {
             crate::redaction::audit_findings(
                 "morning_brief",
                 &findings,
+                crate::redaction_policy::RedactionAction::FlaggedOnly,  // Just flag, no automatic action
                 &row.id,
                 None,  // Morning briefs are cross-project
                 "system",  // Morning brief generation is automatic

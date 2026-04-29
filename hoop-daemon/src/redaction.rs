@@ -415,6 +415,7 @@ fn extract_all_strings(value: &serde_json::Value) -> String {
 /// # Arguments
 /// * `what_flagged` - What was scanned (e.g., "transcript", "attachment", "draft")
 /// * `findings` - Secret findings from a scan operation
+/// * `action` - Action taken (flagged_only, redacted_in_place, proceeded_anyway, rejected)
 /// * `source_ref` - Reference to the source (stitch_id, attachment_id, etc.)
 /// * `project` - Optional project name
 /// * `operator` - Operator who triggered the scan (or "system" for automatic scans)
@@ -424,12 +425,12 @@ fn extract_all_strings(value: &serde_json::Value) -> String {
 pub fn audit_findings(
     what_flagged: &str,
     findings: &[SecretFinding],
+    action: crate::redaction_policy::RedactionAction,
     source_ref: &str,
     project: Option<&str>,
     operator: &str,
 ) -> usize {
     use crate::fleet;
-    use crate::redaction_policy::RedactionAction;
     use std::collections::HashSet;
 
     if findings.is_empty() {
@@ -463,7 +464,7 @@ pub fn audit_findings(
         if let Err(e) = fleet::insert_redaction_audit(
             what_flagged,
             pattern_name,
-            RedactionAction::FlaggedOnly,
+            action,
             operator,
             Some(source_ref),
             project,

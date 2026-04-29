@@ -336,6 +336,7 @@ async fn create_draft(
             crate::redaction::audit_findings(
                 "draft",
                 &findings,
+                crate::redaction_policy::RedactionAction::FlaggedOnly,  // Just flag, no automatic action
                 &draft_id,
                 Some(&req.project),
                 &actor,  // Use the actor who created the draft

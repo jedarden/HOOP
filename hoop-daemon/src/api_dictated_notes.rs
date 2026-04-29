@@ -109,6 +109,7 @@ async fn create_note(
             crate::redaction::audit_findings(
                 "transcript",
                 &findings,
+                crate::redaction_policy::RedactionAction::FlaggedOnly,  // Just flag, no automatic action
                 &valid_stitch_id,
                 Some(&project),
                 "system",  // Voice transcription is automatic
@@ -491,6 +492,7 @@ async fn update_note(
             crate::redaction::audit_findings(
                 "transcript",
                 &findings,
+                crate::redaction_policy::RedactionAction::FlaggedOnly,  // Just flag, no automatic action
                 &valid_id.as_str(),
                 project,
                 "system",  // Voice transcription is automatic

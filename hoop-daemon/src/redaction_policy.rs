@@ -486,10 +486,11 @@ pub async fn scan_and_audit(
         .filter(|f| finding_matches_enabled_pattern(f.pattern_name, &policy.patterns))
         .collect();
 
-    // Write audit entries for each unique pattern
+    // Write audit entries for each unique pattern, recording the policy action
     crate::redaction::audit_findings(
         what_flagged,
         &filtered_findings,
+        policy.action,
         source_ref,
         Some(project_name),
         operator,
