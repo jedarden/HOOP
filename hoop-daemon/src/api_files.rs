@@ -299,14 +299,20 @@ fn highlight_file(
         content.clone()
     };
 
-    // Use two_face for highlighting (it wraps syntect conveniently)
-    let highlighted = two_face::syntax_highlighter(&lines_to_highlight, &abs_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("highlight error: {}", e)))?;
+    // Highlight using syntect directly
+    use syntect::easy::HighlightLines;
+    use syntect::html::styled_line_to_highlighted_html;
+    use syntect::highlighting::IncludeBackground;
 
-    // Split highlighted output into lines and extract HTML
-    for line in highlighted.lines() {
-        // two_face returns complete HTML; we need to extract just the line content
-        html_lines.push(escape_html_entities(line));
+    let mut h = HighlightLines::new(syntax, theme);
+
+    for line in LinesWithEndings::from(&lines_to_highlight) {
+        let ranges = h
+            .highlight_line(line, &ps)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("highlight error: {}", e)))?;
+
+        let html = styled_line_to_highlighted_html(&ranges, IncludeBackground::Yes);
+        html_lines.push(html);
     }
 
     Ok(HighlightResult {
