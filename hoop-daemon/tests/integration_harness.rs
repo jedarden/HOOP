@@ -579,7 +579,7 @@ use tokio::time::timeout;
 /// temporary directory will be cleaned up.
 pub struct DaemonHandle {
     shutdown_notify: Arc<tokio::sync::Notify>,
-    _temp_dir: TempDir,
+    pub temp_dir: TempDir,
 }
 
 impl Drop for DaemonHandle {
@@ -683,7 +683,7 @@ where
             if resp.status().is_success() {
                 let handle = DaemonHandle {
                     shutdown_notify,
-                    _temp_dir: temp_dir,
+                    temp_dir,
                 };
                 return Ok((base_url, handle));
             }
