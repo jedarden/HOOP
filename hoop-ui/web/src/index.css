@@ -480,6 +480,12 @@ pre {
   font-size: 0.75rem;
 }
 
+.bead-blockers {
+  color: #d97706;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
 .bead-cell-status,
 .bead-cell-type {
   width: 90px;
@@ -2497,6 +2503,188 @@ body:has(.connection-banner) main {
 .diff-stat-rem {
   color: #c5221f;
   font-weight: 500;
+}
+
+/* Stitch Cost Panel */
+.stitch-cost-loading {
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: #999;
+  font-style: italic;
+}
+
+.stitch-cost-panel {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+.stitch-cost-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.stitch-cost-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.cost-window-selector {
+  display: flex;
+  gap: 0.25rem;
+  background: #f0f0f0;
+  border-radius: 4px;
+  padding: 0.125rem;
+}
+
+.window-button {
+  padding: 0.25rem 0.5rem;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.window-button:hover {
+  background: rgba(25, 118, 210, 0.1);
+  color: #1976d2;
+}
+
+.window-button--active {
+  background: #1976d2;
+  color: #ffffff;
+}
+
+.window-button--active:hover {
+  background: #1565c0;
+  color: #ffffff;
+}
+
+.stitch-cost-comparison {
+  margin-bottom: 0.75rem;
+  padding: 0.5rem;
+  background: #ffffff;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+}
+
+.cost-comparison-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.25rem 0;
+  font-size: 0.8125rem;
+}
+
+.comparison-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.comparison-value {
+  font-weight: 600;
+  color: #333;
+}
+
+.comparison-value--this {
+  color: #1976d2;
+  font-size: 0.9375rem;
+}
+
+.comparison-value--avg {
+  color: #666;
+}
+
+.cost-comparison-diff {
+  text-align: center;
+  padding: 0.375rem;
+  margin-top: 0.25rem;
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.cost-diff-high {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.cost-diff-low {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.cost-diff-neutral {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.stitch-cost-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.stitch-cost-metric {
+  padding: 0.5rem;
+  background: #ffffff;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+  text-align: center;
+}
+
+.metric-label {
+  display: block;
+  font-size: 0.6875rem;
+  color: #666;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.metric-value {
+  display: block;
+  font-size: 0.875rem;
+  color: #333;
+  font-weight: 600;
+}
+
+.stitch-cost-group-comparison {
+  padding: 0.5rem;
+  background: #ffffff;
+  border-radius: 4px;
+  border: 1px solid #e0e0e0;
+  margin-bottom: 0.5rem;
+}
+
+.group-comparison-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 0.25rem 0;
+  font-size: 0.8125rem;
+}
+
+.group-comparison-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.group-comparison-value {
+  font-weight: 600;
+  color: #333;
 }
 
 /* Infinite scroll sentinel + load-more button */
