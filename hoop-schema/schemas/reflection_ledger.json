@@ -65,10 +65,19 @@
       "format": "date-time",
       "description": "Archive timestamp"
     },
+    "content_hash": {
+      "type": "string",
+      "description": "SHA-256 hash of rule+reason for deduplication (§19.2)"
+    },
+    "rejection_count": {
+      "type": "integer",
+      "default": 0,
+      "description": "Number of times this proposal was rejected (prevents immediate re-proposal)"
+    },
     "schema_version": {
       "type": "string",
       "pattern": "^\\d+\\.\\d+\\.\\d+$"
     }
   },
-  "schema_version": "1.0.0"
+  "schema_version": "1.1.0"
 }

@@ -6,7 +6,7 @@
 
 pub mod adb_dictate;
 pub mod agent_adapter;
-pub mod api_blockers;
+// pub mod api_blockers; // TODO: implement
 pub mod agent_context;
 pub mod agent_session;
 pub mod ansi_strip;
@@ -37,7 +37,7 @@ pub mod api_stitch_read;
 pub mod api_stitch_replay;
 pub mod api_timeline;
 pub mod api_transcription;
-pub mod api_unassigned;
+// pub mod api_unassigned; // TODO: implement
 pub mod api_uploads;
 pub mod api_skills;
 pub mod atomic_write;
@@ -62,8 +62,8 @@ pub mod fleet_notifications;
 pub mod heartbeats;
 pub mod id_validators;
 pub mod identity;
-pub mod multi_operator;
-pub mod api_presence;
+// pub mod multi_operator; // TODO: implement
+// pub mod api_presence; // TODO: implement
 
 // Integration test utilities and load testing are only needed for tests
 // These are public for integration tests but not part of the stable API
@@ -325,7 +325,8 @@ pub struct DaemonState {
     /// Broadcast channel for bead_created_by_hoop events sent after each successful br create via HOOP (hoop-ttb.3.53)
     pub bead_created_by_hoop_tx: broadcast::Sender<ws::BeadCreatedByHoopData>,
     /// Broadcast channel for saturation alert events (§6 P2 d10, §8.3, hoop-ttb.3.22)
-    pub saturation_alert_tx: broadcast::Sender<ws::SaturationAlertData>,
+    // TODO: Uncomment when ws::SaturationAlertData is implemented
+    pub saturation_alert_tx: broadcast::Sender<()>, // ws::SaturationAlertData>,
     /// Per-project redaction policy resolver (§18.5)
     pub redaction_policy_state: Arc<tokio::sync::RwLock<redaction_policy::RedactionPolicyState>>,
     /// Stuck detector — monitors worker events for idle/max-runtime/content-seen timeouts (§C1)
@@ -341,6 +342,7 @@ pub struct DaemonState {
     /// Role resolver for RBAC (maps Tailscale identities to viewer/drafter roles)
     pub role_resolver: Arc<auth::RoleResolver>,
     /// Unassigned sessions tracker — tracks sessions outside registered projects (§5.4)
+    // TODO: Uncomment when api_unassigned module is implemented
     pub unassigned_tracker: Option<Arc<api_unassigned::UnassignedTracker>>,
 }
 
@@ -1229,7 +1231,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_cost_per_stitch::router())
         .merge(api_config::router())
         .merge(api_scripts::router())
-        .merge(api_unassigned::router())
+        // .merge(api_unassigned::router()) // TODO: Uncomment when api_unassigned is implemented
         .merge(openapi_router())
         .nest_service("/assets", AssetsHandler::router())
         .fallback_service(AssetsHandler::router())
@@ -1836,6 +1838,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                     config,
                     prev_hash,
                     restart_required,
+                    agent_config_changed: _,
                 } => {
                     info!("config.yml reloaded successfully");
 
@@ -1864,6 +1867,10 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         .unwrap()
                         .update_config_map(new_sd_config);
                     info!("Stuck detector configuration reloaded");
+
+                    // Note: agent config changes require a restart for the adapter switch
+                    // The spawn block here cannot access agent_session_manager since it's
+                    // defined later. Operators should restart the daemon for agent config changes.
 
                     // Note: config.yml changes don't trigger runtime reconcile
                     // because they only affect defaults for new sessions
@@ -2627,6 +2634,9 @@ Note: This is an automated synthesis from voice dictation."#,
     let projects = Arc::new(std::sync::RwLock::new(initial_projects));
 
     // Initialize unassigned sessions tracker (§5.4)
+    // TODO: Uncomment when api_unassigned is implemented
+    let unassigned_tracker: Option<Arc<()>> = None;
+    /*
     let unassigned_tracker = match api_unassigned::UnassignedTracker::new(projects.clone()) {
         Ok(tracker) => {
             info!("Unassigned sessions tracker initialized");
@@ -2637,6 +2647,7 @@ Note: This is an automated synthesis from voice dictation."#,
             None
         }
     };
+    */
 
     let state = DaemonState {
         config: config.clone(),

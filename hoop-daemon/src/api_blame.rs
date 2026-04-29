@@ -19,6 +19,8 @@ use axum::{
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
 
 use crate::{files, fleet, id_validators, DaemonState};
 
@@ -27,6 +29,7 @@ use crate::{files, fleet, id_validators, DaemonState};
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct BlameLine {
     pub line_no: u32,
     pub sha: String,
@@ -54,10 +57,27 @@ pub fn router() -> Router<DaemonState> {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 struct BlameQuery {
     path: String,
 }
 
+/// GET /api/projects/:project/files/blame — get file blame with Stitch attribution
+#[utoipa::path(
+    get,
+    path = "/api/projects/{project}/files/blame",
+    tag = "blame",
+    params(
+        ("project" = String, Path, description = "Project name"),
+        ("path" = String, Query, description = "File path relative to project root")
+    ),
+    responses(
+        (status = 200, description = "File blame lines with attribution", body = Vec<BlameLine>),
+        (status = 400, description = "Invalid project name or unsafe path"),
+        (status = 404, description = "Project not found"),
+        (status = 500, description = "Failed to run git blame")
+    )
+)]
 async fn get_file_blame(
     Path(project): Path<String>,
     Query(params): Query<BlameQuery>,

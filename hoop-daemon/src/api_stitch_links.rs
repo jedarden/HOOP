@@ -14,6 +14,9 @@ use std::net::SocketAddr;
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
 use crate::fleet;
 
 // ---------------------------------------------------------------------------
@@ -21,12 +24,14 @@ use crate::fleet;
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct CreateLinkRequest {
     pub to_stitch_id: String,
     pub kind: String,
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct CreateLinkResponse {
     pub from_stitch_id: String,
     pub to_stitch_id: String,
@@ -36,12 +41,14 @@ pub struct CreateLinkResponse {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct SearchStitchesResponse {
     pub results: Vec<StitchSearchResult>,
     pub elapsed_ms: Option<f64>,
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct StitchSearchResult {
     pub id: String,
     pub project: String,

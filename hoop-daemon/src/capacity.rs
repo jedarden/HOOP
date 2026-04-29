@@ -456,6 +456,26 @@ struct PlanLimits {
     tokens_7d: u64,
 }
 
+/// OpenCode prompt limits for ZAI proxy rate limiting.
+///
+/// Based on ZAI proxy Max tier: 1600 prompts per 5 hours, 8000 prompts per 7 days.
+/// These counts represent the number of assistant responses (prompts) sent.
+#[derive(Debug, Clone)]
+struct OpenCodePromptLimits {
+    /// Prompt budget per 5-hour window
+    prompts_per_5h: u64,
+    /// Prompt budget per 7-day window
+    prompts_per_7d: u64,
+}
+
+fn get_opencode_limits() -> OpenCodePromptLimits {
+    // ZAI proxy Max tier limits: 1600 prompts per 5 hours, 8000 prompts per 7 days
+    OpenCodePromptLimits {
+        prompts_per_5h: 1600,
+        prompts_per_7d: 8000,
+    }
+}
+
 fn get_plan_limits(plan_type: &str, tier: &str) -> PlanLimits {
     match (plan_type, tier) {
         ("max", t) if t.contains("20x") => PlanLimits {
@@ -507,6 +527,17 @@ struct GeminiAccountPaths {
     sessions_dir: PathBuf,
 }
 
+/// Resolved paths for a single OpenCode account
+#[derive(Debug, Clone)]
+struct OpenCodeAccountPaths {
+    /// Root directory (e.g. ~/.local/share/opencode)
+    root_dir: PathBuf,
+    /// Session storage directory
+    session_dir: PathBuf,
+    /// Legacy session directory (if exists)
+    legacy_session_dir: Option<PathBuf>,
+}
+
 /// Capacity meter configuration
 #[derive(Debug, Clone)]
 pub struct CapacityMeterConfig {
@@ -518,6 +549,10 @@ pub struct CapacityMeterConfig {
     /// Defaults to vec![~/.gemini].
     /// Auto-discovery appends any ~/.gemini-* dirs with session files.
     pub gemini_dirs: Vec<PathBuf>,
+    /// OpenCode config directories to scan (each = one account).
+    /// Defaults to vec![~/.local/share/opencode].
+    /// Auto-discovery appends any opencode-* dirs with session files.
+    pub opencode_dirs: Vec<PathBuf>,
     /// How often to recompute (seconds)
     pub refresh_interval_secs: u64,
     /// Maximum age of cached usage.json before treating it as stale (seconds)
@@ -552,6 +587,9 @@ impl Default for CapacityMeterConfig {
         // Discover Gemini directories
         let mut gemini_dirs = Self::discover_gemini_dirs(&home);
 
+        // Discover OpenCode directories
+        let mut opencode_dirs = Self::discover_opencode_dirs(&home);
+
         // Load optional GCP quota configuration from environment
         let gcp_quota_config = gcp_quota_client::load_gcp_quota_config();
 
@@ -566,6 +604,7 @@ impl Default for CapacityMeterConfig {
         Self {
             account_dirs,
             gemini_dirs,
+            opencode_dirs,
             refresh_interval_secs: 60,
             cache_max_age_secs: 600,
             cache_base_dir: None,
@@ -704,6 +743,148 @@ impl CapacityMeterConfig {
         found_dirs
     }
 
+    /// Discover OpenCode session directories.
+    ///
+    /// Checks multiple potential locations in order:
+    /// 1. `~/.local/share/opencode/storage/session/` (primary tree-based storage)
+    /// 2. `~/.opencode/sessions/` (legacy JSONL format)
+    /// 3. Additional XDG data dirs with opencode/storage/session
+    ///
+    /// Returns all paths that exist and contain session files.
+    fn discover_opencode_dirs(home: &Path) -> Vec<PathBuf> {
+        let mut found_dirs = Vec::new();
+
+        // Primary: XDG data directory
+        let xdg_data_home = std::env::var("XDG_DATA_HOME")
+            .ok()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| home.join(".local").join("share"));
+
+        let opencode_storage = xdg_data_home.join("opencode").join("storage").join("session");
+        if opencode_storage.exists() && opencode_storage.is_dir() {
+            debug!(
+                "OpenCode session discovery: found tree-based storage at {}",
+                opencode_storage.display()
+            );
+            found_dirs.push(xdg_data_home.join("opencode"));
+        }
+
+        // Legacy: ~/.opencode/sessions/
+        let legacy_dir = home.join(".opencode").join("sessions");
+        if legacy_dir.exists() && legacy_dir.is_dir() {
+            // Check if it contains .jsonl files
+            let has_jsonl = fs::read_dir(&legacy_dir)
+                .map(|entries| {
+                    entries
+                        .filter_map(|e| e.ok())
+                        .any(|e| {
+                            e.path()
+                                .extension()
+                                .map(|ext| ext == "jsonl")
+                                .unwrap_or(false)
+                        })
+                })
+                .unwrap_or(false);
+
+            if has_jsonl {
+                debug!(
+                    "OpenCode session discovery: found legacy sessions at {}",
+                    legacy_dir.display()
+                );
+                found_dirs.push(home.join(".opencode"));
+            }
+        }
+
+        // Also check for ~/.opencode-* directories (named OpenCode accounts)
+        if let Ok(entries) = fs::read_dir(home) {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let name_str = name.to_string_lossy();
+                if name_str.starts_with(".opencode-") {
+                    let path = entry.path();
+                    // Check for storage/session or sessions subdirectory
+                    let has_sessions = path.join("storage").join("session").exists()
+                        || path.join("sessions").exists();
+
+                    if has_sessions && !found_dirs.contains(&path) {
+                        debug!(
+                            "OpenCode session discovery: found named account at {}",
+                            path.display()
+                        );
+                        found_dirs.push(path);
+                    }
+                }
+            }
+        }
+
+        found_dirs
+    }
+
+    /// Resolve OpenCode session paths from a root directory.
+    ///
+    /// Returns all session paths that exist and contain session files.
+    fn resolve_opencode_paths(&self, root_dir: &Path) -> Vec<OpenCodeAccountPaths> {
+        let mut paths = Vec::new();
+
+        // Primary: tree-based storage at storage/session/
+        let session_dir = root_dir.join("storage").join("session");
+        if session_dir.exists() && session_dir.is_dir() {
+            // Check for .json session files (tree-based storage)
+            let has_json = fs::read_dir(&session_dir)
+                .map(|entries| {
+                    entries
+                        .filter_map(|e| e.ok())
+                        .any(|e| {
+                            e.path()
+                                .extension()
+                                .map(|ext| ext == "json")
+                                .unwrap_or(false)
+                        })
+                })
+                .unwrap_or(false);
+
+            if has_json {
+                paths.push(OpenCodeAccountPaths {
+                    root_dir: root_dir.to_path_buf(),
+                    session_dir: session_dir.clone(),
+                    legacy_session_dir: None,
+                });
+            }
+        }
+
+        // Legacy fallback: sessions/ directory with .jsonl files
+        let legacy_dir = root_dir.join("sessions");
+        if legacy_dir.exists() && legacy_dir.is_dir() {
+            let has_jsonl = fs::read_dir(&legacy_dir)
+                .map(|entries| {
+                    entries
+                        .filter_map(|e| e.ok())
+                        .any(|e| {
+                            e.path()
+                                .extension()
+                                .map(|ext| ext == "jsonl")
+                                .unwrap_or(false)
+                        })
+                })
+                .unwrap_or(false);
+
+            if has_jsonl {
+                // If we already have a tree-based path, add this as legacy
+                if let Some(existing) = paths.iter_mut().find(|p| p.root_dir == root_dir) {
+                    existing.legacy_session_dir = Some(legacy_dir);
+                } else {
+                    paths.push(OpenCodeAccountPaths {
+                        root_dir: root_dir.to_path_buf(),
+                        session_dir: root_dir.join("storage").join("session"), // may not exist
+                        legacy_session_dir: Some(legacy_dir),
+                    });
+                }
+            }
+        }
+
+        paths
+    }
+
     /// Resolve Gemini session paths from a root directory.
     ///
     /// Returns all session subdirectories (tmp, sessions) that exist
@@ -779,6 +960,23 @@ impl CapacityMeter {
                     Err(e) => {
                         warn!(
                             "Failed to compute Gemini capacity for {}: {}",
+                            paths.root_dir.display(),
+                            e
+                        );
+                    }
+                }
+            }
+        }
+
+        // Process OpenCode accounts
+        for opencode_root in &self.config.opencode_dirs {
+            let opencode_paths = self.config.resolve_opencode_paths(opencode_root);
+            for paths in &opencode_paths {
+                match self.compute_opencode_account(paths) {
+                    Ok(cap) => accounts.push(cap),
+                    Err(e) => {
+                        warn!(
+                            "Failed to compute OpenCode capacity for {}: {}",
                             paths.root_dir.display(),
                             e
                         );
@@ -1614,6 +1812,311 @@ impl CapacityMeter {
                 cache_write_tokens,
                 session_id,
             });
+        }
+
+        Ok(())
+    }
+
+    /// Compute capacity for an OpenCode account from session files.
+    ///
+    /// OpenCode uses tree-based JSON storage with assistant turns counted as prompts.
+    /// Each assistant response counts as one prompt against the ZAI proxy limits.
+    fn compute_opencode_account(&self, paths: &OpenCodeAccountPaths) -> Result<AccountCapacity> {
+        let account_id = Self::derive_opencode_account_id(&paths.root_dir);
+        let now = Utc::now();
+
+        // Parse OpenCode sessions to count prompts
+        let prompts = Self::parse_opencode_sessions(paths)?;
+
+        // Compute rolling windows
+        let cutoff_5h = now - Duration::hours(5);
+        let cutoff_7d = now - Duration::days(7);
+        let cutoff_1h = now - Duration::hours(1);
+
+        let mut prompts_5h: u64 = 0;
+        let mut prompts_7d: u64 = 0;
+        let mut prompts_last_hour: u64 = 0;
+
+        for prompt in &prompts {
+            if prompt.ts > cutoff_5h {
+                prompts_5h += 1;
+            }
+            if prompt.ts > cutoff_7d {
+                prompts_7d += 1;
+            }
+            if prompt.ts > cutoff_1h {
+                prompts_last_hour += 1;
+            }
+        }
+
+        // Get limits for OpenCode (ZAI proxy)
+        let limits = get_opencode_limits();
+
+        // Calculate utilization based on prompt counts
+        let util_5h = if limits.prompts_per_5h > 0 {
+            (prompts_5h as f64 / limits.prompts_per_5h as f64 * 100.0).min(100.0)
+        } else {
+            0.0
+        };
+        let util_7d = if limits.prompts_per_7d > 0 {
+            (prompts_7d as f64 / limits.prompts_per_7d as f64 * 100.0).min(100.0)
+        } else {
+            0.0
+        };
+
+        // Calculate burn rate (prompts per minute)
+        let burn_rate_per_min = if prompts_last_hour > 0 {
+            prompts_last_hour as f64 / 60.0
+        } else {
+            0.0
+        };
+
+        // Calculate forecasts
+        let remaining_5h = limits.prompts_per_5h as f64 * (1.0 - util_5h / 100.0);
+        let remaining_7d = limits.prompts_per_7d as f64 * (1.0 - util_7d / 100.0);
+
+        let forecast_full_5h = if burn_rate_per_min > 0.0 && util_5h < 100.0 {
+            Some(remaining_5h / burn_rate_per_min)
+        } else if util_5h >= 100.0 {
+            Some(0.0)
+        } else {
+            None
+        };
+
+        let forecast_full_7d = if burn_rate_per_min > 0.0 && util_7d < 100.0 {
+            Some(remaining_7d / burn_rate_per_min)
+        } else if util_7d >= 100.0 {
+            Some(0.0)
+        } else {
+            None
+        };
+
+        // Stitch-based metrics (not applicable for OpenCode prompt counting)
+        let stitch_close_rate_per_min = 0.0;
+        let mean_cost_per_stitch_tokens = 0.0;
+        let forecast_full_5h_stitch = None;
+        let forecast_full_7d_stitch = None;
+
+        // OpenCode adapter type
+        let adapter = "opencode".to_string();
+        let plan_type = "max".to_string();
+        let rate_limit_tier = "zai_proxy_max".to_string();
+
+        Ok(AccountCapacity {
+            account_id,
+            adapter,
+            plan_type,
+            rate_limit_tier,
+            utilization_5h: util_5h,
+            utilization_7d: util_7d,
+            resets_at_5h: None,
+            resets_at_7d: None,
+            model_windows_7d: Vec::new(),
+            tokens_5h: 0,
+            tokens_7d: 0,
+            turns_5h: 0,
+            turns_7d: 0,
+            prompts_5h,
+            prompts_7d,
+            prompts_per_5h: Some(limits.prompts_per_5h),
+            prompts_per_7d: Some(limits.prompts_per_7d),
+            burn_rate_per_min,
+            forecast_full_5h_min: forecast_full_5h,
+            forecast_full_7d_min: forecast_full_7d,
+            stitch_close_rate_per_min,
+            mean_cost_per_stitch_tokens,
+            forecast_full_5h_stitch_min: forecast_full_5h_stitch,
+            forecast_full_7d_stitch_min: forecast_full_7d_stitch,
+            source: "jsonl_estimate".to_string(),
+            computed_at: now,
+        })
+    }
+
+    fn derive_opencode_account_id(root_dir: &Path) -> String {
+        let dir_name = root_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown");
+        if dir_name == "opencode" {
+            "opencode-default".to_string()
+        } else {
+            dir_name.to_string()
+        }
+    }
+
+    /// Parse OpenCode session files to count assistant prompts.
+    ///
+    /// Supports both tree-based storage (storage/session/*.json) and
+    /// legacy JSONL format (sessions/*.jsonl).
+    fn parse_opencode_sessions(paths: &OpenCodeAccountPaths) -> Result<Vec<ParsedPrompt>> {
+        let mut prompts = Vec::new();
+
+        // Parse tree-based storage first
+        if paths.session_dir.exists() {
+            Self::scan_opencode_tree_sessions(&paths.session_dir, &mut prompts)?;
+        }
+
+        // Parse legacy JSONL format if available
+        if let Some(ref legacy_dir) = paths.legacy_session_dir {
+            if legacy_dir.exists() {
+                Self::scan_opencode_jsonl_sessions(legacy_dir, &mut prompts)?;
+            }
+        }
+
+        debug!(
+            "Parsed {} OpenCode prompts from {}",
+            prompts.len(),
+            paths.root_dir.display()
+        );
+        Ok(prompts)
+    }
+
+    /// Scan tree-based OpenCode sessions for assistant prompts.
+    fn scan_opencode_tree_sessions(session_dir: &Path, prompts: &mut Vec<ParsedPrompt>) -> Result<()> {
+        if !session_dir.exists() {
+            return Ok(());
+        }
+
+        let entries = fs::read_dir(session_dir)?;
+        for entry in entries.flatten() {
+            let path = entry.path();
+
+            // Each project directory contains session files
+            if path.is_dir() {
+                Self::scan_opencode_tree_sessions(&path, prompts)?;
+            } else if path.extension().map(|e| e == "json").unwrap_or(false) {
+                // Parse session file to get message IDs
+                if let Err(e) = Self::parse_opencode_tree_session_file(&path, prompts) {
+                    debug!("Error parsing OpenCode session {}: {}", path.display(), e);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Parse a single tree-based session file.
+    fn parse_opencode_tree_session_file(session_path: &Path, prompts: &mut Vec<ParsedPrompt>) -> Result<()> {
+        let raw = fs::read(session_path)?;
+        let session_data: serde_json::Value = serde_json::from_slice(&raw)?;
+
+        let session_id = session_data
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or_else(|| {
+                session_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("unknown")
+            })
+            .to_string();
+
+        // Derive storage root from session path
+        let storage_root = session_path
+            .parent()
+            .and_then(|p| p.parent())
+            .and_then(|p| p.parent())
+            .and_then(|p| p.parent())
+            .map(|p| p.to_path_buf());
+
+        let message_ids = session_data
+            .get("messageIds")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        // Load messages and count assistant responses
+        if let Some(root) = storage_root {
+            let message_dir = root.join("message").join(&session_id);
+            for msg_id in &message_ids {
+                let msg_path = message_dir.join(format!("{}.json", msg_id));
+                if let Ok(msg_raw) = fs::read_to_string(&msg_path) {
+                    if let Ok(msg_data) = serde_json::from_str::<serde_json::Value>(&msg_raw) {
+                        let role = msg_data.get("role").and_then(|v| v.as_str());
+                        if role == Some("assistant") {
+                            if let Some(ts_str) = msg_data.get("createdAt").and_then(|v| v.as_str()) {
+                                if let Ok(ts) = ts_str.parse() {
+                                    prompts.push(ParsedPrompt {
+                                        ts,
+                                        session_id: session_id.clone(),
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Scan legacy OpenCode JSONL sessions for assistant prompts.
+    fn scan_opencode_jsonl_sessions(sessions_dir: &Path, prompts: &mut Vec<ParsedPrompt>) -> Result<()> {
+        if !sessions_dir.exists() {
+            return Ok(());
+        }
+
+        let entries = fs::read_dir(sessions_dir)?;
+        for entry in entries.flatten() {
+            let path = entry.path();
+
+            if path.is_dir() {
+                Self::scan_opencode_jsonl_sessions(&path, prompts)?;
+            } else if path.extension().map(|e| e == "jsonl").unwrap_or(false) {
+                if let Err(e) = Self::parse_opencode_jsonl_file(&path, prompts) {
+                    debug!("Error parsing OpenCode JSONL {}: {}", path.display(), e);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Parse a legacy OpenCode JSONL session file.
+    fn parse_opencode_jsonl_file(path: &Path, prompts: &mut Vec<ParsedPrompt>) -> Result<()> {
+        let file = fs::File::open(path)?;
+        let reader = BufReader::new(file);
+
+        let mut session_id = String::new();
+
+        for line in reader.lines() {
+            let line = line?;
+            if !line.contains("\"type\"") {
+                continue;
+            }
+
+            let value: serde_json::Value = serde_json::from_str(&line).ok()?;
+            let event_type = value.get("type").and_then(|v| v.as_str());
+
+            match event_type {
+                Some("message") => {
+                    let role = value.get("role").and_then(|v| v.as_str());
+                    if role == Some("assistant") {
+                        if let Some(ts_str) = value.get("timestamp").and_then(|v| v.as_str()) {
+                            if let Ok(ts) = ts_str.parse() {
+                                prompts.push(ParsedPrompt {
+                                    ts,
+                                    session_id: session_id.clone(),
+                                });
+                            }
+                        }
+                    }
+                }
+                Some("metadata") | Some("session") => {
+                    session_id = value
+                        .get("session_id")
+                        .or_else(|| value.get("id"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(&uuid::Uuid::new_v4().to_string())
+                        .to_string();
+                }
+                _ => {}
+            }
         }
 
         Ok(())

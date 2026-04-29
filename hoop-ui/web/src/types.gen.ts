@@ -1551,6 +1551,27 @@ export interface HoopConfig {
      */
     drafters?: string[];
   };
+  redaction?: {
+    /**
+     * Action to take when secrets are detected: warn (log only), redact (replace with [REDACTED]), reject (block the operation)
+     */
+    action?: "warn" | "redact" | "reject";
+    /**
+     * Pattern sets to enable for this project. If omitted, all default patterns are enabled.
+     */
+    patterns?: (
+      | "anthropic_api_key"
+      | "generic_sk_key"
+      | "aws_access_key"
+      | "github_token"
+      | "slack_token"
+      | "jwt"
+      | "bearer_token"
+      | "env_var_secret"
+      | "json_secret_field"
+    )[];
+    [k: string]: unknown;
+  };
 }
 
 
@@ -1741,7 +1762,7 @@ export interface StitchBead {
 
 
 /**
- * Link between two stitches
+ * Link between two stitches with cross-workspace tracking (§4.2)
  */
 export interface StitchLink {
   /**
@@ -1756,6 +1777,14 @@ export interface StitchLink {
    * Link kind
    */
   kind: "spawned" | "references";
+  /**
+   * Workspace path of the source stitch (for cross-workspace dependency tracking)
+   */
+  workspace_from: string;
+  /**
+   * Workspace path of the target stitch (for cross-workspace dependency tracking)
+   */
+  workspace_to: string;
   /**
    * When the link was created
    */
@@ -1969,6 +1998,14 @@ export interface ReflectionLedger {
    * Archive timestamp
    */
   archived_at?: string | null;
+  /**
+   * SHA-256 hash of rule+reason for deduplication (§19.2)
+   */
+  content_hash?: string;
+  /**
+   * Number of times this proposal was rejected (prevents immediate re-proposal)
+   */
+  rejection_count?: number;
   schema_version: string;
   [k: string]: unknown;
 }

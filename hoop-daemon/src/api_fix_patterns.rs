@@ -7,6 +7,8 @@
 //! `DELETE /api/fix-patterns/:id` — delete a pattern
 //! `POST   /api/fix-patterns/match` — find patterns matching a signature vector
 //! `GET    /api/fix-patterns/search?q=` — search patterns by keywords
+//! `GET    /api/fix-patterns/export` — export all patterns as JSON
+//! `POST   /api/fix-patterns/import` — import patterns from JSON
 
 use axum::{
     extract::{Path, Query},
@@ -81,6 +83,37 @@ pub struct SearchQuery {
     pub q: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct PatternsExportResponse {
+    pub patterns: Vec<PatternExport>,
+    pub exported_at: String,
+    pub version: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PatternExport {
+    pub id: String,
+    pub name: String,
+    pub signature_vector: Vec<f32>,
+    pub keywords: String,
+    pub recommended_fix_template_md: String,
+    pub example_source_stitches: Vec<String>,
+    pub created_at: String,
+    pub applied_count: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PatternsImportRequest {
+    pub patterns: Vec<PatternExport>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PatternsImportResponse {
+    pub imported: usize,
+    pub skipped: usize,
+    pub ids: Vec<String>,
+}
+
 // ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
@@ -94,6 +127,8 @@ pub fn router() -> Router<crate::DaemonState> {
         )
         .route("/api/fix-patterns/match", post(match_patterns))
         .route("/api/fix-patterns/search", get(search_patterns))
+        .route("/api/fix-patterns/export", get(export_patterns))
+        .route("/api/fix-patterns/import", post(import_patterns))
 }
 
 // ---------------------------------------------------------------------------
@@ -247,4 +282,131 @@ async fn search_patterns(
         .collect();
 
     Ok(Json(PatternListResponse { patterns: details }))
+}
+
+async fn export_patterns() -> Result<Json<PatternsExportResponse>, (StatusCode, String)> {
+    let patterns = FixPatternService::list().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("export failed: {e}"),
+        )
+    })?;
+
+    let exports = patterns
+        .into_iter()
+        .map(|p| PatternExport {
+            id: p.id,
+            name: p.name,
+            signature_vector: p.signature_vector,
+            keywords: p.keywords,
+            recommended_fix_template_md: p.recommended_fix_template_md,
+            example_source_stitches: p.example_source_stitches,
+            created_at: p.created_at,
+            applied_count: p.applied_count,
+        })
+        .collect();
+
+    Ok(Json(PatternsExportResponse {
+        patterns: exports,
+        exported_at: chrono::Utc::now().to_rfc3339(),
+        version: "1.0.0".to_string(),
+    }))
+}
+
+async fn import_patterns(
+    Json(req): Json<PatternsImportRequest>,
+) -> Result<Json<PatternsImportResponse>, (StatusCode, String)> {
+    let mut imported = 0;
+    let mut skipped = 0;
+    let mut ids = Vec::new();
+
+    for pattern in &req.patterns {
+        // Check if pattern already exists by ID
+        match FixPatternService::get(&pattern.id) {
+            Ok(Some(_)) => {
+                skipped += 1;
+                continue;
+            }
+            Ok(None) => {}
+            Err(e) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("import check failed: {e}"),
+                ))
+            }
+        }
+
+        // Create new pattern with preserved ID
+        let create_req = CreatePatternRequest {
+            name: pattern.name.clone(),
+            signature_vector: pattern.signature_vector.clone(),
+            keywords: pattern.keywords.clone(),
+            recommended_fix_template_md: pattern.recommended_fix_template_md.clone(),
+            example_source_stitches: pattern.example_source_stitches.clone(),
+        };
+
+        // Note: create() generates a new ID, so we need to insert directly
+        let db_path = crate::fleet::db_path();
+        let mut conn = match rusqlite::Connection::open(&db_path) {
+            Ok(c) => c,
+            Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("db open failed: {e}"))),
+        };
+
+        let signature_json = match serde_json::to_string(&pattern.signature_vector) {
+            Ok(j) => j,
+            Err(e) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("json serialize failed: {e}"),
+                ))
+            }
+        };
+
+        let examples_json = match serde_json::to_string(&pattern.example_source_stitches) {
+            Ok(j) => j,
+            Err(e) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("json serialize failed: {e}"),
+                ))
+            }
+        };
+
+        match conn.execute(
+            r#"
+            INSERT INTO fix_patterns (
+                id, name, signature_vector_json, keywords,
+                recommended_fix_template_md, example_source_stitches_json,
+                created_at, applied_count
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            "#,
+            rusqlite::params![
+                &pattern.id,
+                &pattern.name,
+                &signature_json,
+                &pattern.keywords,
+                &pattern.recommended_fix_template_md,
+                &examples_json,
+                &pattern.created_at,
+                pattern.applied_count,
+            ],
+        ) {
+            Ok(_) => {
+                imported += 1;
+                ids.push(pattern.id.clone());
+            }
+            Err(e) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("insert failed: {e}"),
+                ))
+            }
+        }
+    }
+
+    Ok(Json(PatternsImportResponse {
+        imported,
+        skipped,
+        ids,
+    }))
 }

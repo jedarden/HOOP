@@ -35,7 +35,7 @@
 
 use anyhow::{anyhow, Result};
 use fnv::FnvBuildHasher;
-use jsonschema::Validator;
+use jsonschema::JSONSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -229,7 +229,7 @@ pub fn validate_args_against_schema(
     schema: &Value,
 ) -> Result<(), Vec<ValidationError>> {
     // Compile the JSON Schema
-    let compiled = match Validator::new(schema) {
+    let compiled = match JSONSchema::compile(schema) {
         Ok(s) => s,
         Err(e) => {
             return Err(vec![ValidationError {
@@ -438,7 +438,7 @@ pub fn skills_dir() -> Result<PathBuf> {
 
 /// Cache for compiled JSON schemas
 pub struct SchemaCache {
-    cache: HashMap<String, Arc<Validator>, FnvBuildHasher>,
+    cache: HashMap<String, Arc<JSONSchema>, FnvBuildHasher>,
 }
 
 impl SchemaCache {
@@ -448,12 +448,12 @@ impl SchemaCache {
         }
     }
 
-    pub fn get_or_compile(&mut self, skill_name: &str, schema: &Value) -> Result<Arc<Validator>> {
+    pub fn get_or_compile(&mut self, skill_name: &str, schema: &Value) -> Result<Arc<JSONSchema>> {
         if let Some(compiled) = self.cache.get(skill_name) {
             return Ok(Arc::clone(compiled));
         }
 
-        let compiled = Validator::new(schema)
+        let compiled = JSONSchema::compile(schema)
             .map_err(|e| anyhow!("Failed to compile schema for skill '{}': {}", skill_name, e))?;
 
         let compiled = Arc::new(compiled);

@@ -439,3 +439,101 @@ fn test_benign_content() {
         );
     }
 }
+
+/// Test false positive rate on testrepo/ content (<5%)
+///
+/// Scans a representative sample of files from testrepo to ensure
+/// the secrets scanner doesn't produce excessive false positives.
+/// The acceptance criteria is <5% false positive rate.
+#[test]
+fn test_false_positive_rate_on_testrepo() {
+    secrets_scanner::init();
+
+    let testrepo_path = std::path::Path::new("../testrepo");
+
+    // Check if testrepo exists (may not exist in all test environments)
+    if !testrepo_path.exists() {
+        println!("testrepo not found, skipping false positive rate test");
+        return;
+    }
+
+    let mut files_scanned = 0;
+    let mut files_with_findings = 0;
+    let mut total_chars = 0;
+    let mut findings_count = 0;
+
+    // Scan a representative sample of testrepo content
+    let sample_files = vec![
+        "README.md",
+        "src/lib.rs",
+        "src/api/rest.rs",
+        "src/models/config.rs",
+        "src/services/storage.rs",
+        "tests/integration_1.rs",
+    ];
+
+    for file_rel_path in sample_files {
+        let file_path = testrepo_path.join(file_rel_path);
+
+        if !file_path.exists() {
+            continue;
+        }
+
+        // Read file content
+        match std::fs::read_to_string(&file_path) {
+            Ok(content) => {
+                files_scanned += 1;
+                total_chars += content.len();
+
+                let findings = secrets_scanner::scan_text(&content, None);
+
+                if !findings.is_empty() {
+                    files_with_findings += 1;
+                    findings_count += findings.len();
+
+                    // Log which patterns triggered for debugging
+                    let pattern_ids: std::collections::HashSet<_> =
+                        findings.iter().map(|f| f.pattern_id.as_str()).collect();
+                    println!(
+                        "File '{}' had {} findings from patterns: {:?}",
+                        file_rel_path,
+                        findings.len(),
+                        pattern_ids
+                    );
+                }
+            }
+            Err(e) => {
+                println!("Failed to read {}: {}", file_rel_path, e);
+            }
+        }
+    }
+
+    // Calculate false positive rate
+    // We expect testrepo content to be clean (no real secrets)
+    // so any findings are considered false positives
+    let false_positive_rate = if files_scanned > 0 {
+        (files_with_findings as f64 / files_scanned as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    println!(
+        "False positive rate test: {}/{} files had findings ({:.1}%)",
+        files_with_findings, files_scanned, false_positive_rate
+    );
+    println!("Total findings: {} across {} characters", findings_count, total_chars);
+
+    // Assert false positive rate is below 5%
+    // We allow some leniency for edge cases but the scanner should be quite accurate
+    assert!(
+        false_positive_rate < 5.0,
+        "False positive rate ({:.1}%) exceeds 5% threshold",
+        false_positive_rate
+    );
+
+    // We should have scanned at least some files
+    assert!(
+        files_scanned >= 3,
+        "Should scan at least 3 files for meaningful test"
+    );
+}

@@ -17,7 +17,7 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 use utoipa::ToSchema;
 
@@ -1091,6 +1091,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
             migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
             migrate!(conn, migrate_v128_to_v129, "1.28.0", "1.29.0", "Add workspace_from/to to stitch_links")?;
+            migrate!(conn, migrate_v129_to_v130, "1.29.0", "1.30.0", "Multi-operator concurrency (§19)")?;
         }
         "1.1.0" => {
             migrate!(conn, migrate_v11_to_v12, "1.1.0", "1.2.0", "Add Pattern service tables")?;
@@ -1121,6 +1122,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
             migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
             migrate!(conn, migrate_v128_to_v129, "1.28.0", "1.29.0", "Add workspace_from/to to stitch_links")?;
+            migrate!(conn, migrate_v129_to_v130, "1.29.0", "1.30.0", "Multi-operator concurrency (§19)")?;
         }
         "1.2.0" => {
             migrate!(conn, migrate_v12_to_v13, "1.2.0", "1.3.0", "Add dictated_notes metadata table")?;
@@ -1150,6 +1152,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
             migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
             migrate!(conn, migrate_v128_to_v129, "1.28.0", "1.29.0", "Add workspace_from/to to stitch_links")?;
+            migrate!(conn, migrate_v129_to_v130, "1.29.0", "1.30.0", "Multi-operator concurrency (§19)")?;
         }
         "1.3.0" => {
             migrate!(conn, migrate_v13_to_v14, "1.3.0", "1.4.0", "Add word-level timestamps to dictated_notes")?;
@@ -1519,13 +1522,16 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
             migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
             migrate!(conn, migrate_v128_to_v129, "1.28.0", "1.29.0", "Add workspace_from/to to stitch_links")?;
+            migrate!(conn, migrate_v129_to_v130, "1.29.0", "1.30.0", "Multi-operator concurrency (§19)")?;
         }
         "1.27.0" => {
             migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
             migrate!(conn, migrate_v128_to_v129, "1.28.0", "1.29.0", "Add workspace_from/to to stitch_links")?;
+            migrate!(conn, migrate_v129_to_v130, "1.29.0", "1.30.0", "Multi-operator concurrency (§19)")?;
         }
         "1.28.0" => {
             migrate!(conn, migrate_v128_to_v129, "1.28.0", "1.29.0", "Add workspace_from/to to stitch_links")?;
+            migrate!(conn, migrate_v129_to_v130, "1.29.0", "1.30.0", "Multi-operator concurrency (§19)")?;
         }
         _ => {
             return Err(anyhow::anyhow!(
@@ -2988,6 +2994,104 @@ pub fn migrate_v128_to_v129(conn: &mut Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migration 1.29.0 → 1.30.0: Multi-operator concurrency (§19)
+///
+/// Adds:
+/// - content_hash to reflection_ledger for deduplication
+/// - rejection_count to prevent immediate re-proposal
+/// - approved_by, approved_at, archived_at to match JSON schema
+/// - presence table for real-time multi-operator presence tracking
+pub fn migrate_v129_to_v130(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.29.0 → 1.30.0: Multi-operator concurrency (§19)");
+
+    // Add content_hash column to reflection_ledger
+    add_column_if_not_exists(
+        conn,
+        "reflection_ledger",
+        "content_hash",
+        "TEXT NOT NULL DEFAULT ''",
+    )?;
+
+    // Compute content_hash for existing entries
+    conn.execute(
+        r#"
+        UPDATE reflection_ledger
+        SET content_hash = lower(hex(rule || reason))
+        WHERE content_hash = ''
+        "#,
+        [],
+    )?;
+
+    // Add rejection_count column
+    add_column_if_not_exists(
+        conn,
+        "reflection_ledger",
+        "rejection_count",
+        "INTEGER NOT NULL DEFAULT 0",
+    )?;
+
+    // Add approved_by column
+    add_column_if_not_exists(
+        conn,
+        "reflection_ledger",
+        "approved_by",
+        "TEXT",
+    )?;
+
+    // Add approved_at column
+    add_column_if_not_exists(
+        conn,
+        "reflection_ledger",
+        "approved_at",
+        "TEXT",
+    )?;
+
+    // Add archived_at column
+    add_column_if_not_exists(
+        conn,
+        "reflection_ledger",
+        "archived_at",
+        "TEXT",
+    )?;
+
+    // Create presence table for multi-operator presence tracking
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS presence (
+            operator_id TEXT NOT NULL,
+            project TEXT,
+            stitch_id TEXT,
+            last_seen TEXT NOT NULL,
+            visibility TEXT NOT NULL DEFAULT 'visible'
+                CHECK(visibility IN ('visible', 'hidden')),
+            PRIMARY KEY (operator_id, COALESCE(project, ''), COALESCE(stitch_id, ''))
+        )
+        "#,
+        [],
+    )?;
+
+    // Index for time-based cleanup
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_presence_last_seen ON presence(last_seen)",
+        [],
+    )?;
+
+    // Index for project-based queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_presence_project ON presence(project) WHERE project IS NOT NULL",
+        [],
+    )?;
+
+    // Index for stitch-based queries
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_presence_stitch ON presence(stitch_id) WHERE stitch_id IS NOT NULL",
+        [],
+    )?;
+
+    update_schema_version(conn, "1.30.0")?;
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // §20.1 Major-upgrade gate
 // ---------------------------------------------------------------------------
@@ -3907,6 +4011,164 @@ pub fn build_reflection_rules_with_audit(
     }
 
     Ok(result)
+}
+
+// ---------------------------------------------------------------------------
+// §19.4 Multi-operator presence tracking
+// ---------------------------------------------------------------------------
+
+/// Update or insert presence record for an operator.
+///
+/// Tracks which operators are currently viewing which projects or Stitches.
+/// Presence records have a 30-second timeout — clients should heartbeat every 15-20s.
+pub fn update_presence(
+    operator_id: &str,
+    project: Option<&str>,
+    stitch_id: Option<&str>,
+    visibility: &str,
+) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let now = Utc::now().to_rfc3339();
+
+    // Use UPSERT (SQLite 3.24+) to insert or update
+    conn.execute(
+        r#"
+        INSERT INTO presence (operator_id, project, stitch_id, last_seen, visibility)
+        VALUES (?1, ?2, ?3, ?4, ?5)
+        ON CONFLICT (operator_id, COALESCE(project, ''), COALESCE(stitch_id, ''))
+        DO UPDATE SET last_seen = ?4, visibility = ?5
+        "#,
+        params![operator_id, project, stitch_id, now, visibility],
+    )?;
+
+    Ok(())
+}
+
+/// Remove presence record for an operator (e.g., when navigating away).
+pub fn remove_presence(
+    operator_id: &str,
+    project: Option<&str>,
+    stitch_id: Option<&str>,
+) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+
+    let mut sql = "DELETE FROM presence WHERE operator_id = ?1".to_string();
+    let mut params: Vec<&dyn rusqlite::ToSql> = vec![operator_id];
+
+    if let Some(p) = project {
+        sql.push_str(" AND (project = ?2 OR project IS NULL)");
+        params.push(p);
+    } else {
+        sql.push_str(" AND project IS NULL");
+    }
+
+    if let Some(s) = stitch_id {
+        sql.push_str(" AND (stitch_id = ?3 OR stitch_id IS NULL)");
+        params.push(s);
+    } else {
+        sql.push_str(" AND stitch_id IS NULL");
+    }
+
+    conn.execute(&sql, params.as_slice())
+        .map_err(|e| anyhow::anyhow!("Failed to remove presence: {}", e))?;
+
+    Ok(())
+}
+
+/// Query current presence for a project or Stitch.
+///
+/// Returns a list of operators currently present, excluding those with
+/// visibility='hidden' (privacy toggle).
+pub fn query_presence(
+    project: Option<&str>,
+    stitch_id: Option<&str>,
+) -> Result<Vec<PresenceEntry>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let cutoff = Utc::now() - chrono::Duration::seconds(30);
+    let cutoff_str = cutoff.to_rfc3339();
+
+    let (sql, params): (String, Vec<&dyn rusqlite::ToSql>) = match (project, stitch_id) {
+        (Some(p), Some(s)) => (
+            "SELECT operator_id, project, stitch_id, last_seen, visibility
+             FROM presence
+             WHERE project = ?1 AND stitch_id = ?2 AND last_seen > ?3 AND visibility = 'visible'
+             ORDER BY last_seen DESC"
+                .to_string(),
+            vec![p, s, &cutoff_str],
+        ),
+        (Some(p), None) => (
+            "SELECT operator_id, project, stitch_id, last_seen, visibility
+             FROM presence
+             WHERE project = ?1 AND stitch_id IS NULL AND last_seen > ?2 AND visibility = 'visible'
+             ORDER BY last_seen DESC"
+                .to_string(),
+            vec![p, &cutoff_str],
+        ),
+        (None, Some(s)) => (
+            "SELECT operator_id, project, stitch_id, last_seen, visibility
+             FROM presence
+             WHERE project IS NULL AND stitch_id = ?1 AND last_seen > ?2 AND visibility = 'visible'
+             ORDER BY last_seen DESC"
+                .to_string(),
+            vec![s, &cutoff_str],
+        ),
+        (None, None) => (
+            "SELECT operator_id, project, stitch_id, last_seen, visibility
+             FROM presence
+             WHERE project IS NULL AND stitch_id IS NULL AND last_seen > ?1 AND visibility = 'visible'
+             ORDER BY last_seen DESC"
+                .to_string(),
+            vec![&cutoff_str],
+        ),
+    };
+
+    let mut stmt = conn.prepare(&sql)?;
+    let entries = stmt
+        .query_map(params.as_slice(), |row| {
+            Ok(PresenceEntry {
+                operator_id: row.get(0)?,
+                project: row.get(1)?,
+                stitch_id: row.get(2)?,
+                last_seen: row.get(3)?,
+                visibility: row.get(4)?,
+            })
+        })
+        .map_err(|e| anyhow::anyhow!("Failed to query presence: {}", e))?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(|e| anyhow::anyhow!("Failed to parse presence entries: {}", e))?;
+
+    Ok(entries)
+}
+
+/// Clean up stale presence records (older than 30 seconds).
+///
+/// Should be called periodically (e.g., every minute) to prevent the table
+/// from growing indefinitely with stale records.
+pub fn cleanup_stale_presence() -> Result<usize> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let cutoff = Utc::now() - chrono::Duration::seconds(30);
+    let cutoff_str = cutoff.to_rfc3339();
+
+    let deleted = conn.execute(
+        "DELETE FROM presence WHERE last_seen <= ?1",
+        params![cutoff_str],
+    )?;
+
+    Ok(deleted)
+}
+
+/// A presence entry representing an operator's current view.
+#[derive(Debug, Clone)]
+pub struct PresenceEntry {
+    pub operator_id: String,
+    pub project: Option<String>,
+    pub stitch_id: Option<String>,
+    pub last_seen: String,
+    pub visibility: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -5259,6 +5521,10 @@ pub fn query_operator_stitch_messages(
 ///
 /// Creates a new row with status='proposed' that can be approved/rejected by the operator.
 /// Returns the ID of the newly created entry.
+///
+/// §19.2 Multi-operator concurrency: proposals are deduplicated on create using content hash.
+/// If a proposal with the same content hash already exists and was rejected, the rejection
+/// count is incremented and no new proposal is created (prevents immediate re-proposal).
 pub fn propose_reflection_entry(
     rule: &str,
     reason: &str,
@@ -5268,14 +5534,57 @@ pub fn propose_reflection_entry(
     let path = db_path();
     let conn = Connection::open(&path)?;
 
+    // Compute content hash for deduplication (SHA-256 of rule + reason)
+    let content = format!("{}{}", rule, reason);
+    let content_hash = hex::encode(sha256(content.as_bytes()));
+
+    // Check for existing proposal with same content hash
+    let existing: Option<(String, String)> = conn
+        .query_row(
+            "SELECT id, status FROM reflection_ledger WHERE content_hash = ?1",
+            params![content_hash],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .ok();
+
+    if let Some((existing_id, status)) = existing {
+        match status.as_str() {
+            "proposed" | "approved" | "archived" => {
+                // Already exists in a non-rejected state — return existing ID
+                tracing::debug!(
+                    "Reflection proposal already exists with content_hash {}: {}",
+                    content_hash, existing_id
+                );
+                return Ok(existing_id);
+            }
+            "rejected" => {
+                // Increment rejection count and don't create new proposal
+                conn.execute(
+                    "UPDATE reflection_ledger SET rejection_count = rejection_count + 1 WHERE id = ?1",
+                    params![existing_id],
+                )?;
+                tracing::debug!(
+                    "Reflection proposal with content_hash {} was rejected before (id: {}), \
+                     incremented rejection_count to prevent re-proposal",
+                    content_hash, existing_id
+                );
+                return Ok(existing_id);
+            }
+            _ => {
+                // Unknown status — create new entry
+            }
+        }
+    }
+
+    // No existing proposal or unknown status — create new entry
     let id = Uuid::new_v4().to_string();
     let source_stitches_json = serde_json::to_string(source_stitches)?;
     let now = Utc::now().to_rfc3339();
 
     conn.execute(
-        r#"INSERT INTO reflection_ledger (id, scope, rule, reason, source_stitches, status, created_at, applied_count)
-           VALUES (?1, ?2, ?3, ?4, ?5, 'proposed', ?6, 0)"#,
-        params![id, scope, rule, reason, source_stitches_json, now],
+        r#"INSERT INTO reflection_ledger (id, scope, rule, reason, source_stitches, status, created_at, applied_count, content_hash, rejection_count)
+           VALUES (?1, ?2, ?3, ?4, ?5, 'proposed', ?6, 0, ?7, 0)"#,
+        params![id, scope, rule, reason, source_stitches_json, now, content_hash],
     )?;
 
     Ok(id)

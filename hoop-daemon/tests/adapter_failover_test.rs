@@ -570,6 +570,149 @@ async fn concurrent_switch_requests_are_handled_gracefully() {
     assert_eq!(health["status"], "ok", "Daemon should remain healthy");
 }
 
+#[tokio::test]
+async fn config_yml_hot_reload_triggers_adapter_switch() {
+    // Acceptance: Operator switches adapter via config.yml edit → hot-reload triggers new session
+    // This is the primary test for hoop-ttb.6.2.2: config file edit (not API) triggers failover
+
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::Duration;
+    use tokio::time::sleep;
+
+    let (base_url, daemon) = spawn_test_daemon_with_config(Some(|config| {
+        config.allow_br_mismatch = true;
+    }))
+    .await
+    .expect("Failed to spawn daemon");
+
+    let client = FailoverClient::new(base_url.clone()).await.expect("Failed to create client");
+
+    // Spawn initial agent session with Claude adapter
+    let spawn_resp = client.spawn_agent().await.expect("Failed to spawn agent");
+    assert_eq!(spawn_resp["status"], "ok", "Agent spawn should succeed");
+    let initial_session_id = spawn_resp
+        .get("session_db_id")
+        .and_then(|v| v.as_str())
+        .expect("Should have session_db_id");
+
+    // Verify initial session is active with Claude adapter
+    let status = client
+        .get_agent_status()
+        .await
+        .expect("Failed to get agent status");
+    assert_eq!(status["active"], true, "Agent should be active");
+    assert_eq!(
+        status["adapter"],
+        "claude",
+        "Initial adapter should be claude"
+    );
+
+    // Get the config.yml path from the temp directory
+    let config_path = daemon
+        ._temp_dir
+        .path()
+        .join(".hoop")
+        .join("config.yml");
+
+    // Edit config.yml to switch to ZAI adapter
+    let new_config_yaml = r#"
+schema_version: "1.0.0"
+agent:
+  adapter: zai
+  model: glm-5
+  zai_base_url: https://zai.example.com
+  zai_api_key: test-key-from-config-reload
+"#;
+
+    fs::write(&config_path, new_config_yaml)
+        .expect("Failed to write updated config.yml");
+
+    info!("Edited config.yml to switch adapter from claude to zai");
+
+    // Wait for hot-reload to detect the change (2-second debounce + processing time)
+    sleep(Duration::from_secs(4)).await;
+
+    // Verify new agent status reflects ZAI adapter
+    let status = client
+        .get_agent_status()
+        .await
+        .expect("Failed to get agent status after config reload");
+    assert_eq!(status["active"], true, "Agent should still be active");
+    assert_eq!(
+        status["adapter"],
+        "zai",
+        "Adapter should be zai after config reload"
+    );
+    assert_eq!(status["model"], "glm-5", "Model should be glm-5");
+
+    // List all sessions
+    let sessions = client
+        .list_sessions()
+        .await
+        .expect("Failed to list sessions");
+
+    // Should have at least 2 sessions (original + new after switch)
+    assert!(
+        sessions.len() >= 2,
+        "Should have at least 2 sessions, got {}",
+        sessions.len()
+    );
+
+    // Count active vs archived sessions
+    let active_count = count_sessions_by_status(&sessions, "active");
+    let archived_count = count_sessions_by_status(&sessions, "switched");
+
+    assert_eq!(active_count, 1, "Should have exactly 1 active session");
+    assert_eq!(archived_count, 1, "Should have 1 switched (archived) session");
+
+    // Verify the archived session is the original one
+    let archived_session = sessions
+        .iter()
+        .find(|s| s.get("id").and_then(|v| v.as_str()) == Some(initial_session_id))
+        .expect("Should find original archived session");
+
+    assert_eq!(
+        archived_session.get("status").and_then(|v| v.as_str()),
+        Some("switched"),
+        "Original session should be switched (archived)"
+    );
+
+    // Verify the archived session has a stitch_id
+    let stitch_id = get_session_stitch_id(archived_session);
+    assert!(
+        stitch_id.is_some(),
+        "Archived session should have a stitch_id linking to the preserved Stitch"
+    );
+
+    // Verify the Stitch exists with correct properties
+    let stitch_row_opt = fleet::load_stitch_by_id(stitch_id.as_ref().unwrap())
+        .expect("Failed to query stitch from fleet.db");
+
+    assert!(
+        stitch_row_opt.is_some(),
+        "Stitch should exist in fleet.db"
+    );
+
+    let stitch_row = stitch_row_opt.unwrap();
+    assert_eq!(
+        stitch_row.kind, "operator",
+        "Stitch kind should be 'operator'"
+    );
+    assert_eq!(
+        stitch_row.project, "hoop-agent",
+        "Stitch should belong to hoop-agent project"
+    );
+    assert_eq!(
+        stitch_row.created_by, "hoop:agent",
+        "Stitch should be created by hoop:agent"
+    );
+
+    // Verify daemon is still healthy after hot-reload
+    let health = client.healthz().await.expect("Health check failed");
+    assert_eq!(health["status"], "ok", "Daemon should remain healthy after hot-reload");
+}
+
 // ---------------------------------------------------------------------------
 // Fleet DB helpers for Stitch verification
 // ---------------------------------------------------------------------------

@@ -13,11 +13,14 @@ use axum::{
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
 
 use crate::DaemonState;
 
 /// Query parameters for conversations list
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ConversationsQuery {
     /// Cursor for pagination (base64-encoded timestamp + id)
     pub cursor: Option<String>,
@@ -45,6 +48,7 @@ pub struct ConversationsQuery {
 
 /// Response for conversations query with cursor-based pagination
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ConversationsResponse {
     /// Conversations matching the query
     pub conversations: Vec<ConversationSummary>,
@@ -56,6 +60,7 @@ pub struct ConversationsResponse {
 
 /// Summary of a conversation for the list view
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ConversationSummary {
     /// Stable conversation ID
     pub id: String,
@@ -87,6 +92,7 @@ pub struct ConversationSummary {
 
 /// Worker metadata for fleet sessions
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct WorkerMetadata {
     /// Worker name
     pub worker: String,

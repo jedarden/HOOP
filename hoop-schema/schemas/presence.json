@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/presence.json",
+  "title": "Presence",
+  "description": "Real-time multi-operator presence tracking (§19.4)",
+  "type": "object",
+  "required": ["operator_id", "last_seen", "visibility"],
+  "properties": {
+    "operator_id": {
+      "type": "string",
+      "description": "Operator identifier (e.g., 'tailscale:user@example.com' or 'os:username')"
+    },
+    "project": {
+      "type": ["string", "null"],
+      "description": "Project name if viewing a project, null otherwise"
+    },
+    "stitch_id": {
+      "type": ["string", "null"],
+      "format": "uuid",
+      "description": "Stitch ID if viewing a specific Stitch, null otherwise"
+    },
+    "last_seen": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last heartbeat timestamp (records older than 30s are considered stale)"
+    },
+    "visibility": {
+      "type": "string",
+      "enum": ["visible", "hidden"],
+      "description": "Privacy toggle: 'visible' shows presence to others, 'hidden' hides it"
+    }
+  },
+  "schema_version": "1.0.0"
+}

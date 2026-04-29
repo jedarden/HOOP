@@ -631,4 +631,85 @@ mod tests {
         assert_eq!(NgramEmbedder::canonicalize("race"), "race");
         assert_eq!(NgramEmbedder::canonicalize("condition"), "condition");
     }
+
+    #[test]
+    fn test_canonicalize_empty() {
+        assert_eq!(NgramEmbedder::canonicalize(""), "");
+    }
+
+    #[test]
+    fn test_canonicalize_case_sensitive() {
+        // Canonicalization should be case-insensitive
+        assert_eq!(NgramEmbedder::canonicalize("Auth"), "auth");
+        assert_eq!(NgramEmbedder::canonicalize("AUTH"), "auth");
+        assert_eq!(NgramEmbedder::canonicalize("Database"), "db");
+    }
+
+    #[test]
+    fn test_jaccard_similarity_tokens() {
+        let tokens_a = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let tokens_b = vec!["b".to_string(), "c".to_string(), "d".to_string()];
+        let sim = jaccard_similarity(&tokens_a, &tokens_b);
+        // intersection = {b, c} = 2, union = {a, b, c, d} = 4
+        assert!((sim - 0.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_jaccard_similarity_both_empty() {
+        let tokens_a: Vec<String> = vec![];
+        let tokens_b: Vec<String> = vec![];
+        assert_eq!(jaccard_similarity(&tokens_a, &tokens_b), 1.0);
+    }
+
+    #[test]
+    fn test_jaccard_similarity_one_empty() {
+        let tokens_a = vec!["a".to_string()];
+        let tokens_b: Vec<String> = vec![];
+        assert_eq!(jaccard_similarity(&tokens_a, &tokens_b), 0.0);
+    }
+
+    #[test]
+    fn test_combined_similarity_metric() {
+        let embedder = NgramEmbedder::new();
+        let sim = combined_similarity(&embedder, "fix auth bug", "fix authentication bug");
+        // Should be high due to synonym canonicalization
+        assert!(sim > 0.8);
+    }
+
+    #[test]
+    fn test_combined_similarity_different_texts() {
+        let embedder = NgramEmbedder::new();
+        let sim = combined_similarity(&embedder, "add feature", "delete code");
+        // Should be low for unrelated texts
+        assert!(sim < 0.5);
+    }
+
+    #[test]
+    fn test_embedding_performance_small_text() {
+        let embedder = NgramEmbedder::new();
+        let start = std::time::Instant::now();
+        for _ in 0..100 {
+            let _ = embedder.embed("small text");
+        }
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed.as_millis() < 100,
+            "100 embeddings of small text should take < 100ms, took {}ms",
+            elapsed.as_millis()
+        );
+    }
+
+    #[test]
+    fn test_embedding_performance_large_text() {
+        let embedder = NgramEmbedder::new();
+        let large_text = "word ".repeat(1000);
+        let start = std::time::Instant::now();
+        let _ = embedder.embed(&large_text);
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed.as_millis() < 50,
+            "Embedding 1000-word text should take < 50ms, took {}ms",
+            elapsed.as_millis()
+        );
+    }
 }

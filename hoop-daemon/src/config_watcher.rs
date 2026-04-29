@@ -18,6 +18,23 @@ use tokio::sync::mpsc;
 use tokio::sync::Mutex;
 use tracing::{debug, info, warn};
 
+/// Agent configuration changes that require session switch (hoop-ttb.6.2.2)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentConfigChanged {
+    /// Old adapter value
+    pub old_adapter: String,
+    /// New adapter value
+    pub new_adapter: String,
+    /// Old model value
+    pub old_model: String,
+    /// New model value
+    pub new_model: String,
+    /// Whether API key changed
+    pub api_key_changed: bool,
+    /// Whether ZAI base URL changed
+    pub zai_base_url_changed: bool,
+}
+
 /// Events emitted by the config watcher
 #[derive(Debug, Clone)]
 pub enum ConfigEvent {
@@ -28,6 +45,8 @@ pub enum ConfigEvent {
         prev_hash: String,
         /// Restart-required keys that changed (§17.4)
         restart_required: Option<RestartRequiredData>,
+        /// Agent configuration changes requiring session switch (hoop-ttb.6.2.2)
+        agent_config_changed: Option<AgentConfigChanged>,
     },
     /// Configuration failed to parse
     ConfigError {
@@ -298,6 +317,9 @@ impl ConfigWatcher {
         // ── Phase 3: detect restart-required changes (§17.4) ───────────────────
         let restart_required = detect_restart_required_changes(&old_config, &new_config);
 
+        // ── Phase 3.5: detect agent config changes requiring session switch (hoop-ttb.6.2.2) ─
+        let agent_config_changed = detect_agent_config_changes(&old_config, &new_config);
+
         // ── Phase 4: apply (store new config) ───────────────────────────────────
         let new_hash = hex::encode(Sha256::digest(raw.as_bytes()));
 
@@ -324,10 +346,29 @@ impl ConfigWatcher {
             info!("✓ Config.yml reloaded successfully — all changes applied via hot-reload");
         }
 
+        // Log agent config changes (hoop-ttb.6.2.2)
+        if let Some(ref acc) = agent_config_changed {
+            info!("╔════════════════════════════════════════════════════════════════════════════════╗");
+            info!("║ 🔄 AGENT CONFIG CHANGED: SESSION SWITCH TRIGGERED                             ║");
+            info!("╠════════════════════════════════════════════════════════════════════════════════╣");
+            info!("║ • Adapter: {} → {}", acc.old_adapter, acc.new_adapter);
+            info!("║ • Model: {} → {}", acc.old_model, acc.new_model);
+            if acc.api_key_changed {
+                info!("║ • API key: changed");
+            }
+            if acc.zai_base_url_changed {
+                info!("║ • ZAI base URL: changed");
+            }
+            info!("║                                                                                ║");
+            info!("║ Current agent session will be archived and new session spawned.               ║");
+            info!("╚════════════════════════════════════════════════════════════════════════════════╝");
+        }
+
         let _ = event_tx.send(ConfigEvent::ConfigReloaded {
             config: new_config,
             prev_hash: prev_hash.clone(),
             restart_required,
+            agent_config_changed,
         });
         info!(
             "Config hash: {} → {}",
@@ -387,6 +428,35 @@ fn detect_restart_required_changes(
             keys: changed_keys,
             message: "Some changed keys require daemon restart to take effect. See hoop config diff for details.".to_string(),
         })
+    }
+}
+
+/// Detect agent configuration changes that require session switch (hoop-ttb.6.2.2)
+///
+/// Returns AgentConfigChanged if any agent-related config changed that requires
+/// the current agent session to be archived and a new session spawned.
+fn detect_agent_config_changes(
+    old_config: &ResolvedConfig,
+    new_config: &ResolvedConfig,
+) -> Option<AgentConfigChanged> {
+    let adapter_changed = old_config.agent_adapter.value != new_config.agent_adapter.value;
+    let model_changed = old_config.agent_model.value != new_config.agent_model.value;
+    let api_key_changed = old_config.agent_anthropic_api_key.value != new_config.agent_anthropic_api_key.value
+        || old_config.agent_zai_api_key.value != new_config.agent_zai_api_key.value;
+    let zai_base_url_changed = old_config.agent_zai_base_url.value != new_config.agent_zai_base_url.value;
+
+    // Only trigger session switch if meaningful changes occurred
+    if adapter_changed || model_changed || api_key_changed || zai_base_url_changed {
+        Some(AgentConfigChanged {
+            old_adapter: old_config.agent_adapter.value.clone(),
+            new_adapter: new_config.agent_adapter.value.clone(),
+            old_model: old_config.agent_model.value.clone(),
+            new_model: new_config.agent_model.value.clone(),
+            api_key_changed,
+            zai_base_url_changed,
+        })
+    } else {
+        None
     }
 }
 

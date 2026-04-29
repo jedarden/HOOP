@@ -458,4 +458,97 @@ mod tests {
             other => panic!("Expected Quiet status, got {:?}", other),
         }
     }
+
+    #[test]
+    fn test_custom_streaming_threshold() {
+        let mut ctx = base_context();
+        ctx.activity.last_streaming_at = Some(minutes_ago(3)); // 3 minutes ago
+        ctx.config.streaming_recent_minutes = 5; // Custom threshold: 5 minutes
+
+        assert_eq!(ctx.derive_status(), StitchStatus::InProgress);
+    }
+
+    #[test]
+    fn test_custom_quiet_threshold() {
+        let mut ctx = base_context();
+        ctx.activity.last_message_at = Some(days_ago(5));
+        ctx.config.quiet_days_threshold = 10; // Custom threshold: 10 days
+
+        match ctx.derive_status() {
+            StitchStatus::Quiet { days } => {
+                assert_eq!(days, 5);
+            }
+            other => panic!("Expected Quiet status, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_closed_bead_not_in_progress() {
+        let mut ctx = base_context();
+        // Closed bead shouldn't trigger In Progress
+        ctx.linked_beads = vec![LinkedBead {
+            id: "bd-1".to_string(),
+            status: BeadStatus::Closed,
+            issue_type: BeadType::Task,
+            claimed_by: Some("worker-alpha".to_string()), // Even if claimed
+            updated_at: now(),
+        }];
+
+        assert_ne!(ctx.derive_status(), StitchStatus::InProgress);
+    }
+
+    #[test]
+    fn test_multiple_claimed_beads() {
+        let mut ctx = base_context();
+        ctx.linked_beads = vec![
+            claimed_bead("bd-1", BeadType::Task, "worker-alpha"),
+            claimed_bead("bd-2", BeadType::Bug, "worker-beta"),
+        ];
+
+        assert_eq!(ctx.derive_status(), StitchStatus::InProgress);
+    }
+
+    #[test]
+    fn test_review_with_task_beads() {
+        let mut ctx = base_context();
+        ctx.linked_beads = vec![
+            open_bead("bd-1", BeadType::Review),
+            open_bead("bd-2", BeadType::Task),
+            open_bead("bd-3", BeadType::Bug),
+        ];
+
+        assert_eq!(ctx.derive_status(), StitchStatus::AwaitingReview);
+    }
+
+    #[test]
+    fn test_performance_many_beads() {
+        let mut ctx = base_context();
+
+        // Create 100 beads (worst case)
+        for i in 0..100 {
+            ctx.linked_beads.push(LinkedBead {
+                id: format!("bd-{}", i),
+                status: if i % 2 == 0 { BeadStatus::Open } else { BeadStatus::Closed },
+                issue_type: match i % 4 {
+                    0 => BeadType::Review,
+                    1 => BeadType::Task,
+                    2 => BeadType::Bug,
+                    _ => BeadType::Fix,
+                },
+                claimed_by: if i % 5 == 0 { Some(format!("worker-{}", i)) } else { None },
+                updated_at: days_ago(i as i64),
+            });
+        }
+        ctx.activity.last_message_at = Some(days_ago(5));
+
+        let start = std::time::Instant::now();
+        let _status = ctx.derive_status();
+        let elapsed = start.elapsed();
+
+        assert!(
+            elapsed.as_millis() < 50,
+            "Status derivation for 100 beads should take < 50ms, took {}ms",
+            elapsed.as_millis()
+        );
+    }
 }

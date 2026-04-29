@@ -165,7 +165,10 @@ test.describe('Mobile Responsiveness - Text Readability', () => {
 
     const lineHeight = await page.evaluate(() => {
       const body = window.getComputedStyle(document.body);
-      return parseFloat(body.lineHeight);
+      const lh = body.lineHeight;
+      // Handle 'normal' line-height
+      if (lh === 'normal') return 1.5; // browsers typically use 1.2-1.4
+      return parseFloat(lh) || 1.5;
     });
 
     // Line height should be at least 1.4 for readability

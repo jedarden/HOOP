@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/bead_blockers_response.json",
+  "title": "BeadBlockersResponse",
+  "description": "Response for GET /api/beads/:id/blockers. Returns cross-workspace blockers for a bead based on Stitch-child relationships.",
+  "type": "object",
+  "required": ["bead_id", "blockers"],
+  "properties": {
+    "bead_id": {
+      "type": "string",
+      "description": "The bead ID that was queried"
+    },
+    "blockers": {
+      "type": "array",
+      "description": "List of cross-workspace blockers",
+      "items": {
+        "$ref": "https://hoop.dev/schemas/cross_workspace_blocker.json"
+      }
+    }
+  },
+  "schema_version": "1.0.0"
+}

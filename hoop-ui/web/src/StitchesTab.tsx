@@ -9,6 +9,7 @@ import StitchDraftForm from './StitchDraftForm';
 import { StitchLinker } from './components/StitchLinker';
 import ChatToStitchPane from './ChatToStitchPane';
 import { TabId } from './ProjectDetail';
+import PatternTagger from './components/PatternTagger';
 
 const PAGE_SIZE = 50;
 
@@ -412,6 +413,84 @@ interface NetDiffResponse {
   truncated: boolean;
   bead_count: number;
   commit_count: number;
+}
+
+// ─── StitchCostPanel ───────────────────────────────────────────────────────────
+
+interface StitchCostData {
+  stitch_id: string;
+  total_cost_usd: number;
+  total_tokens: number;
+  message_count: number;
+  cost_per_message_usd: number;
+}
+
+interface StitchCostPanelProps {
+  stitchId: string;
+}
+
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  }).format(amount);
+}
+
+function StitchCostPanel({ stitchId }: StitchCostPanelProps) {
+  const [costData, setCostData] = useState<StitchCostData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    fetch(`/api/stitches/${encodeURIComponent(stitchId)}/cost`)
+      .then(r => r.ok ? r.json() : null)
+      .then((data: StitchCostData) => {
+        if (mounted) {
+          setCostData(data);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => { mounted = false; };
+  }, [stitchId]);
+
+  if (loading) return <div className="stitch-cost-loading">Loading cost data…</div>;
+  if (!costData || costData.total_cost_usd === 0) return null;
+
+  return (
+    <div className="stitch-cost-panel">
+      <div className="stitch-cost-header">
+        <span className="stitch-cost-title">Cost Analysis</span>
+      </div>
+      <div className="stitch-cost-metrics">
+        <div className="stitch-cost-metric">
+          <span className="metric-label">Total Cost</span>
+          <span className="metric-value metric-value--cost">{formatCurrency(costData.total_cost_usd)}</span>
+        </div>
+        <div className="stitch-cost-metric">
+          <span className="metric-label">Total Tokens</span>
+          <span className="metric-value">{costData.total_tokens.toLocaleString()}</span>
+        </div>
+        {costData.message_count > 0 && (
+          <div className="stitch-cost-metric">
+            <span className="metric-label">Cost per Message</span>
+            <span className="metric-value">{formatCurrency(costData.cost_per_message_usd)}</span>
+          </div>
+        )}
+        {costData.total_tokens > 0 && (
+          <div className="stitch-cost-metric">
+            <span className="metric-label">Cost per 1M Tokens</span>
+            <span className="metric-value">{formatCurrency((costData.total_cost_usd / costData.total_tokens) * 1_000_000)}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ─── TouchedFilesPanel ────────────────────────────────────────────────────────
@@ -1101,6 +1180,7 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
                         Created {formatTimeAgo(item.createdAt)} ago
                       </span>
                       <StitchLinker stitchId={item.id} stitchProject={item.project} onLinkCreated={handleLinkCreated} />
+                      <PatternTagger stitchId={item.id} stitchTitle={item.title} disabled={mutationsDisabled} />
                     </div>
                     {/* See also: stitch links */}
                     {(() => {
@@ -1170,6 +1250,7 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
                         Created {formatTimeAgo(item.createdAt)} ago
                       </span>
                       <StitchLinker stitchId={item.id} stitchProject={item.project} onLinkCreated={handleLinkCreated} />
+                      <PatternTagger stitchId={item.id} stitchTitle={item.title} disabled={mutationsDisabled} />
                     </div>
                     {/* See also: stitch links */}
                     {(() => {
@@ -1239,6 +1320,7 @@ export default function StitchesTab({ projectName, projectPath: _projectPath, co
                         Created {formatTimeAgo(item.createdAt)} ago
                       </span>
                       <StitchLinker stitchId={item.id} stitchProject={item.project} onLinkCreated={handleLinkCreated} />
+                      <PatternTagger stitchId={item.id} stitchTitle={item.title} disabled={mutationsDisabled} />
                     </div>
                     {/* See also: stitch links */}
                     {(() => {

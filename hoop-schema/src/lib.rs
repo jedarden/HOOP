@@ -578,8 +578,6 @@ mod tests {
             redaction: None,
             // roles (RBAC, §13 Security)
             roles: None,
-            // secrets_patterns (§18)
-            secrets_patterns: vec![],
             // server (required)
             server: Some(HoopConfigServer {
                 bind_addr: Some("127.0.0.1:3000".to_string()),

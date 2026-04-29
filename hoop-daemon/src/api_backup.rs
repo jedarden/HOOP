@@ -11,12 +11,16 @@ use axum::{
 };
 use serde::Serialize;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
 /// Build the backup API router.
 pub fn router() -> Router<DaemonState> {
     Router::new().route("/api/backup/trigger", post(trigger_backup))
 }
 
 #[derive(Serialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 struct TriggerResponse {
     status: String,
     message: String,
@@ -28,6 +32,15 @@ struct TriggerResponse {
 /// - Backup is not configured
 /// - Credentials are not available
 /// - A backup is already in progress (TODO: add run state tracking)
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/backup/trigger",
+    tag = "backup",
+    responses(
+        (status = 200, description = "Backup started successfully", body = TriggerResponse),
+        (status = 503, description = "Backup is not configured")
+    )
+))]
 async fn trigger_backup(
     State(state): State<DaemonState>,
 ) -> Result<Json<TriggerResponse>, axum::http::StatusCode> {

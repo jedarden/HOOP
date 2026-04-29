@@ -67,6 +67,23 @@ pub struct CostAnomalyResult {
     pub band: Option<CostBand>,
     /// Computed similarity score vs each comparable (0–1, for diagnostics)
     pub similar_stitch_ids: Vec<String>,
+    /// Matching fix patterns with recommended fixes
+    pub matching_patterns: Vec<MatchingPattern>,
+}
+
+/// A matching fix pattern with similarity score and recommended fix
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MatchingPattern {
+    /// Pattern ID
+    pub pattern_id: String,
+    /// Pattern name
+    pub pattern_name: String,
+    /// Similarity score (0.0 to 1.0)
+    pub similarity: f32,
+    /// Recommended fix template in markdown
+    pub recommended_fix_template_md: String,
+    /// Example source stitches where this pattern was applied
+    pub example_source_stitches: Vec<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -206,11 +223,15 @@ pub fn check_cost_anomaly(
             .inc();
     }
 
+    // Find matching fix patterns based on stitch signature
+    let matching_patterns = find_matching_patterns(stitch);
+
     CostAnomalyResult {
         is_anomaly,
         cost_usd: stitch.cost_usd,
         band,
         similar_stitch_ids: similar_ids,
+        matching_patterns,
     }
 }
 
@@ -222,7 +243,10 @@ pub fn check_cost_anomaly(
 ///
 /// This is called from the bead close event handler in lib.rs.
 /// Returns Ok(false) if the Stitch is not fully closed yet.
-pub fn check_on_stitch_close(stitch_id: &str) -> anyhow::Result<bool> {
+pub fn check_on_stitch_close(
+    stitch_id: &str,
+    sender: Option<&tokio::sync::broadcast::Sender<crate::ws::CostAnomalyAlertData>>,
+) -> anyhow::Result<bool> {
     let db_path = std::path::PathBuf::from(dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")))
         .join(".hoop")
         .join("fleet.db");
@@ -234,12 +258,12 @@ pub fn check_on_stitch_close(stitch_id: &str) -> anyhow::Result<bool> {
     let conn = Connection::open(&db_path)?;
 
     // Check if this Stitch is "closed" (no recent activity)
-    let last_activity_at: String = match conn.query_row(
-        "SELECT last_activity_at FROM stitches WHERE id = ?1",
+    let (last_activity_at, project): (String, String) = match conn.query_row(
+        "SELECT last_activity_at, project FROM stitches WHERE id = ?1",
         params![stitch_id],
-        |row| row.get(0),
+        |row| Ok((row.get(0)?, row.get(1)?)),
     ) {
-        Ok(ts) => ts,
+        Ok(data) => data,
         Err(rusqlite::Error::QueryReturnedNoRows) => {
             return Ok(false);
         }
@@ -273,7 +297,7 @@ pub fn check_on_stitch_close(stitch_id: &str) -> anyhow::Result<bool> {
         DEFAULT_MIN_SIMILARITY,
     );
 
-    // Log if anomalous
+    // Broadcast alert if anomalous
     if result.is_anomaly {
         tracing::warn!(
             stitch_id = %stitch_id,
@@ -286,6 +310,39 @@ pub fn check_on_stitch_close(stitch_id: &str) -> anyhow::Result<bool> {
             similar_stitch_ids = ?result.similar_stitch_ids,
             "Cost anomaly detected: Stitch cost exceeds 2σ band"
         );
+
+        // Broadcast the alert via WebSocket if sender is available
+        if let Some(sender) = sender {
+            let band = result.band.unwrap();
+            let closest_pattern = result.matching_patterns.first().map(|p| {
+                crate::ws::ClosestPatternMatch {
+                    pattern_id: p.pattern_id.clone(),
+                    pattern_name: p.pattern_name.clone(),
+                    similarity: p.similarity,
+                    recommended_fix_template_md: p.recommended_fix_template_md.clone(),
+                }
+            });
+
+            let alert = crate::ws::CostAnomalyAlertData {
+                alert_id: uuid::Uuid::new_v4().to_string(),
+                stitch_id: stitch_id.to_string(),
+                stitch_title: current.title.clone(),
+                project,
+                cost_usd: result.cost_usd,
+                band: crate::ws::CostBand {
+                    mean_usd: band.mean_usd,
+                    std_dev_usd: band.std_dev_usd,
+                    upper_2sigma_usd: band.upper_2sigma_usd,
+                    similar_count: band.similar_count,
+                    min_similarity: band.min_similarity,
+                    window_days: band.window_days,
+                },
+                closest_pattern,
+                detected_at: Utc::now().to_rfc3339(),
+            };
+
+            let _ = sender.send(alert);
+        }
     }
 
     Ok(true)
@@ -430,6 +487,62 @@ fn count_attachments(attachments_path: &str) -> usize {
                 .count()
         })
         .unwrap_or(0)
+}
+
+// ---------------------------------------------------------------------------
+// Pattern matching integration
+// ---------------------------------------------------------------------------
+
+/// Find matching fix patterns for a cost-anomaly stitch.
+///
+/// Computes a signature vector from the stitch's title and body,
+/// then queries the fix_patterns service for matches above threshold.
+fn find_matching_patterns(stitch: &CostAnomalyStitch) -> Vec<MatchingPattern> {
+    // Compute signature vector from stitch (simple hash-based approach)
+    let signature = compute_stitch_signature(stitch);
+
+    // Query fix_patterns service for matches
+    match crate::fix_patterns::FixPatternService::match_by_signature(&signature, 0.5, 5) {
+        Ok(matches) => matches
+            .into_iter()
+            .map(|m| MatchingPattern {
+                pattern_id: m.pattern.id.clone(),
+                pattern_name: m.pattern.name.clone(),
+                similarity: m.similarity,
+                recommended_fix_template_md: m.pattern.recommended_fix_template_md.clone(),
+                example_source_stitches: m.pattern.example_source_stitches.clone(),
+            })
+            .collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
+/// Compute a signature vector for a stitch for pattern matching.
+///
+/// Uses a simple hash-based approach to convert the stitch title
+/// and body into a fixed-length vector for similarity matching.
+fn compute_stitch_signature(stitch: &CostAnomalyStitch) -> Vec<f32> {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    const VECTOR_SIZE: usize = 8;
+
+    let mut hasher = DefaultHasher::new();
+    stitch.title.hash(&mut hasher);
+    if let Some(ref body) = stitch.body {
+        body.hash(&mut hasher);
+    }
+
+    let hash = hasher.finish();
+    let mut signature = Vec::with_capacity(VECTOR_SIZE);
+
+    // Convert hash to a vector of floats in [0, 1]
+    for i in 0..VECTOR_SIZE {
+        let byte = (hash >> (i * 8)) as u8;
+        signature.push(byte as f32 / 255.0);
+    }
+
+    signature
 }
 
 // ---------------------------------------------------------------------------
@@ -673,5 +786,67 @@ mod tests {
         // Dissimilar → not enough comparables → no anomaly
         assert!(!result.is_anomaly);
         assert!(result.band.is_none());
+    }
+
+    #[test]
+    fn test_band_with_zero_variance() {
+        let costs = vec![5.0; 100];
+        let band = compute_band(&costs, 3).unwrap();
+        assert!((band.mean_usd - 5.0).abs() < 1e-9);
+        assert!(band.std_dev_usd < 1e-9);
+        assert!((band.upper_2sigma_usd - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_similarity_with_no_body_or_attachments() {
+        let a = make_stitch("a", "fix bug", 1.0, 5);
+        let b = make_stitch("b", "fix bug", 1.0, 5);
+        let s = stitch_similarity(&a, &b);
+        // Only title matches (60%)
+        assert!((s - 0.60).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_excludes_self_from_historical() {
+        let historical = vec![
+            make_stitch("self", "fix bug", 1.0, 5),
+            make_stitch("other", "fix bug", 1.0, 5),
+        ];
+
+        let stitch = make_stitch("self", "fix bug", 1.0, 5);
+        let result = check_cost_anomaly(
+            &stitch,
+            &historical,
+            DEFAULT_WINDOW_DAYS,
+            DEFAULT_MIN_SIMILARITY,
+        );
+
+        // Should exclude self from historical
+        assert_eq!(result.similar_stitch_ids.len(), 1);
+        assert_eq!(result.similar_stitch_ids[0], "other");
+    }
+
+    #[test]
+    fn test_performance_100_historical_stitches() {
+        let historical: Vec<CostAnomalyStitch> = (0..100)
+            .map(|i| make_stitch(&format!("h{i}"), "fix bug", 1.0 + i as f64 * 0.01, i))
+            .collect();
+
+        let stitch = make_stitch("target", "fix bug", 1.5, 1);
+
+        let start = std::time::Instant::now();
+        let _result = check_cost_anomaly(
+            &stitch,
+            &historical,
+            DEFAULT_WINDOW_DAYS,
+            DEFAULT_MIN_SIMILARITY,
+        );
+        let elapsed = start.elapsed();
+
+        assert!(
+            elapsed.as_millis() < 100,
+            "Checking 100 historical stitches should take < 100ms, took {}ms",
+            elapsed.as_millis()
+        );
     }
 }

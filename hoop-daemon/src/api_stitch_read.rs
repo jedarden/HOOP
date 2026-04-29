@@ -45,6 +45,10 @@ pub struct StitchRow {
     pub created_at: String,
     pub last_activity_at: String,
     pub participants: serde_json::Value,
+    /// Total cost in USD (aggregated from messages)
+    pub total_cost_usd: Option<f64>,
+    /// Total token count
+    pub total_tokens: Option<i64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -214,7 +218,7 @@ fn query_stitch_row(
     stitch_id: &str,
 ) -> Result<StitchRow, (StatusCode, String)> {
     conn.query_row(
-        "SELECT id, project, kind, title, created_by, created_at, last_activity_at, participants \
+        "SELECT id, project, kind, title, created_by, created_at, last_activity_at, participants, total_cost_usd, total_tokens \
          FROM stitches WHERE id = ?1",
         [stitch_id],
         |row| {
@@ -230,6 +234,8 @@ fn query_stitch_row(
                 created_at: row.get(5)?,
                 last_activity_at: row.get(6)?,
                 participants: participants_val,
+                total_cost_usd: row.get(8).ok(),
+                total_tokens: row.get(9).ok(),
             })
         },
     )

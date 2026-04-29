@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/cross_workspace_blocker.json",
+  "title": "CrossWorkspaceBlocker",
+  "description": "A cross-workspace blocker entry for a bead. Represents a bead in another workspace that blocks completion via Stitch-child relationships (§4.2).",
+  "type": "object",
+  "required": ["bead_id", "workspace", "title", "status", "priority", "issue_type"],
+  "properties": {
+    "bead_id": {
+      "type": "string",
+      "description": "Bead ID that is blocking completion"
+    },
+    "workspace": {
+      "type": "string",
+      "description": "Workspace where the bead exists (for cross-workspace context)"
+    },
+    "title": {
+      "type": "string",
+      "description": "Bead title"
+    },
+    "status": {
+      "type": "string",
+      "description": "Bead status (e.g., 'Open', 'Closed')"
+    },
+    "priority": {
+      "type": "integer",
+      "description": "Bead priority (1-5, where 1 is highest)"
+    },
+    "issue_type": {
+      "type": "string",
+      "description": "Bead issue type (e.g., 'task', 'bug', 'feature')"
+    }
+  },
+  "schema_version": "1.0.0"
+}

@@ -48,6 +48,36 @@ interface ClassificationSplit {
   operator: number;
 }
 
+// Cost trends API types
+interface CostTrendPoint {
+  date: string;
+  cost_usd: number;
+  total_tokens: number;
+  stitch_count: number;
+}
+
+interface AdapterCostTrend {
+  adapter: string;
+  model: string;
+  data_points: CostTrendPoint[];
+  total_cost_usd: number;
+  total_tokens: number;
+}
+
+interface ProjectCostTrend {
+  project: string;
+  data_points: CostTrendPoint[];
+  total_cost_usd: number;
+  total_tokens: number;
+}
+
+interface CostTrendsResponse {
+  window_days: number;
+  cost_per_stitch_usd: number;
+  by_adapter: AdapterCostTrend[];
+  by_project: ProjectCostTrend[];
+}
+
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -149,6 +179,10 @@ export default function CostPanel({ projectName, conversations: conversationsPro
   const claudeCapacity = allCapacity.filter(a => a.adapter === 'claude');
   const [apiBuckets, setApiBuckets] = useState<CostBucket[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [trendsData, setTrendsData] = useState<CostTrendsResponse | null>(null);
+  const [trendsWindow, setTrendsWindow] = useState<30 | 90 | 180>(30);
+  const [trendsLoading, setTrendsLoading] = useState(true);
+  const [trendsView, setTrendsView] = useState<'adapter' | 'project'>('adapter');
 
   // Fetch real cost data from backend
   useEffect(() => {
@@ -170,6 +204,26 @@ export default function CostPanel({ projectName, conversations: conversationsPro
 
     return () => { cancelled = true; };
   }, [projectName]);
+
+  // Fetch cost trends data
+  useEffect(() => {
+    let cancelled = false;
+    setTrendsLoading(true);
+
+    fetch(`/api/cost/stitch-trends?window_days=${trendsWindow}`)
+      .then(res => res.ok ? res.json() : Promise.reject(new Error(`${res.status}`)))
+      .then((data: CostTrendsResponse) => {
+        if (!cancelled) setTrendsData(data);
+      })
+      .catch(() => {
+        if (!cancelled) setTrendsData(null);
+      })
+      .finally(() => {
+        if (!cancelled) setTrendsLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [trendsWindow]);
 
   // Cost breakdown by adapter/model
   const costByAdapter = useMemo((): CostBreakdown[] => {
@@ -452,6 +506,134 @@ export default function CostPanel({ projectName, conversations: conversationsPro
               );
             })}
           </div>
+        </section>
+
+        {/* Cost Per Stitch Trends */}
+        <section className="cost-section">
+          <div className="cost-trends-header">
+            <h4>Cost Per Stitch Trends</h4>
+            <div className="cost-trends-controls">
+              <div className="trends-window-selector">
+                <button
+                  className={`trends-window-btn ${trendsWindow === 30 ? 'active' : ''}`}
+                  onClick={() => setTrendsWindow(30)}
+                >
+                  30 days
+                </button>
+                <button
+                  className={`trends-window-btn ${trendsWindow === 90 ? 'active' : ''}`}
+                  onClick={() => setTrendsWindow(90)}
+                >
+                  90 days
+                </button>
+                <button
+                  className={`trends-window-btn ${trendsWindow === 180 ? 'active' : ''}`}
+                  onClick={() => setTrendsWindow(180)}
+                >
+                  180 days
+                </button>
+              </div>
+              <div className="trends-view-selector">
+                <button
+                  className={`trends-view-btn ${trendsView === 'adapter' ? 'active' : ''}`}
+                  onClick={() => setTrendsView('adapter')}
+                >
+                  By Adapter
+                </button>
+                <button
+                  className={`trends-view-btn ${trendsView === 'project' ? 'active' : ''}`}
+                  onClick={() => setTrendsView('project')}
+                >
+                  By Project
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {trendsLoading ? (
+            <div className="cost-loading">Loading trends data...</div>
+          ) : !trendsData ? (
+            <p className="cost-empty">No trends data available</p>
+          ) : (
+            <div className="cost-trends-content">
+              {/* Overall cost per stitch metric */}
+              <div className="cost-per-stitch-summary">
+                <span className="cost-label">Cost Per Stitch</span>
+                <span className="cost-value cost-value--stitch">{formatCurrency(trendsData.cost_per_stitch_usd)}</span>
+                <span className="cost-stitch-period">over {trendsData.window_days} days</span>
+              </div>
+
+              {/* Trend charts grouped by selected view */}
+              {trendsView === 'adapter' && trendsData.by_adapter.length > 0 ? (
+                <div className="cost-trends-grouped">
+                  {trendsData.by_adapter.map(trend => (
+                    <div key={`${trend.adapter}-${trend.model}`} className="cost-trend-item">
+                      <div className="cost-trend-header">
+                        <span className="trend-name">
+                          {trend.adapter}
+                          {trend.model && <span className="trend-model"> · {trend.model}</span>}
+                        </span>
+                        <span className="trend-total">{formatCurrency(trend.total_cost_usd)}</span>
+                      </div>
+                      <div className="cost-trend-chart">
+                        {trend.data_points.slice(0, 14).reverse().map((point, idx) => {
+                          const maxCost = Math.max(...trend.data_points.map(p => p.cost_usd));
+                          const height = maxCost > 0 ? (point.cost_usd / maxCost) * 100 : 0;
+                          return (
+                            <div key={idx} className="trend-bar-container">
+                              <div
+                                className="trend-bar"
+                                style={{ height: `${height}%` }}
+                                title={`${point.date}: ${formatCurrency(point.cost_usd)} (${point.stitch_count} stitches)`}
+                              />
+                              <span className="trend-date">{new Date(point.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="cost-trend-stats">
+                        <span>{formatNumber(trend.total_tokens)} tokens</span>
+                        <span>{trend.data_points.reduce((sum, p) => sum + p.stitch_count, 0)} stitches</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : trendsView === 'project' && trendsData.by_project.length > 0 ? (
+                <div className="cost-trends-grouped">
+                  {trendsData.by_project.map(trend => (
+                    <div key={trend.project} className="cost-trend-item">
+                      <div className="cost-trend-header">
+                        <span className="trend-name">{trend.project}</span>
+                        <span className="trend-total">{formatCurrency(trend.total_cost_usd)}</span>
+                      </div>
+                      <div className="cost-trend-chart">
+                        {trend.data_points.slice(0, 14).reverse().map((point, idx) => {
+                          const maxCost = Math.max(...trend.data_points.map(p => p.cost_usd));
+                          const height = maxCost > 0 ? (point.cost_usd / maxCost) * 100 : 0;
+                          return (
+                            <div key={idx} className="trend-bar-container">
+                              <div
+                                className="trend-bar"
+                                style={{ height: `${height}%` }}
+                                title={`${point.date}: ${formatCurrency(point.cost_usd)} (${point.stitch_count} stitches)`}
+                              />
+                              <span className="trend-date">{new Date(point.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="cost-trend-stats">
+                        <span>{formatNumber(trend.total_tokens)} tokens</span>
+                        <span>{trend.data_points.reduce((sum, p) => sum + p.stitch_count, 0)} stitches</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="cost-empty">No {trendsView} trend data available for this period</p>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Notes */}

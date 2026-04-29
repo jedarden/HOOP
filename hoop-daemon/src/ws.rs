@@ -633,6 +633,78 @@ pub struct CollisionAlertData {
     pub overlapping_files: Vec<String>,
 }
 
+/// Saturation alert emitted when capacity thresholds are exceeded (§6 P2 d10, §8.3, hoop-ttb.3.22)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaturationAlertData {
+    /// Stable UUID identifying this alert
+    pub alert_id: String,
+    /// ISO 8601 timestamp of detection
+    pub detected_at: String,
+    /// Account that is saturated
+    pub account: String,
+    /// Model that is saturated
+    pub model: String,
+    /// Current utilization percentage
+    pub utilization_percent: f64,
+    /// Threshold that was exceeded
+    pub threshold_percent: f64,
+    /// Current tokens per minute usage
+    pub current_tpm: u64,
+    /// Allowed tokens per minute quota
+    pub quota_tpm: u64,
+}
+
+/// Closest pattern match for recommending a fix template
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClosestPatternMatch {
+    /// Pattern ID
+    pub pattern_id: String,
+    /// Pattern name
+    pub pattern_name: String,
+    /// Similarity score (0-1)
+    pub similarity: f64,
+    /// Recommended fix template (markdown)
+    pub recommended_fix_template_md: String,
+}
+
+/// Cost band computed from similar historical Stitches
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CostBand {
+    /// Mean cost in USD
+    pub mean_usd: f64,
+    /// Population standard deviation of cost
+    pub std_dev_usd: f64,
+    /// Upper 2σ threshold: mean + 2 × std_dev
+    pub upper_2sigma_usd: f64,
+    /// Number of similar Stitches used
+    pub similar_count: usize,
+    /// Similarity threshold applied
+    pub min_similarity: f64,
+    /// Look-back window in days
+    pub window_days: i64,
+}
+
+/// Cost anomaly alert emitted when a Stitch's cost exceeds the 2σ band (§6 Phase 2 marquee #4)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CostAnomalyAlertData {
+    /// Stable UUID identifying this alert
+    pub alert_id: String,
+    /// Stitch that exceeded the cost threshold
+    pub stitch_id: String,
+    /// Stitch title
+    pub stitch_title: String,
+    /// Project name
+    pub project: String,
+    /// Actual cost in USD
+    pub cost_usd: f64,
+    /// Statistical band used for detection
+    pub band: CostBand,
+    /// Closest matching pattern from the library (if any)
+    pub closest_pattern: Option<ClosestPatternMatch>,
+    /// ISO 8601 timestamp when the anomaly was detected
+    pub detected_at: String,
+}
+
 /// Pattern saved query synced event data (§4.7)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PatternSavedQuerySyncedData {
@@ -696,9 +768,15 @@ pub struct WsEvent {
     pub bead_created_by_hoop: Option<BeadCreatedByHoopData>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pattern_saved_query_synced: Option<PatternSavedQuerySyncedData>,
+    /// Saturation alert (§6 P2 d10, §8.3, hoop-ttb.3.22)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub saturation_alert: Option<SaturationAlertData>,
     /// Stuck detector alert (§C1, hoop-ttb.3.25)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stuck_alert: Option<crate::stuck_detector::StuckAlert>,
+    /// Cost anomaly alert (§6 Phase 2 marquee #4)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_anomaly_alert: Option<CostAnomalyAlertData>,
     /// Present only on `init` events; the server-authoritative subscription list.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subscriptions: Option<Vec<String>>,

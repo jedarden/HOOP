@@ -244,9 +244,12 @@ fn generate_schema_fixtures() {
             serde_json::to_string_pretty(&StitchMessage {
                 id: uuid,
                 stitch_id: uuid,
+                ts,
                 role: StitchMessageRole::User,
                 content: serde_json::Value::String("Hello".to_string()),
-                created_at: ts,
+                attachments: None,
+                tokens: None,
+                tool_use: None,
                 schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
             })
             .unwrap(),
@@ -254,18 +257,11 @@ fn generate_schema_fixtures() {
         (
             "stitch_preview",
             serde_json::to_string_pretty(&StitchPreview {
-                id: uuid,
-                project: "test-project".to_string(),
-                kind: StitchKind::Operator,
-                title: "Test stitch".to_string(),
-                created_by: "user".to_string(),
-                created_at: ts,
-                classification: Some(StitchClassification::Operator),
+                schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
                 prediction: None,
-                similar_stitches: vec![],
                 risk_patterns: vec![],
                 file_conflicts: vec![],
-                schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
+                similar_stitches: vec![],
             })
             .unwrap(),
         ),
@@ -305,11 +301,9 @@ fn generate_schema_fixtures() {
         (
             "pattern_query",
             serde_json::to_string_pretty(&PatternQuery {
-                id: uuid,
                 pattern_id: uuid,
                 query: "status:open".to_string(),
-                created_at: ts,
-                created_by: "user".to_string(),
+                created_at: Some(ts),
                 schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
             })
             .unwrap(),
@@ -322,7 +316,7 @@ fn generate_schema_fixtures() {
                 rule: "test rule".to_string(),
                 reason: Some("test example".to_string()),
                 source_stitches: vec![],
-                status: ReflectionLedgerStatus::Active,
+                status: ReflectionLedgerStatus::Proposed,
                 created_at: ts,
                 last_applied: None,
                 applied_count: 0,
@@ -351,6 +345,7 @@ fn generate_schema_fixtures() {
                 stuck_detector: None,
                 morning_brief: None,
                 pricing: None,
+                redaction: None,
                 roles: None,
                 server: None,
             })
@@ -411,19 +406,37 @@ fn generate_schema_fixtures() {
         (
             "config_error",
             serde_json::to_string_pretty(&ConfigError {
-                file: "/path/to/config.yml".to_string(),
-                error: "Invalid configuration".to_string(),
-                line: Some(10),
-                column: Some(5),
+                message: "Invalid configuration".to_string(),
+                line: 10,
+                col: 5,
             })
             .unwrap(),
         ),
         (
             "project_config_status",
             serde_json::to_string_pretty(&ProjectConfigStatus {
-                project: "test-project".to_string(),
                 valid: true,
                 error: None,
+            })
+            .unwrap(),
+        ),
+        (
+            "morning_brief_config",
+            serde_json::to_string_pretty(&MorningBriefConfig {
+                window_hours: 24,
+                schedule_hour: 7,
+                auto_run_enabled: true,
+            })
+            .unwrap(),
+        ),
+        (
+            "stuck_detector_config",
+            serde_json::to_string_pretty(&StuckDetectorConfig {
+                idle_timeout_secs: 180,
+                max_runtime_secs: 3600,
+                content_seen_grace_secs: 600,
+                heartbeat_transition_threshold_secs: 300,
+                retry_threshold: 3,
             })
             .unwrap(),
         ),
@@ -651,6 +664,64 @@ fn generate_schema_fixtures() {
             })
             .unwrap(),
         ),
+        (
+            "secret_pattern",
+            serde_json::to_string_pretty(&SecretPattern {
+                id: "test_pattern".to_string(),
+                name: "Test Pattern".to_string(),
+                severity: SecretPatternSeverity::High,
+                patterns: vec!["sk-ant-[0-9a-zA-Z_-]{95}".to_string()],
+            })
+            .unwrap(),
+        ),
+        (
+            "template_field",
+            serde_json::to_string_pretty(&TemplateField {
+                key: "test_field".to_string(),
+                label: "Test Field".to_string(),
+                required: true,
+                placeholder: None,
+                default: None,
+                schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
+            })
+            .unwrap(),
+        ),
+        (
+            "stitch_template",
+            serde_json::to_string_pretty(&StitchTemplate {
+                name: "test-template".to_string(),
+                description: "Test template".to_string(),
+                scope: "global".to_string(),
+                kind: None,
+                priority: None,
+                labels: None,
+                default_beads: None,
+                fields: vec![],
+                body: "Test body with {{test_field}}".to_string(),
+                schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
+            })
+            .unwrap(),
+        ),
+        (
+            "unknown_events_response",
+            serde_json::to_string_pretty(&UnknownEventsResponse {
+                total_count: 10,
+                labeled_totals: vec![],
+                daemon_version: "1.0.0".to_string(),
+                schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
+            })
+            .unwrap(),
+        ),
+        (
+            "unknown_event_samples_response",
+            serde_json::to_string_pretty(&UnknownEventSamplesResponse {
+                samples: vec![],
+                total_count: 5,
+                daemon_version: "1.0.0".to_string(),
+                schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
+            })
+            .unwrap(),
+        ),
     ];
 
     // Create fixture directory
@@ -722,6 +793,8 @@ fn validate_fixture_roundtrip() {
         "pricing_config.json",
         "config_error.json",
         "project_config_status.json",
+        "morning_brief_config.json",
+        "stuck_detector_config.json",
         "workspace_entry.json",
         "project_entry.json",
         "projects_registry.json",
@@ -739,6 +812,11 @@ fn validate_fixture_roundtrip() {
         "dictated_note.json",
         "redaction_policy.json",
         "script_manifest.json",
+        "secret_pattern.json",
+        "template_field.json",
+        "stitch_template.json",
+        "unknown_events_response.json",
+        "unknown_event_samples_response.json",
     ];
 
     for fixture_file in fixture_files {
