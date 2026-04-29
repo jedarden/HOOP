@@ -449,22 +449,18 @@ export interface HashChainVerifyResponse {
   row_count: number;
 }
 
-// Redaction audit log row from GET /api/audit/redaction
+// Redaction audit log row from GET /api/redaction-audit
 export interface RedactionAuditRow {
   id: string;
   ts: string;
-  project: string;
-  stitch_id: string | null;
   what_flagged: string;
-  secret_type: string | null;
-  pattern_name: string | null;
+  pattern_name: string;
   action: string;
-  actor: string;
-  operator: string | null;
+  operator: string;
   source_ref: string | null;
+  project: string | null;
   metadata: Record<string, unknown> | null;
-  reviewed_at: string | null;
-  reviewer: string | null;
+  created_at: string;
 }
 
 // Response from GET /api/audit/redaction

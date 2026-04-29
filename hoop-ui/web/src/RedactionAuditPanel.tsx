@@ -311,8 +311,10 @@ export default function RedactionAuditPanel() {
                     <span className="redaction-operator">{row.operator}</span>
                   </td>
                   <td className="redaction-audit-td redaction-audit-td-source">
-                    <span className="redaction-source-ref" title={row.source_ref}>
-                      {row.source_ref.length > 30 ? row.source_ref.slice(0, 30) + '…' : row.source_ref}
+                    <span className="redaction-source-ref" title={row.source_ref ?? ''}>
+                      {row.source_ref
+                        ? (row.source_ref.length > 30 ? row.source_ref.slice(0, 30) + '…' : row.source_ref)
+                        : '—'}
                     </span>
                   </td>
                   <td className="redaction-audit-td redaction-audit-td-metadata">

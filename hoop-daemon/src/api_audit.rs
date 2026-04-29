@@ -42,6 +42,8 @@ pub struct RedactionAuditQuery {
     pub operator: Option<String>,
     /// Filter by what was flagged (e.g., "transcript", "attachment", "draft")
     pub what_flagged: Option<String>,
+    /// Filter by action taken (flagged_only, redacted_in_place, proceeded_anyway, rejected)
+    pub action: Option<String>,
 }
 
 /// Response for audit log query
@@ -178,7 +180,25 @@ pub fn router() -> axum::Router<crate::DaemonState> {
 }
 
 /// GET /api/audit — query audit log
-async fn query_audit(
+#[utoipa::path(
+    get,
+    path = "/api/audit",
+    tag = "audit",
+    params(
+        ("limit" = Option<usize>, Query, description = "Maximum number of results to return"),
+        ("offset" = Option<usize>, Query, description = "Offset for pagination"),
+        ("project" = Option<String>, Query, description = "Filter by project name"),
+        ("kind" = Option<String>, Query, description = "Filter by action kind"),
+        ("pattern" = Option<String>, Query, description = "Filter by redaction pattern name"),
+        ("operator" = Option<String>, Query, description = "Filter by operator")
+    ),
+    responses(
+        (status = 200, description = "Audit log query results", body = AuditResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn query_audit(
     Query(params): Query<AuditQuery>,
 ) -> Result<Json<AuditResponse>, (StatusCode, String)> {
     // Validate project filter if provided
@@ -258,7 +278,16 @@ async fn query_audit(
 }
 
 /// GET /api/audit/verify — verify hash chain integrity
-async fn verify_hash_chain() -> Result<Json<HashChainVerifyResponse>, (StatusCode, String)> {
+#[utoipa::path(
+    get,
+    path = "/api/audit/verify",
+    tag = "audit",
+    responses(
+        (status = 200, description = "Hash chain verification result", body = HashChainVerifyResponse),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn verify_hash_chain() -> Result<Json<HashChainVerifyResponse>, (StatusCode, String)> {
     match fleet::verify_hash_chain() {
         Ok(()) => {
             // Get row count
@@ -291,7 +320,26 @@ async fn verify_hash_chain() -> Result<Json<HashChainVerifyResponse>, (StatusCod
 }
 
 /// GET /api/redaction-audit — query redaction audit log
-async fn query_redaction_audit(
+#[utoipa::path(
+    get,
+    path = "/api/redaction-audit",
+    tag = "audit",
+    params(
+        ("limit" = Option<usize>, Query, description = "Maximum number of results to return"),
+        ("offset" = Option<usize>, Query, description = "Offset for pagination"),
+        ("project" = Option<String>, Query, description = "Filter by project name"),
+        ("pattern" = Option<String>, Query, description = "Filter by redaction pattern name"),
+        ("operator" = Option<String>, Query, description = "Filter by operator"),
+        ("what_flagged" = Option<String>, Query, description = "Filter by what was flagged"),
+        ("action" = Option<String>, Query, description = "Filter by action taken")
+    ),
+    responses(
+        (status = 200, description = "Redaction audit log query results", body = RedactionAuditResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn query_redaction_audit(
     Query(params): Query<RedactionAuditQuery>,
 ) -> Result<Json<RedactionAuditResponse>, (StatusCode, String)> {
     // Validate project filter if provided
