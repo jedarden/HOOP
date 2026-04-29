@@ -63,8 +63,8 @@ pub struct McpServerState {
     pub fleet_db_path: PathBuf,
     /// Discovered skills
     skills: Vec<crate::skills::SkillEntry>,
-    /// Schema cache for skill validation
-    schema_cache: crate::skills::SchemaCache,
+    /// Schema cache for skill validation (interior mutable for concurrent access)
+    schema_cache: std::sync::Mutex<crate::skills::SchemaCache>,
 }
 
 impl McpServerState {
@@ -85,7 +85,7 @@ impl McpServerState {
         // Discover skills
         let skills_dir = crate::skills::skills_dir()?;
         let skills = crate::skills::discover_skills();
-        let schema_cache = crate::skills::SchemaCache::new();
+        let schema_cache = std::sync::Mutex::new(crate::skills::SchemaCache::new());
 
         tracing::debug!(
             "Discovered {} skills from {}",
@@ -350,7 +350,9 @@ impl McpServerState {
 
         // Validate arguments against the skill's schema
         let args_value = Value::Object(args.clone());
-        let validator = self.schema_cache.get_or_compile(skill_name, &skill.manifest.args_schema)
+        let validator = self.schema_cache.lock()
+            .map_err(|e| format!("Failed to lock schema cache: {}", e))?
+            .get_or_compile(skill_name, &skill.manifest.args_schema)
             .map_err(|e| format!("Failed to compile schema for skill '{}': {}", skill_name, e))?;
 
         if let Err(validation_errors) = crate::skills::validate_args(&validator, &args_value) {
