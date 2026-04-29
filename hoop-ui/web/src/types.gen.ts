@@ -820,6 +820,14 @@ export interface CapacityLimits {
    */
   tokens_per_7d?: number | null;
   /**
+   * Prompt limit per 5-hour window (OpenCode ZAI proxy)
+   */
+  prompts_per_5h?: number | null;
+  /**
+   * Prompt limit per 7-day window (OpenCode ZAI proxy)
+   */
+  prompts_per_7d?: number | null;
+  /**
    * Request limit per day
    */
   requests_per_day?: number | null;
@@ -847,6 +855,14 @@ export interface CapacityUsage {
    * Tokens used in current 7-day window
    */
   tokens_7d: number;
+  /**
+   * Prompts used in current 5-hour window (OpenCode ZAI proxy)
+   */
+  prompts_5h: number;
+  /**
+   * Prompts used in current 7-day window (OpenCode ZAI proxy)
+   */
+  prompts_7d: number;
   /**
    * Requests made today
    */
@@ -889,6 +905,14 @@ export interface CapacityAccount {
      */
     tokens_per_7d?: number | null;
     /**
+     * Prompt limit per 5-hour window (OpenCode ZAI proxy)
+     */
+    prompts_per_5h?: number | null;
+    /**
+     * Prompt limit per 7-day window (OpenCode ZAI proxy)
+     */
+    prompts_per_7d?: number | null;
+    /**
      * Request limit per day
      */
     requests_per_day?: number | null;
@@ -911,6 +935,14 @@ export interface CapacityAccount {
      * Tokens used in current 7-day window
      */
     tokens_7d: number;
+    /**
+     * Prompts used in current 5-hour window (OpenCode ZAI proxy)
+     */
+    prompts_5h: number;
+    /**
+     * Prompts used in current 7-day window (OpenCode ZAI proxy)
+     */
+    prompts_7d: number;
     /**
      * Requests made today
      */
@@ -1606,7 +1638,8 @@ export interface AuditRow {
     | "backup_failed"
     | "restore_started"
     | "restore_finished"
-    | "restore_failed";
+    | "restore_failed"
+    | "saturation_alert";
   /**
    * Target identifier (bead ID, stitch ID, etc.)
    */
@@ -1636,7 +1669,7 @@ export interface AuditRow {
   /**
    * Schema version at time of action
    */
-  schema_version?: string;
+  schema_version: string;
   [k: string]: unknown;
 }
 
@@ -2062,6 +2095,80 @@ export interface ProjectConfigStatus {
 
 
 /**
+ * A cross-workspace blocker entry for a bead. Represents a bead in another workspace that blocks completion via Stitch-child relationships (§4.2).
+ */
+export interface CrossWorkspaceBlocker {
+  /**
+   * Bead ID that is blocking completion
+   */
+  bead_id: string;
+  /**
+   * Workspace where the bead exists (for cross-workspace context)
+   */
+  workspace: string;
+  /**
+   * Bead title
+   */
+  title: string;
+  /**
+   * Bead status (e.g., 'Open', 'Closed')
+   */
+  status: string;
+  /**
+   * Bead priority (1-5, where 1 is highest)
+   */
+  priority: number;
+  /**
+   * Bead issue type (e.g., 'task', 'bug', 'feature')
+   */
+  issue_type: string;
+  [k: string]: unknown;
+}
+
+
+/**
+ * Response for GET /api/beads/:id/blockers. Returns cross-workspace blockers for a bead based on Stitch-child relationships.
+ */
+export interface BeadBlockersResponse {
+  /**
+   * The bead ID that was queried
+   */
+  bead_id: string;
+  /**
+   * List of cross-workspace blockers
+   */
+  blockers: {
+    /**
+     * Bead ID that is blocking completion
+     */
+    bead_id: string;
+    /**
+     * Workspace where the bead exists (for cross-workspace context)
+     */
+    workspace: string;
+    /**
+     * Bead title
+     */
+    title: string;
+    /**
+     * Bead status (e.g., 'Open', 'Closed')
+     */
+    status: string;
+    /**
+     * Bead priority (1-5, where 1 is highest)
+     */
+    priority: number;
+    /**
+     * Bead issue type (e.g., 'task', 'bug', 'feature')
+     */
+    issue_type: string;
+    [k: string]: unknown;
+  }[];
+  [k: string]: unknown;
+}
+
+
+/**
  * A field definition in a stitch template. Fields define user inputs that are substituted into the template body.
  */
 export interface TemplateField {
@@ -2151,5 +2258,33 @@ export interface StitchTemplate {
    * Template body with {{field}} placeholders for substitution
    */
   body: string;
+  [k: string]: unknown;
+}
+
+
+/**
+ * Real-time multi-operator presence tracking (§19.4)
+ */
+export interface Presence {
+  /**
+   * Operator identifier (e.g., 'tailscale:user@example.com' or 'os:username')
+   */
+  operator_id: string;
+  /**
+   * Project name if viewing a project, null otherwise
+   */
+  project?: string | null;
+  /**
+   * Stitch ID if viewing a specific Stitch, null otherwise
+   */
+  stitch_id?: string | null;
+  /**
+   * Last heartbeat timestamp (records older than 30s are considered stale)
+   */
+  last_seen: string;
+  /**
+   * Privacy toggle: 'visible' shows presence to others, 'hidden' hides it
+   */
+  visibility: "visible" | "hidden";
   [k: string]: unknown;
 }
