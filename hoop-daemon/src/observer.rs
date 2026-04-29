@@ -4,7 +4,7 @@
 //! forwarding read requests to the primary daemon and broadcasting events
 //! to its own WebSocket clients.
 
-use axum::extract::{State, ws::WebSocket};
+use axum::extract::{State, ws::{WebSocket, Message as AxumMessage}};
 use crate::log_rotation;
 use crate::ws::WsEvent;
 use anyhow::Result;
@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, RwLock};
-use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::Message as TungsteniteMessage;
 use tracing::{debug, error, info, warn};
 
 /// Observer client that connects to primary daemon's WebSocket endpoint
@@ -55,13 +55,13 @@ impl ObserverClient {
 
         // Subscribe to all events (global + per-project)
         let subscribe_msg = r#"{"type":"subscribe","topic":"global"}"#;
-        ws_sender.send(Message::Text(subscribe_msg.to_string().into())).await?;
+        ws_sender.send(TungsteniteMessage::Text(subscribe_msg.into())).await?;
         debug!("Observer subscribed to global events");
 
         // Forward events from primary to observer's clients
         while let Some(msg) = ws_receiver.next().await {
             match msg {
-                Ok(Message::Text(text)) => {
+                Ok(TungsteniteMessage::Text(text)) => {
                     debug!("Observer received event from primary: {}", text.chars().take(100).collect::<String>());
 
                     // Parse the event and update local state
@@ -151,7 +151,7 @@ impl ObserverClient {
                         }
                     }
                 }
-                Ok(Message::Close(_)) => {
+                Ok(TungsteniteMessage::Close(_)) => {
                     warn!("Primary closed WebSocket connection");
                     break;
                 }
@@ -275,10 +275,10 @@ pub async fn observer_ws_handler(
     // Convert beads to BeadData
     let bead_data: Vec<crate::ws::BeadData> = beads.iter().map(crate::ws::bead_to_data).collect();
 
-    let _ = ws_sender.send(Message::Text(serde_json::to_string(&WsEvent::init(init_subs)).unwrap().into())).await;
-    let _ = ws_sender.send(Message::Text(serde_json::to_string(&WsEvent::workers_snapshot(workers)).unwrap().into())).await;
-    let _ = ws_sender.send(Message::Text(serde_json::to_string(&WsEvent::beads_snapshot(bead_data)).unwrap().into())).await;
-    let _ = ws_sender.send(Message::Text(serde_json::to_string(&WsEvent::projects_snapshot(projects)).unwrap().into())).await;
+    let _ = ws_sender.send(AxumMessage::Text(serde_json::to_string(&WsEvent::init(init_subs)).unwrap().into())).await;
+    let _ = ws_sender.send(AxumMessage::Text(serde_json::to_string(&WsEvent::workers_snapshot(workers)).unwrap().into())).await;
+    let _ = ws_sender.send(AxumMessage::Text(serde_json::to_string(&WsEvent::beads_snapshot(bead_data)).unwrap().into())).await;
+    let _ = ws_sender.send(AxumMessage::Text(serde_json::to_string(&WsEvent::projects_snapshot(projects)).unwrap().into())).await;
 
     // Subscribe to events
     let mut event_rx = state.event_tx.subscribe();
@@ -291,7 +291,7 @@ pub async fn observer_ws_handler(
                 match result {
                     Ok(event) => {
                         if let Ok(json) = serde_json::to_string(&event) {
-                            if ws_sender.send(Message::Text(json)).await.is_err() {
+                            if ws_sender.send(AxumMessage::Text(json.into())).await.is_err() {
                                 break;
                             }
                         }
@@ -307,7 +307,7 @@ pub async fn observer_ws_handler(
             // Handle client messages (subscribe/unsubscribe)
             result = ws_receiver.next() => {
                 match result {
-                    Some(Ok(Message::Text(text))) => {
+                    Some(Ok(AxumMessage::Text(text))) => {
                         if let Ok(msg) = serde_json::from_str::<crate::ws::ClientMessage>(&text) {
                             match msg {
                                 crate::ws::ClientMessage::Subscribe { .. } | crate::ws::ClientMessage::Unsubscribe { .. } => {
@@ -317,7 +317,7 @@ pub async fn observer_ws_handler(
                             }
                         }
                     }
-                    Some(Ok(Message::Close(_))) | Some(Err(_)) => {
+                    Some(Ok(AxumMessage::Close(_))) | Some(Err(_)) => {
                         break;
                     }
                     _ => {}
