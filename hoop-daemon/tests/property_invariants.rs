@@ -918,10 +918,10 @@ mod replay_equals_live {
         // Write mix of valid and malformed events
         {
             let mut file = File::create(&events_path).unwrap();
-            writeln!(file, r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-1"}"#).unwrap();
-            writeln!(file, r#"{"event":"invalid"#).unwrap(); // Malformed: missing closing brace
+            writeln!(file, r#"{{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-1"}}"#).unwrap();
+            writeln!(file, r#"{{"event":"invalid"#).unwrap(); // Malformed: missing closing brace
             writeln!(file, r#"not json at all"#).unwrap(); // Malformed: not JSON
-            writeln!(file, r#"{"event":"dispatch","ts":"2026-04-21T18:42:11Z","worker":"alpha","bead":"bd-1"}"#).unwrap();
+            writeln!(file, r#"{{"event":"dispatch","ts":"2026-04-21T18:42:11Z","worker":"alpha","bead":"bd-1"}}"#).unwrap();
         }
 
         // Read and parse
