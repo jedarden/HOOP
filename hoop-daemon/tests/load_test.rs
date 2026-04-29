@@ -23,8 +23,8 @@ fn test_load_test_config_defaults() {
     let config = LoadTestConfig::default();
     assert_eq!(config.num_projects, 20);
     assert_eq!(config.workers_per_project, 5);
-    assert_eq!(config.beads_per_worker, 200);
-    assert_eq!(config.total_beads(), 20 * 5 * 200);
+    assert_eq!(config.beads_per_worker, 300);
+    assert_eq!(config.total_beads(), 20 * 5 * 300);
     assert_eq!(config.total_workers(), 20 * 5);
 }
 

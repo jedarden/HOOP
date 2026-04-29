@@ -55,7 +55,7 @@ impl Default for LoadTestConfig {
         Self {
             num_projects: Self::env_or_default("HOOP_LOAD_PROJECTS", 20),
             workers_per_project: Self::env_or_default("HOOP_LOAD_WORKERS", 5),
-            beads_per_worker: Self::env_or_default("HOOP_LOAD_BEADS", 200),
+            beads_per_worker: Self::env_or_default("HOOP_LOAD_BEADS", 300),
             event_cadence_ms: Self::env_or_default("HOOP_LOAD_CADENCE_MS", 10),
             api_latency_budget_ms: 500,
             memory_ceiling_bytes: 4 * 1024 * 1024 * 1024, // 4GB
@@ -704,4 +704,84 @@ pub async fn run_load_test(
     }
 
     Ok(report)
+}
+
+// ---------------------------------------------------------------------------
+// Testrepo population helper
+// ---------------------------------------------------------------------------
+
+/// Populate testrepo with load test data
+///
+/// This function creates synthetic bead data in the testrepo directory
+/// for performance budget verification. It generates:
+/// - 20 projects (configurable)
+/// - 5 workers per project (configurable)
+/// - 300 beads per worker (configurable)
+///
+/// # Arguments
+/// * `config` - Load test configuration
+/// * `testrepo_path` - Path to the testrepo directory
+///
+/// # Returns
+/// * `Ok(())` if successful
+/// * `Err(anyhow::Error)` if population fails
+pub fn populate_testrepo(config: LoadTestConfig, testrepo_path: &Path) -> anyhow::Result<()> {
+    use std::fs;
+
+    let load_test_dir = testrepo_path.join("load-test-data");
+
+    // Create load-test-data directory if it doesn't exist
+    fs::create_dir_all(&load_test_dir)?;
+
+    let generator = EventGenerator::new(config);
+
+    // Write all synthetic events to testrepo
+    generator.write_to_disk(&load_test_dir)?;
+
+    tracing::info!(
+        "Populated testrepo at {} with {} projects ({} total beads)",
+        load_test_dir.display(),
+        config.num_projects,
+        config.total_beads()
+    );
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_populate_testrepo_creates_expected_files() {
+        let config = LoadTestConfig {
+            num_projects: 1,
+            workers_per_project: 1,
+            beads_per_worker: 5,
+            event_cadence_ms: 10,
+            ..Default::default()
+        };
+
+        let temp_dir = tempfile::TempDir::new().unwrap();
+
+        populate_testrepo(config, temp_dir.path()).unwrap();
+
+        let load_test_dir = temp_dir.path().join("load-test-data");
+
+        // Check that load-test-data directory was created
+        assert!(load_test_dir.exists());
+
+        // Check that project directory was created
+        let project_dir = load_test_dir.join("load-test-project-000");
+        assert!(project_dir.exists());
+
+        // Check that .beads directory was created
+        let beads_dir = project_dir.join(".beads");
+        assert!(beads_dir.exists());
+
+        // Check that expected files exist
+        assert!(beads_dir.join("events.jsonl").exists());
+        assert!(beads_dir.join("heartbeats.jsonl").exists());
+        assert!(beads_dir.join("beads.jsonl").exists());
+    }
 }
