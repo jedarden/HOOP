@@ -45,6 +45,9 @@ use rusqlite::Connection;
 use std::collections::HashMap;
 use tracing::info;
 
+// Re-export metrics for migration duration tracking (§16.6)
+pub use crate::metrics;
+
 /// A single schema migration
 pub struct Migration {
     /// Target version (e.g., "1.25.0")
@@ -198,6 +201,11 @@ pub fn run_pending_migrations(
             rows_touched as i64,
         );
 
+        // Record migration duration metric (§16.6)
+        metrics::metrics()
+            .hoop_schema_migration_duration_ms
+            .observe(&[from_version, migration.version], elapsed_ms);
+
         from_version = migration.version.to_string();
     }
 
@@ -253,6 +261,11 @@ pub fn rollback_migration(
 
     // Write audit row for rollback
     let _ = write_schema_migration_audit(current_version, target_version, elapsed_ms, rows_touched as i64);
+
+    // Record migration duration metric (§16.6)
+    metrics::metrics()
+        .hoop_schema_migration_duration_ms
+        .observe(&[current_version, target_version], elapsed_ms);
 
     Ok(())
 }
