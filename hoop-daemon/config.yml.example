@@ -238,18 +238,91 @@ pricing_file: "~/.hoop/pricing.yml"
 # - name: Human-readable display name
 # - severity: "high", "medium", or "low"
 # - patterns: List of regex patterns that match this secret type
+#
+# NOTE: This is the full set of built-in patterns. If you omit this section
+# from your config.yml, all of these patterns will be used by default.
+# You can customize by copying only the patterns you want to modify.
 secrets_patterns:
+  - id: "stripe_api_key"
+    name: "Stripe API Key"
+    severity: "high"
+    patterns:
+      - "\\bsk_live_[0-9a-zA-Z]{24,}\\b"
+      - "\\bsk_test_[0-9a-zA-Z]{24,}\\b"
+      - "\\bir_live_[0-9a-zA-Z]{32,}\\b"
+      - "\\bir_test_[0-9a-zA-Z]{32,}\\b"
+
+  - id: "openai_api_key"
+    name: "OpenAI API Key"
+    severity: "high"
+    patterns:
+      - "\\bsk-[a-zA-Z0-9]{48}\\b"
+      - "\\bsk-proj-[a-zA-Z0-9_-]{48,}\\b"
+
   - id: "anthropic_api_key"
     name: "Anthropic API Key"
     severity: "high"
     patterns:
       - "sk-ant-[a-zA-Z0-9_-]{20,}"
 
-  - id: "openai_api_key"
-    name: "OpenAI API Key"
+  - id: "generic_sk_key"
+    name: "Generic API Key"
     severity: "high"
     patterns:
-      - "sk-[a-zA-Z0-9]{48}"
+      - "\\bsk-[a-zA-Z0-9]{20,}\\b"
+
+  - id: "aws_access_key"
+    name: "AWS Access Key"
+    severity: "high"
+    patterns:
+      - "\\bAKIA[A-Z0-9]{16}\\b"
+      - "\\bASIA[A-Z0-9]{16}\\b"
+
+  - id: "aws_secret_key"
+    name: "AWS Secret Access Key"
+    severity: "high"
+    patterns:
+      - "(?i)aws_secret_access_key\\s*[:=]\\s*[A-Za-z0-9/+=]{40}\\b"
+
+  - id: "github_token"
+    name: "GitHub Token"
+    severity: "high"
+    patterns:
+      - "\\bghp_[a-zA-Z0-9]{36}\\b"
+      - "\\bghs_[a-zA-Z0-9]{36}\\b"
+      - "\\bghu_[a-zA-Z0-9]{36}\\b"
+      - "\\bgithub_pat_[a-zA-Z0-9_]{82}\\b"
+
+  - id: "slack_token"
+    name: "Slack Token"
+    severity: "high"
+    patterns:
+      - "\\bxoxb-[0-9A-Za-z-]{24,}\\b"
+      - "\\bxoxp-[0-9A-Za-z-]{24,}\\b"
+
+  - id: "jwt"
+    name: "JWT"
+    severity: "high"
+    patterns:
+      - "\\bey[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b"
+
+  - id: "bearer_token"
+    name: "Bearer Token"
+    severity: "high"
+    patterns:
+      - "(?i)bearer\\s+[A-Za-z0-9._\\-+/]{20,}"
+
+  - id: "env_var_secret"
+    name: "Environment Variable Secret"
+    severity: "high"
+    patterns:
+      - "(?i)(?:api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|private[_-]?key|client[_-]?secret|anthropic[_-]?api[_-]?key|openai[_-]?api[_-]?key|github[_-]?token)\\s*[:=]\\s*[\"']?([A-Za-z0-9+/_.~\\-]{16,})[\"']?"
+
+  - id: "json_secret_field"
+    name: "JSON Secret Field"
+    severity: "high"
+    patterns:
+      - "(?i)\"(?:password|passwd|secret|token|api_key|apikey|access_token|auth_token|private_key|client_secret)\"\\s*:\\s*\"([^\"]{8,})\""
 
 # ---------------------------------------------------------------------------
 # Stuck Detector Configuration (§C1, hoop-ttb.3.25)
