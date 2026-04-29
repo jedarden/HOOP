@@ -89,6 +89,7 @@ use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::{debug, error, info, warn};
 
 use crate::beads::{BeadEvent, BeadReader, BeadReaderConfig};
+use crate::metrics::metrics;
 use crate::cost::CostAggregator;
 use crate::events::{BeadEventData, EventTailer, EventTailerConfig, TailerEvent};
 use crate::projects::ProjectsConfig;
@@ -635,6 +636,11 @@ impl ProjectSupervisor {
 
     /// Handle runtime failure with exponential backoff and auto-restart
     async fn handle_failure(&self, project_name: &str, error: &str) {
+        // Increment panic metric for all failures
+        metrics()
+            .hoop_errors_total
+            .inc(&["supervisor", "project_panic"]);
+
         // Check if this is a permanent error (should not auto-restart)
         if Self::is_permanent_error(error) {
             let mut runtimes = self.runtimes.write().await;
