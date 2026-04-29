@@ -11,7 +11,7 @@
 //!
 //! §5.4 Session tailer filtering
 
-use crate::sessions::SessionAdapter;
+use crate::sessions::{create_all_adapters, SessionAdapter};
 use anyhow::{Context, Result};
 use axum::{
     extract::{Path as AxumPath, State},
