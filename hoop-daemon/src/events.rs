@@ -958,4 +958,66 @@ mod tests {
         // Should return Unknown event
         assert!(matches!(result.event, NeedleEvent::Unknown));
     }
+
+    /// Synthetic unknown-event test for events tailer (§16.2 acceptance).
+    ///
+    /// Verifies that:
+    /// 1. Unknown event types are recorded via UnknownEventSink
+    /// 2. The `hoop_unknown_event_labeled_total` metric is incremented
+    /// 3. The `hoop_unknown_event_total` metric is incremented
+    /// 4. The event is registered with the global registry for diagnostics
+    #[test]
+    fn events_tailer_unknown_event_records_via_sink() {
+        use crate::unknown_event_sink;
+
+        // Clear the global registry to start fresh
+        unknown_event_sink::global_registry().clear_all();
+
+        // Get initial metric counts
+        let m = crate::metrics::metrics();
+        let initial_total = m.hoop_unknown_event_total.get();
+        let initial_labeled = m.hoop_unknown_event_labeled_total.snapshot();
+
+        let mut parser = NdjsonParser::new(PathBuf::from("/tmp/test_events.jsonl"));
+
+        // Parse an unknown event type (not one of the known NeedleEvent variants)
+        let unknown_event = r#"{"event":"unknown_type","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-abc123"}"#;
+        let result = parser.parse_line(unknown_event, 1, &test_source()).unwrap().unwrap();
+
+        // Should return Unknown event
+        assert!(matches!(result.event, NeedleEvent::Unknown));
+
+        // Verify the unknown event was recorded via UnknownEventSink
+        let samples = unknown_event_sink::global_registry().get_all_samples();
+        let needle_unknown: Vec<_> = samples
+            .iter()
+            .filter(|s| s.adapter == "needle")
+            .collect();
+
+        // Should have recorded the unknown event
+        assert!(!needle_unknown.is_empty(), "Expected unknown event to be recorded");
+        assert_eq!(needle_unknown[0].event_kind, "unknown_type");
+        assert!(needle_unknown[0].raw_event.contains("unknown_type"));
+
+        // Verify the metrics were incremented
+        let final_total = m.hoop_unknown_event_total.get();
+        let final_labeled = m.hoop_unknown_event_labeled_total.snapshot();
+
+        assert!(final_total > initial_total, "Expected hoop_unknown_event_total to increment");
+        assert_eq!(final_total - initial_total, 1, "Expected exactly 1 unknown event");
+
+        // Check labeled metric for needle adapter
+        let needle_count = final_labeled
+            .iter()
+            .filter(|(labels, _)| labels.first().map(|s| s.as_str()) == Some("needle"))
+            .map(|(_, count)| count)
+            .sum::<u64>();
+        let initial_needle_count = initial_labeled
+            .iter()
+            .filter(|(labels, _)| labels.first().map(|s| s.as_str()) == Some("needle"))
+            .map(|(_, count)| count)
+            .sum::<u64>();
+
+        assert_eq!(needle_count - initial_needle_count, 1, "Expected exactly 1 unknown event for needle adapter");
+    }
 }

@@ -3,7 +3,7 @@
 //! Every tailer (events.jsonl, heartbeats.jsonl, each session adapter) routes
 //! unrecognized event kinds through this central sink that:
 //! - Logs at WARN with raw event
-//! - Increments `hoop_unknown_event_total{adapter,event_kind}` metric
+//! - Increments `hoop_unknown_event_total` and `hoop_unknown_event_labeled_total{adapter,event_kind}` metrics
 //! - Buffers last N (default 20) samples for the diagnostic panel
 //!
 //! Plan reference: §3 principle 7, §16.2, §M1 orchestrator-problems-and-solutions.md
@@ -117,11 +117,12 @@ impl UnknownEventSink {
     ///
     /// This method:
     /// 1. Logs a WARN-level message with the raw event
-    /// 2. Increments the `hoop_unknown_event_labeled_total` metric
+    /// 2. Increments both `hoop_unknown_event_total` and `hoop_unknown_event_labeled_total` metrics
     /// 3. Adds the sample to the circular buffer for diagnostics
     /// 4. Registers the sample with the global registry for API access
     pub fn record(&self, event_kind: &str, raw_event: &str) {
-        // Increment the metric with adapter and event_kind labels
+        // Increment both metrics (unlabeled total and labeled with adapter/event_kind)
+        metrics::metrics().hoop_unknown_event_total.inc();
         metrics::metrics().hoop_unknown_event_labeled_total.inc(&[
             &self.adapter,
             event_kind,
@@ -165,11 +166,12 @@ impl UnknownEventSink {
     ///
     /// This method:
     /// 1. Logs a WARN-level message with the raw event
-    /// 2. Increments the `hoop_unknown_event_labeled_total` metric
+    /// 2. Increments both `hoop_unknown_event_total` and `hoop_unknown_event_labeled_total` metrics
     /// 3. Adds the sample to the circular buffer for diagnostics
     /// 4. Registers the sample with the global registry for API access
     pub fn record_at_line(&self, event_kind: &str, raw_event: &str, line_number: usize) {
-        // Increment the metric
+        // Increment both metrics (unlabeled total and labeled with adapter/event_kind)
+        metrics::metrics().hoop_unknown_event_total.inc();
         metrics::metrics().hoop_unknown_event_labeled_total.inc(&[
             &self.adapter,
             event_kind,
