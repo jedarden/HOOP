@@ -156,6 +156,9 @@
           "default": []
         }
       }
+    },
+    "redaction": {
+      "$ref": "redaction_policy.json"
     }
   }
 }

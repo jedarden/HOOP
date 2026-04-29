@@ -253,9 +253,19 @@ fn finding_matches_enabled_pattern(
 
 impl RedactionPolicyState {
     /// Create a new policy state from the current config.
-    pub fn new(_global_config: &HoopConfig, projects_registry: ProjectsRegistry) -> Self {
-        // TODO: Parse global redaction policy from config when redaction field is added to HoopConfig
-        let global_policy = None;
+    pub fn new(global_config: &HoopConfig, projects_registry: ProjectsRegistry) -> Self {
+        // Parse global redaction policy from config if present
+        let global_policy = global_config.redaction.as_ref().map(|config_redaction| {
+            let action = match config_redaction.action {
+                hoop_schema::HoopConfigRedactionAction::Warn => RedactionAction::Warn,
+                hoop_schema::HoopConfigRedactionAction::Redact => RedactionAction::Redact,
+                hoop_schema::HoopConfigRedactionAction::Reject => RedactionAction::Reject,
+            };
+            GlobalRedactionPolicy {
+                action,
+                patterns: config_redaction.patterns.clone(),
+            }
+        });
 
         Self {
             global_policy,
@@ -272,7 +282,7 @@ impl RedactionPolicyState {
     ///
     /// Returns the effective policy by checking:
     /// 1. Per-project override in projects.yaml
-    /// 2. Global policy in config.yml (TODO: not yet implemented in schema)
+    /// 2. Global policy in config.yml
     /// 3. Built-in defaults
     pub async fn resolve_for_project(&self, project_name: &str) -> ResolvedRedactionPolicy {
         // Check for per-project override first
