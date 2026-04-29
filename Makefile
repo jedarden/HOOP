@@ -2,7 +2,7 @@
 #
 # Common development tasks for the HOOP project.
 
-.PHONY: help build test test-load test-load-medium test-load-full test-load-watch clean
+.PHONY: help build test test-load test-load-medium test-load-full test-load-watch clean openapi-generate openapi-check ts-client-generate
 
 # Default target
 help:
@@ -16,6 +16,9 @@ help:
 	@echo "  test-load-full     - Run full-scale load test (20x5x200)"
 	@echo "  test-load-watch    - Run load test in watch mode (re-run on changes)"
 	@echo "  clean              - Clean build artifacts"
+	@echo "  openapi-generate   - Generate OpenAPI spec from utoipa annotations"
+	@echo "  openapi-check      - Check OpenAPI spec parity (CI)"
+	@echo "  ts-client-generate - Generate TypeScript client from OpenAPI spec"
 	@echo ""
 	@echo "Load Test Configuration:"
 	@echo "  HOOP_LOAD_PROJECTS    - Number of projects (default: 20)"
@@ -97,3 +100,19 @@ test-load-verify: test-load-medium
 	@echo "=== Performance Budget Verification ==="
 	@echo "✓ Load test completed"
 	@echo "✓ Performance budgets verified in test output"
+
+# Generate OpenAPI spec from utoipa annotations
+openapi-generate:
+	@echo "=== Generating OpenAPI Spec ==="
+	cargo run --bin generate_openapi --features openapi > hoop-schema/openapi.yaml
+	@echo "✓ OpenAPI spec generated to hoop-schema/openapi.yaml"
+
+# Check OpenAPI spec parity (used in CI)
+openapi-check:
+	@echo "=== Checking OpenAPI Spec Parity ==="
+	./scripts/check-openapi-spec.sh
+
+# Generate TypeScript client from OpenAPI spec
+ts-client-generate:
+	@echo "=== Generating TypeScript Client ==="
+	./scripts/generate-ts-client.sh

@@ -122,6 +122,46 @@ All schemas use **Semantic Versioning (SemVer)** `MAJOR.MINOR.PATCH`:
 - **MINOR**: Backwards-compatible additions
 - **PATCH**: Backwards-compatible bug fixes
 
+### Deprecation Policy
+
+#### Minor Deprecations
+
+Fields deprecated in a minor version release must remain **readable and writable** for at least **one full minor version** after their deprecation:
+
+- **Deprecated in 1.10.0**: Supported until 1.11.0 is released
+- **Removed in 1.12.0**: Earliest removal of 1.10.0 deprecations
+
+**Example timeline:**
+```
+1.9.0  — Field "old_field" is introduced
+1.10.0 — Field "new_field" added, "old_field" deprecated (marked @deprecated)
+1.11.0 — Both fields still supported (deprecation window active)
+1.12.0 — "old_field" removed (one full version after deprecation)
+```
+
+**Implementation:**
+1. Mark deprecated fields with `@deprecated` in schema description
+2. Keep the field in the schema (nullable, with default)
+3. Add migration to populate new field from old field
+4. Remove in the next minor version after deprecation window closes
+
+#### Major Deprecations
+
+Major version changes are **one-way migrations** with no rollback:
+
+- Old binaries cannot read new schemas
+- Manual intervention required: `hoop migrate major-upgrade --confirm`
+- Operator consciously accepts data transformation at upgrade gate
+
+**Example timeline:**
+```
+1.x    — Stable series with full backward compatibility
+2.0.0  — Breaking change released
+        — Old binaries (1.x) refuse to start with 2.0 data
+        — Upgrade gate: hoop migrate major-upgrade --confirm
+        — No rollback path (major version is one-way)
+```
+
 ### Schema Version Field
 
 Every durable record includes a `schema_version` field:

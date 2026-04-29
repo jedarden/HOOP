@@ -21,6 +21,20 @@ jobs:
       run: ./scripts/check-changelog.sh
       shell: bash
 
+  openapi_spec:
+    name: OpenAPI Spec Parity Check (§20)
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Check OpenAPI spec matches generated output
+      run: ./scripts/check-openapi-spec.sh
+      shell: bash
+
   test:
     name: Unit Tests
     runs-on: ubuntu-latest
