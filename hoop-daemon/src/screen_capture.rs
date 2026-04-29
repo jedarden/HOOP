@@ -7,6 +7,10 @@
 //!   transcript.json         — word-level Whisper transcript from the audio track
 //!   meta.json               — stitch metadata (title, project, recorded_at)
 //!
+//! Streaming uploads are stored at ~/.hoop/streaming_uploads/<stream_id>/:
+//!   partial.{ext}           — partial video file being streamed
+//!   metadata.json           — stream session metadata
+//!
 //! All functions accept `ValidStitchId` for compile-time path-traversal protection (§13).
 //! Paths are canonicalized and prefix-checked against an allowlist (§13, §K2).
 
@@ -14,7 +18,10 @@ use crate::id_validators::ValidStitchId;
 use crate::path_security::{canonicalize_and_check, PathAllowlist};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::fs::{self, File, OpenOptions};
+use std::io::{Seek, SeekFrom, Write};
+use std::path::{Path, PathBuf};
+use uuid::Uuid;
 
 /// A frame sample representing a UI change captured during screen recording.
 /// These become chapter markers in the video player.
@@ -221,6 +228,334 @@ pub fn list_for_project(project: &str) -> Vec<ScreenCaptureSummary> {
     // Sort newest first (recorded_at is ISO 8601 so lexicographic works)
     results.sort_by(|a, b| b.recorded_at.cmp(&a.recorded_at));
     results
+}
+
+/// Streaming upload session for screen captures
+///
+/// Used for real-time chunked upload during recording when the total
+/// size is not known upfront.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamingUploadSession {
+    pub stream_id: String,
+    pub stitch_id: String,
+    pub project: String,
+    pub video_content_type: String,
+    pub file_extension: String,
+    pub received_bytes: u64,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Response when starting a streaming upload
+#[derive(Debug, Serialize, Deserialize)]
+pub struct StartStreamingUploadResponse {
+    pub stream_id: String,
+    pub stitch_id: String,
+    pub upload_url: String,
+    pub complete_url: String,
+}
+
+/// Streaming upload registry for managing active streaming sessions
+pub struct StreamingUploadRegistry {
+    streaming_dir: PathBuf,
+    allowlist: PathAllowlist,
+}
+
+impl StreamingUploadRegistry {
+    pub fn new() -> Result<Self> {
+        let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+        home.push(".hoop");
+        home.push("streaming_uploads");
+        let streaming_dir = home.clone();
+
+        // Create directory if it doesn't exist
+        fs::create_dir_all(&streaming_dir)
+            .context("failed to create streaming uploads directory")?;
+
+        let allowlist = PathAllowlist::for_uploads(&streaming_dir)?;
+
+        Ok(Self {
+            streaming_dir,
+            allowlist,
+        })
+    }
+
+    /// Get the directory for a streaming upload session
+    fn stream_dir(&self, stream_id: &str) -> Result<PathBuf> {
+        let path = self.streaming_dir.join(stream_id);
+        canonicalize_and_check(&path, &self.allowlist)
+            .context("stream directory failed path validation")
+    }
+
+    /// Get the metadata file path for a streaming session
+    fn metadata_path(&self, stream_id: &str) -> Result<PathBuf> {
+        Ok(self.stream_dir(stream_id)?.join("metadata.json"))
+    }
+
+    /// Get the partial video file path for a streaming session
+    fn partial_path(&self, stream_id: &str) -> Result<PathBuf> {
+        Ok(self.stream_dir(stream_id)?.join("partial.bin"))
+    }
+
+    /// Start a new streaming upload session
+    pub fn start_session(
+        &self,
+        project: String,
+        video_content_type: String,
+    ) -> Result<StartStreamingUploadResponse> {
+        let stitch_id = Uuid::new_v4().to_string();
+        let stream_id = Uuid::new_v4().to_string();
+        let valid_stitch_id = ValidStitchId::parse(&stitch_id)
+            .context("generated invalid stitch ID")?;
+
+        // Determine file extension from content type
+        let file_extension = if video_content_type.contains("mp4") {
+            "mp4"
+        } else if video_content_type.contains("mov") {
+            "mov"
+        } else {
+            "webm"
+        };
+
+        // Create stream directory
+        let stream_dir = self.streaming_dir.join(&stream_id);
+        fs::create_dir_all(&stream_dir)
+            .context("failed to create stream directory")?;
+
+        // Create the attachments directory for the final stitch
+        let attachments_dir = attachments_dir(&valid_stitch_id)?;
+
+        // Create session metadata
+        let now = chrono::Utc::now();
+        let session = StreamingUploadSession {
+            stream_id: stream_id.clone(),
+            stitch_id: stitch_id.clone(),
+            project,
+            video_content_type,
+            file_extension: file_extension.to_string(),
+            received_bytes: 0,
+            created_at: now,
+            updated_at: now,
+        };
+
+        // Write metadata
+        let metadata_path = stream_dir.join("metadata.json");
+        let metadata_json = serde_json::to_string_pretty(&session)
+            .context("failed to serialize session metadata")?;
+        fs::write(&metadata_path, metadata_json)
+            .context("failed to write session metadata")?;
+
+        // Create empty partial file
+        let partial_path = stream_dir.join("partial.bin");
+        File::create(&partial_path)
+            .context("failed to create partial file")?;
+
+        Ok(StartStreamingUploadResponse {
+            stream_id: stream_id.clone(),
+            stitch_id,
+            upload_url: format!("/api/p/{{project}}/screen-captures/stream/{}", stream_id),
+            complete_url: format!("/api/p/{{project}}/screen-captures/stream/{}/complete", stream_id),
+        })
+    }
+
+    /// Append a chunk to a streaming upload
+    pub fn append_chunk(
+        &self,
+        stream_id: &str,
+        data: &[u8],
+    ) -> Result<u64> {
+        let partial_path = self.partial_path(stream_id)?;
+
+        // Append to partial file
+        let mut file = OpenOptions::new()
+            .write(true)
+            .open(&partial_path)
+            .context("failed to open partial file")?;
+
+        file.seek(SeekFrom::End(0))
+            .context("failed to seek to end of partial file")?;
+        file.write_all(data)
+            .context("failed to write chunk")?;
+        file.sync_all()
+            .context("failed to sync chunk to disk")?;
+
+        // Update metadata
+        let new_size = file.metadata()
+            .context("failed to get file metadata")?
+            .len();
+
+        let mut session = self.load_session(stream_id)?;
+        session.received_bytes = new_size;
+        session.updated_at = chrono::Utc::now();
+        self.save_session(stream_id, &session)?;
+
+        Ok(new_size)
+    }
+
+    /// Load a streaming upload session
+    pub fn load_session(&self, stream_id: &str) -> Result<StreamingUploadSession> {
+        let metadata_path = self.metadata_path(stream_id)?;
+        let content = fs::read_to_string(&metadata_path)
+            .with_context(|| format!("stream session not found: {}", stream_id))?;
+        let session: StreamingUploadSession = serde_json::from_str(&content)
+            .context("failed to parse session metadata")?;
+        Ok(session)
+    }
+
+    /// Save a streaming upload session
+    fn save_session(&self, stream_id: &str, session: &StreamingUploadSession) -> Result<()> {
+        let metadata_path = self.metadata_path(stream_id)?;
+        let metadata_json = serde_json::to_string_pretty(session)
+            .context("failed to serialize session metadata")?;
+        fs::write(&metadata_path, metadata_json)
+            .context("failed to write session metadata")?;
+        Ok(())
+    }
+
+    /// Complete a streaming upload and move to final location
+    pub fn complete_session(
+        &self,
+        stream_id: &str,
+        duration_secs: f64,
+        frame_samples: Vec<FrameSample>,
+        state: &crate::DaemonState,
+    ) -> Result<ScreenCaptureData> {
+        let session = self.load_session(stream_id)?;
+        let valid_stitch_id = ValidStitchId::parse(&session.stitch_id)?;
+
+        // Move partial file to final location
+        let partial_path = self.partial_path(stream_id)?;
+        let attachments_dir = attachments_dir(&valid_stitch_id)?;
+        let video_path = attachments_dir.join(format!("screen.{}", session.file_extension));
+
+        // Atomic rename
+        fs::rename(&partial_path, &video_path).with_context(|| {
+            format!(
+                "failed to move {} to {}",
+                partial_path.display(),
+                video_path.display()
+            )
+        })?;
+
+        // Write frame_samples.json
+        let frame_samples_path = attachments_dir.join("frame_samples.json");
+        let frame_samples_json = serde_json::to_string_pretty(&frame_samples)
+            .context("failed to serialize frame samples")?;
+        fs::write(&frame_samples_path, frame_samples_json)
+            .context("failed to write frame samples")?;
+
+        // §18.1 secrets scan: screen capture text (frame labels)
+        {
+            let frame_labels: String = frame_samples.iter()
+                .map(|f| f.label.as_str())
+                .collect::<Vec<_>>()
+                .join(" ");
+
+            let findings = crate::redaction::scan_screen_capture_text(&frame_labels);
+            if !findings.is_empty() {
+                tracing::warn!(
+                    stitch_id = %session.stitch_id,
+                    project = %session.project,
+                    findings = findings.len(),
+                    "Screen capture frame labels contain potential secrets — flagged for operator review (§18.1)"
+                );
+                crate::redaction::audit_findings(
+                    "screen_capture",
+                    &findings,
+                    crate::redaction_policy::RedactionAction::FlaggedOnly,
+                    &session.stitch_id,
+                    Some(&session.project),
+                    "system",
+                );
+            }
+        }
+
+        // Write meta.json
+        let now = chrono::Utc::now();
+        let title = format!("Screen capture {}", now.format("%Y-%m-%d %H:%M"));
+        let meta = ScreenCaptureMeta {
+            stitch_id: session.stitch_id.clone(),
+            project: session.project.clone(),
+            title: title.clone(),
+            recorded_at: now.to_rfc3339(),
+            duration_secs: Some(duration_secs),
+        };
+        let meta_path = attachments_dir.join("meta.json");
+        let meta_json = serde_json::to_string_pretty(&meta)
+            .context("failed to serialize metadata")?;
+        fs::write(&meta_path, meta_json)
+            .context("failed to write metadata")?;
+
+        // Insert into fleet.db
+        let db_path = crate::fleet::db_path();
+        let conn = rusqlite::Connection::open(&db_path)
+            .context("failed to open database")?;
+        conn.pragma_update(None, "journal_mode", "WAL")
+            .context("failed to set WAL mode")?;
+
+        conn.execute(
+            "INSERT INTO stitches (id, project, kind, title, created_by, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![
+                &session.stitch_id,
+                &session.project,
+                "screen-capture",
+                &title,
+                "operator",
+                now.to_rfc3339(),
+            ],
+        ).context("failed to create stitch row")?;
+
+        // Evaluate pattern queries for the new stitch
+        if let Err(e) = crate::pattern_query_evaluator::sync_and_emit_pattern_queries(
+            &session.stitch_id,
+            &session.project,
+            "screen-capture",
+            &title,
+            &state.pattern_tx,
+        ) {
+            tracing::warn!("Failed to sync pattern queries for stitch {}: {}", session.stitch_id, e);
+        }
+
+        tracing::info!(
+            "Completed streaming screen capture {} in project {} (duration: {:.1}s, size: {} bytes)",
+            session.stitch_id,
+            session.project,
+            duration_secs,
+            session.received_bytes
+        );
+
+        // Clean up streaming directory
+        let stream_dir = self.stream_dir(stream_id)?;
+        fs::remove_dir_all(&stream_dir)
+            .context("failed to clean up stream directory")?;
+
+        Ok(ScreenCaptureData {
+            video_url: format!("/api/screen-capture/{}/video", session.stitch_id),
+            stitch_id: session.stitch_id,
+            title,
+            project: session.project,
+            recorded_at: now.to_rfc3339(),
+            duration_secs: Some(duration_secs),
+            chapters: frame_samples,
+            transcript: None,
+        })
+    }
+
+    /// Cancel and cleanup a streaming upload session
+    pub fn cancel_session(&self, stream_id: &str) -> Result<()> {
+        let stream_dir = self.stream_dir(stream_id)?;
+        if stream_dir.exists() {
+            fs::remove_dir_all(&stream_dir)
+                .context("failed to remove stream directory")?;
+        }
+        Ok(())
+    }
+}
+
+impl Default for StreamingUploadRegistry {
+    fn default() -> Self {
+        Self::new().expect("failed to create streaming upload registry")
+    }
 }
 
 #[cfg(test)]
