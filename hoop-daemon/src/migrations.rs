@@ -39,6 +39,7 @@ use crate::fleet::{
     migrate_v125_to_v126,
     migrate_v126_to_v127,
     migrate_v127_to_v128,
+    migrate_v128_to_v129,
 };
 use anyhow::{bail, Result};
 use rusqlite::Connection;
@@ -531,6 +532,13 @@ pub fn get_migration_registry() -> MigrationRegistry {
         description: "Add redaction_audit table for secret detection events",
         up: migrate_v127_to_v128,
         down: Some(rollback_v128_to_v127),
+    });
+
+    let _ = registry.register(Migration {
+        version: "1.29.0",
+        description: "Add workspace_from/to to stitch_links for cross-workspace blocker resolution",
+        up: migrate_v128_to_v129,
+        down: Some(rollback_v129_to_v128),
     });
 
     registry
@@ -1078,6 +1086,46 @@ fn rollback_v128_to_v127(conn: &mut Connection) -> Result<()> {
     info!("Rolling back migration 1.28.0 → 1.27.0: Dropping redaction_audit table");
 
     conn.execute("DROP TABLE IF EXISTS redaction_audit", [])?;
+
+    Ok(())
+}
+
+/// Rollback 1.29.0 → 1.28.0: Remove workspace_from/to from stitch_links
+fn rollback_v129_to_v128(conn: &mut Connection) -> Result<()> {
+    info!("Rolling back migration 1.29.0 → 1.28.0: Removing workspace_from/to from stitch_links");
+
+    // SQLite doesn't support DROP COLUMN, need to recreate table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS stitch_links_backup (
+            from_stitch TEXT NOT NULL,
+            to_stitch TEXT NOT NULL,
+            kind TEXT NOT NULL CHECK(kind IN ('spawned', 'references')),
+            PRIMARY KEY (from_stitch, to_stitch, kind),
+            FOREIGN KEY (from_stitch) REFERENCES stitches(id) ON DELETE CASCADE,
+            FOREIGN KEY (to_stitch) REFERENCES stitches(id) ON DELETE CASCADE
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "INSERT INTO stitch_links_backup (from_stitch, to_stitch, kind)
+         SELECT from_stitch, to_stitch, kind FROM stitch_links",
+        [],
+    )?;
+
+    conn.execute("DROP TABLE stitch_links", [])?;
+    conn.execute("ALTER TABLE stitch_links_backup RENAME TO stitch_links", [])?;
+
+    // Recreate indexes
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_stitch_links_from ON stitch_links(from_stitch)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_stitch_links_to ON stitch_links(to_stitch)",
+        [],
+    )?;
 
     Ok(())
 }
