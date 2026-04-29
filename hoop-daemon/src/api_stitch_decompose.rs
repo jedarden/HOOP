@@ -27,7 +27,6 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Instant;
 use tracing::warn;
 
@@ -280,7 +279,7 @@ async fn submit_stitch(
         connect_info.map(|ci| ci.0),
         crate::auth::Role::Drafter,
     )
-    .map_err(|e| (e.0, serde_json::to_string(e.1).unwrap_or_else(|_| e.0.to_string())))?;
+    .map_err(|e| (e.0, serde_json::to_string(&e.1 .0).unwrap_or_else(|_| e.0.to_string())))?;
 
     // 1. Validate draft against schema
     validate_stitch_draft(&req)?;
