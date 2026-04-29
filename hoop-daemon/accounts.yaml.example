@@ -1,0 +1,42 @@
+# Per-account configuration for OpenCode ZAI proxy limits
+#
+# Location: ~/.hoop/accounts.yaml
+#
+# This file configures per-account prompt limits for OpenCode/ZAI proxy usage.
+# Each account can have custom 5-hour and 7-day prompt budgets.
+#
+# If an account is not configured here, the default ZAI proxy Max tier limits
+# will be used: 1600 prompts per 5 hours, 8000 prompts per 7 days.
+#
+# Account IDs:
+# - "~/.local/share/opencode" maps to "opencode-default"
+# - "~/.local/share/opencode-*" maps to "opencode-*" (e.g., "~/.local/share/opencode-work" -> "opencode-work")
+# - "~/.opencode" maps to "opencode-default" (legacy)
+# - "~/.opencode-*" maps to the directory name (e.g., "~/.opencode-work" -> ".opencode-work")
+#
+# Hot-reload: Changes to this file are applied on the next capacity refresh cycle.
+
+accounts:
+  # Default OpenCode account (Max tier: 1600/5h, 8000/7d)
+  opencode-default:
+    adapter: opencode
+    limits:
+      opencode:
+        prompts_per_5h: 1600
+        prompts_per_7d: 8000
+
+  # Work account with higher limits (Max tier 2x: 3200/5h, 16000/7d)
+  # opencode-work:
+  #   adapter: opencode
+  #   limits:
+  #     opencode:
+  #       prompts_per_5h: 3200
+  #       prompts_per_7d: 16000
+
+  # Test account with lower limits
+  # opencode-test:
+  #   adapter: opencode
+  #   limits:
+  #     opencode:
+  #       prompts_per_5h: 800
+  #       prompts_per_7d: 4000

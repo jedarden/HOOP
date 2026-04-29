@@ -25,6 +25,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration as StdDuration;
 use tracing::{debug, info, warn};
 
+use crate::accounts_config::{AccountsConfig, OpenCodeLimits as AccountsOpenCodeLimits};
+
 /// GCP Consumer Quotas API client for fetching Gemini quota limits.
 ///
 /// This module provides optional integration with Google Cloud's Consumer Quotas API
@@ -564,6 +566,9 @@ pub struct CapacityMeterConfig {
     /// Loaded from environment variables (GEMINI_GCP_PROJECT_ID, GEMINI_USE_QUOTA_API).
     /// When None, uses hardcoded defaults for Gemini limits.
     pub gcp_quota_config: Option<gcp_quota_client::GcpQuotaConfig>,
+    /// Path to accounts.yaml for per-account OpenCode prompt limits.
+    /// Defaults to ~/.hoop/accounts.yaml.
+    pub accounts_file: Option<PathBuf>,
 }
 
 impl Default for CapacityMeterConfig {
@@ -601,6 +606,9 @@ impl Default for CapacityMeterConfig {
             );
         }
 
+        // Default accounts.yaml path
+        let accounts_file = home.join(".hoop").join("accounts.yaml");
+
         Self {
             account_dirs,
             gemini_dirs,
@@ -609,6 +617,7 @@ impl Default for CapacityMeterConfig {
             cache_max_age_secs: 600,
             cache_base_dir: None,
             gcp_quota_config,
+            accounts_file: Some(accounts_file),
         }
     }
 }
@@ -925,11 +934,34 @@ impl CapacityMeterConfig {
 /// Capacity meter: computes per-account utilization
 pub struct CapacityMeter {
     config: CapacityMeterConfig,
+    /// Loaded accounts configuration for per-account OpenCode limits
+    accounts_config: AccountsConfig,
 }
 
 impl CapacityMeter {
     pub fn new(config: CapacityMeterConfig) -> Self {
-        Self { config }
+        // Load accounts configuration
+        let accounts_config = config
+            .accounts_file
+            .as_ref()
+            .map(|path| AccountsConfig::load_from_file(path))
+            .transpose()
+            .ok()
+            .flatten()
+            .unwrap_or_default();
+
+        if let Some(ref path) = config.accounts_file {
+            info!(
+                "Loaded accounts config from {}: {} accounts configured",
+                path.display(),
+                accounts_config.accounts.len()
+            );
+        }
+
+        Self {
+            config,
+            accounts_config,
+        }
     }
 
     /// Compute capacity for all configured accounts
@@ -1849,8 +1881,12 @@ impl CapacityMeter {
             }
         }
 
-        // Get limits for OpenCode (ZAI proxy)
-        let limits = get_opencode_limits();
+        // Get per-account limits from accounts_config (or default if not configured)
+        let limits_config = self.accounts_config.get_opencode_limits_or_default(&account_id);
+        let limits = OpenCodePromptLimits {
+            prompts_per_5h: limits_config.prompts_per_5h,
+            prompts_per_7d: limits_config.prompts_per_7d,
+        };
 
         // Calculate utilization based on prompt counts
         let util_5h = if limits.prompts_per_5h > 0 {

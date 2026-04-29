@@ -95,6 +95,9 @@ function CapacityRow({ account, activeWorkers }: CapacityRowProps) {
   const level5h = getUtilizationLevel(account.utilization_5h);
   const level7d = getUtilizationLevel(account.utilization_7d);
 
+  // Check if this is an OpenCode account (shows prompts instead of tokens)
+  const isOpenCode = account.adapter === 'opencode';
+
   return (
     <div className="capacity-row">
       <div className="capacity-row-header">
@@ -107,7 +110,7 @@ function CapacityRow({ account, activeWorkers }: CapacityRowProps) {
             <span className="capacity-active-workers">{activeWorkers} active</span>
           )}
           <span className="capacity-source-badge" title={`Data from ${account.source}`}>
-            {account.source === 'api_cache' ? 'API' : 'JSONL'}
+            {isOpenCode ? 'ZAI' : (account.source === 'api_cache' ? 'API' : 'JSONL')}
           </span>
         </div>
       </div>
@@ -122,14 +125,25 @@ function CapacityRow({ account, activeWorkers }: CapacityRowProps) {
               style={{ color: getUtilizationColor(level5h) }}
               onMouseEnter={(e) => handleMouseEnter(e, (
                 <div className="tooltip-content">
-                  <div className="tooltip-row">
-                    <span>Weighted tokens:</span>
-                    <strong>{formatNumber(account.tokens_5h)}</strong>
-                  </div>
-                  <div className="tooltip-row">
-                    <span>Turns:</span>
-                    <strong>{account.turns_5h}</strong>
-                  </div>
+                  {isOpenCode ? (
+                    <>
+                      <div className="tooltip-row">
+                        <span>Prompts:</span>
+                        <strong>{account.prompts_5h} / {formatNumber(account.prompts_per_5h || 0)}</strong>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="tooltip-row">
+                        <span>Weighted tokens:</span>
+                        <strong>{formatNumber(account.tokens_5h)}</strong>
+                      </div>
+                      <div className="tooltip-row">
+                        <span>Turns:</span>
+                        <strong>{account.turns_5h}</strong>
+                      </div>
+                    </>
+                  )}
                   {account.resets_at_5h && (
                     <div className="tooltip-row">
                       <span>Resets:</span>
@@ -199,14 +213,25 @@ function CapacityRow({ account, activeWorkers }: CapacityRowProps) {
               style={{ color: getUtilizationColor(level7d) }}
               onMouseEnter={(e) => handleMouseEnter(e, (
                 <div className="tooltip-content">
-                  <div className="tooltip-row">
-                    <span>Weighted tokens:</span>
-                    <strong>{formatNumber(account.tokens_7d)}</strong>
-                  </div>
-                  <div className="tooltip-row">
-                    <span>Turns:</span>
-                    <strong>{account.turns_7d}</strong>
-                  </div>
+                  {isOpenCode ? (
+                    <>
+                      <div className="tooltip-row">
+                        <span>Prompts:</span>
+                        <strong>{account.prompts_7d} / {formatNumber(account.prompts_per_7d || 0)}</strong>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="tooltip-row">
+                        <span>Weighted tokens:</span>
+                        <strong>{formatNumber(account.tokens_7d)}</strong>
+                      </div>
+                      <div className="tooltip-row">
+                        <span>Turns:</span>
+                        <strong>{account.turns_7d}</strong>
+                      </div>
+                    </>
+                  )}
                   {(account.forecast_full_7d_stitch_min != null || account.forecast_full_7d_min != null) && (
                     <>
                       <div className="tooltip-divider" />
@@ -399,7 +424,13 @@ export default function CapacityPanel({ projectName: _projectName }: CapacityPan
           </p>
           {accounts.length > 0 && (
             <p className="capacity-note">
-              <strong>Source:</strong> {accounts[0].source === 'api_cache' ? 'Claude API cache (exact)' : 'JSONL estimate (±5%)'}
+              <strong>Source:</strong> {(() => {
+                const firstAccount = accounts[0];
+                if (firstAccount.adapter === 'opencode') {
+                  return 'OpenCode session files (prompt count)';
+                }
+                return firstAccount.source === 'api_cache' ? 'Claude API cache (exact)' : 'JSONL estimate (±5%)';
+              })()}
             </p>
           )}
         </div>
