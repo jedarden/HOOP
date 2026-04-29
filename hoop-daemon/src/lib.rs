@@ -13,6 +13,7 @@ pub mod api_agent;
 pub mod api_backup;
 pub mod api_attachments;
 pub mod api_audit;
+pub mod accounts_config;
 pub mod auth;
 pub mod api_beads;
 pub mod api_bead_blockers;
@@ -23,6 +24,7 @@ pub mod api_dictated_notes;
 pub mod api_draft_queue;
 pub mod api_metrics;
 pub mod api_morning_brief;
+pub mod api_onboarding;
 
 #[cfg(feature = "openapi")]
 pub mod openapi;
@@ -58,11 +60,16 @@ pub mod events;
 pub mod files;
 pub mod fleet;
 pub mod fleet_notifications;
+pub mod content_blocks;
+pub mod stitch_traversal;
 pub mod heartbeats;
 pub mod id_validators;
 pub mod identity;
 // pub mod multi_operator; // TODO: implement
 pub mod api_presence;
+pub mod api_reflection_ledger;
+pub mod api_stitch_traversal;
+pub mod api_tour_project;
 
 // Integration test utilities and load testing are only needed for tests
 // These are public for integration tests but not part of the stable API
@@ -112,10 +119,13 @@ pub mod ws;
 pub mod collision_detector;
 pub mod config_backup;
 pub mod api_blame;
+pub mod api_content_blocks;
 pub mod api_diff;
+pub mod api_files;
 pub mod api_fix_patterns;
 pub mod api_orphans;
 pub mod api_screen_capture;
+pub mod api_ui_state;
 pub mod bead_commit_index;
 pub mod net_diff;
 pub mod orphan_beads;
@@ -326,6 +336,10 @@ pub struct DaemonState {
     pub bead_created_by_hoop_tx: broadcast::Sender<ws::BeadCreatedByHoopData>,
     /// Broadcast channel for saturation alert events (§6 P2 d10, §8.3, hoop-ttb.3.22)
     pub saturation_alert_tx: broadcast::Sender<ws::SaturationAlertData>,
+    /// Broadcast channel for presence update events (§19.4)
+    pub presence_tx: broadcast::Sender<ws::PresenceUpdateData>,
+    /// Broadcast channel for reflection proposal events (§19.2)
+    pub reflection_tx: broadcast::Sender<ws::ReflectionProposalData>,
     /// Per-project redaction policy resolver (§18.5)
     pub redaction_policy_state: Arc<tokio::sync::RwLock<redaction_policy::RedactionPolicyState>>,
     /// Stuck detector — monitors worker events for idle/max-runtime/content-seen timeouts (§C1)
@@ -1148,6 +1162,18 @@ async fn get_bead_commits(
     .map_err(|e| (axum::http::StatusCode::BAD_REQUEST, e.to_string()))
 }
 
+/// Get the OpenAPI router if the feature is enabled, otherwise an empty router
+#[cfg(feature = "openapi")]
+fn openapi_router() -> Router<DaemonState> {
+    openapi::router()
+}
+
+/// Get the OpenAPI router if the feature is enabled, otherwise an empty router
+#[cfg(not(feature = "openapi"))]
+fn openapi_router() -> Router<DaemonState> {
+    Router::new()
+}
+
 /// Build the daemon router with all endpoints
 pub fn router() -> Router<DaemonState> {
     Router::new()
@@ -1218,6 +1244,13 @@ pub fn router() -> Router<DaemonState> {
         .merge(net_diff::router())
         .merge(template_library::router())
         .merge(api_prompts::router())
+        .merge(api_onboarding::router())
+        .merge(api_tour_project::router())
+        .merge(api_ui_state::router())
+        .merge(api_content_blocks::router())
+        .merge(api_files::router())
+        .merge(api_reflection_ledger::router())
+        .merge(api_stitch_traversal::router())
         .route(
             "/api/workers/timeline",
             get(api_timeline::get_worker_timeline),
@@ -1230,7 +1263,9 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_config::router())
         .merge(api_scripts::router())
         .merge(api_unassigned::router())
-        .merge(openapi_router())
+        .merge(api_screen_capture::router())
+        .merge(api_reflection_ledger::router())
+        .merge(api_stitch_traversal::router())
         .nest_service("/assets", AssetsHandler::router())
         .fallback_service(AssetsHandler::router())
         .layer(TraceLayer::new_for_http())
@@ -2557,6 +2592,11 @@ Note: This is an automated synthesis from voice dictation."#,
     fleet::start_draft_cleanup_scheduler(draft_cleanup_shutdown);
     info!("Draft cleanup scheduler started");
 
+    // Start presence cleanup scheduler (§19.4) — removes stale presence records (>30s)
+    let presence_cleanup_shutdown = shutdown_coordinator.subscribe();
+    fleet::start_presence_cleanup_scheduler(presence_cleanup_shutdown);
+    info!("Presence cleanup scheduler started");
+
     // Start redaction audit cleanup scheduler (§18.5) — removes old redaction_audit entries
     let redaction_audit_cleanup_shutdown = shutdown_coordinator.subscribe();
     let audit_retention_days = resolved_config.audit_retention_days.value;
@@ -2678,6 +2718,7 @@ Note: This is an automated synthesis from voice dictation."#,
         pattern_tx,
         bead_created_by_hoop_tx: broadcast::channel::<ws::BeadCreatedByHoopData>(64).0,
         saturation_alert_tx: broadcast::channel::<ws::SaturationAlertData>(64).0,
+        presence_tx: broadcast::channel::<ws::PresenceUpdateData>(64).0,
         redaction_policy_state,
         stuck_detector,
         backup_runner,
@@ -2876,6 +2917,7 @@ Note: This is an automated synthesis from voice dictation."#,
         let projects_ref = state.projects.clone();
         let status_ref = state.project_status_tx.clone();
         let vindex_ref = state.vector_index.clone();
+        let fleet_db_ref = state.fleet_db.clone();
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(5));
             let mut vindex_counter: u32 = 0;
@@ -2974,8 +3016,21 @@ Note: This is an automated synthesis from voice dictation."#,
                     vindex_ref.write().unwrap().rebuild(items);
                 }
 
-                *projects_ref.write().unwrap() = new_cards.clone();
-                for card in new_cards {
+                // Include tour project if enabled
+                let mut cards_with_tour = new_cards.clone();
+                {
+                    let fleet_db = fleet_db_ref.clone();
+                    if let Ok(conn) = fleet_db.lock() {
+                        // Use a default operator_id for tour project check
+                        // (tour state is global, not per-operator)
+                        if let Some(tour_card) = api_tour_project::get_tour_project_card(&conn, "") {
+                            cards_with_tour.push(tour_card);
+                        }
+                    }
+                }
+
+                *projects_ref.write().unwrap() = cards_with_tour.clone();
+                for card in cards_with_tour {
                     let _ = status_ref.send(card);
                 }
             }

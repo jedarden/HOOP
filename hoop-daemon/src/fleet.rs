@@ -4456,6 +4456,48 @@ pub struct PresenceEntry {
 }
 
 // ---------------------------------------------------------------------------
+// §19.4 Presence cleanup scheduler
+// ---------------------------------------------------------------------------
+
+/// Start the background scheduler for cleaning up stale presence records.
+///
+/// Presence records have a 30-second timeout; this scheduler runs every
+/// minute to remove expired entries and prevent the table from growing
+/// indefinitely.
+pub fn start_presence_cleanup_scheduler(
+    mut shutdown: tokio::sync::broadcast::Receiver<crate::shutdown::ShutdownPhase>,
+) {
+    tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                _ = shutdown.recv() => {
+                    info!("Presence cleanup scheduler shutting down");
+                    break;
+                }
+                _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
+                    // Run the synchronous cleanup in a blocking task
+                    match tokio::task::spawn_blocking(|| {
+                        cleanup_stale_presence()
+                    }).await {
+                        Ok(Ok(count)) => {
+                            if count > 0 {
+                                debug!("Presence cleanup completed: {} stale records removed", count);
+                            }
+                        }
+                        Ok(Err(e)) => {
+                            warn!("Presence cleanup failed: {}", e);
+                        }
+                        Err(e) => {
+                            warn!("Presence cleanup task failed to join: {}", e);
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// ---------------------------------------------------------------------------
 // Agent session → Stitch archival
 // ---------------------------------------------------------------------------
 
@@ -6111,6 +6153,45 @@ pub fn is_operator_stitch(stitch_id: &str) -> Result<bool> {
         .ok();
 
     Ok(result.unwrap_or(false))
+}
+
+/// Record first usage of a feature for onboarding prompts.
+///
+/// Sets a feature_first_used timestamp in ui_state if not already set.
+/// This is used to prevent showing intro prompts for features the operator
+/// has already used.
+///
+/// # Arguments
+/// * `operator_id` - The operator identifier
+/// * `feature` - Feature name: "agent", "mic", "patterns", or "reflection_ledger"
+///
+/// # Returns
+/// * `Ok(true)` if the usage was recorded (first time)
+/// * `Ok(false)` if already recorded (no-op)
+/// * `Err(...)` on database error
+pub fn record_feature_usage(operator_id: &str, feature: &str) -> Result<bool> {
+    let key = match feature {
+        "agent" => "agent_first_used",
+        "mic" => "mic_first_used",
+        "patterns" => "patterns_first_used",
+        "reflection_ledger" => "reflection_ledger_first_used",
+        _ => return Ok(false),
+    };
+
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+
+    // Only set if not already set (idempotent)
+    let rows_affected = conn.execute(
+        "INSERT INTO ui_state (operator_id, key, value, updated_at)
+         VALUES (?1, ?2, ?3, datetime('now'))
+         ON CONFLICT (operator_id, key) DO UPDATE SET
+             value = excluded.value
+             WHERE value IS NULL",
+        params![operator_id, key, Utc::now().to_rfc3339()],
+    )?;
+
+    Ok(rows_affected > 0)
 }
 
 #[cfg(test)]
