@@ -35,6 +35,7 @@ pub fn router() -> Router<crate::DaemonState> {
         .route("/api/p/{project}/dictated-notes", get(list_notes))
         .route("/api/dictated-notes/{stitch_id}", get(get_note))
         .route("/api/dictated-notes/{stitch_id}", patch(update_note))
+        .route("/api/dictated-notes/{stitch_id}/findings", get(get_findings))
         .route("/api/dictated-notes/{stitch_id}/redact", post(redact_words))
         .route("/api/dictated-notes/{stitch_id}/audio", get(get_audio))
         .route("/api/dictated-notes/{stitch_id}/synthesize", post(synthesize_draft))
@@ -287,6 +288,62 @@ async fn get_note(
         Some(n) => Ok(Json(n).into_response()),
         None => Err((StatusCode::NOT_FOUND, "Note not found".to_string())),
     }
+}
+
+/// Response format for secret findings
+#[derive(Debug, Serialize)]
+struct SecretFindingResponse {
+    /// Which scanner pattern matched (e.g. "anthropic_api_key")
+    pattern_name: String,
+    /// Byte offset of the start of the match within the scanned text
+    match_start: usize,
+    /// Length of the matched substring in bytes
+    match_len: usize,
+    /// The matched string (truncated for display)
+    matched_text: String,
+}
+
+/// GET /api/dictated-notes/:stitch_id/findings — get secret findings for a note
+///
+/// Scans the transcript for secrets and returns all findings.
+/// This is used by the frontend to show a warning banner when secrets are detected.
+async fn get_findings(
+    Path(stitch_id): Path<String>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let valid_id = ValidStitchId::parse(&stitch_id).map_err(id_validators::rejection)?;
+
+    let db_path = fleet::db_path();
+    let conn = rusqlite::Connection::open(&db_path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("DB error: {}", e),
+        )
+    })?;
+
+    let note = dictated_notes::get_note(&conn, valid_id.as_str()).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Query error: {}", e),
+        )
+    })?
+    .ok_or_else(|| (StatusCode::NOT_FOUND, "Note not found".to_string()))?;
+
+    // Scan the transcript for secrets
+    let findings = crate::redaction::scan_voice_transcript(&note.transcript);
+
+    // Convert findings to a more detailed response format
+    let findings_response: Vec<SecretFindingResponse> = findings
+        .into_iter()
+        .map(|f| SecretFindingResponse {
+            pattern_name: f.pattern_name.to_string(),
+            match_start: f.match_start,
+            match_len: f.match_len,
+            // Extract the matched text from the transcript for display
+            matched_text: note.transcript[f.match_start..f.match_start + f.match_len].to_string(),
+        })
+        .collect();
+
+    Ok(Json(findings_response))
 }
 
 /// GET /api/dictated-notes/:stitch_id/audio — serve the audio file

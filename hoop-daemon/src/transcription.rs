@@ -876,6 +876,54 @@ impl TranscriptionJobProcessor {
         })
         .await??;
 
+        // §18.2 Post-transcription secrets scan
+        // Scan the completed transcript for secrets and write audit entries.
+        // This is "flag, not block" - the transcription is stored regardless,
+        // but findings are logged for operator review.
+        if status == TranscriptionStatus::Completed && !transcript.is_empty() {
+            // Get the project name for this stitch
+            let project_name: Option<String> = tokio::task::spawn_blocking({
+                let stitch_id = stitch_id.clone();
+                move || {
+                    let db_path = crate::fleet::db_path();
+                    let conn = Connection::open(&db_path)?;
+                    conn.query_row(
+                        "SELECT project FROM stitches WHERE id = ?1",
+                        params![stitch_id],
+                        |row| row.get(0),
+                    )
+                    .optional()
+                    .ok()
+                }
+            })
+            .await
+            .ok()
+            .and_then(|r| r.ok()
+                .flatten());
+
+            // Scan the transcript for secrets
+            let findings = crate::redaction::scan_voice_transcript(&transcript);
+
+            if !findings.is_empty() {
+                tracing::warn!(
+                    stitch_id = %stitch_id,
+                    project = ?project_name,
+                    findings = findings.len(),
+                    "Post-transcription scan detected potential secrets — flagged for operator review (§18.2)"
+                );
+
+                // Write audit entries for each unique pattern detected
+                crate::redaction::audit_findings(
+                    "transcript",
+                    &findings,
+                    crate::redaction_policy::RedactionAction::FlaggedOnly,  // Just flag, no automatic action
+                    &stitch_id,
+                    project_name.as_deref(),
+                    "system",  // Voice transcription is automatic
+                );
+            }
+        }
+
         Ok(())
     }
 }
