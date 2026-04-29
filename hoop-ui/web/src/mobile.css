@@ -1,0 +1,1242 @@
+/* ─────────────────────────────────────────────────────────────────────────────────
+   MOBILE UX OPTIMIZATIONS (§21)
+   Cross-cutting mobile responsiveness for HOOP UI
+
+   Breakpoints:
+   - Phone portrait: ≥375px (Pixel 6 native: 412px)
+   - Phone landscape: ~700px
+   - Tablet: ≥768px
+   - Desktop: ≥1280px (primary target)
+──────────────────────────────────────────────────────────────────────────────── */
+
+/* ─────────────────────────────────────────────────────────────────────────────────
+   BASE MOBILE STYLES (375px and up)
+──────────────────────────────────────────────────────────────────────────────── */
+
+/* Mobile-first base styles */
+@media (max-width: 767px) {
+  /* App container - full width on mobile */
+  .app {
+    max-width: 100%;
+    padding: 1rem 0.75rem;
+    margin: 0;
+  }
+
+  /* Header navigation - scrollable horizontal on mobile */
+  .header-nav {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 0.25rem 0;
+  }
+
+  .header-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .header-nav-link,
+  .back-link {
+    font-size: 0.875rem;
+    white-space: nowrap;
+    padding: 0.375rem 0.75rem;
+    border-radius: 9999px;
+    background: #f5f5f5;
+    text-decoration: none;
+    color: #333;
+    transition: background 0.15s ease;
+  }
+
+  .header-nav-link:hover,
+  .back-link:hover {
+    background: #e0e0e0;
+  }
+
+  /* Main content - no padding on mobile for max space */
+  main {
+    padding: 0;
+  }
+
+  /* Section headers - compact on mobile */
+  h2 {
+    font-size: 1.25rem;
+    margin-bottom: 0.75rem;
+  }
+
+  /* Cards - full width on mobile */
+  .worker-card,
+  .project-card-fleet,
+  .stitch-card {
+    width: 100%;
+    max-width: 100%;
+    margin-bottom: 0.75rem;
+  }
+
+  /* Buttons - full width on mobile, minimum 44px tap target */
+  button,
+  .btn {
+    min-height: 44px;
+    padding: 0.625rem 1rem;
+    font-size: 1rem;
+    border-radius: 8px;
+  }
+
+  /* Primary actions - stacked full width on mobile */
+  .new-bead-btn,
+  .new-stitch-btn {
+    width: 100%;
+    margin-bottom: 0.5rem;
+    justify-content: center;
+  }
+
+  /* Form inputs - full width on mobile */
+  input[type="text"],
+  input[type="email"],
+  input[type="search"],
+  textarea,
+  select {
+    width: 100%;
+    min-height: 44px;
+    padding: 0.625rem 0.875rem;
+    font-size: 1rem;
+    border-radius: 8px;
+  }
+
+  /* Filters - stacked on mobile */
+  .stitch-filter-select,
+  .stitch-search {
+    width: 100%;
+    margin-bottom: 0.5rem;
+  }
+
+  .stitches-filters {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  /* Stats - compact on mobile */
+  .stitches-stats {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .stitch-stat {
+    min-width: 70px;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .stat-value {
+    font-size: 1.25rem;
+  }
+
+  .stat-label {
+    font-size: 0.75rem;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────
+   MORNING BRIEF MOBILE (§21.1)
+   Card-per-headline layout with swipe gestures
+──────────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 767px) {
+  /* Morning Brief container */
+  .morning-brief-container,
+  .p-4 {
+    padding: 0.75rem;
+  }
+
+  /* Brief cards - swipeable stack on mobile */
+  .morning-brief-card,
+  .border.rounded-lg {
+    border-radius: 12px;
+    overflow: hidden;
+    touch-action: pan-y;
+  }
+
+  /* Headline section - full width on mobile */
+  .morning-brief-headline {
+    font-size: 1.125rem;
+    line-height: 1.4;
+    padding: 1rem;
+  }
+
+  /* Brief content - scrollable on mobile */
+  .morning-brief-content,
+  .prose {
+    font-size: 1rem;
+    line-height: 1.6;
+    max-height: 60vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 1rem 1rem;
+  }
+
+  /* Brief actions - full-width buttons on mobile */
+  .morning-brief-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+    border-top: 1px solid #e0e0e0;
+  }
+
+  .morning-brief-actions button {
+    width: 100%;
+    min-height: 48px;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  /* Status badges - compact on mobile */
+  .badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 9999px;
+  }
+
+  /* History list - compact on mobile */
+  .history-item {
+    padding: 0.75rem;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .history-item:last-child {
+    border-bottom: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────
+   DICTATION WIDGET MOBILE (§21.2)
+   Large mic button, push-to-talk, haptic feedback
+──────────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 767px) {
+  /* Dictation widget - fixed at bottom on mobile for easy access */
+  .dictation-widget {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    padding: 0.75rem;
+    background: white;
+    border-top: 1px solid #e0e0e0;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+    margin: 0;
+    border-radius: 0;
+  }
+
+  /* Large mic icon for mobile idle state */
+  .dictation-mic-icon--mobile {
+    font-size: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    background: #1976d2;
+    color: white;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
+  }
+
+  /* Large gear button for mobile */
+  .dictation-gear-btn--mobile {
+    min-width: 48px;
+    min-height: 48px;
+    font-size: 1.5rem;
+    background: #f5f5f5;
+    border-radius: 50%;
+  }
+
+  /* Recording state - full screen overlay on mobile */
+  .dictation-widget--recording {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(244, 67, 54, 0.95);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+  }
+
+  /* Large mic icon for recording state */
+  .dictation-widget--recording .dictation-rec-dot::before {
+    content: '🎤';
+    font-size: 4rem;
+    display: block;
+    margin-bottom: 1rem;
+  }
+
+  /* Recording timer - larger on mobile */
+  .dictation-timer {
+    font-size: 2.5rem;
+    font-weight: 600;
+    margin: 1rem 0;
+  }
+
+  /* Oscilloscope - full width on mobile during recording */
+  .dictation-oscilloscope {
+    width: 100%;
+    height: 80px;
+    margin: 1rem 0;
+  }
+
+  /* Stop hint - clear and centered */
+  .dictation-stop-hint {
+    font-size: 1rem;
+    text-align: center;
+    margin-top: 1rem;
+  }
+
+  /* Idle state - compact bar at bottom */
+  .dictation-widget--idle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .dictation-mic-icon {
+    font-size: 1.5rem;
+  }
+
+  .dictation-hotkey-label {
+    font-size: 0.875rem;
+    flex: 1;
+    text-align: center;
+  }
+
+  .dictation-gear-btn {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 1.25rem;
+  }
+
+  /* Settings panel - modal on mobile */
+  .dictation-settings-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 400px;
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    z-index: 2001;
+  }
+
+  /* Error state - full width banner */
+  .dictation-widget--error {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 1rem;
+    background: #ffebee;
+    color: #c62828;
+    z-index: 2000;
+  }
+
+  /* Uploading state - inline with main content */
+  .dictation-widget--uploading {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 0.75rem;
+    background: #e3f2fd;
+    color: #1976d2;
+    z-index: 1000;
+  }
+}
+
+@media (max-width: 767px) {
+  /* Dictation widget - fixed at bottom on mobile for easy access */
+  .dictation-widget {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    padding: 0.75rem;
+    background: white;
+    border-top: 1px solid #e0e0e0;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+    margin: 0;
+    border-radius: 0;
+  }
+
+  /* Recording state - full screen overlay on mobile */
+  .dictation-widget--recording {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(244, 67, 54, 0.95);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+  }
+
+  /* Large mic icon for recording state */
+  .dictation-widget--recording .dictation-rec-dot::before {
+    content: '🎤';
+    font-size: 4rem;
+    display: block;
+    margin-bottom: 1rem;
+  }
+
+  /* Recording timer - larger on mobile */
+  .dictation-timer {
+    font-size: 2.5rem;
+    font-weight: 600;
+    margin: 1rem 0;
+  }
+
+  /* Oscilloscope - full width on mobile during recording */
+  .dictation-oscilloscope {
+    width: 100%;
+    height: 80px;
+    margin: 1rem 0;
+  }
+
+  /* Stop hint - clear and centered */
+  .dictation-stop-hint {
+    font-size: 1rem;
+    text-align: center;
+    margin-top: 1rem;
+  }
+
+  /* Idle state - compact bar at bottom */
+  .dictation-widget--idle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .dictation-mic-icon {
+    font-size: 1.5rem;
+  }
+
+  .dictation-hotkey-label {
+    font-size: 0.875rem;
+    flex: 1;
+    text-align: center;
+  }
+
+  .dictation-gear-btn {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 1.25rem;
+  }
+
+  /* Settings panel - modal on mobile */
+  .dictation-settings-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 400px;
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    z-index: 2001;
+  }
+
+  /* Error state - full width banner */
+  .dictation-widget--error {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 1rem;
+    background: #ffebee;
+    color: #c62828;
+    z-index: 2000;
+  }
+
+  /* Uploading state - inline with main content */
+  .dictation-widget--uploading {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 0.75rem;
+    background: #e3f2fd;
+    color: #1976d2;
+    z-index: 1000;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────
+   STITCH LIST MOBILE (§21.3)
+   Compact cards with project/title/activity/indicator
+──────────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 767px) {
+  /* Stitch cards - compact full-width on mobile */
+  .stitch-card {
+    padding: 0.75rem;
+    border-radius: 12px;
+    margin-bottom: 0.75rem;
+    touch-action: manipulation;
+  }
+
+  /* Stitch card header - stacked on mobile */
+  .stitch-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  /* Stitch title - larger on mobile for readability */
+  .stitch-title {
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  /* Badges - compact on mobile */
+  .stitch-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+  }
+
+  /* Stitch card meta - stacked on mobile */
+  .stitch-card-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    font-size: 0.875rem;
+  }
+
+  .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  .meta-label {
+    color: #666;
+    font-size: 0.75rem;
+  }
+
+  .meta-value {
+    font-weight: 500;
+  }
+
+  /* Activity indicator - larger on mobile */
+  .stitch-activity-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #4caf50;
+    animation: pulse 1.5s infinite;
+  }
+
+  /* Streaming indicator - prominent on mobile */
+  .stitch-card--streaming {
+    border-left: 4px solid #4caf50;
+    background: #f1f8f4;
+  }
+
+  /* Stitch detail - full width on mobile */
+  .stitch-detail {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #e0e0e0;
+  }
+
+  /* Stitch detail messages - scrollable */
+  .stitch-detail-messages {
+    max-height: 40vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Load more button - full width */
+  .stitch-load-more {
+    width: 100%;
+    min-height: 48px;
+    margin-top: 1rem;
+    font-weight: 600;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────
+   AGENT CHAT MOBILE (§21.4)
+   Optimized composer, native attachment picker
+──────────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 767px) {
+  /* Agent chat pane - full viewport on mobile */
+  .agent-chat-pane {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1500;
+    display: flex;
+    flex-direction: column;
+    background: white;
+  }
+
+  /* Chat header - compact on mobile */
+  .acp-header {
+    flex-shrink: 0;
+    padding: 0.75rem;
+    border-bottom: 1px solid #e0e0e0;
+    background: white;
+  }
+
+  .acp-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .acp-title-row h2 {
+    font-size: 1.125rem;
+    margin: 0;
+  }
+
+  /* Session controls - stacked on mobile */
+  .acp-session-controls {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  /* Status badge - full width on mobile */
+  .acp-status-badge {
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    font-size: 0.875rem;
+  }
+
+  /* Scope bar - horizontally scrollable on mobile */
+  .acp-scope-bar {
+    flex-shrink: 0;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #f0f0f0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .acp-scope-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .acp-scope-pills {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .acp-scope-pill {
+    min-width: 80px;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    white-space: nowrap;
+    border-radius: 9999px;
+    border: 1px solid #e0e0e0;
+    background: white;
+  }
+
+  .acp-scope-active {
+    background: #1976d2;
+    border-color: #1976d2;
+    color: white;
+  }
+
+  /* Messages area - flex with scroll */
+  .acp-messages {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.75rem;
+  }
+
+  /* Message bubbles - full width on mobile */
+  .acp-message {
+    margin-bottom: 0.75rem;
+    padding: 0.75rem;
+    border-radius: 12px;
+    max-width: 100%;
+  }
+
+  .acp-message-user {
+    background: #e3f2fd;
+    margin-left: 0.5rem;
+  }
+
+  .acp-message-assistant {
+    background: #f5f5f5;
+    margin-right: 0.5rem;
+  }
+
+  .acp-role {
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-bottom: 0.375rem;
+    text-transform: uppercase;
+  }
+
+  .acp-message-text {
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* Input area - fixed at bottom on mobile */
+  .acp-input-area {
+    flex-shrink: 0;
+    padding: 0.75rem;
+    border-top: 1px solid #e0e0e0;
+    background: white;
+  }
+
+  /* Input row - stacked on mobile */
+  .acp-input-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  /* Attachment button - prominent on mobile */
+  .acp-attach-btn {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #f5f5f5;
+    border: none;
+    color: #666;
+  }
+
+  /* Textarea - larger on mobile */
+  .acp-textarea {
+    min-height: 80px;
+    padding: 0.75rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    border-radius: 12px;
+    border: 1px solid #e0e0e0;
+    resize: none;
+  }
+
+  .acp-textarea:focus {
+    outline: none;
+    border-color: #1976d2;
+    box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.1);
+  }
+
+  /* Send button - prominent on mobile */
+  .acp-send-btn {
+    align-self: flex-end;
+    min-width: 48px;
+    min-height: 48px;
+    border-radius: 50%;
+    background: #1976d2;
+    color: white;
+    border: none;
+  }
+
+  .acp-send-btn:disabled {
+    background: #e0e0e0;
+    color: #999;
+  }
+
+  /* Attachments preview - horizontal scroll on mobile */
+  .acp-attachments {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.5rem;
+    scrollbar-width: none;
+  }
+
+  .acp-attachments::-webkit-scrollbar {
+    display: none;
+  }
+
+  .acp-attachment-chip {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.75rem;
+    background: #f5f5f5;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+  }
+
+  .acp-attachment-preview {
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    object-fit: cover;
+  }
+
+  /* Cost hint - subtle at bottom */
+  .acp-cost-hint {
+    font-size: 0.75rem;
+    color: #999;
+    text-align: center;
+    margin-top: 0.5rem;
+  }
+
+  /* Error banner - full width */
+  .acp-error-bar {
+    padding: 0.75rem;
+    background: #ffebee;
+    color: #c62828;
+    border-radius: 8px;
+    margin-bottom: 0.5rem;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────
+   APPROVAL DIALOGS MOBILE (§21.5)
+   Oversized buttons, high contrast
+──────────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 767px) {
+  /* Draft detail overlay - full screen on mobile */
+  .draft-detail-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 3000;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Approval actions - stacked at bottom on mobile */
+  .draft-detail-actions {
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 1rem;
+    background: white;
+    border-top: 1px solid #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    z-index: 10;
+  }
+
+  /* Approve button - large, green, high contrast */
+  .draft-btn-approve {
+    width: 100%;
+    min-height: 56px;
+    font-size: 1.125rem;
+    font-weight: 700;
+    background: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .draft-btn-approve:active {
+    background: #43a047;
+    transform: scale(0.98);
+  }
+
+  /* Reject button - large, red, high contrast */
+  .draft-btn-reject {
+    width: 100%;
+    min-height: 56px;
+    font-size: 1.125rem;
+    font-weight: 700;
+    background: #f44336;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .draft-btn-reject:active {
+    background: #e53935;
+    transform: scale(0.98);
+  }
+
+  /* Edit button - secondary style */
+  .draft-btn-edit {
+    width: 100%;
+    min-height: 48px;
+    font-size: 1rem;
+    font-weight: 600;
+    background: #1976d2;
+    color: white;
+    border: none;
+    border-radius: 12px;
+  }
+
+  /* Draft detail content - scrollable */
+  .draft-detail-content {
+    flex: 1;
+    padding: 1rem;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Close button - prominent in header */
+  .draft-detail-close {
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 1.5rem;
+    background: #f5f5f5;
+    border: none;
+    border-radius: 50%;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────
+   FILE BROWSER MOBILE (§21.6)
+   Read-only on phone, syntax highlighted, side-scrolling
+──────────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 767px) {
+  /* File browser - full width on mobile */
+  .file-browser,
+  .files-tab {
+    padding: 0;
+  }
+
+  /* File tree - compact on mobile */
+  .file-tree,
+  .tree-view {
+    font-size: 0.9375rem;
+  }
+
+  /* File items - larger tap targets on mobile */
+  .file-item,
+  .tree-item {
+    min-height: 44px;
+    padding: 0.625rem 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid #f0f0f0;
+    touch-action: manipulation;
+  }
+
+  /* File icons - larger on mobile */
+  .file-icon,
+  .tree-icon {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+  }
+
+  /* File names - truncate on mobile */
+  .file-name,
+  .tree-label {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Code viewer - side-scroll on mobile */
+  .code-viewer,
+  .CodeViewer {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.4;
+  }
+
+  .code-viewer pre,
+  .CodeViewer pre {
+    margin: 0;
+    white-space: pre;
+    min-width: 100%;
+  }
+
+  /* Syntax highlighting - optimized for mobile */
+  .code-viewer code,
+  .CodeViewer code {
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-size: 0.8125rem;
+  }
+
+  /* File action buttons - hide on mobile (read-only) */
+  .file-actions,
+  .tree-actions {
+    display: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────
+   GRACEFUL DEGRADATION FOR DESKTOP-ONLY FEATURES (§21.7)
+──────────────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 767px) {
+  /* Net-diff viewer - show message on mobile */
+  .nd-mobile-message {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 2rem;
+    text-align: center;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+    border-radius: 16px;
+    margin: 2rem 1rem;
+    min-height: 50vh;
+  }
+
+  .nd-mobile-icon {
+    font-size: 4rem;
+    margin-bottom: 1.5rem;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+  }
+
+  .nd-mobile-message h3 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0 0 1rem;
+    color: #333;
+  }
+
+  .nd-mobile-message p {
+    font-size: 1rem;
+    color: #666;
+    margin: 0;
+    line-height: 1.6;
+    max-width: 400px;
+  }
+
+  /* Hide complex visualizations on mobile */
+  .bead-graph,
+  .fleet-map,
+  .dashboard-chart,
+  .timeline-chart {
+    display: none;
+  }
+
+  /* Show simplified summary instead */
+  .bead-graph-mobile-summary,
+  .fleet-map-mobile-summary,
+  .dashboard-mobile-summary {
+    display: block;
+    padding: 1rem;
+    background: #f9f9f9;
+    border-radius: 8px;
+    text-align: center;
+  }
+
+  /* Multi-project dashboards - compact summary only */
+  .cross-project-dashboard {
+    padding: 0.75rem;
+  }
+
+  .dashboard-charts {
+    display: none;
+  }
+
+  .dashboard-summary {
+    display: block;
+  }
+
+  /* Reflection Ledger - list only on mobile */
+  .reflection-ledger-editor {
+    display: none;
+  }
+
+  .reflection-ledger-list {
+    display: block;
+  }
+
+  .reflection-ledger-edit-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: #e3f2fd;
+    border-radius: 8px;
+    margin-top: 1rem;
+    font-size: 0.875rem;
+    color: #1976d2;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────
+   TABLET STYLES (768px - 1279px)
+──────────────────────────────────────────────────────────────────────────────── */
+
+@media (min-width: 768px) and (max-width: 1279px) {
+  /* App container */
+  .app {
+    padding: 1.5rem;
+  }
+
+  /* Cards - 2 column grid on tablet */
+  .worker-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Header nav - wrap on tablet */
+  .header-nav {
+    flex-wrap: wrap;
+  }
+
+  /* Stitch cards - wider on tablet */
+  .stitch-card {
+    max-width: 100%;
+  }
+
+  /* Agent chat - side panel on tablet */
+  .agent-chat-pane {
+    position: fixed;
+    top: 60px;
+    right: 0;
+    width: 400px;
+    height: calc(100vh - 60px);
+    border-left: 1px solid #e0e0e0;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────
+   ACCESSIBILITY - TOUCH TARGETS (All breakpoints)
+──────────────────────────────────────────────────────────────────────────────── */
+
+/* Ensure minimum touch targets across all devices */
+@media (hover: none) and (pointer: coarse) {
+  /* Touch devices - ensure 44x44px minimum tap targets */
+  button,
+  a,
+  input[type="checkbox"],
+  input[type="radio"],
+  select,
+  [role="button"],
+  .clickable {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Increase spacing between interactive elements */
+  .stitches-filters > *,
+  .stitches-stats > * {
+    margin: 0.25rem;
+  }
+
+  /* Prevent accidental zoom on focus */
+  input[type="text"],
+  input[type="email"],
+  input[type="search"],
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────
+   ORIENTATION SPECIFIC
+──────────────────────────────────────────────────────────────────────────────── */
+
+/* Phone landscape (typically 700px height) */
+@media (max-width: 767px) and (orientation: landscape) {
+  /* Dictation widget - compact in landscape */
+  .dictation-widget {
+    padding: 0.5rem;
+  }
+
+  .dictation-mic-icon {
+    font-size: 1.25rem;
+  }
+
+  /* Agent chat - maximize space in landscape */
+  .acp-header {
+    padding: 0.5rem;
+  }
+
+  .acp-input-area {
+    padding: 0.5rem;
+  }
+
+  /* Hide scope bar in landscape to save space */
+  .acp-scope-bar {
+    display: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────
+   UTILITY CLASSES
+──────────────────────────────────────────────────────────────────────────────── */
+
+/* Mobile-only visibility */
+.mobile-only {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .mobile-only {
+    display: block;
+  }
+
+  .desktop-only {
+    display: none !important;
+  }
+}
+
+/* Touch-specific optimizations */
+@media (hover: none) and (pointer: coarse) {
+  .touch-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .touch-scroll::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Safe area support for notched devices */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .dictation-widget,
+  .acp-input-area,
+  .draft-detail-actions {
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  }
+
+  .agent-chat-pane {
+    height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, TouchEvent } from 'react';
 import { marked } from 'marked';
 
 interface MorningBrief {
@@ -56,6 +56,44 @@ function getStatusBadge(status: string): { label: string; className: string } {
   }
 }
 
+// Swipe gesture hook for mobile (§21.1)
+function useSwipeGestures(onSwipeLeft?: () => void, onSwipeRight?: () => void) {
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleTouchStart = useCallback((e: TouchEvent) => {
+    touchStartRef.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+    };
+  }, []);
+
+  const handleTouchEnd = useCallback((e: TouchEvent) => {
+    if (!touchStartRef.current) return;
+
+    const touchEnd = {
+      x: e.changedTouches[0].clientX,
+      y: e.changedTouches[0].clientY,
+    };
+
+    const deltaX = touchEnd.x - touchStartRef.current.x;
+    const deltaY = Math.abs(touchEnd.y - touchStartRef.current.y);
+
+    // Only trigger if horizontal swipe and vertical movement is minimal
+    const minSwipeDistance = 50;
+    if (Math.abs(deltaX) > minSwipeDistance && deltaY < 50) {
+      if (deltaX > 0 && onSwipeRight) {
+        onSwipeRight();
+      } else if (deltaX < 0 && onSwipeLeft) {
+        onSwipeLeft();
+      }
+    }
+
+    touchStartRef.current = null;
+  }, [onSwipeLeft, onSwipeRight]);
+
+  return { handleTouchStart, handleTouchEnd };
+}
+
 export default function MorningBriefTab() {
   const [briefs, setBriefs] = useState<MorningBrief[]>([]);
   const [latestBrief, setLatestBrief] = useState<MorningBrief | null>(null);
@@ -63,6 +101,25 @@ export default function MorningBriefTab() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedBrief, setExpandedBrief] = useState<string | null>(null);
+  const [currentCardIndex, setCurrentCardIndex] = useState(0);
+
+  // Mobile swipe gestures for card navigation (§21.1)
+  const { handleTouchStart, handleTouchEnd } = useSwipeGestures(
+    // Swipe left: next card
+    () => {
+      if (currentCardIndex < briefs.length - 1) {
+        setCurrentCardIndex(currentCardIndex + 1);
+        setExpandedBrief(briefs[currentCardIndex + 1]?.id ?? null);
+      }
+    },
+    // Swipe right: previous card
+    () => {
+      if (currentCardIndex > 0) {
+        setCurrentCardIndex(currentCardIndex - 1);
+        setExpandedBrief(briefs[currentCardIndex - 1]?.id ?? null);
+      }
+    }
+  );
 
   const fetchBriefs = useCallback(async () => {
     try {
@@ -191,6 +248,12 @@ export default function MorningBriefTab() {
     );
   }
 
+  // Mobile card view: show only current card
+  const isMobileView = window.innerWidth < 768;
+  const displayBriefs = isMobileView && briefs.length > 0
+    ? [briefs[currentCardIndex]]
+    : briefs;
+
   return (
     <div className="p-4">
       <div className="flex items-center justify-between mb-6">
@@ -222,66 +285,98 @@ export default function MorningBriefTab() {
 
       {latestBrief && (
         <div className="space-y-4">
-          {/* Latest Brief */}
-          <div className="border rounded-lg overflow-hidden">
-            <div className="bg-gray-50 px-4 py-3 border-b flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <h3 className="font-semibold">Latest Brief</h3>
-                <span className={`badge ${getStatusBadge(latestBrief.status).className}`}>
-                  {getStatusBadge(latestBrief.status).label}
-                </span>
-                <span className="text-sm text-gray-500">
-                  {formatTimeAgo(latestBrief.generated_at)}
-                </span>
+          {/* Mobile card navigation indicators */}
+          {isMobileView && briefs.length > 1 && (
+            <div className="mobile-brief-nav flex items-center justify-between text-sm text-gray-500 mb-2">
+              <span>Brief {currentCardIndex + 1} of {briefs.length}</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCurrentCardIndex(Math.max(0, currentCardIndex - 1))}
+                  disabled={currentCardIndex === 0}
+                  className="px-3 py-1 rounded bg-gray-100 disabled:opacity-50"
+                >
+                  ← Prev
+                </button>
+                <button
+                  onClick={() => setCurrentCardIndex(Math.min(briefs.length - 1, currentCardIndex + 1))}
+                  disabled={currentCardIndex === briefs.length - 1}
+                  className="px-3 py-1 rounded bg-gray-100 disabled:opacity-50"
+                >
+                  Next →
+                </button>
               </div>
-              {latestBrief.status === 'complete' && latestBrief.draft_ids.length > 0 && (
-                <span className="text-sm text-gray-500">
-                  {latestBrief.draft_ids.length} draft{latestBrief.draft_ids.length !== 1 ? 's' : ''} created
-                </span>
-              )}
             </div>
-            <div className="p-4">
-              {latestBrief.status === 'running' && (
-                <div className="flex items-center justify-center py-8">
-                  <div className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-                    <span className="text-gray-600">Generating morning brief...</span>
-                  </div>
-                </div>
-              )}
-              {latestBrief.status === 'failed' && (
-                <div className="text-red-600">
-                  <p className="font-semibold">Failed to generate morning brief</p>
-                  {latestBrief.error && <p className="text-sm mt-1">{latestBrief.error}</p>}
-                </div>
-              )}
-              {latestBrief.status === 'complete' && (
-                <>
-                  <div className="mb-4">
-                    <h4 className="text-lg font-semibold mb-2">{latestBrief.headline}</h4>
-                    <p className="text-sm text-gray-500 mb-4">
-                      {formatDate(latestBrief.generated_at)}
-                    </p>
-                    <div
-                      className="prose prose-sm max-w-none"
-                      dangerouslySetInnerHTML={renderMarkdown(latestBrief.markdown_content)}
-                    />
-                  </div>
-                  {latestBrief.draft_ids.length > 0 && (
-                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
-                      <p className="text-sm font-medium text-blue-800">
-                        {latestBrief.draft_ids.length} draft stitch{latestBrief.draft_ids.length !== 1 ? 'es' : ''} created — check the Drafts tab to review
-                      </p>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
+          )}
 
-          {/* History */}
-          {briefs.length > 1 && (
-            <div className="border rounded-lg overflow-hidden">
+          {/* Brief cards with swipe gestures (§21.1) */}
+          {displayBriefs.map((brief) => (
+            <div
+              key={brief.id}
+              className="border rounded-lg overflow-hidden morning-brief-card"
+              onTouchStart={handleTouchStart as any}
+              onTouchEnd={handleTouchEnd as any}
+            >
+              <div className="bg-gray-50 px-4 py-3 border-b flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <h3 className="font-semibold">
+                    {brief.id === latestBrief.id ? 'Latest Brief' : `Brief ${briefs.indexOf(brief) + 1}`}
+                  </h3>
+                  <span className={`badge ${getStatusBadge(brief.status).className}`}>
+                    {getStatusBadge(brief.status).label}
+                  </span>
+                  <span className="text-sm text-gray-500">
+                    {formatTimeAgo(brief.generated_at)}
+                  </span>
+                </div>
+                {brief.status === 'complete' && brief.draft_ids.length > 0 && (
+                  <span className="text-sm text-gray-500">
+                    {brief.draft_ids.length} draft{brief.draft_ids.length !== 1 ? 's' : ''} created
+                  </span>
+                )}
+              </div>
+              <div className="p-4">
+                {brief.status === 'running' && (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+                      <span className="text-gray-600">Generating morning brief...</span>
+                    </div>
+                  </div>
+                )}
+                {brief.status === 'failed' && (
+                  <div className="text-red-600">
+                    <p className="font-semibold">Failed to generate morning brief</p>
+                    {brief.error && <p className="text-sm mt-1">{brief.error}</p>}
+                  </div>
+                )}
+                {brief.status === 'complete' && (
+                  <>
+                    <div className="mb-4">
+                      <h4 className="text-lg font-semibold mb-2 morning-brief-headline">{brief.headline}</h4>
+                      <p className="text-sm text-gray-500 mb-4">
+                        {formatDate(brief.generated_at)}
+                      </p>
+                      <div
+                        className="prose prose-sm max-w-none morning-brief-content"
+                        dangerouslySetInnerHTML={renderMarkdown(brief.markdown_content)}
+                      />
+                    </div>
+                    {brief.draft_ids.length > 0 && (
+                      <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                        <p className="text-sm font-medium text-blue-800">
+                          {brief.draft_ids.length} draft stitch{brief.draft_ids.length !== 1 ? 'es' : ''} created — check the Drafts tab to review
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {/* Desktop-only history view */}
+          {!isMobileView && briefs.length > 1 && (
+            <div className="border rounded-lg overflow-hidden desktop-only">
               <div className="bg-gray-50 px-4 py-3 border-b">
                 <h3 className="font-semibold">History</h3>
               </div>

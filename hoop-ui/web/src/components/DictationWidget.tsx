@@ -134,8 +134,31 @@ export function DictationWidget() {
   const [hotkey, setHotkeyAtom] = useAtom(dictationHotkeyAtom);
   const [showSettings, setShowSettings] = useState(false);
   const [binding, setBinding] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   const { phase, duration, error, analyser, clearError } = useDictationRecorder(projectName);
+
+  // Detect mobile device (§21.2)
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768 || ('ontouchstart' in window));
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Haptic feedback for recording state changes (mobile only) - enhanced with stronger feedback
+  useEffect(() => {
+    if ('vibrate' in navigator && phase === 'recording' && isMobile) {
+      // Double vibration pattern when recording starts - more noticeable
+      navigator.vibrate([50, 50, 50]);
+    }
+    if ('vibrate' in navigator && phase === 'idle' && isMobile) {
+      // Single short vibration when recording stops
+      navigator.vibrate(30);
+    }
+  }, [phase, isMobile]);
 
   const handleHotkeyChange = useCallback(
     (hk: DictationHotkey) => {
@@ -176,7 +199,9 @@ export function DictationWidget() {
         <span className="dictation-rec-dot" aria-label="Recording" />
         <span className="dictation-timer">{formatDuration(duration)}</span>
         {analyser && <Oscilloscope analyser={analyser} />}
-        <span className="dictation-stop-hint">Release {formatHotkey(hotkey)} to stop</span>
+        <span className="dictation-stop-hint">
+          {isMobile ? 'Tap mic button to stop' : `Release ${formatHotkey(hotkey)} to stop`}
+        </span>
       </div>
     );
   }
@@ -213,15 +238,22 @@ export function DictationWidget() {
         )
       ) : (
         <>
-          <span className="dictation-mic-icon" aria-hidden="true">🎤</span>
-          <span className="dictation-hotkey-label">{formatHotkey(hotkey)}</span>
-          {projectName && (
+          <span
+            className={`dictation-mic-icon${isMobile ? ' dictation-mic-icon--mobile' : ''}`}
+            aria-hidden="true"
+          >
+            🎤
+          </span>
+          {!isMobile && (
+            <span className="dictation-hotkey-label">{formatHotkey(hotkey)}</span>
+          )}
+          {projectName && !isMobile && (
             <span className="dictation-project-name" title={projectName}>
               {projectName}
             </span>
           )}
           <button
-            className="dictation-gear-btn"
+            className={`dictation-gear-btn${isMobile ? ' dictation-gear-btn--mobile' : ''}`}
             onClick={() => setShowSettings(true)}
             title="Dictation settings"
             aria-label="Dictation settings"
