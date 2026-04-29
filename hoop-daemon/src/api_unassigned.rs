@@ -11,10 +11,10 @@
 //!
 //! §5.4 Session tailer filtering
 
-use crate::sessions::{SessionAdapter, AiderAdapter, ClaudeAdapter, CodexAdapter, GeminiAdapter, OpenCodeAdapter};
+use crate::sessions::SessionAdapter;
 use anyhow::{Context, Result};
 use axum::{
-    extract::{Path, State},
+    extract::{Path as AxumPath, State},
     http::StatusCode,
     routing::{get, post},
     Json, Router,
@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::io::BufWriter;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::broadcast;
@@ -377,7 +377,7 @@ async fn list_unassigned(
 #[axum::debug_handler]
 async fn assign_session(
     State(state): State<DaemonState>,
-    Path(id): Path<String>,
+    AxumPath(id): AxumPath<String>,
     Json(req): Json<AssignRequest>,
 ) -> Result<Json<SuccessResponse>, (StatusCode, String)> {
     let Some(tracker) = state.unassigned_tracker.as_ref() else {
@@ -401,7 +401,7 @@ async fn assign_session(
 #[axum::debug_handler]
 async fn ignore_session(
     State(state): State<DaemonState>,
-    Path(id): Path<String>,
+    AxumPath(id): AxumPath<String>,
 ) -> Result<Json<SuccessResponse>, (StatusCode, String)> {
     let Some(tracker) = state.unassigned_tracker.as_ref() else {
         return Err((StatusCode::INTERNAL_SERVER_ERROR, "Tracker not available".to_string()));
