@@ -958,4 +958,67 @@ mod tests {
         let p50 = percentile_at(&data, 0.5, |&x| x);
         assert_eq!(p50, 0.0);
     }
+
+    #[test]
+    fn test_bucket_id_stability() {
+        // Same features should produce the same bucket key
+        let bucket1 = BucketId::from_features(
+            "Fix authentication bug",
+            100,
+            &["bug".to_string(), "auth".to_string()],
+            0,
+        );
+
+        let bucket2 = BucketId::from_features(
+            "Fix authentication bug",
+            100,
+            &["bug".to_string(), "auth".to_string()],
+            0,
+        );
+
+        assert_eq!(bucket1.to_key(), bucket2.to_key());
+
+        // Different features should produce different bucket keys
+        let bucket3 = BucketId::from_features(
+            "Fix authentication bug",
+            200, // Different body length
+            &["bug".to_string(), "auth".to_string()],
+            0,
+        );
+
+        assert_ne!(bucket1.to_key(), bucket3.to_key());
+    }
+
+    #[test]
+    fn test_labels_case_insensitive() {
+        // Labels should be case-insensitive (lowercased for hashing)
+        let bucket1 = BucketId::from_features(
+            "Test",
+            50,
+            &["BUG".to_string(), "Auth".to_string()],
+            0,
+        );
+
+        let bucket2 = BucketId::from_features(
+            "Test",
+            50,
+            &["bug".to_string(), "auth".to_string()],
+            0,
+        );
+
+        assert_eq!(bucket1.labels_hash, bucket2.labels_hash);
+        assert_eq!(bucket1.to_key(), bucket2.to_key());
+    }
+
+    #[test]
+    fn test_min_samples_for_prediction() {
+        // Verify the constant is set correctly
+        assert_eq!(MIN_SAMPLES_FOR_PREDICTION, 3);
+    }
+
+    #[test]
+    fn test_title_token_bucket_size() {
+        // Verify the constant is set correctly
+        assert_eq!(TITLE_TOKEN_BUCKET_SIZE, 5);
+    }
 }
