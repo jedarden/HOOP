@@ -356,6 +356,83 @@ pub fn default_risk_patterns() -> Vec<RiskPattern> {
             severity: RiskSeverity::Medium,
             category: RiskCategory::CodeQuality,
         },
+        RiskPattern {
+            id: "secrets_in_attachment".to_string(),
+            name: "Secrets in Attachment".to_string(),
+            description: "Attachments may contain sensitive credentials, API keys, or secrets that should be redacted".to_string(),
+            keywords: vec![
+                "attachment".to_string(),
+                "file".to_string(),
+                "upload".to_string(),
+                "config".to_string(),
+                "env".to_string(),
+                ".env".to_string(),
+                "secret".to_string(),
+                "key".to_string(),
+                "credential".to_string(),
+                "password".to_string(),
+                "token".to_string(),
+            ],
+            label_keywords: vec!["attachment".to_string(), "config".to_string()],
+            fix_recommendation: "Scan attachments for secrets before processing. Use redaction service to remove sensitive data.".to_string(),
+            severity: RiskSeverity::Critical,
+            category: RiskCategory::Security,
+        },
+        RiskPattern {
+            id: "cross_workspace_dep".to_string(),
+            name: "Cross-Workspace Dependency".to_string(),
+            description: "Bead depends on code or state from a different workspace/project".to_string(),
+            keywords: vec![
+                "cross".to_string(),
+                "workspace".to_string(),
+                "project".to_string(),
+                "dependency".to_string(),
+                "import".to_string(),
+                "external".to_string(),
+                "upstream".to_string(),
+                "downstream".to_string(),
+            ],
+            label_keywords: vec!["dependency".to_string(), "integration".to_string()],
+            fix_recommendation: "Verify the target workspace is registered. Coordinate beads across workspaces or create a shared library.".to_string(),
+            severity: RiskSeverity::High,
+            category: RiskCategory::Integration,
+        },
+        RiskPattern {
+            id: "infinite_review_loop".to_string(),
+            name: "Infinite Review Loop".to_string(),
+            description: "Agent enters a cycle of repeatedly requesting and performing reviews without making progress".to_string(),
+            keywords: vec![
+                "review".to_string(),
+                "again".to_string(),
+                "recheck".to_string(),
+                "iterate".to_string(),
+                "loop".to_string(),
+                "stuck".to_string(),
+                "feedback".to_string(),
+            ],
+            label_keywords: vec!["review".to_string()],
+            fix_recommendation: "Add a maximum iteration limit. Break review into phases with explicit acceptance criteria.".to_string(),
+            severity: RiskSeverity::High,
+            category: RiskCategory::Performance,
+        },
+        RiskPattern {
+            id: "runaway_tool_loop".to_string(),
+            name: "Runaway Tool Loop".to_string(),
+            description: "Agent repeatedly calls the same tool with similar arguments without making progress".to_string(),
+            keywords: vec![
+                "loop".to_string(),
+                "retry".to_string(),
+                "again".to_string(),
+                "repeated".to_string(),
+                "stuck".to_string(),
+                "tool".to_string(),
+                "function".to_string(),
+            ],
+            label_keywords: vec!["loop".to_string(), "retry".to_string()],
+            fix_recommendation: "Implement tool call deduplication and maximum retry limits. Detect and break repetitive call patterns.".to_string(),
+            severity: RiskSeverity::Critical,
+            category: RiskCategory::Performance,
+        },
     ]
 }
 
@@ -459,5 +536,124 @@ mod tests {
         assert!(patterns
             .iter()
             .any(|p| p.id == "race_condition_concurrency"));
+    }
+
+    // Synthetic tests for newly seeded patterns
+
+    #[test]
+    fn test_secrets_in_attachment_pattern_triggered() {
+        let lib = FixLineageLibrary::from_patterns(default_risk_patterns());
+
+        // Test with attachment-related keywords
+        let matches = lib.match_draft("Upload config file with API keys", None, &["attachment".to_string()]);
+        let secret_match = matches
+            .iter()
+            .find(|m| m.pattern.id == "secrets_in_attachment");
+        assert!(secret_match.is_some(), "secrets_in_attachment pattern should trigger on attachment + config");
+        assert!(secret_match.unwrap().confidence > 0.0);
+    }
+
+    #[test]
+    fn test_secrets_in_attachment_with_env_keywords() {
+        let lib = FixLineageLibrary::from_patterns(default_risk_patterns());
+
+        // Test with .env file reference
+        let matches = lib.match_draft("Fix .env file upload issue", Some("Need to upload the .env file"), &[]);
+        let secret_match = matches
+            .iter()
+            .find(|m| m.pattern.id == "secrets_in_attachment");
+        assert!(secret_match.is_some(), "secrets_in_attachment pattern should trigger on .env keyword");
+    }
+
+    #[test]
+    fn test_cross_workspace_dep_pattern_triggered() {
+        let lib = FixLineageLibrary::from_patterns(default_risk_patterns());
+
+        // Test with cross-workspace keywords
+        let matches = lib.match_draft("Add cross-workspace dependency on utils", None, &["dependency".to_string()]);
+        let dep_match = matches
+            .iter()
+            .find(|m| m.pattern.id == "cross_workspace_dep");
+        assert!(dep_match.is_some(), "cross_workspace_dep pattern should trigger");
+        assert!(dep_match.unwrap().confidence > 0.0);
+    }
+
+    #[test]
+    fn test_cross_workspace_upstream_reference() {
+        let lib = FixLineageLibrary::from_patterns(default_risk_patterns());
+
+        let matches = lib.match_draft("Import from upstream project workspace", None, &[]);
+        let dep_match = matches
+            .iter()
+            .find(|m| m.pattern.id == "cross_workspace_dep");
+        assert!(dep_match.is_some(), "cross_workspace_dep should trigger on upstream reference");
+    }
+
+    #[test]
+    fn test_infinite_review_loop_pattern_triggered() {
+        let lib = FixLineageLibrary::from_patterns(default_risk_patterns());
+
+        // Test with review + iteration keywords
+        let matches = lib.match_draft("Review code again and iterate", Some("Need to recheck the implementation"), &["review".to_string()]);
+        let loop_match = matches
+            .iter()
+            .find(|m| m.pattern.id == "infinite_review_loop");
+        assert!(loop_match.is_some(), "infinite_review_loop pattern should trigger on review + again");
+    }
+
+    #[test]
+    fn test_infinite_review_with_feedback_keywords() {
+        let lib = FixLineageLibrary::from_patterns(default_risk_patterns());
+
+        let matches = lib.match_draft("Stuck in feedback loop", None, &[]);
+        let loop_match = matches
+            .iter()
+            .find(|m| m.pattern.id == "infinite_review_loop");
+        assert!(loop_match.is_some(), "infinite_review_loop should trigger on loop keyword");
+    }
+
+    #[test]
+    fn test_runaway_tool_loop_pattern_triggered() {
+        let lib = FixLineageLibrary::from_patterns(default_risk_patterns());
+
+        // Test with tool + retry keywords
+        let matches = lib.match_draft("Tool function stuck in retry loop", None, &["retry".to_string()]);
+        let tool_match = matches
+            .iter()
+            .find(|m| m.pattern.id == "runaway_tool_loop");
+        assert!(tool_match.is_some(), "runaway_tool_loop pattern should trigger on tool + retry");
+    }
+
+    #[test]
+    fn test_runaway_tool_with_repeated_keyword() {
+        let lib = FixLineageLibrary::from_patterns(default_risk_patterns());
+
+        let matches = lib.match_draft("Repeated tool calls stuck again", None, &[]);
+        let tool_match = matches
+            .iter()
+            .find(|m| m.pattern.id == "runaway_tool_loop");
+        assert!(tool_match.is_some(), "runaway_tool_loop should trigger on repeated + tool");
+    }
+
+    #[test]
+    fn test_all_new_patterns_have_critical_or_high_severity() {
+        let patterns = default_risk_patterns();
+
+        // Check that newly added patterns have appropriate severity
+        let secrets_pattern = patterns.iter().find(|p| p.id == "secrets_in_attachment");
+        assert!(secrets_pattern.is_some());
+        assert_eq!(secrets_pattern.unwrap().severity, RiskSeverity::Critical);
+
+        let tool_loop_pattern = patterns.iter().find(|p| p.id == "runaway_tool_loop");
+        assert!(tool_loop_pattern.is_some());
+        assert_eq!(tool_loop_pattern.unwrap().severity, RiskSeverity::Critical);
+
+        let cross_ws_pattern = patterns.iter().find(|p| p.id == "cross_workspace_dep");
+        assert!(cross_ws_pattern.is_some());
+        assert_eq!(cross_ws_pattern.unwrap().severity, RiskSeverity::High);
+
+        let review_loop_pattern = patterns.iter().find(|p| p.id == "infinite_review_loop");
+        assert!(review_loop_pattern.is_some());
+        assert_eq!(review_loop_pattern.unwrap().severity, RiskSeverity::High);
     }
 }

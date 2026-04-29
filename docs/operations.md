@@ -1478,3 +1478,123 @@ trivy fs --scanners vuln,secret .
 docker build -t hoop:test .
 trivy image hoop:test
 ```
+
+## Risk Pattern Management
+
+HOOP includes a risk pattern library that matches draft Stitches against known failure patterns and recommends fixes. This is part of the Fix Lineage system (§6 Phase 2 marquee #4).
+
+### Pattern storage
+
+Risk patterns are stored in `~/.hoop/risk_patterns.json`. On first run, HOOP seeds default patterns if the file doesn't exist.
+
+### Seeding default patterns
+
+```bash
+# Seed default risk patterns (first-run setup)
+hoop risk-patterns seed
+
+# Force re-seed (overwrites existing patterns)
+hoop risk-patterns seed --force
+```
+
+Default patterns include:
+
+| Pattern ID | Name | Severity | Category | Description |
+|------------|------|----------|----------|-------------|
+| `large_codegen_stack_overflow` | Large Codegen Stack Overflow | High | CodeQuality | Large-scale code generation tasks often hit token limits |
+| `secrets_in_attachment` | Secrets in Attachment | Critical | Security | Attachments may contain sensitive credentials |
+| `cross_workspace_dep` | Cross-Workspace Dependency | High | Integration | Bead depends on code from a different workspace |
+| `infinite_review_loop` | Infinite Review Loop | High | Performance | Agent enters a cycle of repeated reviews |
+| `runaway_tool_loop` | Runaway Tool Loop | Critical | Performance | Agent repeatedly calls the same tool without progress |
+| `missing_test_coverage` | Missing Test Coverage | Medium | CodeQuality | New code without tests tends to break in production |
+| `race_condition_concurrency` | Race Condition / Concurrency Issue | Critical | Correctness | Concurrency bugs are notoriously difficult to reproduce |
+| `performance_regression` | Performance Regression | Medium | Performance | Changes that may impact performance need baseline measurement |
+| `breaking_change` | Breaking Change | High | Integration | API or contract changes can break downstream consumers |
+| `database_migration` | Database Migration Risk | High | Infrastructure | Schema changes have high blast radius and rollback complexity |
+| `dependency_update` | Dependency Update Risk | Medium | Integration | Dependency updates can introduce subtle breakage |
+| `file_overlap_conflict` | File Overlap Conflict | Medium | CodeQuality | Multiple beads touching the same files can cause conflicts |
+
+### Listing patterns
+
+```bash
+# List all risk patterns (human-readable)
+hoop risk-patterns list
+
+# List as JSON
+hoop risk-patterns list --json
+```
+
+### Adding custom patterns
+
+```bash
+hoop risk-patterns add \
+  --id custom_pattern_id \
+  --name "Custom Pattern Name" \
+  --description "Description of the failure pattern" \
+  --keywords "keyword1,keyword2,keyword3" \
+  --label-keywords "label1,label2" \
+  --fix-recommendation "Recommended fix approach" \
+  --severity high \
+  --category correctness
+```
+
+Severity options: `low`, `medium`, `high`, `critical`
+
+Category options: `performance`, `correctness`, `security`, `integration`, `code_quality`, `infrastructure`
+
+### Pattern schema
+
+Each risk pattern has the following structure:
+
+```json
+{
+  "id": "unique_pattern_identifier",
+  "name": "Human-readable pattern name",
+  "description": "Description of the failure pattern",
+  "keywords": ["keyword1", "keyword2"],
+  "label_keywords": ["label1", "label2"],
+  "fix_recommendation": "Recommended fix approach",
+  "severity": "high",
+  "category": "security"
+}
+```
+
+### Integration with other features
+
+Risk patterns are automatically integrated with:
+
+- **What-Will-This-Take preview** (`hoop-ttb.5.8`): Patterns are matched against draft titles and bodies, showing risk warnings before submission
+- **Cost-Anomaly alerts** (`hoop-ttb.3.41`): When a Stitch's cost exceeds 2σ of similar historical Stitches, matching patterns are surfaced with recommended fixes
+
+### Pattern matching algorithm
+
+The pattern matcher uses:
+- **Keyword matching**: Case-insensitive search in title and body (0.3 confidence per keyword)
+- **Label matching**: Case-insensitive search in labels (0.2 confidence per label)
+- **Confidence scoring**: Capped at 1.0, sorted by highest confidence first
+
+### Example workflow
+
+```bash
+# 1. Seed default patterns on first run
+hoop risk-patterns seed
+
+# 2. List available patterns
+hoop risk-patterns list
+
+# 3. Add a custom pattern for your project
+hoop risk-patterns add \
+  --id legacy_refactor_risk \
+  --name "Legacy Refactor Risk" \
+  --description "Refactoring legacy code modules often uncovers hidden dependencies" \
+  --keywords "refactor,legacy,old,rewrite" \
+  --label-keywords "refactor,legacy" \
+  --fix-recommendation "Map all dependencies before refactoring. Add comprehensive tests." \
+  --severity high \
+  --category integration
+
+# 4. Preview a bead to see pattern matches
+curl "http://localhost:3000/api/p/myproject/beads/preview?title=Refactor+legacy+auth+module"
+
+# 5. Pattern matches appear in the preview response under risk_patterns
+```
