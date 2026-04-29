@@ -18,6 +18,20 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
     {
+      name: 'desktop-1920',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1920, height: 1080 },
+      },
+    },
+    {
+      name: 'pixel6-mobile',
+      use: {
+        ...devices['Pixel 5'],
+        viewport: { width: 412, height: 915 },
+      },
+    },
+    {
       name: 'mobile-375',
       use: {
         ...devices['iPhone 12'],

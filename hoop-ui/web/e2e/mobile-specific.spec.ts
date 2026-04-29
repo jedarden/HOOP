@@ -206,6 +206,208 @@ test.describe('Mobile Specific - Morning Brief Cards', () => {
       await expect(whatsNewBanner.locator('.whats-new-message')).toBeAttached();
     }
   });
+
+  test('should display Morning Brief view when integrated', async ({ page }) => {
+    // Note: Morning Brief is not yet integrated into the UI routing
+    // This test is written for when the feature is connected
+    test.skip(true, 'Morning Brief feature not yet integrated into app routing');
+
+    await page.goto('/#/morning-brief');
+
+    // Morning Brief container should be visible
+    await expect(page.locator('.morning-brief-tab, .p-4')).toBeVisible();
+
+    // Generate button should be visible
+    await expect(page.locator('text=Generate Brief').or(page.locator('button:has-text("Generate")'))).toBeVisible();
+  });
+
+  test('should display card navigation on mobile when multiple briefs exist', async ({ page }) => {
+    test.skip(true, 'Morning Brief feature not yet integrated into app routing');
+
+    await page.goto('/#/morning-brief');
+
+    // Navigation indicators should be visible on mobile per §21.1
+    const navIndicator = page.locator('.mobile-brief-nav');
+    if (await navIndicator.count() > 0) {
+      await expect(navIndicator).toBeVisible();
+
+      // Should show current brief position
+      await expect(navIndicator.locator('text=/Brief \\d+ of \\d+/')).toBeVisible();
+
+      // Prev/Next buttons should be present
+      await expect(navIndicator.locator('button:has-text("Prev")')).toBeVisible();
+      await expect(navIndicator.locator('button:has-text("Next")')).toBeVisible();
+    }
+  });
+
+  test('should support swipe gestures for card navigation per §21.1', async ({ page }) => {
+    test.skip(true, 'Morning Brief feature not yet integrated into app routing');
+
+    await page.goto('/#/morning-brief');
+
+    // Find a brief card
+    const briefCard = page.locator('.morning-brief-card').first();
+    await expect(briefCard).toBeVisible();
+
+    // Verify card has touch action for swipe gestures
+    const touchAction = await briefCard.evaluate(el => {
+      return window.getComputedStyle(el).touchAction;
+    });
+
+    expect(touchAction).toContain('pan-y');
+
+    // Swipe left (next card) - simulate swipe gesture
+    const cardBox = await briefCard.boundingBox();
+    if (cardBox) {
+      const startX = cardBox.x + cardBox.width / 2;
+      const startY = cardBox.y + cardBox.height / 2;
+      const endX = startX - 100; // Swipe left
+
+      await page.touchscreen.tap(startX, startY);
+      await page.waitForTimeout(100);
+
+      // Touch-based swipe simulation
+      await page.touchscreen.touchStart({
+        x: startX,
+        y: startY,
+      });
+      await page.waitForTimeout(50);
+      await page.touchscreen.touchMove({
+        x: endX,
+        y: startY,
+      });
+      await page.waitForTimeout(50);
+      await page.touchscreen.touchEnd();
+
+      // Wait for potential navigation
+      await page.waitForTimeout(500);
+    }
+  });
+
+  test('should display brief cards with proper mobile styling', async ({ page }) => {
+    test.skip(true, 'Morning Brief feature not yet integrated into app routing');
+
+    await page.goto('/#/morning-brief');
+
+    const briefCard = page.locator('.morning-brief-card').first();
+
+    // Check card styling for mobile per §21.1
+    const cardStyles = await briefCard.evaluate(el => {
+      const styles = window.getComputedStyle(el);
+      return {
+        borderRadius: styles.borderRadius,
+        overflow: styles.overflow,
+        touchAction: styles.touchAction,
+      };
+    });
+
+    expect(cardStyles.borderRadius).toBeTruthy();
+    expect(cardStyles.overflow).toBe('hidden');
+    expect(cardStyles.touchAction).toContain('pan-y');
+  });
+
+  test('should display full-width brief cards on mobile', async ({ page }) => {
+    test.skip(true, 'Morning Brief feature not yet integrated into app routing');
+
+    await page.goto('/#/morning-brief');
+
+    const briefCard = page.locator('.morning-brief-card').first();
+    await expect(briefCard).toBeVisible();
+
+    // Verify card takes full width on mobile
+    const cardWidth = await briefCard.evaluate(el => {
+      const styles = window.getComputedStyle(el);
+      return {
+        width: styles.width,
+        maxWidth: styles.maxWidth,
+      };
+    });
+
+    // Should be full width on mobile
+    expect(cardWidth.width).toBe('100%');
+  });
+
+  test('should display status badges on brief cards', async ({ page }) => {
+    test.skip(true, 'Morning Brief feature not yet integrated into app routing');
+
+    await page.goto('/#/morning-brief');
+
+    // Status badges should be visible
+    const statusBadge = page.locator('.badge').first();
+    await expect(statusBadge).toBeVisible();
+
+    // Badge should have appropriate styling
+    const badgeStyles = await statusBadge.evaluate(el => {
+      const styles = window.getComputedStyle(el);
+      return {
+        fontSize: styles.fontSize,
+        padding: styles.padding,
+        borderRadius: styles.borderRadius,
+      };
+    });
+
+    // Compact badges on mobile per §21.1
+    expect(parseInt(badgeStyles.fontSize) || 0).toBeLessThan(16);
+    expect(badgeStyles.borderRadius).toBe('9999px');
+  });
+
+  test('should display brief content with scrollable markdown', async ({ page }) => {
+    test.skip(true, 'Morning Brief feature not yet integrated into app routing');
+
+    await page.goto('/#/morning-brief');
+
+    const briefContent = page.locator('.morning-brief-content, .prose').first();
+
+    if (await briefContent.count() > 0) {
+      // Content should be scrollable on mobile per §21.1
+      const contentStyles = await briefContent.evaluate(el => {
+        const styles = window.getComputedStyle(el);
+        return {
+          maxHeight: styles.maxHeight,
+          overflowY: styles.overflowY,
+          WebkitOverflowScrolling: styles.webkitOverflowScrolling,
+        };
+      });
+
+      expect(contentStyles.overflowY).toBe('auto');
+      expect(contentStyles.WebkitOverflowScrolling).toBe('touch');
+    }
+  });
+
+  test('should display Generate Brief button as full-width on mobile', async ({ page }) => {
+    test.skip(true, 'Morning Brief feature not yet integrated into app routing');
+
+    await page.goto('/#/morning-brief');
+
+    const generateBtn = page.locator('button:has-text("Generate"), button:has-text("Running")').first();
+    await expect(generateBtn).toBeVisible();
+
+    // Button should be full width on mobile
+    const btnStyles = await generateBtn.evaluate(el => {
+      const styles = window.getComputedStyle(el);
+      return {
+        width: styles.width,
+        minWidth: styles.minWidth,
+        minHeight: styles.minHeight,
+      };
+    });
+
+    expect(btnStyles.width === '100%' || parseInt(btnStyles.minWidth || '0') >= 300).toBeTruthy();
+    expect(parseInt(btnStyles.minHeight || '0')).toBeGreaterThanOrEqual(44);
+  });
+
+  test('should display loading state while generating brief', async ({ page }) => {
+    test.skip(true, 'Morning Brief feature not yet integrated into app routing');
+
+    await page.goto('/#/morning-brief');
+
+    // Trigger brief generation
+    const generateBtn = page.locator('button:has-text("Generate")').first();
+    await generateBtn.click();
+
+    // Should show loading state
+    await expect(page.locator('text=Running').or(page.locator('.animate-spin'))).toBeVisible();
+  });
 });
 
 test.describe('Mobile Specific - Navigation', () => {

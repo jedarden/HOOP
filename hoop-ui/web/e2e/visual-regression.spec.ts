@@ -479,3 +479,216 @@ test.describe('Visual Regression - Component Consistency', () => {
     expect(color).toBeTruthy();
   });
 });
+
+test.describe('Visual Regression - Mobile Dictation Widget (§21.2)', () => {
+  test('should match dictation widget idle state on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 412, height: 915 });
+    await page.goto('/');
+
+    await page.waitForLoadState('networkidle');
+
+    const dictationWidget = page.locator('.dictation-widget').first();
+    await expect(dictationWidget).toBeVisible();
+
+    await expect(dictationWidget).toHaveScreenshot('dictation-widget-idle-mobile.png', {
+      maxDiffPixels: 100,
+      threshold: VISUAL_THRESHOLDS.styling,
+    });
+  });
+
+  test('should match dictation widget settings panel on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 412, height: 915 });
+    await page.goto('/');
+
+    await page.waitForLoadState('networkidle');
+
+    const gearBtn = page.locator('.dictation-gear-btn--mobile, .dictation-gear-btn').first();
+    await gearBtn.click();
+
+    const settingsPanel = page.locator('.dictation-settings-panel');
+    await expect(settingsPanel).toBeVisible();
+
+    await expect(settingsPanel).toHaveScreenshot('dictation-settings-panel-mobile.png', {
+      maxDiffPixels: 150,
+      threshold: VISUAL_THRESHOLDS.styling,
+    });
+  });
+
+  test('should match dictation widget recording state on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 412, height: 915 });
+    await page.goto('/');
+
+    await page.waitForLoadState('networkidle');
+
+    // Trigger dictation
+    const hotkey = process.platform === 'darwin' ? 'Meta+Shift+d' : 'Control+Shift+d';
+    await page.keyboard.press(hotkey);
+    await page.waitForTimeout(500);
+
+    const recordingState = page.locator('.dictation-widget--recording');
+    const count = await recordingState.count();
+
+    if (count > 0 && await recordingState.first().isVisible()) {
+      await expect(recordingState.first()).toHaveScreenshot('dictation-widget-recording-mobile.png', {
+        maxDiffPixels: 200,
+        threshold: VISUAL_THRESHOLDS.layout,
+      });
+    } else {
+      test.skip(true, 'Recording state not visible');
+    }
+  });
+});
+
+test.describe('Visual Regression - Mobile Header Navigation', () => {
+  test('should match header navigation on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 412, height: 915 });
+    await page.goto('/');
+
+    await page.waitForLoadState('networkidle');
+
+    const header = page.locator('header').first();
+    await expect(header).toBeVisible();
+
+    await expect(header).toHaveScreenshot('header-navigation-mobile.png', {
+      maxDiffPixels: 100,
+      threshold: VISUAL_THRESHOLDS.styling,
+    });
+  });
+
+  test('should match mini header navigation on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 412, height: 915 });
+    await page.goto('/#/dashboard');
+
+    await page.waitForLoadState('networkidle');
+
+    const miniHeader = page.locator('.app-header-mini');
+    const count = await miniHeader.count();
+
+    if (count > 0) {
+      await expect(miniHeader.first()).toHaveScreenshot('mini-header-navigation-mobile.png', {
+        maxDiffPixels: 100,
+        threshold: VISUAL_THRESHOLDS.styling,
+      });
+    }
+  });
+});
+
+test.describe('Visual Regression - Mobile Cards', () => {
+  test('should match project card on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 412, height: 915 });
+    await page.goto('/');
+
+    await page.waitForSelector('.fleet-cards-grid', { timeout: 10000 });
+
+    const firstCard = page.locator('.project-card-fleet').first();
+    const cardCount = await firstCard.count();
+
+    if (cardCount > 0) {
+      await expect(firstCard.first()).toHaveScreenshot('project-card-mobile.png', {
+        maxDiffPixels: 150,
+        threshold: VISUAL_THRESHOLDS.styling,
+      });
+    } else {
+      test.skip(true, 'No project cards available');
+    }
+  });
+
+  test('should match stitch card on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 412, height: 915 });
+    await page.goto('/');
+
+    await page.waitForSelector('.fleet-cards-grid', { timeout: 10000 });
+
+    const firstCard = page.locator('.project-card-fleet').first();
+    const cardCount = await firstCard.count();
+
+    if (cardCount > 0) {
+      await firstCard.click();
+      await page.waitForSelector('.app-project-detail', { timeout: 5000 });
+
+      const stitchesTab = page.locator('button[role="tab"]', { hasText: 'Stitches' });
+      const tabCount = await stitchesTab.count();
+      if (tabCount > 0) {
+        await stitchesTab.first().click();
+        await page.waitForTimeout(500);
+
+        const stitchCard = page.locator('.stitch-card').first();
+        const stitchCount = await stitchCard.count();
+
+        if (stitchCount > 0) {
+          await expect(stitchCard.first()).toHaveScreenshot('stitch-card-mobile.png', {
+            maxDiffPixels: 150,
+            threshold: VISUAL_THRESHOLDS.styling,
+          });
+        }
+      }
+    }
+  });
+});
+
+test.describe('Visual Regression - Mobile Forms', () => {
+  test('should match agent chat input on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 412, height: 915 });
+    await page.goto('/#/fleet');
+
+    await page.waitForLoadState('networkidle');
+
+    const agentChat = page.locator('.agent-chat-pane');
+    const count = await agentChat.count();
+
+    if (count > 0) {
+      const inputArea = agentChat.locator('.acp-input-area');
+      const inputCount = await inputArea.count();
+
+      if (inputCount > 0) {
+        await expect(inputArea.first()).toHaveScreenshot('agent-chat-input-mobile.png', {
+          maxDiffPixels: 150,
+          threshold: VISUAL_THRESHOLDS.styling,
+        });
+      }
+    }
+  });
+});
+
+test.describe('Visual Regression - Mobile Orientation', () => {
+  test('should match overview page in landscape orientation', async ({ page }) => {
+    // Pixel 6 landscape
+    await page.setViewportSize({ width: 915, height: 412 });
+    await page.goto('/');
+
+    await page.waitForSelector('.fleet-cards-grid, .fleet-empty, .fleet-loading', { timeout: 10000 });
+    await page.waitForLoadState('networkidle');
+
+    await expect(page).toHaveScreenshot('overview-landscape.png', {
+      maxDiffPixels: 400,
+      threshold: VISUAL_THRESHOLDS.layout,
+    });
+  });
+});
+
+test.describe('Visual Regression - Safe Areas', () => {
+  test('should respect safe area insets on notched devices', async ({ page }) => {
+    await page.setViewportSize({ width: 412, height: 915 });
+
+    // Simulate safe area insets
+    await page.addInitScript(() => {
+      // Add a meta tag for safe area support
+      const meta = document.createElement('meta');
+      meta.name = 'viewport';
+      meta.content = 'viewport-fit=cover';
+      document.head.appendChild(meta);
+    });
+
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    const dictationWidget = page.locator('.dictation-widget').first();
+    await expect(dictationWidget).toBeVisible();
+
+    // Verify the widget is visible and properly positioned
+    await expect(dictationWidget).toHaveScreenshot('dictation-widget-safe-area.png', {
+      maxDiffPixels: 100,
+      threshold: VISUAL_THRESHOLDS.styling,
+    });
+  });
+});
