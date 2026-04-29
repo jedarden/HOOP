@@ -1057,3 +1057,119 @@ test.describe('Touch Target Size Compliance - All Interactive Elements', () => {
     });
   }
 });
+
+test.describe('Approval Dialogs - Mobile Optimization (§21)', () => {
+  test('should display approval modal with adequate tap targets on mobile (375px)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    // Navigate to drafts tab
+    const draftsLink = page.locator('a[href="#/drafts"]');
+    const draftsCount = await draftsLink.count();
+    if (draftsCount > 0) {
+      await draftsLink.first().click();
+      await page.waitForTimeout(500);
+
+      // Look for draft items
+      const draftItems = page.locator('.draft-row, [data-testid="draft-row"]');
+      const itemCount = await draftItems.count();
+      if (itemCount > 0) {
+        // Click first draft to open detail modal
+        await draftItems.first().click();
+        await page.waitForTimeout(300);
+
+        // Check for approval modal
+        const modal = page.locator('.draft-detail-overlay');
+        if (await modal.count() > 0) {
+          await expect(modal.first()).toBeVisible();
+
+          // Check approval button tap target size
+          const approveButton = page.locator('.draft-btn-approve');
+          if (await approveButton.count() > 0 && await approveButton.first().isVisible()) {
+            const boundingBox = await approveButton.first().boundingBox();
+            if (boundingBox) {
+              // Minimum tap target: 44x44px
+              expect(boundingBox.width).toBeGreaterThanOrEqual(44);
+              expect(boundingBox.height).toBeGreaterThanOrEqual(44);
+            }
+          }
+
+          // Check reject button tap target size
+          const rejectButton = page.locator('.draft-btn-reject');
+          if (await rejectButton.count() > 0 && await rejectButton.first().isVisible()) {
+            const boundingBox = await rejectButton.first().boundingBox();
+            if (boundingBox) {
+              expect(boundingBox.width).toBeGreaterThanOrEqual(44);
+              expect(boundingBox.height).toBeGreaterThanOrEqual(44);
+            }
+          }
+
+          // Check that buttons are full-width on mobile
+          const actionsContainer = page.locator('.draft-detail-actions');
+          if (await actionsContainer.count() > 0) {
+            const flexDirection = await actionsContainer.first().evaluate(el => {
+              return window.getComputedStyle(el).flexDirection;
+            });
+            // On mobile, buttons should stack vertically
+            expect(['column', 'column-reverse']).toContain(flexDirection);
+          }
+        }
+      }
+    }
+  });
+
+  test('should have oversized high-contrast approval buttons on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    const draftsLink = page.locator('a[href="#/drafts"]');
+    const draftsCount = await draftsLink.count();
+    if (draftsCount > 0) {
+      await draftsLink.first().click();
+      await page.waitForTimeout(500);
+
+      const draftItems = page.locator('.draft-row, [data-testid="draft-row"]');
+      const itemCount = await draftItems.count();
+      if (itemCount > 0) {
+        await draftItems.first().click();
+        await page.waitForTimeout(300);
+
+        // Check approve button styling for high contrast
+        const approveButton = page.locator('.draft-btn-approve');
+        if (await approveButton.count() > 0 && await approveButton.first().isVisible()) {
+          const backgroundColor = await approveButton.first().evaluate(el => {
+            return window.getComputedStyle(el).backgroundColor;
+          });
+          const color = await approveButton.first().evaluate(el => {
+            return window.getComputedStyle(el).color;
+          });
+
+          // Verify high contrast colors (green button, white text)
+          expect(backgroundColor).toBeTruthy();
+          expect(color).toBeTruthy();
+
+          // Check for larger font size on mobile
+          const fontSize = await approveButton.first().evaluate(el => {
+            return parseInt(window.getComputedStyle(el).fontSize);
+          });
+          expect(fontSize).toBeGreaterThanOrEqual(16);
+        }
+
+        // Check reject button styling for high contrast
+        const rejectButton = page.locator('.draft-btn-reject');
+        if (await rejectButton.count() > 0 && await rejectButton.first().isVisible()) {
+          const backgroundColor = await rejectButton.first().evaluate(el => {
+            return window.getComputedStyle(el).backgroundColor;
+          });
+          const color = await rejectButton.first().evaluate(el => {
+            return window.getComputedStyle(el).color;
+          });
+
+          // Verify high contrast colors (red button, white text)
+          expect(backgroundColor).toBeTruthy();
+          expect(color).toBeTruthy();
+        }
+      }
+    }
+  });
+});

@@ -14945,3 +14945,184 @@ body.wt-tour-active {
   background: #fff8f8;
 }
 
+/* ── Mobile UX Optimizations (§21) ───────────────────────────────────────────── */
+
+/* Draft approval modal - mobile tap targets and layout */
+@media (max-width: 700px) {
+  .draft-detail-panel {
+    width: 95%;
+    max-height: 95vh;
+  }
+
+  .draft-detail-actions {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .draft-btn-draft-action {
+    width: 100%;
+    padding: 12px 16px;
+    min-height: 48px;
+    font-size: 16px;
+    font-weight: 500;
+    text-align: center;
+  }
+
+  .draft-btn-approve {
+    background: #4caf50;
+    border-color: #388e3c;
+    color: white;
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .draft-btn-reject {
+    background: #f44336;
+    border-color: #d32f2f;
+    color: white;
+    font-size: 16px;
+    font-weight: 500;
+  }
+
+  .draft-rejection-input {
+    width: 100%;
+    min-height: 48px;
+    font-size: 16px;
+    padding: 12px;
+  }
+
+  .draft-detail-title {
+    font-size: 18px;
+    padding-right: 40px;
+  }
+
+  .draft-detail-header {
+    padding: 16px;
+  }
+
+  .draft-detail-body {
+    padding: 16px;
+  }
+
+  .draft-detail-meta {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+/* CrossProjectDashboard - mobile responsive */
+@media (max-width: 768px) {
+  .cpd-page {
+    padding: 16px;
+  }
+
+  .cpd-header {
+    margin-bottom: 16px;
+  }
+
+  .cpd-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .cpd-title-row h2 {
+    font-size: 20px;
+  }
+
+  .cpd-range-tabs {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .cpd-range-tab {
+    flex: 1;
+    min-width: 80px;
+    padding: 10px 12px;
+    font-size: 14px;
+    text-align: center;
+  }
+
+  .cpd-kpis {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .cpd-kpi {
+    padding: 16px;
+    min-height: 80px;
+  }
+
+  .cpd-kpi-value {
+    font-size: 20px;
+  }
+
+  .cpd-kpi-label {
+    font-size: 12px;
+  }
+
+  .cpd-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .cpd-section-wide {
+    order: -1;
+  }
+
+  .cpd-list-row {
+    padding: 12px;
+    min-height: 56px;
+  }
+
+  .cpd-list-label {
+    font-size: 14px;
+  }
+
+  .cpd-list-value {
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .cpd-stitch-row {
+    padding: 12px;
+    min-height: 64px;
+  }
+
+  .cpd-stitch-title {
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .cpd-stitch-meta {
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .cpd-clickable {
+    -webkit-tap-highlight-color: rgba(25, 118, 210, 0.1);
+  }
+}
+
+@media (max-width: 480px) {
+  .cpd-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .cpd-stitch-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .cpd-stitch-duration {
+    width: 100%;
+  }
+
+  .cpd-stitch-info {
+    width: 100%;
+  }
+}
+
