@@ -8,18 +8,22 @@ use reqwest::Client;
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::fs;
+use std::env;
 
 /// Config subcommands
 #[derive(Subcommand, Debug)]
 pub enum ConfigCommands {
     /// Show configuration diff (running vs config.yml)
     Diff,
+    /// Validate config.yml syntax and schema
+    Validate,
 }
 
 /// Handle the `hoop config` subcommands
 pub async fn handle_config(cmd: ConfigCommands) -> Result<()> {
     match cmd {
         ConfigCommands::Diff => run_diff().await?,
+        ConfigCommands::Validate => run_validate()?,
     }
     Ok(())
 }
@@ -280,4 +284,149 @@ fn get_nested_yaml_bool(yaml: &serde_yaml::Value, parts: &[&str]) -> Option<bool
     }
 
     None
+}
+
+/// Validate config.yml syntax and basic schema
+///
+/// Checks:
+/// - File exists and is readable
+/// - Valid YAML syntax
+/// - Required top-level keys present
+/// - Basic type checking for known fields
+///
+/// Note: This is a basic validation. Full semantic validation happens when the daemon loads the config.
+pub fn run_validate() -> Result<()> {
+    let config_path = get_config_path()?;
+
+    // Check if file exists
+    if !config_path.exists() {
+        println!("No config.yml found at {}", config_path.display());
+        println!("\nTo create a config file:");
+        println!("  1. Copy the example: cp hoop-daemon/config.yml.example ~/.hoop/config.yml");
+        println!("  2. Edit it to your needs");
+        println!("\nUsing daemon defaults (no config file is valid).");
+        return Ok(());
+    }
+
+    println!("Validating config.yml at {}", config_path.display());
+    println!("{}", "=".repeat(60));
+
+    // Read file
+    let raw = fs::read_to_string(&config_path)
+        .context("Failed to read config.yml")?;
+
+    // Parse YAML
+    let yaml: serde_yaml::Value = serde_yaml::from_str(&raw)
+        .with_context(|| "Invalid YAML syntax".to_string())?;
+
+    let mut has_errors = false;
+    let mut has_warnings = false;
+
+    // Check required top-level keys
+    if let Some(mapping) = yaml.as_mapping() {
+        // Check schema_version
+        match mapping.get(&serde_yaml::Value::String("schema_version".to_string())) {
+            None => {
+                println!("❌ Error: Missing required key 'schema_version'");
+                has_errors = true;
+            }
+            Some(serde_yaml::Value::String(v)) if !v.is_empty() => {
+                println!("✓ schema_version: {}", v);
+            }
+            Some(_) => {
+                println!("⚠️  Warning: schema_version should be a string (e.g., \"1.0.0\")");
+                has_warnings = true;
+            }
+        }
+    }
+
+    // Check known sections (warning if missing, not error)
+    let sections = [
+        "server", "agent", "projects_file", "ui", "metrics", "voice",
+        "agent_extensions", "audit", "reflection", "backup", "pricing_file",
+        "secrets_patterns", "stuck_detector", "roles",
+    ];
+
+    if let Some(mapping) = yaml.as_mapping() {
+        for section in &sections {
+            if mapping.contains_key(&serde_yaml::Value::String(section.to_string())) {
+                println!("✓ Section '{}' present", section);
+            } else {
+                println!("  Section '{}' not present (will use defaults)", section);
+            }
+        }
+
+        // Check for unknown top-level keys
+        for key in mapping.keys() {
+            if let Some(key_str) = key.as_str() {
+                if !sections.contains(&key_str) && key_str != "schema_version" {
+                    println!("⚠️  Warning: Unknown top-level key '{}'", key_str);
+                    has_warnings = true;
+                }
+            }
+        }
+    }
+
+    // Check agent.adapter value if present
+    if let Some(adapter) = get_nested_yaml_value(&yaml, &["agent", "adapter"]) {
+        let valid_adapters = ["claude", "codex", "opencode", "gemini", "aider"];
+        if !valid_adapters.contains(&adapter.as_str()) {
+            println!("⚠️  Warning: agent.adapter '{}' is not a known adapter", adapter);
+            println!("   Valid options: {}", valid_adapters.join(", "));
+            has_warnings = true;
+        } else {
+            println!("✓ agent.adapter: {} (valid)", adapter);
+        }
+    }
+
+    // Check ui.theme value if present
+    if let Some(theme) = get_nested_yaml_value(&yaml, &["ui", "theme"]) {
+        let valid_themes = ["auto", "light", "dark", "solarized-light", "solarized-dark"];
+        if !valid_themes.contains(&theme.as_str()) {
+            println!("⚠️  Warning: ui.theme '{}' is not a known theme", theme);
+            println!("   Valid options: {}", valid_themes.join(", "));
+            has_warnings = true;
+        } else {
+            println!("✓ ui.theme: {} (valid)", theme);
+        }
+    }
+
+    // Check metrics.port if metrics enabled
+    if let Some(enabled) = get_nested_yaml_bool(&yaml, &["metrics", "enabled"]) {
+        if enabled {
+            if let Some(port) = get_nested_yaml_value(&yaml, &["metrics", "port"]) {
+                match port.parse::<u16>() {
+                    Ok(p) if p > 0 && p <= 65535 => {
+                        println!("✓ metrics.port: {} (valid, [RESTART REQUIRED])", p);
+                    }
+                    _ => {
+                        println!("❌ Error: metrics.port '{}' is not a valid port (1-65535)", port);
+                        has_errors = true;
+                    }
+                }
+            }
+        }
+    }
+
+    println!("{}", "=".repeat(60));
+
+    if has_errors {
+        println!("\n❌ Validation FAILED: Errors found that must be fixed.");
+        println!("\nNext steps:");
+        println!("  1. Fix the errors listed above");
+        println!("  2. Run `hoop config validate` again");
+        return Err(anyhow::anyhow!("Config validation failed"));
+    } else if has_warnings {
+        println!("\n⚠️  Validation PASSED with warnings.");
+        println!("\nThe config file is syntactically valid but has warnings.");
+        println!("The daemon will load this config, but review warnings above.");
+    } else {
+        println!("\n✓ Validation PASSED: config.yml is valid!");
+        println!("\nThe daemon will load this config successfully.");
+    }
+
+    println!("\nNote: Full semantic validation happens when the daemon loads the config.");
+    println!("      Run the daemon to check for any additional errors.");
+
+    Ok(())
 }

@@ -15,7 +15,6 @@
  * 8. Client detects JSON secret fields
  * 9. Multiple secrets in one text are all detected
  * 10. Overlapping matches are deduplicated correctly
- * 11. Built-in fallback patterns work when API is unavailable
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
@@ -24,9 +23,64 @@ import {
   prefetchSecretPatterns,
   getSecretSeverity,
   truncateSecret,
-  type SecretWarning,
-  type SecretMatch,
 } from './components/secretsScanner';
+
+// Mock the global fetch for patterns API
+const mockPatterns = [
+  {
+    name: 'Anthropic API Key',
+    severity: 'high',
+    patterns: ['sk-ant-[a-zA-Z0-9_-]{20,}'],
+  },
+  {
+    name: 'Generic API Key',
+    severity: 'high',
+    patterns: ['\\bsk-[a-zA-Z0-9]{20,}\\b'],
+  },
+  {
+    name: 'AWS Access Key',
+    severity: 'high',
+    patterns: ['\\bAKIA[A-Z0-9]{16}\\b'],
+  },
+  {
+    name: 'GitHub Token',
+    severity: 'high',
+    patterns: [
+      '\\bghp_[a-zA-Z0-9]{36}\\b',
+      '\\bghs_[a-zA-Z0-9]{36}\\b',
+      '\\bghu_[a-zA-Z0-9]{36}\\b',
+      '\\bgithub_pat_[a-zA-Z0-9_]{82}\\b',
+    ],
+  },
+  {
+    name: 'Slack Token',
+    severity: 'high',
+    patterns: [
+      '\\bxoxb-[0-9A-Za-z-]{24,}\\b',
+      '\\bxoxp-[0-9A-Za-z-]{24,}\\b',
+    ],
+  },
+  {
+    name: 'JWT',
+    severity: 'high',
+    patterns: ['\\bey[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b'],
+  },
+  {
+    name: 'Bearer Token',
+    severity: 'high',
+    patterns: ['(?i)bearer\\s+[A-Za-z0-9._\\-+/]{20,}'],
+  },
+  {
+    name: 'Environment Variable Secret',
+    severity: 'high',
+    patterns: ['(?i)(?:api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|private[_-]?key|client[_-]?secret|anthropic[_-]?api[_-]?key|openai[_-]?api[_-]?key|github[_-]?token)\\s*[:=]\\s*["\']?([A-Za-z0-9+/_.~\\-]{16,})["\']?'],
+  },
+  {
+    name: 'JSON Secret Field',
+    severity: 'high',
+    patterns: ['(?i)"(?:password|passwd|secret|token|api_key|apikey|access_token|auth_token|private_key|client_secret)"\\s*:\\s*"([^"]{8,})"'],
+  },
+];
 
 // Fixture secrets that should be detected by both client and backend
 const FIXTURE_SECRETS = {
@@ -49,13 +103,25 @@ const FIXTURE_SECRETS = {
 
 describe('secrets scanner parity (§18)', () => {
   beforeEach(async () => {
+    // Mock fetch to return backend patterns
+    globalThis.fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          schema_version: '1.0.0',
+          patterns: mockPatterns,
+        }),
+      } as Response)
+    );
+
     // Clear cached patterns to ensure each test starts fresh
     vi.resetModules();
     // Prefetch patterns to ensure cache is populated
-    await prefetchSecretPatterns().catch(() => {
-      // If backend is unavailable, tests will use built-in patterns
-      console.warn('Backend unavailable, using built-in patterns');
-    });
+    await prefetchSecretPatterns();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe('detection with backend patterns (async)', () => {
@@ -210,6 +276,27 @@ describe('secrets scanner parity (§18)', () => {
       const result = scanForSecretsSync(cleanText);
       expect(result.count).toBe(0);
       expect(result.matches).toHaveLength(0);
+    });
+  });
+
+  describe('backend API requirement', () => {
+    it('throws error when backend is unavailable', async () => {
+      // Mock fetch to fail
+      globalThis.fetch = vi.fn(() =>
+        Promise.resolve({
+          ok: false,
+          status: 503,
+          statusText: 'Service Unavailable',
+        } as Response)
+      );
+
+      // Clear module cache to reset state
+      vi.resetModules();
+
+      // Re-import to get fresh state
+      const { prefetchSecretPatterns: freshPrefetch } = await import('./components/secretsScanner');
+
+      await expect(freshPrefetch()).rejects.toThrow();
     });
   });
 

@@ -23,6 +23,7 @@ const ACTION_KINDS = [
   { value: 'restore_started', label: 'Restore Started' },
   { value: 'restore_finished', label: 'Restore Finished' },
   { value: 'restore_failed', label: 'Restore Failed' },
+  { value: 'skill_invoked', label: 'Skill Invoked' },
 ];
 
 function formatTs(ts: string): string {

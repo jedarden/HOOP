@@ -1162,7 +1162,14 @@ impl SessionTailer {
             let value =
                 match crate::parse_jsonl_safe::parse_line::<serde_json::Value>(&line, &source) {
                     crate::parse_jsonl_safe::ParseResult::Ok(v) => v,
-                    _ => continue,
+                    crate::parse_jsonl_safe::ParseResult::Quarantined => {
+                        // Increment adapter-specific parse error metric
+                        crate::metrics::metrics()
+                            .hoop_event_parse_errors_total
+                            .inc(&["codex"]);
+                        continue;
+                    }
+                    crate::parse_jsonl_safe::ParseResult::Empty => continue,
                 };
 
             let event_type = value.get("type").and_then(|v| v.as_str());
@@ -1628,7 +1635,14 @@ impl SessionTailer {
             let value =
                 match crate::parse_jsonl_safe::parse_line::<serde_json::Value>(&line, &source) {
                     crate::parse_jsonl_safe::ParseResult::Ok(v) => v,
-                    _ => continue,
+                    crate::parse_jsonl_safe::ParseResult::Quarantined => {
+                        // Increment adapter-specific parse error metric
+                        crate::metrics::metrics()
+                            .hoop_event_parse_errors_total
+                            .inc(&["opencode"]);
+                        continue;
+                    }
+                    crate::parse_jsonl_safe::ParseResult::Empty => continue,
                 };
 
             let event_type = value.get("type").and_then(|v| v.as_str());
@@ -1863,7 +1877,14 @@ impl SessionTailer {
             let value =
                 match crate::parse_jsonl_safe::parse_line::<serde_json::Value>(&line, &source) {
                     crate::parse_jsonl_safe::ParseResult::Ok(v) => v,
-                    _ => continue,
+                    crate::parse_jsonl_safe::ParseResult::Quarantined => {
+                        // Increment adapter-specific parse error metric
+                        crate::metrics::metrics()
+                            .hoop_event_parse_errors_total
+                            .inc(&["gemini"]);
+                        continue;
+                    }
+                    crate::parse_jsonl_safe::ParseResult::Empty => continue,
                 };
 
             let event_type = value.get("type").and_then(|v| v.as_str());
@@ -2085,7 +2106,14 @@ impl SessionTailer {
             };
             let entry = match crate::parse_jsonl_safe::parse_line::<ClaudeEntry>(&line, &source) {
                 crate::parse_jsonl_safe::ParseResult::Ok(v) => v,
-                _ => continue,
+                crate::parse_jsonl_safe::ParseResult::Quarantined => {
+                    // Increment adapter-specific parse error metric
+                    crate::metrics::metrics()
+                        .hoop_event_parse_errors_total
+                        .inc(&["aider"]);
+                    continue;
+                }
+                crate::parse_jsonl_safe::ParseResult::Empty => continue,
             };
             match entry {
                 ClaudeEntry::Message(msg) => {
@@ -2338,6 +2366,11 @@ impl NdjsonParser {
                     Ok(None)
                 } else {
                     crate::parse_jsonl_safe::quarantine_raw(input, &e.to_string(), source);
+
+                    // Increment adapter-specific parse error metric
+                    crate::metrics::metrics()
+                        .hoop_event_parse_errors_total
+                        .inc(&["claude"]);
 
                     // Record the malformed/unknown event via UnknownEventSink
                     let event_kind = extract_entry_kind_from_raw(input);

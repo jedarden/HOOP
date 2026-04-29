@@ -3,7 +3,7 @@
 //! Provides efficient line-by-line streaming for large files (>50KB).
 //! Results are yielded as JSON chunks suitable for Server-Sent Events.
 
-use futures_util::stream::{self, Stream};
+use futures_util::stream::{self, Stream, StreamExt};
 use once_cell::sync::Lazy;
 use serde::Serialize;
 use std::sync::Arc;
@@ -155,8 +155,9 @@ pub fn highlight_stream(
 
     let total_lines = content.lines().count();
 
-    // Create initial highlighter
-    let highlighter = HighlightLines::new((*syntax).clone(), (*theme).clone());
+    // Clone Arcs so they can be moved into the stream
+    let theme_for_highlighter = theme.clone();
+    let syntax_for_highlighter = syntax.clone();
 
     stream::once(async move {
         StreamItem::Header(StreamHeader {
@@ -168,9 +169,12 @@ pub fn highlight_stream(
         })
     })
     .chain(stream::unfold(
-        (0usize, content, highlighter),
-        move |(line_idx, remaining_content, mut highlighter)| async move {
+        (0usize, content, ss, syntax_for_highlighter, theme_for_highlighter),
+        move |(line_idx, remaining_content, ss, syntax, theme)| async move {
             let mut line_idx = line_idx;
+
+            // Recreate highlighter on each iteration (cheap operation)
+            let mut highlighter = HighlightLines::new(&*syntax, &*theme);
 
             if line_idx >= MAX_LINES {
                 return Some((
@@ -178,7 +182,7 @@ pub fn highlight_stream(
                         msg_type: "trailer".to_string(),
                         truncated: true,
                     }),
-                    (line_idx, remaining_content, highlighter),
+                    (line_idx, remaining_content, ss, syntax, theme),
                 ));
             }
 
@@ -204,7 +208,7 @@ pub fn highlight_stream(
                                         msg_type: "error".to_string(),
                                         error: format!("highlight error: {e}"),
                                     },
-                                    (line_idx, remaining_content, highlighter),
+                                    (line_idx, remaining_content, ss, syntax, theme),
                                 ));
                             }
                         }
@@ -215,7 +219,7 @@ pub fn highlight_stream(
                                 msg_type: "error".to_string(),
                                 error: format!("highlight error: {e}"),
                             },
-                            (line_idx, remaining_content, highlighter),
+                            (line_idx, remaining_content, ss, syntax, theme),
                         ));
                     }
                 }
@@ -227,7 +231,7 @@ pub fn highlight_stream(
                         msg_type: "trailer".to_string(),
                         truncated: false,
                     }),
-                    (line_idx, remaining_content, highlighter),
+                    (line_idx, remaining_content, ss, syntax, theme),
                 ));
             }
 
@@ -239,7 +243,7 @@ pub fn highlight_stream(
                     msg_type: "chunk".to_string(),
                     lines: chunk_lines,
                 }),
-                (line_idx, new_remaining, highlighter),
+                (line_idx, new_remaining, ss, syntax, theme),
             ))
         },
     ))

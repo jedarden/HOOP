@@ -8,5 +8,6 @@ pub mod br_verbs;
 pub mod id_validators;
 pub mod protocol;
 pub mod redaction;
+pub mod skills;
 pub mod socket;
 pub mod tools;

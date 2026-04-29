@@ -174,6 +174,28 @@ impl ConfigWatcher {
         Ok(())
     }
 
+    /// Trigger a config reload programmatically (e.g., from SIGHUP)
+    ///
+    /// This method can be called to reload the config.yml file without
+    /// waiting for a file system event. It's useful for signal-based reload triggers.
+    pub async fn reload(&self) -> Result<()> {
+        let watch_path = config_path()?;
+        let event_tx = self.event_tx.clone();
+        let config = self.config.clone();
+        let cli_overrides = self.cli_overrides.clone();
+
+        // Cancel any pending debounced reload and trigger immediate reload
+        let mut debouncer_guard = self.debouncer.lock().await;
+        if let Some(handle) = debouncer_guard.take() {
+            handle.abort();
+        }
+        drop(debouncer_guard);
+
+        // Trigger immediate reload (no debounce for SIGHUP)
+        Self::reload_config(&watch_path, event_tx, config, cli_overrides).await;
+        Ok(())
+    }
+
     fn handle_watch_event(
         res: Result<notify::Event, notify::Error>,
         watch_path: &Path,

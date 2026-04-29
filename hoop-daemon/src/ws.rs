@@ -1099,6 +1099,34 @@ impl WsEvent {
         }
     }
 
+    /// Create a pattern saved query synced event (§4.7)
+    pub fn pattern_saved_query_synced(data: PatternSavedQuerySyncedData) -> Self {
+        Self {
+            event_type: "pattern_saved_query_synced".to_string(),
+            worker: None,
+            workers: None,
+            beads: None,
+            conversations: None,
+            conversation: None,
+            streaming: None,
+            projects: None,
+            config_status: None,
+            capacity: None,
+            bead_event: None,
+            bead_events: None,
+            stitch_created: None,
+            agent_session: None,
+            morning_brief: None,
+            draft_update: None,
+            spawn_ack_alert: None,
+            collision_alert: None,
+            bead_created_by_hoop: None,
+            pattern_saved_query_synced: Some(data),
+            stuck_alert: None,
+            subscriptions: None,
+        }
+    }
+
     /// Create a spawn_ack_alert event for a missing-ack condition (§M5)
     pub fn spawn_ack_alert_event(alert: crate::worker_ack::SpawnAckAlert) -> Self {
         Self {
@@ -1479,6 +1507,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState, actor: String) {
     let mut draft_rx = state.draft_tx.subscribe();
     let mut collision_rx = state.collision_alert_tx.subscribe();
     let mut bead_created_by_hoop_rx = state.bead_created_by_hoop_tx.subscribe();
+    let mut pattern_rx = state.pattern_tx.subscribe();
     let mut stuck_rx = state.stuck_detector.lock().unwrap().subscribe();
     let mut shutdown_rx = state.shutdown.subscribe();
 
@@ -1750,6 +1779,25 @@ async fn handle_socket(socket: WebSocket, state: DaemonState, actor: String) {
         }
     });
 
+    // Pattern saved query synced — routed to the project topic carried in the event (§4.7)
+    let ws_tx_pattern = ws_tx.clone();
+    let pattern_task = tokio::spawn(async move {
+        loop {
+            match pattern_rx.recv().await {
+                Ok(data) => {
+                    if let Ok(json) = serde_json::to_string(&WsEvent::pattern_saved_query_synced(data.clone())) {
+                        let topic = format!("project:{}", data.project);
+                        let _ = ws_tx_pattern.send(WsOutMsg::with_topic(json, topic)).await;
+                    }
+                }
+                Err(broadcast::error::RecvError::Lagged(n)) => {
+                    debug!("Pattern saved query broadcast lagged by {}, continuing", n);
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+            }
+        }
+    });
+
     // Session events placeholder
     let _registry_for_sessions = registry.clone();
     let session_task = tokio::spawn(async move {
@@ -1991,6 +2039,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState, actor: String) {
         _ = bead_task => {},
         _ = stitch_task => {},
         _ = bead_created_by_hoop_task => {},
+        _ = pattern_task => {},
         _ = session_task => {},
         _ = config_task => {},
         _ = project_task => {},

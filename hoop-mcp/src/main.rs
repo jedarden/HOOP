@@ -11,6 +11,7 @@ mod id_validators;
 mod log_rotation;
 mod protocol;
 mod redaction;
+mod skills;
 mod socket;
 mod tools;
 
@@ -157,7 +158,7 @@ async fn run_stdio_mode(actor_override: Option<String>) -> Result<()> {
                 )
             }
             Method::ToolsList(_) => {
-                let tools = tools::McpServerState::get_tools();
+                let tools = server_state.get_tools();
                 let result = serde_json::json!({ "tools": tools });
                 protocol::JsonRpcResponse::result(serde_json::json!(null), result)
             }

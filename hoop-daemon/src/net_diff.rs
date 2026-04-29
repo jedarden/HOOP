@@ -607,11 +607,13 @@ mod tests {
         // Timestamps are provided out-of-order: b has older ts but was committed later
         let mut commits = vec![
             CommitEntry {
+                bead_id: "bead-a".to_string(),
                 workspace: dir.to_string(),
                 sha: sha_a.clone(),
                 ts: "2024-01-05T00:00:00+00:00".to_string(),
             },
             CommitEntry {
+                bead_id: "bead-b".to_string(),
                 workspace: dir.to_string(),
                 sha: sha_b.clone(),
                 ts: "2024-01-03T00:00:00+00:00".to_string(),

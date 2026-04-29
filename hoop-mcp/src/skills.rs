@@ -4,17 +4,21 @@
 //! Validates skill arguments against the manifest's args_schema before invocation.
 
 use anyhow::{anyhow, Result};
+use chrono::Utc;
 use fnv::FnvBuildHasher;
 use jsonschema::Validator;
+use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tracing::{debug, warn};
+use uuid::Uuid;
 
 /// Skill manifest metadata (from manifest.yml)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -421,6 +425,101 @@ pub fn find_skill_by_tool_name<'a>(skills: &'a [SkillEntry], tool_name: &str) ->
     skills.iter().find(|s| s.name == skill_name)
 }
 
+/// Write a skill invocation audit row to fleet.db
+///
+/// Records skill_name, args_json, invoked_by, ts, duration_ms, and result
+/// to the actions table with hash-chain integrity (§13).
+pub fn write_skill_audit(
+    fleet_db_path: &Path,
+    skill_name: &str,
+    args_json: Option<&Value>,
+    invoked_by: &str,
+    duration_ms: u64,
+    success: bool,
+    error_msg: Option<&str>,
+) -> Result<()> {
+    if !fleet_db_path.exists() {
+        // fleet.db may not exist yet if daemon hasn't started
+        warn!("fleet.db not found, skipping skill audit");
+        return Ok(());
+    }
+
+    let conn = rusqlite::Connection::open(fleet_db_path)
+        .map_err(|e| anyhow!("Failed to open fleet.db: {}", e))?;
+
+    // Fetch the most recent hash_self for hash chaining
+    let hash_prev: String = conn
+        .query_row(
+            "SELECT hash_self FROM actions ORDER BY ts DESC LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or_else(|_| "0000000000000000000000000000000000000000000000000000000000000000".to_string());
+
+    // Generate audit row ID and timestamp
+    let id = Uuid::new_v4().to_string();
+    let ts = Utc::now().to_rfc3339();
+
+    // Build args_json with skill_name and duration_ms included
+    let mut audit_args = json!({
+        "skill_name": skill_name,
+        "duration_ms": duration_ms,
+    });
+    if let Some(args) = args_json {
+        if let Some(obj) = audit_args.as_object_mut() {
+            obj.insert("args".to_string(), args.clone());
+        }
+    }
+
+    let args_json_str = serde_json::to_string(&audit_args)?;
+
+    // Compute hash_self from row content
+    let hash_input = format!(
+        "{}{}{}{}{}{}",
+        id,
+        ts,
+        invoked_by,
+        "skill_invoked",
+        args_json_str,
+        if success { "success" } else { "failure" }
+    );
+    let mut hasher = Sha256::new();
+    hasher.update(hash_input.as_bytes());
+    let hash_self = hex::encode(hasher.finalize());
+
+    // Insert the audit row
+    conn.execute(
+        r#"
+        INSERT INTO actions (id, ts, actor, kind, target, project, args_json, result, error, source, stitch_id, args_hash, hash_prev, hash_self)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+        "#,
+        params![
+            id,
+            ts,
+            invoked_by,
+            "skill_invoked",
+            skill_name,
+            Option::<String>::None,  // project
+            args_json_str,
+            if success { "success" } else { "failure" },
+            error_msg,
+            Option::<String>::None,  // source
+            Option::<String>::None,  // stitch_id
+            Option::<String>::None,  // args_hash
+            hash_prev,
+            hash_self,
+        ],
+    )
+    .map_err(|e| anyhow!("Failed to insert skill audit row: {}", e))?;
+
+    debug!(
+        "Skill audit written: {} invoked by {} in {}ms",
+        skill_name, invoked_by, duration_ms
+    );
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -576,5 +675,84 @@ mod tests {
 
         // Same reference (Arc pointing to same allocation)
         assert!(Arc::ptr_eq(&compiled1, &compiled2));
+    }
+
+    #[test]
+    fn test_skill_invocation_rejects_missing_required_arg() {
+        let schema = Validator::new(&json!({
+            "type": "object",
+            "properties": {
+                "url": {"type": "string"}
+            },
+            "required": ["url"]
+        })).unwrap();
+
+        // Missing required 'url' argument
+        let args = json!({"count": 42});
+        let result = validate_args(&schema, &args);
+
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        assert!(!errors.is_empty());
+        // Error should mention the missing required property
+        let error_msg = errors.iter().map(|e| e.message.as_str()).collect::<Vec<_>>().join(" ");
+        assert!(error_msg.contains("url") || error_msg.contains("required"));
+    }
+
+    #[test]
+    fn test_skill_invocation_rejects_wrong_type() {
+        let schema = Validator::new(&json!({
+            "type": "object",
+            "properties": {
+                "count": {"type": "number"}
+            }
+        })).unwrap();
+
+        // 'count' should be a number, not a string
+        let args = json!({"count": "not a number"});
+        let result = validate_args(&schema, &args);
+
+        assert!(result.is_err());
+        let errors = result.unwrap_err();
+        assert!(!errors.is_empty());
+        // Error should mention the type mismatch
+        let error_msg = errors[0].message.to_lowercase();
+        assert!(error_msg.contains("type") || error_msg.contains("number") || error_msg.contains("integer"));
+    }
+
+    #[test]
+    fn test_skill_invocation_accepts_valid_args() {
+        let schema = Validator::new(&json!({
+            "type": "object",
+            "properties": {
+                "url": {"type": "string"},
+                "count": {"type": "number"}
+            },
+            "required": ["url"]
+        })).unwrap();
+
+        // Valid arguments
+        let args = json!({
+            "url": "https://example.com",
+            "count": 42
+        });
+        let result = validate_args(&schema, &args);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_skill_invocation_rejects_invalid_schema() {
+        // Test that an invalid schema in manifest is caught
+        let invalid_schema = json!({
+            "type": "object",
+            "properties": {
+                "url": {"type": "invalid-type"}  // Invalid JSON Schema type
+            }
+        });
+
+        let result = Validator::new(&invalid_schema);
+        // The jsonschema crate should reject this invalid schema
+        assert!(result.is_err());
     }
 }

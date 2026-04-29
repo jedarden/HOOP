@@ -1,0 +1,263 @@
+# HOOP daemon configuration file
+#
+# Location: ~/.hoop/config.yml
+#
+# Configuration precedence (highest to lowest):
+#   1. CLI flags (--addr, --observer, etc.)
+#   2. Environment variables (HOOP_*)
+#   3. config.yml (this file)
+#   4. Compiled defaults
+#
+# Hot-reload: All changes to this file are applied immediately without restart,
+#             except for keys marked [RESTART REQUIRED].
+#
+# Secret values: Use environment variables for API keys, secrets, and credentials.
+#               Never store secrets in this file - it may appear in logs and audit trails.
+
+schema_version: "1.0.0"
+
+# ---------------------------------------------------------------------------
+# Server Configuration
+# ---------------------------------------------------------------------------
+server:
+  # Server bind address [RESTART REQUIRED]
+  # Default: "127.0.0.1:3000"
+  # Env var: HOOP_BIND_ADDR
+  bind_addr: "127.0.0.1:3000"
+
+  # Allow br version mismatch (skip compatibility check)
+  # Default: false
+  # Env var: HOOP_ALLOW_BR_MISMATCH
+  allow_br_mismatch: false
+
+# ---------------------------------------------------------------------------
+# Agent Configuration
+# ---------------------------------------------------------------------------
+agent:
+  # LLM adapter to use
+  # Options: claude, codex, opencode, gemini, aider
+  # Default: "claude"
+  # Env var: HOOP_AGENT_ADAPTER
+  adapter: "claude"
+
+  # Model name (adapter-specific)
+  # Default: "claude-sonnet-4-20250514"
+  # Env var: HOOP_AGENT_MODEL
+  model: "claude-sonnet-4-20250514"
+
+  # Anthropic API key (use env var for security)
+  # Default: null
+  # Env var: HOOP_AGENT_ANTHROPIC_API_KEY
+  anthropic_api_key: null
+
+  # ZAI proxy URL (optional)
+  # Default: null
+  # Env var: HOOP_ZAI_BASE_URL
+  zai_base_url: null
+
+  # ZAI API key (optional)
+  # Default: null
+  # Env var: HOOP_ZAI_API_KEY
+  zai_api_key: null
+
+  # Rate limit in requests per minute
+  # Default: null (unlimited)
+  # Env var: HOOP_RATE_LIMIT_RPM
+  rate_limit_rpm: null
+
+  # Cost cap in USD (stop when exceeded)
+  # Default: null (no cap)
+  # Env var: HOOP_COST_CAP_USD
+  cost_cap_usd: null
+
+# ---------------------------------------------------------------------------
+# Projects Configuration
+# ---------------------------------------------------------------------------
+# Path to projects.yaml file
+# Default: "~/.hoop/projects.yaml"
+# Env var: HOOP_PROJECTS_FILE
+projects_file: "~/.hoop/projects.yaml"
+
+# ---------------------------------------------------------------------------
+# UI Configuration
+# ---------------------------------------------------------------------------
+ui:
+  # UI theme
+  # Options: auto, light, dark, solarized-light, solarized-dark
+  # Default: "auto"
+  # Env var: HOOP_UI_THEME
+  theme: "auto"
+
+  # Default project sort order
+  # Options: name, last_activity, cost_today, worker_count
+  # Default: "last_activity"
+  # Env var: HOOP_UI_SORT
+  default_project_sort: "last_activity"
+
+  # Auto-archive inactive projects after N days
+  # Default: 30
+  # Env var: HOOP_ARCHIVE_DAYS
+  archive_after_days: 30
+
+# ---------------------------------------------------------------------------
+# Metrics Configuration
+# ---------------------------------------------------------------------------
+metrics:
+  # Enable Prometheus metrics endpoint
+  # Default: false
+  # Env var: HOOP_METRICS_ENABLED
+  enabled: false
+
+  # Metrics server port [RESTART REQUIRED if enabled=true]
+  # Default: 9091
+  # Env var: HOOP_METRICS_PORT
+  port: 9091
+
+# ---------------------------------------------------------------------------
+# Voice Configuration
+# ---------------------------------------------------------------------------
+voice:
+  # Path to Whisper model file
+  # Default: null (uses bundled model)
+  # Env var: HOOP_WHISPER_MODEL_PATH
+  whisper_model_path: null
+
+  # Voice input hotkey
+  # Default: "Ctrl+Shift+V"
+  # Env var: HOOP_VOICE_HOTKEY
+  hotkey: "Ctrl+Shift+V"
+
+  # Maximum recording duration in seconds
+  # Default: 300
+  # Env var: HOOP_VOICE_MAX_SECONDS
+  max_recording_seconds: 300
+
+# ---------------------------------------------------------------------------
+# Agent Extensions (§22)
+# ---------------------------------------------------------------------------
+agent_extensions:
+  # Skills directory
+  # Default: null
+  # Env var: HOOP_AGENT_EXTENSIONS_SKILLS
+  skills: null
+
+  # Scripts directory
+  # Default: null
+  # Env var: HOOP_AGENT_EXTENSIONS_SCRIPTS
+  scripts: null
+
+  # Notes directory
+  # Default: null
+  # Env var: HOOP_AGENT_EXTENSIONS_NOTES
+  notes: null
+
+  # Prompts directory
+  # Default: null
+  # Env var: HOOP_AGENT_EXTENSIONS_PROMPTS
+  prompts: null
+
+# ---------------------------------------------------------------------------
+# Audit Configuration
+# ---------------------------------------------------------------------------
+audit:
+  # Audit log retention in days
+  # Default: 90
+  # Env var: HOOP_AUDIT_RETENTION_DAYS
+  retention_days: 90
+
+  # Enable hash chain for audit log integrity
+  # Default: true
+  # Env var: HOOP_AUDIT_HASH_CHAIN
+  hash_chain: true
+
+# ---------------------------------------------------------------------------
+# Reflection Detection Configuration
+# ---------------------------------------------------------------------------
+reflection:
+  # Enable reflection pattern detection
+  # Default: true
+  # Env var: HOOP_REFLECTION_ENABLED
+  enabled: true
+
+  # Detection threshold (0.0 - 1.0)
+  # Default: 0.8
+  # Env var: HOOP_REFLECTION_THRESHOLD
+  detection_threshold: 0.8
+
+  # Auto-archive detected reflections after N days
+  # Default: 30
+  # Env var: HOOP_REFLECTION_ARCHIVE_DAYS
+  auto_archive_after_days: 30
+
+# ---------------------------------------------------------------------------
+# Backup Configuration (§15.2, §17.3)
+# ---------------------------------------------------------------------------
+backup:
+  # S3 endpoint URL
+  # Default: null
+  # Env var: (none - use config.yml only)
+  endpoint: null
+
+  # S3 bucket name
+  # Default: null
+  bucket: null
+
+  # S3 key prefix
+  # Default: null
+  prefix: null
+
+  # Backup schedule (cron expression: minute hour day month dow)
+  # Default: "0 4 * * *" (daily at 4 AM)
+  schedule: "0 4 * * *"
+
+  # Backup retention in days
+  # Default: 30
+  # Env var: HOOP_BACKUP_RETENTION_DAYS
+  retention_days: 30
+
+  # Enable age encryption for backups
+  # Default: false
+  encryption: false
+
+# ---------------------------------------------------------------------------
+# Pricing Configuration (§17.3)
+# ---------------------------------------------------------------------------
+# Path to pricing.yml file
+# Default: "~/.hoop/pricing.yml"
+# Env var: HOOP_PRICING_FILE
+pricing_file: "~/.hoop/pricing.yml"
+
+# ---------------------------------------------------------------------------
+# Secrets Scanner Patterns (§18)
+# ---------------------------------------------------------------------------
+# Custom secret scanning patterns
+# Default: (built-in patterns for common secrets)
+secrets_patterns:
+  - name: "Anthropic API Key"
+    severity: "high"
+    patterns:
+      - "sk-ant-[a-zA-Z0-9_-]{20,}"
+
+  - name: "OpenAI API Key"
+    severity: "high"
+    patterns:
+      - "sk-[a-zA-Z0-9]{48}"
+
+# ---------------------------------------------------------------------------
+# Stuck Detector Configuration (§C1, hoop-ttb.3.25)
+# ---------------------------------------------------------------------------
+# Project-specific stuck detection thresholds
+# Default: (global defaults)
+stuck_detector: null
+
+# ---------------------------------------------------------------------------
+# Role-Based Access Control (RBAC)
+# ---------------------------------------------------------------------------
+roles:
+  # Viewers can read projects and sessions but cannot create drafts
+  viewers:
+    - "viewer@example.com"
+
+  # Drafters can create and edit drafts
+  drafters:
+    - "drafter@example.com"

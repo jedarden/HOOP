@@ -216,7 +216,7 @@ fn handle_request(
             )
         }
         crate::protocol::Method::ToolsList(_) => {
-            let tools = crate::tools::McpServerState::get_tools();
+            let tools = server_state.get_tools();
             let result = serde_json::json!({ "tools": tools });
             crate::protocol::JsonRpcResponse::result(serde_json::json!(null), result)
         }

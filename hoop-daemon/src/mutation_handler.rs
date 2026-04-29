@@ -202,14 +202,14 @@ pub trait MutationHandlerExt<T>
 where
     T: Clone + WithRejectError + serde::Serialize + Send + Sync,
 {
-    fn mutation_handler<'a>(&self, entity_type: &'a str, actor: String) -> MutationHandler<'a, T>;
+    fn mutation_handler<'a>(&'a self, entity_type: &'a str, actor: String) -> MutationHandler<'a, T>;
 }
 
 impl<T> MutationHandlerExt<T> for tokio::sync::broadcast::Sender<T>
 where
     T: Clone + WithRejectError + serde::Serialize + Send + Sync,
 {
-    fn mutation_handler<'a>(&self, entity_type: &'a str, actor: String) -> MutationHandler<'a, T> {
+    fn mutation_handler<'a>(&'a self, entity_type: &'a str, actor: String) -> MutationHandler<'a, T> {
         MutationHandler::new(self, entity_type, actor)
     }
 }

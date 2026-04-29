@@ -61,6 +61,10 @@ pub struct McpServerState {
     pub projects: HashMap<String, String>,
     /// Fleet database path
     pub fleet_db_path: PathBuf,
+    /// Discovered skills
+    skills: Vec<crate::skills::SkillEntry>,
+    /// Schema cache for skill validation
+    schema_cache: crate::skills::SchemaCache,
 }
 
 impl McpServerState {
@@ -78,11 +82,24 @@ impl McpServerState {
         home.push("fleet.db");
         let fleet_db_path = home;
 
+        // Discover skills
+        let skills_dir = crate::skills::skills_dir()?;
+        let skills = crate::skills::discover_skills();
+        let schema_cache = crate::skills::SchemaCache::new();
+
+        tracing::debug!(
+            "Discovered {} skills from {}",
+            skills.len(),
+            skills_dir.display()
+        );
+
         Ok(Self {
             audit_log,
             actor,
             projects,
             fleet_db_path,
+            skills,
+            schema_cache,
         })
     }
 
@@ -158,8 +175,8 @@ impl McpServerState {
     }
 
     /// Get all available tools with input and output schemas
-    pub fn get_tools() -> Vec<Tool> {
-        vec![
+    pub fn get_tools(&self) -> Vec<Tool> {
+        let mut tools = vec![
             // Read tools
             Tool {
                 name: "find_stitches".to_string(),
@@ -235,7 +252,30 @@ impl McpServerState {
                 input_schema: input_schema_escalate_to_operator(),
                 output_schema: Some(output_schema_escalate_to_operator()),
             },
-        ]
+        ];
+
+        // Add skills as tools
+        for skill in &self.skills {
+            if skill.executable {
+                tools.push(Tool {
+                    name: format!("skill_{}", skill.name),
+                    description: skill.manifest.description.clone(),
+                    input_schema: InputSchema {
+                        schema_type: skill.manifest.args_schema["type"].as_str().unwrap_or("object").to_string(),
+                        properties: skill.manifest.args_schema["properties"].as_object()
+                            .map(|p| serde_json::Map::from_iter(p.iter().map(|(k, v)| (k.clone(), v.clone()))))
+                            .unwrap_or_default(),
+                        required: skill.manifest.args_schema["required"].as_array()
+                            .map(|r| r.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                            .or_else(|| skill.manifest.args_schema["required"].as_array()
+                                .and_then(|r| serde_json::from_value::<Vec<String>>(serde_json::Value::Array(r.clone())).ok())),
+                    },
+                    output_schema: None,
+                });
+            }
+        }
+
+        tools
     }
 
     /// Handle a tool call
@@ -265,6 +305,8 @@ impl McpServerState {
             "create_bead" => self.create_bead(args),
             // Utility tools
             "escalate_to_operator" => self.escalate_to_operator(args),
+            // Skills (handle with validation)
+            tool_name if tool_name.starts_with("skill_") => self.invoke_skill(tool_name, args),
             _ => Err(format!("Unknown tool: {}", name)),
         };
 
@@ -280,6 +322,79 @@ impl McpServerState {
             .record(&self.actor, name, Some(&args_value), &audit_result);
 
         result
+    }
+
+    /// Invoke a skill with argument validation
+    ///
+    /// Before executing the skill's run executable, validates the arguments
+    /// against the skill's manifest args_schema. Invalid arguments are rejected
+    /// with a readable error message without executing the skill.
+    fn invoke_skill(
+        &self,
+        tool_name: &str,
+        args: &Map<String, Value>,
+    ) -> Result<ToolCallResult, String> {
+        // Extract skill name from tool name (skill_<name> -> <name>)
+        let skill_name = tool_name.strip_prefix("skill_")
+            .ok_or_else(|| format!("Invalid skill tool name: {}", tool_name))?;
+
+        // Find the skill
+        let skill = self.skills.iter()
+            .find(|s| s.name == skill_name)
+            .ok_or_else(|| format!("Skill '{}' not found", skill_name))?;
+
+        // Check if executable
+        if !skill.executable {
+            return Err(format!("Skill '{}' is not executable (run file not found or not +x)", skill_name));
+        }
+
+        // Validate arguments against the skill's schema
+        let args_value = Value::Object(args.clone());
+        let validator = self.schema_cache.get_or_compile(skill_name, &skill.manifest.args_schema)
+            .map_err(|e| format!("Failed to compile schema for skill '{}': {}", skill_name, e))?;
+
+        if let Err(validation_errors) = crate::skills::validate_args(&validator, &args_value) {
+            // Build readable error message
+            let error_messages: Vec<String> = validation_errors.iter()
+                .map(|e| format!("  - {}: {}", e.instance_path, e.message))
+                .collect();
+            return Err(format!(
+                "Skill '{}' argument validation failed:\n{}\n\nSchema: {}",
+                skill_name,
+                error_messages.join("\n"),
+                serde_json::to_string(&skill.manifest.args_schema).unwrap_or_default()
+            ));
+        }
+
+        // Arguments are valid, execute the skill
+        let result = crate::skills::execute_skill(skill, &args_value)
+            .map_err(|e| format!("Failed to execute skill '{}': {}", skill_name, e))?;
+
+        // Write audit record
+        let _ = crate::skills::write_skill_audit(
+            &self.fleet_db_path,
+            skill_name,
+            Some(&args_value),
+            &self.actor,
+            result.duration_ms,
+            result.success,
+            if result.success { None } else { Some(&result.status) },
+        );
+
+        Ok(ToolCallResult {
+            content: vec![
+                Content::Text {
+                    text: if result.success {
+                        format!("Skill '{}' completed successfully\n\nStdout:\n{}\nStderr:\n{}",
+                            skill_name, result.stdout, result.stderr)
+                    } else {
+                        format!("Skill '{}' failed\n\nStatus: {}\n\nStdout:\n{}\nStderr:\n{}",
+                            skill_name, result.status, result.stdout, result.stderr)
+                    }
+                }
+            ],
+            is_error: if result.success { None } else { Some(true) },
+        })
     }
 
     // -----------------------------------------------------------------------

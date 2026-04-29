@@ -89,7 +89,7 @@ fn parse_query(query: &str) -> Result<QueryExpr> {
     let tokens = tokenize(query)?;
     let (expr, remaining) = parse_or_expr(&tokens)?;
     if !remaining.is_empty() {
-        return anyhow::bail!("Unexpected tokens after query: {:?}", remaining);
+        anyhow::bail!("Unexpected tokens after query: {:?}", remaining);
     }
     Ok(expr)
 }
@@ -217,14 +217,14 @@ fn parse_not_expr(tokens: &[Token]) -> Result<(QueryExpr, &[Token])> {
 /// Parse primary expressions (literals, parenthesized expressions)
 fn parse_primary_expr(tokens: &[Token]) -> Result<(QueryExpr, &[Token])> {
     if tokens.is_empty() {
-        return anyhow::bail!("Unexpected end of input");
+        anyhow::bail!("Unexpected end of input");
     }
 
     match &tokens[0] {
         Token::LParen => {
             let (expr, remaining) = parse_or_expr(&tokens[1..])?;
             if remaining.is_empty() || remaining[0] != Token::RParen {
-                return anyhow::bail!("Expected closing parenthesis");
+                anyhow::bail!("Expected closing parenthesis");
             }
             Ok((expr, &remaining[1..]))
         }
@@ -234,7 +234,7 @@ fn parse_primary_expr(tokens: &[Token]) -> Result<(QueryExpr, &[Token])> {
                 return Ok((QueryExpr::Label(field.clone()), &tokens[1..]));
             }
             if tokens.len() < 3 {
-                return anyhow::bail!("Expected value after colon");
+                anyhow::bail!("Expected value after colon");
             }
             match &tokens[2] {
                 Token::Word(value) => {
@@ -243,7 +243,7 @@ fn parse_primary_expr(tokens: &[Token]) -> Result<(QueryExpr, &[Token])> {
                         "label" => QueryExpr::Label(value.clone()),
                         "project" => QueryExpr::Project(value.clone()),
                         "kind" => QueryExpr::Kind(value.clone()),
-                        _ => return anyhow::bail!("Unknown field: {}", field),
+                        _ => anyhow::bail!("Unknown field: {}", field),
                     };
                     Ok((expr, &tokens[3..]))
                 }

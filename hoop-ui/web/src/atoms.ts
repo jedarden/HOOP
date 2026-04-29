@@ -811,3 +811,73 @@ export interface TemplateValues {
 
 // Template library cache — fetched from /api/p/{project}/templates
 export const templatesAtom = atom<import('./types.gen').StitchTemplate[]>([]);
+
+// ── Operator-invoked scripts (§22.3) ─────────────────────────────────────────────
+
+// Script manifest (from optional manifest.yml next to script)
+export interface ScriptManifest {
+  name: string;
+  description?: string;
+  scope?: 'global' | 'project';
+  projects?: string[];
+  timeout_secs?: number;
+  arguments?: ScriptArgument[];
+  schedule?: string;
+  overlap_policy?: 'skip' | 'queue' | 'parallel';
+  on?: EventSubscription[];
+}
+
+// Script argument definition
+export interface ScriptArgument {
+  name: string;
+  description?: string;
+  required?: boolean;
+  default?: string;
+}
+
+// Event subscription for triggering scripts automatically
+export interface EventSubscription {
+  event: string;
+  project?: string;
+  kind?: string;
+  adapter?: string;
+  result?: 'success' | 'failure';
+}
+
+// Discovered script entry (from GET /api/scripts)
+export interface ScriptEntry {
+  name: string;
+  path: string;
+  manifest?: ScriptManifest;
+  executable: boolean;
+  last_fire?: string;
+  next_fire?: string;
+  running?: boolean;
+}
+
+// Script execution response (from POST /api/scripts/:name/run)
+export interface ScriptRunResponse {
+  script: string;
+  exit_code?: number;
+  timed_out: boolean;
+  stdout: string;
+  stderr: string;
+  duration_ms: number;
+  status: string;
+}
+
+// Script execution state for UI
+export interface ScriptExecutionState {
+  running: boolean;
+  scriptName: string | null;
+  result: ScriptRunResponse | null;
+  error: string | null;
+}
+
+// Script execution atom — tracks current script execution state
+export const scriptExecutionAtom = atom<ScriptExecutionState>({
+  running: false,
+  scriptName: null,
+  result: null,
+  error: null,
+});

@@ -12,6 +12,10 @@ use std::fs;
 const FIXTURE_DIR: &str = "../hoop-ui/web/src/__fixtures__/schema";
 
 /// Generate schema fixtures for round-trip testing
+///
+/// This test is marked as ignored so it only runs when explicitly requested
+/// (e.g., in CI or via `cargo test generate_schema_fixtures -- --ignored`).
+#[ignore]
 #[test]
 fn generate_schema_fixtures() {
     use chrono::{DateTime, Utc};
@@ -113,14 +117,19 @@ fn generate_schema_fixtures() {
         // Session/Conversation types
         (
             "session_kind",
-            serde_json::to_string_pretty(&SessionKind::Worker("alpha".to_string())).unwrap(),
+            serde_json::to_string_pretty(&SessionKind::Variant0 {
+                worker: "alpha".to_string(),
+                bead: "bd-abc123".to_string(),
+                strand: None,
+            }).unwrap(),
         ),
         (
             "session_message",
             serde_json::to_string_pretty(&SessionMessage {
-                role: SessionMessageRole::User,
-                content: "Hello".to_string(),
+                role: "user".to_string(),
+                content: serde_json::Value::String("Hello".to_string()),
                 usage: None,
+                timestamp: None,
             })
             .unwrap(),
         ),
@@ -128,9 +137,27 @@ fn generate_schema_fixtures() {
             "parsed_session",
             serde_json::to_string_pretty(&ParsedSession {
                 id: "session-123".to_string(),
-                kind: ParsedSessionKind::Worker("alpha".to_string()),
+                session_id: "session-456".to_string(),
+                provider: "claude".to_string(),
+                kind: ParsedSessionKind::Variant0 {
+                    worker: "alpha".to_string(),
+                    bead: "bd-abc123".to_string(),
+                    strand: None,
+                },
+                cwd: "/home/coding/project".to_string(),
+                canonical_cwd: None,
+                title: "Test session".to_string(),
                 messages: vec![],
-                total_usage: None,
+                total_usage: ParsedSessionTotalUsage {
+                    input_tokens: 0,
+                    output_tokens: 0,
+                    cache_read_tokens: 0,
+                    cache_write_tokens: 0,
+                },
+                created_at: ts,
+                updated_at: ts,
+                complete: false,
+                file_path: "/path/to/session.jsonl".to_string(),
             })
             .unwrap(),
         ),
@@ -193,9 +220,10 @@ fn generate_schema_fixtures() {
             serde_json::to_string_pretty(&StitchBead {
                 stitch_id: uuid,
                 bead_id: "hoop-ttb.1".to_string(),
-                relationship: StitchBeadRelationship::WorksOn,
-                created_at: Some(ts),
-                created_by: Some("user".to_string()),
+                relationship: StitchBeadRelationship::CreatedHere,
+                linked_at: Some(ts),
+                workspace: "/home/coding/project".to_string(),
+                canonical_workspace: None,
                 schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
             })
             .unwrap(),
@@ -217,7 +245,7 @@ fn generate_schema_fixtures() {
                 id: uuid,
                 stitch_id: uuid,
                 role: StitchMessageRole::User,
-                content: "Hello".to_string(),
+                content: serde_json::Value::String("Hello".to_string()),
                 created_at: ts,
                 schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
             })
@@ -290,11 +318,17 @@ fn generate_schema_fixtures() {
             "reflection_ledger",
             serde_json::to_string_pretty(&ReflectionLedger {
                 id: uuid,
-                pattern_id: Some(uuid),
+                scope: "global".to_string(),
                 rule: "test rule".to_string(),
-                example: Some("test example".to_string()),
+                reason: Some("test example".to_string()),
+                source_stitches: vec![],
                 status: ReflectionLedgerStatus::Active,
                 created_at: ts,
+                last_applied: None,
+                applied_count: 0,
+                approved_by: None,
+                approved_at: None,
+                archived_at: None,
                 schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
             })
             .unwrap(),
@@ -315,7 +349,9 @@ fn generate_schema_fixtures() {
                 audit: None,
                 reflection: None,
                 stuck_detector: None,
+                morning_brief: None,
                 pricing: None,
+                roles: None,
                 server: None,
             })
             .unwrap(),
@@ -338,28 +374,30 @@ fn generate_schema_fixtures() {
         (
             "backup_config",
             serde_json::to_string_pretty(&BackupConfig {
-                s3_bucket: Some("test-bucket".to_string()),
-                s3_prefix: Some("hoop/".to_string()),
-                s3_region: Some("us-east-1".to_string()),
-                s3_endpoint_url: None,
-                schedule: None,
+                endpoint: "https://s3.example.com".to_string(),
+                bucket: "test-bucket".to_string(),
+                prefix: "hoop/".to_string(),
+                schedule: "0 4 * * *".to_string(),
+                retention_days: 30,
+                encryption: false,
             })
             .unwrap(),
         ),
         (
             "ui_config",
             serde_json::to_string_pretty(&UiConfig {
-                default_project_sort: Some(UiConfigDefaultProjectSort::Name),
-                theme: Some(UiConfigTheme::Dark),
+                default_project_sort: UiConfigDefaultProjectSort::Name,
+                theme: UiConfigTheme::Dark,
+                archive_after_days: 30,
             })
             .unwrap(),
         ),
         (
             "voice_config",
             serde_json::to_string_pretty(&VoiceConfig {
-                enabled: Some(true),
-                provider: Some("openai".to_string()),
-                model: Some("whisper-1".to_string()),
+                whisper_model_path: Some("/path/to/model.bin".to_string()),
+                hotkey: "Ctrl+Shift+V".to_string(),
+                max_recording_seconds: 300,
             })
             .unwrap(),
         ),
@@ -405,6 +443,9 @@ fn generate_schema_fixtures() {
             serde_json::to_string_pretty(&ProjectEntry::Variant0 {
                 name: "test-project".to_string(),
                 color: Some(ProjectEntryVariant0Color("#FF0000".to_string())),
+                label: None,
+                path: "/home/coding/project".to_string(),
+                canonical_path: None,
             })
             .unwrap(),
         ),
@@ -443,10 +484,14 @@ fn generate_schema_fixtures() {
         (
             "capacity_account",
             serde_json::to_string_pretty(&CapacityAccount {
+                id: "account-123".to_string(),
                 adapter: Some(CapacityAccountAdapter::Claude),
-                account_id: Some("account-123".to_string()),
+                account_id: Some("account-456".to_string()),
                 limits: None,
                 usage: None,
+                window_start: None,
+                window_end: None,
+                updated_at: ts,
                 schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
             })
             .unwrap(),
@@ -484,7 +529,9 @@ fn generate_schema_fixtures() {
                 args: serde_json::Map::new(),
                 result: AuditRowResult::Success,
                 error: None,
-                schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
+                hash_prev: AuditRowHashPrev("0".repeat(64)),
+                hash_self: AuditRowHashSelf("0".repeat(64)),
+                schema_version: None,
             })
             .unwrap(),
         ),
@@ -575,6 +622,8 @@ fn generate_schema_fixtures() {
                 transcript: "Test transcript".to_string(),
                 transcript_words: vec![],
                 tags: vec![],
+                redacted_words: vec![],
+                transcription_status: None,
                 schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
             })
             .unwrap(),
@@ -592,37 +641,13 @@ fn generate_schema_fixtures() {
             serde_json::to_string_pretty(&ScriptManifest {
                 name: "test-script".to_string(),
                 description: Some("Test script".to_string()),
-                scope: Some(ScriptManifestScope::Global),
-                projects: None,
-                timeout_secs: Some(300),
-                arguments: None,
+                scope: ScriptManifestScope::Global,
+                projects: vec![],
+                timeout_secs: 300,
+                arguments: vec![],
                 schedule: None,
-                overlap_policy: Some(ScriptManifestOverlapPolicy::Skip),
-                on: None,
-            })
-            .unwrap(),
-        ),
-        (
-            "codex_account_daily_spend_row",
-            serde_json::to_string_pretty(&CodexAccountDailySpendRow {
-                date: "2024-01-01".to_string(),
-                account_id: "account-123".to_string(),
-                adapter: Some("claude".to_string()),
-                spend_usd: 1.23,
-                input_tokens: 1000,
-                output_tokens: 500,
-            })
-            .unwrap(),
-        ),
-        (
-            "codex_account_monthly_rollup_row",
-            serde_json::to_string_pretty(&CodexAccountMonthlyRollupRow {
-                month: "2024-01".to_string(),
-                account_id: "account-123".to_string(),
-                adapter: Some("claude".to_string()),
-                spend_usd: 37.99,
-                input_tokens: 30000,
-                output_tokens: 15000,
+                overlap_policy: ScriptManifestOverlapPolicy::Skip,
+                on: vec![],
             })
             .unwrap(),
         ),

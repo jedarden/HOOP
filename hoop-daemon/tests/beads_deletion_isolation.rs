@@ -102,6 +102,9 @@ async fn test_beads_deletion_shows_error_card() {
         hoop_daemon::vector_index::VectorIndex::new(),
     ));
     let scripts_dir = PathBuf::from("/tmp/scripts");
+    let stuck_detector = std::sync::Arc::new(std::sync::Mutex::new(
+        hoop_daemon::stuck_detector::StuckDetector::new(),
+    ));
 
     let supervisor = ProjectSupervisor::new(
         bead_tx,
@@ -112,6 +115,7 @@ async fn test_beads_deletion_shows_error_card() {
         cost_aggregator,
         vector_index,
         scripts_dir,
+        stuck_detector,
     );
 
     // Reconcile the projects
@@ -242,6 +246,9 @@ async fn test_readyz_reports_degraded_after_beads_deletion() {
         hoop_daemon::vector_index::VectorIndex::new(),
     ));
     let scripts_dir = PathBuf::from("/tmp/scripts");
+    let stuck_detector = std::sync::Arc::new(std::sync::Mutex::new(
+        hoop_daemon::stuck_detector::StuckDetector::new(),
+    ));
 
     let supervisor = ProjectSupervisor::new(
         bead_tx,
@@ -252,6 +259,7 @@ async fn test_readyz_reports_degraded_after_beads_deletion() {
         cost_aggregator,
         vector_index,
         scripts_dir,
+        stuck_detector,
     );
 
     // Reconcile the projects
@@ -355,6 +363,9 @@ async fn test_beads_restoration_recovers_project() {
         hoop_daemon::vector_index::VectorIndex::new(),
     ));
     let scripts_dir = PathBuf::from("/tmp/scripts");
+    let stuck_detector = std::sync::Arc::new(std::sync::Mutex::new(
+        hoop_daemon::stuck_detector::StuckDetector::new(),
+    ));
 
     let supervisor = ProjectSupervisor::new(
         bead_tx,
@@ -365,6 +376,7 @@ async fn test_beads_restoration_recovers_project() {
         cost_aggregator,
         vector_index,
         scripts_dir,
+        stuck_detector,
     );
 
     // Reconcile the projects
@@ -486,6 +498,9 @@ async fn test_sibling_projects_serve_events_during_degradation() {
         hoop_daemon::vector_index::VectorIndex::new(),
     ));
     let scripts_dir = PathBuf::from("/tmp/scripts");
+    let stuck_detector = std::sync::Arc::new(std::sync::Mutex::new(
+        hoop_daemon::stuck_detector::StuckDetector::new(),
+    ));
 
     let supervisor = ProjectSupervisor::new(
         bead_tx.clone(),
@@ -496,6 +511,7 @@ async fn test_sibling_projects_serve_events_during_degradation() {
         cost_aggregator,
         vector_index,
         scripts_dir,
+        stuck_detector,
     );
 
     // Reconcile the projects

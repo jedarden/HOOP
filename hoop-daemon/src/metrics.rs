@@ -693,6 +693,10 @@ pub struct Metrics {
     pub hoop_shutdown_exceeded_grace_period: Counter,
     /// Connections that did not drain before the shutdown timeout fired.
     pub hoop_shutdown_timeout_connections: Counter,
+    /// Daemon startup duration in seconds.
+    pub hoop_startup_duration_seconds: Histogram,
+    /// Workers detected as stuck (heartbeat timeout).
+    pub hoop_worker_stuck_total: Counter,
 
     // ── §16.1 Operational ──────────────────────────────────────────────────
     /// Panics caught and recovered, labelled by subsystem.
@@ -815,6 +819,8 @@ impl Metrics {
             hoop_shutdown_duration_seconds: Histogram::new(),
             hoop_shutdown_exceeded_grace_period: Counter::new(),
             hoop_shutdown_timeout_connections: Counter::new(),
+            hoop_startup_duration_seconds: Histogram::new(),
+            hoop_worker_stuck_total: Counter::new(),
 
             hoop_panics_total: LabeledCounter::new(&["subsystem"]),
             hoop_errors_total: LabeledCounter::new(&["subsystem", "kind"]),

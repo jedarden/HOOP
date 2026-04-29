@@ -262,6 +262,16 @@ impl UploadRegistry {
         })
     }
 
+    /// Get metadata for an upload (for redaction policy checking)
+    pub fn get_metadata(&self, upload_id: &ValidUploadId) -> Result<UploadMetadata> {
+        self.load_metadata(upload_id)
+    }
+
+    /// Get the partial file path for an upload (for redaction policy checking)
+    pub fn get_partial_path(&self, upload_id: &ValidUploadId) -> Result<PathBuf> {
+        self.partial_path(upload_id)
+    }
+
     /// Complete upload and verify checksum
     pub fn complete_upload(&self, upload_id: &ValidUploadId) -> Result<PathBuf> {
         let meta = self.load_metadata(upload_id)?;

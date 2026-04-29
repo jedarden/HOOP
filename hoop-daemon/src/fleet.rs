@@ -69,6 +69,8 @@ pub enum ActionKind {
     SchemaMigrated,
     /// Reflection Ledger rule injected into agent session (§4.7)
     ReflectionInjected,
+    /// Skill invoked via MCP (skill_name, args, duration_ms, result in args_json)
+    SkillInvoked,
 }
 
 /// Action result for audit log
@@ -279,6 +281,67 @@ pub fn write_redaction_audit(
         source_ref,
         None, // stitch_id
         None, // args_hash
+    )?;
+
+    Ok(())
+}
+
+/// Insert a redaction audit entry into the redaction_audit table.
+///
+/// This is the canonical function for writing redaction audit entries.
+/// It writes directly to the redaction_audit table (not the actions table).
+#[allow(clippy::too_many_arguments)]
+pub fn insert_redaction_audit(
+    what_flagged: &str,
+    pattern_name: &str,
+    action: crate::redaction_policy::RedactionAction,
+    operator: &str,
+    source_ref: Option<&str>,
+    project: Option<&str>,
+    metadata: Option<serde_json::Value>,
+) -> Result<()> {
+    use crate::redaction_policy::RedactionAction;
+
+    // Map RedactionAction to the string values expected by the frontend
+    let action_str = match action {
+        RedactionAction::FlaggedOnly => "flagged_only",
+        RedactionAction::Redact => "redacted_in_place",
+        RedactionAction::Warn => "proceeded_anyway",
+        RedactionAction::Reject => "rejected",
+    };
+
+    // Generate a unique ID
+    let id = Uuid::new_v4().to_string();
+
+    // Get current timestamp
+    let ts = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    let created_at = ts.clone();
+
+    // Convert metadata to JSON string
+    let metadata_json = metadata.map(|m| m.to_string());
+
+    // Normalize project to empty string for NULL
+    let project_val = project.unwrap_or("");
+
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+
+    // Insert into redaction_audit table
+    conn.execute(
+        "INSERT INTO redaction_audit (id, ts, what_flagged, pattern_name, action, operator, source_ref, project, metadata_json, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        [
+            &id,
+            &ts,
+            what_flagged,
+            pattern_name,
+            action_str,
+            operator,
+            source_ref.unwrap_or(""),
+            project_val,
+            metadata_json.as_deref().unwrap_or(""),
+            &created_at,
+        ],
     )?;
 
     Ok(())
@@ -3651,6 +3714,28 @@ pub struct ReflectionLedgerEntry {
     pub applied_count: i64,
 }
 
+/// Insert a reflection ledger entry (for testing and reflection propagation).
+pub fn insert_reflection_entry(entry: &ReflectionLedgerEntry) -> Result<()> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    conn.execute(
+        r#"INSERT INTO reflection_ledger (id, scope, rule, reason, source_stitches, status, created_at, last_applied, applied_count)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"#,
+        params![
+            &entry.id,
+            &entry.scope,
+            &entry.rule,
+            &entry.reason,
+            &entry.source_stitches,
+            &entry.status,
+            &entry.created_at,
+            &entry.last_applied,
+            &entry.applied_count,
+        ],
+    )?;
+    Ok(())
+}
+
 /// List approved reflection ledger entries, optionally filtered by scope.
 pub fn list_approved_reflection_entries(
     scope_prefix: Option<&str>,
@@ -3852,6 +3937,50 @@ pub fn load_recent_stitches(limit: usize) -> Result<Vec<(String, String, String,
         result.push(row?);
     }
     Ok(result)
+}
+
+/// Load a Stitch by ID (for testing Stitch archival verification).
+///
+/// Returns None if the Stitch doesn't exist.
+pub fn load_stitch_by_id(stitch_id: &str) -> Result<Option<StitchRow>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+
+    let row = conn
+        .query_row(
+            "SELECT id, project, kind, title, created_by, created_at, last_activity_at
+             FROM stitches WHERE id = ?1",
+            &[stitch_id],
+            |row| {
+                Ok(StitchRow {
+                    id: row.get(0)?,
+                    project: row.get(1)?,
+                    kind: row.get(2)?,
+                    title: row.get(3)?,
+                    created_by: row.get(4)?,
+                    created_at: row.get(5)?,
+                    last_activity_at: row.get(6)?,
+                })
+            },
+        );
+
+    match row {
+        Ok(r) => Ok(Some(r)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// A row from the `stitches` table (for testing).
+#[derive(Debug, Clone)]
+pub struct StitchRow {
+    pub id: String,
+    pub project: String,
+    pub kind: String,
+    pub title: String,
+    pub created_by: String,
+    pub created_at: String,
+    pub last_activity_at: String,
 }
 
 // ---------------------------------------------------------------------------

@@ -1,8 +1,9 @@
 /**
- * Secrets Scanner for dictated notes
+ * Secrets Scanner for dictated notes (§18)
  *
  * Scans transcript text for potential secrets and sensitive information.
- * Uses regex patterns to detect common secret formats.
+ * Uses regex patterns fetched from the backend to ensure parity with
+ * the authoritative server-side scanner.
  */
 
 export interface SecretMatch {
@@ -17,122 +18,127 @@ export interface SecretWarning {
   count: number;
 }
 
-// Common secret patterns
-const SECRET_PATTERNS = [
-  {
-    type: 'API Key',
-    // Matches: sk-..., api_key..., API_KEY=..., etc.
-    patterns: [
-      /(?:sk_|api[_-]?key|apikey|secret[_-]?key|secretkey)\s*[:=]\s*['"']?([a-zA-Z0-9_\-]{20,})['"']?/gi,
-      /(sk_[a-zA-Z0-9]{20,})/g,
-    ],
-  },
-  {
-    type: 'Bearer Token',
-    patterns: [
-      /(?:bearer|authorization)\s*:\s*['"']?([a-zA-Z0-9_\-\.]{20,})['"']?/gi,
-    ],
-  },
-  {
-    type: 'JWT Token',
-    patterns: [
-      /eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/g,
-    ],
-  },
-  {
-    type: 'AWS Access Key',
-    patterns: [
-      /(AKIA[0-9A-Z]{16})/g,
-    ],
-  },
-  {
-    type: 'AWS Secret Key',
-    patterns: [
-      /(?:aws[_-]?secret[_-]?access[_-]?key|secret[_-]?key)\s*[:=]\s*['"']?([a-zA-Z0-9/+=]{40})['"']?/gi,
-    ],
-  },
-  {
-    type: 'GitHub Token',
-    patterns: [
-      /(ghp_[a-zA-Z0-9]{36})/g,
-      /(gho_[a-zA-Z0-9]{36})/g,
-      /(ghu_[a-zA-Z0-9]{36})/g,
-      /(ghs_[a-zA-Z0-9]{36})/g,
-      /(ghr_[a-zA-Z0-9]{36})/g,
-    ],
-  },
-  {
-    type: 'Password',
-    patterns: [
-      /(?:password|passwd|pwd)\s*[:=]\s*['"']?([^\s'"']{8,})['"']?/gi,
-    ],
-  },
-  {
-    type: 'Private Key',
-    patterns: [
-      /-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----/g,
-      /-----BEGIN\s+EC\s+PRIVATE\s+KEY-----/g,
-      /-----BEGIN\s+OPENSSH\s+PRIVATE\s+KEY-----/g,
-    ],
-  },
-  {
-    type: 'Database URL',
-    patterns: [
-      /(?:postgres|mysql|mongodb|redis|sqlite)?:\/\/[^\s'"']+/gi,
-    ],
-  },
-  {
-    type: 'Email Address',
-    patterns: [
-      /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
-    ],
-  },
-  {
-    type: 'IP Address',
-    patterns: [
-      /\b(?:\d{1,3}\.){3}\d{1,3}\b/g,
-    ],
-  },
-  {
-    type: 'Phone Number',
-    patterns: [
-      /\b\+?[\d\s\-()]{10,}\b/g,
-    ],
-  },
-  {
-    type: 'Credit Card',
-    patterns: [
-      /\b(?:\d{4}[-\s]?){3}\d{4}\b/g,
-    ],
-  },
-  {
-    type: 'SSN',
-    patterns: [
-      /\b\d{3}-\d{2}-\d{4}\b/g,
-    ],
-  },
-];
+// Secret pattern from backend API
+export interface SecretPattern {
+  name: string;
+  severity: string;
+  patterns: string[];
+}
+
+// Response from /api/config/secrets-patterns
+interface SecretsPatternsResponse {
+  schema_version: string;
+  patterns: SecretPattern[];
+}
+
+// ─── Pattern cache ─────────────────────────────────────────────────────────────
+
+let cachedPatterns: SecretPattern[] | null = null;
+let fetchPromise: Promise<SecretPattern[]> | null = null;
 
 /**
- * Scan text for potential secrets
+ * Fetch secret patterns from the backend API (§18).
+ *
+ * This function caches the result and ensures only one fetch request
+ * is in flight at a time. Patterns are served from config.yml or
+ * backend defaults (single source of truth).
+ *
+ * @throws Error if the backend is unavailable (no local fallback)
  */
-export function scanForSecrets(text: string): SecretWarning {
+export async function prefetchSecretPatterns(): Promise<SecretPattern[]> {
+  // Return cached patterns if available
+  if (cachedPatterns) {
+    return cachedPatterns;
+  }
+
+  // Return existing fetch promise if fetch is in progress
+  if (fetchPromise) {
+    return fetchPromise;
+  }
+
+  // Start fetching patterns
+  fetchPromise = (async () => {
+    try {
+      const response = await fetch('/api/config/secrets-patterns');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const data: SecretsPatternsResponse = await response.json();
+      cachedPatterns = data.patterns;
+      console.log(`[secretsScanner] Loaded ${data.patterns.length} patterns from backend`);
+      return data.patterns;
+    } catch (e) {
+      console.error('[secretsScanner] Failed to fetch patterns from backend:', e);
+      throw new Error('Secrets scanner requires backend connection. Please ensure the daemon is running.');
+    } finally {
+      fetchPromise = null;
+    }
+  })();
+
+  return fetchPromise;
+}
+
+/**
+ * Get cached patterns synchronously.
+ *
+ * Returns cached patterns if available, otherwise returns an empty array.
+ * Use prefetchSecretPatterns() to ensure patterns are loaded from the
+ * backend before calling this.
+ */
+function getPatternsSync(): SecretPattern[] {
+  if (cachedPatterns) {
+    return cachedPatterns;
+  }
+
+  // Patterns not loaded yet - return empty array for fail-safe behavior
+  return [];
+}
+
+/**
+ * Scan text for secrets using cached patterns (synchronous).
+ *
+ * This function is optimized for use in React render cycles where
+ * async operations are not allowed. It uses patterns that were
+ * pre-fetched via prefetchSecretPatterns(). If patterns haven't
+ * been loaded yet, returns an empty result (fail-safe).
+ *
+ * IMPORTANT: Always call prefetchSecretPatterns() before using this
+ * function, otherwise it will return an empty result.
+ *
+ * @param text - The text to scan for secrets
+ * @returns SecretWarning with matches and count
+ */
+export function scanForSecretsSync(text: string): SecretWarning {
+  const patterns = getPatternsSync();
+  if (patterns.length === 0) {
+    // Patterns not loaded yet - fail-safe, return empty result
+    return { matches: [], count: 0 };
+  }
+
   const matches: SecretMatch[] = [];
 
-  for (const secretType of SECRET_PATTERNS) {
-    for (const pattern of secretType.patterns) {
-      let match;
-      // Reset regex state for each pattern
-      pattern.lastIndex = 0;
+  for (const secretType of patterns) {
+    for (const patternStr of secretType.patterns) {
+      try {
+        const pattern = new RegExp(patternStr, 'gi');
+        let match;
 
-      while ((match = pattern.exec(text)) !== null) {
-        const value = match[1] || match[0];
-        matches.push({
-          type: secretType.type,
-          value,
-          startIndex: match.index,
-          endIndex: match.index + value.length,
-        });
+        // Reset regex state
+        pattern.lastIndex = 0;
+
+        while ((match = pattern.exec(text)) !== null) {
+          // For patterns with capture groups, use the captured value;
+          // otherwise use the full match
+          const value = (match as any)[1] || match[0];
+          matches.push({
+            type: secretType.name,
+            value,
+            startIndex: match.index,
+            endIndex: match.index + value.length,
+          });
+        }
+      } catch (e) {
+        console.warn(`[secretsScanner] Invalid pattern "${patternStr}" for type "${secretType.name}":`, e);
       }
     }
   }
@@ -147,7 +153,57 @@ export function scanForSecrets(text: string): SecretWarning {
 }
 
 /**
- * Remove overlapping matches, keeping the most specific one
+ * Scan text for secrets (async version).
+ *
+ * This function ensures patterns are loaded from the backend before
+ * scanning. Use this for explicit user actions where a brief delay
+ * is acceptable (e.g., before form submission).
+ *
+ * @param text - The text to scan for secrets
+ * @returns SecretWarning with matches and count
+ */
+export async function scanForSecrets(text: string): Promise<SecretWarning> {
+  // Ensure patterns are loaded from backend
+  const patterns = await prefetchSecretPatterns();
+  const matches: SecretMatch[] = [];
+
+  for (const secretType of patterns) {
+    for (const patternStr of secretType.patterns) {
+      try {
+        const pattern = new RegExp(patternStr, 'gi');
+        let match;
+
+        // Reset regex state
+        pattern.lastIndex = 0;
+
+        while ((match = pattern.exec(text)) !== null) {
+          // For patterns with capture groups, use the captured value;
+          // otherwise use the full match
+          const value = (match as any)[1] || match[0];
+          matches.push({
+            type: secretType.name,
+            value,
+            startIndex: match.index,
+            endIndex: match.index + value.length,
+          });
+        }
+      } catch (e) {
+        console.warn(`[secretsScanner] Invalid pattern "${patternStr}" for type "${secretType.name}":`, e);
+      }
+    }
+  }
+
+  // Remove duplicates and sort by position
+  const uniqueMatches = removeOverlappingMatches(matches);
+
+  return {
+    matches: uniqueMatches,
+    count: uniqueMatches.length,
+  };
+}
+
+/**
+ * Remove overlapping matches, keeping the most specific one.
  */
 function removeOverlappingMatches(matches: SecretMatch[]): SecretMatch[] {
   if (matches.length === 0) return [];
@@ -174,11 +230,38 @@ function removeOverlappingMatches(matches: SecretMatch[]): SecretMatch[] {
 }
 
 /**
- * Get severity level based on secret type
+ * Get severity level based on secret type.
+ *
+ * Uses the severity from the backend pattern, or falls back to
+ * heuristic classification for unknown types.
+ *
+ * @param type - The secret type name
+ * @param backendSeverity - The severity from the backend pattern (optional)
+ * @returns 'high' | 'medium' | 'low'
  */
-export function getSecretSeverity(type: string): 'high' | 'medium' | 'low' {
-  const highSeverity = ['API Key', 'AWS Access Key', 'AWS Secret Key', 'GitHub Token', 'Private Key', 'JWT Token', 'Bearer Token'];
-  const mediumSeverity = ['Password', 'Database URL'];
+export function getSecretSeverity(type: string, backendSeverity?: string): 'high' | 'medium' | 'low' {
+  // Use backend severity if provided
+  if (backendSeverity === 'high' || backendSeverity === 'medium' || backendSeverity === 'low') {
+    return backendSeverity;
+  }
+
+  // Fallback heuristic classification
+  const highSeverity = [
+    'Anthropic API Key',
+    'Generic API Key',
+    'AWS Access Key',
+    'AWS Secret Key',
+    'GitHub Token',
+    'Private Key',
+    'JWT',
+    'Bearer Token',
+  ];
+  const mediumSeverity = [
+    'Password',
+    'Database URL',
+    'Environment Variable Secret',
+    'JSON Secret Field',
+  ];
 
   if (highSeverity.includes(type)) return 'high';
   if (mediumSeverity.includes(type)) return 'medium';
@@ -186,7 +269,11 @@ export function getSecretSeverity(type: string): 'high' | 'medium' | 'low' {
 }
 
 /**
- * Truncate secret value for display (show first and last few characters)
+ * Truncate secret value for display (show first and last few characters).
+ *
+ * @param value - The secret value to truncate
+ * @param visibleChars - Number of characters to show at each end (default: 4)
+ * @returns Truncated string with asterisks in the middle
  */
 export function truncateSecret(value: string, visibleChars: number = 4): string {
   if (value.length <= visibleChars * 2) {

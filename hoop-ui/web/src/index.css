@@ -14601,3 +14601,347 @@ body.wt-tour-active {
   background: #3367d6;
 }
 
+/* ── Scripts Tab (§22.3 Operator-invoked scripts) ─────────────────────────────── */
+
+.scripts-tab {
+  padding: 1.5rem;
+}
+
+/* Banner for success/error messages */
+.banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.banner-success {
+  background: #e6f4ea;
+  border: 1px solid #34a853;
+  color: #137333;
+}
+
+.banner-error {
+  background: #fce8e6;
+  border: 1px solid #ea4335;
+  color: #c5221f;
+}
+
+.banner-content {
+  flex: 1;
+}
+
+.banner-content strong {
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.banner-details {
+  margin: 0.5rem 0 0 0;
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.banner-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.6;
+  padding: 0;
+  margin-left: 1rem;
+}
+
+.banner-close:hover {
+  opacity: 1;
+}
+
+/* Scripts header */
+.scripts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.scripts-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.scripts-header button {
+  padding: 0.5rem 1rem;
+}
+
+/* Error state */
+.scripts-error {
+  padding: 1.5rem;
+  background: #fce8e6;
+  border: 1px solid #ea4335;
+  border-radius: 8px;
+  color: #c5221f;
+}
+
+.scripts-error strong {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+/* Empty state */
+.scripts-empty {
+  padding: 3rem;
+  text-align: center;
+  color: #666;
+}
+
+.scripts-empty p {
+  margin: 0.5rem 0;
+}
+
+.scripts-empty-hint {
+  font-size: 0.9rem;
+  color: #999;
+}
+
+.scripts-empty-hint code {
+  background: #f0f0f0;
+  padding: 0.125rem 0.25rem;
+  border-radius: 3px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 0.875rem;
+}
+
+/* Scripts list */
+.scripts-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 1.5rem;
+}
+
+.script-card {
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 1.25rem;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.script-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-color: #d0d0d0;
+}
+
+/* Script header */
+.script-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.script-name {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.script-badges {
+  display: flex;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+/* Badges */
+.badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.badge-scheduled {
+  background: #e8f0fe;
+  color: #1967d2;
+}
+
+.badge-running {
+  background: #fff8e1;
+  color: #f9ab00;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.badge-project {
+  background: #f3e8fd;
+  color: #8e24aa;
+}
+
+.badge-not-executable {
+  background: #fce8e6;
+  color: #ea4335;
+}
+
+/* Script description */
+.script-description {
+  margin: 0 0 1rem 0;
+  font-size: 0.9rem;
+  color: #666;
+  line-height: 1.5;
+}
+
+/* Script metadata */
+.script-meta {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.script-timeout,
+.script-projects {
+  display: flex;
+  align-items: center;
+}
+
+/* Script schedule */
+.script-schedule {
+  background: #f8f9fa;
+  border-radius: 4px;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+}
+
+.schedule-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.375rem;
+}
+
+.schedule-row:last-child {
+  margin-bottom: 0;
+}
+
+.schedule-label {
+  font-weight: 600;
+  color: #555;
+  margin-right: 0.5rem;
+  min-width: 70px;
+}
+
+.schedule-value {
+  color: #333;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+}
+
+/* Script button */
+.script-card button {
+  width: 100%;
+  padding: 0.625rem 1rem;
+  font-size: 0.9rem;
+}
+
+/* Script result */
+.script-result {
+  margin-top: 2rem;
+  padding: 1.25rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.script-result h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.result-meta {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.result-stdout,
+.result-stderr {
+  margin-bottom: 1rem;
+}
+
+.result-stdout:last-child,
+.result-stderr:last-child {
+  margin-bottom: 0;
+}
+
+.result-stdout h4,
+.result-stderr h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.result-stdout h4 {
+  color: #137333;
+}
+
+.result-stderr h4 {
+  color: #c5221f;
+}
+
+.result-stdout pre,
+.result-stderr pre {
+  margin: 0;
+  padding: 0.75rem;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.result-stderr pre {
+  border-color: #fce8e6;
+  background: #fff8f8;
+}
+

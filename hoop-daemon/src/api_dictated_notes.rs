@@ -104,6 +104,14 @@ async fn create_note(
                 findings = findings.len(),
                 "Voice transcript contains potential secrets — flagged for operator review (§18.2)"
             );
+            // Write audit entries for each unique pattern detected
+            crate::redaction::audit_findings(
+                "transcript",
+                &findings,
+                &valid_stitch_id,
+                Some(&project),
+                "system",  // Voice transcription is automatic
+            );
         }
     }
 
@@ -378,6 +386,15 @@ async fn update_note(
         None => return Err((StatusCode::NOT_FOUND, "Note not found".to_string())),
     };
 
+    // Query stitch info once for both title and transcript blocks
+    let stitch_info: Option<(String, String)> = conn
+        .query_row(
+            "SELECT project, kind FROM stitches WHERE id = ?1",
+            params![valid_id.as_str()],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .ok();
+
     if let Some(title) = req.title {
         dictated_notes::update_stitch_title(&conn, valid_id.as_str(), &title).map_err(|e| {
             (
@@ -387,14 +404,7 @@ async fn update_note(
         })?;
 
         // Re-evaluate pattern queries after title change (§4.7)
-        let stitch_info: Option<(String, String)> = conn
-            .query_row(
-                "SELECT project, kind FROM stitches WHERE id = ?1",
-                params![valid_id.as_str()],
-                |row| Ok((row.get(0)?, row.get(1)?)),
-            )
-            .ok();
-        if let Some((project, kind)) = stitch_info {
+        if let Some((ref project, ref kind)) = stitch_info {
             if let Err(e) = crate::pattern_query_evaluator::sync_and_emit_pattern_queries(
                 valid_id.as_str(),
                 &project,
@@ -418,6 +428,15 @@ async fn update_note(
                 stitch_id = %valid_id.as_str(),
                 findings = findings.len(),
                 "Updated voice transcript contains potential secrets — flagged for operator review (§18.2)"
+            );
+            // Write audit entries for each unique pattern detected
+            let project = stitch_info.as_ref().map(|(p, _)| p.as_str());
+            crate::redaction::audit_findings(
+                "transcript",
+                &findings,
+                &valid_id.as_str(),
+                project,
+                "system",  // Voice transcription is automatic
             );
         }
         note.transcript = transcript;

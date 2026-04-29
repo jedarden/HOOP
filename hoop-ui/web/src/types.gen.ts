@@ -987,6 +987,30 @@ export type ProjectEntry =
        * Optional color hex code
        */
       color?: string;
+      /**
+       * Per-project redaction policy override (§18.5)
+       */
+      redaction?: {
+        /**
+         * Action to take when secrets are detected: warn (log only), redact (replace with [REDACTED]), reject (block the operation)
+         */
+        action?: "warn" | "redact" | "reject";
+        /**
+         * Pattern sets to enable for this project. If omitted, all default patterns are enabled.
+         */
+        patterns?: (
+          | "anthropic_api_key"
+          | "generic_sk_key"
+          | "aws_access_key"
+          | "github_token"
+          | "slack_token"
+          | "jwt"
+          | "bearer_token"
+          | "env_var_secret"
+          | "json_secret_field"
+        )[];
+        [k: string]: unknown;
+      };
       [k: string]: unknown;
     }
   | {
@@ -1002,6 +1026,12 @@ export type ProjectEntry =
        * Optional color hex code
        */
       color?: string;
+      /**
+       * Per-project redaction policy override (§18.5)
+       */
+      redaction?: {
+        [k: string]: unknown;
+      };
       workspaces: {
         /**
          * Raw workspace path as provided by the operator (display-only)
@@ -1047,6 +1077,30 @@ export interface ProjectsRegistry {
          * Optional color hex code
          */
         color?: string;
+        /**
+         * Per-project redaction policy override (§18.5)
+         */
+        redaction?: {
+          /**
+           * Action to take when secrets are detected: warn (log only), redact (replace with [REDACTED]), reject (block the operation)
+           */
+          action?: "warn" | "redact" | "reject";
+          /**
+           * Pattern sets to enable for this project. If omitted, all default patterns are enabled.
+           */
+          patterns?: (
+            | "anthropic_api_key"
+            | "generic_sk_key"
+            | "aws_access_key"
+            | "github_token"
+            | "slack_token"
+            | "jwt"
+            | "bearer_token"
+            | "env_var_secret"
+            | "json_secret_field"
+          )[];
+          [k: string]: unknown;
+        };
         [k: string]: unknown;
       }
     | {
@@ -1062,6 +1116,12 @@ export interface ProjectsRegistry {
          * Optional color hex code
          */
         color?: string;
+        /**
+         * Per-project redaction policy override (§18.5)
+         */
+        redaction?: {
+          [k: string]: unknown;
+        };
         workspaces: {
           /**
            * Raw workspace path as provided by the operator (display-only)

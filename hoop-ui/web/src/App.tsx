@@ -11,6 +11,7 @@ import CapacityPanel from './CapacityPanel';
 import AgentChatPane from './AgentChatPane';
 import WorkerTimeline from './WorkerTimeline';
 import AuditPanel from './AuditPanel';
+import RedactionAuditPanel from './RedactionAuditPanel';
 import { SearchPalette } from './SearchPalette';
 import CrossProjectDashboard from './CrossProjectDashboard';
 import PatternsView from './PatternsView';
@@ -30,6 +31,7 @@ type Route =
   | { view: 'fleet' }
   | { view: 'timeline' }
   | { view: 'audit' }
+  | { view: 'redaction-audit' }
   | { view: 'dashboard' }
   | { view: 'patterns'; patternId?: string }
   | { view: 'conversations' }
@@ -72,6 +74,7 @@ function parseHash(hash: string): Route {
   if (path === 'fleet') return { view: 'fleet' };
   if (path === 'timeline') return { view: 'timeline' };
   if (path === 'audit') return { view: 'audit' };
+  if (path === 'redaction-audit') return { view: 'redaction-audit' };
   if (path === 'dashboard') return { view: 'dashboard' };
   if (path === 'patterns') return { view: 'patterns' };
   if (path === 'conversations') return { view: 'conversations' };
@@ -230,6 +233,7 @@ export default function App() {
                 <a href="#/drafts" className="header-nav-link">Drafts</a>
                 <a href="#/fleet" className="header-nav-link">Fleet</a>
                 <a href="#/audit" className="header-nav-link">Audit</a>
+                <a href="#/redaction-audit" className="header-nav-link">Redaction Audit</a>
               </div>
               <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
                 <span className="indicator-dot" />
@@ -277,6 +281,7 @@ export default function App() {
                 <a href="#/fleet" className="header-nav-link">Fleet</a>
                 <a href="#/timeline" className="header-nav-link">Timeline</a>
                 <a href="#/audit" className="header-nav-link">Audit</a>
+                <a href="#/redaction-audit" className="header-nav-link">Redaction Audit</a>
               </div>
               <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
                 <span className="indicator-dot" />
@@ -321,6 +326,7 @@ export default function App() {
                 <a href="#/fleet" className="header-nav-link">Fleet</a>
                 <a href="#/timeline" className="header-nav-link">Timeline</a>
                 <a href="#/audit" className="header-nav-link">Audit</a>
+                <a href="#/redaction-audit" className="header-nav-link">Redaction Audit</a>
                 <a href="#/drafts" className="header-nav-link">Drafts</a>
               </div>
               <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
@@ -362,6 +368,7 @@ export default function App() {
                 <a href="#/fleet" className="header-nav-link">Fleet</a>
                 <a href="#/timeline" className="header-nav-link">Timeline</a>
                 <a href="#/audit" className="header-nav-link">Audit</a>
+                <a href="#/redaction-audit" className="header-nav-link">Redaction Audit</a>
               </div>
               <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
                 <span className="indicator-dot" />
@@ -405,6 +412,7 @@ export default function App() {
                 <a href="#/fleet" className="header-nav-link">Fleet</a>
                 <a href="#/timeline" className="header-nav-link">Timeline</a>
                 <a href="#/audit" className="header-nav-link">Audit</a>
+                <a href="#/redaction-audit" className="header-nav-link">Redaction Audit</a>
               </div>
               <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
                 <span className="indicator-dot" />
@@ -465,6 +473,7 @@ export default function App() {
                 <a href="#/drafts" className="header-nav-link">Drafts</a>
                 <a href="#/fleet" className="header-nav-link">Fleet</a>
                 <a href="#/audit" className="header-nav-link">Audit Log &rarr;</a>
+                <a href="#/redaction-audit" className="header-nav-link">Redaction Audit &rarr;</a>
               </div>
               <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
                 <span className="indicator-dot" />
@@ -501,6 +510,7 @@ export default function App() {
                 <a href="#/" className="back-link">&larr; All Projects</a>
                 <a href="#/drafts" className="header-nav-link">Drafts</a>
                 <a href="#/fleet" className="header-nav-link">Fleet</a>
+                <a href="#/redaction-audit" className="header-nav-link">Redaction Audit &rarr;</a>
               </div>
               <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
                 <span className="indicator-dot" />
@@ -510,6 +520,43 @@ export default function App() {
           </header>
           <main>
             <AuditPanel />
+          </main>
+        </div>
+        <SearchPalette />
+        <DictationWidget />
+      </>
+    );
+  }
+
+  // Redaction audit log view (hoop-ttb.15.5)
+  if (route.view === 'redaction-audit') {
+    return (
+      <>
+        <ConnectionBanner />
+        {showRestoreToast && (
+          <div className="restore-toast" role="status">
+            Restoring state...
+          </div>
+        )}
+        <div className="app app-project-detail">
+          {configStatus.error && <ConfigBanner error={configStatus.error} />}
+          {configStatus.restart_required && <RestartRequiredBanner restart_required={configStatus.restart_required} />}
+          <header className="app-header-mini">
+            <div className="header-top">
+              <div className="header-nav">
+                <a href="#/" className="back-link">&larr; All Projects</a>
+                <a href="#/drafts" className="header-nav-link">Drafts</a>
+                <a href="#/fleet" className="header-nav-link">Fleet</a>
+                <a href="#/audit" className="header-nav-link">General Audit &rarr;</a>
+              </div>
+              <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
+                <span className="indicator-dot" />
+                {wsConnected ? 'Connected' : 'Connecting...'}
+              </div>
+            </div>
+          </header>
+          <main>
+            <RedactionAuditPanel />
           </main>
         </div>
         <SearchPalette />
@@ -538,6 +585,7 @@ export default function App() {
                 <a href="#/drafts" className="header-nav-link">Drafts</a>
                 <a href="#/timeline" className="header-nav-link">Worker Timeline &rarr;</a>
                 <a href="#/audit" className="header-nav-link">Audit Log &rarr;</a>
+                <a href="#/redaction-audit" className="header-nav-link">Redaction Audit &rarr;</a>
               </div>
               <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
                 <span className="indicator-dot" />

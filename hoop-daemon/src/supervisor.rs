@@ -1,14 +1,83 @@
 //! Per-project runtime supervisor
 //!
-//! Each project gets its own supervised tokio task that manages:
-//! - Bead reader for the project's workspaces
-//! - Session tailer scoped to the project
-//! - Panic recovery via JoinError detection
-//! - Exponential backoff restart limiting
+//! This module implements the supervisor subsystem responsible for managing isolated
+//! project runtimes with fault tolerance and hot-reload capabilities.
 //!
-//! A panic in one project's runtime is caught, logged, and restarted.
-//! Other projects are unaffected. Missing .beads/ directories result in
-//! error state rather than crash.
+//! # Responsibilities
+//!
+//! ## 1. Restart-on-Panic (Per-Project)
+//!
+//! Each project runtime runs in a supervised tokio task. Panics are caught via
+//! `JoinError` detection and trigger automatic restart with exponential backoff.
+//!
+//! - Transient errors (network, temporary failures) → retry with backoff
+//! - Permanent errors (missing workspace/.beads) → Error state (no auto-restart)
+//! - After `MAX_CONSECUTIVE_FAILURES` (5) → Abandoned state
+//! - Each panic increments `hoop_errors_total{subsystem=supervisor,kind=project_panic}`
+//!
+//! Backoff formula: `BASE_RESTART_DELAY_SECS * 2^(failures-1)` capped at `MAX_RESTART_DELAY_SECS`
+//! - 1st failure: 1s, 2nd: 2s, 3rd: 4s, 4th: 8s, 5th: 16s (max: 300s)
+//!
+//! ## 2. Hot-Reload Apply (New Project Registration)
+//!
+//! The `reconcile()` method compares desired project configuration against active
+//! runtimes and applies changes:
+//!
+//! - New projects → spawn runtime immediately
+//! - Removed projects → graceful shutdown, cleanup
+//! - Workspace path changes → restart runtime with new paths
+//! - No-op (unchanged) → leave runtime untouched
+//!
+//! Each state transition broadcasts `ProjectRuntimeStatus` for UI updates.
+//!
+//! ## 3. Per-Project Isolation
+//!
+//! Each project runtime is fully isolated:
+//!
+//! - Separate tokio task with independent panic recovery
+//! - Separate BeadReader instances per workspace
+//! - Separate SessionTailer scoped to project path
+//! - Shared broadcast channels for cross-project events only
+//!
+//! Isolation guarantee: N panics in project A → project B continues unaffected.
+//!
+//! ## 4. Graceful Shutdown Coordination
+//!
+//! The supervisor coordinates graceful shutdown via `ShutdownCoordinator`:
+//!
+//! - `FlushState` phase → flush session tailer state to disk
+//! - `Exit` phase → all runtimes exit cleanly
+//! - Bead readers are stopped (file-based, no explicit flush needed)
+//! - Session tailers flush pending data before stopping
+//! - Task handles aborted after 2s grace period
+//!
+//! ## 5. Health Reporting for /readyz
+//!
+//! The supervisor provides health status via:
+//!
+//! - `snapshot()` → current state of all runtimes
+//! - `subscribe_status()` → broadcast channel for live updates
+//! - Each runtime reports state: Starting, Healthy, Failed, Error, Abandoned
+//!
+//! Health check logic (used by /readyz):
+//! - At least one runtime in Healthy/Starting → ready
+//! - All runtimes in Failed/Error/Abandoned → not ready
+//!
+//! # State Machine
+//!
+//! ```text
+//! Starting → Healthy (runtime initialized successfully)
+//! Starting → Error (permanent error like missing .beads)
+//! Healthy → Failed (panic or transient error)
+//! Failed → Healthy (after successful restart)
+//! Failed → Abandoned (after MAX_CONSECUTIVE_FAILURES)
+//! Any → Exit (on shutdown signal)
+//! ```
+//!
+//! # Metrics
+//!
+//! - `hoop_errors_total{subsystem=supervisor,kind=project_panic}` - incremented per panic
+//! - Status broadcasts consumed by UI for runtime state display
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};

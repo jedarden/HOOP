@@ -111,7 +111,7 @@ export default function RedactionAuditPanel() {
       if (f.whatFlagged) params.set('what_flagged', f.whatFlagged);
       if (f.action) params.set('action', f.action);
 
-      const res = await fetch(`/api/audit/redaction?${params}`);
+      const res = await fetch(`/api/redaction-audit?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
       const data: RedactionAuditResponse = await res.json();
 

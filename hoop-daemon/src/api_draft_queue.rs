@@ -332,6 +332,14 @@ async fn create_draft(
                 findings = findings.len(),
                 "Draft body contains potential secrets — flagged for operator review (§18.1)"
             );
+            // Write audit entries for each unique pattern detected
+            crate::redaction::audit_findings(
+                "draft",
+                &findings,
+                &draft_id,
+                Some(&req.project),
+                &actor,  // Use the actor who created the draft
+            );
         }
     }
 

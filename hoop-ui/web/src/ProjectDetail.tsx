@@ -12,8 +12,9 @@ import DebugPanel from './DebugPanel';
 import DiffViewer from './DiffViewer';
 import StitchNetDiff from './StitchNetDiff';
 import OrphansTab from './OrphansTab';
+import ScriptsTab from './ScriptsTab';
 
-export type TabId = 'stitches' | 'fleet' | 'graph' | 'conversations' | 'cost' | 'capacity' | 'files' | 'debug' | 'diff' | 'net-diff' | 'orphans';
+export type TabId = 'stitches' | 'fleet' | 'graph' | 'conversations' | 'cost' | 'capacity' | 'files' | 'debug' | 'diff' | 'net-diff' | 'scripts' | 'orphans';
 
 interface Tab {
   id: TabId;
@@ -33,6 +34,7 @@ const STANDARD_TABS: Tab[] = [
   { id: 'files', label: 'Files', description: 'Project file browser', keyboardShortcut: '8' },
   { id: 'diff', label: 'Diff', description: 'Side-by-side git diff view', keyboardShortcut: '9' },
   { id: 'net-diff', label: 'Net-Diff', description: 'PR-like stitch net-diff review', keyboardShortcut: '0' },
+  { id: 'scripts', label: 'Scripts', description: 'Operator-invoked scripts', keyboardShortcut: '' },
 ];
 
 const EXPERT_TAB: Tab = {
@@ -291,6 +293,11 @@ export default function ProjectDetail({ projectName, projectPath }: ProjectDetai
                 projectPath={projectPath}
                 conversations={projectConversations}
               />
+            </div>
+          )}
+          {activeTab === 'scripts' && (
+            <div className="panel-content">
+              <ScriptsTab projectName={projectName} />
             </div>
           )}
           {activeTab === 'orphans' && (

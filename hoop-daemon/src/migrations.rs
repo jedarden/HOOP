@@ -38,6 +38,7 @@ use crate::fleet::{
     migrate_v124_to_v125,
     migrate_v125_to_v126,
     migrate_v126_to_v127,
+    migrate_v127_to_v128,
 };
 use anyhow::{bail, Result};
 use rusqlite::Connection;
@@ -510,6 +511,13 @@ pub fn get_migration_registry() -> MigrationRegistry {
         description: "Add fix_patterns table for reusable fix templates",
         up: migrate_v126_to_v127,
         down: Some(rollback_v127_to_v126),
+    });
+
+    let _ = registry.register(Migration {
+        version: "1.28.0",
+        description: "Add redaction_audit table for secret detection events",
+        up: migrate_v127_to_v128,
+        down: Some(rollback_v128_to_v127),
     });
 
     registry
@@ -1048,6 +1056,15 @@ fn rollback_v127_to_v126(conn: &mut Connection) -> Result<()> {
     info!("Rolling back migration 1.27.0 → 1.26.0: Dropping fix_patterns table");
 
     conn.execute("DROP TABLE IF EXISTS fix_patterns", [])?;
+
+    Ok(())
+}
+
+/// Rollback 1.28.0 → 1.27.0: Drop redaction_audit table
+fn rollback_v128_to_v127(conn: &mut Connection) -> Result<()> {
+    info!("Rolling back migration 1.28.0 → 1.27.0: Dropping redaction_audit table");
+
+    conn.execute("DROP TABLE IF EXISTS redaction_audit", [])?;
 
     Ok(())
 }
