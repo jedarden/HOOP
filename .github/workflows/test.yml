@@ -200,3 +200,70 @@ jobs:
         path: |
           target/
         retention-days: 7
+
+  e2e_tests:
+    name: Playwright UI Tests (Desktop + Mobile)
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Build daemon binary
+      run: |
+        cargo build --release --bin hoop-daemon
+
+    - name: Install Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 9
+
+    - name: Install Playwright browsers
+      working-directory: ./hoop-ui/web
+      run: npx playwright install --with-deps chromium
+
+    - name: Install dependencies
+      working-directory: ./hoop-ui/web
+      run: pnpm install --frozen-lockfile
+
+    - name: Run Playwright smoke tests
+      working-directory: ./hoop-ui/web
+      run: npm run test:e2e smoke-tests.spec.ts
+      timeout-minutes: 15
+
+    - name: Run Playwright visual regression tests
+      working-directory: ./hoop-ui/web
+      run: npm run test:e2e visual-regression.spec.ts --project=chromium --project=desktop-1920 --project=pixel6-mobile
+      timeout-minutes: 15
+
+    - name: Run Playwright mobile-specific tests
+      working-directory: ./hoop-ui/web
+      run: npm run test:e2e mobile-specific.spec.ts --project=pixel6-mobile
+      timeout-minutes: 10
+
+    - name: Upload Playwright test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-test-results
+        path: |
+          hoop-ui/web/playwright-report/
+          hoop-ui/web/test-results/
+        retention-days: 7
+
+    - name: Upload Playwright screenshots on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-screenshots-failed
+        path: |
+          hoop-ui/web/test-results/
+          hoop-ui/web/e2e/*-snapshots/
+        retention-days: 7
