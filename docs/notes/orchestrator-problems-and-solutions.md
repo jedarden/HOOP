@@ -183,6 +183,16 @@ Heartbeat emitted by the harness wrapper, not the CLI — the CLI can't prove it
 
 **Fix.** Lint rule or per-call regex construction. Never share stateful regexes.
 
+**HOOP.** Lint implemented as `hoop-daemon/tests/lint_regex_global_state.rs`. The test scans source code for:
+- `Regex` stored in global state (`OnceLock`, `lazy_static`, `LazyLock`)
+- AND used with `captures_iter()` method (which has internal state)
+
+Safe alternatives: `find_iter()`, `captures()`, `replace_all()`, `is_match()`, or local `Regex::new()`.
+
+CI: Run `cargo test -p hoop-daemon --test lint_regex_global_state` to verify.
+
+Exception mechanism: Add `#[allow(clippy::regex_global_state)]` to suppress for legitimate uses.
+
 ### F4. ANSI/terminal control sequences leak into parsed text
 
 **Observed.** Some providers emit ANSI codes that corrupt downstream UI.

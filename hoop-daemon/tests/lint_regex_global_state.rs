@@ -1,23 +1,77 @@
-//! Test lint for global Regex with captures_iter
+//! Lint: no shared /g regex with captures_iter across async boundaries
 //!
-//! This test checks for the dangerous pattern where:
-//! 1. A `Regex` is stored in global state (OnceLock, lazy_static)
+//! Plan reference: notes/orchestrator-problems-and-solutions.md §F3
+//!
+//! # The Problem
+//!
+//! Shared stateful regexes produce nondeterministic parses under load. When a `Regex`
+//! is stored in global state (OnceLock, lazy_static, std::sync::LazyLock) and used with
+//! `captures_iter()`, the internal caching in the regex crate can produce race conditions
+//! when the same Regex is used concurrently across async boundaries.
+//!
+//! This is catastrophic for audit correctness — the same input can produce different
+//! parsed results depending on timing.
+//!
+//! # The Pattern
+//!
+//! The dangerous pattern:
+//! 1. A `Regex` is stored in global state (static OnceLock<Regex>, lazy_static, etc.)
 //! 2. AND that regex is used with `captures_iter()` method
 //!
-//! This pattern can cause race conditions under load because `captures_iter()`
-//! uses internal caching that can produce nondeterministic parses when the
-//! same Regex is used concurrently across async boundaries.
+//! # Safe Alternatives
 //!
-//! §F3: shared stateful regexes produce nondeterministic parses under load
+//! 1. Use `find_iter()` instead of `captures_iter()` — doesn't use capture state
+//! 2. Create the `Regex` locally instead of storing in global state
+//! 3. Use `captures()` for single-match extraction (stateless)
+//! 4. Use `replace_all()` for substitution (stateless)
+//! 5. Use `is_match()` for boolean checks (stateless)
 //!
-//! To allow an exception (for stateless uses), add:
+//! # Exception Mechanism
+//!
+//! To allow an exception for legitimate uses, add:
 //! `#[allow(clippy::regex_global_state)]` or `#[expect(clippy::regex_global_state)]`
+//!
+//! This lint is not a real Clippy lint (yet), so the allow attribute is checked
+//! by this test's line scanner.
+//!
+//! # CI Command
+//!
+//! ```bash
+//! cargo test -p hoop-daemon --test lint_regex_global_state
+//! ```
+//!
+//! # Acceptance Criteria (hoop-ttb.11.9.1)
+//!
+//! - Lint rule identifies dangerous pattern ✓
+//! - CI fails on violation ✓ (via this test)
+//! - Documented exception mechanism for stateless uses ✓
 
-use std::path::Path;
-use std::fs;
 use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 
-/// Pattern to find: `captures_iter` calls on expressions that trace back to a global static
+/// Patterns that indicate global Regex storage
+const GLOBAL_REGEX_PATTERNS: &[&str] = &[
+    "static",       // static declarations
+    "OnceLock",     // std::sync::OnceLock
+    "lazy_static",  // lazy_static! macro
+    "LazyLock",     // std::sync::LazyLock (Rust 1.80+)
+];
+
+/// Methods that are SAFE to use with global regexes (no internal state)
+const SAFE_REGEX_METHODS: &[&str] = &[
+    "is_match(",    // Boolean check, no state
+    "find(",        // Single match, no state
+    "find_iter(",   // Iterator over matches, no capture state
+    "captures(",    // Single capture, no iterator state
+    "replace(",     // Replacement, no state
+    "replace_all(", // Replacement, no state
+];
+
+/// The dangerous method that must NOT be used with global regexes
+const DANGEROUS_METHOD: &str = "captures_iter(";
+
+/// Lint test: fail if any global Regex uses captures_iter()
 #[test]
 fn lint_regex_global_state() {
     let daemon_dir = Path::new("src");
@@ -45,11 +99,101 @@ fn lint_regex_global_state() {
         eprintln!("  1. Use find_iter() instead of captures_iter() (doesn't use capture state)");
         eprintln!("  2. Or create the Regex locally instead of storing in global state");
         eprintln!("  3. Or add #[allow(clippy::regex_global_state)] for legitimate exceptions\n");
-        panic!("Found {} violations of regex_global_state lint", violations.len());
+        panic!(
+            "Found {} violation(s) of regex_global_state lint",
+            violations.len()
+        );
     }
 }
 
-/// Check a single source file for the pattern
+/// Synthetic violation test: prove the scanner catches the dangerous pattern
+#[test]
+fn test_synthetic_violation_is_caught() {
+    // This test creates a temporary file with the dangerous pattern
+    // and verifies that the scanner catches it.
+    use std::io::Write;
+
+    let temp_file = Path::new("test_violation_temp.rs");
+    let mut file = fs::File::create(temp_file).unwrap();
+
+    // Write the dangerous pattern: global regex + captures_iter()
+    writeln!(
+        file,
+        r#"
+static BAD_RE: OnceLock<Regex> = OnceLock::new();
+
+fn bad_function() {{
+    let re = BAD_RE.get_or_init(|| Regex::new(r"\d+").unwrap());
+    // This should trigger the lint!
+    for cap in re.captures_iter("test 123") {{
+        println!("{{:?}}", cap);
+    }}
+}}
+"#
+    )
+    .unwrap();
+
+    let mut violations = Vec::new();
+    check_file(temp_file, &mut violations);
+
+    // Clean up
+    fs::remove_file(temp_file).unwrap();
+
+    assert!(
+        !violations.is_empty(),
+        "Synthetic violation should have been detected"
+    );
+    assert_eq!(violations.len(), 1);
+    assert!(violations[0].2.contains("captures_iter() on potentially global Regex"));
+}
+
+/// Synthetic safe test: prove the scanner allows safe patterns
+#[test]
+fn test_safe_patterns_are_allowed() {
+    use std::io::Write;
+
+    let temp_file = Path::new("test_safe_temp.rs");
+    let mut file = fs::File::create(temp_file).unwrap();
+
+    // Write safe patterns: local regex with captures_iter(), global regex with safe methods
+    writeln!(
+        file,
+        r#"
+// Safe: local regex with captures_iter()
+fn safe_local() {{
+    let re = Regex::new(r"\d+").unwrap();
+    for cap in re.captures_iter("test 123") {{
+        println!("{{:?}}", cap);
+    }}
+}}
+
+// Safe: global regex with is_match()
+static SAFE_RE: OnceLock<Regex> = OnceLock::new();
+
+fn safe_global() {{
+    let re = SAFE_RE.get_or_init(|| Regex::new(r"\d+").unwrap());
+    if re.is_match("test 123") {{
+        println!("matched!");
+    }}
+}}
+"#
+    )
+    .unwrap();
+
+    let mut violations = Vec::new();
+    check_file(temp_file, &mut violations);
+
+    // Clean up
+    fs::remove_file(temp_file).unwrap();
+
+    assert!(
+        violations.is_empty(),
+        "Safe patterns should not trigger violations: {:?}",
+        violations
+    );
+}
+
+/// Check a single source file for the dangerous pattern
 fn check_file(path: &Path, violations: &mut Vec<(std::path::PathBuf, usize, String)>) {
     let content = match fs::read_to_string(path) {
         Ok(c) => c,
@@ -65,14 +209,17 @@ fn check_file(path: &Path, violations: &mut Vec<(std::path::PathBuf, usize, Stri
         let line_num = line_idx + 1;
 
         // Skip lines with allow attribute
-        if line.contains("allow(clippy::regex_global_state)")
-            || line.contains("expect(clippy::regex_global_state)")
+        if line.contains("#[allow(clippy::regex_global_state)]")
+            || line.contains("#[expect(clippy::regex_global_state)]")
         {
             continue;
         }
 
         // Find: static NAME: OnceLock<Regex>
-        if line.contains("static ") && line.contains("OnceLock") && line.contains("Regex") {
+        if line.contains("static ")
+            && GLOBAL_REGEX_PATTERNS.iter().any(|p| line.contains(p))
+            && line.contains("Regex")
+        {
             if let Some(name) = extract_static_name(line) {
                 global_regexes.insert(name, line_num);
             }
@@ -95,7 +242,12 @@ fn check_file(path: &Path, violations: &mut Vec<(std::path::PathBuf, usize, Stri
         }
 
         // Find: .captures_iter(...) usage
-        if line.contains(".captures_iter(") {
+        if line.contains(DANGEROUS_METHOD) {
+            // But skip if it's on a local Regex::new(...)
+            if line.contains("Regex::new(") {
+                continue;
+            }
+
             // Check if it's on a variable that traces back to global
             if let Some(var_name) = extract_receiver_name(line) {
                 let is_global = global_regexes.contains_key(&var_name)
@@ -116,7 +268,14 @@ fn check_file(path: &Path, violations: &mut Vec<(std::path::PathBuf, usize, Stri
     for (line_idx, line) in content.lines().enumerate() {
         let line_num = line_idx + 1;
 
-        if line.contains(".captures_iter(") {
+        // Skip lines with allow attribute
+        if line.contains("#[allow(clippy::regex_global_state)]")
+            || line.contains("#[expect(clippy::regex_global_state)]")
+        {
+            continue;
+        }
+
+        if line.contains(DANGEROUS_METHOD) {
             // Look for function calls like: needle_tag_re().captures_iter(...)
             if let Some(func_name) = extract_function_call(line) {
                 // Check if this is a known global regex accessor function
@@ -124,7 +283,10 @@ fn check_file(path: &Path, violations: &mut Vec<(std::path::PathBuf, usize, Stri
                     violations.push((
                         path.to_path_buf(),
                         line_num,
-                        format!("captures_iter() on global Regex from function '{}()'", func_name),
+                        format!(
+                            "captures_iter() on global Regex from function '{}()'",
+                            func_name
+                        ),
                     ));
                 }
             }
@@ -177,7 +339,7 @@ fn extract_let_binding(line: &str) -> Option<String> {
 
 /// Extract the receiver name from a method call: `re.captures_iter(...)` -> `re`
 fn extract_receiver_name(line: &str) -> Option<String> {
-    let dot_pos = line.rfind(".captures_iter(")?;
+    let dot_pos = line.rfind(DANGEROUS_METHOD)?;
     let before = &line[..dot_pos];
     let receiver = before.split_whitespace().last()?;
 
@@ -186,7 +348,7 @@ fn extract_receiver_name(line: &str) -> Option<String> {
 
 /// Extract the function name from a call: `foo().captures_iter(...)` -> `foo`
 fn extract_function_call(line: &str) -> Option<String> {
-    let dot_pos = line.rfind(".captures_iter(")?;
+    let dot_pos = line.rfind(DANGEROUS_METHOD)?;
     let before = &line[..dot_pos];
 
     // Find the function name (before the paren)
@@ -204,6 +366,7 @@ fn is_global_regex_function(content: &str, func_name: &str) -> bool {
 
     // Also check for OnceLock::get_or_init pattern inside the function
     content.lines().any(|line| {
-        line.contains(&pattern) || (line.contains("fn ") && line.contains(func_name) && line.contains("Regex"))
+        line.contains(&pattern)
+            || (line.contains("fn ") && line.contains(func_name) && line.contains("Regex"))
     })
 }

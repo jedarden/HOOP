@@ -71,6 +71,9 @@ jobs:
     - name: Run projection file audit (static check for forbidden writes)
       run: cargo test -p hoop-daemon --test projection_file_audit --verbose
 
+    - name: Run regex global state lint (static check for captures_iter on global regexes)
+      run: cargo test -p hoop-daemon --test lint_regex_global_state --verbose
+
     - name: Run protocol contract tests (daemon ↔ hoop-mcp socket)
       run: |
         cargo test -p hoop-mcp --test protocol_contract --verbose
@@ -280,4 +283,58 @@ jobs:
         path: |
           hoop-ui/web/test-results/
           hoop-ui/web/e2e/*-snapshots/
+        retention-days: 7
+
+  performance_budget_verification:
+    name: Performance Budget Verification (hoop-ttb.7.11)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo build
+      uses: actions/cache@v4
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Build daemon
+      run: cargo build --release --bin hoop-daemon
+
+    - name: Run performance budget verification test
+      run: cargo test --package hoop-daemon --test load_test_integration load_test_ci_performance_budgets -- --nocapture
+      env:
+        HOOP_LOAD_TEST_FULL_SCALE: 1
+        HOOP_LOAD_PROJECTS: 20
+        HOOP_LOAD_WORKERS: 5
+        HOOP_LOAD_BEADS: 300
+        HOOP_LOAD_CADENCE_MS: 10
+        RUST_BACKTRACE: 1
+
+      # Test failure indicates performance budget violation - blocks merge
+      continue-on-error: false
+
+    - name: Upload test results on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-budget-verification-results
+        path: |
+          target/
         retention-days: 7
