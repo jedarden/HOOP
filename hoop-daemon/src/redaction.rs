@@ -30,8 +30,8 @@ static REDACTOR: LazyLock<Mutex<Redactor>> = LazyLock::new(|| Mutex::new(Redacto
 
 /// Named patterns for detection. Updated by `update_patterns_with_names()`.
 ///
-/// This is the single source of truth for scanning. Each entry is `(name, Regex)`.
-/// The names match the `name` field from `config_resolver::SecretPattern`.
+/// This is the single source of truth for scanning. Each entry is `(id, Regex)`.
+/// The ids match the `id` field from `config_resolver::SecretPattern`.
 static NAMED_PATTERNS: LazyLock<Mutex<Vec<(&'static str, Regex)>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
 /// Redact a text string, returning a new string with secrets replaced.
@@ -291,6 +291,119 @@ pub fn scan_propagation_draft(title: &str, body: &str) -> Vec<SecretFinding> {
     scan_text_for_secrets(&combined)
 }
 
+/// Scan a text-based attachment file for secrets (§18.1).
+///
+/// Only scans files that are likely to contain text (based on extension).
+/// Binary files (images, PDFs, etc.) are skipped since they require OCR.
+/// Returns findings if the file could be read and scanned, or an error.
+pub fn scan_attachment(path: &std::path::Path) -> Result<Vec<SecretFinding>, std::io::Error> {
+    // Only scan text-based file extensions
+    let extension = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
+
+    let is_text_file = matches!(
+        extension.to_lowercase().as_str(),
+        "txt" | "md" | "markdown" | "json" | "yaml" | "yml" |
+        "toml" | "ini" | "cfg" | "conf" | "sh" | "bash" |
+        "zsh" | "fish" | "ps1" | "py" | "rs" | "js" | "ts" |
+        "jsx" | "tsx" | "go" | "java" | "c" | "cpp" | "h" |
+        "hpp" | "cs" | "php" | "rb" | "lua" | "pl" | "sql" |
+        "env" | "dockerenv" | "gitignore" | "gitattributes"
+    );
+
+    if !is_text_file {
+        return Ok(Vec::new());
+    }
+
+    // Read file content with size limit (10MB)
+    let metadata = std::fs::metadata(path)?;
+    if metadata.len() > 10 * 1024 * 1024 {
+        tracing::warn!(
+            path = %path.display(),
+            size = metadata.len(),
+            "Attachment too large for secret scanning, skipping"
+        );
+        return Ok(Vec::new());
+    }
+
+    let content = std::fs::read_to_string(path)?;
+    Ok(scan_text_for_secrets(&content))
+}
+
+/// Scan a CLI session JSONL file for secrets (§18.1).
+///
+/// Parses the JSONL file and scans all text content for secrets.
+/// This is used when sessions are filtered by project before display.
+pub fn scan_session_jsonl(path: &std::path::Path) -> Result<Vec<SecretFinding>, std::io::Error> {
+    let metadata = std::fs::metadata(path)?;
+    if metadata.len() > 50 * 1024 * 1024 {
+        tracing::warn!(
+            path = %path.display(),
+            size = metadata.len(),
+            "Session file too large for secret scanning, skipping"
+        );
+        return Ok(Vec::new());
+    }
+
+    let file = std::fs::File::open(path)?;
+    let reader = std::io::BufReader::new(file);
+    let mut all_findings = Vec::new();
+
+    for line in std::io::BufRead::lines(reader) {
+        let line = line?;
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        // Parse JSON and extract all string values for scanning
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) {
+            let text_content = extract_all_strings(&value);
+            all_findings.extend(scan_text_for_secrets(&text_content));
+        }
+    }
+
+    Ok(all_findings)
+}
+
+/// Recursively extract all string values from a JSON value.
+///
+/// This helper function walks through JSON objects, arrays, and primitives
+/// to collect all string values into a single text blob for scanning.
+fn extract_all_strings(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::String(s) => s.clone(),
+        serde_json::Value::Array(arr) => {
+            let mut result = String::new();
+            for item in arr {
+                let extracted = extract_all_strings(item);
+                if !extracted.is_empty() {
+                    if !result.is_empty() {
+                        result.push(' ');
+                    }
+                    result.push_str(&extracted);
+                }
+            }
+            result
+        }
+        serde_json::Value::Object(obj) => {
+            let mut result = String::new();
+            for (_key, val) in obj {
+                let extracted = extract_all_strings(val);
+                if !extracted.is_empty() {
+                    if !result.is_empty() {
+                        result.push(' ');
+                    }
+                    result.push_str(&extracted);
+                }
+            }
+            result
+        }
+        _ => String::new(),
+    }
+}
+
 // ── Audit integration (§18.5) ─────────────────────────────────────────────────────
 
 /// Write redaction audit entries for detected findings.
@@ -376,6 +489,15 @@ pub fn audit_findings(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config_resolver::SecretPattern;
+
+    /// Initialize default patterns for tests.
+    /// This ensures both REDACTOR and NAMED_PATTERNS are populated.
+    fn init_default_patterns() {
+        let default_patterns = SecretPattern::default_secret_patterns();
+        let named_patterns = SecretPattern::to_named_patterns(&default_patterns);
+        update_patterns_with_names(&named_patterns);
+    }
 
     fn redact(s: &str) -> String {
         apply_patterns_uncached(s)
@@ -516,5 +638,171 @@ mod tests {
         let out = redact(input);
         assert!(out.contains("[REDACTED]"), "got: {out}");
         assert!(!out.contains("testkey"), "got: {out}");
+    }
+
+    // ── Client-Backend Parity Tests (§18) ─────────────────────────────────────────────
+    //
+    // These tests use the same fixtures as the client-side tests in
+    // hoop-ui/web/src/secretsScanner.test.ts to verify parity between
+    // client pre-upload warnings and backend authoritative scanning.
+
+    #[test]
+    fn test_parity_anthropic_key() {
+        init_default_patterns();
+        // Fixture from client test: anthropicKey
+        let input = "Here is my key sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666 please keep it safe";
+        let findings = scan_text_for_secrets(input);
+        assert!(!findings.is_empty(), "should detect Anthropic API key");
+        assert!(
+            findings.iter().any(|f| f.pattern_name == "anthropic_api_key"),
+            "should detect anthropic_api_key pattern"
+        );
+    }
+
+    #[test]
+    fn test_parity_generic_sk_key() {
+        init_default_patterns();
+        // Fixture from client test: genericKey
+        let input = "Key: sk-ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdefghijklmn";
+        let findings = scan_text_for_secrets(input);
+        assert!(!findings.is_empty(), "should detect generic API key");
+        assert!(
+            findings.iter().any(|f| f.pattern_name == "generic_sk_key"),
+            "should detect generic_sk_key pattern"
+        );
+    }
+
+    #[test]
+    fn test_parity_aws_access_key() {
+        init_default_patterns();
+        // Fixture from client test: awsKey
+        let input = "aws_access_key_id = AKIAIOSFODNN7EXAMPLE";
+        let findings = scan_text_for_secrets(input);
+        assert!(!findings.is_empty(), "should detect AWS access key");
+        assert!(
+            findings.iter().any(|f| f.pattern_name == "aws_access_key"),
+            "should detect aws_access_key pattern"
+        );
+    }
+
+    #[test]
+    fn test_parity_github_token() {
+        init_default_patterns();
+        // Fixture from client test: githubToken
+        let input = "token=ghp_16C7e42F292c6912E7710c838347Ae178B4a";
+        let findings = scan_text_for_secrets(input);
+        assert!(!findings.is_empty(), "should detect GitHub token");
+        assert!(
+            findings.iter().any(|f| f.pattern_name == "github_token"),
+            "should detect github_token pattern"
+        );
+    }
+
+    #[test]
+    fn test_parity_slack_token() {
+        init_default_patterns();
+        // Fixture from client test: slackToken
+        let input = "SLACK_TOKEN=xoxb-1234567890-1234567890123-12345678901234567890123456";
+        let findings = scan_text_for_secrets(input);
+        assert!(!findings.is_empty(), "should detect Slack token");
+        assert!(
+            findings.iter().any(|f| f.pattern_name == "slack_token"),
+            "should detect slack_token pattern"
+        );
+    }
+
+    #[test]
+    fn test_parity_jwt() {
+        init_default_patterns();
+        // Fixture from client test: jwt
+        let input = "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+        let findings = scan_text_for_secrets(input);
+        // JWT is detected either by JWT pattern or Bearer Token pattern
+        assert!(!findings.is_empty(), "should detect JWT or Bearer token");
+        let has_jwt_or_bearer = findings.iter().any(|f| {
+            f.pattern_name == "jwt" || f.pattern_name == "bearer_token"
+        });
+        assert!(has_jwt_or_bearer, "should detect jwt or bearer_token pattern");
+    }
+
+    #[test]
+    fn test_parity_env_var_secret() {
+        init_default_patterns();
+        // Fixture from client test: envVarSecret
+        let input = "export openai_api_key=sk-proj-AbCdEf1234567890";
+        let findings = scan_text_for_secrets(input);
+        assert!(!findings.is_empty(), "should detect environment variable secret");
+        assert!(
+            findings.iter().any(|f| f.pattern_name == "env_var_secret"),
+            "should detect env_var_secret pattern"
+        );
+    }
+
+    #[test]
+    fn test_parity_json_secret() {
+        init_default_patterns();
+        // Fixture from client test: jsonSecret
+        let input = r#"{"password": "s3cr3tP@ssw0rd!", "api_key": "abc123def456ghi789jkl"}"#;
+        let findings = scan_text_for_secrets(input);
+        assert!(!findings.is_empty(), "should detect JSON secret field");
+        assert!(
+            findings.iter().any(|f| f.pattern_name == "json_secret_field"),
+            "should detect json_secret_field pattern"
+        );
+    }
+
+    #[test]
+    fn test_parity_multiple_secrets() {
+        init_default_patterns();
+        // Fixture from client test: multipleSecrets
+        let input = r#"
+    My API keys:
+    Anthropic: sk-ant-api03-TEST1234567890ABCDEFGHIJ1234567890ABCD
+    GitHub: ghp_1234567890abcdef1234567890abcd123456
+    AWS: AKIA1234567890ABCDEF
+  "#;
+        let findings = scan_text_for_secrets(input);
+        // Should detect at least 3 secrets (Anthropic, GitHub, AWS)
+        assert!(findings.len() >= 3, "should detect at least 3 secrets, got {}", findings.len());
+        let pattern_names: Vec<_> = findings.iter().map(|f| f.pattern_name).collect();
+        assert!(pattern_names.contains(&"anthropic_api_key"), "should detect anthropic_api_key");
+        assert!(pattern_names.contains(&"github_token"), "should detect github_token");
+        assert!(pattern_names.contains(&"aws_access_key"), "should detect aws_access_key");
+    }
+
+    #[test]
+    fn test_parity_clean_text() {
+        init_default_patterns();
+        // Clean text should have no findings
+        let input = "This is a normal message with no secrets. Just plain text.";
+        let findings = scan_text_for_secrets(input);
+        assert!(findings.is_empty(), "clean text should have no findings");
+    }
+
+    #[test]
+    fn test_parity_match_positions() {
+        init_default_patterns();
+        // Verify match positions are correct
+        let input = "My key is sk-ant-test1234567890ABCDEFGH end";
+        let findings = scan_text_for_secrets(input);
+        assert!(!findings.is_empty(), "should detect secret");
+        let finding = &findings[0];
+        assert!(finding.match_start < input.len(), "match start should be within text");
+        assert!(finding.match_start + finding.match_len <= input.len(), "match end should be within text");
+    }
+
+    #[test]
+    fn test_parity_redaction_matches_scanning() {
+        init_default_patterns();
+        // Verify that redaction and scanning use the same patterns
+        let input = "My key sk-ant-api03-TEST1234567890ABCDEFGHIJ1234567890ABCD is here";
+        let findings = scan_text_for_secrets(input);
+        let redacted = redact_text(input);
+
+        // If scanning finds something, redaction should remove it
+        if !findings.is_empty() {
+            assert!(redacted.contains("[REDACTED]"), "redaction should replace detected secrets");
+            assert!(!redacted.contains("sk-ant-"), "redacted text should not contain raw secret");
+        }
     }
 }

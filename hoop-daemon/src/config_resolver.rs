@@ -86,7 +86,7 @@ impl SecretPattern {
 /// Default secret patterns when none are configured.
 ///
 /// These are the built-in patterns that ship with HOOP.
-fn default_secret_patterns() -> Vec<SecretPattern> {
+pub fn default_secret_patterns() -> Vec<SecretPattern> {
     vec![
         SecretPattern {
             id: "anthropic_api_key".to_string(),
@@ -802,6 +802,43 @@ fn yaml_get_role_config(root: &serde_yaml::Value) -> Option<crate::auth::RoleCon
         } else {
             Some(crate::auth::RoleConfig { viewers, drafters })
         }
+    })
+}
+
+/// Helper to extract redaction policy configuration from a YAML value.
+///
+/// Parses the `redaction` section from config.yml:
+/// ```yaml
+/// redaction:
+///   action: warn
+///   patterns: []
+/// ```
+fn yaml_get_redaction_policy(root: &serde_yaml::Value) -> Option<crate::redaction_policy::GlobalRedactionPolicy> {
+    root.get("redaction").and_then(|v| {
+        // Parse action
+        let action = v.get("action")
+            .and_then(|a| a.as_str())
+            .and_then(|s| match s {
+                "warn" => Some(crate::redaction_policy::RedactionAction::Warn),
+                "redact" => Some(crate::redaction_policy::RedactionAction::Redact),
+                "reject" => Some(crate::redaction_policy::RedactionAction::Reject),
+                _ => None,
+            });
+
+        // Parse patterns (optional)
+        let patterns: Vec<String> = v.get("patterns")
+            .and_then(|p| p.as_sequence())
+            .map(|seq| {
+                seq.iter()
+                    .filter_map(|item| item.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        action.map(|a| crate::redaction_policy::GlobalRedactionPolicy {
+            action: a,
+            patterns,
+        })
     })
 }
 
@@ -2181,6 +2218,7 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
                         "secrets_patterns",
                         "stuck_detector",
                         "roles",
+                        "redaction",
                     ];
                     if !VALID_TOP_LEVEL_KEYS.contains(&field_name) {
                         return Err(ConfigError::validation(
