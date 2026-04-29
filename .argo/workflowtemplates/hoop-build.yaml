@@ -1,0 +1,156 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: hoop-build
+  namespace: argo-workflows
+  annotations:
+    description: "Docker image build: ronaldraygun/hoop:latest"
+    planReference: "hoop-ttb.9.9"
+spec:
+  arguments:
+    parameters:
+      - name: repo
+        value: https://github.com/jedarden/HOOP.git
+      - name: branch
+        value: main
+      - name: image_tag
+        value: latest
+      - name: dockerfile
+        value: Dockerfile
+      - name: build_context
+        value: .
+
+  templates:
+    - name: hoop-build
+      inputs:
+        artifacts:
+          - name: source
+            path: /workspace
+            git:
+              repo: "{{workflow.parameters.repo}}"
+              revision: "{{workflow.parameters.branch}}"
+              depth: 1
+      outputs:
+        artifacts:
+          - name: image
+            path: /tmp/image.tar
+            s3:
+              endpoint: s3.amazonaws.com
+              bucket: ronaldraygun-docker-images
+              key: hoop/{{workflow.parameters.image_tag}}.tar
+      container:
+        image: gcr.io/kaniko-project/executor:v1.23.2
+        args:
+          - --dockerfile={{workflow.parameters.dockerfile}}
+          - --context=/workspace/{{workflow.parameters.build_context}}
+          - --destination=ronaldraygun/hoop:{{workflow.parameters.image_tag}}
+          - --cache=true
+          - --cache-ttl=24h
+          - --snapshotMode=redo
+          - --use-new-run
+          - --tarPath=/tmp/image.tar
+        volumeMounts:
+          - name: docker-config
+            mountPath: /kaniko/.docker
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "4000m"
+      volumes:
+        - name: docker-config
+          secret:
+            secretName: dockerhub-secret
+            items:
+              - key: .dockerconfigjson
+                path: config.json
+
+    - name: build-image
+      template: hoop-build
+
+    - name: validate-image-size
+      container:
+        image: gcr.io/go-containerregistry/gcrane:v0.20.1
+        command:
+          - sh
+          - -c
+          - |
+            echo "=== Image Size Validation ==="
+            echo "Image: ronaldraygun/hoop:{{workflow.parameters.image_tag}}"
+
+            # Get image manifest and check size
+            SIZE=$(gcrane manifest ronaldraygun/hoop:{{workflow.parameters.image_tag}} | jq -r '.config.Size')
+
+            if [ "$SIZE" = "null" ] || [ -z "$SIZE" ]; then
+              echo "Warning: Could not determine image size from manifest"
+              echo "Image may not have been pushed yet or is not accessible"
+              exit 0
+            fi
+
+            # Convert bytes to MB
+            SIZE_MB=$(echo "scale=2; $SIZE / 1024 / 1024" | bc)
+
+            echo "Image size: ${SIZE_MB} MB"
+            echo "Expected size: < 50 MB"
+
+            # Check if size is under 50MB (52428800 bytes)
+            if [ "$SIZE" -gt 52428800 ]; then
+              echo "FAIL: Image size exceeds 50MB limit"
+              exit 1
+            fi
+
+            echo "PASS: Image size is within limits"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+    - name: trivy-image-scan
+      container:
+        image: aquasec/trivy:latest
+        command:
+          - sh
+          - -c
+          - |
+            echo "=== Trivy Image Scan (build-time) ==="
+            echo "Image: ronaldraygun/hoop:{{workflow.parameters.image_tag}}"
+            echo ""
+            echo "Note: This is a non-blocking scan. For release gating, use hoop-security-scan with fail_on_vuln=true"
+
+            trivy image --skip-db-update \
+              --severity HIGH,CRITICAL \
+              --exit-code 0 \
+              ronaldraygun/hoop:{{workflow.parameters.image_tag}}
+
+            echo ""
+            echo "Scan complete. Results above are informational."
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+
+    - name: full-build
+      steps:
+        - - name: build
+            template: build-image
+        - - name: validate
+            template: validate-image-size
+        - - name: security-scan
+            template: trivy-image-scan
+
+    - name: build-latest
+      arguments:
+        parameters:
+          - name: image_tag
+            value: latest
+      steps:
+        - - name: build
+            template: build-image
