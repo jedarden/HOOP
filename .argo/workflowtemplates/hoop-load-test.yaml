@@ -137,20 +137,28 @@ spec:
           - sh
           - -c
           - |
-            echo "=== HOOP Load Test ==="
-            echo "Test: {{inputs.parameters.test-name}}"
+            echo "=== HOOP Performance Budget Test ==="
+            echo "Scale: {{workflow.parameters.scale}}"
             echo "Configuration: {{inputs.parameters.num-projects}} projects × {{inputs.parameters.num-workers}} workers × {{inputs.parameters.num-beads}} beads"
             echo ""
 
-            # Install dependencies
+            # Install dependencies for build and UI tests
             apt-get update
-            apt-get install -y pkg-config libssl3
+            apt-get install -y pkg-config libssl3 curl nodejs npm
 
-            # Run load test
-            cargo test --test load_test {{inputs.parameters.test-name}} -- {{inputs.parameters.test-flags}} --nocapture
+            # Install pnpm for Playwright tests
+            npm install -g pnpm
+
+            # Run performance budget test via bash script
+            # This script:
+            # 1. Builds the daemon
+            # 2. Runs Rust load test integration (API latency, memory, WS fan-out)
+            # 3. Runs Playwright UI performance tests
+            # 4. Fails if any budget is exceeded
+            bash .github/scripts/run-performance-budget-test.sh
 
             echo ""
-            echo "=== Load Test Complete ==="
+            echo "=== Performance Budget Test Complete ==="
         env:
           - name: CARGO_TERM_COLOR
             value: "always"
@@ -164,9 +172,9 @@ spec:
             value: "{{inputs.parameters.num-beads}}"
           - name: HOOP_LOAD_CADENCE_MS
             value: "{{workflow.parameters.event_cadence_ms}}"
-          # Enable full-scale test if needed
-          - name: HOOP_LOAD_TEST_FULL_SCALE
-            value: "{{inputs.parameters.test-flags}}"
+          # Set scale based on workflow parameter
+          - name: LOAD_TEST_SCALE
+            value: "{{workflow.parameters.scale}}"
         volumeMounts:
           - name: workspace
             mountPath: /workspace

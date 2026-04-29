@@ -66,6 +66,8 @@ export default defineConfig({
         viewport: { width: 1920, height: 1080 },
       },
       testMatch: /load-test-performance\.spec\.ts/,
+      // Don't start webServer for load tests - daemon provides UI
+      // Set reuseExistingServer to true when running load tests
     },
   ],
 

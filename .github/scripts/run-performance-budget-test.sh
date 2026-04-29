@@ -128,8 +128,8 @@ if [ -f "$DAEMON_URL_FILE" ] && [ -s "$DAEMON_URL_FILE" ] && [ -f "$REPO_ROOT/ho
       pnpm install --frozen-lockfile
     fi
 
-    # Run performance-budget tests
-    if pnpm test:e2e load-test-performance.spec.ts 2>&1; then
+    # Run performance-budget tests using the load-test project
+    if pnpm test:load 2>&1; then
       PLAYWRIGHT_RESULT=0
       echo -e "${GREEN}✓ Playwright UI performance tests passed${NC}"
     else
