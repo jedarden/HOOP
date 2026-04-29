@@ -61,6 +61,22 @@ impl SecretPattern {
             .flat_map(|sp| sp.patterns.iter().cloned())
             .collect()
     }
+
+    /// Convert a list of SecretPattern objects into named pattern tuples.
+    ///
+    /// This is used to update both redaction and scanning patterns via
+    /// `redaction::update_patterns_with_names()`.
+    ///
+    /// Returns a list of `(name, pattern_string)` tuples.
+    pub fn to_named_patterns(patterns: &[SecretPattern]) -> Vec<(&str, String)> {
+        patterns
+            .iter()
+            .flat_map(|sp| {
+                let name: &str = &sp.name;
+                sp.patterns.iter().map(move |pat| (name, pat.clone()))
+            })
+            .collect()
+    }
 }
 
 /// Default secret patterns when none are configured.

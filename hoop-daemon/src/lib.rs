@@ -90,6 +90,8 @@ pub mod svg_sanitize;
 pub mod syntax_highlight;
 pub mod syntax_highlight_stream;
 pub mod template_library;
+pub mod prompt_substitute;
+pub mod api_prompts;
 pub mod tag_join;
 pub mod transcription;
 pub mod unknown_event_sink;
@@ -210,13 +212,14 @@ use hoop_schema::{DegradedProject, HealthResponse, ReadinessResponse};
 use hoop_ui::AssetsHandler;
 use sha2::{Digest, Sha256};
 use shutdown::{DbCheckpointHandle, ShutdownCoordinator, SocketCleanupHandle};
+use std::pin::Pin;
 use std::sync::Arc;
 use std::{fs, net::SocketAddr, os::unix::fs::PermissionsExt, path::PathBuf, time::Duration};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt},
     net::UnixListener,
     signal,
-    sync::broadcast,
+    sync::{broadcast, mpsc},
     time::Instant,
 };
 use tower_http::trace::TraceLayer;
@@ -317,6 +320,8 @@ pub struct DaemonState {
     pub backup_runner: Option<Arc<backup_pipeline::BackupPipeline>>,
     /// Template library — reusable stitch templates (§22)
     pub template_library: template_library::TemplateStore,
+    /// Prompt library — reusable prompt bodies with substitution (§22.5)
+    pub prompt_library: api_prompts::PromptStore,
     /// Identity cache for Tailscale whois lookups (§13 Security)
     pub identity_cache: Arc<identity::IdentityCache>,
     /// Role resolver for RBAC (maps Tailscale identities to viewer/drafter roles)
@@ -785,7 +790,21 @@ async fn get_file_content_stream(
     axum::extract::Path(project): axum::extract::Path<String>,
     axum::extract::Query(params): axum::extract::Query<FileContentQuery>,
     axum::extract::State(state): axum::extract::State<DaemonState>,
-) -> Result<axum::response::Sse<impl futures_util::Stream<Item = Result<String, axum::Error>> + Send + 'static>, (axum::http::StatusCode, String)> {
+) -> Result<
+    axum::response::Sse<
+        Pin<
+            Box<
+                dyn futures_util::Stream<
+                        Item = Result<
+                            axum::response::sse::Event,
+                            axum::Error,
+                        >,
+                    > + Send,
+            >,
+        >,
+    >,
+    (axum::http::StatusCode, String),
+> {
     use futures_util::stream;
 
     if id_validators::validate_project_name(&project).is_err() {
@@ -854,17 +873,17 @@ async fn get_file_content_stream(
     let highlight_stream = syntax_highlight_stream::highlight_stream(content, &filename, &theme);
 
     // Convert to SSE stream
-    let sse_stream = stream::unfold(highlight_stream, |mut stream| async move {
+    let sse_stream = stream::unfold(Box::pin(highlight_stream), |mut stream| async move {
         match futures_util::StreamExt::next(&mut stream).await {
             Some(item) => {
                 let sse_data = syntax_highlight_stream::item_to_sse(&item);
-                Some((Ok(sse_data), stream))
+                Some((Ok(axum::response::sse::Event::default().data(sse_data)), stream))
             }
             None => None,
         }
     });
 
-    Ok(axum::response::Sse::new(sse_stream).keep_alive(
+    Ok(axum::response::Sse::new(Box::pin(sse_stream)).keep_alive(
         axum::response::sse::KeepAlive::new()
             .interval(std::time::Duration::from_secs(15))
             .text("keepalive"),
@@ -1179,6 +1198,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_fix_patterns::router())
         .merge(net_diff::router())
         .merge(template_library::router())
+        .merge(api_prompts::router())
         .route(
             "/api/workers/timeline",
             get(api_timeline::get_worker_timeline),
@@ -1756,16 +1776,20 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     let mut config_watcher = config_watcher::ConfigWatcher::new(cli_overrides)?;
     config_watcher.start()?;
 
+    // Wrap config_watcher in Arc for sharing with SIGHUP handler
+    let config_watcher = Arc::new(tokio::sync::Mutex::new(config_watcher));
+
     // Initialize redaction patterns from initial config (§18)
     // Ensure the redaction module uses the configured patterns from config.yml
     // (or defaults if not configured) instead of its built-in patterns.
+    // This also updates the named patterns used by scan_text_for_secrets().
     {
-        let initial_config = config_watcher.config().await;
-        let pattern_strings = config_resolver::SecretPattern::flatten_patterns(&initial_config.secrets_patterns.value);
-        redaction::update_patterns(&pattern_strings);
+        let initial_config = config_watcher.lock().await.config().await;
+        let named_patterns = config_resolver::SecretPattern::to_named_patterns(&initial_config.secrets_patterns.value);
+        redaction::update_patterns_with_names(&named_patterns);
         info!(
             "Redaction patterns initialized: {} patterns from {}",
-            pattern_strings.len(),
+            named_patterns.len(),
             initial_config.secrets_patterns.attribution
         );
     }
@@ -1773,8 +1797,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     // Spawn task to handle config.yml changes
     let config_tx_for_config = config_status_tx.clone();
     let stuck_detector_for_reload = stuck_detector.clone();
+    let config_watcher_for_events = config_watcher.clone();
     tokio::spawn(async move {
-        let mut rx = config_watcher.subscribe();
+        let mut rx = config_watcher_for_events.lock().await.subscribe();
         while let Ok(event) = rx.recv().await {
             match event {
                 config_watcher::ConfigEvent::ConfigReloaded {
@@ -1785,11 +1810,12 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                     info!("config.yml reloaded successfully");
 
                     // Update redaction patterns from new config (§18)
-                    let pattern_strings = config_resolver::SecretPattern::flatten_patterns(&config.secrets_patterns.value);
-                    redaction::update_patterns(&pattern_strings);
+                    // This also updates the named patterns used by scan_text_for_secrets().
+                    let named_patterns = config_resolver::SecretPattern::to_named_patterns(&config.secrets_patterns.value);
+                    redaction::update_patterns_with_names(&named_patterns);
                     info!(
                         "Redaction patterns reloaded: {} patterns from {}",
-                        pattern_strings.len(),
+                        named_patterns.len(),
                         config.secrets_patterns.attribution
                     );
 
@@ -1891,6 +1917,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                             expected: error.expected.clone(),
                             got: error.got.clone(),
                         }),
+                        restart_required: None,
                     });
                 }
             }
@@ -2214,11 +2241,11 @@ Note: This is an automated synthesis from voice dictation."#,
                             let mut full_response = String::new();
                             while let Some(item) = stream.next().await {
                                 match item {
-                                    crate::agent_adapter::AgentEvent::TextDelta { text } => {
+                                    Ok(crate::agent_adapter::AgentEvent::TextDelta { text }) => {
                                         full_response.push_str(&text);
                                     }
-                                    crate::agent_adapter::AgentEvent::TurnComplete { .. } => break,
-                                    crate::agent_adapter::AgentEvent::Error { message } => {
+                                    Ok(crate::agent_adapter::AgentEvent::TurnComplete { .. }) => break,
+                                    Ok(crate::agent_adapter::AgentEvent::Error { message }) => {
                                         tracing::warn!(
                                             "Agent error during synthesis for {}: {}",
                                             stitch_id,
@@ -2284,9 +2311,8 @@ Note: This is an automated synthesis from voice dictation."#,
         })
     };
 
-    let transcription_service = Arc::new(transcription::TranscriptionService::with_callback(
+    let transcription_service = Arc::new(transcription::TranscriptionService::new(
         transcription_config.clone(),
-        Some(synthesis_callback),
     ));
 
     // Ensure models directory exists
@@ -2409,15 +2435,10 @@ Note: This is an automated synthesis from voice dictation."#,
     let morning_brief_runner = match &agent_session_manager {
         Some(mgr) => {
             let config = morning_brief::MorningBriefConfig::load_config();
-            let scripts_dir = dirs::home_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join(".hoop")
-                .join("scripts");
             let runner = Arc::new(morning_brief::MorningBriefRunner::new(
                 config,
                 mgr.clone(),
                 brief_tx.clone(),
-                scripts_dir,
             ));
             info!("Morning brief runner initialized");
             Some(runner)
@@ -2468,10 +2489,19 @@ Note: This is an automated synthesis from voice dictation."#,
     };
 
     // Initialize script scheduler (§22.3)
-    let scripts_dir = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".hoop")
-        .join("scripts");
+    let scripts_dir_str = resolved_config
+        .agent_extensions_scripts
+        .value
+        .clone()
+        .unwrap_or_else(|| {
+            dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(".hoop")
+                .join("scripts")
+                .to_string_lossy()
+                .to_string()
+        });
+    let scripts_dir = PathBuf::from(&scripts_dir_str);
     let script_scheduler = Arc::new(script_scheduler::ScriptScheduler::new(scripts_dir));
     let sched_shutdown = shutdown_coordinator.subscribe();
     script_scheduler.clone().start_scheduler(sched_shutdown);
@@ -2495,8 +2525,7 @@ Note: This is an automated synthesis from voice dictation."#,
             .registry
             .projects
             .iter()
-            .filter_map(|p| p.path.as_ref())
-            .map(|p| PathBuf::from(p))
+            .flat_map(|p| p.all_canonical_paths())
             .collect();
         if let Err(e) = lib.load(&templates_dir, &project_dirs) {
             warn!("Failed to load initial templates: {}", e);
@@ -2508,8 +2537,7 @@ Note: This is an automated synthesis from voice dictation."#,
         .registry
         .projects
         .iter()
-        .filter_map(|p| p.path.as_ref())
-        .map(|p| PathBuf::from(p))
+        .flat_map(|p| p.all_canonical_paths())
         .collect();
     let _template_watcher = template_library::start_watcher(
         templates_dir,
@@ -2517,6 +2545,25 @@ Note: This is an automated synthesis from voice dictation."#,
         project_dirs,
     );
     info!("Template library initialized and watcher started");
+
+    // Initialize prompt library (§22.5)
+    let prompts_dir = api_prompts::ensure_prompts_dir(&home);
+    let prompt_library = Arc::new(std::sync::RwLock::new(api_prompts::PromptLibrary::new()));
+
+    // Load initial prompts
+    {
+        let mut lib = prompt_library.write().unwrap();
+        if let Err(e) = lib.load(&prompts_dir) {
+            warn!("Failed to load initial prompts: {}", e);
+        }
+    }
+
+    // Start prompt file watcher for hot-reload
+    let _prompt_watcher = api_prompts::start_watcher(
+        prompts_dir,
+        prompt_library.clone(),
+    );
+    info!("Prompt library initialized and watcher started");
 
     let bead_tx_for_rebuild = bead_tx.clone();
     let stitch_tx_for_rebuild = stitch_tx.clone();
@@ -2562,6 +2609,7 @@ Note: This is an automated synthesis from voice dictation."#,
         stuck_detector,
         backup_runner,
         template_library,
+        prompt_library,
         identity_cache: identity_cache.clone(),
         role_resolver: Arc::new(
             auth::RoleResolver::new(resolved_config.roles.value.clone())
@@ -3030,6 +3078,20 @@ Note: This is an automated synthesis from voice dictation."#,
     let control_socket_task =
         tokio::spawn(async move { run_control_socket(control_state, control_shutdown).await });
 
+    // Set up config reload trigger channel (for SIGHUP)
+    let (config_reload_tx, mut config_reload_rx) = mpsc::channel::<()>(1);
+    let config_watcher_for_reload = Arc::new(tokio::sync::Mutex::new(config_watcher));
+
+    // Spawn task to handle config reload requests (from SIGHUP)
+    tokio::spawn(async move {
+        while let Some(()) = config_reload_rx.recv().await {
+            info!("Received config reload request (SIGHUP), reloading config.yml");
+            if let Err(e) = config_watcher_for_reload.lock().await.reload().await {
+                warn!("Failed to reload config: {}", e);
+            }
+        }
+    });
+
     // Set up signal handling
     let ctrl_c = async {
         signal::ctrl_c()
@@ -3045,8 +3107,19 @@ Note: This is an automated synthesis from voice dictation."#,
             .await;
     };
 
+    #[cfg(unix)]
+    let hangup = async {
+        signal::unix::signal(signal::unix::SignalKind::hangup())
+            .expect("failed to install SIGHUP handler")
+            .recv()
+            .await;
+    };
+
     #[cfg(not(unix))]
     let terminate = std::future::pending::<()>;
+
+    #[cfg(not(unix))]
+    let hangup = std::future::pending::<()>;
 
     // The graceful shutdown future
     let graceful_shutdown = async {
@@ -3056,6 +3129,12 @@ Note: This is an automated synthesis from voice dictation."#,
             }
             _ = terminate => {
                 info!("Received SIGTERM, initiating graceful shutdown");
+            }
+            _ = hangup => {
+                info!("Received SIGHUP, triggering config reload");
+                let _ = config_reload_tx.send(()).await;
+                // Continue running - SIGHUP doesn't shut down the daemon
+                return std::future::pending::<()>();
             }
         }
         let _ = shutdown_coordinator.shutdown(None).await;
@@ -3324,6 +3403,7 @@ async fn load_hoop_config() -> Option<hoop_schema::HoopConfig> {
             server: None,
             stuck_detector: None,
             morning_brief: None,
+            roles: None,
         };
 
         if !config_path.exists() {

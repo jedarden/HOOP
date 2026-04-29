@@ -8,6 +8,11 @@
 //! Cache automatically handles file rotation: new session content produces new
 //! hashes, so rotated files get fresh redaction without explicit eviction.
 //! Call `clear_cache()` after bulk reloads to reclaim memory.
+//!
+//! ## Pattern Source (§18)
+//!
+//! All patterns are sourced from config.yml via `config_resolver::SecretPattern`.
+//! This ensures a single source of truth for both client and backend scanners.
 
 use regex::Regex;
 use serde_json::Value;
@@ -19,9 +24,15 @@ use std::sync::{LazyLock, Mutex};
 /// Maximum cached entries before the cache is cleared.
 const MAX_CACHE_ENTRIES: usize = 50_000;
 
-// ── Global singleton ──────────────────────────────────────────────────────────
+// ── Global singletons ──────────────────────────────────────────────────────────
 
 static REDACTOR: LazyLock<Mutex<Redactor>> = LazyLock::new(|| Mutex::new(Redactor::new()));
+
+/// Named patterns for detection. Updated by `update_patterns_with_names()`.
+///
+/// This is the single source of truth for scanning. Each entry is `(name, Regex)`.
+/// The names match the `name` field from `config_resolver::SecretPattern`.
+static NAMED_PATTERNS: LazyLock<Mutex<Vec<(&'static str, Regex)>>> = LazyLock::new(|| Mutex::new(Vec::new()));
 
 /// Redact a text string, returning a new string with secrets replaced.
 /// Uses the process-wide cache; safe to call from multiple threads.
@@ -60,6 +71,9 @@ pub fn clear_cache() {
 ///
 /// Compiles each pattern string into a Regex and replaces the current
 /// pattern set in the global REDACTOR. Invalid patterns are logged and skipped.
+///
+/// Note: This function does NOT update the named patterns used by `scan_text_for_secrets()`.
+/// Use `update_patterns_with_names()` for full synchronization.
 pub fn update_patterns(pattern_strings: &[String]) {
     let mut new_patterns = Vec::new();
     for (i, pat_str) in pattern_strings.iter().enumerate() {
@@ -83,6 +97,53 @@ pub fn update_patterns(pattern_strings: &[String]) {
     }
 }
 
+/// Update both redaction and scanning patterns from named patterns.
+///
+/// This is the primary pattern update function. It synchronizes both:
+/// 1. The redaction patterns (used by `redact_text()`)
+/// 2. The named scanning patterns (used by `scan_text_for_secrets()`)
+///
+/// The pattern names are stored as static strings for the lifetime of the process.
+/// This ensures that scanning and redaction always use the same pattern set.
+///
+/// # Arguments
+/// * `patterns` - Slice of `(name, pattern_string)` tuples
+pub fn update_patterns_with_names(patterns: &[(&str, String)]) {
+    let mut redaction_patterns = Vec::new();
+    let mut named_patterns = Vec::new();
+
+    for (name, pat_str) in patterns {
+        match Regex::new(pat_str) {
+            Ok(re) => {
+                redaction_patterns.push(re.clone());
+                // Leak the name string to get a &'static str
+                // This is safe because the patterns live for the process lifetime
+                let static_name: &'static str = Box::leak(name.to_string().into_boxed_str());
+                named_patterns.push((static_name, re));
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Invalid redaction pattern '{}': '{}' - {}. Skipping.",
+                    name,
+                    pat_str,
+                    e
+                );
+            }
+        }
+    }
+
+    if let Ok(mut r) = REDACTOR.lock() {
+        r.patterns = redaction_patterns;
+        r.cache.clear(); // Clear cache to avoid stale matches
+        tracing::info!("Redaction patterns updated: {} patterns loaded", r.patterns.len());
+    }
+
+    if let Ok(mut np) = NAMED_PATTERNS.lock() {
+        *np = named_patterns;
+        tracing::info!("Named patterns updated: {} patterns loaded", np.len());
+    }
+}
+
 // ── Redactor ──────────────────────────────────────────────────────────────────
 
 struct Redactor {
@@ -93,7 +154,7 @@ struct Redactor {
 impl Redactor {
     fn new() -> Self {
         Self {
-            patterns: build_patterns(),
+            patterns: Vec::new(), // Patterns loaded via update_patterns_with_names()
             cache: HashMap::new(),
         }
     }
@@ -115,38 +176,7 @@ impl Redactor {
     }
 }
 
-// ── Pattern set ───────────────────────────────────────────────────────────────
-
-fn build_patterns() -> Vec<Regex> {
-    vec![
-        // Anthropic API keys: sk-ant-api03-*
-        Regex::new(r"sk-ant-[a-zA-Z0-9_-]{20,}").unwrap(),
-        // Generic sk-* keys (OpenAI, etc.)
-        Regex::new(r"\bsk-[a-zA-Z0-9]{20,}\b").unwrap(),
-        // AWS Access Key ID
-        Regex::new(r"\bAKIA[A-Z0-9]{16}\b").unwrap(),
-        // GitHub personal access tokens (classic + fine-grained)
-        Regex::new(r"\bghp_[a-zA-Z0-9]{36}\b").unwrap(),
-        Regex::new(r"\bghs_[a-zA-Z0-9]{36}\b").unwrap(),
-        Regex::new(r"\bghu_[a-zA-Z0-9]{36}\b").unwrap(),
-        Regex::new(r"\bgithub_pat_[a-zA-Z0-9_]{82}\b").unwrap(),
-        // Slack bot/user tokens
-        Regex::new(r"\bxoxb-[0-9A-Za-z-]{24,}\b").unwrap(),
-        Regex::new(r"\bxoxp-[0-9A-Za-z-]{24,}\b").unwrap(),
-        // JWTs: three base64url segments
-        Regex::new(r"\bey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b").unwrap(),
-        // Bearer tokens in HTTP headers / curl calls
-        Regex::new(r"(?i)bearer\s+[A-Za-z0-9._\-+/]{20,}").unwrap(),
-        // env-var style assignments: API_KEY=<value>
-        Regex::new(
-            r#"(?i)(?:api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|private[_-]?key|client[_-]?secret|anthropic[_-]?api[_-]?key|openai[_-]?api[_-]?key|github[_-]?token)\s*[:=]\s*["']?([A-Za-z0-9+/_.~\-]{16,})["']?"#
-        ).unwrap(),
-        // JSON-object style: "password": "…"  / "token": "…"
-        Regex::new(
-            r#"(?i)"(?:password|passwd|secret|token|api_key|apikey|access_token|auth_token|private_key|client_secret)"\s*:\s*"([^"]{8,})""#
-        ).unwrap(),
-    ]
-}
+// ── Pattern application ───────────────────────────────────────────────────────────
 
 fn apply_patterns(patterns: &[Regex], text: &str) -> String {
     let mut out = text.to_owned();
@@ -157,7 +187,13 @@ fn apply_patterns(patterns: &[Regex], text: &str) -> String {
 }
 
 fn apply_patterns_uncached(text: &str) -> String {
-    apply_patterns(&build_patterns(), text)
+    // Fallback: use current patterns from REDACTOR
+    if let Ok(r) = REDACTOR.lock() {
+        apply_patterns(&r.patterns, text)
+    } else {
+        // If lock fails, return text unchanged (fail-safe)
+        text.to_string()
+    }
 }
 
 fn hash_str(s: &str) -> u64 {
@@ -184,45 +220,6 @@ pub struct SecretFinding {
     pub match_len: usize,
 }
 
-/// Named patterns for detection. Each tuple is `(name, Regex)`.
-/// Mirrors `build_patterns` but retains the pattern name for reporting.
-static NAMED_PATTERNS: LazyLock<Vec<(&'static str, Regex)>> = LazyLock::new(build_named_patterns);
-
-fn build_named_patterns() -> Vec<(&'static str, Regex)> {
-    vec![
-        ("anthropic_api_key",
-            Regex::new(r"sk-ant-[a-zA-Z0-9_-]{20,}").unwrap()),
-        ("generic_sk_key",
-            Regex::new(r"\bsk-[a-zA-Z0-9]{20,}\b").unwrap()),
-        ("aws_access_key",
-            Regex::new(r"\bAKIA[A-Z0-9]{16}\b").unwrap()),
-        ("github_token_ghp",
-            Regex::new(r"\bghp_[a-zA-Z0-9]{36}\b").unwrap()),
-        ("github_token_ghs",
-            Regex::new(r"\bghs_[a-zA-Z0-9]{36}\b").unwrap()),
-        ("github_token_ghu",
-            Regex::new(r"\bghu_[a-zA-Z0-9]{36}\b").unwrap()),
-        ("github_pat",
-            Regex::new(r"\bgithub_pat_[a-zA-Z0-9_]{82}\b").unwrap()),
-        ("slack_bot_token",
-            Regex::new(r"\bxoxb-[0-9A-Za-z-]{24,}\b").unwrap()),
-        ("slack_user_token",
-            Regex::new(r"\bxoxp-[0-9A-Za-z-]{24,}\b").unwrap()),
-        ("jwt",
-            Regex::new(r"\bey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b").unwrap()),
-        ("bearer_token",
-            Regex::new(r"(?i)bearer\s+[A-Za-z0-9._\-+/]{20,}").unwrap()),
-        ("env_var_secret",
-            Regex::new(
-                r#"(?i)(?:api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|private[_-]?key|client[_-]?secret|anthropic[_-]?api[_-]?key|openai[_-]?api[_-]?key|github[_-]?token)\s*[:=]\s*["']?([A-Za-z0-9+/_.~\-]{16,})["']?"#
-            ).unwrap()),
-        ("json_secret_field",
-            Regex::new(
-                r#"(?i)"(?:password|passwd|secret|token|api_key|apikey|access_token|auth_token|private_key|client_secret)"\s*:\s*"([^"]{8,})""#
-            ).unwrap()),
-    ]
-}
-
 /// Scan `text` for secrets and return all findings.
 ///
 /// Returns an empty vec if no secrets are detected. The text is never mutated
@@ -233,13 +230,15 @@ fn build_named_patterns() -> Vec<(&'static str, Regex)> {
 /// (e.g. both `anthropic_api_key` and `env_var_secret`).
 pub fn scan_text_for_secrets(text: &str) -> Vec<SecretFinding> {
     let mut findings = Vec::new();
-    for (name, re) in NAMED_PATTERNS.iter() {
-        for m in re.find_iter(text) {
-            findings.push(SecretFinding {
-                pattern_name: name,
-                match_start: m.start(),
-                match_len: m.len(),
-            });
+    if let Ok(named_patterns) = NAMED_PATTERNS.lock() {
+        for (name, re) in named_patterns.iter() {
+            for m in re.find_iter(text) {
+                findings.push(SecretFinding {
+                    pattern_name: name,
+                    match_start: m.start(),
+                    match_len: m.len(),
+                });
+            }
         }
     }
     findings
@@ -348,12 +347,12 @@ pub fn audit_findings(
                 .collect::<Vec<_>>()
         });
 
-        if let Err(e) = fleet::write_redaction_audit(
+        if let Err(e) = fleet::insert_redaction_audit(
             what_flagged,
             pattern_name,
             RedactionAction::FlaggedOnly,
             operator,
-            source_ref,
+            Some(source_ref),
             project,
             Some(metadata),
         ) {
