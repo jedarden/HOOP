@@ -23,26 +23,32 @@ import {
   prefetchSecretPatterns,
   getSecretSeverity,
   truncateSecret,
+  clearPatternCache,
 } from './components/secretsScanner';
 
 // Mock the global fetch for patterns API
+// These patterns match the backend default_secret_patterns() in config_resolver.rs
 const mockPatterns = [
   {
+    id: 'anthropic_api_key',
     name: 'Anthropic API Key',
     severity: 'high',
     patterns: ['sk-ant-[a-zA-Z0-9_-]{20,}'],
   },
   {
+    id: 'generic_sk_key',
     name: 'Generic API Key',
     severity: 'high',
     patterns: ['\\bsk-[a-zA-Z0-9]{20,}\\b'],
   },
   {
+    id: 'aws_access_key',
     name: 'AWS Access Key',
     severity: 'high',
     patterns: ['\\bAKIA[A-Z0-9]{16}\\b'],
   },
   {
+    id: 'github_token',
     name: 'GitHub Token',
     severity: 'high',
     patterns: [
@@ -53,6 +59,7 @@ const mockPatterns = [
     ],
   },
   {
+    id: 'slack_token',
     name: 'Slack Token',
     severity: 'high',
     patterns: [
@@ -61,21 +68,25 @@ const mockPatterns = [
     ],
   },
   {
+    id: 'jwt',
     name: 'JWT',
     severity: 'high',
     patterns: ['\\bey[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b'],
   },
   {
+    id: 'bearer_token',
     name: 'Bearer Token',
     severity: 'high',
     patterns: ['(?i)bearer\\s+[A-Za-z0-9._\\-+/]{20,}'],
   },
   {
+    id: 'env_var_secret',
     name: 'Environment Variable Secret',
     severity: 'high',
     patterns: ['(?i)(?:api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|private[_-]?key|client[_-]?secret|anthropic[_-]?api[_-]?key|openai[_-]?api[_-]?key|github[_-]?token)\\s*[:=]\\s*["\']?([A-Za-z0-9+/_.~\\-]{16,})["\']?'],
   },
   {
+    id: 'json_secret_field',
     name: 'JSON Secret Field',
     severity: 'high',
     patterns: ['(?i)"(?:password|passwd|secret|token|api_key|apikey|access_token|auth_token|private_key|client_secret)"\\s*:\\s*"([^"]{8,})"'],
@@ -84,8 +95,10 @@ const mockPatterns = [
 
 // Fixture secrets that should be detected by both client and backend
 const FIXTURE_SECRETS = {
-  anthropicKey: 'ANTHROPIC_API_KEY=sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666',
-  genericKey: 'API_KEY=sk-ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdefghijklmn',
+  // Anthropic key without the variable name to avoid matching env_var_secret pattern
+  anthropicKey: 'Here is my key sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666 please keep it safe',
+  // Generic key without common variable names to avoid matching env_var_secret pattern
+  genericKey: 'Key: sk-ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcdefghijklmn',
   awsKey: 'aws_access_key_id = AKIAIOSFODNN7EXAMPLE',
   githubToken: 'token=ghp_16C7e42F292c6912E7710c838347Ae178B4a',
   slackToken: 'SLACK_TOKEN=xoxb-1234567890-1234567890123-12345678901234567890123456',
@@ -95,14 +108,17 @@ const FIXTURE_SECRETS = {
   multipleSecrets: `
     My API keys:
     Anthropic: sk-ant-api03-TEST1234567890ABCDEFGHIJ1234567890ABCD
-    GitHub: ghp_1234567890abcdef1234567890abcdef123456
-    AWS: AKIA1234567890ABCDEFG
+    GitHub: ghp_1234567890abcdef1234567890abcd123456
+    AWS: AKIA1234567890ABCDEF
   `,
   overlappingSecrets: 'Key=sk-ant-test1234567890ABCDEFGHIJ1234567890ABCD and Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N',
 };
 
 describe('secrets scanner parity (§18)', () => {
   beforeEach(async () => {
+    // Clear the pattern cache before each test
+    clearPatternCache();
+
     // Mock fetch to return backend patterns
     globalThis.fetch = vi.fn(() =>
       Promise.resolve({
@@ -114,8 +130,6 @@ describe('secrets scanner parity (§18)', () => {
       } as Response)
     );
 
-    // Clear cached patterns to ensure each test starts fresh
-    vi.resetModules();
     // Prefetch patterns to ensure cache is populated
     await prefetchSecretPatterns();
   });
@@ -281,6 +295,9 @@ describe('secrets scanner parity (§18)', () => {
 
   describe('backend API requirement', () => {
     it('throws error when backend is unavailable', async () => {
+      // Clear the pattern cache
+      clearPatternCache();
+
       // Mock fetch to fail
       globalThis.fetch = vi.fn(() =>
         Promise.resolve({
@@ -290,19 +307,13 @@ describe('secrets scanner parity (§18)', () => {
         } as Response)
       );
 
-      // Clear module cache to reset state
-      vi.resetModules();
-
-      // Re-import to get fresh state
-      const { prefetchSecretPatterns: freshPrefetch } = await import('./components/secretsScanner');
-
-      await expect(freshPrefetch()).rejects.toThrow();
+      await expect(prefetchSecretPatterns()).rejects.toThrow();
     });
   });
 
   describe('match positions are correct', () => {
     it('returns correct byte offsets for detected secrets', () => {
-      const text = 'My key is sk-ant-test1234567890ABCD end';
+      const text = 'My key is sk-ant-test1234567890ABCDEFGH end';
       const result = scanForSecretsSync(text);
       expect(result.count).toBeGreaterThan(0);
       const match = result.matches[0];

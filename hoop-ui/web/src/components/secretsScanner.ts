@@ -7,7 +7,7 @@
  */
 
 export interface SecretMatch {
-  type: string;
+  type: string; // Pattern id (e.g., "anthropic_api_key")
   value: string;
   startIndex: number;
   endIndex: number;
@@ -20,6 +20,7 @@ export interface SecretWarning {
 
 // Secret pattern from backend API
 export interface SecretPattern {
+  id: string;
   name: string;
   severity: string;
   patterns: string[];
@@ -35,6 +36,30 @@ interface SecretsPatternsResponse {
 
 let cachedPatterns: SecretPattern[] | null = null;
 let fetchPromise: Promise<SecretPattern[]> | null = null;
+
+/**
+ * Convert Rust regex pattern to JavaScript-compatible pattern.
+ *
+ * Rust regex uses inline flags like (?i) for case-insensitive matching,
+ * which JavaScript doesn't support. This function strips those flags
+ * since the client always adds the 'i' flag to the RegExp constructor.
+ *
+ * @param rustPattern - Pattern string from backend (may contain (?i), (?-i), etc.)
+ * @returns JavaScript-compatible pattern string
+ */
+function rustPatternToJs(rustPattern: string): string {
+  // Remove inline flag groups: (?i), (?-i), (?s), (?-s), (?m), (?-m), etc.
+  // Also remove non-capturing groups with just flags: (?i:something)
+  return rustPattern.replace(/\(\?[-a-z]+\)/g, '').replace(/\(\?[-a-z]+:/g, '(?:');
+}
+
+/**
+ * Clear the cached patterns. For testing only.
+ */
+export function clearPatternCache(): void {
+  cachedPatterns = null;
+  fetchPromise = null;
+}
 
 /**
  * Fetch secret patterns from the backend API (§18).
@@ -112,6 +137,7 @@ export function scanForSecretsSync(text: string): SecretWarning {
   const patterns = getPatternsSync();
   if (patterns.length === 0) {
     // Patterns not loaded yet - fail-safe, return empty result
+    console.warn('[secretsScanner] scanForSecretsSync: No patterns loaded');
     return { matches: [], count: 0 };
   }
 
@@ -120,7 +146,8 @@ export function scanForSecretsSync(text: string): SecretWarning {
   for (const secretType of patterns) {
     for (const patternStr of secretType.patterns) {
       try {
-        const pattern = new RegExp(patternStr, 'gi');
+        const jsPattern = rustPatternToJs(patternStr);
+        const pattern = new RegExp(jsPattern, 'gi');
         let match;
 
         // Reset regex state
@@ -170,7 +197,8 @@ export async function scanForSecrets(text: string): Promise<SecretWarning> {
   for (const secretType of patterns) {
     for (const patternStr of secretType.patterns) {
       try {
-        const pattern = new RegExp(patternStr, 'gi');
+        const jsPattern = rustPatternToJs(patternStr);
+        const pattern = new RegExp(jsPattern, 'gi');
         let match;
 
         // Reset regex state
@@ -279,5 +307,5 @@ export function truncateSecret(value: string, visibleChars: number = 4): string 
   if (value.length <= visibleChars * 2) {
     return '*'.repeat(value.length);
   }
-  return `${value.slice(0, visibleChars)}${'*'.repeat(Math.min(value.length - visibleChars * 2, 8))}${value.slice(-visibleChars)}`;
+  return `${value.slice(0, visibleChars)}${'*'.repeat(value.length - visibleChars * 2)}${value.slice(-visibleChars)}`;
 }
