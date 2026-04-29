@@ -401,6 +401,74 @@ export interface SaturationAlert {
 // Search palette open/closed state (cmd-K)
 export const searchPaletteOpenAtom = atom<boolean>(false);
 
+// Settings menu open/closed state
+export const settingsMenuOpenAtom = atom<boolean>(false);
+
+// Welcome tour state
+const WELCOME_TOUR_STORAGE_KEY = 'hoop_welcome_tour_completed';
+
+function loadWelcomeTourCompleted(): boolean {
+  try {
+    const stored = localStorage.getItem(WELCOME_TOUR_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as boolean;
+      return parsed;
+    }
+  } catch {}
+  return false;
+}
+
+function saveWelcomeTourCompleted(completed: boolean) {
+  try {
+    localStorage.setItem(WELCOME_TOUR_STORAGE_KEY, JSON.stringify(completed));
+  } catch {}
+}
+
+export { WELCOME_TOUR_STORAGE_KEY };
+
+const baseWelcomeTourCompletedAtom = atom<boolean>(loadWelcomeTourCompleted());
+export const welcomeTourCompletedAtom = atom(
+  (get) => get(baseWelcomeTourCompletedAtom),
+  (get, set, newValue: boolean) => {
+    set(baseWelcomeTourCompletedAtom, newValue);
+    saveWelcomeTourCompleted(newValue);
+  }
+);
+
+// Welcome tour step (0 = not started, 1-N = active step, >N = completed)
+export const welcomeTourStepAtom = atom<number>(0);
+
+// Presence tracking atoms (§19.4 Multi-operator presence)
+export type PresenceVisibility = 'online' | 'away' | 'offline';
+export const presenceVisibilityAtom = atom<PresenceVisibility>('online');
+
+// Per-project presence: project name -> Set of operator IDs
+export const presenceForProjectAtom = atom<Map<string, Set<string>>>(new Map());
+
+// Per-stitch presence: stitch ID -> Set of operator IDs
+export const presenceForStitchAtom = atom<Map<string, Set<string>>>(new Map());
+
+// Onboarding prompt types
+export interface OnboardingPrompt {
+  id: string;
+  title: string;
+  description: string;
+  action?: string;
+  priority: number;
+  created_at: string;
+  dismissible: boolean;
+}
+
+export interface OnboardingPromptsResponse {
+  prompts: OnboardingPrompt[];
+  dismissed: string[];
+}
+
+// Onboarding atoms - store the full response including dismissed list
+export const onboardingPromptsAtom = atom<OnboardingPromptsResponse | null>(null);
+export const onboardingPromptsLoadedAtom = atom<boolean>(false);
+export const onboardingPromptsErrorAtom = atom<string | null>(null);
+
 // Optimistic mutation stub — survives WS reconnect (§B2, epoch-sync)
 export interface OptimisticStub {
   tempId: string;
@@ -874,8 +942,11 @@ export interface TemplateValues {
   [key: string]: string;
 }
 
+// Re-export StitchTemplate from generated types for convenience
+export type StitchTemplate = import('./types.gen').StitchTemplate;
+
 // Template library cache — fetched from /api/p/{project}/templates
-export const templatesAtom = atom<import('./types.gen').StitchTemplate[]>([]);
+export const templatesAtom = atom<StitchTemplate[]>([]);
 
 // ── Operator-invoked scripts (§22.3) ─────────────────────────────────────────────
 

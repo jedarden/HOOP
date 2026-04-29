@@ -16,6 +16,7 @@ import { SearchPalette } from './SearchPalette';
 import CrossProjectDashboard from './CrossProjectDashboard';
 import PatternsView from './PatternsView';
 import ConversationsView from './ConversationsView';
+import SearchPage from './SearchPage';
 import { DictationWidget } from './components/DictationWidget';
 import { ConnectionBanner } from './components/ConnectionBanner';
 import { StuckAlertBanner } from './components/StuckAlertBanner';
@@ -38,7 +39,8 @@ type Route =
   | { view: 'patterns'; patternId?: string }
   | { view: 'conversations' }
   | { view: 'drafts' }
-  | { view: 'diagnostics' };
+  | { view: 'diagnostics' }
+  | { view: 'search' };
 
 function ConfigBanner({ error }: { error: { message: string; line: number; col: number; field?: string; expected?: string; got?: string } }) {
   return (
@@ -83,6 +85,7 @@ function parseHash(hash: string): Route {
   if (path === 'conversations') return { view: 'conversations' };
   if (path === 'drafts') return { view: 'drafts' };
   if (path === 'diagnostics') return { view: 'diagnostics' };
+  if (path === 'search') return { view: 'search' };
   if (path.startsWith('patterns/')) {
     const patternId = path.slice('patterns/'.length);
     if (patternId) return { view: 'patterns', patternId };
@@ -176,14 +179,35 @@ export default function App() {
       }, 300);
     };
 
+    const handleEnableTour = async () => {
+      try {
+        const response = await fetch('/api/tour/enable', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        if (response.ok) {
+          // Navigate to the tour project
+          window.location.hash = '#/__hoop_tour__';
+        } else {
+          alert('Failed to enable tour project. Please try again.');
+        }
+      } catch (error) {
+        console.error('Error enabling tour:', error);
+        alert('Failed to enable tour project. Please try again.');
+      }
+    };
+
     window.addEventListener('hoop-start-dictation', handleStartDictation);
     window.addEventListener('hoop-register-project', handleRegisterProject);
     window.addEventListener('hoop-open-agent-chat', handleOpenAgentChat);
+    window.addEventListener('hoop-enable-tour', handleEnableTour);
 
     return () => {
       window.removeEventListener('hoop-start-dictation', handleStartDictation);
       window.removeEventListener('hoop-register-project', handleRegisterProject);
       window.removeEventListener('hoop-open-agent-chat', handleOpenAgentChat);
+      window.removeEventListener('hoop-enable-tour', handleEnableTour);
     };
   }, [projectCards]);
 
@@ -432,6 +456,44 @@ export default function App() {
         <DictationWidget />
         <StuckAlertBanner />
         <CollisionAlertBanner />
+      </>
+    );
+  }
+
+  // Search view — full-text search with faceted filters
+  if (route.view === 'search') {
+    return (
+      <>
+        <ConnectionBanner />
+        {showRestoreToast && (
+          <div className="restore-toast" role="status">
+            Restoring state...
+          </div>
+        )}
+        <div className="app app-project-detail">
+          <header className="app-header-mini">
+            <div className="header-top">
+              <div className="header-nav">
+                <a href="#/" className="back-link">&larr; All Projects</a>
+                <a href="#/dashboard" className="header-nav-link">Dashboard</a>
+                <a href="#/patterns" className="header-nav-link">Patterns</a>
+                <a href="#/conversations" className="header-nav-link">Conversations</a>
+                <a href="#/drafts" className="header-nav-link">Drafts</a>
+                <a href="#/fleet" className="header-nav-link">Fleet</a>
+                <a href="#/audit" className="header-nav-link">Audit</a>
+              </div>
+              <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
+                <span className="indicator-dot" />
+                {wsConnected ? 'Connected' : 'Connecting...'}
+              </div>
+            </div>
+          </header>
+          <main>
+            <SearchPage />
+          </main>
+        </div>
+        <SearchPalette />
+        <DictationWidget />
       </>
     );
   }

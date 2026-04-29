@@ -296,6 +296,22 @@ export function SearchPalette() {
           <div className="sp-empty">No results for &ldquo;{debouncedQuery.trim()}&rdquo;</div>
         )}
 
+        {debouncedQuery.trim() && results.length >= MAX_RESULTS && (
+          <div className="sp-footer">
+            <a
+              href={`#/search?q=${encodeURIComponent(debouncedQuery.trim())}`}
+              className="sp-footer-link"
+              onClick={(e) => {
+                e.preventDefault();
+                window.location.hash = `/search?q=${encodeURIComponent(debouncedQuery.trim())}`;
+                setOpen(false);
+              }}
+            >
+              Full search page →
+            </a>
+          </div>
+        )}
+
         {!debouncedQuery.trim() && (
           <div className="sp-hint-row">
             <span className="sp-hint">Search across all projects · use <code>project:name</code> to filter</span>
