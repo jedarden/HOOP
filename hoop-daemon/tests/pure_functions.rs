@@ -350,4 +350,247 @@ mod pure_function_tests {
         let result: ParseResult<serde_json::Value> = parse_line(r#"{"key": "value"}"#, &source);
         assert!(matches!(result, ParseResult::Ok(_)));
     }
+
+    // ============================================================================
+    // Performance Tests — All must complete in < 60s total
+    // ============================================================================
+
+    #[test]
+    fn test_pure_functions_performance_all() {
+        use std::time::Instant;
+
+        // ANSI strip performance
+        let start = Instant::now();
+        for _ in 0..10000 {
+            ansi_strip::strip_ansi("\x1b[31m\x1b[1mError\x1b[0m: file not found");
+        }
+        let ansi_time = start.elapsed();
+        assert!(ansi_time.as_millis() < 100, "ANSI strip too slow: {:?}", ansi_time);
+
+        // Cost aggregation performance
+        let start = Instant::now();
+        for _ in 0..1000 {
+            let _ = cost::CostAggregator::extract_project("/home/user/projects/my-project");
+            let _ = cost::CostAggregator::worker_to_model("alpha");
+        }
+        let cost_time = start.elapsed();
+        assert!(cost_time.as_millis() < 10, "Cost functions too slow: {:?}", cost_time);
+
+        // Embedding performance
+        let embedder = embedding::NgramEmbedder::new();
+        let start = Instant::now();
+        for _ in 0..1000 {
+            let _ = embedder.embed("Fix authentication bug in login flow");
+        }
+        let embed_time = start.elapsed();
+        assert!(embed_time.as_millis() < 500, "Embedding too slow: {:?}", embed_time);
+
+        // Similarity performance
+        let start = Instant::now();
+        for _ in 0..1000 {
+            let _ = similarity::text_similarity("fix bug", "fix crash");
+        }
+        let similarity_time = start.elapsed();
+        assert!(similarity_time.as_millis() < 50, "Similarity too slow: {:?}", similarity_time);
+
+        // Status derivation performance (20 beads must be < 10ms per §4.7)
+        let start = Instant::now();
+        let ctx = hoop_daemon::stitch_status::StitchContext {
+            linked_beads: (0..20).map(|i| hoop_daemon::stitch_status::LinkedBead {
+                id: format!("bd-{}", i),
+                status: hoop_daemon::stitch_status::BeadStatus::Open,
+                issue_type: hoop_daemon::stitch_status::BeadType::Task,
+                claimed_by: if i % 5 == 0 { Some(format!("worker-{}", i)) } else { None },
+                updated_at: chrono::Utc::now() - chrono::Duration::days(i),
+            }).collect(),
+            activity: hoop_daemon::stitch_status::StitchActivity {
+                last_message_at: Some(chrono::Utc::now() - chrono::Duration::days(3)),
+                last_streaming_at: None,
+            },
+            config: Default::default(),
+        };
+        for _ in 0..100 {
+            let _ = ctx.derive_status();
+        }
+        let status_time = start.elapsed();
+        assert!(status_time.as_millis() < 1000, "Status derivation too slow: {:?}", status_time);
+
+        // Tag join performance
+        let start = Instant::now();
+        for _ in 0..10000 {
+            let _ = tag_join::resolve("[needle:alpha:bd-abc123:pluck] Fix bug", None);
+        }
+        let tag_time = start.elapsed();
+        assert!(tag_time.as_millis() < 100, "Tag join too slow: {:?}", tag_time);
+
+        // Prompt substitute performance
+        let ctx = prompt_substitute::SubstitutionContext::new().project("test".to_string());
+        let start = Instant::now();
+        for _ in 0..10000 {
+            let _ = prompt_substitute::substitute("Working on {{project}}", &ctx);
+        }
+        let sub_time = start.elapsed();
+        assert!(sub_time.as_millis() < 100, "Prompt substitute too slow: {:?}", sub_time);
+
+        println!("All pure function performance tests passed:");
+        println!("  ANSI strip: {:?} (10k ops)", ansi_time);
+        println!("  Cost: {:?} (1k ops)", cost_time);
+        println!("  Embedding: {:?} (1k ops)", embed_time);
+        println!("  Similarity: {:?} (1k ops)", similarity_time);
+        println!("  Status: {:?} (100 ops)", status_time);
+        println!("  Tag join: {:?} (10k ops)", tag_time);
+        println!("  Substitute: {:?} (10k ops)", sub_time);
+    }
+
+    // ============================================================================
+    // Additional Edge Cases for Coverage
+    // ============================================================================
+
+    #[test]
+    fn test_ansi_strip_edge_cases() {
+        // Empty input
+        assert_eq!(ansi_strip::strip_ansi(""), "");
+        // Only ANSI
+        assert_eq!(ansi_strip::strip_ansi("\x1b[31m\x1b[0m"), "");
+        // Unicode with ANSI
+        assert_eq!(ansi_strip::strip_ansi("\x1b[31m你好\x1b[0m"), "你好");
+        // Multiple reset sequences
+        assert_eq!(ansi_strip::strip_ansi("\x1b[0m\x1b[0m\x1b[0m"), "");
+    }
+
+    #[test]
+    fn test_cost_edge_cases() {
+        // Empty path
+        assert_eq!(cost::CostAggregator::extract_project(""), "unknown");
+        // Root path
+        assert_eq!(cost::CostAggregator::extract_project("/"), "");
+        // Path with trailing slash
+        assert_eq!(cost::CostAggregator::extract_project("/home/user/"), "");
+        // Unknown worker
+        assert_eq!(cost::CostAggregator::worker_to_model("unknown"), "unknown");
+    }
+
+    #[test]
+    fn test_similarity_edge_cases() {
+        // Empty strings
+        let sim = similarity::text_similarity("", "");
+        assert_eq!(sim.jaccard, 1.0);
+        // Single word
+        let sim = similarity::text_similarity("hello", "hello");
+        assert_eq!(sim.jaccard, 1.0);
+        // Case sensitivity
+        let sim = similarity::text_similarity("Hello", "hello");
+        assert_eq!(sim.jaccard, 1.0);
+    }
+
+    #[test]
+    fn test_prompt_substitute_edge_cases() {
+        let ctx = prompt_substitute::SubstitutionContext::new().project("p".to_string());
+
+        // Nested braces (should be handled)
+        let result = prompt_substitute::substitute("{{project}}", &ctx);
+        assert!(result.is_ok());
+
+        // Multiple same variable
+        let result = prompt_substitute::substitute("{{project}} {{project}} {{project}}", &ctx);
+        assert_eq!(result.unwrap(), "p p p");
+    }
+
+    #[test]
+    fn test_path_security_edge_cases() {
+        use std::path::PathBuf;
+        use hoop_schema::path_security::PathAllowlist;
+
+        // Empty allowlist
+        let al = PathAllowlist::from_roots(vec![]);
+        assert!(!al.contains(&PathBuf::from("/any/path")));
+
+        // Root allowlist
+        let al = PathAllowlist::from_roots(vec![PathBuf::from("/")]);
+        assert!(al.contains(&PathBuf::from("/any/path")));
+
+        // Nested paths
+        let root = PathBuf::from("/tmp/test");
+        let al = PathAllowlist::from_roots(vec![root.clone()]);
+        assert!(al.contains(&root.join("deep/nested/path")));
+        assert!(!al.contains(&PathBuf::from("/tmp/other")));
+    }
+
+    #[test]
+    fn test_svg_sanitize_edge_cases() {
+        // Empty SVG
+        let result = svg_sanitize::sanitize(b"").unwrap();
+        assert!(!result.record.was_modified);
+
+        // SVG with only whitespace
+        let result = svg_sanitize::sanitize(b"   \n\t  ").unwrap();
+        assert!(!result.record.was_modified);
+
+        // Mixed case event handlers
+        let svg = b"<svg><rect ONCLICK=\"alert(1)\"/></svg>";
+        let result = svg_sanitize::sanitize(svg).unwrap();
+        assert!(result.record.was_modified);
+        assert!(!String::from_utf8_lossy(&result.safe_bytes).to_ascii_lowercase().contains("onclick"));
+    }
+
+    #[test]
+    fn test_pdf_sanitize_edge_cases() {
+        // Empty PDF
+        let result = pdf_sanitize::sanitize(b"%PDF-1.4\n%%EOF\n").unwrap();
+        assert!(!result.record.was_modified);
+
+        // PDF with only JavaScript action (no other content)
+        let pdf = b"%PDF-1.4\n1 0 obj\n<< /Type /Action /S /JavaScript /JS (alert(1)) >>\nendobj\n%%EOF\n";
+        let result = pdf_sanitize::sanitize(pdf).unwrap();
+        assert!(result.record.was_modified);
+    }
+
+    #[test]
+    fn test_stitch_status_edge_cases() {
+        use chrono::{Duration, Utc};
+        use hoop_daemon::stitch_status::{BeadStatus, BeadType, LinkedBead, StitchActivity, StitchContext};
+
+        // No linked beads, no activity
+        let ctx = StitchContext {
+            linked_beads: vec![],
+            activity: StitchActivity {
+                last_message_at: None,
+                last_streaming_at: None,
+            },
+            config: Default::default(),
+        };
+        let status = ctx.derive_status();
+        match status {
+            hoop_daemon::stitch_status::StitchStatus::Quiet { days } => {
+                assert_eq!(days, 999);
+            }
+            _ => panic!("Expected Quiet with 999 days"),
+        }
+
+        // Multiple claimed beads
+        let ctx = StitchContext {
+            linked_beads: vec![
+                LinkedBead {
+                    id: "bd-1".to_string(),
+                    status: BeadStatus::Open,
+                    issue_type: BeadType::Task,
+                    claimed_by: Some("worker-1".to_string()),
+                    updated_at: Utc::now(),
+                },
+                LinkedBead {
+                    id: "bd-2".to_string(),
+                    status: BeadStatus::Open,
+                    issue_type: BeadType::Bug,
+                    claimed_by: Some("worker-2".to_string()),
+                    updated_at: Utc::now(),
+                },
+            ],
+            activity: StitchActivity {
+                last_message_at: Some(Utc::now()),
+                last_streaming_at: None,
+            },
+            config: Default::default(),
+        };
+        assert_eq!(ctx.derive_status(), hoop_daemon::stitch_status::StitchStatus::InProgress);
+    }
 }
