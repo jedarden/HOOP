@@ -59,6 +59,14 @@ export default defineConfig({
         viewport: { width: 1280, height: 720 },
       },
     },
+    {
+      name: 'load-test',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1920, height: 1080 },
+      },
+      testMatch: /load-test-performance\.spec\.ts/,
+    },
   ],
 
   webServer: {
