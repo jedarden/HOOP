@@ -22,7 +22,7 @@ use uuid::Uuid;
 use utoipa::ToSchema;
 
 /// Current schema version
-pub const SCHEMA_VERSION: &str = "1.29.0";
+pub const SCHEMA_VERSION: &str = "1.32.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -31,7 +31,7 @@ const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
 pub const GENESIS_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 /// Action kind for audit log
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ActionKind {
     BeadCreated,
@@ -72,10 +72,12 @@ pub enum ActionKind {
     ReflectionInjected,
     /// Skill invoked via MCP (skill_name, args, duration_ms, result in args_json)
     SkillInvoked,
+    /// Capacity saturation alert fired (§6 P2 d10, §8.3, hoop-ttb.3.22)
+    SaturationAlert,
 }
 
 /// Action result for audit log
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum ActionResult {
     Success,
@@ -1092,6 +1094,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
             migrate!(conn, migrate_v128_to_v129, "1.28.0", "1.29.0", "Add workspace_from/to to stitch_links")?;
             migrate!(conn, migrate_v129_to_v130, "1.29.0", "1.30.0", "Multi-operator concurrency (§19)")?;
+            migrate!(conn, migrate_v130_to_v131, "1.30.0", "1.31.0", "Add UNIQUE constraint on reflection_ledger.content_hash")?;
         }
         "1.1.0" => {
             migrate!(conn, migrate_v11_to_v12, "1.1.0", "1.2.0", "Add Pattern service tables")?;
@@ -1123,6 +1126,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
             migrate!(conn, migrate_v128_to_v129, "1.28.0", "1.29.0", "Add workspace_from/to to stitch_links")?;
             migrate!(conn, migrate_v129_to_v130, "1.29.0", "1.30.0", "Multi-operator concurrency (§19)")?;
+            migrate!(conn, migrate_v130_to_v131, "1.30.0", "1.31.0", "Add UNIQUE constraint on reflection_ledger.content_hash")?;
         }
         "1.2.0" => {
             migrate!(conn, migrate_v12_to_v13, "1.2.0", "1.3.0", "Add dictated_notes metadata table")?;
@@ -1153,6 +1157,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
             migrate!(conn, migrate_v128_to_v129, "1.28.0", "1.29.0", "Add workspace_from/to to stitch_links")?;
             migrate!(conn, migrate_v129_to_v130, "1.29.0", "1.30.0", "Multi-operator concurrency (§19)")?;
+            migrate!(conn, migrate_v130_to_v131, "1.30.0", "1.31.0", "Add UNIQUE constraint on reflection_ledger.content_hash")?;
         }
         "1.3.0" => {
             migrate!(conn, migrate_v13_to_v14, "1.3.0", "1.4.0", "Add word-level timestamps to dictated_notes")?;
@@ -3092,6 +3097,161 @@ pub fn migrate_v129_to_v130(conn: &mut Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migration 1.30.0 → 1.31.0: Add UNIQUE constraint on reflection_ledger.content_hash
+///
+/// Adds a UNIQUE constraint on content_hash to prevent duplicate proposals
+/// under concurrent writes. Before adding the constraint, deduplicates any
+/// existing entries by merging source_stitches and keeping the oldest entry.
+///
+/// Plan reference: §19.2 Reflection concurrency - dedup on content hash
+pub fn migrate_v130_to_v131(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.30.0 → 1.31.0: Adding UNIQUE constraint on reflection_ledger.content_hash");
+
+    // First, deduplicate any existing entries with the same content_hash
+    // Keep the oldest entry (by created_at) and merge source_stitches
+    conn.execute(
+        r#"
+        CREATE TEMP TABLE reflection_dedup AS
+        SELECT
+            content_hash,
+            MIN(created_at) as keep_created_at,
+            GROUP_CONCAT(id) as all_ids,
+            '[' || GROUP_CONCAT('"', source_stitches, '"') || ']' as merged_stitches
+        FROM reflection_ledger
+        WHERE content_hash != ''
+        GROUP BY content_hash
+        HAVING COUNT(*) > 1
+        "#,
+        [],
+    )?;
+
+    // Update the kept entry with merged source_stitches
+    conn.execute(
+        r#"
+        UPDATE reflection_ledger
+        SET source_stitches = (
+            SELECT '[' || GROUP_CONCAT DISTINCT(json_each.value) || ']'
+            FROM json_each((SELECT merged_stitches FROM reflection_dedup WHERE reflection_dedup.content_hash = reflection_ledger.content_hash))
+        )
+        WHERE id IN (SELECT substr(all_ids, 1, instr(all_ids, ',') - 1) FROM reflection_dedup)
+        "#,
+        [],
+    )?;
+
+    // Delete duplicate entries (keep the oldest)
+    conn.execute(
+        r#"
+        DELETE FROM reflection_ledger
+        WHERE id NOT IN (
+            SELECT substr(all_ids, 1, instr(all_ids, ',') - 1)
+            FROM reflection_dedup
+        ) AND content_hash IN (SELECT content_hash FROM reflection_dedup)
+        "#,
+        [],
+    )?;
+
+    // Drop temp table
+    conn.execute("DROP TABLE reflection_dedup", [])?;
+
+    // Now add the UNIQUE constraint
+    // SQLite doesn't support ALTER TABLE to add UNIQUE constraint directly
+    // We need to recreate the table
+    conn.execute(
+        r#"
+        CREATE TABLE reflection_ledger_new (
+            id TEXT PRIMARY KEY NOT NULL,
+            scope TEXT NOT NULL,
+            rule TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            source_stitches TEXT NOT NULL DEFAULT '[]',
+            status TEXT NOT NULL DEFAULT 'proposed'
+                CHECK(status IN ('proposed', 'approved', 'rejected', 'archived')),
+            created_at TEXT NOT NULL,
+            last_applied TEXT,
+            applied_count INTEGER NOT NULL DEFAULT 0,
+            content_hash TEXT NOT NULL DEFAULT '',
+            rejection_count INTEGER NOT NULL DEFAULT 0,
+            approved_by TEXT,
+            approved_at TEXT,
+            archived_at TEXT,
+            UNIQUE(content_hash)
+        )
+        "#,
+        [],
+    )?;
+
+    // Copy data from old table to new table
+    conn.execute(
+        r#"
+        INSERT INTO reflection_ledger_new
+        SELECT * FROM reflection_ledger
+        "#,
+        [],
+    )?;
+
+    // Drop old table and rename new table
+    conn.execute("DROP TABLE reflection_ledger", [])?;
+    conn.execute("ALTER TABLE reflection_ledger_new RENAME TO reflection_ledger", [])?;
+
+    // Recreate indexes
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_reflection_ledger_status ON reflection_ledger(status)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_reflection_ledger_scope ON reflection_ledger(scope)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_reflection_ledger_created_at ON reflection_ledger(created_at DESC)",
+        [],
+    )?;
+
+    update_schema_version(conn, "1.31.0")?;
+    Ok(())
+}
+
+/// Migration 1.31.0 → 1.32.0: Add content_blocks table for multimodal input
+///
+/// This adds support for storing content blocks (text, image, audio, video, file)
+/// associated with stitches, enabling multimodal input for agent conversations.
+pub fn migrate_v131_to_v132(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.31.0 → 1.32.0: Adding content_blocks table for multimodal input");
+
+    // Create content_blocks table
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS content_blocks (
+            id TEXT PRIMARY KEY,
+            stitch_id TEXT NOT NULL,
+            block_type TEXT NOT NULL CHECK(block_type IN ('text', 'image', 'audio', 'video', 'file')),
+            content TEXT,
+            metadata TEXT,
+            block_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (stitch_id) REFERENCES stitches(id) ON DELETE CASCADE
+        )
+        "#,
+        [],
+    )?;
+
+    // Create indexes for efficient querying
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_content_blocks_stitch_id ON content_blocks(stitch_id)",
+        [],
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_content_blocks_block_order ON content_blocks(stitch_id, block_order)",
+        [],
+    )?;
+
+    update_schema_version(conn, "1.32.0")?;
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // §20.1 Major-upgrade gate
 // ---------------------------------------------------------------------------
@@ -3555,6 +3715,83 @@ pub fn list_drafts(
     Ok(result)
 }
 
+/// Detect similar existing drafts (Already-Started Detection, marquee #8).
+///
+/// Searches for drafts with similar titles/descriptions to warn operators
+/// of potential duplicate work. Returns drafts that:
+/// - Match the project
+/// - Match the status (if provided)
+/// - Have similar titles or descriptions (contains match)
+pub fn detect_similar_drafts(
+    project: &str,
+    title: Option<&str>,
+    description: Option<&str>,
+    status: Option<&str>,
+) -> Result<Vec<DraftRow>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+
+    let mut sql = String::from(
+        r#"SELECT id, project, title, kind, description, has_acceptance_criteria,
+                  priority, labels, created_by, created_at, source, agent_session_id,
+                  turn_id, status, version, original_json, resolved_by, resolved_at,
+                  rejection_reason, stitch_id, preview_json, opened_by, opened_at,
+                  last_autosave_at, abandoned_at
+           FROM draft_queue WHERE project = ?1"#,
+    );
+    let mut params: Vec<String> = vec![project.to_string()];
+
+    // Filter by status if provided (exclude abandoned drafts from similarity check)
+    if let Some(st) = status {
+        sql.push_str(&format!(" AND status = ?{}", params.len() + 1));
+        params.push(st.to_string());
+    } else {
+        // Default: only look at pending/edited drafts, not abandoned
+        sql.push_str(" AND status IN ('pending', 'edited')");
+    }
+
+    // Add similarity matching for title and description
+    // If title is provided, check if existing titles contain similar words
+    if let Some(t) = title {
+        // Split title into words and check if any existing draft title contains them
+        // For simplicity, use a contains match on the first few meaningful words
+        let words: Vec<&str> = t.split_whitespace()
+            .filter(|w| w.len() > 3)  // Only use words longer than 3 chars
+            .take(3)  // Use up to 3 words
+            .collect();
+
+        if !words.is_empty() {
+            let like_pattern = format!("%{}%", words.join("%"));
+            sql.push_str(&format!(" AND title LIKE ?{}", params.len() + 1));
+            params.push(like_pattern);
+        }
+    }
+
+    // If description is provided, also check description similarity
+    if let Some(d) = description {
+        let words: Vec<&str> = d.split_whitespace()
+            .filter(|w| w.len() > 3)
+            .take(2)
+            .collect();
+
+        if !words.is_empty() {
+            let like_pattern = format!("%{}%", words.join("%"));
+            sql.push_str(&format!(" AND (description LIKE ?{} OR description IS NOT NULL)", params.len() + 1));
+            params.push(like_pattern);
+        }
+    }
+
+    sql.push_str(" ORDER BY created_at DESC LIMIT 10");
+
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(rusqlite::params_from_iter(params.iter()), read_draft_row)?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row?);
+    }
+    Ok(result)
+}
+
 /// Update a draft's status and resolution metadata.
 pub fn update_draft_status(
     draft_id: &str,
@@ -3863,6 +4100,11 @@ pub struct ReflectionLedgerEntry {
     pub created_at: String,
     pub last_applied: Option<String>,
     pub applied_count: i64,
+    pub content_hash: String,
+    pub rejection_count: i64,
+    pub approved_by: Option<String>,
+    pub approved_at: Option<String>,
+    pub archived_at: Option<String>,
 }
 
 /// Insert a reflection ledger entry (for testing and reflection propagation).
@@ -3894,7 +4136,8 @@ pub fn list_approved_reflection_entries(
     let path = db_path();
     let conn = Connection::open(&path)?;
     let mut sql = String::from(
-        "SELECT id, scope, rule, reason, source_stitches, status, created_at, last_applied, applied_count
+        "SELECT id, scope, rule, reason, source_stitches, status, created_at, last_applied, applied_count,
+                content_hash, rejection_count, approved_by, approved_at, archived_at
          FROM reflection_ledger WHERE status = 'approved'",
     );
     let mut p: Vec<String> = Vec::new();
@@ -3918,6 +4161,11 @@ pub fn list_approved_reflection_entries(
             created_at: row.get(6)?,
             last_applied: row.get(7)?,
             applied_count: row.get(8)?,
+            content_hash: row.get(9)?,
+            rejection_count: row.get(10)?,
+            approved_by: row.get(11)?,
+            approved_at: row.get(12)?,
+            archived_at: row.get(13)?,
         })
     })?;
     let mut result = Vec::new();
@@ -4055,7 +4303,7 @@ pub fn remove_presence(
     let conn = Connection::open(&path)?;
 
     let mut sql = "DELETE FROM presence WHERE operator_id = ?1".to_string();
-    let mut params: Vec<&dyn rusqlite::ToSql> = vec![operator_id];
+    let mut params: Vec<&dyn rusqlite::ToSql> = vec![&operator_id];
 
     if let Some(p) = project {
         sql.push_str(" AND (project = ?2 OR project IS NULL)");
@@ -4090,14 +4338,14 @@ pub fn query_presence(
     let cutoff = Utc::now() - chrono::Duration::seconds(30);
     let cutoff_str = cutoff.to_rfc3339();
 
-    let (sql, params): (String, Vec<&dyn rusqlite::ToSql>) = match (project, stitch_id) {
+    let (sql, params): (String, Vec<Box<dyn rusqlite::ToSql>>) = match (project, stitch_id) {
         (Some(p), Some(s)) => (
             "SELECT operator_id, project, stitch_id, last_seen, visibility
              FROM presence
              WHERE project = ?1 AND stitch_id = ?2 AND last_seen > ?3 AND visibility = 'visible'
              ORDER BY last_seen DESC"
                 .to_string(),
-            vec![p, s, &cutoff_str],
+            vec![Box::new(p.to_string()), Box::new(s.to_string()), Box::new(cutoff_str)],
         ),
         (Some(p), None) => (
             "SELECT operator_id, project, stitch_id, last_seen, visibility
@@ -4105,7 +4353,7 @@ pub fn query_presence(
              WHERE project = ?1 AND stitch_id IS NULL AND last_seen > ?2 AND visibility = 'visible'
              ORDER BY last_seen DESC"
                 .to_string(),
-            vec![p, &cutoff_str],
+            vec![Box::new(p.to_string()), Box::new(cutoff_str)],
         ),
         (None, Some(s)) => (
             "SELECT operator_id, project, stitch_id, last_seen, visibility
@@ -4113,7 +4361,7 @@ pub fn query_presence(
              WHERE project IS NULL AND stitch_id = ?1 AND last_seen > ?2 AND visibility = 'visible'
              ORDER BY last_seen DESC"
                 .to_string(),
-            vec![s, &cutoff_str],
+            vec![Box::new(s.to_string()), Box::new(cutoff_str)],
         ),
         (None, None) => (
             "SELECT operator_id, project, stitch_id, last_seen, visibility
@@ -4121,13 +4369,14 @@ pub fn query_presence(
              WHERE project IS NULL AND stitch_id IS NULL AND last_seen > ?1 AND visibility = 'visible'
              ORDER BY last_seen DESC"
                 .to_string(),
-            vec![&cutoff_str],
+            vec![Box::new(cutoff_str)],
         ),
     };
 
     let mut stmt = conn.prepare(&sql)?;
+    let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
     let entries = stmt
-        .query_map(params.as_slice(), |row| {
+        .query_map(params_refs.as_slice(), |row| {
             Ok(PresenceEntry {
                 operator_id: row.get(0)?,
                 project: row.get(1)?,
@@ -5517,14 +5766,33 @@ pub fn query_operator_stitch_messages(
     Ok(messages)
 }
 
+/// Normalize rule text for content hashing.
+///
+/// Normalization: lowercase, trim whitespace, collapse multiple spaces.
+/// This ensures that semantically identical rules produce the same hash.
+fn normalize_rule_for_hash(rule: &str) -> String {
+    rule.trim()
+        .to_lowercase()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// Propose a new reflection entry in the ledger.
 ///
 /// Creates a new row with status='proposed' that can be approved/rejected by the operator.
-/// Returns the ID of the newly created entry.
+/// Returns the ID of the newly created entry (or existing ID if deduplicated).
+///
+/// Propose a new reflection entry in the ledger.
+///
+/// Creates a new row with status='proposed' that can be approved/rejected by the operator.
+/// Returns the ID of the newly created entry (or existing ID if deduplicated).
 ///
 /// §19.2 Multi-operator concurrency: proposals are deduplicated on create using content hash.
-/// If a proposal with the same content hash already exists and was rejected, the rejection
-/// count is incremented and no new proposal is created (prevents immediate re-proposal).
+/// - Hash is computed on normalized `rule` text (normalized)
+/// - Duplicate creation is a no-op: no new row, but source_stitches are merged
+/// - Source_stitches array includes all operators' source stitches (deduplicated)
+/// - If a proposal was rejected, rejection_count is incremented
 pub fn propose_reflection_entry(
     rule: &str,
     reason: &str,
@@ -5534,60 +5802,203 @@ pub fn propose_reflection_entry(
     let path = db_path();
     let conn = Connection::open(&path)?;
 
-    // Compute content hash for deduplication (SHA-256 of rule + reason)
-    let content = format!("{}{}", rule, reason);
-    let content_hash = hex::encode(sha256(content.as_bytes()));
+    // Compute content hash for deduplication (SHA-256 of normalized rule only)
+    let normalized_rule = normalize_rule_for_hash(rule);
+    let content_hash = hex::encode(sha256(normalized_rule.as_bytes()));
 
-    // Check for existing proposal with same content hash
-    let existing: Option<(String, String)> = conn
-        .query_row(
-            "SELECT id, status FROM reflection_ledger WHERE content_hash = ?1",
-            params![content_hash],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )
-        .ok();
+    // Check if a proposal with this content_hash already exists
+    let existing_id: Option<String> = conn.query_row(
+        "SELECT id FROM reflection_ledger WHERE content_hash = ?1",
+        params![content_hash],
+        |row| row.get(0),
+    ).ok();
 
-    if let Some((existing_id, status)) = existing {
-        match status.as_str() {
-            "proposed" | "approved" | "archived" => {
-                // Already exists in a non-rejected state — return existing ID
-                tracing::debug!(
-                    "Reflection proposal already exists with content_hash {}: {}",
-                    content_hash, existing_id
-                );
-                return Ok(existing_id);
-            }
-            "rejected" => {
-                // Increment rejection count and don't create new proposal
-                conn.execute(
-                    "UPDATE reflection_ledger SET rejection_count = rejection_count + 1 WHERE id = ?1",
-                    params![existing_id],
-                )?;
-                tracing::debug!(
-                    "Reflection proposal with content_hash {} was rejected before (id: {}), \
-                     incremented rejection_count to prevent re-proposal",
-                    content_hash, existing_id
-                );
-                return Ok(existing_id);
-            }
-            _ => {
-                // Unknown status — create new entry
-            }
+    if let Some(existing_id) = existing_id {
+        // Duplicate detected - merge source_stitches and update rejection_count
+        let current_stitches: Vec<String> = conn.query_row(
+            "SELECT source_stitches FROM reflection_ledger WHERE id = ?1",
+            params![&existing_id],
+            |row| row.get::<_, String>(0),
+        ).and_then(|json| Ok(serde_json::from_str::<Vec<String>>(&json)?))?;
+
+        let current_status: String = conn.query_row(
+            "SELECT status FROM reflection_ledger WHERE id = ?1",
+            params![&existing_id],
+            |row| row.get(0),
+        )?;
+
+        // Merge source_stitches (deduplicate)
+        use std::collections::HashSet;
+        let mut merged_stitches: HashSet<String> = current_stitches.into_iter().collect();
+        for stitch in source_stitches {
+            merged_stitches.insert(stitch.clone());
         }
+        let merged_stitches_json = serde_json::to_string(&merged_stitches)?;
+
+        // Update rejection_count if the proposal was rejected
+        let new_rejection_count = if current_status == "rejected" {
+            conn.query_row(
+                "SELECT rejection_count FROM reflection_ledger WHERE id = ?1",
+                params![&existing_id],
+                |row| row.get::<_, i64>(0),
+            )? + 1
+        } else {
+            conn.query_row(
+                "SELECT rejection_count FROM reflection_ledger WHERE id = ?1",
+                params![&existing_id],
+                |row| row.get::<_, i64>(0),
+            )?
+        };
+
+        // Update the existing proposal
+        conn.execute(
+            "UPDATE reflection_ledger SET source_stitches = ?1, rejection_count = ?2 WHERE id = ?3",
+            params![merged_stitches_json, new_rejection_count, &existing_id],
+        )?;
+
+        tracing::debug!(
+            "Reflection proposal deduplicated with content_hash {} (existing id: {})",
+            content_hash,
+            existing_id
+        );
+
+        return Ok(existing_id);
     }
 
-    // No existing proposal or unknown status — create new entry
+    // No duplicate - create new proposal
     let id = Uuid::new_v4().to_string();
     let source_stitches_json = serde_json::to_string(source_stitches)?;
     let now = Utc::now().to_rfc3339();
 
     conn.execute(
-        r#"INSERT INTO reflection_ledger (id, scope, rule, reason, source_stitches, status, created_at, applied_count, content_hash, rejection_count)
-           VALUES (?1, ?2, ?3, ?4, ?5, 'proposed', ?6, 0, ?7, 0)"#,
+        "INSERT INTO reflection_ledger (id, scope, rule, reason, source_stitches, status, created_at, applied_count, content_hash, rejection_count)
+         VALUES (?1, ?2, ?3, ?4, ?5, 'proposed', ?6, 0, ?7, 0)",
         params![id, scope, rule, reason, source_stitches_json, now, content_hash],
     )?;
 
+    tracing::debug!(
+        "Reflection proposal created with content_hash {} (id: {})",
+        content_hash,
+        id
+    );
+
     Ok(id)
+}
+
+
+/// List pending reflection proposals (status='proposed').
+///
+/// Returns all proposals awaiting operator approval.
+pub fn list_pending_reflection_proposals() -> Result<Vec<ReflectionLedgerEntry>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+
+    let mut stmt = conn.prepare(
+        "SELECT id, scope, rule, reason, source_stitches, status, created_at, last_applied, applied_count,
+                content_hash, rejection_count, approved_by, approved_at, archived_at
+         FROM reflection_ledger WHERE status = 'proposed' ORDER BY created_at DESC"
+    )?;
+
+    let rows = stmt.query_map([], |row| {
+        Ok(ReflectionLedgerEntry {
+            id: row.get(0)?,
+            scope: row.get(1)?,
+            rule: row.get(2)?,
+            reason: row.get(3)?,
+            source_stitches: row.get(4)?,
+            status: row.get(5)?,
+            created_at: row.get(6)?,
+            last_applied: row.get(7)?,
+            applied_count: row.get(8)?,
+            content_hash: row.get(9)?,
+            rejection_count: row.get(10)?,
+            approved_by: row.get(11)?,
+            approved_at: row.get(12)?,
+            archived_at: row.get(13)?,
+        })
+    })?;
+
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row?);
+    }
+    Ok(result)
+}
+
+/// Get a reflection proposal by ID (any status).
+///
+/// Returns None if the proposal doesn't exist.
+pub fn get_reflection_proposal(id: &str) -> Result<Option<ReflectionLedgerEntry>> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+
+    let result = conn.query_row(
+        "SELECT id, scope, rule, reason, source_stitches, status, created_at, last_applied, applied_count,
+                content_hash, rejection_count, approved_by, approved_at, archived_at
+         FROM reflection_ledger WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(ReflectionLedgerEntry {
+                id: row.get(0)?,
+                scope: row.get(1)?,
+                rule: row.get(2)?,
+                reason: row.get(3)?,
+                source_stitches: row.get(4)?,
+                status: row.get(5)?,
+                created_at: row.get(6)?,
+                last_applied: row.get(7)?,
+                applied_count: row.get(8)?,
+                content_hash: row.get(9)?,
+                rejection_count: row.get(10)?,
+                approved_by: row.get(11)?,
+                approved_at: row.get(12)?,
+                archived_at: row.get(13)?,
+            })
+        },
+    );
+
+    match result {
+        Ok(entry) => Ok(Some(entry)),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// Approve a reflection proposal.
+///
+/// Marks the proposal as approved and records who approved it and when.
+/// Returns true if the proposal was approved, false if not found or not in 'proposed' status.
+pub fn approve_reflection_proposal(id: &str, approved_by: &str) -> Result<bool> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let now = Utc::now().to_rfc3339();
+
+    let rows_affected = conn.execute(
+        "UPDATE reflection_ledger
+         SET status = 'approved', approved_by = ?1, approved_at = ?2
+         WHERE id = ?3 AND status = 'proposed'",
+        params![approved_by, now, id],
+    )?;
+
+    Ok(rows_affected > 0)
+}
+
+/// Reject a reflection proposal.
+///
+/// Marks the proposal as rejected and increments the rejection_count.
+/// Returns true if the proposal was rejected, false if not found or not in 'proposed' status.
+pub fn reject_reflection_proposal(id: &str) -> Result<bool> {
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+
+    let rows_affected = conn.execute(
+        "UPDATE reflection_ledger
+         SET status = 'rejected', rejection_count = rejection_count + 1
+         WHERE id = ?1 AND status = 'proposed'",
+        params![id],
+    )?;
+
+    Ok(rows_affected > 0)
 }
 
 /// Update the reflection approval rate metric based on a rolling window.
