@@ -1,150 +1,22 @@
 //! Pre-storage secrets scanner for attachments and transcripts (§18)
 //!
 //! Detects:
-//! - Common secret patterns (Stripe, OpenAI, Anthropic, AWS, GitHub, JWT)
+//! - Common secret patterns (from config.yml or defaults)
 //! - Env-var-style leaks (`OPENAI_API_KEY=sk-...`)
 //! - High-entropy strings >N bits, with context-aware exclusions (git SHAs fine)
 //! - Email addresses per operator-configured PII patterns
 //!
 //! Behavior: **Flag, not block**. Operator sees warning banner listing findings,
 //! chooses: redact-in-place, redact-and-rewind, or proceed.
+//!
+//! Pattern source: Single source of truth from config.yml via config_resolver.
+//! Client fetches patterns from /api/config/secrets-patterns for pre-upload warning.
 
-use crate::config_resolver::SecretPattern;
+use crate::config_resolver::{SecretPattern, default_secret_patterns};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::{LazyLock, Mutex};
-
-// ── Pattern definitions (default set) ───────────────────────────────────────────
-
-/// Get default secret patterns for scanning.
-///
-/// These patterns are used when no custom patterns are configured in config.yml.
-pub fn default_patterns() -> Vec<SecretPattern> {
-    vec![
-        // Stripe API keys
-        SecretPattern {
-            id: "stripe_api_key".to_string(),
-            name: "Stripe API Key".to_string(),
-            severity: "high".to_string(),
-            patterns: vec![
-                r"\bsk_live_[0-9a-zA-Z]{24,}\b".to_string(),
-                r"\bsk_test_[0-9a-zA-Z]{24,}\b".to_string(),
-                r"\bir_live_[0-9a-zA-Z]{32,}\b".to_string(),
-                r"\bir_test_[0-9a-zA-Z]{32,}\b".to_string(),
-            ],
-        },
-        // OpenAI API keys
-        SecretPattern {
-            id: "openai_api_key".to_string(),
-            name: "OpenAI API Key".to_string(),
-            severity: "high".to_string(),
-            patterns: vec![
-                r"\bsk-[a-zA-Z0-9]{48}\b".to_string(),
-                r"\bsk-proj-[a-zA-Z0-9_-]{48,}\b".to_string(),
-            ],
-        },
-        // Anthropic API keys
-        SecretPattern {
-            id: "anthropic_api_key".to_string(),
-            name: "Anthropic API Key".to_string(),
-            severity: "high".to_string(),
-            patterns: vec![
-                r"\bsk-ant-api[0-9]{2}-[a-zA-Z0-9_-]{20,}[a-zA-Z0-9_-]{20,}[a-zA-Z0-9_-]{20,}\b".to_string(),
-                r"\bsk-ant-[a-zA-Z0-9_-]{20,}\b".to_string(),
-            ],
-        },
-        // AWS access keys
-        SecretPattern {
-            id: "aws_access_key".to_string(),
-            name: "AWS Access Key".to_string(),
-            severity: "high".to_string(),
-            patterns: vec![
-                r"\bAKIA[A-Z0-9]{16}\b".to_string(),
-                r"\bASIA[A-Z0-9]{16}\b".to_string(),
-            ],
-        },
-        // AWS secret access key (high entropy base64-like)
-        SecretPattern {
-            id: "aws_secret_key".to_string(),
-            name: "AWS Secret Access Key".to_string(),
-            severity: "high".to_string(),
-            patterns: vec![
-                r"(?i)aws_secret_access_key\s*[:=]\s*[A-Za-z0-9/+=]{40}\b".to_string(),
-            ],
-        },
-        // GitHub tokens
-        SecretPattern {
-            id: "github_token".to_string(),
-            name: "GitHub Token".to_string(),
-            severity: "high".to_string(),
-            patterns: vec![
-                r"\bghp_[a-zA-Z0-9]{36}\b".to_string(),
-                r"\bghs_[a-zA-Z0-9]{36}\b".to_string(),
-                r"\bghu_[a-zA-Z0-9]{36}\b".to_string(),
-                r"\bgho_[a-zA-Z0-9]{36}\b".to_string(),
-                r"\bghr_[a-zA-Z0-9]{36}\b".to_string(),
-                r"\bgithub_pat_[a-zA-Z0-9_]{82}\b".to_string(),
-            ],
-        },
-        // JWT tokens
-        SecretPattern {
-            id: "jwt".to_string(),
-            name: "JWT Token".to_string(),
-            severity: "high".to_string(),
-            patterns: vec![
-                r"\bey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b".to_string(),
-            ],
-        },
-        // Slack tokens
-        SecretPattern {
-            id: "slack_token".to_string(),
-            name: "Slack Token".to_string(),
-            severity: "high".to_string(),
-            patterns: vec![
-                r"\bxoxb-[0-9A-Za-z_-]{24,}\b".to_string(),
-                r"\bxoxp-[0-9A-Za-z_-]{24,}\b".to_string(),
-                r"\bxoxc-[0-9A-Za-z_-]{24,}\b".to_string(),
-            ],
-        },
-        // Generic API keys (sk- prefix)
-        SecretPattern {
-            id: "generic_sk_key".to_string(),
-            name: "Generic API Key (sk-)".to_string(),
-            severity: "high".to_string(),
-            patterns: vec![
-                r"\bsk-[a-zA-Z0-9_-]{20,}\b".to_string(),
-            ],
-        },
-        // Bearer tokens
-        SecretPattern {
-            id: "bearer_token".to_string(),
-            name: "Bearer Token".to_string(),
-            severity: "high".to_string(),
-            patterns: vec![
-                r"(?i)bearer\s+[A-Za-z0-9._\-+/]{20,}".to_string(),
-            ],
-        },
-        // Environment variable secrets
-        SecretPattern {
-            id: "env_var_secret".to_string(),
-            name: "Environment Variable Secret".to_string(),
-            severity: "high".to_string(),
-            patterns: vec![
-                r#"(?i)(?:api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|private[_-]?key|client[_-]?secret|anthropic[_-]?api[_-]?key|openai[_-]?api[_-]?key|github[_-]?token|stripe[_-]?key|aws[_-]?secret)\s*[:=]\s*["']?([A-Za-z0-9+/_.~\-]{16,})["']?"#.to_string(),
-            ],
-        },
-        // JSON secret fields
-        SecretPattern {
-            id: "json_secret_field".to_string(),
-            name: "JSON Secret Field".to_string(),
-            severity: "high".to_string(),
-            patterns: vec![
-                r#"(?i)"(?:password|passwd|secret|token|api_key|apikey|access_token|auth_token|private_key|client_secret|secret_key)"\s*:\s*"([^"]{8,})""#.to_string(),
-            ],
-        },
-    ]
-}
 
 // ── High-entropy scanner ────────────────────────────────────────────────────────
 
@@ -527,9 +399,13 @@ fn scan_email(text: &str) -> Vec<Finding> {
 
 // ── Pattern management ───────────────────────────────────────────────────────────
 
-/// Initialize the scanner with default patterns.
+/// Initialize the scanner with default patterns from config_resolver.
+///
+/// This is a convenience function for tests. In production, patterns are
+/// loaded from config.yml and applied via update_patterns() during daemon
+/// initialization (see lib.rs).
 pub fn init() {
-    let patterns = default_patterns();
+    let patterns = default_secret_patterns();
     update_patterns(&patterns);
 }
 

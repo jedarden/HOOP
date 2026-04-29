@@ -86,8 +86,33 @@ impl SecretPattern {
 /// Default secret patterns when none are configured.
 ///
 /// These are the built-in patterns that ship with HOOP.
+/// This is the single source of truth for default secret patterns - both
+/// the backend scanner and client-side scanner use these patterns.
 pub fn default_secret_patterns() -> Vec<SecretPattern> {
     vec![
+        // Stripe API keys
+        SecretPattern {
+            id: "stripe_api_key".to_string(),
+            name: "Stripe API Key".to_string(),
+            severity: "high".to_string(),
+            patterns: vec![
+                r"\bsk_live_[0-9a-zA-Z]{24,}\b".to_string(),
+                r"\bsk_test_[0-9a-zA-Z]{24,}\b".to_string(),
+                r"\bir_live_[0-9a-zA-Z]{32,}\b".to_string(),
+                r"\bir_test_[0-9a-zA-Z]{32,}\b".to_string(),
+            ],
+        },
+        // OpenAI API keys
+        SecretPattern {
+            id: "openai_api_key".to_string(),
+            name: "OpenAI API Key".to_string(),
+            severity: "high".to_string(),
+            patterns: vec![
+                r"\bsk-[a-zA-Z0-9]{48}\b".to_string(),
+                r"\bsk-proj-[a-zA-Z0-9_-]{48,}\b".to_string(),
+            ],
+        },
+        // Anthropic API keys
         SecretPattern {
             id: "anthropic_api_key".to_string(),
             name: "Anthropic API Key".to_string(),
@@ -110,6 +135,16 @@ pub fn default_secret_patterns() -> Vec<SecretPattern> {
             severity: "high".to_string(),
             patterns: vec![
                 r"\bAKIA[A-Z0-9]{16}\b".to_string(),
+                r"\bASIA[A-Z0-9]{16}\b".to_string(),
+            ],
+        },
+        // AWS secret access key (high entropy base64-like)
+        SecretPattern {
+            id: "aws_secret_key".to_string(),
+            name: "AWS Secret Access Key".to_string(),
+            severity: "high".to_string(),
+            patterns: vec![
+                r"(?i)aws_secret_access_key\s*[:=]\s*[A-Za-z0-9/+=]{40}\b".to_string(),
             ],
         },
         SecretPattern {

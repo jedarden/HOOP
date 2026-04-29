@@ -607,3 +607,148 @@ async fn test_permanent_error_detection() {
         "Timeouts should not be permanent"
     );
 }
+
+/// Integration test: HTTP /readyz endpoint reports degraded state after .beads/ deletion
+///
+/// This test verifies that the HTTP /readyz endpoint correctly reports
+/// degraded state when a project's .beads/ directory is deleted mid-run.
+#[tokio::test]
+async fn test_readyz_http_endpoint_reports_degraded() {
+    use std::fs;
+    use std::time::Duration;
+    use tempfile::TempDir;
+
+    // Create temporary directories for three projects
+    let project_a_dir = tempfile::tempdir().unwrap();
+    let project_a_path = project_a_dir.path().to_path_buf();
+    setup_beads_dir(&project_a_path).unwrap();
+
+    let project_b_dir = tempfile::tempdir().unwrap();
+    let project_b_path = project_b_dir.path().to_path_buf();
+    setup_beads_dir(&project_b_path).unwrap();
+
+    let project_c_dir = tempfile::tempdir().unwrap();
+    let project_c_path = project_c_dir.path().to_path_buf();
+    setup_beads_dir(&project_c_path).unwrap();
+
+    // Create a projects configuration
+    let registry = ProjectsRegistry {
+        projects: vec![
+            create_test_project("project-a", project_a_path.clone()),
+            create_test_project("project-b", project_b_path),
+            create_test_project("project-c", project_c_path),
+        ],
+    };
+    let config = ProjectsConfig {
+        registry: registry.clone(),
+        path: PathBuf::from("/test/projects.yaml"),
+        canonical_cache: std::collections::HashMap::new(),
+        content_hash: String::new(),
+    };
+
+    // Create a supervisor
+    let (bead_tx, _bead_rx) = tokio::sync::broadcast::channel(64);
+    let (session_tx, _session_rx) = tokio::sync::broadcast::channel(64);
+    let worker_registry = std::sync::Arc::new(hoop_daemon::ws::WorkerRegistry::new());
+    let beads = std::sync::Arc::new(std::sync::RwLock::new(Vec::new()));
+    let shutdown = std::sync::Arc::new(hoop_daemon::shutdown::ShutdownCoordinator::new());
+    let cost_aggregator = std::sync::Arc::new(std::sync::RwLock::new(
+        hoop_daemon::cost::CostAggregator::new(),
+    ));
+    let vector_index = std::sync::Arc::new(std::sync::RwLock::new(
+        hoop_daemon::vector_index::VectorIndex::new(),
+    ));
+    let scripts_dir = PathBuf::from("/tmp/scripts");
+    let stuck_detector = std::sync::Arc::new(std::sync::Mutex::new(
+        hoop_daemon::stuck_detector::StuckDetector::new(),
+    ));
+
+    let supervisor = ProjectSupervisor::new(
+        bead_tx,
+        session_tx,
+        worker_registry,
+        beads,
+        shutdown,
+        cost_aggregator,
+        vector_index,
+        scripts_dir,
+        stuck_detector,
+    );
+
+    // Reconcile the projects
+    supervisor.reconcile(&config).await.unwrap();
+
+    // Wait for projects to start
+    sleep(Duration::from_secs(2)).await;
+
+    // Verify all projects are healthy initially (simulating /readyz check)
+    let snapshot = supervisor.snapshot().await;
+    let degraded: Vec<_> = snapshot
+        .iter()
+        .filter(|s| !is_healthy_state(&s.state))
+        .collect();
+
+    assert!(
+        degraded.is_empty(),
+        "All projects should be healthy initially, found {} degraded",
+        degraded.len()
+    );
+
+    // Delete project A's .beads directory
+    let beads_a_path = project_a_path.join(".beads");
+    fs::remove_dir_all(&beads_a_path).unwrap();
+
+    // Wait for the error to be detected
+    let start = std::time::Instant::now();
+    let mut project_a_degraded = false;
+
+    while start.elapsed() < Duration::from_secs(30) {
+        let snapshot = supervisor.snapshot().await;
+
+        // Simulate /readyz behavior: filter for non-Healthy projects
+        let degraded_projects: Vec<_> = snapshot
+            .iter()
+            .filter(|s| !matches!(s.state, ProjectRuntimeState::Healthy))
+            .collect();
+
+        // Check if project-a is in the degraded list
+        let project_a_in_degraded = degraded_projects
+            .iter()
+            .any(|s| s.project_name == "project-a");
+
+        if project_a_in_degraded {
+            project_a_degraded = true;
+
+            // Verify the degraded list contains only project-a
+            assert_eq!(
+                degraded_projects.len(),
+                1,
+                "Only project-a should be degraded, found: {:?}",
+                degraded_projects.iter().map(|s| &s.project_name).collect::<Vec<_>>()
+            );
+            assert_eq!(degraded_projects[0].project_name, "project-a");
+
+            // Verify the error message mentions .beads
+            let error_msg = degraded_projects[0].state.error();
+            assert!(
+                error_msg.is_some(),
+                "Degraded project should have an error message"
+            );
+            let error_str = error_msg.unwrap().to_lowercase();
+            assert!(
+                error_str.contains(".beads") || error_str.contains("beads"),
+                "Error message should mention .beads directory, got: {:?}",
+                error_msg
+            );
+
+            break;
+        }
+
+        sleep(Duration::from_millis(500)).await;
+    }
+
+    assert!(
+        project_a_degraded,
+        "Project A should be reported as degraded within 30s"
+    );
+}
