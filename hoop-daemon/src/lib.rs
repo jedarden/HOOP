@@ -16,13 +16,18 @@ pub mod api_attachments;
 pub mod api_audit;
 pub mod auth;
 pub mod api_beads;
+pub mod api_bead_blockers;
 pub mod api_config;
+pub mod api_cost_per_stitch;
 pub mod api_conversations;
 pub mod api_dictated_notes;
 pub mod api_draft_queue;
 pub mod api_metrics;
 pub mod api_morning_brief;
+
+#[cfg(feature = "openapi")]
 pub mod openapi;
+
 pub mod api_patterns;
 pub mod api_preview;
 pub mod api_scripts;
@@ -32,6 +37,7 @@ pub mod api_stitch_read;
 pub mod api_stitch_replay;
 pub mod api_timeline;
 pub mod api_transcription;
+pub mod api_unassigned;
 pub mod api_uploads;
 pub mod api_skills;
 pub mod atomic_write;
@@ -56,6 +62,8 @@ pub mod fleet_notifications;
 pub mod heartbeats;
 pub mod id_validators;
 pub mod identity;
+pub mod multi_operator;
+pub mod api_presence;
 
 // Integration test utilities and load testing are only needed for tests
 // These are public for integration tests but not part of the stable API
@@ -316,6 +324,8 @@ pub struct DaemonState {
     pub pattern_tx: broadcast::Sender<ws::PatternSavedQuerySyncedData>,
     /// Broadcast channel for bead_created_by_hoop events sent after each successful br create via HOOP (hoop-ttb.3.53)
     pub bead_created_by_hoop_tx: broadcast::Sender<ws::BeadCreatedByHoopData>,
+    /// Broadcast channel for saturation alert events (§6 P2 d10, §8.3, hoop-ttb.3.22)
+    pub saturation_alert_tx: broadcast::Sender<ws::SaturationAlertData>,
     /// Per-project redaction policy resolver (§18.5)
     pub redaction_policy_state: Arc<tokio::sync::RwLock<redaction_policy::RedactionPolicyState>>,
     /// Stuck detector — monitors worker events for idle/max-runtime/content-seen timeouts (§C1)
@@ -330,6 +340,8 @@ pub struct DaemonState {
     pub identity_cache: Arc<identity::IdentityCache>,
     /// Role resolver for RBAC (maps Tailscale identities to viewer/drafter roles)
     pub role_resolver: Arc<auth::RoleResolver>,
+    /// Unassigned sessions tracker — tracks sessions outside registered projects (§5.4)
+    pub unassigned_tracker: Option<Arc<api_unassigned::UnassignedTracker>>,
 }
 
 /// Health check endpoint handler — returns 200 if the process is responsive.
@@ -1188,7 +1200,9 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_audit::router())
         .merge(api_conversations::router())
         .merge(api_beads::router())
+        .merge(api_bead_blockers::router())
         .merge(api_draft_queue::router())
+        .merge(api_presence::router())
         .merge(api_preview::router())
         .merge(api_stitch_decompose::router())
         .merge(api_stitch_read::router())
@@ -1212,9 +1226,11 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_backup::router())
         .merge(api_morning_brief::router())
         .merge(api_metrics::router())
+        .merge(api_cost_per_stitch::router())
         .merge(api_config::router())
         .merge(api_scripts::router())
-        .merge(crate::openapi::router())
+        .merge(api_unassigned::router())
+        .merge(openapi_router())
         .nest_service("/assets", AssetsHandler::router())
         .fallback_service(AssetsHandler::router())
         .layer(TraceLayer::new_for_http())
@@ -2607,6 +2623,21 @@ Note: This is an automated synthesis from voice dictation."#,
     // Create shared identity cache for whois lookups (cached per IP, 5-min TTL)
     let identity_cache = Arc::new(identity::IdentityCache::new());
 
+    // Create projects Arc for shared access
+    let projects = Arc::new(std::sync::RwLock::new(initial_projects));
+
+    // Initialize unassigned sessions tracker (§5.4)
+    let unassigned_tracker = match api_unassigned::UnassignedTracker::new(projects.clone()) {
+        Ok(tracker) => {
+            info!("Unassigned sessions tracker initialized");
+            Some(Arc::new(tracker))
+        }
+        Err(e) => {
+            warn!("Failed to initialize unassigned sessions tracker: {}", e);
+            None
+        }
+    };
+
     let state = DaemonState {
         config: config.clone(),
         started_at: Instant::now(),
@@ -2616,7 +2647,7 @@ Note: This is an automated synthesis from voice dictation."#,
         stitch_tx,
         shutdown: shutdown_coordinator.clone(),
         supervisor,
-        projects: Arc::new(std::sync::RwLock::new(initial_projects)),
+        projects,
         project_metadata: project_metadata.clone(),
         config_status_tx,
         config_status,
@@ -2638,6 +2669,7 @@ Note: This is an automated synthesis from voice dictation."#,
         collision_alert_tx: broadcast::channel::<ws::CollisionAlertData>(64).0,
         pattern_tx,
         bead_created_by_hoop_tx: broadcast::channel::<ws::BeadCreatedByHoopData>(64).0,
+        saturation_alert_tx: broadcast::channel::<ws::SaturationAlertData>(64).0,
         redaction_policy_state,
         stuck_detector,
         backup_runner,
@@ -2648,6 +2680,7 @@ Note: This is an automated synthesis from voice dictation."#,
             auth::RoleResolver::new(resolved_config.roles.value.clone())
                 .with_identity_cache(identity_cache),
         ),
+        unassigned_tracker,
     };
 
     // Forward project runtime status updates to shared store and broadcast

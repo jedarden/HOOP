@@ -15126,3 +15126,865 @@ body.wt-tour-active {
   }
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────────
+   Mobile UX §21 - Pixel 6 (412px) and general mobile optimization
+   ───────────────────────────────────────────────────────────────────────────────── */
+
+/* Mobile breakpoint for phone portrait (≥375px, includes Pixel 6 at 412px) */
+@media (max-width: 480px) {
+  /* ── Morning Brief (§21) ──────────────────────────────────────────────────────── */
+  .p-4 {
+    padding: 0.75rem;
+  }
+
+  .text-xl {
+    font-size: 1.125rem;
+  }
+
+  .mb-6 {
+    margin-bottom: 0.75rem;
+  }
+
+  /* Compact header */
+  .flex.items-center.justify-between {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  /* Full-width button */
+  .px-4.py-2.rounded {
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    width: 100%;
+    text-align: center;
+  }
+
+  /* Card-per-headline layout */
+  .border.rounded-lg {
+    border-radius: 0.5rem;
+    overflow: hidden;
+  }
+
+  .bg-gray-50 {
+    padding: 0.75rem;
+  }
+
+  /* One-tap approve/redirect buttons */
+  .prose {
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  .prose p {
+    margin-bottom: 0.75rem;
+  }
+
+  /* Swipeable headline cards */
+  .space-y-4 > * {
+    margin-bottom: 0.75rem;
+  }
+
+  /* ── Dictation Widget (§21) ───────────────────────────────────────────────────── */
+  .dictation-widget {
+    bottom: 1rem;
+    right: 1rem;
+    padding: 0.6rem 0.85rem;
+    border-radius: 9999px;
+    min-height: 48px; /* Larger touch target */
+  }
+
+  .dictation-mic-icon {
+    font-size: 1.25rem; /* Large mic icon */
+  }
+
+  .dictation-widget--recording {
+    padding: 0.75rem 1rem;
+    min-height: 52px;
+  }
+
+  .dictation-rec-dot {
+    width: 12px;
+    height: 12px;
+  }
+
+  .dictation-timer {
+    font-size: 0.9rem;
+  }
+
+  .dictation-oscilloscope {
+    width: 160px;
+    height: 32px;
+  }
+
+  /* Transcript preview on mobile */
+  .dictated-note-transcript-preview p {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  /* ── Stitch List (§21) ────────────────────────────────────────────────────────── */
+  .stitches-tab {
+    padding: 0;
+  }
+
+  .stitches-header {
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .stitches-stats {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .stitch-stat {
+    min-width: 60px;
+    padding: 0.5rem;
+  }
+
+  .stitch-filters {
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .stitch-filter-select,
+  .stitch-search {
+    width: 100%;
+    min-height: 44px; /* Adequate tap target */
+    font-size: 16px; /* Prevent zoom on iOS */
+  }
+
+  /* Compact stitch cards */
+  .stitch-card {
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    border-radius: 0.5rem;
+    min-height: 80px; /* Swipeable card height */
+  }
+
+  .stitch-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.375rem;
+  }
+
+  .stitch-title {
+    font-size: 0.9rem;
+    line-height: 1.3;
+  }
+
+  .stitch-card-meta {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .stitch-detail {
+    padding: 0.75rem;
+    margin-top: 0.75rem;
+  }
+
+  /* Activity indicator */
+  .stitch-activity-dot {
+    width: 8px;
+    height: 8px;
+  }
+
+  /* ── Agent Chat (§21) ─────────────────────────────────────────────────────────── */
+  .acp-header {
+    padding: 0.75rem;
+  }
+
+  .acp-title-row h2 {
+    font-size: 1rem;
+  }
+
+  .acp-scope-bar {
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .acp-scope-pill {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    min-height: 32px;
+  }
+
+  .acp-messages {
+    padding: 0.75rem;
+    min-height: 200px;
+    max-height: 50vh;
+  }
+
+  .acp-message-text {
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  /* Optimized composer */
+  .acp-input-area {
+    padding: 0.5rem 0.75rem 0.75rem;
+    border-radius: 0;
+  }
+
+  .acp-textarea {
+    min-height: 44px;
+    max-height: 120px;
+    font-size: 16px; /* Prevent zoom on iOS */
+    padding: 0.625rem;
+  }
+
+  .acp-input-row {
+    gap: 0.5rem;
+  }
+
+  .acp-attach-btn,
+  .acp-send-btn {
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
+
+  /* Native attachment picker styling */
+  .acp-attachments {
+    padding: 0.5rem 0;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+
+  .acp-attachment-chip {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.75rem;
+    min-height: 36px;
+  }
+
+  .acp-attachment-remove {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+  }
+
+  /* ── File Browser (§21) ────────────────────────────────────────────────────────── */
+  .file-browser {
+    padding: 0.5rem;
+  }
+
+  .file-tree {
+    font-size: 0.875rem;
+  }
+
+  .tree-node-btn,
+  .file-item-btn {
+    min-height: 44px;
+    padding: 0.5rem 0.625rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  /* Side-scrolling for long paths */
+  .file-path,
+  .tree-node-label {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Code viewer - read only on mobile */
+  .code-viewer {
+    font-size: 0.75rem;
+    line-height: 1.4;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .code-viewer pre {
+    padding: 0.75rem;
+    min-width: 100%;
+    width: max-content;
+  }
+
+  /* Blame cells - tap to navigate */
+  .blame-cell {
+    min-width: 32px;
+    min-height: 32px;
+    font-size: 0.7rem;
+  }
+
+  .blame-cell--stitch {
+    cursor: pointer;
+  }
+
+  /* ── Approval Dialogs (§21) ────────────────────────────────────────────────────── */
+  .draft-detail-overlay {
+    padding: 1rem;
+    max-width: 100%;
+  }
+
+  .draft-detail-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .draft-detail-body {
+    padding: 0.75rem;
+    font-size: 0.875rem;
+  }
+
+  /* Oversized, high-contrast buttons */
+  .draft-detail-actions {
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+
+  .draft-btn-approve,
+  .draft-btn-reject,
+  .draft-btn-comment,
+  .draft-btn-dismiss {
+    width: 100%;
+    min-height: 52px;
+    font-size: 1rem;
+    font-weight: 600;
+    text-align: center;
+    border-radius: 0.5rem;
+    padding: 0.875rem 1rem;
+  }
+
+  .draft-btn-approve {
+    background: #22c55e;
+    color: #ffffff;
+    border: none;
+  }
+
+  .draft-btn-reject {
+    background: #ef4444;
+    color: #ffffff;
+    border: none;
+  }
+
+  .draft-btn-comment {
+    background: #3b82f6;
+    color: #ffffff;
+    border: none;
+  }
+
+  .draft-btn-dismiss {
+    background: #f3f4f6;
+    color: #374151;
+    border: 1px solid #d1d5db;
+  }
+
+  /* High contrast focus states */
+  .draft-btn-approve:focus,
+  .draft-btn-reject:focus,
+  .draft-btn-comment:focus {
+    outline: 3px solid rgba(0, 0, 0, 0.3);
+    outline-offset: 2px;
+  }
+
+  /* ── Cost Panel (mobile) ──────────────────────────────────────────────────────── */
+  .cost-panel {
+    padding: 0.75rem;
+  }
+
+  .cost-bar {
+    min-height: 24px;
+  }
+
+  .rl-meter {
+    min-height: 8px;
+  }
+
+  /* ── Capacity Panel (mobile) ───────────────────────────────────────────────────── */
+  .capacity-panel {
+    padding: 0.75rem;
+  }
+
+  .capacity-meters {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .capacity-meter {
+    min-height: 48px;
+  }
+
+  /* ── Audio Player (mobile) ─────────────────────────────────────────────────────── */
+  .audio-player {
+    padding: 0.75rem;
+  }
+
+  .audio-controls {
+    gap: 0.5rem;
+  }
+
+  .audio-btn {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+  }
+
+  /* ── Video Player (mobile) ─────────────────────────────────────────────────────── */
+  .video-player {
+    padding: 0.75rem;
+  }
+
+  .video-container {
+    aspect-ratio: 16/9;
+    border-radius: 0.5rem;
+    overflow: hidden;
+  }
+
+  /* ── Redaction Audit Panel (mobile) ────────────────────────────────────────────── */
+  .redaction-audit-panel {
+    padding: 0.75rem;
+  }
+
+  .redaction-audit-filters {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .redaction-filter-select {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  /* ── Bead Graph (mobile - gracefully degrade) ──────────────────────────────────── */
+  .bead-graph {
+    min-height: 300px;
+  }
+
+  .bead-node {
+    min-width: 100px;
+    font-size: 0.75rem;
+  }
+
+  /* ── Fleet Map (mobile - gracefully degrade) ──────────────────────────────────── */
+  .fleet-map {
+    min-height: 300px;
+  }
+
+  .fleet-card {
+    padding: 0.75rem;
+    min-height: 100px;
+  }
+
+  /* ── Patterns View (mobile) ─────────────────────────────────────────────────────── */
+  .patterns-container {
+    padding: 0.75rem;
+  }
+
+  .pattern-card {
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .pattern-title {
+    font-size: 0.9rem;
+  }
+
+  /* ── Cross Project Dashboard (mobile - compact summary only) ──────────────────── */
+  .cpd-page {
+    padding: 0.75rem;
+  }
+
+  .cpd-kpis {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+
+  .cpd-kpi {
+    padding: 0.75rem;
+    min-height: 72px;
+  }
+
+  .cpd-kpi-value {
+    font-size: 1.25rem;
+  }
+
+  .cpd-kpi-label {
+    font-size: 0.75rem;
+  }
+
+  /* ── Touch target improvements ─────────────────────────────────────────────────── */
+  button,
+  a,
+  [role="button"],
+  input[type="submit"],
+  input[type="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Text links can be smaller */
+  a:not([class]),
+  a.text-link {
+    min-height: auto;
+    min-width: auto;
+  }
+
+  /* ── Form inputs (prevent iOS zoom) ─────────────────────────────────────────────── */
+  input[type="text"],
+  input[type="email"],
+  input[type="search"],
+  input[type="url"],
+  input[type="tel"],
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  /* ── Scrollbar styling (mobile) ─────────────────────────────────────────────────── */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+  }
+
+  /* ── Safe area insets (notch support) ────────────────────────────────────────────── */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-right {
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Pixel 6 specific (412px) */
+@media (min-width: 412px) and (max-width: 480px) {
+  .stitches-filters {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .stitch-filter-select {
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .cpd-kpis {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* ── Unassigned Sessions (hoop-ttb.3.11) ──────────────────────────────────────────────────────────────────── */
+
+.unassigned-sessions-section {
+  padding: 1.5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.unassigned-sessions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.unassigned-sessions-header h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.refresh-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  background: #ffffff;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: #f5f5f5;
+  border-color: #1976d2;
+}
+
+.refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.unassigned-sessions-error {
+  padding: 1rem;
+  background: #fce8e6;
+  border: 1px solid #ea4335;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  color: #c62828;
+}
+
+.unassigned-sessions-success {
+  padding: 1rem;
+  background: #e6f4ea;
+  border: 1px solid #34a853;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  color: #137333;
+}
+
+.unassigned-sessions-loading {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 3rem;
+  justify-content: center;
+  color: #666;
+}
+
+.unassigned-sessions-empty {
+  padding: 3rem;
+  text-align: center;
+  color: #666;
+  background: #f9f9f9;
+  border-radius: 8px;
+  border: 1px dashed #d0d0d0;
+}
+
+.unassigned-sessions-table-container {
+  overflow-x: auto;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+}
+
+.unassigned-sessions-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+}
+
+.unassigned-sessions-header {
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #666;
+  border-bottom: 2px solid #e0e0e0;
+  white-space: nowrap;
+}
+
+.unassigned-sessions-header-title {
+  width: 300px;
+  min-width: 200px;
+}
+
+.unassigned-sessions-header-provider {
+  width: 100px;
+}
+
+.unassigned-sessions-header-kind {
+  width: 100px;
+}
+
+.unassigned-sessions-header-messages {
+  width: 80px;
+  text-align: center;
+}
+
+.unassigned-sessions-header-tokens {
+  width: 100px;
+  text-align: right;
+}
+
+.unassigned-sessions-header-age {
+  width: 80px;
+  text-align: right;
+}
+
+.unassigned-sessions-header-actions {
+  width: 200px;
+  text-align: right;
+}
+
+.unassigned-session-row {
+  border-bottom: 1px solid #e8e8e8;
+  transition: background-color 0.15s;
+}
+
+.unassigned-session-row:hover {
+  background: #f8f9fa;
+}
+
+.unassigned-session-row:last-child {
+  border-bottom: none;
+}
+
+.unassigned-session-cell {
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
+}
+
+.unassigned-session-cell-title {
+  vertical-align: top;
+}
+
+.session-title {
+  font-weight: 500;
+  color: #333;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.session-cwd {
+  font-size: 0.75rem;
+  color: #666;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', 'Droid Sans Mono', 'Source Code Pro', monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 400px;
+}
+
+.unassigned-session-cell-provider,
+.unassigned-session-cell-kind {
+  text-align: center;
+}
+
+.unassigned-session-cell-messages,
+.unassigned-session-cell-tokens,
+.unassigned-session-cell-age {
+  text-align: right;
+}
+
+.unassigned-session-cell-actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Provider badges */
+.provider-claude {
+  background: #e8f0fe;
+  color: #1976d2;
+}
+
+.provider-codex {
+  background: #f3e8fd;
+  color: #8430ce;
+}
+
+.provider-opencode {
+  background: #e6f4ea;
+  color: #137333;
+}
+
+.provider-gemini {
+  background: #fff8e1;
+  color: #f9ab00;
+}
+
+.provider-aider {
+  background: #fce8e6;
+  color: #c5221f;
+}
+
+.provider-unknown {
+  background: #f5f5f5;
+  color: #666;
+}
+
+/* Kind badges */
+.kind-worker {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.kind-operator {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+.kind-dictated {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.kind-adhoc {
+  background: #f5f5f5;
+  color: #616161;
+}
+
+.kind-unknown {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.assign-project-select {
+  padding: 0.375rem 0.5rem;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  background: #ffffff;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  margin-right: 0.5rem;
+  transition: all 0.15s;
+}
+
+.assign-project-select:hover:not(:disabled) {
+  border-color: #1976d2;
+}
+
+.assign-project-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ignore-session-btn {
+  padding: 0.375rem 0.75rem;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  background: #ffffff;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: #666;
+}
+
+.ignore-session-btn:hover:not(:disabled) {
+  background: #fce8e6;
+  border-color: #c5221f;
+  color: #c5221f;
+}
+
+.ignore-session-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
