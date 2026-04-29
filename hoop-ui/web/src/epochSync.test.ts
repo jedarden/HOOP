@@ -101,6 +101,8 @@ describe('epoch-sync invariant (§B2)', () => {
         tokens_7d: 5000,
         turns_5h: 10,
         turns_7d: 50,
+        prompts_5h: 0,
+        prompts_7d: 0,
         burn_rate_per_min: 0.1,
         mean_cost_per_stitch_tokens: 100,
         stitch_close_rate_per_min: 0.5,
