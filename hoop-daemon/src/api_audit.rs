@@ -5,12 +5,13 @@
 
 use axum::{extract::Query, http::StatusCode, routing::get, Json};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::fleet::{self, ActionKind, AuditRow as FleetAuditRow, RedactionAuditRow as FleetRedactionAuditRow};
 use crate::id_validators::{rejection, validate_project_name};
 
 /// Query parameters for audit log
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct AuditQuery {
     /// Maximum number of results to return
     pub limit: Option<usize>,
@@ -27,7 +28,7 @@ pub struct AuditQuery {
 }
 
 /// Query parameters for redaction audit log
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct RedactionAuditQuery {
     /// Maximum number of results to return
     pub limit: Option<usize>,
@@ -44,14 +45,14 @@ pub struct RedactionAuditQuery {
 }
 
 /// Response for audit log query
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct AuditResponse {
     pub audit_rows: Vec<AuditRow>,
     pub total_count: usize,
 }
 
 /// Response for hash chain verification
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct HashChainVerifyResponse {
     pub valid: bool,
     pub message: String,
@@ -59,14 +60,14 @@ pub struct HashChainVerifyResponse {
 }
 
 /// Response for redaction audit log query
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct RedactionAuditResponse {
     pub audit_rows: Vec<RedactionAuditRow>,
     pub total_count: usize,
 }
 
 /// Audit row for API responses (matches frontend types)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AuditRow {
     pub id: String,
     pub ts: String,
@@ -82,7 +83,7 @@ pub struct AuditRow {
 }
 
 /// Redaction audit row for API responses
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct RedactionAuditRow {
     pub id: String,
     pub ts: String,
@@ -308,6 +309,7 @@ async fn query_redaction_audit(
         params.pattern.as_deref(),
         params.operator.as_deref(),
         params.what_flagged.as_deref(),
+        params.action.as_deref(),
     )
     .map_err(|e| {
         (
@@ -324,6 +326,7 @@ async fn query_redaction_audit(
         params.pattern.as_deref(),
         params.operator.as_deref(),
         params.what_flagged.as_deref(),
+        params.action.as_deref(),
     )
     .map_err(|e| {
         (

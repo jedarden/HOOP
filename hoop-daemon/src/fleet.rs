@@ -436,7 +436,7 @@ pub fn query_audit_rows(
 /// Query redaction audit rows with optional filters
 ///
 /// Returns redaction audit entries from the redaction_audit table,
-/// supporting filters by pattern, operator, project, and what_flagged.
+/// supporting filters by pattern, operator, project, what_flagged, and action.
 pub fn query_redaction_audit_rows(
     limit: Option<usize>,
     offset: Option<usize>,
@@ -444,6 +444,7 @@ pub fn query_redaction_audit_rows(
     pattern_filter: Option<&str>,
     operator_filter: Option<&str>,
     what_flagged_filter: Option<&str>,
+    action_filter: Option<&str>,
 ) -> Result<Vec<RedactionAuditRow>> {
     let path = db_path();
     let conn = Connection::open(&path)?;
@@ -471,6 +472,11 @@ pub fn query_redaction_audit_rows(
     if let Some(what_flagged) = what_flagged_filter {
         query.push_str(&format!(" AND what_flagged = ?{}", params.len() + 1));
         params.push(what_flagged.to_string());
+    }
+
+    if let Some(action) = action_filter {
+        query.push_str(&format!(" AND action = ?{}", params.len() + 1));
+        params.push(action.to_string());
     }
 
     query.push_str(" ORDER BY ts DESC");
