@@ -89,12 +89,14 @@ hoop init
 
 ### Requirements
 
-| Tool | Minimum version | Install |
-|------|----------------|---------|
-| `br` (beads_rust) | 0.1.0 | `cargo install --git https://github.com/dicklesworthstone/beads_rust` |
-| `git` | 2.5+ | System package manager (`apt install git` / `dnf install git`) |
-| `tmux` | 3.0+ | System package manager (`apt install tmux` / `dnf install tmux`) |
-| Rust | 1.75+ | `rustup.rs` (for building from source only) |
+| Tool | Minimum version | Recommended version | Install |
+|------|----------------|-------------------|---------|
+| `br` (beads_rust) | 0.1.28 | 0.1.28+ | `cargo install --git https://github.com/dicklesworthstone/beads_rust` |
+| `git` | 2.5+ | 2.47+ | System package manager (`apt install git` / `dnf install git`) |
+| `tmux` | 3.0+ | 3.5a+ | System package manager (`apt install tmux` / `dnf install tmux`) |
+| Rust | 1.75+ | 1.83+ (stable) | `rustup.rs` (for building from source only) |
+
+**Verified versions:** HOOP v1.0.0 is tested and verified against `br` 0.1.28, `git` 2.47.3, `tmux` 3.5a, and Rust 1.95.0. Earlier versions may work but are not actively tested.
 
 ### First-time setup walkthrough
 
@@ -107,6 +109,190 @@ hoop init
 5. 🌐 **Health check + URL** — confirms HOOP is running, prints the Tailscale URL you can open in a browser.
 
 Total time: under 5 minutes if your tools are already installed.
+
+---
+
+## ⚡ Quick Start: Up and Running in 10 Minutes
+
+Follow this step-by-step guide to get HOOP running with the testrepo workspace in under 10 minutes.
+
+### Step 1: Install HOOP (2 minutes)
+
+```bash
+# Pull the v1.0.0 binary
+HOOP_VERSION="1.0.0"
+curl -sSL "https://github.com/jedarden/HOOP/releases/download/v${HOOP_VERSION}/hoop-linux-x86_64" \
+  -o ~/.local/bin/hoop && chmod +x ~/.local/bin/hoop
+
+# Verify installation
+hoop --version
+# Expected output: hoop 1.0.0
+```
+
+**If you don't have the prerequisites installed:**
+
+```bash
+# Install br (beads_rust) - required for bead operations
+cargo install --git https://github.com/dicklesworthstone/beads_rust
+
+# Install tmux (for observing NEEDLE workers)
+sudo apt install tmux  # Debian/Ubuntu
+# or: sudo dnf install tmux  # Fedora/RHEL
+
+# Install git (if not already installed)
+sudo apt install git  # Debian/Ubuntu
+```
+
+### Step 2: Run First-Time Setup (2 minutes)
+
+```bash
+# Start the setup wizard
+hoop init
+```
+
+The wizard will:
+1. Check dependencies (`br`, `tmux`, `git`)
+2. Scan for projects with `.beads/` directories
+3. Offer to register projects (you can skip this and use testrepo)
+4. Set up the agent (optional — select "Skip" for now)
+5. Install the systemd service
+6. Start the daemon and provide the URL
+
+### Step 3: Register the Testrepo (1 minute)
+
+```bash
+# Register the included testrepo workspace
+hoop projects add /home/coding/HOOP/testrepo --name testrepo
+
+# Verify registration
+hoop projects list
+# Expected output:
+# Registered projects:
+#   - testrepo (1 workspace)
+```
+
+The testrepo contains:
+- **Pre-populated beads** — Synthetic open, claimed, closed, and failed beads
+- **CLI session fixtures** — Example Claude, Codex, OpenCode, Gemini, and Aider sessions
+- **Attachments** — Test images, audio, video, and log files
+- **Source code** — ~500 synthetic Rust files for file browser testing
+
+### Step 4: Open the Web UI (1 minute)
+
+```bash
+# Get the URL
+hoop url
+# Expected output:
+# http://localhost:3000
+# or http://100.x.y.z:3000 (if on Tailscale)
+```
+
+Open the URL in your browser. You should see:
+- A dashboard with the testrepo project card
+- Synthetic Stitches showing different states (open, claimed, closed)
+- File browser for exploring the testrepo source code
+
+### Step 5: Explore the Interface (4 minutes)
+
+**Dashboard (home page):**
+- Project cards showing active work, cost today, and alerts
+- Click on testrepo to see the Stitch timeline
+
+**Project Detail (click testrepo card):**
+- Stitch list showing all conversations in the project
+- Filter by status: open, claimed, closed, failed
+- Click on any Stitch to see details
+
+**File Browser:**
+- Navigate through testrepo source code
+- Syntax highlighting for Rust files
+- File tree on the left, code viewer on the right
+
+### Step 6: Verify Service Status (optional)
+
+```bash
+# Check HOOP is running
+hoop status
+# Expected output:
+# HOOP daemon is running (v1.0.0)
+#    PID: 12345
+#    Uptime: 2 minutes
+
+# Check systemd service
+systemctl --user status hoop
+# Expected output: active (running)
+```
+
+### Next Steps
+
+Now that HOOP is running:
+
+1. **Add your own projects:**
+   ```bash
+   hoop projects add /path/to/your/project --name myproject
+   ```
+
+2. **Enable the agent (optional):**
+   ```bash
+   hoop agent setup
+   # Follow prompts to enter Anthropic API key
+   ```
+
+3. **Configure backup (optional):**
+   ```bash
+   # Edit ~/.hoop/config.yml
+   # Add backup configuration for S3-compatible storage
+   ```
+
+4. **Set up ADB dictation (optional):**
+   ```bash
+   ./scripts/hoop-adb setup
+   # Follow prompts for Pixel 6 integration
+   ```
+
+---
+
+## 🔗 Full Installation Examples
+
+### Verified installation example (testrepo)
+
+HOOP includes a synthetic test workspace at `testrepo/` that you can use to verify your installation in under 10 minutes:
+
+```bash
+# 1. Install HOOP (if not already installed)
+HOOP_VERSION="1.0.0"
+curl -sSL "https://github.com/jedarden/HOOP/releases/download/v${HOOP_VERSION}/hoop-linux-x86_64" \
+  -o ~/.local/bin/hoop && chmod +x ~/.local/bin/hoop
+
+# 2. Run first-time setup (select "Skip" for agent setup to keep it simple)
+hoop init
+
+# 3. Register the testrepo project
+hoop projects add /home/coding/HOOP/testrepo --name testrepo
+
+# 4. Verify HOOP sees the testrepo data
+hoop projects list
+# → Registered projects:
+#   - testrepo (1 workspace)
+
+# 5. Open the web UI and explore
+echo "Open this URL in your browser:"
+hoop url
+# → http://localhost:3000
+
+# 6. In the UI, verify you see:
+#    - testrepo project card with synthetic Stitches
+#    - Stitch list showing open/claimed/closed beads
+#    - File browser for testrepo source code
+```
+
+The testrepo contains:
+- **Pre-populated beads** — Synthetic open, claimed, closed, and failed beads for testing
+- **CLI session fixtures** — Example Claude, Codex, OpenCode, Gemini, and Aider sessions
+- **Attachments** — Test images, audio, video, and log files
+- **Source code** — ~500 synthetic Rust files for file browser testing
+
+This lets you explore HOOP's UI and features without setting up a real NEEDLE fleet or waiting for LLM work to complete.
 
 ---
 
@@ -147,16 +333,41 @@ You don't need to know what a bead is to use HOOP. You work in Stitches.
 *One card per project, aggregating active work, cost today, and alerts.*
 
 ### Stitch Timeline
-![Stitch Timeline](docs/screenshots/stitches.png)
+![Stitch Timeline](docs/screenshots/project-detail.png)
 *All conversations in a project — worker sessions, operator chats, dictated notes.*
 
 ### Agent Chat
-![Agent Chat](docs/screenshots/agent.png)
+![Agent Chat](docs/screenshots/agent-chat.png)
 *Ask questions, draft work, get summaries — your primary interface to HOOP.*
+
+### File Browser
+![File Browser](docs/screenshots/file-browser.png)
+*Navigate project files with code syntax highlighting and Stitch-aware change tracking.*
 
 </div>
 
-> **Note:** Screenshots coming soon in v1.0.1. The UI features a responsive dark-themed design with project cards, timeline views, and an integrated chat interface for the human-interface agent. Run `hoop init` and open the provided URL to see the live interface.
+> **Note:** Screenshots show anonymized data from the testrepo workspace. For live demos with your own projects, run `hoop init` and open the provided URL.
+
+**See your own interface in under 10 minutes:**
+
+```bash
+# Install HOOP
+HOOP_VERSION="1.0.0"
+curl -sSL "https://github.com/jedarden/HOOP/releases/download/v${HOOP_VERSION}/hoop-linux-x86_64" \
+  -o ~/.local/bin/hoop && chmod +x ~/.local/bin/hoop
+
+# Run first-time setup (select "Skip" for agent setup to keep it simple)
+hoop init
+
+# Register the testrepo project
+hoop projects add /home/coding/HOOP/testrepo --name testrepo
+
+# Open the web UI
+echo "Open this URL in your browser:"
+hoop url
+# → http://localhost:3000
+#    or http://100.x.y.z:3000 (Tailscale)
+```
 
 ---
 
@@ -346,9 +557,158 @@ State in `~/.hoop/` persists across upgrades. Schema migrations run on startup; 
 
 ---
 
-## 🔧 Common configuration patterns
+## 🔧 Configuration Examples
 
-### Pattern 1: Single developer, local-only
+HOOP includes example configuration files for common use cases in [`docs/examples/`](docs/examples/). Copy these to `~/.hoop/` and customize for your environment.
+
+### Quick Setup with Examples
+
+```bash
+# Create config directory
+mkdir -p ~/.hoop
+
+# Copy example configurations
+cp docs/examples/config.yml ~/.hoop/
+cp docs/examples/accounts.yaml ~/.hoop/
+
+# Edit to customize (optional)
+nano ~/.hoop/config.yml
+```
+
+### Example: Minimal Local-Only Setup
+
+Perfect for single-developer workflows with no network exposure:
+
+```yaml
+# ~/.hoop/config.yml
+server:
+  bind_addr: "127.0.0.1:3000"  # Localhost only
+
+ui:
+  theme: dark
+  default_project_sort: activity
+
+agent:
+  model: claude-sonnet-4-6
+  morning_brief_enabled: true
+```
+
+### Example: Tailscale-Exposed with Backup
+
+For multi-host access via Tailscale with automated backups:
+
+```yaml
+# ~/.hoop/config.yml
+server:
+  bind_addr: "0.0.0.0:3000"  # Expose on all interfaces
+
+backup:
+  endpoint: https://s3.us-west-000.backblazeb2.com
+  bucket: hoop-backups-yourname
+  prefix: hoop/
+  schedule: "0 4 * * *"  # Daily at 4 AM
+  retention_days: 30
+  encryption: true  # Set HOOP_BACKUP_AGE_KEY env var
+```
+
+### Example: Multi-Account Rate Limits
+
+Configure rate limits for multiple Claude Code accounts:
+
+```yaml
+# ~/.hoop/accounts.yaml
+accounts:
+  claude-code-default:
+    adapter: claude-code
+    limits:
+      prompts_per_5h: 1600
+      prompts_per_7d: 8000
+      tokens_per_minute: 40000
+
+  claude-code-build:
+    adapter: claude-code
+    limits:
+      prompts_per_5h: 500
+      prompts_per_7d: 2000
+      tokens_per_minute: 20000
+```
+
+### Example: Multi-Repo Project
+
+Track a deployment spanning multiple repositories:
+
+```bash
+hoop projects add-multi myservice-deployment \
+  /home/coding/myservice:source \
+  /home/coding/declarative-config:manifests \
+  /home/coding/secrets:secrets
+```
+
+Or configure directly in `~/.hoop/projects.yaml`:
+
+```yaml
+projects:
+  - name: myservice-deployment
+    description: My service deployment across repos
+    workspaces:
+      - path: /home/coding/myservice
+        role: source
+      - path: /home/coding/declarative-config
+        role: manifests
+      - path: /home/coding/secrets
+        role: secrets
+```
+
+### Example: NEEDLE Fleet Configuration
+
+Configure a NEEDLE worker fleet (HOOP observes but doesn't control):
+
+```yaml
+# ~/.needle/fleet.yaml (in each NEEDLE workspace)
+name: example-fleet
+workspace: /home/coding/myproject
+
+workers:
+  - name: worker-opus
+    model: claude-opus-4-7
+    harness: claude-code
+    concurrency: 1
+
+  - name: worker-sonnet
+    model: claude-sonnet-4-6
+    harness: claude-code
+    concurrency: 2
+
+cost:
+  pricing:
+    claude-opus-4-7:
+      input: 15.0
+      output: 75.0
+      cache_read: 0.3
+      cache_write: 3.75
+    claude-sonnet-4-6:
+      input: 3.0
+      output: 15.0
+      cache_read: 0.06
+      cache_write: 0.30
+```
+
+### Common Configuration Patterns
+
+| Use Case | Key Settings | Description |
+|----------|-------------|-------------|
+| **Local development** | `bind_addr: "127.0.0.1:3000"` | No network exposure |
+| **Tailscale access** | `bind_addr: "0.0.0.0:3000"` | Expose on Tailscale interface |
+| **Automated backup** | `backup.enabled: true` | Daily S3 backups |
+| **High-volume tier** | `accounts.limits.prompts_per_5h: 1600` | Claude Max limits |
+| **Multi-repo project** | `projects.add-multi` | Group related repos |
+| **Cost monitoring** | `pricing.per_million` | Track per-model costs |
+
+For more examples, see [`docs/examples/README.md`](docs/examples/README.md).
+
+---
+
+## 🔧 Advanced Configuration Patterns
 
 Run HOOP locally without network exposure:
 
@@ -502,16 +862,33 @@ We welcome contributions! HOOP is a Rust + TypeScript project with a focus on re
 git clone https://github.com/jedarden/HOOP.git
 cd HOOP
 
-# Install dependencies
-cargo install just  # optional, for task running
+# Install Rust dependencies
 cargo build
+
+# Install UI dependencies
+cd hoop-ui/web
+pnpm install
+cd ../..
 
 # Run tests
 cargo test
 
 # Run with hot-reload during development
 cargo run --bin hoop -- serve --dev
+
+# Run UI in development mode (separate terminal)
+cd hoop-ui/web && pnpm dev
 ```
+
+### Prerequisites for development
+
+| Tool | Minimum version | Purpose |
+|------|----------------|---------|
+| Rust | 1.83+ (stable) | Daemon build |
+| Node.js | 20+ | UI development |
+| pnpm | 9+ | UI package manager |
+| br (beads_rust) | 0.1.28+ | Bead operations |
+| just | 0.12+ (optional) | Task runner |
 
 ### Contribution guidelines
 
@@ -521,14 +898,26 @@ cargo run --bin hoop -- serve --dev
 4. **Respect non-goals** — HOOP never steers workers, never enforces capacity, never mutates bead state beyond `br create`
 5. **Test your changes** — Run the full test suite including integration tests
 6. **Document schema changes** — Update CHANGELOG.md for any schema modifications
+7. **Follow Rust conventions** — Use `cargo fmt`, `cargo clippy`, and respect Rust idioms
+8. **Respect TypeScript conventions** — Use the existing ESLint config and type checking
 
 ### Pull request process
 
-1. Fork and create a feature branch
+1. Fork and create a feature branch from `main`
 2. Make your changes with tests
-3. Update CHANGELOG.md if applicable
-4. Submit PR with description linking to relevant beads/issues
-5. CI will run tests, schema drift check, and performance budget verification
+3. Run `cargo fmt` and `cargo clippy` to ensure code quality
+4. Update CHANGELOG.md if applicable
+5. Submit PR with description linking to relevant beads/issues
+6. CI will run tests, schema drift check, and performance budget verification
+
+### Code review criteria
+
+PRs are reviewed based on:
+- **Correctness** — Does the change do what it claims? Tests must pass.
+- **Clarity** — Is the code readable and well-documented where needed?
+- **Consistency** — Does it match existing patterns and conventions?
+- **Performance** — Does it respect performance budgets? (UI: Core Web Vitals, daemon: latency targets)
+- **Completeness** — Are docs, tests, and CHANGELOG updated?
 
 ### Areas seeking contribution
 
@@ -537,10 +926,66 @@ cargo run --bin hoop -- serve --dev
 - **Reflection rules** — New rule types and learning patterns
 - **Morning Brief** — Enhanced summarization and draft quality
 - **Documentation** — Screenshots, demo videos, tutorials
+- **Performance** — Query optimization, caching strategies
+- **Testing** — Integration test coverage, load testing scenarios
+
+### Development workflow
+
+```bash
+# 1. Create a feature branch
+git checkout -b feature/my-feature
+
+# 2. Make your changes
+# ... edit files ...
+
+# 3. Run tests locally
+cargo test
+cd hoop-ui/web && pnpm test && pnpm lint
+
+# 4. Check formatting
+cargo fmt --check
+cargo clippy -- -D warnings
+
+# 5. Commit with conventional commits
+git commit -m "feat: add support for Cursor adapter"
+
+# 6. Push and create PR
+git push origin feature/my-feature
+# Create PR on GitHub
+```
+
+### Testing with testrepo
+
+Use the included testrepo for verification:
+
+```bash
+# Register testrepo for local testing
+hoop projects add /home/coding/HOOP/testrepo --name testrepo
+
+# Verify UI shows synthetic beads
+# Open http://localhost:3000 and check testrepo project
+```
+
+### Release process
+
+Releases are automated via Argo Workflows:
+
+1. Update version in `Cargo.toml` and `hoop-ui/web/package.json`
+2. Update CHANGELOG.md with release notes
+3. Commit and tag: `git tag v1.x.x`
+4. Push to trigger CI/CD: `git push origin v1.x.x`
+5. GitHub Release is created automatically with binary attachments
 
 ### Code of conduct
 
 Be respectful, constructive, and focused on the work. We're building tools for operators — empathy for the user experience is our north star.
+
+### Getting help
+
+- **Documentation** — Start with [AGENTS.md](AGENTS.md) and [docs/plan/plan.md](docs/plan/plan.md)
+- **Issues** — Search existing issues before creating new ones
+- **Discussions** — Use GitHub Discussions for questions and ideas
+- **Pull requests** — Draft PRs are welcome for early feedback
 
 ---
 
