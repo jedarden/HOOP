@@ -231,16 +231,18 @@ impl Default for SchemaCache {
 
 /// Validate arguments against a JSON Schema
 pub fn validate_args(schema: &Validator, args: &Value) -> Result<(), Vec<ValidationError>> {
-    let result = schema.validate(args);
+    // Use iter_errors to get all validation errors (not just the first one)
+    let errors_iter = schema.iter_errors(args);
 
-    if let Err(errors) = result {
-        let validation_errors: Vec<ValidationError> = errors
-            .map(|e| ValidationError {
-                message: e.to_string(),
-                instance_path: e.instance_path.to_string(),
-            })
-            .collect();
+    // Collect all validation errors
+    let validation_errors: Vec<ValidationError> = errors_iter
+        .map(|e| ValidationError {
+            message: e.to_string(),
+            instance_path: e.instance_path.to_string(),
+        })
+        .collect();
 
+    if !validation_errors.is_empty() {
         return Err(validation_errors);
     }
 
@@ -473,15 +475,19 @@ pub fn write_skill_audit(
 
     let args_json_str = serde_json::to_string(&audit_args)?;
 
-    // Compute hash_self from row content
+    // Compute hash_self from row content (must match verify_hash_chain in fleet.rs)
+    // Format: id, ts, actor, kind, target, project, args_json
+    // Note: result is NOT included in hash computation (see verify_hash_chain)
+    let project: Option<String> = None;
     let hash_input = format!(
-        "{}{}{}{}{}{}",
+        "{}{}{}{}{}{:?}{}",
         id,
         ts,
         invoked_by,
         "skill_invoked",
-        args_json_str,
-        if success { "success" } else { "failure" }
+        skill_name,
+        project,
+        args_json_str
     );
     let mut hasher = Sha256::new();
     hasher.update(hash_input.as_bytes());
