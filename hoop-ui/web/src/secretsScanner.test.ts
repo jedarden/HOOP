@@ -27,8 +27,9 @@ import {
 } from './components/secretsScanner';
 
 // Mock the global fetch for patterns API
-// These patterns MUST match backend default_patterns() in secrets_scanner.rs exactly
+// These patterns MUST match backend default_secret_patterns() in config_resolver.rs exactly
 // for true parity between client and backend scanning.
+// Source of truth: hoop-daemon/src/config_resolver.rs::default_secret_patterns()
 const mockPatterns = [
   // Stripe API keys
   {
@@ -58,8 +59,16 @@ const mockPatterns = [
     name: 'Anthropic API Key',
     severity: 'high',
     patterns: [
-      '\\bsk-ant-api[0-9]{2}-[a-zA-Z0-9_-]{20,}[a-zA-Z0-9_-]{20,}[a-zA-Z0-9_-]{20,}\\b',
-      '\\bsk-ant-[a-zA-Z0-9_-]{20,}\\b',
+      'sk-ant-[a-zA-Z0-9_-]{20,}',
+    ],
+  },
+  // Generic API keys (sk- prefix) - matches Anthropic keys too, so order matters
+  {
+    id: 'generic_sk_key',
+    name: 'Generic API Key',
+    severity: 'high',
+    patterns: [
+      '\\bsk-[a-zA-Z0-9]{20,}\\b',
     ],
   },
   // AWS access keys
@@ -88,15 +97,13 @@ const mockPatterns = [
       '\\bghp_[a-zA-Z0-9]{36}\\b',
       '\\bghs_[a-zA-Z0-9]{36}\\b',
       '\\bghu_[a-zA-Z0-9]{36}\\b',
-      '\\bgho_[a-zA-Z0-9]{36}\\b',
-      '\\bghr_[a-zA-Z0-9]{36}\\b',
       '\\bgithub_pat_[a-zA-Z0-9_]{82}\\b',
     ],
   },
   // JWT tokens
   {
     id: 'jwt',
-    name: 'JWT Token',
+    name: 'JWT',
     severity: 'high',
     patterns: ['\\bey[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\b'],
   },
@@ -106,17 +113,9 @@ const mockPatterns = [
     name: 'Slack Token',
     severity: 'high',
     patterns: [
-      '\\bxoxb-[0-9A-Za-z_-]{24,}\\b',
-      '\\bxoxp-[0-9A-Za-z_-]{24,}\\b',
-      '\\bxoxc-[0-9A-Za-z_-]{24,}\\b',
+      '\\bxoxb-[0-9A-Za-z-]{24,}\\b',
+      '\\bxoxp-[0-9A-Za-z-]{24,}\\b',
     ],
-  },
-  // Generic API keys (sk- prefix)
-  {
-    id: 'generic_sk_key',
-    name: 'Generic API Key (sk-)',
-    severity: 'high',
-    patterns: ['\\bsk-[a-zA-Z0-9_-]{20,}\\b'],
   },
   // Bearer tokens
   {
@@ -130,14 +129,14 @@ const mockPatterns = [
     id: 'env_var_secret',
     name: 'Environment Variable Secret',
     severity: 'high',
-    patterns: ['(?i)(?:api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|private[_-]?key|client[_-]?secret|anthropic[_-]?api[_-]?key|openai[_-]?api[_-]?key|github[_-]?token|stripe[_-]?key|aws[_-]?secret)\\s*[:=]\\s*["\']?([A-Za-z0-9+/_.~\\-]{16,})["\']?'],
+    patterns: ['(?i)(?:api[_-]?key|secret[_-]?key|access[_-]?token|auth[_-]?token|private[_-]?key|client[_-]?secret|anthropic[_-]?api[_-]?key|openai[_-]?api[_-]?key|github[_-]?token)\\s*[:=]\\s*["\']?([A-Za-z0-9+/_.~\\-]{16,})["\']?'],
   },
   // JSON secret fields
   {
     id: 'json_secret_field',
     name: 'JSON Secret Field',
     severity: 'high',
-    patterns: ['(?i)"(?:password|passwd|secret|token|api_key|apikey|access_token|auth_token|private_key|client_secret|secret_key)"\\s*:\\s*"([^"]{8,})"'],
+    patterns: ['(?i)"(?:password|passwd|secret|token|api_key|apikey|access_token|auth_token|private_key|client_secret)"\\s*:\\s*"([^"]{8,})"'],
   },
 ];
 
@@ -301,7 +300,7 @@ describe('secrets scanner parity (§18)', () => {
       expect(result.count).toBeGreaterThan(0);
       // JWT is detected either by JWT pattern or Bearer Token pattern
       const hasJWTOrBearer = result.matches.some(
-        (m) => m.type === 'JWT Token' || m.type === 'Bearer Token'
+        (m) => m.type === 'JWT' || m.type === 'Bearer Token'
       );
       expect(hasJWTOrBearer).toBe(true);
     });
@@ -309,7 +308,7 @@ describe('secrets scanner parity (§18)', () => {
     it('detects generic API key', async () => {
       const result = await scanForSecrets(FIXTURE_SECRETS.genericKey);
       expect(result.count).toBeGreaterThan(0);
-      expect(result.matches.some((m) => m.type === 'Generic API Key (sk-)')).toBe(true);
+      expect(result.matches.some((m) => m.type === 'Generic API Key')).toBe(true);
     });
 
     it('detects environment variable secret', async () => {
