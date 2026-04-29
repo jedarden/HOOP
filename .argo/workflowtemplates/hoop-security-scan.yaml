@@ -16,7 +16,7 @@ spec:
       - name: image_tag
         value: latest
       - name: fail_on_vuln
-        value: "false"  # Allow patches; set to "true" for release gates
+        value: "false"
 
   templates:
     - name: cargo-audit
@@ -29,33 +29,14 @@ spec:
           - |
             echo "=== Rust Dependency Audit (cargo audit) ==="
             cargo install cargo-audit
-            cargo audit --json > /tmp/cargo-audit-report.json
-            EXIT_CODE=$?
-
+            cargo audit --json > /tmp/cargo-audit-report.json || EXIT_CODE=$? || EXIT_CODE=$?
             echo ""
             echo "=== Summary ==="
-            if [ $EXIT_CODE -eq 0 ]; then
-              echo "No vulnerabilities found"
-            else
-              echo "Vulnerabilities detected. Report:"
-              cat /tmp/cargo-audit-report.json | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-if 'vulnerabilities' in data:
-    vulns = data['vulnerabilities']
-    print(f'Total: {len(vulns)} vulnerabilities')
-    for v in vulns:
-        print(f'  - {v.get(\"advisory\", {}).get(\"id\", \"unknown\")}: {v.get(\"advisory\", {}).get(\"title\", \"no title\")}')
-        print(f'    Package: {v.get(\"package\", {}).get(\"name\", \"unknown\")} {v.get(\"package\", {}).get(\"version\", \"unknown\")}')
-                        "
-            fi
-
-            # Fail only if fail_on_vuln is true
+            cat /tmp/cargo-audit-report.json || echo "No vulnerabilities found"
             if [ "{{workflow.parameters.fail_on_vuln}}" = "true" ]; then
-              exit $EXIT_CODE
+              cargo audit
             else
-              echo ""
-              echo "NOTE: Vulnerabilities found but not blocking (fail_on_vuln=false)"
+              echo "NOTE: Non-blocking scan (fail_on_vuln=false)"
               exit 0
             fi
         volumeMounts:
@@ -83,31 +64,13 @@ if 'vulnerabilities' in data:
             npm install -g pnpm
             pnpm install --frozen-lockfile
             pnpm audit --json > /tmp/pnpm-audit-report.json 2>&1 || true
-            pnpm audit --audit-level moderate 2>&1 || EXIT_CODE=$?
-
             echo ""
             echo "=== Summary ==="
-            cat /tmp/pnpm-audit-report.json | python3 -c "
-import json, sys
-try:
-    data = json.load(sys.stdin)
-    if 'metadata' in data:
-        vulns = data['metadata'].get('vulnerabilities', {})
-        total = sum(vulns.values())
-        print(f'Total: {total} vulnerabilities')
-        for level, count in vulns.items():
-            if count > 0:
-                print(f'  - {level}: {count}')
-except:
-    pass
-                    " || echo "No vulnerabilities or audit error"
-
-            # Exit 0 for non-blocking; exit code 1 for moderate+ vulns when blocking
+            cat /tmp/pnpm-audit-report.json || echo "No vulnerabilities found"
             if [ "{{workflow.parameters.fail_on_vuln}}" = "true" ]; then
               pnpm audit --audit-level moderate
             else
-              echo ""
-              echo "NOTE: Vulnerabilities found but not blocking (fail_on_vuln=false)"
+              echo "NOTE: Non-blocking scan (fail_on_vuln=false)"
               exit 0
             fi
         volumeMounts:
@@ -136,55 +99,14 @@ except:
               --skip-db-update \
               --scanners vuln,secret \
               --severity HIGH,CRITICAL \
-              .
-
-            EXIT_CODE=$?
-
+              . || EXIT_CODE=$? || EXIT_CODE=$?
             echo ""
             echo "=== Summary ==="
-            cat /tmp/trivy-fs-report.json | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-results = data.get('Results', [])
-
-vuln_count = 0
-secret_count = 0
-
-for result in results:
-    for vuln in result.get('Vulnerabilities', []):
-        if vuln.get('Severity', '') in ['HIGH', 'CRITICAL']:
-            vuln_count += 1
-
-    for finding in result.get('Secrets', []):
-        secret_count += 1
-
-print(f'Vulnerabilities (HIGH+CRITICAL): {vuln_count}')
-print(f'Secrets detected: {secret_count}')
-
-if vuln_count > 0:
-    print('')
-    print('Sample vulnerabilities:')
-    for result in results[:3]:
-        for vuln in result.get('Vulnerabilities', [])[:5]:
-            if vuln.get('Severity', '') in ['HIGH', 'CRITICAL']:
-                print(f'  - {vuln.get(\"Target\", \"unknown\")}: {vuln.get(\"VulnerabilityID\", \"unknown\")} ({vuln.get(\"Severity\", \"UNKNOWN\")})')
-                break
-        if vuln_count > 5:
-            break
-            "
-
-            if [ $secret_count -gt 0 ]; then
-              echo ""
-              echo "WARNING: Secrets detected in source tree!"
-              echo "Review /tmp/trivy-fs-report.json for details"
-            fi
-
-            # Fail only if fail_on_vuln is true AND vulnerabilities found
-            if [ "{{workflow.parameters.fail_on_vuln}}" = "true" ] && [ $EXIT_CODE -ne 0 ]; then
-              exit $EXIT_CODE
+            cat /tmp/trivy-fs-report.json || echo "Scan complete"
+            if [ "{{workflow.parameters.fail_on_vuln}}" = "true" ]; then
+              trivy fs --skip-db-update --scanners vuln,secret --severity HIGH,CRITICAL .
             else
-              echo ""
-              echo "NOTE: Issues found but not blocking (fail_on_vuln=false)"
+              echo "NOTE: Non-blocking scan (fail_on_vuln=false)"
               exit 0
             fi
         volumeMounts:
@@ -209,48 +131,17 @@ if vuln_count > 0:
           - |
             echo "=== Trivy Image Scan ==="
             echo "Image: ronaldraygun/hoop:{{workflow.parameters.image_tag}}"
-
-            # Pull image first (trivy server-side scan needs local access or registry credentials)
             trivy image --format json --output /tmp/trivy-image-report.json \
               --skip-db-update \
               --severity HIGH,CRITICAL \
-              ronaldraygun/hoop:{{workflow.parameters.image_tag}}
-
-            EXIT_CODE=$?
-
+              ronaldraygun/hoop:{{workflow.parameters.image_tag}} || EXIT_CODE=$? || EXIT_CODE=$?
             echo ""
             echo "=== Summary ==="
-            cat /tmp/trivy-image-report.json | python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-results = data.get('Results', [])
-
-vuln_count = 0
-for result in results:
-    for vuln in result.get('Vulnerabilities', []):
-        if vuln.get('Severity', '') in ['HIGH', 'CRITICAL']:
-            vuln_count += 1
-
-print(f'Vulnerabilities (HIGH+CRITICAL): {vuln_count}')
-
-if vuln_count > 0:
-    print('')
-    print('Sample vulnerabilities:')
-    for result in results[:3]:
-        target = result.get('Target', 'unknown')
-        for vuln in result.get('Vulnerabilities', [])[:5]:
-            if vuln.get('Severity', '') in ['HIGH', 'CRITICAL']:
-                print(f'  - {target}: {vuln.get(\"VulnerabilityID\", \"unknown\")} ({vuln.get(\"Severity\", \"UNKNOWN\")})')
-        if vuln_count > 5:
-            break
-            "
-
-            # Fail only if fail_on_vuln is true AND vulnerabilities found
-            if [ "{{workflow.parameters.fail_on_vuln}}" = "true" ] && [ $EXIT_CODE -ne 0 ]; then
-              exit $EXIT_CODE
+            cat /tmp/trivy-image-report.json || echo "Scan complete"
+            if [ "{{workflow.parameters.fail_on_vuln}}" = "true" ]; then
+              trivy image --skip-db-update --severity HIGH,CRITICAL ronaldraygun/hoop:{{workflow.parameters.image_tag}}
             else
-              echo ""
-              echo "NOTE: Issues found but not blocking (fail_on_vuln=false)"
+              echo "NOTE: Non-blocking scan (fail_on_vuln=false)"
               exit 0
             fi
         volumeMounts:
@@ -279,7 +170,7 @@ if vuln_count > 0:
 
     - name: checkout
       container:
-        image: alpine/git:2.47.0
+        image: alpine/git:2.49.0
         command:
           - sh
           - -c
@@ -298,35 +189,31 @@ if vuln_count > 0:
             cpu: "500m"
 
     - name: weekly-scan
-      arguments:
-        parameters:
-          - name: repo
-            value: https://github.com/jedarden/HOOP.git
-          - name: branch
-            value: main
-          - name: image_tag
-            value: latest
-          - name: fail_on_vuln
-            value: "false"  # Weekly scans are informational, not blocking
       steps:
         - - name: security-scan
             template: hoop-security-scan
+            arguments:
+              parameters:
+                - name: repo
+                  value: https://github.com/jedarden/HOOP.git
+                - name: branch
+                  value: main
+                - name: image_tag
+                  value: latest
+                - name: fail_on_vuln
+                  value: "false"
 
     - name: release-gate
-      arguments:
-        parameters:
-          - name: repo
-            value: https://github.com/jedarden/HOOP.git
-          - name: branch
-            value: main
-          - name: image_tag
-            value: latest
-          - name: fail_on_vuln
-            value: "true"  # Block releases on unpatched vulns
       steps:
         - - name: security-scan
             template: hoop-security-scan
-
-  # Weekly cron schedule for advisory updates
-  # Run every Sunday at 00:00 UTC
-  # Note: This requires an Argo CronWorkflow resource; this template alone doesn't auto-schedule
+            arguments:
+              parameters:
+                - name: repo
+                  value: https://github.com/jedarden/HOOP.git
+                - name: branch
+                  value: main
+                - name: image_tag
+                  value: latest
+                - name: fail_on_vuln
+                  value: "true"

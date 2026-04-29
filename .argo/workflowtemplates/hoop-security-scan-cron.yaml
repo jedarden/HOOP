@@ -1,0 +1,115 @@
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: hoop-security-scan-weekly
+  namespace: argo-workflows
+  annotations:
+    description: "Weekly automated security scan: cargo audit, pnpm audit, trivy fs + image scan"
+    planReference: "hoop-ttb.10.5"
+spec:
+  schedules:
+    - "0 0 * * 0"  # Every Sunday at 00:00 UTC
+  workflowSpec:
+    entrypoint: hoop-security-scan-weekly
+    arguments:
+      parameters:
+        - name: repo
+          value: https://github.com/jedarden/HOOP.git
+        - name: branch
+          value: main
+        - name: image_tag
+          value: latest
+        - name: fail_on_vuln
+          value: "false"
+    volumes:
+      - name: workspace
+        emptyDir: {}
+      - name: reports
+        emptyDir: {}
+    templates:
+      - name: hoop-security-scan-weekly
+        steps:
+          - - name: checkout
+              template: checkout
+          - - name: cargo-audit
+              template: cargo-audit
+          - - name: pnpm-audit
+              template: pnpm-audit
+          - - name: trivy-fs
+              template: trivy-fs
+          - - name: trivy-image
+              template: trivy-image
+      - name: checkout
+        container:
+          image: alpine/git:2.49.0
+          command:
+            - sh
+            - -c
+            - "git clone --depth 1 --branch \"{{workflow.parameters.branch}}\" \"{{workflow.parameters.repo}}\" /workspace && echo \"Checked out {{workflow.parameters.branch}} at $(git rev-parse HEAD)\""
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+      - name: cargo-audit
+        container:
+          image: rust:1.83-bookworm
+          workingDir: /workspace
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              echo "=== Rust Dependency Audit (cargo audit) ==="
+              cargo install cargo-audit
+              cargo audit || true
+              echo "Scan complete (non-blocking for weekly scan)"
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+      - name: pnpm-audit
+        container:
+          image: node:22-bookworm
+          workingDir: /workspace/hoop-ui/web
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              echo "=== npm Dependency Audit (pnpm audit) ==="
+              npm install -g pnpm
+              pnpm install --frozen-lockfile
+              pnpm audit || true
+              echo "Scan complete (non-blocking for weekly scan)"
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+      - name: trivy-fs
+        container:
+          image: aquasec/trivy:latest
+          workingDir: /workspace
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              echo "=== Trivy Filesystem Scan (secrets + vulns) ==="
+              trivy fs --skip-db-update --scanners vuln,secret --severity HIGH,CRITICAL . || true
+              echo "Scan complete (non-blocking for weekly scan)"
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+      - name: trivy-image
+        container:
+          image: aquasec/trivy:latest
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              echo "=== Trivy Image Scan ==="
+              echo "Image: ronaldraygun/hoop:{{workflow.parameters.image_tag}}"
+              trivy image --skip-db-update --severity HIGH,CRITICAL ronaldraygun/hoop:{{workflow.parameters.image_tag}} || true
+              echo "Scan complete (non-blocking for weekly scan)"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
