@@ -152,9 +152,7 @@ impl UnassignedTracker {
     /// Save the ignore list to disk
     fn save_ignore_list(&self) -> Result<()> {
         let path = self.hoop_home.join(IGNORE_LIST_PATH);
-        let ignored = self.ignored.lock().unwrap();
-        let ids: Vec<&String> = ignored.iter().collect();
-        drop(ignored); // Release lock before write
+        let ids: Vec<String> = self.ignored.lock().unwrap().iter().cloned().collect();
 
         // Ensure directory exists
         if let Some(parent) = path.parent() {
