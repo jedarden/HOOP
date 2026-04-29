@@ -12,6 +12,14 @@ interface StarterPrompt {
 
 const STARTER_PROMPTS: StarterPrompt[] = [
   {
+    label: 'Enable Tour Project',
+    description: 'Spin up a demo workspace with example Stitches',
+    action: () => {
+      const event = new CustomEvent('hoop-enable-tour');
+      window.dispatchEvent(event);
+    },
+  },
+  {
     label: 'Dictate a first note',
     description: 'Record a voice note with transcription',
     action: () => {
