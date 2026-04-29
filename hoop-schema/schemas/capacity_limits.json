@@ -13,6 +13,14 @@
       "type": ["integer", "null"],
       "description": "Token limit per 7-day window (Claude-specific)"
     },
+    "prompts_per_5h": {
+      "type": ["integer", "null"],
+      "description": "Prompt limit per 5-hour window (OpenCode ZAI proxy)"
+    },
+    "prompts_per_7d": {
+      "type": ["integer", "null"],
+      "description": "Prompt limit per 7-day window (OpenCode ZAI proxy)"
+    },
     "requests_per_day": {
       "type": ["integer", "null"],
       "description": "Request limit per day"

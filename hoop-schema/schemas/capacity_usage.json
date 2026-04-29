@@ -4,7 +4,7 @@
   "title": "CapacityUsage",
   "description": "Current capacity usage for an adapter account",
   "type": "object",
-  "required": ["tokens_5h", "tokens_7d", "requests_today", "spend_usd_today"],
+  "required": ["tokens_5h", "tokens_7d", "requests_today", "spend_usd_today", "prompts_5h", "prompts_7d"],
   "properties": {
     "tokens_5h": {
       "type": "integer",
@@ -13,6 +13,14 @@
     "tokens_7d": {
       "type": "integer",
       "description": "Tokens used in current 7-day window"
+    },
+    "prompts_5h": {
+      "type": "integer",
+      "description": "Prompts used in current 5-hour window (OpenCode ZAI proxy)"
+    },
+    "prompts_7d": {
+      "type": "integer",
+      "description": "Prompts used in current 7-day window (OpenCode ZAI proxy)"
     },
     "requests_today": {
       "type": "integer",
