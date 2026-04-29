@@ -593,16 +593,16 @@ impl GeminiAdapter {
                     has_tmp = has_tmp || subpath == "tmp";
                     has_sessions = has_sessions || subpath == "sessions";
 
+                    debug!(
+                        "Gemini session discovery: found session files at {}",
+                        full_path.display()
+                    );
+
                     found_paths.push(GeminiSessionPath {
                         root,
                         subpath,
                         full_path,
                     });
-
-                    debug!(
-                        "Gemini session discovery: found session files at {}",
-                        full_path.display()
-                    );
                 }
             }
         }
