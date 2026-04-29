@@ -10,7 +10,7 @@ use crate::config_resolver::SecretPattern;
 use crate::DaemonState;
 
 /// Response for GET /api/config
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ConfigResponse {
     /// Schema version for compatibility tracking
     pub schema_version: String,
@@ -19,7 +19,7 @@ pub struct ConfigResponse {
 }
 
 /// Subset of running config values relevant for diff (restart-required keys first)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct RunningConfig {
     /// Server bind address (RESTART REQUIRED)
     pub server_bind_addr: String,
@@ -85,7 +85,7 @@ pub fn is_restart_required_key(key: &str) -> bool {
 ///
 /// Exposes the current secret scanning patterns to the client for pre-upload
 /// warning. This ensures client and backend use the same pattern set.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct SecretsPatternsResponse {
     /// Schema version for compatibility tracking
     pub schema_version: String,

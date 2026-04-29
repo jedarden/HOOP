@@ -54,6 +54,10 @@ fastembed = { version = "5", default-features = false, features = ["online", "or
 flate2 = "1.0"
 tar = "0.4"
 glob = "0.3"
+utoipa = "5"
+utoipa-swagger-ui = "8"
+utoipa-redoc = "5"
+utoipa-rapidoc = "5"
 
 [dev-dependencies]
 tempfile = "3"
@@ -61,3 +65,7 @@ trybuild = "1.0"
 serial_test = "3"
 proptest = "1.0"
 proptest-derive = "0.4"
+
+[[bin]]
+name = "generate_openapi"
+path = "src/bin/generate_openapi.rs"

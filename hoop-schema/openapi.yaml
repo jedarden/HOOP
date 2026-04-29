@@ -1,0 +1,2331 @@
+openapi: 3.1.0
+info:
+  title: HOOP REST API
+  version: 1.0.0
+  description: |
+    HOOP is an opinionated project management system built on beads, stitches, and
+    semantic deduplication. This API provides endpoints for:
+
+    - **Agent sessions**: Control Claude/OpenAI agent lifecycle
+    - **Beads**: Create, list, and manage work items
+    - **Stitches**: Multi-bead work items with decomposition
+    - **Drafts**: Queue-based stitch approval workflow
+    - **Audit**: Query audit log with hash chain verification
+    - **Transcription**: Whisper audio transcription jobs
+    - **Uploads**: Chunked resumable file upload
+    - **Attachments**: Serve bead/stitch attachments
+    - **Dictated notes**: Voice note capture with transcription
+    - **Metrics**: Prometheus metrics endpoint
+    - **Morning brief**: Daily brief generation
+
+    ## Breaking Changes
+
+    Per §20, all spec changes require a CHANGELOG entry.
+  contact:
+    name: HOOP Project
+    url: https://github.com/jedarden/hoop
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+tags:
+  - name: agent
+    description: Agent session lifecycle control
+  - name: beads
+    description: Bead creation, listing, and deduplication
+  - name: audit
+    description: Audit log queries and hash chain verification
+  - name: attachments
+    description: File attachment serving
+  - name: config
+    description: Configuration access
+  - name: dictated_notes
+    description: Voice dictation notes
+  - name: draft_queue
+    description: Draft bead queue
+  - name: metrics
+    description: Metrics and monitoring
+  - name: morning_brief
+    description: Morning brief generation
+  - name: patterns
+    description: Pattern (multi-stitch) management
+  - name: preview
+    description: Stitch prediction and preview
+  - name: scripts
+    description: Scheduled script management
+  - name: stitch_decompose
+    description: Stitch decomposition
+  - name: stitch_links
+    description: Stitch relationship links
+  - name: stitch_read
+    description: Stitch reading
+  - name: stitch_replay
+    description: Stitch replay
+  - name: transcription
+    description: Audio transcription
+  - name: uploads
+    description: File upload handling
+  - name: backup
+    description: Fleet.db backup management
+  - name: diff
+    description: Git diff queries
+  - name: blame
+    description: Git blame queries
+  - name: orphans
+    description: Orphaned file detection
+  - name: fix_patterns
+    description: Fix pattern suggestions
+  - name: timeline
+    description: Worker timeline queries
+  - name: screen_capture
+    description: Screen capture
+  - name: net_diff
+    description: Network diff queries
+  - name: templates
+    description: Stitch template library
+  - name: prompts
+    description: Prompt library
+
+paths:
+  /api/agent/status:
+    get:
+      tags: [agent]
+      summary: Get current agent session status
+      operationId: getAgentStatus
+      responses:
+        '200':
+          description: Agent session status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentSessionStatus'
+
+  /api/agent/spawn:
+    post:
+      tags: [agent]
+      summary: Spawn a new agent session
+      operationId: spawnAgentSession
+      responses:
+        '200':
+          description: Session spawned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SpawnSessionResponse'
+        '404':
+          description: Agent session manager not available
+        '500':
+          description: Failed to spawn session
+
+  /api/agent/disable:
+    post:
+      tags: [agent]
+      summary: Disable the agent
+      operationId: disableAgent
+      responses:
+        '200':
+          description: Agent disabled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisableAgentResponse'
+
+  /api/agent/switch:
+    post:
+      tags: [agent]
+      summary: Switch adapter mid-stream
+      operationId: switchAdapter
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SwitchRequest'
+      responses:
+        '200':
+          description: Adapter switched successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SwitchAdapterResponse'
+
+  /api/agent/turn:
+    post:
+      tags: [agent]
+      summary: Send a user turn
+      operationId: sendTurn
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TurnRequest'
+      responses:
+        '200':
+          description: Turn completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SendTurnResponse'
+
+  /api/agent/sessions:
+    get:
+      tags: [agent]
+      summary: List recent agent sessions
+      operationId: listAgentSessions
+      responses:
+        '200':
+          description: List of agent sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentSessionRow'
+
+  /api/p/{project}/beads:
+    get:
+      tags: [beads]
+      summary: List open beads for a project
+      operationId: listOpenBeads
+      parameters:
+        - name: project
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of open beads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BeadSummary'
+    post:
+      tags: [beads]
+      summary: Create a bead
+      operationId: createBead
+      parameters:
+        - name: project
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBeadRequest'
+      responses:
+        '200':
+          description: Bead created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateBeadResponse'
+
+  /api/p/{project}/beads/dedup:
+    post:
+      tags: [beads]
+      summary: Check for similar existing work
+      operationId: checkDedup
+      parameters:
+        - name: project
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DedupCheckRequest'
+      responses:
+        '200':
+          description: Dedup check results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DedupCheckResponse'
+
+  /api/vector-index/query:
+    post:
+      tags: [beads]
+      summary: Cross-project dedup query
+      operationId: queryVectorIndex
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DedupCheckRequest'
+      responses:
+        '200':
+          description: Dedup check results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DedupCheckResponse'
+
+  /api/vector-index/stats:
+    get:
+      tags: [beads]
+      summary: Get vector index statistics
+      operationId: getVectorIndexStats
+      responses:
+        '200':
+          description: Vector index statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VectorIndexStats'
+
+  /api/audit:
+    get:
+      tags: [audit]
+      summary: Query audit log
+      operationId: queryAudit
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+        - name: project
+          in: query
+          schema:
+            type: string
+        - name: kind
+          in: query
+          schema:
+            type: string
+        - name: operator
+          in: query
+          schema:
+            type: string
+        - name: pattern
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Audit log query results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditResponse'
+
+  /api/audit/verify:
+    get:
+      tags: [audit]
+      summary: Verify hash chain integrity
+      operationId: verifyHashChain
+      responses:
+        '200':
+          description: Hash chain verification result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HashChainVerifyResponse'
+
+  /api/redaction-audit:
+    get:
+      tags: [audit]
+      summary: Query redaction audit log
+      operationId: queryRedactionAudit
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+        - name: project
+          in: query
+          schema:
+            type: string
+        - name: pattern
+          in: query
+          schema:
+            type: string
+        - name: operator
+          in: query
+          schema:
+            type: string
+        - name: what_flagged
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Redaction audit log query results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RedactionAuditResponse'
+
+  /api/config:
+    get:
+      tags: [config]
+      summary: Get running daemon config
+      operationId: getConfig
+      responses:
+        '200':
+          description: Running config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigResponse'
+
+  /api/config/secrets-patterns:
+    get:
+      tags: [config]
+      summary: Get current secret scanning patterns
+      operationId: getSecretsPatterns
+      responses:
+        '200':
+          description: Secret patterns
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SecretsPatternsResponse'
+
+  /api/drafts:
+    get:
+      tags: [draft_queue]
+      summary: List all actionable drafts
+      operationId: listAllDrafts
+      responses:
+        '200':
+          description: List of drafts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DraftListResponse'
+    post:
+      tags: [draft_queue]
+      summary: Create a new draft
+      operationId: createDraft
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDraftRequest'
+      responses:
+        '200':
+          description: Draft created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateDraftResponse'
+
+  /api/drafts/{draft_id}:
+    get:
+      tags: [draft_queue]
+      summary: Get a single draft
+      operationId: getDraft
+      parameters:
+        - name: draft_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Draft details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DraftResponse'
+
+  /api/drafts/{draft_id}/approve:
+    post:
+      tags: [draft_queue]
+      summary: Approve a draft
+      operationId: approveDraft
+      parameters:
+        - name: draft_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveRequest'
+      responses:
+        '200':
+          description: Draft approved and submitted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApproveResponse'
+
+  /api/drafts/{draft_id}/edit:
+    post:
+      tags: [draft_queue]
+      summary: Edit a draft
+      operationId: editDraft
+      parameters:
+        - name: draft_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EditDraftRequest'
+      responses:
+        '200':
+          description: Draft edited successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EditResponse'
+
+  /api/drafts/{draft_id}/reject:
+    post:
+      tags: [draft_queue]
+      summary: Reject a draft
+      operationId: rejectDraft
+      parameters:
+        - name: draft_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectRequest'
+      responses:
+        '200':
+          description: Draft rejected successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RejectResponse'
+
+  /api/drafts/{draft_id}/open:
+    post:
+      tags: [draft_queue]
+      summary: Open a draft form
+      operationId: openDraft
+      parameters:
+        - name: draft_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenDraftRequest'
+      responses:
+        '200':
+          description: Draft opened successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OpenDraftResponse'
+
+  /api/drafts/{draft_id}/autosave:
+    post:
+      tags: [draft_queue]
+      summary: Autosave draft content
+      operationId: autosaveDraft
+      parameters:
+        - name: draft_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AutosaveDraftRequest'
+      responses:
+        '200':
+          description: Draft autosaved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AutosaveDraftResponse'
+
+  /api/drafts/{draft_id}/abandon:
+    post:
+      tags: [draft_queue]
+      summary: Abandon a draft
+      operationId: abandonDraft
+      parameters:
+        - name: draft_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Draft abandoned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AbandonDraftResponse'
+
+  /api/dedup/stats:
+    get:
+      tags: [draft_queue]
+      summary: Get deduplication statistics
+      operationId: getDedupStats
+      responses:
+        '200':
+          description: Deduplication statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DedupStatsResponse'
+
+  /api/dedup/false-positive:
+    post:
+      tags: [draft_queue]
+      summary: Report a false positive dedup match
+      operationId: reportFalsePositive
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportFalsePositiveRequest'
+      responses:
+        '200':
+          description: False positive reported successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportFalsePositiveResponse'
+
+  /api/agent/morning-brief/latest:
+    get:
+      tags: [morning_brief]
+      summary: Get most recent completed brief
+      operationId: getLatestMorningBrief
+      responses:
+        '200':
+          description: Latest morning brief
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MorningBriefRow'
+
+  /api/agent/morning-brief/list:
+    get:
+      tags: [morning_brief]
+      summary: List recent briefs
+      operationId: listMorningBriefs
+      responses:
+        '200':
+          description: List of recent morning briefs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MorningBriefRow'
+
+  /api/agent/morning-brief/trigger:
+    post:
+      tags: [morning_brief]
+      summary: Manually trigger a new brief
+      operationId: triggerMorningBrief
+      responses:
+        '200':
+          description: Morning brief triggered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriggerResponse'
+
+  /api/agent/morning-brief/status:
+    get:
+      tags: [morning_brief]
+      summary: Check if a brief is currently running
+      operationId: getMorningBriefStatus
+      responses:
+        '200':
+          description: Morning brief status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+
+  /api/p/{project}/beads/preview:
+    get:
+      tags: [preview]
+      summary: Preview what a bead will take
+      operationId: previewBead
+      parameters:
+        - name: project
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: title
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: description
+          in: query
+          schema:
+            type: string
+        - name: labels
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Stitch preview data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StitchPreview'
+
+  /api/p/{project}/stitch/decompose:
+    post:
+      tags: [stitch_decompose]
+      summary: Preview decomposition without creating beads
+      operationId: previewDecompose
+      parameters:
+        - name: project
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecomposePreviewRequest'
+      responses:
+        '200':
+          description: Decomposition preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DecomposePreviewResponse'
+
+  /api/p/{project}/stitch/submit:
+    post:
+      tags: [stitch_decompose]
+      summary: Submit a decomposed Stitch
+      operationId: submitStitch
+      parameters:
+        - name: project
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StitchSubmitRequest'
+      responses:
+        '200':
+          description: Stitch submitted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StitchSubmitResponse'
+
+  /api/transcription-jobs:
+    get:
+      tags: [transcription]
+      summary: List transcription jobs
+      operationId: listTranscriptionJobs
+      parameters:
+        - name: stitch_id
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of transcription jobs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TranscriptionJob'
+
+  /api/transcription-jobs/{job_id}:
+    get:
+      tags: [transcription]
+      summary: Get a single transcription job
+      operationId: getTranscriptionJob
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Job status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranscriptionJob'
+
+  /api/uploads:
+    post:
+      tags: [uploads]
+      summary: Initiate a new chunked upload
+      operationId: initUpload
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitUploadRequest'
+      responses:
+        '200':
+          description: Upload initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitUploadResponse'
+
+  /api/uploads/{upload_id}:
+    patch:
+      tags: [uploads]
+      summary: Upload a chunk
+      operationId: uploadChunk
+      parameters:
+        - name: upload_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Chunk uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadProgressResponse'
+    get:
+      tags: [uploads]
+      summary: Get upload progress
+      operationId: getUploadProgress
+      parameters:
+        - name: upload_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Upload progress
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadProgressResponse'
+    delete:
+      tags: [uploads]
+      summary: Cancel an upload
+      operationId: cancelUpload
+      parameters:
+        - name: upload_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Upload cancelled successfully
+
+  /api/uploads/{upload_id}/complete:
+    post:
+      tags: [uploads]
+      summary: Complete upload and verify checksum
+      operationId: completeUpload
+      parameters:
+        - name: upload_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Upload completed successfully
+
+  /api/p/{project}/dictated-notes:
+    get:
+      tags: [dictated_notes]
+      summary: List notes for a project
+      operationId: listDictatedNotes
+      parameters:
+        - name: project
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of dictated notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DictatedNote'
+    post:
+      tags: [dictated_notes]
+      summary: Create a new dictated note
+      operationId: createDictatedNote
+      parameters:
+        - name: project
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNoteRequest'
+      responses:
+        '201':
+          description: Dictated note created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateNoteResponse'
+
+  /api/dictated-notes/{stitch_id}:
+    get:
+      tags: [dictated_notes]
+      summary: Get a single dictated note
+      operationId: getDictatedNote
+      parameters:
+        - name: stitch_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Dictated note details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DictatedNote'
+    patch:
+      tags: [dictated_notes]
+      summary: Update a dictated note
+      operationId: updateDictatedNote
+      parameters:
+        - name: stitch_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateNoteRequest'
+      responses:
+        '200':
+          description: Note updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DictatedNote'
+
+  /api/dictated-notes/{stitch_id}/redact:
+    post:
+      tags: [dictated_notes]
+      summary: Redact words from a note
+      operationId: redactWords
+      parameters:
+        - name: stitch_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RedactWordsRequest'
+      responses:
+        '200':
+          description: Words redacted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DictatedNote'
+
+  /api/dictated-notes/{stitch_id}/audio:
+    get:
+      tags: [dictated_notes]
+      summary: Serve the audio file
+      operationId: getDictatedNoteAudio
+      parameters:
+        - name: stitch_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Audio file content
+          content:
+            audio/*:
+              schema:
+                type: string
+                format: binary
+
+  /api/dictated-notes/{stitch_id}/synthesize:
+    post:
+      tags: [dictated_notes]
+      summary: Synthesize title + body from transcript
+      operationId: synthesizeDraft
+      parameters:
+        - name: stitch_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SynthesizeRequest'
+      responses:
+        '200':
+          description: Synthesized title and body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SynthesizeResponse'
+
+  /api/dictated-notes/{stitch_id}/draft:
+    post:
+      tags: [dictated_notes]
+      summary: Create a Stitch draft from a dictated note
+      operationId: createDraftFromNote
+      parameters:
+        - name: stitch_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SynthesizeRequest'
+      responses:
+        '200':
+          description: Draft created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateDraftResponse'
+
+  /api/attachments/{attachment_type}/{id}/{filename}:
+    get:
+      tags: [attachments]
+      summary: Serve an attachment file
+      operationId: serveAttachment
+      parameters:
+        - name: attachment_type
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [bead, stitch]
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Attachment file content
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+  /api/openapi.json:
+    get:
+      tags: [openapi]
+      summary: Get OpenAPI spec as JSON
+      operationId: getOpenApiJson
+      responses:
+        '200':
+          description: OpenAPI spec
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/openapi.yaml:
+    get:
+      tags: [openapi]
+      summary: Get OpenAPI spec as YAML
+      operationId: getOpenApiYaml
+      responses:
+        '200':
+          description: OpenAPI spec
+          content:
+            application/vnd.oai.openapi:
+              schema:
+                type: string
+
+components:
+  schemas:
+    AgentSessionStatus:
+      type: object
+      properties:
+        active:
+          type: boolean
+        enabled:
+          type: boolean
+        session_id:
+          type: string
+        adapter:
+          type: string
+        model:
+          type: string
+        stitch_id:
+          type: string
+        cost_usd:
+          type: number
+        input_tokens:
+          type: integer
+        output_tokens:
+          type: integer
+        turn_count:
+          type: integer
+        created_at:
+          type: string
+        last_activity_at:
+          type: string
+        age_secs:
+          type: integer
+
+    SpawnSessionResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        session_db_id:
+          type: string
+
+    DisableAgentResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+
+    SwitchAdapterResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        session_db_id:
+          type: string
+        message:
+          type: string
+
+    SendTurnResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+
+    SwitchRequest:
+      type: object
+      properties:
+        adapter:
+          type: string
+        model:
+          type: string
+        anthropic_api_key:
+          type: string
+        zai_base_url:
+          type: string
+        zai_api_key:
+          type: string
+
+    TurnRequest:
+      type: object
+      properties:
+        prompt:
+          type: string
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TurnAttachment'
+
+    TurnAttachment:
+      type: object
+      properties:
+        name:
+          type: string
+        content:
+          type: string
+          format: byte
+        mime:
+          type: string
+
+    AgentSessionRow:
+      type: object
+      properties:
+        id:
+          type: string
+        adapter_session_id:
+          type: string
+        adapter:
+          type: string
+        model:
+          type: string
+        status:
+          type: string
+        stitch_id:
+          type: string
+        cost_usd:
+          type: number
+        input_tokens:
+          type: integer
+        output_tokens:
+          type: integer
+        turn_count:
+          type: integer
+        has_started_session:
+          type: boolean
+        created_at:
+          type: string
+        last_activity_at:
+          type: string
+        archived_at:
+          type: string
+        archived_reason:
+          type: string
+
+    BeadSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        issue_type:
+          type: string
+        priority:
+          type: integer
+        dependencies:
+          type: array
+          items:
+            type: string
+
+    CreateBeadRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        issue_type:
+          type: string
+        priority:
+          type: integer
+        dependencies:
+          type: array
+          items:
+            type: string
+        assignee:
+          type: string
+        labels:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+        stitch_id:
+          type: string
+        force_create:
+          type: boolean
+        parent_bead_id:
+          type: string
+
+    CreateBeadResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        project:
+          type: string
+        source:
+          type: string
+        actor:
+          type: string
+        stitch_id:
+          type: string
+
+    DedupCheckRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+
+    DedupCheckResponse:
+      type: object
+      properties:
+        matches:
+          type: array
+          items:
+            $ref: '#/components/schemas/DedupMatchRef'
+        threshold:
+          type: number
+        message:
+          type: string
+
+    DedupMatchRef:
+      type: object
+      properties:
+        id:
+          type: string
+        project:
+          type: string
+        title:
+          type: string
+        kind:
+          type: string
+        similarity:
+          type: number
+
+    VectorIndexStats:
+      type: object
+      properties:
+        num_entries:
+          type: integer
+        rebuild_progress_current:
+          type: integer
+        rebuild_progress_total:
+          type: integer
+        is_rebuilding:
+          type: boolean
+        model_name:
+          type: string
+        model_version:
+          type: string
+        false_positive_rate:
+          type: number
+        false_positive_rate_30d:
+          type: number
+
+    AuditQuery:
+      type: object
+      properties:
+        limit:
+          type: integer
+        offset:
+          type: integer
+        project:
+          type: string
+        kind:
+          type: string
+        operator:
+          type: string
+        pattern:
+          type: string
+
+    AuditResponse:
+      type: object
+      properties:
+        audit_rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditRow'
+        total_count:
+          type: integer
+
+    AuditRow:
+      type: object
+      properties:
+        id:
+          type: string
+        ts:
+          type: string
+        actor:
+          type: string
+        kind:
+          type: string
+        target:
+          type: string
+        project:
+          type: string
+        args:
+          type: object
+        result:
+          type: string
+        error:
+          type: string
+        schema_version:
+          type: string
+
+    HashChainVerifyResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        message:
+          type: string
+        row_count:
+          type: integer
+
+    RedactionAuditQuery:
+      type: object
+      properties:
+        limit:
+          type: integer
+        offset:
+          type: integer
+        project:
+          type: string
+        pattern:
+          type: string
+        operator:
+          type: string
+        what_flagged:
+          type: string
+
+    RedactionAuditResponse:
+      type: object
+      properties:
+        audit_rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/RedactionAuditRow'
+        total_count:
+          type: integer
+
+    RedactionAuditRow:
+      type: object
+      properties:
+        id:
+          type: string
+        ts:
+          type: string
+        what_flagged:
+          type: string
+        pattern_name:
+          type: string
+        action:
+          type: string
+        operator:
+          type: string
+        source_ref:
+          type: string
+        project:
+          type: string
+        metadata:
+          type: object
+        created_at:
+          type: string
+
+    ConfigResponse:
+      type: object
+      properties:
+        schema_version:
+          type: string
+        config:
+          $ref: '#/components/schemas/RunningConfig'
+
+    RunningConfig:
+      type: object
+      properties:
+        server_bind_addr:
+          type: string
+        agent_adapter:
+          type: string
+        agent_model:
+          type: string
+        projects_file:
+          type: string
+        ui_theme:
+          type: string
+        metrics_enabled:
+          type: boolean
+        metrics_port:
+          type: integer
+        voice_hotkey:
+          type: string
+        agent_extensions_skills:
+          type: string
+        agent_extensions_scripts:
+          type: string
+        agent_extensions_notes:
+          type: string
+        agent_extensions_prompts:
+          type: string
+        audit_retention_days:
+          type: integer
+        audit_hash_chain:
+          type: boolean
+        reflection_enabled:
+          type: boolean
+        reflection_detection_threshold:
+          type: number
+        reflection_auto_archive_after_days:
+          type: integer
+        backup_endpoint:
+          type: string
+        backup_bucket:
+          type: string
+        backup_prefix:
+          type: string
+        backup_schedule:
+          type: string
+        backup_retention_days:
+          type: integer
+        backup_encryption:
+          type: boolean
+        pricing_file:
+          type: string
+        ui_archive_after_days:
+          type: integer
+
+    SecretsPatternsResponse:
+      type: object
+      properties:
+        schema_version:
+          type: string
+        patterns:
+          type: array
+          items:
+            $ref: '#/components/schemas/SecretPattern'
+
+    SecretPattern:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        severity:
+          type: string
+        patterns:
+          type: array
+          items:
+            type: string
+
+    DraftResponse:
+      type: object
+      properties:
+        draft:
+          $ref: '#/components/schemas/DraftRow'
+
+    DraftListResponse:
+      type: object
+      properties:
+        drafts:
+          type: array
+          items:
+            $ref: '#/components/schemas/DraftRow'
+        count:
+          type: integer
+
+    CreateDraftRequest:
+      type: object
+      properties:
+        project:
+          type: string
+        title:
+          type: string
+        kind:
+          type: string
+        description:
+          type: string
+        has_acceptance_criteria:
+          type: boolean
+        priority:
+          type: integer
+        labels:
+          type: array
+          items:
+            type: string
+        source:
+          type: string
+        agent_session_id:
+          type: string
+        turn_id:
+          type: string
+        force_create:
+          type: boolean
+
+    CreateDraftResponse:
+      type: object
+      properties:
+        draft_id:
+          type: string
+        status:
+          type: string
+
+    ApproveRequest:
+      type: object
+      properties:
+        override_:
+          type: object
+        force_create:
+          type: boolean
+
+    ApproveResponse:
+      type: object
+      properties:
+        draft_id:
+          type: string
+        stitch_id:
+          type: string
+        created_beads:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreatedBead'
+        graph:
+          $ref: '#/components/schemas/BeadGraph'
+
+    EditDraftRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        kind:
+          type: string
+        priority:
+          type: integer
+        labels:
+          type: array
+          items:
+            type: string
+
+    EditResponse:
+      type: object
+      properties:
+        draft_id:
+          type: string
+        version:
+          type: integer
+        status:
+          type: string
+
+    RejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+
+    RejectResponse:
+      type: object
+      properties:
+        draft_id:
+          type: string
+        status:
+          type: string
+        reason:
+          type: string
+
+    ReportFalsePositiveRequest:
+      type: object
+      properties:
+        match_id:
+          type: string
+
+    ReportFalsePositiveResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        false_positive_rate:
+          type: number
+
+    DedupStatsResponse:
+      type: object
+      properties:
+        total_checks:
+          type: integer
+        duplicates_found:
+          type: integer
+        false_positives_reported:
+          type: integer
+        false_positive_rate_cumulative:
+          type: number
+        false_positive_rate_30d:
+          type: number
+        threshold:
+          type: number
+        indexed_items:
+          type: integer
+
+    OpenDraftRequest:
+      type: object
+      properties:
+        project:
+          type: string
+
+    OpenDraftResponse:
+      type: object
+      properties:
+        draft_id:
+          type: string
+        status:
+          type: string
+        opened_at:
+          type: string
+
+    AutosaveDraftRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        kind:
+          type: string
+        priority:
+          type: integer
+        labels:
+          type: array
+          items:
+            type: string
+
+    AutosaveDraftResponse:
+      type: object
+      properties:
+        draft_id:
+          type: string
+        last_autosave_at:
+          type: string
+
+    AbandonDraftResponse:
+      type: object
+      properties:
+        draft_id:
+          type: string
+        status:
+          type: string
+        abandoned_at:
+          type: string
+
+    MorningBriefRow:
+      type: object
+      properties:
+        id:
+          type: string
+        generated_at:
+          type: string
+        window_from:
+          type: string
+        window_to:
+          type: string
+        headline:
+          type: string
+        markdown_content:
+          type: string
+        draft_ids:
+          type: array
+          items:
+            type: string
+        session_id:
+          type: string
+        status:
+          type: string
+        error:
+          type: string
+
+    TriggerResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        brief_id:
+          type: string
+        message:
+          type: string
+
+    StatusResponse:
+      type: object
+      properties:
+        running:
+          type: boolean
+
+    PreviewRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        labels:
+          type: string
+
+    StitchPreview:
+      type: object
+      properties:
+        schema_version:
+          type: string
+        prediction:
+          $ref: '#/components/schemas/PredictionData'
+        risk_patterns:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiskPatternMatch'
+        file_conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileConflict'
+        similar_stitches:
+          type: array
+          items:
+            $ref: '#/components/schemas/SimilarStitchRef'
+
+    PredictionData:
+      type: object
+      properties:
+        cost:
+          $ref: '#/components/schemas/PercentileEstimate'
+        duration:
+          $ref: '#/components/schemas/PercentileEstimate'
+        likely_adapter_model:
+          type: string
+        similar_count:
+          type: integer
+        data_range:
+          $ref: '#/components/schemas/DateRange'
+
+    PercentileEstimate:
+      type: object
+      properties:
+        p50:
+          type: number
+        p90:
+          type: number
+        count:
+          type: integer
+
+    DateRange:
+      type: object
+      properties:
+        start:
+          type: string
+        end:
+          type: string
+
+    RiskPatternMatch:
+      type: object
+      properties:
+        pattern:
+          $ref: '#/components/schemas/RiskPatternInfo'
+        confidence:
+          type: number
+        matched_keywords:
+          type: array
+          items:
+            type: string
+        matched_labels:
+          type: array
+          items:
+            type: string
+
+    RiskPatternInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        fix_recommendation:
+          type: string
+        severity:
+          type: string
+        category:
+          type: string
+
+    FileConflict:
+      type: object
+      properties:
+        bead_id:
+          type: string
+        title:
+          type: string
+        project:
+          type: string
+        overlapping_files:
+          type: array
+          items:
+            type: string
+
+    SimilarStitchRef:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        similarity:
+          type: number
+
+    DecomposePreviewRequest:
+      type: object
+      properties:
+        kind:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        has_acceptance_criteria:
+          type: boolean
+        priority:
+          type: integer
+        labels:
+          type: array
+          items:
+            type: string
+
+    DecomposePreviewResponse:
+      type: object
+      properties:
+        graph:
+          $ref: '#/components/schemas/BeadGraph'
+        rule_name:
+          type: string
+        bead_count:
+          type: integer
+        dedup_matches:
+          type: array
+          items:
+            $ref: '#/components/schemas/DedupMatchRef'
+        preview:
+          $ref: '#/components/schemas/StitchPreviewData'
+
+    StitchPreviewData:
+      type: object
+      properties:
+        schema_version:
+          type: string
+        prediction:
+          $ref: '#/components/schemas/PredictionData'
+        risk_patterns:
+          type: array
+          items:
+            $ref: '#/components/schemas/RiskPatternMatch'
+        file_conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileConflict'
+        similar_stitches:
+          type: array
+          items:
+            $ref: '#/components/schemas/SimilarStitchRef'
+
+    StitchSubmitRequest:
+      type: object
+      properties:
+        kind:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        has_acceptance_criteria:
+          type: boolean
+        priority:
+          type: integer
+        labels:
+          type: array
+          items:
+            type: string
+        override_:
+          type: object
+        source:
+          type: string
+        stitch_id:
+          type: string
+        force_create:
+          type: boolean
+
+    StitchSubmitResponse:
+      type: object
+      properties:
+        stitch_id:
+          type: string
+        graph:
+          $ref: '#/components/schemas/BeadGraph'
+        created_beads:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreatedBead'
+        errors:
+          type: array
+          items:
+            type: string
+        rolled_back:
+          type: boolean
+
+    CreatedBead:
+      type: object
+      properties:
+        key:
+          type: string
+        id:
+          type: string
+        title:
+          type: string
+        issue_type:
+          type: string
+
+    BeadGraph:
+      type: object
+      properties:
+        rule_name:
+          type: string
+        beads:
+          type: array
+          items:
+            type: object
+
+    TranscriptionJob:
+      type: object
+      properties:
+        id:
+          type: string
+        stitch_id:
+          type: string
+        audio_path:
+          type: string
+        status:
+          $ref: '#/components/schemas/JobStatus'
+        attempts:
+          type: integer
+        created_at:
+          type: string
+        started_at:
+          type: string
+        completed_at:
+          type: string
+        error_message:
+          type: string
+
+    JobStatus:
+      type: string
+      enum:
+        - Pending
+        - Running
+        - Completed
+        - Failed
+
+    InitUploadRequest:
+      type: object
+      properties:
+        filename:
+          type: string
+        total_size:
+          type: integer
+          format: int64
+        checksum:
+          type: string
+        attachment_type:
+          type: string
+        resource_id:
+          type: string
+
+    InitUploadResponse:
+      type: object
+      properties:
+        upload_id:
+          type: string
+        upload_url:
+          type: string
+        chunk_size:
+          type: integer
+          format: int64
+        expires_at:
+          type: string
+
+    UploadProgressResponse:
+      type: object
+      properties:
+        upload_id:
+          type: string
+        received_size:
+          type: integer
+          format: int64
+        total_size:
+          type: integer
+          format: int64
+        offset:
+          type: integer
+          format: int64
+
+    UploadMetadata:
+      type: object
+      properties:
+        upload_id:
+          type: string
+        filename:
+          type: string
+        total_size:
+          type: integer
+          format: int64
+        received_size:
+          type: integer
+          format: int64
+        checksum:
+          type: string
+        attachment_type:
+          type: string
+        resource_id:
+          type: string
+        created_at:
+          type: string
+        updated_at:
+          type: string
+
+    DictatedNote:
+      type: object
+      properties:
+        stitch_id:
+          type: string
+        recorded_at:
+          type: string
+        transcribed_at:
+          type: string
+        audio_filename:
+          type: string
+        transcript:
+          type: string
+        transcript_words:
+          type: array
+          items:
+            $ref: '#/components/schemas/TranscriptWord'
+        redacted_words:
+          type: array
+          items:
+            $ref: '#/components/schemas/RedactedWord'
+        duration_secs:
+          type: number
+        language:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        transcription_status:
+          $ref: '#/components/schemas/TranscriptionStatus'
+        synthesis_result:
+          type: string
+        draft_id:
+          type: string
+
+    CreateNoteRequest:
+      type: object
+      properties:
+        project:
+          type: string
+        audio_data:
+          type: string
+          format: byte
+        audio_filename:
+          type: string
+        audio_content_type:
+          type: string
+        transcript:
+          type: string
+        transcript_words:
+          type: array
+          items:
+            $ref: '#/components/schemas/TranscriptWord'
+        duration_secs:
+          type: number
+        language:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    CreateNoteResponse:
+      type: object
+      properties:
+        stitch_id:
+          type: string
+        project:
+          type: string
+        title:
+          type: string
+        recorded_at:
+          type: string
+        transcribed_at:
+          type: string
+        transcription_status:
+          $ref: '#/components/schemas/TranscriptionStatus'
+
+    TranscriptWord:
+      type: object
+      properties:
+        word:
+          type: string
+        start:
+          type: number
+        end:
+          type: number
+
+    RedactedWord:
+      type: object
+      properties:
+        word_index:
+          type: integer
+        original_word:
+          type: string
+        start:
+          type: number
+        end:
+          type: number
+        redacted_at:
+          type: string
+
+    TranscriptionStatus:
+      type: string
+      enum:
+        - Pending
+        - Completed
+        - Failed
+
+    UpdateNoteRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        transcript:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+
+    RedactWordsRequest:
+      type: object
+      properties:
+        word_indices:
+          type: array
+          items:
+            type: integer
+
+    SynthesizeRequest:
+      type: object
+      properties:
+        kind:
+          type: string
+
+    SynthesizeResponse:
+      type: object
+      properties:
+        title:
+          type: string
+        body:
+          type: string
+        kind:
+          type: string
+        confidence:
+          type: string
+
+    DraftRow:
+      type: object
+      properties:
+        id:
+          type: string
+        project:
+          type: string
+        title:
+          type: string
+        kind:
+          type: string
+        description:
+          type: string
+        has_acceptance_criteria:
+          type: boolean
+        priority:
+          type: integer
+        labels:
+          type: array
+          items:
+            type: string
+        created_by:
+          type: string
+        created_at:
+          type: string
+        source:
+          type: string
+        agent_session_id:
+          type: string
+        turn_id:
+          type: string
+        status:
+          type: string
+        version:
+          type: integer
+        original_json:
+          type: string
+        resolved_by:
+          type: string
+        resolved_at:
+          type: string
+        rejection_reason:
+          type: string
+        stitch_id:
+          type: string
+        preview_json:
+          type: string
+        opened_by:
+          type: string
+        opened_at:
+          type: string
+        last_autosave_at:
+          type: string
+        abandoned_at:
+          type: string

@@ -21,7 +21,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 /// Current schema version
-pub const SCHEMA_VERSION: &str = "1.28.0";
+pub const SCHEMA_VERSION: &str = "1.29.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -1083,6 +1083,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
             migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
+            migrate!(conn, migrate_v128_to_v129, "1.28.0", "1.29.0", "Add workspace_from/to to stitch_links")?;
         }
         "1.1.0" => {
             migrate!(conn, migrate_v11_to_v12, "1.1.0", "1.2.0", "Add Pattern service tables")?;
@@ -1112,6 +1113,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
             migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
+            migrate!(conn, migrate_v128_to_v129, "1.28.0", "1.29.0", "Add workspace_from/to to stitch_links")?;
         }
         "1.2.0" => {
             migrate!(conn, migrate_v12_to_v13, "1.2.0", "1.3.0", "Add dictated_notes metadata table")?;
@@ -1140,6 +1142,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v125_to_v126, "1.25.0", "1.26.0", "Add stitch_percentile_index table")?;
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
             migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
+            migrate!(conn, migrate_v128_to_v129, "1.28.0", "1.29.0", "Add workspace_from/to to stitch_links")?;
         }
         "1.3.0" => {
             migrate!(conn, migrate_v13_to_v14, "1.3.0", "1.4.0", "Add word-level timestamps to dictated_notes")?;
@@ -1508,10 +1511,18 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
         "1.26.0" => {
             migrate!(conn, migrate_v126_to_v127, "1.26.0", "1.27.0", "Add fix_patterns table")?;
             migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
+            migrate!(conn, migrate_v128_to_v129, "1.28.0", "1.29.0", "Add workspace_from/to to stitch_links")?;
+        }
+        "1.27.0" => {
+            migrate!(conn, migrate_v127_to_v128, "1.27.0", "1.28.0", "Add redaction_audit table")?;
+            migrate!(conn, migrate_v128_to_v129, "1.28.0", "1.29.0", "Add workspace_from/to to stitch_links")?;
+        }
+        "1.28.0" => {
+            migrate!(conn, migrate_v128_to_v129, "1.28.0", "1.29.0", "Add workspace_from/to to stitch_links")?;
         }
         _ => {
             return Err(anyhow::anyhow!(
-                "Unsupported schema version: {}. Expected 0.1.0–1.26.0",
+                "Unsupported schema version: {}. Expected 0.1.0–1.28.0",
                 from_version
             ));
         }
@@ -1623,6 +1634,8 @@ pub fn migrate_v01_to_v11(conn: &mut Connection) -> Result<()> {
             from_stitch TEXT NOT NULL REFERENCES stitches(id) ON DELETE CASCADE,
             to_stitch TEXT NOT NULL REFERENCES stitches(id) ON DELETE CASCADE,
             kind TEXT NOT NULL CHECK(kind IN ('spawned', 'references')),
+            workspace_from TEXT NOT NULL DEFAULT '',
+            workspace_to TEXT NOT NULL DEFAULT '',
             PRIMARY KEY (from_stitch, to_stitch, kind)
         )
         "#,
@@ -2938,6 +2951,33 @@ pub fn migrate_v127_to_v128(conn: &mut Connection) -> Result<()> {
 
     info!("redaction_audit table created successfully");
     update_schema_version(conn, "1.28.0")?;
+    Ok(())
+}
+
+/// Migration 1.28.0 → 1.29.0: Add workspace_from/to to stitch_links
+///
+/// Extends stitch_links with workspace tracking for cross-workspace blocker resolution.
+/// When a parent stitch spawns a child stitch in another workspace, the link carries
+/// both source and target workspace identifiers. The resolver uses these to compute
+/// cross-workspace blocker chains (per §4.2).
+pub fn migrate_v128_to_v129(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.28.0 → 1.29.0: Adding workspace_from/to to stitch_links");
+
+    add_column_if_not_exists(
+        conn,
+        "stitch_links",
+        "workspace_from",
+        "TEXT NOT NULL DEFAULT ''",
+    )?;
+
+    add_column_if_not_exists(
+        conn,
+        "stitch_links",
+        "workspace_to",
+        "TEXT NOT NULL DEFAULT ''",
+    )?;
+
+    update_schema_version(conn, "1.29.0")?;
     Ok(())
 }
 
@@ -5070,6 +5110,98 @@ pub fn start_draft_cleanup_scheduler(
     });
 }
 
+// ---------------------------------------------------------------------------
+// §18.5 Redaction audit cleanup scheduler
+// ---------------------------------------------------------------------------
+
+/// Clean up old redaction audit entries based on retention policy.
+///
+/// Should be called periodically (e.g., daily) to remove old audit entries.
+pub fn cleanup_old_redaction_audit<F>(get_retention_days: F) -> Result<usize>
+where
+    F: FnOnce() -> i64,
+{
+    let path = db_path();
+    let conn = Connection::open(&path)?;
+    let retention_days = get_retention_days();
+    let cutoff = Utc::now() - chrono::Duration::days(retention_days);
+
+    let deleted = conn.execute(
+        "DELETE FROM redaction_audit WHERE created_at < ?1",
+        params![cutoff.to_rfc3339()],
+    )?;
+
+    if deleted > 0 {
+        info!(
+            "Cleaned up {} redaction audit entries older than {} days",
+            deleted, retention_days
+        );
+    }
+
+    Ok(deleted)
+}
+
+/// Start the background scheduler for cleaning up old redaction audit entries.
+///
+/// Runs once daily at 3 AM local time and removes audit entries
+/// older than the configured retention period (default: 30 days).
+///
+/// Follows the same `tokio::select!` pattern as the draft cleanup and
+/// morning-brief schedulers.
+pub fn start_redaction_audit_cleanup_scheduler<F>(
+    mut shutdown: tokio::sync::broadcast::Receiver<crate::shutdown::ShutdownPhase>,
+    get_retention_days: F,
+) where
+    F: Fn() -> i64 + Send + 'static,
+{
+    tokio::spawn(async move {
+        let mut last_cleanup_date: Option<chrono::NaiveDate> = None;
+        const CLEANUP_HOUR: u32 = 3; // 3 AM
+
+        loop {
+            tokio::select! {
+                _ = shutdown.recv() => {
+                    info!("Redaction audit cleanup scheduler shutting down");
+                    break;
+                }
+                _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
+                    let now = Utc::now();
+                    let current_hour = now.time().hour();
+                    let today = now.date_naive();
+
+                    let should_run = current_hour == CLEANUP_HOUR
+                        && last_cleanup_date.as_ref() != Some(&today);
+
+                    if should_run {
+                        last_cleanup_date = Some(today);
+                        info!("Redaction audit cleanup scheduler: triggering daily cleanup for {}", today);
+
+                        // Run the synchronous cleanup in a blocking task
+                        let retention_days = get_retention_days();
+                        match tokio::task::spawn_blocking(move || {
+                            cleanup_old_redaction_audit(|| retention_days)
+                        }).await {
+                            Ok(Ok(count)) => {
+                                if count > 0 {
+                                    info!("Redaction audit cleanup completed: {} entries removed", count);
+                                } else {
+                                    info!("Redaction audit cleanup completed: no old entries to remove");
+                                }
+                            }
+                            Ok(Err(e)) => {
+                                warn!("Redaction audit cleanup failed: {}", e);
+                            }
+                            Err(e) => {
+                                warn!("Redaction audit cleanup task failed to join: {}", e);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
 /// Query operator stitch messages for reflection detection.
 ///
 /// Returns messages from operator-kind Stitches within the time window,
@@ -5438,10 +5570,10 @@ mod tests {
 
         conn.execute(
             r#"
-            INSERT INTO stitch_links (from_stitch, to_stitch, kind)
-            VALUES (?, ?, ?)
+            INSERT INTO stitch_links (from_stitch, to_stitch, kind, workspace_from, workspace_to)
+            VALUES (?, ?, ?, ?, ?)
             "#,
-            params![stitch_id, stitch_id_2, "spawned"],
+            params![stitch_id, stitch_id_2, "spawned", "", ""],
         )?;
 
         Ok(())
@@ -5560,20 +5692,20 @@ mod tests {
         for kind in ["spawned", "references"] {
             conn.execute(
                 r#"
-                INSERT INTO stitch_links (from_stitch, to_stitch, kind)
-                VALUES (?, ?, ?)
+                INSERT INTO stitch_links (from_stitch, to_stitch, kind, workspace_from, workspace_to)
+                VALUES (?, ?, ?, ?, ?)
                 "#,
-                params![stitch_id_1, stitch_id_2, kind],
+                params![stitch_id_1, stitch_id_2, kind, "", ""],
             )?;
         }
 
         // Invalid link kind should fail
         let result = conn.execute(
             r#"
-            INSERT INTO stitch_links (from_stitch, to_stitch, kind)
-            VALUES (?, ?, ?)
+            INSERT INTO stitch_links (from_stitch, to_stitch, kind, workspace_from, workspace_to)
+            VALUES (?, ?, ?, ?, ?)
             "#,
-            params![stitch_id_1, stitch_id_2, "invalid_kind"],
+            params![stitch_id_1, stitch_id_2, "invalid_kind", "", ""],
         );
         assert!(
             result.is_err(),

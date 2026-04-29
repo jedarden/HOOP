@@ -6,6 +6,7 @@
 
 pub mod adb_dictate;
 pub mod agent_adapter;
+pub mod api_blockers;
 pub mod agent_context;
 pub mod agent_session;
 pub mod ansi_strip;
@@ -21,6 +22,7 @@ pub mod api_dictated_notes;
 pub mod api_draft_queue;
 pub mod api_metrics;
 pub mod api_morning_brief;
+pub mod openapi;
 pub mod api_patterns;
 pub mod api_preview;
 pub mod api_scripts;
@@ -1191,6 +1193,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_stitch_read::router())
         .merge(api_stitch_replay::router())
         .merge(api_stitch_links::router())
+        .merge(api_blockers::router())
         .merge(api_patterns::router())
         .merge(api_diff::router())
         .merge(api_blame::router())
@@ -1210,6 +1213,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_metrics::router())
         .merge(api_config::router())
         .merge(api_scripts::router())
+        .merge(crate::openapi::router())
         .nest_service("/assets", AssetsHandler::router())
         .fallback_service(AssetsHandler::router())
         .layer(TraceLayer::new_for_http())
