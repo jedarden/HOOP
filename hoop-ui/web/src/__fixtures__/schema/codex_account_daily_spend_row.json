@@ -1,0 +1,9 @@
+{
+  "account_id": "default",
+  "cost_usd": 1.5,
+  "date": "2024-01-01",
+  "input_tokens": 1000,
+  "output_tokens": 500,
+  "plan_tier": "tier_1",
+  "updated_at": "2024-01-01T00:00:00Z"
+}

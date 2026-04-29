@@ -1,0 +1,16 @@
+{
+  "account_id": "account-456",
+  "adapter": "claude",
+  "id": "account-123",
+  "limits": {},
+  "schema_version": "1.0.0",
+  "updated_at": "2024-01-01T00:00:00Z",
+  "usage": {
+    "prompts_5h": 0,
+    "prompts_7d": 0,
+    "requests_today": 0,
+    "spend_usd_today": 0.0,
+    "tokens_5h": 0,
+    "tokens_7d": 0
+  }
+}

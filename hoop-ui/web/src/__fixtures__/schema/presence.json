@@ -1,0 +1,7 @@
+{
+  "last_seen": "2024-01-01T00:00:00Z",
+  "operator_id": "tailscale:user@example.com",
+  "project": "test-project",
+  "stitch_id": "01234567-89ab-cdef-0123-456789abcdef",
+  "visibility": "visible"
+}

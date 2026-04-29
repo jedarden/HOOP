@@ -1,0 +1,6 @@
+{
+  "adapter": "claude",
+  "bead": "bd-abc123",
+  "model": "opus",
+  "state": "executing"
+}

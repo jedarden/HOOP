@@ -1,0 +1,6 @@
+{
+  "action": "warn",
+  "patterns": [
+    "anthropic_api_key"
+  ]
+}

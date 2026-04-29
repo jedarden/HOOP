@@ -1,0 +1,15 @@
+{
+  "adapter": "claude",
+  "classification": "fleet",
+  "cost_usd": 0.05,
+  "date": "2024-01-01",
+  "model": "opus",
+  "project": "test-project",
+  "strand": null,
+  "usage": {
+    "cache_read_tokens": 100,
+    "cache_write_tokens": 50,
+    "input_tokens": 1000,
+    "output_tokens": 500
+  }
+}

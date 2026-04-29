@@ -1,0 +1,6 @@
+{
+  "cache_read_tokens": 10,
+  "cache_write_tokens": 5,
+  "input_tokens": 100,
+  "output_tokens": 50
+}

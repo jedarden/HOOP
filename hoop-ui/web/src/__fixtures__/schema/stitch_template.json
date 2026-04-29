@@ -1,0 +1,7 @@
+{
+  "body": "Test body with {{test_field}}",
+  "description": "Test template",
+  "fields": [],
+  "name": "test-template",
+  "scope": "global"
+}

@@ -1,0 +1,5 @@
+{
+  "hotkey": "Ctrl+Shift+V",
+  "max_recording_seconds": 300,
+  "whisper_model_path": "/path/to/model.bin"
+}

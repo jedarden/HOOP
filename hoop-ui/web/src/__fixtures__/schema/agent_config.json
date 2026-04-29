@@ -1,0 +1,9 @@
+{
+  "adapter": "claude",
+  "content_seen_grace_secs": 600,
+  "heartbeat_transition_threshold_secs": 300,
+  "idle_timeout_secs": 180,
+  "max_runtime_secs": 3600,
+  "model": "opus",
+  "retry_threshold": 3
+}

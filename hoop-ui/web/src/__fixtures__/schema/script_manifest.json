@@ -1,0 +1,7 @@
+{
+  "description": "Test script",
+  "name": "test-script",
+  "overlap_policy": "skip",
+  "scope": "global",
+  "timeout_secs": 300
+}

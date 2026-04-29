@@ -1,0 +1,26 @@
+{
+  "active_claims": [],
+  "backup_timestamps": {
+    "last_size_bytes": 0,
+    "last_success_iso": null,
+    "last_success_unix": 0
+  },
+  "bind_addr": "127.0.0.1:8080",
+  "config_hash": "abc123",
+  "fleet_db_path": "/tmp/fleet.db",
+  "fleet_db_size_bytes": 1024,
+  "fleet_db_wal_size_bytes": 512,
+  "open_stitches": 5,
+  "projects": [],
+  "schema_version": "1.0.0",
+  "session_alias_table": [],
+  "total_beads": 100,
+  "uptime_secs": 3600,
+  "version": {
+    "daemon": "1.0.0",
+    "schema": "1.0.0"
+  },
+  "worker_pids": [],
+  "workers": [],
+  "ws_clients": []
+}

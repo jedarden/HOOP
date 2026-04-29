@@ -1,0 +1,8 @@
+{
+  "bead_id": "hoop-ttb.1",
+  "linked_at": "2024-01-01T00:00:00Z",
+  "relationship": "created-here",
+  "schema_version": "1.0.0",
+  "stitch_id": "01234567-89ab-cdef-0123-456789abcdef",
+  "workspace": "/home/coding/project"
+}

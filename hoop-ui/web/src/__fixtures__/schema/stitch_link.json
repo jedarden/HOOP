@@ -1,0 +1,9 @@
+{
+  "created_at": "2024-01-01T00:00:00Z",
+  "from_stitch": "01234567-89ab-cdef-0123-456789abcdef",
+  "kind": "spawned",
+  "schema_version": "1.0.0",
+  "to_stitch": "01234567-89ab-cdef-0123-456789abcdef",
+  "workspace_from": "/home/coding/project1",
+  "workspace_to": "/home/coding/project2"
+}

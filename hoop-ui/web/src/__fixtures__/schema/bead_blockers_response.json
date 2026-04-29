@@ -1,0 +1,13 @@
+{
+  "bead_id": "hoop-ttb.1",
+  "blockers": [
+    {
+      "bead_id": "hoop-ttb.1.2.3",
+      "issue_type": "task",
+      "priority": 1,
+      "status": "Open",
+      "title": "Blocking bead",
+      "workspace": "/home/coding/project"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "bucket": "test-bucket",
+  "encryption": false,
+  "endpoint": "https://s3.example.com",
+  "prefix": "hoop/",
+  "retention_days": 30,
+  "schedule": "0 4 * * *"
+}

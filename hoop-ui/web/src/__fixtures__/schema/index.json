@@ -1,30 +1,168 @@
 {
+  "agent_config": {
+    "file": "agent_config.json"
+  },
   "audit_row": {
     "file": "audit_row.json"
+  },
+  "backup_config": {
+    "file": "backup_config.json"
   },
   "bead": {
     "file": "bead.json"
   },
+  "bead_blockers_response": {
+    "file": "bead_blockers_response.json"
+  },
+  "bead_created_by_hoop": {
+    "file": "bead_created_by_hoop.json"
+  },
   "bead_data": {
     "file": "bead_data.json"
+  },
+  "capacity_account": {
+    "file": "capacity_account.json"
+  },
+  "capacity_limits": {
+    "file": "capacity_limits.json"
+  },
+  "capacity_usage": {
+    "file": "capacity_usage.json"
+  },
+  "codex_account_daily_spend_row": {
+    "file": "codex_account_daily_spend_row.json"
+  },
+  "codex_account_monthly_rollup_row": {
+    "file": "codex_account_monthly_rollup_row.json"
+  },
+  "config_error": {
+    "file": "config_error.json"
   },
   "conversation_data": {
     "file": "conversation_data.json"
   },
-  "hoop_config_minimal": {
-    "file": "hoop_config_minimal.json"
+  "cost_bucket": {
+    "file": "cost_bucket.json"
+  },
+  "cross_workspace_blocker": {
+    "file": "cross_workspace_blocker.json"
+  },
+  "debug_state": {
+    "file": "debug_state.json"
+  },
+  "dictated_note": {
+    "file": "dictated_note.json"
+  },
+  "hoop_config": {
+    "file": "hoop_config.json"
+  },
+  "message_usage": {
+    "file": "message_usage.json"
+  },
+  "morning_brief_config": {
+    "file": "morning_brief_config.json"
+  },
+  "parsed_session": {
+    "file": "parsed_session.json"
   },
   "pattern": {
     "file": "pattern.json"
   },
+  "pattern_member": {
+    "file": "pattern_member.json"
+  },
+  "pattern_query": {
+    "file": "pattern_query.json"
+  },
+  "presence": {
+    "file": "presence.json"
+  },
+  "pricing_config": {
+    "file": "pricing_config.json"
+  },
+  "project_config_status": {
+    "file": "project_config_status.json"
+  },
+  "project_entry": {
+    "file": "project_entry.json"
+  },
   "projects_registry": {
     "file": "projects_registry.json"
+  },
+  "redaction_policy": {
+    "file": "redaction_policy.json"
+  },
+  "reflection_ledger": {
+    "file": "reflection_ledger.json"
+  },
+  "script_manifest": {
+    "file": "script_manifest.json"
+  },
+  "secret_pattern": {
+    "file": "secret_pattern.json"
+  },
+  "session_kind": {
+    "file": "session_kind.json"
+  },
+  "session_message": {
+    "file": "session_message.json"
   },
   "stitch": {
     "file": "stitch.json"
   },
+  "stitch_bead": {
+    "file": "stitch_bead.json"
+  },
+  "stitch_link": {
+    "file": "stitch_link.json"
+  },
+  "stitch_message": {
+    "file": "stitch_message.json"
+  },
+  "stitch_preview": {
+    "file": "stitch_preview.json"
+  },
+  "stitch_template": {
+    "file": "stitch_template.json"
+  },
+  "streaming_content": {
+    "file": "streaming_content.json"
+  },
+  "stuck_detector_config": {
+    "file": "stuck_detector_config.json"
+  },
+  "template_field": {
+    "file": "template_field.json"
+  },
+  "ui_config": {
+    "file": "ui_config.json"
+  },
+  "ui_state": {
+    "file": "ui_state.json"
+  },
+  "unknown_event_samples_response": {
+    "file": "unknown_event_samples_response.json"
+  },
+  "unknown_events_response": {
+    "file": "unknown_events_response.json"
+  },
+  "voice_config": {
+    "file": "voice_config.json"
+  },
   "worker_data": {
     "file": "worker_data.json"
+  },
+  "worker_display_state": {
+    "file": "worker_display_state.json"
+  },
+  "worker_liveness": {
+    "file": "worker_liveness.json"
+  },
+  "worker_metadata": {
+    "file": "worker_metadata.json"
+  },
+  "workspace_entry": {
+    "file": "workspace_entry.json"
   },
   "ws_event": {
     "file": "ws_event.json"
