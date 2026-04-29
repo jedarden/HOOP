@@ -339,6 +339,7 @@ export default function App() {
     return (
       <>
         <ConnectionBanner />
+        <WhatsNewBanner />
         {showRestoreToast && (
           <div className="restore-toast" role="status">
             Restoring state...
@@ -380,6 +381,7 @@ export default function App() {
     return (
       <>
         <ConnectionBanner />
+        <WhatsNewBanner />
         {showRestoreToast && (
           <div className="restore-toast" role="status">
             Restoring state...
@@ -423,6 +425,7 @@ export default function App() {
     return (
       <>
         <ConnectionBanner />
+        <WhatsNewBanner />
         {showRestoreToast && (
           <div className="restore-toast" role="status">
             Restoring state...
@@ -468,6 +471,7 @@ export default function App() {
     return (
       <>
         <ConnectionBanner />
+        <WhatsNewBanner />
         {showRestoreToast && (
           <div className="restore-toast" role="status">
             Restoring state...
@@ -527,6 +531,7 @@ export default function App() {
     return (
       <>
         <ConnectionBanner />
+        <WhatsNewBanner />
         {showRestoreToast && (
           <div className="restore-toast" role="status">
             Restoring state...
@@ -565,6 +570,7 @@ export default function App() {
     return (
       <>
         <ConnectionBanner />
+        <WhatsNewBanner />
         {showRestoreToast && (
           <div className="restore-toast" role="status">
             Restoring state...
@@ -602,6 +608,7 @@ export default function App() {
     return (
       <>
         <ConnectionBanner />
+        <WhatsNewBanner />
         {showRestoreToast && (
           <div className="restore-toast" role="status">
             Restoring state...
@@ -639,6 +646,7 @@ export default function App() {
     return (
       <>
         <ConnectionBanner />
+        <WhatsNewBanner />
         {showRestoreToast && (
           <div className="restore-toast" role="status">
             Restoring state...
@@ -681,6 +689,7 @@ export default function App() {
     return (
       <>
         <ConnectionBanner />
+        <WhatsNewBanner />
         {showRestoreToast && (
           <div className="restore-toast" role="status">
             Restoring state...
@@ -752,6 +761,7 @@ export default function App() {
   return (
     <>
       <ConnectionBanner />
+      <WhatsNewBanner />
       {showRestoreToast && (
         <div className="restore-toast" role="status">
           Restoring state...
