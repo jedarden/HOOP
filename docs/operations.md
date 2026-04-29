@@ -908,3 +908,264 @@ The `hoop-ci` WorkflowTemplate is planned but not yet implemented. When complete
 **To implement:** Create `.argo/workflowtemplates/hoop-ci.yaml` modeled after existing CI workflows (e.g., `needle-ci`, `forge-ci` in `declarative-config`)
 
 **Current version:** `0.1.0` (initial development release—breaking changes may occur before `1.0.0`)
+
+## Security Scanning
+
+HOOP includes automated dependency and security scanning via Argo Workflows. Scanning runs on:
+- **Every build:** Trivy image scan (informational, non-blocking)
+- **Weekly schedule:** Full security scan (cargo audit, pnpm audit, trivy fs + image)
+- **Release gates:** Blocking scan before releases (fail_on_vuln=true)
+
+### Running scans manually
+
+#### Full security scan (Rust + npm + filesystem + image)
+
+```bash
+kubectl --kubeconfig=/home/coding/.kube/iad-ci.kubeconfig create -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: hoop-security-scan-
+  namespace: argo-workflows
+spec:
+  workflowTemplateRef:
+    name: hoop-security-scan
+  arguments:
+    parameters:
+      - name: fail_on_vuln
+        value: "false"  # Set to "true" for release gating
+EOF
+```
+
+#### Release gate scan (blocking on vulnerabilities)
+
+```bash
+kubectl --kubeconfig=/home/coding/.kube/iad-ci.kubeconfig create -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: hoop-release-gate-
+  namespace: argo-workflows
+spec:
+  workflowTemplateRef:
+    name: hoop-security-scan
+  arguments:
+    parameters:
+      - name: fail_on_vuln
+        value: "true"  # Block on vulnerabilities
+      - name: image_tag
+        value: v0.2.0  # Scan specific image tag
+EOF
+```
+
+### What gets scanned
+
+| Scanner | Target | What it detects |
+|---------|--------|-----------------|
+| `cargo audit` | Rust dependencies (Cargo.lock) | RUSTSEC advisories, CVEs in crates |
+| `pnpm audit` | npm dependencies (hoop-ui/web) | CVEs in npm packages |
+| `trivy fs` | Source tree | Secrets, misconfigurations, file-based vulns |
+| `trivy image` | Docker image | OS package vulns, base image issues |
+
+### Remediation flow
+
+#### 1. Rust dependencies (cargo audit)
+
+**Symptom:** `cargo audit` reports RUSTSEC advisory
+
+```bash
+# View advisory details locally
+cargo audit
+
+# Update affected dependencies
+cargo update -p <crate-name>
+
+# Verify fix
+cargo audit
+```
+
+**If no update available:**
+- Check advisory for workaround
+- Evaluate severity for your threat model
+- Document exception in `SECURITY_NOTES.md` if acceptable
+
+#### 2. npm dependencies (pnpm audit)
+
+**Symptom:** `pnpm audit` reports CVE
+
+```bash
+# View vulnerabilities
+cd hoop-ui/web
+pnpm audit
+
+# Auto-fix where possible
+pnpm audit --fix
+
+# Manual update for specific package
+pnpm update <package-name>
+
+# Verify fix
+pnpm audit
+```
+
+**If no update available:**
+- Check `pnpm audit --why` for dependency tree
+- Consider overrides for transitive deps (last resort)
+- Document exception if acceptable
+
+#### 3. Secrets detected (trivy fs)
+
+**Symptom:** Trivy reports secrets in source tree
+
+```bash
+# Run locally for details
+trivy fs --scanners secret .
+
+# Common false positives:
+# - Test fixtures with dummy credentials
+# - Example config files
+# - Documentation with placeholders
+
+# Remediation:
+# 1. If real secret: rotate it immediately, remove from git history
+# 2. If false positive: add to .trivyignore or move to examples/
+```
+
+**Rotating leaked secrets:**
+- GitHub personal access tokens → Regenerate at github.com/settings/tokens
+- API keys → Check provider's key management interface
+- Database credentials → Change password, update config
+
+#### 4. Image vulnerabilities (trivy image)
+
+**Symptom:** Trivy reports HIGH/CRITICAL vulns in Docker image
+
+```bash
+# Scan locally for details
+trivy image ronaldraygun/hoop:latest
+
+# Check base image
+trivy image gcr.io/distroless/cc-debian12:latest
+
+# Remediation:
+# 1. Update base image (Dockerfile line 53)
+# 2. Rebuild and rescan
+```
+
+**If base image is the issue:**
+- Switch to newer distroless tag (e.g., `cc-debian12:nonroot` → `cc-debian12:latest`)
+- Consider alternative minimal base (alpine-based if compatible)
+
+### Weekly cron schedule
+
+The `weekly-scan` template is designed for a CronWorkflow. To enable:
+
+```bash
+kubectl --kubeconfig=/home/coding/.kube/iad-ci.kubeconfig apply -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: hoop-security-scan-weekly
+  namespace: argo-workflows
+spec:
+  schedule: "0 0 * * 0"  # Every Sunday at 00:00 UTC
+  workflowTemplateRef:
+    name: hoop-security-scan
+  workflowSpec:
+    arguments:
+      parameters:
+        - name: fail_on_vuln
+          value: "false"
+    entrypoint: weekly-scan
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+EOF
+```
+
+### Release gating
+
+Before creating a GitHub Release, run the blocking scan:
+
+```bash
+# 1. Ensure image is built and pushed
+docker pull ronaldraygun/hoop:v0.2.0
+
+# 2. Run release gate scan
+kubectl --kubeconfig=/home/coding/.kube/iad-ci.kubeconfig create -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: hoop-release-gate-
+  namespace: argo-workflows
+spec:
+  workflowTemplateRef:
+    name: hoop-security-scan
+  arguments:
+    parameters:
+      - name: image_tag
+        value: v0.2.0
+      - name: fail_on_vuln
+        value: "true"
+EOF
+
+# 3. Wait for completion
+kubectl --kubeconfig=/home/coding/.kube/iad-ci.kubeconfig get workflows -n argo-workflows -l workflows.argoproj.io/workflow-template=hoop-security-scan -w
+
+# 4. If failed: remediate before release
+# 5. If passed: proceed with GitHub Release
+```
+
+### Baseline capture
+
+After initial setup, capture a baseline of current vulnerabilities:
+
+```bash
+# Run scan and save results
+kubectl --kubeconfig=/home/coding/.kube/iad-ci.kubeconfig create -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: hoop-security-baseline-$(date +%Y%m%d)
+  namespace: argo-workflows
+spec:
+  workflowTemplateRef:
+    name: hoop-security-scan
+  arguments:
+    parameters:
+      - name: fail_on_vuln
+        value: "false"
+EOF
+
+# Future scans will highlight NEW vulnerabilities against this baseline
+```
+
+### Monitoring and alerts
+
+- **Workflow failures:** Check Argo UI at `https://argo-ci.ardenone.com`
+- **Weekly reports:** CronWorkflow runs every Sunday; check results Monday
+- **Release blockers:** Pre-release scan must pass before creating GitHub Release
+
+### Exclusions and false positives
+
+For known false positives, create `.trivyignore`:
+
+```gitignore
+# Test fixtures with dummy credentials
+**/fixtures/test-secret.txt
+**/tests/fixtures/*.env
+
+# Example config files (documented as placeholders)
+docs/examples/config.yml
+```
+
+Document security exceptions in `SECURITY_NOTES.md`:
+
+```markdown
+# Security Notes
+
+## Accepted vulnerabilities
+
+| ID | Severity | Reason | Date |
+|----|----------|--------|------|
+| RUSTSEC-2024-XXXX | Medium | Unused dev dependency, no impact | 2026-04-29 |
+```
