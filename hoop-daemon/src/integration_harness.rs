@@ -1,7 +1,8 @@
 //! Integration test harness for spawning test daemon instances
 //!
 //! Provides utilities for integration tests to spawn temporary daemon instances
-//! with isolated state (temporary directories, random ports, etc.).
+//! with isolated state (temporary directories, random ports, etc.). The daemon
+//! boots against the testrepo fixture data for realistic state projections.
 //!
 //! ## Example
 //!
@@ -10,7 +11,7 @@
 //!
 //! #[tokio::test]
 //! async fn my_test() {
-//!     let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+//!     let (base_url, _daemon) = spawn_test_daemon()
 //!         .await
 //!         .expect("Failed to spawn daemon");
 //!
@@ -29,6 +30,14 @@ use tokio::task::JoinHandle;
 use tracing::debug;
 
 use crate::Config;
+
+/// Get the testrepo path for integration testing
+fn testrepo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("workspace root is parent of hoop-daemon/")
+        .join("testrepo")
+}
 
 /// Test daemon handle
 ///
@@ -58,10 +67,12 @@ impl Drop for TestDaemon {
 ///
 /// Creates a temporary directory structure with:
 /// - `.hoop/` directory
-/// - `.hoop/projects.yaml` (minimal configuration)
-/// - `.hoop/fleet.db` (initialized)
+/// - `.hoop/projects.yaml` (pointing to testrepo)
+/// - `.hoop/config.yml` (minimal configuration)
+/// - `.hoop/data/` directory
 ///
-/// The daemon is started on a random port to avoid conflicts.
+/// The daemon is started on a random port to avoid conflicts and boots
+/// against the testrepo fixture data.
 ///
 /// # Returns
 ///
@@ -98,12 +109,32 @@ where
     let hoop_dir = temp_dir.path().join(".hoop");
     fs::create_dir_all(&hoop_dir)?;
 
-    // Create minimal projects.yaml
+    // Create minimal projects.yaml pointing to testrepo
     let projects_path = hoop_dir.join("projects.yaml");
-    let projects_yaml = r#"---
-projects: []
-"#;
+    let projects_yaml = format!(
+        r#"---
+projects:
+  - name: testrepo
+    path: {}
+    workspaces:
+      - path: {}
+        role: primary
+"#,
+        testrepo_root().display(),
+        testrepo_root().display()
+    );
     fs::write(&projects_path, projects_yaml)?;
+
+    // Create minimal config.yml
+    let config_yaml = r#"schema_version: 1
+agent:
+  adapter: claude
+  model: claude-sonnet-4-6
+"#;
+    fs::write(hoop_dir.join("config.yml"), config_yaml)?;
+
+    // Create data directory for fleet.db
+    fs::create_dir_all(hoop_dir.join("data"))?;
 
     // Set environment variable to point to temp directory
     // This ensures the daemon uses our test config
