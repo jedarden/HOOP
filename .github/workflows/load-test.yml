@@ -241,10 +241,12 @@ jobs:
         retention-days: 30
 
   # UI Performance budget tests via Playwright
+  # This is now superseded by the integrated performance-budget-test job
   ui-performance-budget:
     name: UI Performance Budget (Playwright)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    if: false  # Disabled - use performance-budget-test job instead
 
     steps:
     - uses: actions/checkout@v4
@@ -302,6 +304,90 @@ jobs:
       with:
         name: playwright-performance-report
         path: |
+          hoop-ui/web/playwright-report/
+          hoop-ui/web/test-results/
+        retention-days: 30
+
+  # Integrated performance budget test (medium scale for PRs)
+  # Runs daemon under synthetic load, measures UI responsiveness and memory
+  performance-budget-test:
+    name: Performance Budget Test (${{ matrix.scale }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        scale:
+          - medium  # For PRs
+          - full    # For main/release
+
+    # Skip full scale on PRs, only run on main/release
+    # Skip medium scale on main (we only need full scale there)
+    if: |
+      (github.event_name == 'pull_request' && matrix.scale == 'medium') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.scale == 'full') ||
+      (startsWith(github.ref, 'refs/tags/v') && matrix.scale == 'full') ||
+      github.event_name == 'workflow_dispatch'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo build
+      uses: actions/cache@v4
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Build daemon
+      run: cargo build --release
+
+    - name: Install Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 9
+
+    - name: Install dependencies
+      working-directory: ./hoop-ui/web
+      run: pnpm install --frozen-lockfile
+
+    - name: Install Playwright browsers
+      working-directory: ./hoop-ui/web
+      run: pnpm exec playwright install --with-deps chromium
+
+    - name: Cache Playwright browsers
+      uses: actions/cache@v4
+      with:
+        path: ~/cache/ms-playwright
+        key: ${{ runner.os }}-playwright-${{ hashFiles('**/playwright.config.ts') }}
+        restore-keys: |
+          ${{ runner.os }}-playwright-
+
+    - name: Run integrated performance budget test
+      run: .github/scripts/run-performance-budget-test.sh
+      env:
+        LOAD_TEST_SCALE: ${{ matrix.scale }}
+        CI: true
+
+      # Test failure indicates performance budget violation - will block merge
+      continue-on-error: false
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-budget-test-${{ matrix.scale }}-${{ github.run_id }}
+        path: |
+          target/daemon.log
+          target/load-gen.log
           hoop-ui/web/playwright-report/
           hoop-ui/web/test-results/
         retention-days: 30
