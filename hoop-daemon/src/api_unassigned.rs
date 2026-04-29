@@ -111,6 +111,8 @@ pub struct UnassignedTracker {
     hoop_home: PathBuf,
     /// Broadcast sender for updates (optional, for future WS integration)
     _update_tx: broadcast::Sender<()>,
+    /// Session adapters for discovering CLI sessions
+    adapters: Vec<Box<dyn SessionAdapter>>,
 }
 
 impl UnassignedTracker {
@@ -130,12 +132,16 @@ impl UnassignedTracker {
 
         let (_update_tx, _) = broadcast::channel(16);
 
+        // Create all session adapters for discovery
+        let adapters = create_all_adapters();
+
         Ok(Self {
             cache: Arc::new(Mutex::new(Vec::new())),
             projects,
             ignored: Arc::new(Mutex::new(ignored)),
             hoop_home,
             _update_tx,
+            adapters,
         })
     }
 
@@ -212,9 +218,37 @@ impl UnassignedTracker {
         let ignored = self.ignored.lock().unwrap().clone();
         drop(ignored); // Release lock before async work
 
-        // Session discovery disabled - requires private adapters
-        debug!("Skipping unassigned session discovery (private adapters not accessible)");
-        let all_sessions: Vec<ParsedSession> = Vec::new();
+        // Discover all sessions from CLI adapters (no project filter)
+        let mut all_sessions: Vec<ParsedSession> = Vec::new();
+
+        for adapter in &self.adapters {
+            let discovered_files = adapter.discover_sessions(None);
+
+            debug!(
+                "Discovered {} session files from {} adapter",
+                discovered_files.len(),
+                adapter.name()
+            );
+
+            for file in discovered_files {
+                match adapter.parse_session_file(&file.path, None) {
+                    Ok(Some(session)) => {
+                        all_sessions.push(session);
+                    }
+                    Ok(None) => {
+                        // File was skipped (not a valid session)
+                    }
+                    Err(e) => {
+                        warn!("Failed to parse session file {}: {}", file.path.display(), e);
+                    }
+                }
+            }
+        }
+
+        debug!(
+            "Parsed {} total sessions from all adapters",
+            all_sessions.len()
+        );
 
         // Filter out assigned and ignored sessions
         let unassigned: Vec<UnassignedEntry> = all_sessions

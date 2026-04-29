@@ -259,7 +259,7 @@ enum AiderEntry {
 
 /// File metadata for discovery phase
 #[derive(Debug, Clone)]
-struct DiscoveredFile {
+pub struct DiscoveredFile {
     path: PathBuf,
     mtime: std::time::SystemTime,
     #[allow(dead_code)]
@@ -315,7 +315,7 @@ struct ParsedSessionFile {
 }
 
 /// Trait for adapter-specific session discovery and parsing
-trait SessionAdapter: Send + Sync {
+pub trait SessionAdapter: Send + Sync {
     /// Get the adapter name
     fn name(&self) -> AdapterName;
 
@@ -333,8 +333,23 @@ trait SessionAdapter: Send + Sync {
     ) -> Result<Option<ParsedSession>>;
 }
 
+/// Create all available session adapters.
+///
+/// Returns a vector of boxed trait objects for all CLI session adapters.
+/// Shared between SessionTailer and UnassignedTracker to ensure consistent
+/// session discovery across the daemon.
+pub fn create_all_adapters() -> Vec<Box<dyn SessionAdapter>> {
+    vec![
+        Box::new(ClaudeAdapter),
+        Box::new(CodexAdapter),
+        Box::new(OpenCodeAdapter),
+        Box::new(GeminiAdapter),
+        Box::new(AiderAdapter),
+    ]
+}
+
 /// Claude Code adapter - parses ~/.claude/projects/**/*.jsonl
-struct ClaudeAdapter;
+pub struct ClaudeAdapter;
 
 impl SessionAdapter for ClaudeAdapter {
     fn name(&self) -> AdapterName {
@@ -365,7 +380,7 @@ impl SessionAdapter for ClaudeAdapter {
 }
 
 /// Codex adapter - parses OpenAI Codex sessions with token_count events
-struct CodexAdapter;
+pub struct CodexAdapter;
 
 impl SessionAdapter for CodexAdapter {
     fn name(&self) -> AdapterName {
@@ -406,7 +421,7 @@ impl SessionAdapter for CodexAdapter {
 /// ```
 ///
 /// Falls back to legacy `~/.opencode/sessions/*.jsonl` for older installations.
-struct OpenCodeAdapter;
+pub struct OpenCodeAdapter;
 
 impl OpenCodeAdapter {
     /// Resolve the OpenCode XDG data directory.
@@ -514,11 +529,11 @@ impl OpenCodeAdapter {
 /// Per §A1: Registry-based path resolution to handle GEMINI_CLI_HOME variations.
 /// Sessions may be at ~/.gemini/tmp/ (when GEMINI_CLI_HOME is set) or
 /// ~/.gemini/sessions/ (legacy/default). Probes on startup and warns on drift.
-struct GeminiAdapter;
+pub struct GeminiAdapter;
 
 /// Session path registry entry for Gemini.
 #[derive(Debug, Clone)]
-struct GeminiSessionPath {
+pub struct GeminiSessionPath {
     /// Root directory (e.g., ~/.gemini or $GEMINI_CLI_HOME)
     root: PathBuf,
     /// Subpath to sessions (e.g., "tmp" or "sessions")
@@ -660,7 +675,7 @@ impl SessionAdapter for GeminiAdapter {
 }
 
 /// Aider adapter - parses Aider sessions (similar format to Claude)
-struct AiderAdapter;
+pub struct AiderAdapter;
 
 impl SessionAdapter for AiderAdapter {
     fn name(&self) -> AdapterName {
@@ -793,13 +808,7 @@ impl SessionTailer {
         let (shutdown_tx, _) = mpsc::channel(1);
 
         // Build adapter list based on enabled_adapters config
-        let all_adapters: Vec<Box<dyn SessionAdapter>> = vec![
-            Box::new(ClaudeAdapter),
-            Box::new(CodexAdapter),
-            Box::new(OpenCodeAdapter),
-            Box::new(GeminiAdapter),
-            Box::new(AiderAdapter),
-        ];
+        let all_adapters = create_all_adapters();
 
         let adapters = if config.enabled_adapters.is_empty() {
             all_adapters
@@ -1106,7 +1115,7 @@ impl SessionTailer {
     }
 
     /// Parse a Claude Code session file
-    fn parse_claude_session_file(
+    pub fn parse_claude_session_file(
         path: &Path,
         project_path: Option<&Path>,
     ) -> Result<Option<ParsedSession>> {
