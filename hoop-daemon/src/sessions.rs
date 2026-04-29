@@ -163,6 +163,100 @@ enum ClaudeEntry {
     Unknown,
 }
 
+/// Message from Aider session JSONL
+#[derive(Debug, Deserialize)]
+struct AiderMessage {
+    /// Message role
+    role: String,
+    /// Message content
+    content: Option<serde_json::Value>,
+    /// Model used
+    #[allow(dead_code)]
+    model: Option<String>,
+    /// Token usage
+    usage: Option<AiderUsage>,
+    /// Timestamp (ISO 8601)
+    timestamp: Option<String>,
+}
+
+/// Token usage from Aider
+#[derive(Debug, Deserialize, Clone)]
+struct AiderUsage {
+    /// Input tokens
+    pub input_tokens: Option<u64>,
+    /// Output tokens
+    pub output_tokens: Option<u64>,
+    /// Cache read tokens (may not be present in Aider)
+    pub cache_read_tokens: Option<u64>,
+    /// Cache write tokens (may not be present in Aider)
+    pub cache_write_tokens: Option<u64>,
+}
+
+impl From<AiderUsage> for ParsedSessionMessagesItemUsage {
+    fn from(u: AiderUsage) -> Self {
+        Self {
+            input_tokens: u.input_tokens.unwrap_or(0) as i64,
+            output_tokens: u.output_tokens.unwrap_or(0) as i64,
+            cache_read_tokens: u.cache_read_tokens.unwrap_or(0) as i64,
+            cache_write_tokens: u.cache_write_tokens.unwrap_or(0) as i64,
+        }
+    }
+}
+
+impl From<AiderUsage> for ParsedSessionTotalUsage {
+    fn from(u: AiderUsage) -> Self {
+        Self {
+            input_tokens: u.input_tokens.unwrap_or(0) as i64,
+            output_tokens: u.output_tokens.unwrap_or(0) as i64,
+            cache_read_tokens: u.cache_read_tokens.unwrap_or(0) as i64,
+            cache_write_tokens: u.cache_write_tokens.unwrap_or(0) as i64,
+        }
+    }
+}
+
+/// Session metadata from Aider (simpler than Claude - no session_id)
+#[derive(Debug, Deserialize)]
+struct AiderMetadata {
+    /// Current working directory
+    cwd: Option<String>,
+    /// Title (optional)
+    title: Option<String>,
+    /// Start time
+    start_time: Option<String>,
+    /// End time
+    end_time: Option<String>,
+    /// Git commit hash (Aider uses git for continuity)
+    git_commit: Option<String>,
+}
+
+/// Aider command invocation record
+#[derive(Debug, Deserialize)]
+struct AiderCommand {
+    /// The full command line
+    command: String,
+    /// The message/prompt (from --message or -m flag)
+    message: Option<String>,
+    /// Timestamp of invocation
+    timestamp: Option<String>,
+    /// Exit code
+    exit_code: Option<i32>,
+}
+
+/// Raw Aider JSONL entry
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum AiderEntry {
+    /// A message in the conversation
+    Message(AiderMessage),
+    /// Session metadata
+    Metadata(AiderMetadata),
+    /// Command invocation (aider --message ...)
+    Command(AiderCommand),
+    /// Unknown entry type
+    #[serde(other)]
+    Unknown,
+}
+
 /// File metadata for discovery phase
 #[derive(Debug, Clone)]
 struct DiscoveredFile {
@@ -592,7 +686,7 @@ impl SessionAdapter for AiderAdapter {
         path: &Path,
         project_path: Option<&Path>,
     ) -> Result<Option<ParsedSession>> {
-        // Aider uses similar format to Claude, can use Claude parser
+        // Aider has its own entry format with Command type for --message invocations
         SessionTailer::parse_aider_session_file(path, project_path)
     }
 }
@@ -633,6 +727,9 @@ impl Default for SessionTailerConfig {
     }
 }
 
+/// Maximum number of unassigned sessions to keep in memory
+const MAX_UNASSIGNED_SESSIONS: usize = 100;
+
 /// Session tailer state
 struct SessionTailerState {
     /// Map of session IDs to their file paths
@@ -651,6 +748,10 @@ struct SessionTailerState {
     bead_to_provider_session: HashMap<String, String>,
     /// Reverse index: provider_session_id → bead_id
     provider_session_to_bead: HashMap<String, String>,
+    /// Unassigned sessions (sessions not matching any registered project) — capped at MAX_UNASSIGNED_SESSIONS
+    unassigned_sessions: Vec<ParsedSession>,
+    /// Ignored session IDs (persisted to disk) — sessions user chose to permanently ignore
+    ignored_session_ids: HashSet<String>,
 }
 
 impl Default for SessionTailerState {
@@ -670,6 +771,8 @@ impl Default for SessionTailerState {
             session_bound_seen: HashSet::new(),
             bead_to_provider_session: HashMap::new(),
             provider_session_to_bead: HashMap::new(),
+            unassigned_sessions: Vec::new(),
+            ignored_session_ids: HashSet::new(),
         }
     }
 }
@@ -2190,7 +2293,12 @@ impl SessionTailer {
         }))
     }
 
-    /// Parse an Aider session file (similar to Claude format)
+    /// Parse an Aider session file.
+    ///
+    /// Aider has a simpler shape than other adapters:
+    /// - No session continuity beyond git (each --message invocation is independent)
+    /// - Parser maps --message invocations and outputs
+    /// - Per-message stats (tokens, cost) are extracted from each invocation
     fn parse_aider_session_file(
         path: &Path,
         project_path: Option<&Path>,
@@ -2200,7 +2308,6 @@ impl SessionTailer {
 
         let reader = BufReader::new(file);
         let mut messages = Vec::new();
-        let mut session_id = String::new();
         let mut cwd = String::new();
         let mut title = String::new();
         let mut start_time: Option<DateTime<Utc>> = None;
@@ -2214,6 +2321,13 @@ impl SessionTailer {
         let mut first_prompt_hash = String::new();
         let mut first_user_content: Option<String> = None;
 
+        // Generate a stable session ID from the file path (Aider doesn't have session IDs)
+        let session_id = format!("aider-{}",
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown")
+        );
+
         let mut line_number: usize = 0;
         for line in reader.lines() {
             let line = line?;
@@ -2223,7 +2337,7 @@ impl SessionTailer {
                 file_path: path.to_path_buf(),
                 line_number,
             };
-            let entry = match crate::parse_jsonl_safe::parse_line::<ClaudeEntry>(&line, &source) {
+            let entry = match crate::parse_jsonl_safe::parse_line::<AiderEntry>(&line, &source) {
                 crate::parse_jsonl_safe::ParseResult::Ok(v) => v,
                 crate::parse_jsonl_safe::ParseResult::Quarantined => {
                     // Increment adapter-specific parse error metric
@@ -2235,7 +2349,7 @@ impl SessionTailer {
                 crate::parse_jsonl_safe::ParseResult::Empty => continue,
             };
             match entry {
-                ClaudeEntry::Message(msg) => {
+                AiderEntry::Message(msg) => {
                     if let Some(usage) = &msg.usage {
                         let usage: ParsedSessionMessagesItemUsage = usage.clone().into();
                         total_usage.input_tokens += usage.input_tokens;
@@ -2259,14 +2373,41 @@ impl SessionTailer {
                         timestamp,
                     });
                 }
-                ClaudeEntry::Metadata(meta) => {
-                    session_id = meta.session_id;
+                AiderEntry::Metadata(meta) => {
                     cwd = meta.cwd.unwrap_or_default();
                     title = meta.title.unwrap_or_default();
                     start_time = meta.start_time.and_then(|s| s.parse().ok());
                     end_time = meta.end_time.and_then(|s| s.parse().ok());
+                    // Note: Aider uses git for continuity, not session IDs
+                    // The git_commit field is available but not used for session binding
                 }
-                ClaudeEntry::Unknown => {
+                AiderEntry::Command(cmd) => {
+                    // Aider --message invocation - treat as user message
+                    if first_prompt_hash.is_empty() {
+                        if let Some(ref message) = cmd.message {
+                            first_prompt_hash = Self::hash_content(&serde_json::json!(message));
+                            first_user_content = Some(message.clone());
+                        }
+                    }
+
+                    // Add command as a user message
+                    let timestamp = cmd.timestamp.as_ref().and_then(|s| s.parse().ok());
+                    messages.push(ParsedSessionMessagesItem {
+                        role: "user".to_string(),
+                        content: cmd.message.map(|m| serde_json::json!(m)).unwrap_or(serde_json::Value::Null),
+                        usage: None,
+                        timestamp,
+                    });
+
+                    // Track timing from command
+                    if start_time.is_none() {
+                        start_time = timestamp;
+                    }
+                    if cmd.exit_code.is_some() {
+                        end_time = timestamp;
+                    }
+                }
+                AiderEntry::Unknown => {
                     // Unknown entry type - record via UnknownEventSink
                     let event_kind = extract_entry_kind_from_raw(&line);
                     let sink = unknown_event_sink::UnknownEventSink::with_source(
@@ -2297,11 +2438,7 @@ impl SessionTailer {
         let tag_result = tag_join::resolve(&title, first_user_content.as_deref());
         let kind = tag_result.kind;
 
-        let id = if session_id.is_empty() {
-            uuid::Uuid::new_v4().to_string()
-        } else {
-            session_id.clone()
-        };
+        let id = session_id.clone();
 
         let created_at = start_time.unwrap_or_else(Utc::now);
         let updated_at = end_time.unwrap_or(created_at);
@@ -3359,9 +3496,9 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         let session_file = tmp.path().join("test_aider_unknown.jsonl");
 
-        // Write a session with an unknown event type (using ClaudeEntry format)
+        // Write a session with an unknown event type (using Aider format)
         let session_data = vec![
-            r#"{"type":"metadata","session_id":"aider-session-111","cwd":"/tmp"}"#,
+            r#"{"type":"metadata","cwd":"/tmp"}"#,
             r#"{"type":"message","role":"user","content":"Hello Aider","timestamp":"2025-01-01T00:00:00Z"}"#,
             // Unknown event type - should trigger UnknownEventSink
             r#"{"type":"aider_custom_event","custom_field":"value"}"#,
@@ -3375,7 +3512,8 @@ mod tests {
         // Session should still parse successfully
         assert!(result.is_some());
         let session = result.unwrap();
-        assert_eq!(session.session_id, "aider-session-111");
+        // Aider session_id is generated from the filename
+        assert!(session.session_id.starts_with("aider-test_aider_unknown.jsonl"));
 
         // Verify the unknown event was recorded via UnknownEventSink
         let samples = unknown_event_sink::global_registry().get_all_samples();
