@@ -66,6 +66,9 @@ Per §20, all spec changes require a CHANGELOG entry.
         crate::api_agent::send_turn,
         crate::api_agent::list_sessions,
 
+        // Backup API
+        crate::api_backup::trigger_backup,
+
         // Beads API
         crate::api_beads::list_open_beads,
         crate::api_beads::create_bead,
@@ -73,6 +76,9 @@ Per §20, all spec changes require a CHANGELOG entry.
         crate::api_beads::dismiss_dedup,
         crate::api_beads::query_vector_index,
         crate::api_beads::get_vector_index_stats,
+
+        // Bead Blockers API
+        crate::api_bead_blockers::get_bead_blockers,
 
         // Audit API
         crate::api_audit::list_audit_rows,
@@ -85,6 +91,20 @@ Per §20, all spec changes require a CHANGELOG entry.
         // Config API
         crate::api_config::get_config,
         crate::api_config::get_secrets_patterns,
+
+        // Content Blocks API
+        crate::api_content_blocks::list_content_blocks,
+        crate::api_content_blocks::create_content_block,
+        crate::api_content_blocks::update_content_block_endpoint,
+        crate::api_content_blocks::delete_content_block_endpoint,
+        crate::api_content_blocks::reorder_content_blocks_endpoint,
+
+        // Conversations API
+        crate::api_conversations::list_conversations,
+
+        // Cost Per Stitch API
+        crate::api_cost_per_stitch::get_stitch_trends,
+        crate::api_cost_per_stitch::get_stitch_cost,
 
         // Dictated Notes API
         crate::api_dictated_notes::create_note,
@@ -110,22 +130,124 @@ Per §20, all spec changes require a CHANGELOG entry.
         crate::api_draft_queue::get_dedup_stats,
         crate::api_draft_queue::report_false_positive,
 
+        // Files API
+        crate::api_files::list_directory,
+        crate::api_files::get_file_content,
+        crate::api_files::search_files,
+
+        // Fix Patterns API
+        crate::api_fix_patterns::create_pattern,
+        crate::api_fix_patterns::list_patterns,
+        crate::api_fix_patterns::get_pattern,
+        crate::api_fix_patterns::update_pattern,
+        crate::api_fix_patterns::delete_pattern,
+        crate::api_fix_patterns::match_patterns,
+        crate::api_fix_patterns::search_patterns,
+        crate::api_fix_patterns::export_patterns,
+        crate::api_fix_patterns::import_patterns,
+
+        // Metrics API
+        crate::api_metrics::get_metrics,
+        crate::api_metrics::debug_state,
+        crate::api_metrics::get_unknown_events,
+        crate::api_metrics::get_unknown_event_samples,
+
         // Morning Brief API
         crate::api_morning_brief::get_latest,
         crate::api_morning_brief::list_briefs,
         crate::api_morning_brief::trigger_brief,
         crate::api_morning_brief::get_status,
 
+        // Onboarding API
+        crate::api_onboarding::list_onboarding_prompts,
+        crate::api_onboarding::dismiss_onboarding_prompt,
+        crate::api_onboarding::set_onboarding_enabled,
+        crate::api_onboarding::record_feature_usage,
+        crate::api_onboarding::acknowledge_version,
+
+        // Orphans API
+        crate::api_orphans::list_orphans,
+        crate::api_orphans::attach_orphan,
+
+        // Patterns API
+        crate::api_patterns::list_patterns,
+        crate::api_patterns::get_pattern,
+
+        // Presence API
+        crate::api_presence::get_presence,
+        crate::api_presence::update_presence,
+        crate::api_presence::remove_presence,
+
         // Preview API
         crate::api_preview::preview_bead,
+
+        // Prompts API
+        crate::api_prompts::list_prompts,
+        crate::api_prompts::get_prompt,
+        crate::api_prompts::substitute_prompt,
+
+        // Reflection Ledger API
+        crate::api_reflection_ledger::list_proposals,
+        crate::api_reflection_ledger::list_reflections,
+        crate::api_reflection_ledger::approve_proposal,
+        crate::api_reflection_ledger::reject_proposal,
+
+        // Screen Capture API
+        crate::api_screen_capture::create_screen_capture,
+        crate::api_screen_capture::list_screen_captures,
+        crate::api_screen_capture::get_metadata,
+        crate::api_screen_capture::get_video,
+
+        // Scripts API
+        crate::api_scripts::list_scripts,
+        crate::api_scripts::get_script,
+        crate::api_scripts::run_script,
 
         // Stitch Decompose API
         crate::api_stitch_decompose::preview_decompose,
         crate::api_stitch_decompose::submit_stitch,
 
+        // Stitch Links API
+        crate::api_stitch_links::create_link,
+        crate::api_stitch_links::delete_link,
+        crate::api_stitch_links::search_stitches,
+
+        // Stitch Read API
+        crate::api_stitch_read::read_stitch,
+
+        // Stitch Replay API
+        crate::api_stitch_replay::get_replay_options,
+        crate::api_stitch_replay::resume_as_new_bead,
+        crate::api_stitch_replay::restore_workspace_state,
+
+        // Stitch Traversal API
+        crate::api_stitch_traversal::get_parents,
+        crate::api_stitch_traversal::get_children,
+        crate::api_stitch_traversal::get_referenced_by,
+        crate::api_stitch_traversal::get_closure,
+
+        // Timeline API
+        crate::api_timeline::get_worker_timeline,
+
+        // Tour Project API
+        crate::api_tour_project::enable_tour_project,
+        crate::api_tour_project::disable_tour_project,
+        crate::api_tour_project::get_tour_status,
+
         // Transcription API
         crate::api_transcription::get_job,
         crate::api_transcription::list_jobs,
+
+        // UI State API
+        crate::api_ui_state::get_ui_state,
+        crate::api_ui_state::put_ui_state,
+        crate::api_ui_state::put_ui_state_batch,
+        crate::api_ui_state::delete_ui_state,
+
+        // Unassigned API
+        crate::api_unassigned::list_unassigned,
+        crate::api_unassigned::assign_session,
+        crate::api_unassigned::ignore_session,
 
         // Uploads API
         crate::api_uploads::init_upload,
@@ -133,19 +255,25 @@ Per §20, all spec changes require a CHANGELOG entry.
         crate::api_uploads::get_progress,
         crate::api_uploads::complete_upload,
         crate::api_uploads::cancel_upload,
+
+        // Diff API
+        crate::api_diff::get_project_diff,
+        crate::api_diff::get_merge_base,
+
+        // Blame API
+        crate::api_blame::get_file_blame,
     ),
     components(
         schemas(
             // Agent API types
             crate::agent_session::AgentSessionStatus,
-            crate::api_agent::SpawnSessionResponse,
-            crate::api_agent::DisableAgentResponse,
-            crate::api_agent::SwitchAdapterResponse,
-            crate::api_agent::SendTurnResponse,
             crate::api_agent::SwitchRequest,
             crate::api_agent::TurnRequest,
             crate::api_agent::TurnAttachment,
             crate::fleet::AgentSessionRow,
+
+            // Backup API types
+            crate::api_backup::TriggerResponse,
 
             // Beads API types
             crate::api_beads::BeadSummary,
@@ -155,6 +283,10 @@ Per §20, all spec changes require a CHANGELOG entry.
             crate::api_beads::DedupCheckResponse,
             crate::api_beads::DedupMatchRef,
             crate::api_beads::VectorIndexStats,
+
+            // Bead Blockers API types
+            crate::api_bead_blockers::CrossWorkspaceBlocker,
+            crate::api_bead_blockers::BeadBlockersResponse,
 
             // Audit API types
             crate::api_audit::AuditQuery,
@@ -172,6 +304,26 @@ Per §20, all spec changes require a CHANGELOG entry.
             crate::api_config::SecretsPatternsResponse,
             crate::api_config::RunningConfig,
             crate::config_resolver::SecretPattern,
+
+            // Content Blocks API types
+            crate::content_blocks::ContentBlock,
+            crate::api_content_blocks::ListBlocksResponse,
+            crate::api_content_blocks::CreateBlockRequest,
+            crate::api_content_blocks::UpdateBlockRequest,
+            crate::api_content_blocks::ReorderBlocksRequest,
+            crate::api_content_blocks::ReorderBlocksResponse,
+
+            // Conversations API types
+            crate::api_conversations::ConversationsQuery,
+            crate::api_conversations::ConversationsResponse,
+            crate::api_conversations::ConversationSummary,
+            crate::api_conversations::WorkerMetadata,
+
+            // Cost Per Stitch API types
+            crate::api_cost_per_stitch::TrendsResponse,
+            crate::api_cost_per_stitch::CostResponse,
+            crate::api_cost_per_stitch::TrendPoint,
+            crate::api_cost_per_stitch::StitchCost,
 
             // Dictated Notes API types
             crate::dictated_notes::TranscriptionStatus,
@@ -207,10 +359,65 @@ Per §20, all spec changes require a CHANGELOG entry.
             crate::fleet::DraftRow,
             crate::fleet::BeadSource,
 
+            // Files API types
+            crate::api_files::ListQuery,
+            crate::api_files::ContentQuery,
+            crate::api_files::SearchQuery,
+            crate::api_files::ListResponse,
+            crate::api_files::FileEntry,
+            crate::api_files::ContentResponse,
+            crate::api_files::SearchResponse,
+            crate::api_files::HighlightResult,
+
+            // Fix Patterns API types
+            crate::api_fix_patterns::PatternListResponse,
+            crate::api_fix_patterns::PatternDetail,
+            crate::api_fix_patterns::PatternCreatedResponse,
+            crate::api_fix_patterns::PatternMatchResponse,
+            crate::api_fix_patterns::PatternMatchDetail,
+            crate::api_fix_patterns::MatchRequest,
+            crate::api_fix_patterns::PatternsExportResponse,
+            crate::api_fix_patterns::PatternExport,
+            crate::api_fix_patterns::PatternsImportRequest,
+            crate::api_fix_patterns::PatternsImportResponse,
+
+            // Metrics API types
+            crate::api_metrics::DebugStateResponse,
+            crate::api_metrics::UnknownEventsResponse,
+            crate::api_metrics::UnknownEventSamplesResponse,
+
             // Morning Brief API types
             crate::api_morning_brief::TriggerResponse,
             crate::api_morning_brief::StatusResponse,
             crate::fleet::MorningBriefRow,
+
+            // Onboarding API types
+            crate::api_onboarding::OnboardingPrompt,
+            crate::api_onboarding::PromptsResponse,
+            crate::api_onboarding::DismissRequest,
+            crate::api_onboarding::DismissResponse,
+            crate::api_onboarding::SetEnabledRequest,
+            crate::api_onboarding::SetEnabledResponse,
+            crate::api_onboarding::RecordUsageRequest,
+            crate::api_onboarding::RecordUsageResponse,
+            crate::api_onboarding::AckVersionRequest,
+            crate::api_onboarding::AckVersionResponse,
+
+            // Orphans API types
+            crate::api_orphans::OrphansResponse,
+            crate::api_orphans::OrphanEntry,
+            crate::api_orphans::AttachRequest,
+            crate::api_orphans::AttachResponse,
+
+            // Patterns API types
+            crate::api_patterns::Pattern,
+            crate::api_patterns::PatternsResponse,
+
+            // Presence API types
+            crate::api_presence::Presence,
+            crate::api_presence::PresenceListResponse,
+            crate::api_presence::UpdateRequest,
+            crate::api_presence::UpdateResponse,
 
             // Preview API types
             crate::api_preview::PreviewRequest,
@@ -222,6 +429,32 @@ Per §20, all spec changes require a CHANGELOG entry.
             crate::api_preview::RiskPatternInfo,
             crate::api_preview::FileConflict,
             crate::api_preview::SimilarStitchRef,
+
+            // Prompts API types
+            crate::api_prompts::Prompt,
+            crate::api_prompts::PromptsListResponse,
+            crate::api_prompts::SubstituteRequest,
+
+            // Reflection Ledger API types
+            crate::api_reflection_ledger::ProposalsResponse,
+            crate::api_reflection_ledger::ReflectionsResponse,
+            crate::api_reflection_ledger::ApproveProposalRequest,
+            crate::api_reflection_ledger::ApproveProposalResponse,
+            crate::api_reflection_ledger::RejectProposalRequest,
+            crate::api_reflection_ledger::RejectProposalResponse,
+            crate::reflection_ledger::ReflectionLedgerEntry,
+
+            // Screen Capture API types
+            crate::api_screen_capture::CreateCaptureResponse,
+            crate::api_screen_capture::ListCapturesResponse,
+            crate::api_screen_capture::CaptureMetadata,
+            crate::api_screen_capture::StartStreamingResponse,
+
+            // Scripts API types
+            crate::api_scripts::ScriptEntry,
+            crate::api_scripts::ScriptsListResponse,
+            crate::api_scripts::RunRequest,
+            crate::api_scripts::RunResponse,
 
             // Stitch Decompose API types
             crate::api_stitch_decompose::DecomposePreviewRequest,
@@ -238,47 +471,112 @@ Per §20, all spec changes require a CHANGELOG entry.
             crate::api_stitch_decompose::SubmitResult,
             crate::stitch_decompose::BeadGraph,
 
+            // Stitch Links API types
+            crate::api_stitch_links::CreateLinkRequest,
+            crate::api_stitch_links::CreateLinkResponse,
+            crate::api_stitch_links::DeleteLinkResponse,
+            crate::api_stitch_links::SearchResponse,
+            crate::api_stitch_links::StitchRef,
+
+            // Stitch Read API types
+            crate::api_stitch_read::ReadStitchResponse,
+
+            // Stitch Replay API types
+            crate::api_stitch_replay::ReplayOptionsResponse,
+            crate::api_stitch_replay::ResumeAsNewResponse,
+            crate::api_stitch_replay::RestoreStateResponse,
+
+            // Stitch Traversal API types
+            crate::api_stitch_traversal::ParentsResponse,
+            crate::api_stitch_traversal::ChildrenResponse,
+            crate::api_stitch_traversal::ReferencedByResponse,
+            crate::api_stitch_traversal::ClosureResponse,
+            crate::api_stitch_traversal::StitchRef,
+
+            // Timeline API types
+            crate::api_timeline::TimelineResponse,
+            crate::api_timeline::TimelineEntry,
+
+            // Tour Project API types
+            crate::api_tour_project::TourProjectResponse,
+            crate::api_tour_project::TourStitchInfo,
+            crate::api_tour_project::EnableTourRequest,
+
             // Transcription API types
             crate::api_transcription::ListJobsQuery,
             crate::transcription::JobStatus,
             crate::transcription::TranscriptionJob,
+
+            // UI State API types
+            crate::api_ui_state::GetStateResponse,
+            crate::api_ui_state::PutStateRequest,
+            crate::api_ui_state::PutStateResponse,
+            crate::api_ui_state::BatchRequest,
+            crate::api_ui_state::BatchResponse,
+
+            // Unassigned API types
+            crate::api_unassigned::UnassignedSession,
+            crate::api_unassigned::ListResponse,
+            crate::api_unassigned::AssignRequest,
+            crate::api_unassigned::AssignResponse,
+            crate::api_unassigned::IgnoreRequest,
+            crate::api_unassigned::IgnoreResponse,
 
             // Uploads API types
             crate::api_uploads::InitUploadRequest,
             crate::uploads::InitUploadResponse,
             crate::uploads::UploadProgressResponse,
             crate::uploads::UploadMetadata,
+
+            // Diff API types
+            crate::api_diff::DiffResponse,
+            crate::api_diff::FileDiff,
+            crate::api_diff::MergeBaseResponse,
+
+            // Blame API types
+            crate::api_blame::BlameResponse,
+            crate::api_blame::BlameLine,
         )
     ),
     tags(
         (name = "agent", description = "Agent session lifecycle control"),
-        (name = "beads", description = "Bead creation, listing, and deduplication"),
-        (name = "audit", description = "Audit log queries and hash chain verification"),
         (name = "attachments", description = "File attachment serving"),
+        (name = "audit", description = "Audit log queries and hash chain verification"),
+        (name = "backup", description = "Fleet.db backup management"),
+        (name = "bead_blockers", description = "Cross-workspace bead blocker resolution"),
+        (name = "beads", description = "Bead creation, listing, and deduplication"),
+        (name = "blame", description = "Git blame queries"),
         (name = "config", description = "Configuration access"),
+        (name = "content_blocks", description = "Content block management"),
+        (name = "conversations", description = "Fleet conversation listing"),
+        (name = "cost", description = "Cost analysis and trends"),
         (name = "dictated_notes", description = "Voice dictation notes"),
+        (name = "diff", description = "Git diff queries"),
         (name = "draft_queue", description = "Draft bead queue"),
+        (name = "files", description = "Project file browsing and content"),
+        (name = "fix_patterns", description = "Fix pattern suggestions"),
         (name = "metrics", description = "Metrics and monitoring"),
         (name = "morning_brief", description = "Morning brief generation"),
+        (name = "onboarding", description = "Onboarding prompts and feature usage"),
+        (name = "orphans", description = "Orphaned file detection"),
         (name = "patterns", description = "Pattern (multi-stitch) management"),
+        (name = "presence", description = "Operator presence tracking"),
         (name = "preview", description = "Stitch prediction and preview"),
+        (name = "prompts", description = "Prompt library"),
+        (name = "reflections", description = "Reflection ledger and approval queue"),
+        (name = "screen_capture", description = "Screen capture management"),
         (name = "scripts", description = "Scheduled script management"),
         (name = "stitch_decompose", description = "Stitch decomposition"),
         (name = "stitch_links", description = "Stitch relationship links"),
         (name = "stitch_read", description = "Stitch reading"),
         (name = "stitch_replay", description = "Stitch replay"),
-        (name = "transcription", description = "Audio transcription"),
-        (name = "uploads", description = "File upload handling"),
-        (name = "backup", description = "Fleet.db backup management"),
-        (name = "diff", description = "Git diff queries"),
-        (name = "blame", description = "Git blame queries"),
-        (name = "orphans", description = "Orphaned file detection"),
-        (name = "fix_patterns", description = "Fix pattern suggestions"),
+        (name = "stitch_traversal", description = "Stitch graph traversal"),
         (name = "timeline", description = "Worker timeline queries"),
-        (name = "screen_capture", description = "Screen capture"),
-        (name = "net_diff", description = "Network diff queries"),
-        (name = "templates", description = "Stitch template library"),
-        (name = "prompts", description = "Prompt library"),
+        (name = "tour_project", description = "Project tour mode"),
+        (name = "transcription", description = "Audio transcription"),
+        (name = "ui_state", description = "UI state persistence"),
+        (name = "unassigned", description = "Unassigned session management"),
+        (name = "uploads", description = "File upload handling"),
     )
 )]
 pub struct ApiDoc;

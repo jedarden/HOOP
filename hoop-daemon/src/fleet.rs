@@ -22,7 +22,7 @@ use uuid::Uuid;
 use utoipa::ToSchema;
 
 /// Current schema version
-pub const SCHEMA_VERSION: &str = "1.32.0";
+pub const SCHEMA_VERSION: &str = "1.33.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -1095,6 +1095,8 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v128_to_v129, "1.28.0", "1.29.0", "Add workspace_from/to to stitch_links")?;
             migrate!(conn, migrate_v129_to_v130, "1.29.0", "1.30.0", "Multi-operator concurrency (§19)")?;
             migrate!(conn, migrate_v130_to_v131, "1.30.0", "1.31.0", "Add UNIQUE constraint on reflection_ledger.content_hash")?;
+            migrate!(conn, migrate_v131_to_v132, "1.31.0", "1.32.0", "Add content_blocks table for multimodal input")?;
+            migrate!(conn, migrate_v132_to_v133, "1.32.0", "1.33.0", "Add template_id and created_by to fix_patterns")?;
         }
         "1.1.0" => {
             migrate!(conn, migrate_v11_to_v12, "1.1.0", "1.2.0", "Add Pattern service tables")?;
@@ -1127,6 +1129,8 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v128_to_v129, "1.28.0", "1.29.0", "Add workspace_from/to to stitch_links")?;
             migrate!(conn, migrate_v129_to_v130, "1.29.0", "1.30.0", "Multi-operator concurrency (§19)")?;
             migrate!(conn, migrate_v130_to_v131, "1.30.0", "1.31.0", "Add UNIQUE constraint on reflection_ledger.content_hash")?;
+            migrate!(conn, migrate_v131_to_v132, "1.31.0", "1.32.0", "Add content_blocks table for multimodal input")?;
+            migrate!(conn, migrate_v132_to_v133, "1.32.0", "1.33.0", "Add template_id and created_by to fix_patterns")?;
         }
         "1.2.0" => {
             migrate!(conn, migrate_v12_to_v13, "1.2.0", "1.3.0", "Add dictated_notes metadata table")?;
@@ -1158,6 +1162,8 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
             migrate!(conn, migrate_v128_to_v129, "1.28.0", "1.29.0", "Add workspace_from/to to stitch_links")?;
             migrate!(conn, migrate_v129_to_v130, "1.29.0", "1.30.0", "Multi-operator concurrency (§19)")?;
             migrate!(conn, migrate_v130_to_v131, "1.30.0", "1.31.0", "Add UNIQUE constraint on reflection_ledger.content_hash")?;
+            migrate!(conn, migrate_v131_to_v132, "1.31.0", "1.32.0", "Add content_blocks table for multimodal input")?;
+            migrate!(conn, migrate_v132_to_v133, "1.32.0", "1.33.0", "Add template_id and created_by to fix_patterns")?;
         }
         "1.3.0" => {
             migrate!(conn, migrate_v13_to_v14, "1.3.0", "1.4.0", "Add word-level timestamps to dictated_notes")?;
@@ -3252,6 +3258,34 @@ pub fn migrate_v131_to_v132(conn: &mut Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migration 1.32.0 → 1.33.0: Add template_id and created_by to fix_patterns
+///
+/// Adds tracking for which template was used for the fix and who created the pattern.
+/// This enables better attribution and lineage for fix patterns.
+///
+/// Plan reference: §6 Phase 2 marquee #4 (hoop-ttb.3.40)
+pub fn migrate_v132_to_v133(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.32.0 → 1.33.0: Adding template_id and created_by to fix_patterns");
+
+    add_column_if_not_exists(
+        conn,
+        "fix_patterns",
+        "template_id",
+        "TEXT",
+    )?;
+
+    add_column_if_not_exists(
+        conn,
+        "fix_patterns",
+        "created_by",
+        "TEXT NOT NULL DEFAULT 'system'",
+    )?;
+
+    info!("fix_patterns table updated successfully");
+    update_schema_version(conn, "1.33.0")?;
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // §20.1 Major-upgrade gate
 // ---------------------------------------------------------------------------
@@ -4090,6 +4124,7 @@ pub fn set_agent_enabled(enabled: bool) -> Result<()> {
 
 /// A row from the `reflection_ledger` table.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ReflectionLedgerEntry {
     pub id: String,
     pub scope: String,
@@ -4495,6 +4530,23 @@ pub fn load_recent_stitches(limit: usize) -> Result<Vec<(String, String, String,
         result.push(row?);
     }
     Ok(result)
+}
+
+/// Get the total count of Stitches across all projects.
+///
+/// This is used by onboarding prompts to determine when to suggest
+/// pattern creation based on usage volume.
+pub async fn get_total_stitch_count() -> Result<usize> {
+    tokio::task::spawn_blocking(|| {
+        let path = db_path();
+        let conn = Connection::open(&path)?;
+        conn.query_row("SELECT COUNT(*) FROM stitches", [], |row| {
+            row.get(0)
+        })
+        .map_err(Into::into)
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("spawn_blocking failed: {}", e))?
 }
 
 /// Load a Stitch by ID (for testing Stitch archival verification).
