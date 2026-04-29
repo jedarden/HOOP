@@ -141,11 +141,64 @@ async fn complete_upload(
     // Get redaction policy state for project-specific checks
     let redaction_state = state.redaction_policy_state.read().await.clone();
 
-    // Load projects config for workspace lookup
-    let projects_config = crate::projects::ProjectsConfig::load().map_err(|_| {
-        tracing::error!("Failed to load projects config");
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    // Get upload metadata to check the attachment type
+    let meta = state
+        .upload_registry
+        .get_metadata(&valid_id)
+        .map_err(|e| {
+            tracing::error!("Failed to get upload metadata: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    // Only check redaction policy for bead attachments (stitches are global)
+    if meta.attachment_type == "bead" {
+        // Get the workspace path for this bead attachment
+        let workspace = std::env::current_dir().map_err(|_| {
+            tracing::error!("Failed to get current directory");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+        // Find the project name for this workspace
+        let project_name = redaction_state
+            .find_project_by_workspace(&workspace)
+            .await;
+
+        if let Some(proj_name) = project_name {
+            // Get the partial file path to scan for secrets
+            let partial_path = state.upload_registry.get_partial_path(&valid_id).map_err(|e| {
+                tracing::error!("Failed to get partial path: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+
+            // Read file content for secret scanning
+            let content = std::fs::read_to_string(&partial_path);
+
+            // If we can't read the file as text, we'll allow the upload (fail-open for binary files)
+            if let Ok(content) = content {
+                // Scan for secrets and write audit entries
+                // This will reject the upload if the project's policy is set to Reject
+                if let Err(reject_err) = crate::redaction_policy::scan_and_audit(
+                    &redaction_state,
+                    &proj_name,
+                    &content,
+                    "attachment",
+                    &upload_id,
+                    "system",  // Attachment scans are automatic
+                )
+                .await
+                {
+                    tracing::warn!(
+                        upload_id = %upload_id,
+                        project = %proj_name,
+                        pattern = %reject_err.pattern,
+                        count = %reject_err.count,
+                        "Upload rejected due to redaction policy"
+                    );
+                    return Err(StatusCode::FORBIDDEN);
+                }
+            }
+        }
+    }
 
     state
         .upload_registry

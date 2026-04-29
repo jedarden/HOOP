@@ -317,6 +317,46 @@ impl RedactionPolicyState {
         let policy = self.resolve_for_project(project_name).await;
         policy.action
     }
+
+    /// Find the project name that contains a given workspace path.
+    ///
+    /// Returns `None` if the path doesn't match any registered project workspace.
+    /// This handles both canonical path matching and prefix matching (for subdirectories).
+    pub async fn find_project_by_workspace(&self, workspace_path: &std::path::Path) -> Option<String> {
+        let registry = self._projects_registry.read().await;
+
+        // First, try to canonicalize the input path for comparison
+        let canon_input = std::fs::canonicalize(workspace_path).ok();
+
+        for project in &registry.projects {
+            for ws_view in project.workspace_views() {
+                // Try canonical path first if available
+                let canon_ws: Option<std::path::PathBuf> = ws_view.canonical_path.as_ref()
+                    .map(|p| std::path::PathBuf::from(p))
+                    .or_else(|| std::fs::canonicalize(&ws_view.path).ok());
+
+                if let Some(ref canon_ws_path) = canon_ws {
+                    if let Some(ref canon_input_path) = canon_input {
+                        // Exact match
+                        if canon_ws_path == canon_input_path {
+                            return Some(project.name().to_string());
+                        }
+                        // Prefix match (workspace is a parent of the input path)
+                        if canon_input_path.starts_with(canon_ws_path) {
+                            return Some(project.name().to_string());
+                        }
+                    }
+                }
+
+                // Fallback: try direct path comparison
+                if workspace_path.starts_with(&ws_view.path) {
+                    return Some(project.name().to_string());
+                }
+            }
+        }
+
+        None
+    }
 }
 
 /// Error type for redaction policy violations.
@@ -396,6 +436,88 @@ pub async fn check_reject_policy(
     }
 
     Ok(())
+}
+
+/// Scan content for secrets and write audit entries.
+///
+/// Returns `Ok(Vec<SecretFinding>)` with all findings (already written to audit),
+/// or an error if the scan fails. This function writes audit entries for each
+/// unique pattern detected, regardless of the project's action policy.
+///
+/// Use this function when you want to:
+/// 1. Detect secrets in content
+/// 2. Record what was flagged in the audit log
+/// 3. Optionally take action based on the project's policy
+///
+/// # Arguments
+/// * `state` - Redaction policy state
+/// * `project_name` - Project name for policy resolution
+/// * `content` - Content to scan
+/// * `what_flagged` - Surface being scanned (e.g., "attachment", "transcript")
+/// * `source_ref` - Reference to the source (attachment_id, stitch_id, etc.)
+/// * `operator` - Operator who triggered the scan (or "system")
+///
+/// # Returns
+/// All findings that were detected and written to audit
+pub async fn scan_and_audit(
+    state: &RedactionPolicyState,
+    project_name: &str,
+    content: &str,
+    what_flagged: &str,
+    source_ref: &str,
+    operator: &str,
+) -> Result<Vec<crate::redaction::SecretFinding>, RedactionRejectedError> {
+    let policy = state.resolve_for_project(project_name).await;
+
+    // Scan for secrets using only enabled patterns
+    let findings = crate::redaction::scan_text_for_secrets(content);
+    let filtered_findings: Vec<_> = findings
+        .into_iter()
+        .filter(|f| finding_matches_enabled_pattern(f.pattern_name, &policy.patterns))
+        .collect();
+
+    // Write audit entries for each unique pattern
+    crate::redaction::audit_findings(
+        what_flagged,
+        &filtered_findings,
+        source_ref,
+        Some(project_name),
+        operator,
+    );
+
+    // If policy is Reject and secrets were found, return an error
+    if policy.action == RedactionAction::Reject && !filtered_findings.is_empty() {
+        // Group by high-level pattern name for reporting
+        let mut high_level_pattern_counts: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
+
+        for finding in &filtered_findings {
+            // Find the high-level pattern that maps to this finding
+            let mut found_high_level = None;
+            for high_level_pattern in &policy.patterns {
+                let impl_names = map_pattern_to_impl_names(high_level_pattern);
+                if impl_names.contains(&finding.pattern_name) {
+                    found_high_level = Some(high_level_pattern.clone());
+                    break;
+                }
+            }
+
+            // Use the high-level pattern name if found, otherwise use the finding's pattern name
+            let pattern_name = found_high_level.unwrap_or_else(|| finding.pattern_name.to_string());
+            *high_level_pattern_counts.entry(pattern_name).or_insert(0) += 1;
+        }
+
+        // Return error for the first detected pattern
+        if let Some((pattern, count)) = high_level_pattern_counts.into_iter().next() {
+            return Err(RedactionRejectedError {
+                project: project_name.to_string(),
+                pattern,
+                count,
+            });
+        }
+    }
+
+    Ok(filtered_findings)
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
