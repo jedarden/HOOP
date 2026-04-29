@@ -869,11 +869,11 @@ async fn get_file_content_stream(
         (status, msg)
     })?;
 
-    // Create the highlighting stream
+    // Create the highlighting stream and convert to SSE
     let highlight_stream = syntax_highlight_stream::highlight_stream(content, &filename, &theme);
+    let pinned = Box::pin(highlight_stream);
 
-    // Convert to SSE stream
-    let sse_stream = stream::unfold(Box::pin(highlight_stream), |mut stream| async move {
+    let sse_stream = stream::unfold(pinned, |mut stream| async move {
         match futures_util::StreamExt::next(&mut stream).await {
             Some(item) => {
                 let sse_data = syntax_highlight_stream::item_to_sse(&item);
@@ -3080,13 +3080,14 @@ Note: This is an automated synthesis from voice dictation."#,
 
     // Set up config reload trigger channel (for SIGHUP)
     let (config_reload_tx, mut config_reload_rx) = mpsc::channel::<()>(1);
-    let config_watcher_for_reload = Arc::new(tokio::sync::Mutex::new(config_watcher));
+    let config_watcher_for_reload = config_watcher.clone();
 
     // Spawn task to handle config reload requests (from SIGHUP)
     tokio::spawn(async move {
         while let Some(()) = config_reload_rx.recv().await {
             info!("Received config reload request (SIGHUP), reloading config.yml");
-            if let Err(e) = config_watcher_for_reload.lock().await.reload().await {
+            let watcher = config_watcher_for_reload.lock().await;
+            if let Err(e) = (*watcher).reload().await {
                 warn!("Failed to reload config: {}", e);
             }
         }

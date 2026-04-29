@@ -104,7 +104,8 @@ pub fn resolve_syntax(filename: &str) -> Arc<SyntaxReference> {
             };
             alt.and_then(|name| ss.find_syntax_for_file(name).unwrap_or(None))
         })
-        .unwrap_or_else(|| ss.find_syntax_plain_text())
+        .map(|syntax| Arc::clone(syntax))
+        .unwrap_or_else(|| Arc::new(ss.find_syntax_plain_text().clone()))
 }
 
 /// Create a stream of highlighted line chunks for a file.

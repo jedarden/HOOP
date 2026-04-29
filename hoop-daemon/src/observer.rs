@@ -168,7 +168,7 @@ impl ObserverClient {
 }
 
 /// HTTP client for making read requests to primary daemon
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct ObserverHttpClient {
     pub primary_addr: SocketAddr,
     pub client: reqwest::Client,

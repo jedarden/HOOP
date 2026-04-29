@@ -23,10 +23,13 @@ use crate::stuck_detector::StuckDetectorConfigMap;
 
 /// A named secret pattern for the secrets scanner.
 ///
-/// Each pattern has a human-readable name, a severity level, and one or more
-/// regular expressions that match secrets of this type.
+/// Each pattern has a unique identifier, a human-readable name, a severity level,
+/// and one or more regular expressions that match secrets of this type.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct SecretPattern {
+    /// Unique snake_case identifier for this pattern (e.g., "anthropic_api_key").
+    /// This is used as the canonical identifier across client and backend.
+    pub id: String,
     /// Human-readable name for this pattern type (e.g., "AWS Access Key").
     pub name: String,
     /// Severity level: high, medium, or low.
@@ -67,13 +70,14 @@ impl SecretPattern {
     /// This is used to update both redaction and scanning patterns via
     /// `redaction::update_patterns_with_names()`.
     ///
-    /// Returns a list of `(name, pattern_string)` tuples.
+    /// Returns a list of `(id, pattern_string)` tuples where `id` is the
+    /// unique snake_case identifier.
     pub fn to_named_patterns(patterns: &[SecretPattern]) -> Vec<(&str, String)> {
         patterns
             .iter()
             .flat_map(|sp| {
-                let name: &str = &sp.name;
-                sp.patterns.iter().map(move |pat| (name, pat.clone()))
+                let id: &str = &sp.id;
+                sp.patterns.iter().map(move |pat| (id, pat.clone()))
             })
             .collect()
     }
@@ -85,6 +89,7 @@ impl SecretPattern {
 fn default_secret_patterns() -> Vec<SecretPattern> {
     vec![
         SecretPattern {
+            id: "anthropic_api_key".to_string(),
             name: "Anthropic API Key".to_string(),
             severity: "high".to_string(),
             patterns: vec![
@@ -92,6 +97,7 @@ fn default_secret_patterns() -> Vec<SecretPattern> {
             ],
         },
         SecretPattern {
+            id: "generic_sk_key".to_string(),
             name: "Generic API Key".to_string(),
             severity: "high".to_string(),
             patterns: vec![
@@ -99,6 +105,7 @@ fn default_secret_patterns() -> Vec<SecretPattern> {
             ],
         },
         SecretPattern {
+            id: "aws_access_key".to_string(),
             name: "AWS Access Key".to_string(),
             severity: "high".to_string(),
             patterns: vec![
@@ -106,6 +113,7 @@ fn default_secret_patterns() -> Vec<SecretPattern> {
             ],
         },
         SecretPattern {
+            id: "github_token".to_string(),
             name: "GitHub Token".to_string(),
             severity: "high".to_string(),
             patterns: vec![
@@ -116,6 +124,7 @@ fn default_secret_patterns() -> Vec<SecretPattern> {
             ],
         },
         SecretPattern {
+            id: "slack_token".to_string(),
             name: "Slack Token".to_string(),
             severity: "high".to_string(),
             patterns: vec![
@@ -124,6 +133,7 @@ fn default_secret_patterns() -> Vec<SecretPattern> {
             ],
         },
         SecretPattern {
+            id: "jwt".to_string(),
             name: "JWT".to_string(),
             severity: "high".to_string(),
             patterns: vec![
@@ -131,6 +141,7 @@ fn default_secret_patterns() -> Vec<SecretPattern> {
             ],
         },
         SecretPattern {
+            id: "bearer_token".to_string(),
             name: "Bearer Token".to_string(),
             severity: "high".to_string(),
             patterns: vec![
@@ -138,6 +149,7 @@ fn default_secret_patterns() -> Vec<SecretPattern> {
             ],
         },
         SecretPattern {
+            id: "env_var_secret".to_string(),
             name: "Environment Variable Secret".to_string(),
             severity: "high".to_string(),
             patterns: vec![
@@ -145,6 +157,7 @@ fn default_secret_patterns() -> Vec<SecretPattern> {
             ],
         },
         SecretPattern {
+            id: "json_secret_field".to_string(),
             name: "JSON Secret Field".to_string(),
             severity: "high".to_string(),
             patterns: vec![
@@ -773,7 +786,7 @@ fn yaml_get_role_config(root: &serde_yaml::Value) -> Option<crate::auth::RoleCon
             .unwrap_or_default();
 
         // Parse drafters list
-        let drafters = v
+        let drafters: Vec<String> = v
             .get("drafters")
             .and_then(|dv| dv.as_sequence())
             .map(|seq| {
