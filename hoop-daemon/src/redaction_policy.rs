@@ -261,9 +261,11 @@ impl RedactionPolicyState {
                 hoop_schema::HoopConfigRedactionAction::Redact => RedactionAction::Redact,
                 hoop_schema::HoopConfigRedactionAction::Reject => RedactionAction::Reject,
             };
+            // Convert Vec<HoopConfigRedactionPatternsItem> to Vec<String>
+            let patterns = config_redaction.patterns.iter().map(|p| p.to_string()).collect();
             GlobalRedactionPolicy {
                 action,
-                patterns: config_redaction.patterns.clone(),
+                patterns,
             }
         });
 
