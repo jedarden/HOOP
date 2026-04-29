@@ -460,7 +460,9 @@ mod tests {
             approved_by: None,
             approved_at: None,
             archived_at: None,
-            schema_version: ReflectionLedgerSchemaVersion("1.0.0".to_string()),
+            content_hash: None,
+            rejection_count: 0,
+            schema_version: ReflectionLedgerSchemaVersion("1.1.0".to_string()),
         }
     );
 
@@ -621,7 +623,6 @@ mod tests {
             pricing: None,
             redaction: None,
             roles: None,
-            secrets_patterns: vec![],
             server: None,
         };
 
@@ -728,7 +729,6 @@ mod tests {
             pricing: None,
             redaction: None,
             roles: None,
-            secrets_patterns: vec![],
             server: None,
         });
 
@@ -781,7 +781,9 @@ mod tests {
             approved_by: None,
             approved_at: None,
             archived_at: None,
-            schema_version: ReflectionLedgerSchemaVersion("1.0.0".to_string()),
+            content_hash: None,
+            rejection_count: 0,
+            schema_version: ReflectionLedgerSchemaVersion("1.1.0".to_string()),
         });
 
         // Stitch
@@ -821,6 +823,8 @@ mod tests {
             from_stitch: Uuid::new_v4(),
             to_stitch: Uuid::new_v4(),
             kind: StitchLinkKind::Spawned,
+            workspace_from: "/home/user/project1".to_string(),
+            workspace_to: "/home/user/project2".to_string(),
             created_at: None,
             schema_version: StitchLinkSchemaVersion("1.0.0".to_string()),
         });
