@@ -286,6 +286,11 @@ pub fn check_on_stitch_close(
     // Load the current Stitch's data
     let current = load_stitch_for_anomaly(&conn, stitch_id)?;
 
+    // Record cost per stitch metric (§16.7)
+    crate::metrics::metrics()
+        .hoop_cost_per_stitch_usd
+        .observe(&[&current.adapter], current.cost_usd);
+
     // Load historical Stitches within the 90-day window
     let historical = load_historical_stitches(&conn, DEFAULT_WINDOW_DAYS)?;
 

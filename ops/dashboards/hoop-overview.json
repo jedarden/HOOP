@@ -597,6 +597,27 @@
           "legendFormat": "approval rate"
         }
       ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "currencyUSD", "color": { "mode": "palette-classic" } } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 59 },
+      "id": 27,
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "title": "Cost per Stitch (p50/p95 over rolling window)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "hoop_cost_per_stitch_usd_p50",
+          "legendFormat": "p50 {{adapter}}"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+          "expr": "hoop_cost_per_stitch_usd_p95",
+          "legendFormat": "p95 {{adapter}}"
+        }
+      ]
     }
   ],
   "refresh": "30s",
