@@ -574,8 +574,12 @@ mod tests {
             morning_brief: None,
             // pricing (beyond §17.3, but part of config)
             pricing: None,
+            // redaction (§18.5)
+            redaction: None,
             // roles (RBAC, §13 Security)
             roles: None,
+            // secrets_patterns (§18)
+            secrets_patterns: vec![],
             // server (required)
             server: Some(HoopConfigServer {
                 bind_addr: Some("127.0.0.1:3000".to_string()),
@@ -617,7 +621,9 @@ mod tests {
             stuck_detector: None,
             morning_brief: None,
             pricing: None,
+            redaction: None,
             roles: None,
+            secrets_patterns: vec![],
             server: None,
         };
 
@@ -722,7 +728,9 @@ mod tests {
             stuck_detector: None,
             morning_brief: None,
             pricing: None,
+            redaction: None,
             roles: None,
+            secrets_patterns: vec![],
             server: None,
         });
 
