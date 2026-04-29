@@ -78,7 +78,70 @@
     "schema_version": {
       "type": "string",
       "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "prompts_dismissed": {
+      "type": "object",
+      "description": "Track which prompts have been dismissed (progressive capability introduction)",
+      "default": {},
+      "properties": {
+        "whats_new_v1_1_0": {
+          "type": ["string", "null"],
+          "description": "ISO 8601 timestamp when 'What's new' v1.1.0 prompt was dismissed, null if not dismissed"
+        },
+        "reflection_ledger_empty_30d": {
+          "type": ["string", "null"],
+          "description": "ISO 8601 timestamp when 'Reflection Ledger empty' prompt was dismissed"
+        },
+        "pattern_suggestion_10plus": {
+          "type": ["string", "null"],
+          "description": "ISO 8601 timestamp when 'Pattern suggestion' prompt was dismissed"
+        },
+        "agent_intro": {
+          "type": ["string", "null"],
+          "description": "ISO 8601 timestamp when 'Agent intro' prompt was dismissed"
+        },
+        "mic_intro": {
+          "type": ["string", "null"],
+          "description": "ISO 8601 timestamp when 'Mic intro' prompt was dismissed"
+        }
+      }
+    },
+    "feature_usage": {
+      "type": "object",
+      "description": "Track first usage of features for progressive introduction",
+      "default": {},
+      "properties": {
+        "agent_first_used": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "First timestamp when agent was used"
+        },
+        "mic_first_used": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "First timestamp when dictation/mic was used"
+        },
+        "patterns_first_used": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "First timestamp when patterns were created/used"
+        },
+        "reflection_ledger_first_used": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "First timestamp when reflection ledger was used"
+        }
+      }
+    },
+    "last_seen_version": {
+      "type": ["string", "null"],
+      "description": "Last HOOP version seen by this operator (for 'What's new' detection)"
+    },
+    "prompts_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Global 'don't bug me' setting - when false, no progressive prompts are shown"
     }
   },
-  "schema_version": "1.0.0"
+  "schema_version": "1.1.0"
 }
