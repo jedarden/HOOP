@@ -1587,6 +1587,68 @@ body:has(.connection-banner) main {
   text-decoration: underline;
 }
 
+/* Saturation Alerts Banner — displays capacity saturation alerts (§6 P2 d10, §8.3, hoop-ttb.3.22) */
+.saturation-alerts-banner {
+  position: fixed;
+  bottom: 2rem;
+  left: 2rem;
+  z-index: 999;
+  max-width: 420px;
+  width: 100%;
+  pointer-events: none;
+}
+
+.saturation-alerts-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  pointer-events: auto;
+}
+
+.saturation-alert-card {
+  background: #e3f2fd;
+  border: 2px solid #1976d2;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: slideInLeft 0.3s ease-out;
+}
+
+.saturation-alert-card .alert-header {
+  border-bottom-color: #1976d2;
+  background: #bbdefb;
+}
+
+.saturation-alert-card .alert-title {
+  color: #0d47a1;
+}
+
+.saturation-alert-card .alert-dismiss {
+  margin-left: auto;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: #0d47a1;
+  padding: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.saturation-alert-card .alert-dismiss:hover {
+  background: rgba(13, 87, 161, 0.1);
+}
+
+.saturation-alert-card .saturation-value {
+  color: #d84315;
+  font-weight: 600;
+}
+
 /* Responsive for conversation pane */
 @media (max-width: 1024px) {
   .conversation-pane {
@@ -4311,6 +4373,33 @@ body:has(.connection-banner) main {
 
 .blame-toggle--active:hover {
   background: #4338ca;
+}
+
+/* Hex toggle button in file preview header */
+.hex-toggle {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid #c7d2fe;
+  border-radius: 3px;
+  background: #f5f7ff;
+  color: #4f46e5;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s, color 0.1s;
+}
+
+.hex-toggle:hover {
+  background: #e0e7ff;
+}
+
+.hex-toggle--active {
+  background: #059669;
+  color: #fff;
+  border-color: #059669;
+}
+
+.hex-toggle--active:hover {
+  background: #047857;
 }
 
 /* Blame cell: sits before the line number in both viewers */

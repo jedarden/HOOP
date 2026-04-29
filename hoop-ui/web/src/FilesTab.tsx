@@ -1240,6 +1240,14 @@ export default function FilesTab({ projectName, projectPath, onSwitchTab }: File
                         ? (blameLoading ? '⋯ blame' : '● blame')
                         : '○ blame'}
                     </button>
+                    <button
+                      className={`hex-toggle${hexEnabled ? ' hex-toggle--active' : ''}`}
+                      onClick={() => setHexEnabled(v => !v)}
+                      title={hexEnabled ? 'Show as text' : 'Show as hex dump'}
+                      disabled={showDiffView}
+                    >
+                      {hexEnabled ? '◼ hex' : '◻ hex'}
+                    </button>
                     {!showDiffView && (
                       <select
                         className="hl-theme-select"
@@ -1271,6 +1279,11 @@ export default function FilesTab({ projectName, projectPath, onSwitchTab }: File
                 />
               ) : isPdfPath(selectedFile.path) ? (
                 <PdfViewer
+                  projectName={projectName}
+                  path={selectedFile.path}
+                />
+              ) : hexEnabled ? (
+                <HexViewer
                   projectName={projectName}
                   path={selectedFile.path}
                 />
