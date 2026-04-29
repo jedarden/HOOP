@@ -29,6 +29,7 @@ hex = "0.4"
 hmac = "0.12"
 chrono = { workspace = true }
 rusqlite = { version = "0.30", features = ["bundled"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 bytes = "1"
 zstd = "0.13"

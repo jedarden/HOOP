@@ -11,6 +11,7 @@ mod projects;
 mod restore;
 mod risk_patterns;
 mod script;
+mod skills;
 
 use clap::Parser;
 use hoop_daemon::{audit, fleet, serve, Config as DaemonConfig};
@@ -114,6 +115,9 @@ enum Commands {
     /// Manage risk patterns
     #[command(subcommand)]
     RiskPatterns(risk_patterns::RiskPatternsCommands),
+    /// Manage agent-invocable skills
+    #[command(subcommand)]
+    Skills(skills::SkillsCommands),
     /// First-time setup wizard
     Init,
 }
@@ -326,6 +330,12 @@ async fn main() -> anyhow::Result<()> {
         Commands::RiskPatterns(cmd) => {
             if let Err(e) = risk_patterns::handle_risk_patterns(cmd).await {
                 eprintln!("hoop risk-patterns: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Skills(cmd) => {
+            if let Err(e) = skills::handle_skills(cmd).await {
+                eprintln!("hoop skills: {}", e);
                 std::process::exit(1);
             }
         }
