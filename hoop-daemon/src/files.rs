@@ -512,3 +512,180 @@ fn search_without_grep(
     results.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(results)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_safe_rel_path_valid_paths() {
+        assert!(is_safe_rel_path("src/main.rs"));
+        assert!(is_safe_rel_path("src/lib.rs"));
+        assert!(is_safe_rel_path("src"));
+        assert!(is_safe_rel_path(""));
+        assert!(is_safe_rel_path("path/to/file.txt"));
+        assert!(is_safe_rel_path("nested/deeply/still/safe/file.rs"));
+    }
+
+    #[test]
+    fn test_is_safe_rel_path_rejects_parent_dir() {
+        assert!(!is_safe_rel_path("../etc/passwd"));
+        assert!(!is_safe_rel_path("src/../../etc/passwd"));
+        assert!(!is_safe_rel_path("../"));
+        assert!(!is_safe_rel_path("a/../b"));
+        assert!(!is_safe_rel_path("safe/../unsafe"));
+    }
+
+    #[test]
+    fn test_is_safe_rel_path_rejects_absolute() {
+        assert!(!is_safe_rel_path("/etc/passwd"));
+        assert!(!is_safe_rel_path("/absolute/path"));
+        assert!(!is_safe_rel_path("C:\\Windows\\System32"));
+    }
+
+    #[test]
+    fn test_parse_ext_patterns_simple() {
+        assert_eq!(parse_ext_patterns("rs"), vec!["rs"]);
+        assert_eq!(parse_ext_patterns("ts"), vec!["ts"]);
+        assert_eq!(parse_ext_patterns("txt"), vec!["txt"]);
+    }
+
+    #[test]
+    fn test_parse_ext_patterns_with_leading_dot() {
+        assert_eq!(parse_ext_patterns(".rs"), vec!["rs"]);
+        assert_eq!(parse_ext_patterns(".ts,.tsx"), vec!["ts", "tsx"]);
+    }
+
+    #[test]
+    fn test_parse_ext_patterns_with_wildcard() {
+        assert_eq!(parse_ext_patterns("*.rs"), vec!["rs"]);
+        assert_eq!(parse_ext_patterns("*.{rs,tsx}"), vec!["rs", "tsx"]);
+    }
+
+    #[test]
+    fn test_parse_ext_patterns_comma_separated() {
+        assert_eq!(parse_ext_patterns("rs,ts,tsx"), vec!["rs", "ts", "tsx"]);
+        assert_eq!(parse_ext_patterns("rs, ts, tsx"), vec!["rs", "ts", "tsx"]);
+    }
+
+    #[test]
+    fn test_parse_ext_patterns_brace_expansion() {
+        assert_eq!(parse_ext_patterns("{rs,tsx}"), vec!["rs", "tsx"]);
+        assert_eq!(parse_ext_patterns("*.{rs,ts,tsx}"), vec!["rs", "ts", "tsx"]);
+    }
+
+    #[test]
+    fn test_parse_ext_patterns_empty_and_whitespace() {
+        assert_eq!(parse_ext_patterns(""), Vec::<String>::new());
+        assert_eq!(parse_ext_patterns("   "), Vec::<String>::new());
+        assert_eq!(parse_ext_patterns("  ,  ,  "), Vec::<String>::new());
+    }
+
+    #[test]
+    fn test_parse_ext_patterns_filters_empty() {
+        assert_eq!(parse_ext_patterns(","), Vec::<String>::new());
+        assert_eq!(parse_ext_patterns("{,}"), Vec::<String>::new());
+        assert_eq!(parse_ext_patterns("{rs,}"), vec!["rs"]);
+        assert_eq!(parse_ext_patterns("{,tsx}"), vec!["tsx"]);
+    }
+
+    #[test]
+    fn test_git_status_from_output() {
+        // Test parsing of git status output
+        let output = "M src/lib.rs\nA src/main.rs\nD src/old.rs\n?? new_file.rs\nR old.txt -> new.txt";
+        let mut map = HashMap::new();
+        for line in output.lines() {
+            if line.len() < 3 {
+                continue;
+            }
+            let xy = &line[..2];
+            let rest = line[3..].trim();
+            let effective_path = if xy.starts_with('R') || xy.ends_with('R') {
+                rest.split(" -> ").last().unwrap_or(rest)
+            } else {
+                rest
+            };
+            let index_char = xy.chars().next().unwrap_or(' ');
+            let worktree_char = xy.chars().nth(1).unwrap_or(' ');
+            let status = match index_char {
+                'M' | 'U' => GitStatus::Modified,
+                'A' => GitStatus::Added,
+                'D' => GitStatus::Deleted,
+                'R' => GitStatus::Renamed,
+                '?' => GitStatus::Untracked,
+                _ => match worktree_char {
+                    'M' => GitStatus::Modified,
+                    'D' => GitStatus::Deleted,
+                    _ => GitStatus::Clean,
+                },
+            };
+            map.insert(effective_path.to_string(), status);
+        }
+
+        assert_eq!(map.get("src/lib.rs"), Some(&GitStatus::Modified));
+        assert_eq!(map.get("src/main.rs"), Some(&GitStatus::Added));
+        assert_eq!(map.get("src/old.rs"), Some(&GitStatus::Deleted));
+        assert_eq!(map.get("new_file.rs"), Some(&GitStatus::Untracked));
+        assert_eq!(map.get("new.txt"), Some(&GitStatus::Renamed));
+    }
+
+    #[test]
+    fn test_file_entry_sort_order() {
+        let mut entries = vec![
+            FileEntry {
+                name: "zebra.rs".to_string(),
+                path: "src/zebra.rs".to_string(),
+                is_dir: false,
+                size: 100,
+                mtime: 1000,
+                git_status: GitStatus::Clean,
+            },
+            FileEntry {
+                name: "alpha.rs".to_string(),
+                path: "src/alpha.rs".to_string(),
+                is_dir: false,
+                size: 200,
+                mtime: 2000,
+                git_status: GitStatus::Clean,
+            },
+            FileEntry {
+                name: "src".to_string(),
+                path: "src".to_string(),
+                is_dir: true,
+                size: 0,
+                mtime: 0,
+                git_status: GitStatus::Clean,
+            },
+            FileEntry {
+                name: "Beta.rs".to_string(),
+                path: "src/Beta.rs".to_string(),
+                is_dir: false,
+                size: 150,
+                mtime: 1500,
+                git_status: GitStatus::Clean,
+            },
+        ];
+
+        entries.sort_by(|a, b| {
+            b.is_dir
+                .cmp(&a.is_dir)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+        });
+
+        assert_eq!(entries[0].name, "src");
+        assert_eq!(entries[1].name, "alpha.rs");
+        assert_eq!(entries[2].name, "Beta.rs");
+        assert_eq!(entries[3].name, "zebra.rs");
+    }
+
+    #[test]
+    fn test_git_status_display() {
+        assert_eq!(serde_json::to_string(&GitStatus::Clean).unwrap(), r#""clean""#);
+        assert_eq!(serde_json::to_string(&GitStatus::Modified).unwrap(), r#""modified""#);
+        assert_eq!(serde_json::to_string(&GitStatus::Added).unwrap(), r#""added""#);
+        assert_eq!(serde_json::to_string(&GitStatus::Deleted).unwrap(), r#""deleted""#);
+        assert_eq!(serde_json::to_string(&GitStatus::Untracked).unwrap(), r#""untracked""#);
+        assert_eq!(serde_json::to_string(&GitStatus::Renamed).unwrap(), r#""renamed""#);
+        assert_eq!(serde_json::to_string(&GitStatus::Dirty).unwrap(), r#""dirty""#);
+    }
+}

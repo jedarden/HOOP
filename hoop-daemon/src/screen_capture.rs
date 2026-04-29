@@ -222,3 +222,145 @@ pub fn list_for_project(project: &str) -> Vec<ScreenCaptureSummary> {
     results.sort_by(|a, b| b.recorded_at.cmp(&a.recorded_at));
     results
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_screen_capture_meta_default() {
+        let meta = ScreenCaptureMeta {
+            stitch_id: "test-stitch".to_string(),
+            project: String::new(),
+            title: String::new(),
+            recorded_at: String::new(),
+            duration_secs: None,
+        };
+
+        assert_eq!(meta.stitch_id, "test-stitch");
+        assert!(meta.project.is_empty());
+        assert!(meta.title.is_empty());
+        assert!(meta.duration_secs.is_none());
+    }
+
+    #[test]
+    fn test_screen_capture_meta_serialization() {
+        let meta = ScreenCaptureMeta {
+            stitch_id: "st-123".to_string(),
+            project: "test-project".to_string(),
+            title: "Test Capture".to_string(),
+            recorded_at: "2026-04-29T12:00:00Z".to_string(),
+            duration_secs: Some(60.5),
+        };
+
+        let json = serde_json::to_string(&meta).unwrap();
+        assert!(json.contains("st-123"));
+        assert!(json.contains("test-project"));
+        assert!(json.contains("60.5"));
+
+        let parsed: ScreenCaptureMeta = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.stitch_id, meta.stitch_id);
+        assert_eq!(parsed.project, meta.project);
+        assert_eq!(parsed.duration_secs, meta.duration_secs);
+    }
+
+    #[test]
+    fn test_frame_sample_serialization() {
+        let sample = FrameSample {
+            timestamp_secs: 10.5,
+            label: "Chapter 1".to_string(),
+        };
+
+        let json = serde_json::to_string(&sample).unwrap();
+        assert!(json.contains("10.5"));
+        assert!(json.contains("Chapter 1"));
+
+        let parsed: FrameSample = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.timestamp_secs, 10.5);
+        assert_eq!(parsed.label, "Chapter 1");
+    }
+
+    #[test]
+    fn test_transcript_word_serialization() {
+        let word = TranscriptWord {
+            word: "hello".to_string(),
+            start: 0.0,
+            end: 0.5,
+        };
+
+        let json = serde_json::to_string(&word).unwrap();
+        assert!(json.contains("hello"));
+
+        let parsed: TranscriptWord = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.word, "hello");
+        assert_eq!(parsed.start, 0.0);
+        assert_eq!(parsed.end, 0.5);
+    }
+
+    #[test]
+    fn test_screen_capture_transcript_serialization() {
+        let transcript = ScreenCaptureTranscript {
+            text: "hello world".to_string(),
+            words: vec![
+                TranscriptWord {
+                    word: "hello".to_string(),
+                    start: 0.0,
+                    end: 0.5,
+                },
+                TranscriptWord {
+                    word: "world".to_string(),
+                    start: 0.5,
+                    end: 1.0,
+                },
+            ],
+        };
+
+        let json = serde_json::to_string(&transcript).unwrap();
+        assert!(json.contains("hello world"));
+
+        let parsed: ScreenCaptureTranscript = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.text, "hello world");
+        assert_eq!(parsed.words.len(), 2);
+    }
+
+    #[test]
+    fn test_screen_capture_summary_serialization() {
+        let summary = ScreenCaptureSummary {
+            stitch_id: "st-123".to_string(),
+            project: "test-project".to_string(),
+            title: "Test".to_string(),
+            recorded_at: "2026-04-29T12:00:00Z".to_string(),
+            duration_secs: Some(60.0),
+            chapter_count: 5,
+            has_transcript: true,
+        };
+
+        let json = serde_json::to_string(&summary).unwrap();
+        assert!(json.contains("st-123"));
+        assert!(json.contains("true"));
+
+        let parsed: ScreenCaptureSummary = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.chapter_count, 5);
+        assert!(parsed.has_transcript);
+    }
+
+    #[test]
+    fn test_screen_capture_data_serialization() {
+        let data = ScreenCaptureData {
+            stitch_id: "st-123".to_string(),
+            title: "Test".to_string(),
+            project: "test-project".to_string(),
+            recorded_at: "2026-04-29T12:00:00Z".to_string(),
+            video_url: "http://example.com/video.mp4".to_string(),
+            duration_secs: Some(60.0),
+            chapters: vec![],
+            transcript: None,
+        };
+
+        let json = serde_json::to_string(&data).unwrap();
+        assert!(json.contains("video_url"));
+
+        let parsed: ScreenCaptureData = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.video_url, "http://example.com/video.mp4");
+    }
+}
