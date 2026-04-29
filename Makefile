@@ -54,11 +54,12 @@ test-load-full:
 	@echo "Configuration: 20 projects × 5 workers × 200 beads"
 	@echo "WARNING: This may take 10+ minutes"
 	@echo ""
+	HOOP_LOAD_TEST_FULL_SCALE=1 \
 	HOOP_LOAD_PROJECTS=20 \
 	HOOP_LOAD_WORKERS=5 \
 	HOOP_LOAD_BEADS=200 \
 	HOOP_LOAD_CADENCE_MS=10 \
-	cargo test --test load_test test_medium_scale_load_test -- --nocapture
+	cargo test --test load_test test_full_scale_load_test -- --ignored --nocapture
 
 # Run load test in watch mode (requires cargo-watch)
 test-load-watch:
