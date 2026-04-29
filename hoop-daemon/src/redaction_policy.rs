@@ -4,8 +4,9 @@
 //!
 //! ## Precedence
 //!
-//! 1. Global `redaction:` block in config.yml (TODO: not yet implemented in schema)
-//! 2. Built-in defaults (if no global policy is configured)
+//! 1. Global `redaction:` block in config.yml
+//! 2. Per-project override in projects.yaml
+//! 3. Built-in defaults (if no policy is configured)
 //!
 //! ## Actions
 //!
