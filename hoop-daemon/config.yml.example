@@ -232,13 +232,21 @@ pricing_file: "~/.hoop/pricing.yml"
 # ---------------------------------------------------------------------------
 # Custom secret scanning patterns
 # Default: (built-in patterns for common secrets)
+#
+# Each pattern has:
+# - id: Unique snake_case identifier (used for pattern matching and filtering)
+# - name: Human-readable display name
+# - severity: "high", "medium", or "low"
+# - patterns: List of regex patterns that match this secret type
 secrets_patterns:
-  - name: "Anthropic API Key"
+  - id: "anthropic_api_key"
+    name: "Anthropic API Key"
     severity: "high"
     patterns:
       - "sk-ant-[a-zA-Z0-9_-]{20,}"
 
-  - name: "OpenAI API Key"
+  - id: "openai_api_key"
+    name: "OpenAI API Key"
     severity: "high"
     patterns:
       - "sk-[a-zA-Z0-9]{48}"
@@ -261,3 +269,20 @@ roles:
   # Drafters can create and edit drafts
   drafters:
     - "drafter@example.com"
+
+# ---------------------------------------------------------------------------
+# Redaction Policy (§18.5)
+# ---------------------------------------------------------------------------
+# Global redaction policy for secrets detection.
+# Per-project overrides in projects.yaml take precedence over this global policy.
+#
+# Actions:
+#   - warn: Log findings but allow the operation (default)
+#   - redact: Replace secrets with [REDACTED] in stored content
+#   - reject: Block the operation entirely (e.g., attachment upload)
+#
+# Example:
+# redaction:
+#   action: warn
+#   patterns: []  # empty = all default patterns enabled
+redaction: null

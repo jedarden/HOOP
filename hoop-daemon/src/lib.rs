@@ -110,6 +110,7 @@ pub mod bead_commit_index;
 pub mod net_diff;
 pub mod orphan_beads;
 pub mod screen_capture;
+pub mod secrets_scanner;
 pub mod observer;
 pub mod cost_anomaly;
 pub mod reflection_detector;
@@ -1792,6 +1793,14 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
             named_patterns.len(),
             initial_config.secrets_patterns.attribution
         );
+
+        // Initialize secrets scanner with the same patterns (§18)
+        secrets_scanner::update_patterns(&initial_config.secrets_patterns.value);
+        info!(
+            "Secrets scanner initialized: {} patterns from {}",
+            initial_config.secrets_patterns.value.len(),
+            initial_config.secrets_patterns.attribution
+        );
     }
 
     // Spawn task to handle config.yml changes
@@ -1816,6 +1825,14 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                     info!(
                         "Redaction patterns reloaded: {} patterns from {}",
                         named_patterns.len(),
+                        config.secrets_patterns.attribution
+                    );
+
+                    // Update secrets scanner with the same patterns (§18)
+                    secrets_scanner::update_patterns(&config.secrets_patterns.value);
+                    info!(
+                        "Secrets scanner reloaded: {} patterns from {}",
+                        config.secrets_patterns.value.len(),
                         config.secrets_patterns.attribution
                     );
 
@@ -2376,6 +2393,7 @@ Note: This is an automated synthesis from voice dictation."#,
             stuck_detector: None,
             morning_brief: None,
             roles: None,
+            redaction: None,
         };
 
         tokio::task::spawn_blocking(|| {
@@ -2400,6 +2418,7 @@ Note: This is an automated synthesis from voice dictation."#,
                 stuck_detector: None,
                 morning_brief: None,
                 roles: None,
+                redaction: None,
             };
 
             if !config_path.exists() {
@@ -2511,6 +2530,15 @@ Note: This is an automated synthesis from voice dictation."#,
     let draft_cleanup_shutdown = shutdown_coordinator.subscribe();
     fleet::start_draft_cleanup_scheduler(draft_cleanup_shutdown);
     info!("Draft cleanup scheduler started");
+
+    // Start redaction audit cleanup scheduler (§18.5) — removes old redaction_audit entries
+    let redaction_audit_cleanup_shutdown = shutdown_coordinator.subscribe();
+    let audit_retention_days = resolved_config.audit_retention_days.value;
+    fleet::start_redaction_audit_cleanup_scheduler(
+        redaction_audit_cleanup_shutdown,
+        move || audit_retention_days,
+    );
+    info!("Redaction audit cleanup scheduler started (retention: {} days)", audit_retention_days);
 
     // Initialize template library (§22)
     let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
@@ -3134,8 +3162,9 @@ Note: This is an automated synthesis from voice dictation."#,
             _ = hangup => {
                 info!("Received SIGHUP, triggering config reload");
                 let _ = config_reload_tx.send(()).await;
-                // Continue running - SIGHUP doesn't shut down the daemon
-                return std::future::pending::<()>();
+                // Don't shut down - SIGHUP only triggers reload
+                // Loop back and wait for another signal
+                return;
             }
         }
         let _ = shutdown_coordinator.shutdown(None).await;
