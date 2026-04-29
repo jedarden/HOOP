@@ -33,6 +33,7 @@ pub mod api_stitch_replay;
 pub mod api_timeline;
 pub mod api_transcription;
 pub mod api_uploads;
+pub mod api_skills;
 pub mod atomic_write;
 pub mod attachment_sync;
 pub mod attachments;
