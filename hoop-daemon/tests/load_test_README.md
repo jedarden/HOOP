@@ -4,7 +4,7 @@ Synthetic event stream generator for load testing the HOOP daemon.
 
 ## Overview
 
-The load test driver generates concurrent synthetic event streams (20 projects × 5 workers × 200 beads by default) and drives the daemon to assert performance budgets:
+The load test driver generates concurrent synthetic event streams (20 projects × 5 workers × 300 beads by default) and drives the daemon to assert performance budgets:
 
 - **UI responsiveness budget**: API latency < 500ms
 - **Memory ceiling**: RSS < 4GB
@@ -35,7 +35,7 @@ cargo test --test load_test test_load_test_with_daemon -- --nocapture
 cargo test --test load_test test_medium_scale_load_test -- --nocapture
 ```
 
-### Full Scale (20×5×200, requires explicit enable)
+### Full Scale (20×5×300, requires explicit enable)
 
 ```bash
 HOOP_LOAD_TEST_FULL_SCALE=1 cargo test --test load_test test_full_scale_load_test -- --ignored --nocapture
@@ -52,10 +52,21 @@ HOOP_LOAD_PROJECTS=10 HOOP_LOAD_WORKERS=3 HOOP_LOAD_BEADS=100 \
 
 The load test runs in CI via `.github/workflows/load-test.yml`:
 
-- **PRs**: Medium scale, optional (doesn't block merge)
-- **Main branch**: Full scale, non-blocking
+- **PRs**: Medium scale, blocks merge if configured as required check in branch protection
+- **Main branch**: Full scale, blocks merge on budget violations
 - **Releases**: Full scale, **required** for release
 - **Manual**: Trigger via GitHub Actions UI with scale selection
+
+### Configuring PR Load Test as Required
+
+To make the PR load test block merges, configure it as a required check in GitHub branch protection rules:
+
+1. Go to repository Settings → Branches
+2. Edit the branch protection rule for `main`
+3. Under "Protect matching branches", enable "Require status checks to pass before merging"
+4. Add `Load Test (Medium Scale)` and `UI Performance Budget (Playwright)` as required checks
+
+This ensures performance budgets are enforced before any PR can merge.
 
 ## Performance Budgets
 

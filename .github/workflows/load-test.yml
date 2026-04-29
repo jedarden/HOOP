@@ -22,12 +22,11 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  # Quick load test for PRs (optional, runs but doesn't block)
+  # Load test for PRs (blocks merge on budget violations)
   load-test-pr:
     name: Load Test (Medium Scale)
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
-    continue-on-error: true  # Optional for PRs - doesn't block merge
 
     steps:
     - uses: actions/checkout@v4
@@ -61,6 +60,9 @@ jobs:
         HOOP_LOAD_BEADS: 50
         HOOP_LOAD_CADENCE_MS: 10
 
+      # Test failure indicates performance budget violation - will block merge if configured as required check
+      continue-on-error: false
+
     - name: Upload test results
       if: always()
       uses: actions/upload-artifact@v4
@@ -70,12 +72,11 @@ jobs:
           target/
         retention-days: 7
 
-  # Full load test for main branch pushes
+  # Full load test for main branch pushes (blocks merge on budget violations)
   load-test-main:
     name: Load Test (Full Scale)
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    continue-on-error: true  # Runs but doesn't block main branch
 
     steps:
     - uses: actions/checkout@v4
@@ -110,11 +111,8 @@ jobs:
         HOOP_LOAD_BEADS: 300
         HOOP_LOAD_CADENCE_MS: 10
 
-    - name: Check performance budgets
-      run: |
-        echo "Verifying performance budgets..."
-        # The test itself will fail if budgets are exceeded
-        # This step provides clear CI output about the check
+      # Test failure indicates performance budget violation - will block merge on main branch
+      continue-on-error: false
 
     - name: Upload test results
       if: always()
@@ -169,14 +167,8 @@ jobs:
         HOOP_LOAD_BEADS: 300
         HOOP_LOAD_CADENCE_MS: 10
 
-    - name: Verify performance budgets
-      run: |
-        echo "=== Performance Budget Verification ==="
-        echo "API Latency Budget: <500ms"
-        echo "WS Fan-out Lag Budget: <100ms"
-        echo "Memory Ceiling: <4GB"
-        echo ""
-        echo "✓ All performance budgets must be satisfied for release"
+      # Test failure indicates performance budget violation - will block release
+      continue-on-error: false
 
     - name: Upload release test results
       if: always()
@@ -301,6 +293,9 @@ jobs:
       env:
         CI: true
 
+      # Playwright test failures indicate performance budget violations
+      continue-on-error: false
+
     - name: Upload Playwright report
       if: always()
       uses: actions/upload-artifact@v4
@@ -310,14 +305,3 @@ jobs:
           hoop-ui/web/playwright-report/
           hoop-ui/web/test-results/
         retention-days: 30
-
-    - name: Check performance budget compliance
-      if: always()
-      run: |
-        echo "=== UI Performance Budget Verification ==="
-        echo "Interaction Latency Budget: < 500ms"
-        echo "Page Load Budget: < 2000ms"
-        echo "Time to Interactive Budget: < 3000ms"
-        echo "Frame Rate Threshold: > 30fps"
-        echo ""
-        echo "✓ All performance budgets must be satisfied for merge"
