@@ -393,15 +393,9 @@ Per §20, all spec changes require a CHANGELOG entry.
 
             // Onboarding API types
             crate::api_onboarding::OnboardingPrompt,
-            crate::api_onboarding::PromptsResponse,
-            crate::api_onboarding::DismissRequest,
-            crate::api_onboarding::DismissResponse,
-            crate::api_onboarding::SetEnabledRequest,
-            crate::api_onboarding::SetEnabledResponse,
-            crate::api_onboarding::RecordUsageRequest,
-            crate::api_onboarding::RecordUsageResponse,
-            crate::api_onboarding::AckVersionRequest,
-            crate::api_onboarding::AckVersionResponse,
+            crate::api_onboarding::OnboardingPromptsResponse,
+            crate::api_onboarding::DismissPromptRequest,
+            crate::api_onboarding::RecordFeatureUsageRequest,
 
             // Orphans API types
             crate::api_orphans::OrphansResponse,
