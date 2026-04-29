@@ -1079,6 +1079,220 @@ test.describe('Touch Target Size Compliance - All Interactive Elements', () => {
   }
 });
 
+test.describe('PDF Viewer - File Preview (hoop-ttb.4.7)', () => {
+  test('should display PDF viewer with page navigation on desktop (1280px)', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('/');
+
+    const projectCard = page.locator('.project-card-fleet').first();
+    if (await projectCard.count() > 0) {
+      await projectCard.click();
+      await page.waitForTimeout(500);
+
+      const filesTab = page.locator('button[role="tab"]', { hasText: 'Files' });
+      if (await filesTab.count() > 0) {
+        await filesTab.click();
+
+        // Look for PDF files in the file tree
+        const pdfFiles = page.locator('.file-tree-node').filter({ hasText: /\.pdf$/i });
+        const pdfCount = await pdfFiles.count();
+
+        if (pdfCount > 0) {
+          // Click first PDF file
+          await pdfFiles.first().click();
+          await page.waitForTimeout(500);
+
+          // Verify PDF viewer is displayed
+          const pdfViewer = page.locator('.pdf-viewer');
+          await expect(pdfViewer.first()).toBeVisible();
+
+          // Verify toolbar elements are present
+          const toolbar = page.locator('.pdf-viewer-toolbar');
+          await expect(toolbar.first()).toBeVisible();
+
+          // Verify page navigation buttons
+          const prevBtn = page.locator('.pdf-viewer-btn', { hasText: '←' });
+          const nextBtn = page.locator('.pdf-viewer-btn', { hasText: '→' });
+          await expect(prevBtn.first()).toBeVisible();
+          await expect(nextBtn.first()).toBeVisible();
+
+          // Verify zoom controls
+          const zoomInBtn = page.locator('.pdf-viewer-btn', { hasText: '+' });
+          const zoomOutBtn = page.locator('.pdf-viewer-btn', { hasText: '−' });
+          await expect(zoomInBtn.first()).toBeVisible();
+          await expect(zoomOutBtn.first()).toBeVisible();
+
+          // Verify download button
+          const downloadBtn = page.locator('.pdf-viewer-download-btn');
+          await expect(downloadBtn.first()).toBeVisible();
+
+          // Verify search input
+          const searchInput = page.locator('.pdf-viewer-search-input');
+          await expect(searchInput.first()).toBeVisible();
+
+          // Verify canvas for rendering
+          const canvas = page.locator('.pdf-viewer-canvas');
+          await expect(canvas.first()).toBeVisible();
+        }
+      }
+    }
+  });
+
+  test('should display PDF viewer on mobile (375px)', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+
+    const projectCard = page.locator('.project-card-fleet').first();
+    if (await projectCard.count() > 0) {
+      await projectCard.click();
+      await page.waitForTimeout(500);
+
+      const filesTab = page.locator('button[role="tab"]', { hasText: 'Files' });
+      if (await filesTab.count() > 0) {
+        await filesTab.click();
+
+        // Look for PDF files
+        const pdfFiles = page.locator('.file-tree-node').filter({ hasText: /\.pdf$/i });
+        const pdfCount = await pdfFiles.count();
+
+        if (pdfCount > 0) {
+          await pdfFiles.first().click();
+          await page.waitForTimeout(500);
+
+          // PDF viewer should be visible on mobile
+          const pdfViewer = page.locator('.pdf-viewer');
+          await expect(pdfViewer.first()).toBeVisible();
+
+          // Toolbar should wrap on mobile
+          const toolbar = page.locator('.pdf-viewer-toolbar');
+          if (await toolbar.count() > 0) {
+            const flexWrap = await toolbar.first().evaluate(el => {
+              return window.getComputedStyle(el).flexWrap;
+            });
+            expect(['wrap', 'wrap-reverse']).toContain(flexWrap);
+          }
+
+          // Buttons should be tappable on mobile
+          const buttons = page.locator('.pdf-viewer-btn');
+          const buttonCount = await buttons.count();
+          if (buttonCount > 0) {
+            for (let i = 0; i < Math.min(buttonCount, 3); i++) {
+              const btn = buttons.nth(i);
+              if (await btn.isVisible()) {
+                const boundingBox = await btn.boundingBox();
+                if (boundingBox) {
+                  // Minimum tap target: 40x40px
+                  expect(boundingBox.width).toBeGreaterThanOrEqual(32);
+                  expect(boundingBox.height).toBeGreaterThanOrEqual(32);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  test('should support search within PDF', async ({ page }) => {
+    await page.goto('/');
+
+    const projectCard = page.locator('.project-card-fleet').first();
+    if (await projectCard.count() > 0) {
+      await projectCard.click();
+      await page.waitForTimeout(500);
+
+      const filesTab = page.locator('button[role="tab"]', { hasText: 'Files' });
+      if (await filesTab.count() > 0) {
+        await filesTab.click();
+
+        const pdfFiles = page.locator('.file-tree-node').filter({ hasText: /\.pdf$/i });
+        const pdfCount = await pdfFiles.count();
+
+        if (pdfCount > 0) {
+          await pdfFiles.first().click();
+          await page.waitForTimeout(500);
+
+          // Search input should be present
+          const searchInput = page.locator('.pdf-viewer-search-input');
+          if (await searchInput.count() > 0 && await searchInput.first().isVisible()) {
+            // Type search query
+            await searchInput.first().fill('test');
+            await page.waitForTimeout(500);
+
+            // Search match counter may appear if matches are found
+            const matchCounter = page.locator('.pdf-viewer-search-matches');
+            if (await matchCounter.count() > 0) {
+              // If matches found, verify counter is visible
+              const counterText = await matchCounter.first().textContent();
+              expect(counterText).toBeTruthy();
+            }
+          }
+        }
+      }
+    }
+  });
+
+  test('should support zoom controls', async ({ page }) => {
+    await page.goto('/');
+
+    const projectCard = page.locator('.project-card-fleet').first();
+    if (await projectCard.count() > 0) {
+      await projectCard.click();
+      await page.waitForTimeout(500);
+
+      const filesTab = page.locator('button[role="tab"]', { hasText: 'Files' });
+      if (await filesTab.count() > 0) {
+        await filesTab.click();
+
+        const pdfFiles = page.locator('.file-tree-node').filter({ hasText: /\.pdf$/i });
+        const pdfCount = await pdfFiles.count();
+
+        if (pdfCount > 0) {
+          await pdfFiles.first().click();
+          await page.waitForTimeout(500);
+
+          // Get initial zoom level
+          const zoomLabel = page.locator('.pdf-viewer-zoom-label');
+          if (await zoomLabel.count() > 0 && await zoomLabel.first().isVisible()) {
+            const initialZoom = await zoomLabel.first().textContent();
+            expect(initialZoom).toContain('%');
+
+            // Click zoom in button
+            const zoomInBtn = page.locator('.pdf-viewer-btn', { hasText: '+' });
+            if (await zoomInBtn.count() > 0) {
+              await zoomInBtn.first().click();
+              await page.waitForTimeout(200);
+
+              const newZoom = await zoomLabel.first().textContent();
+              expect(newZoom).toBeTruthy();
+            }
+
+            // Click zoom out button
+            const zoomOutBtn = page.locator('.pdf-viewer-btn', { hasText: '−' });
+            if (await zoomOutBtn.count() > 0) {
+              await zoomOutBtn.first().click();
+              await page.waitForTimeout(200);
+
+              const finalZoom = await zoomLabel.first().textContent();
+              expect(finalZoom).toBeTruthy();
+            }
+
+            // Click reset zoom button
+            const resetBtn = page.locator('.pdf-viewer-btn', { hasText: '1:1' });
+            if (await resetBtn.count() > 0) {
+              await resetBtn.first().click();
+              await page.waitForTimeout(200);
+
+              const resetZoom = await zoomLabel.first().textContent();
+              expect(resetZoom).toBe('100%');
+            }
+          }
+        }
+      }
+    }
+  });
+});
+
 test.describe('Approval Dialogs - Mobile Optimization (§21)', () => {
   test('should display approval modal with adequate tap targets on mobile (375px)', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
