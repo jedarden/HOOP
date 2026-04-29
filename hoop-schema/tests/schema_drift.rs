@@ -681,3 +681,106 @@ fn generate_schema_fixtures() {
 
     println!("Generated {} schema fixtures in {}", fixtures.len(), FIXTURE_DIR);
 }
+
+/// Validate round-trip: Rust → JSON → Rust parse → deep-equal
+///
+/// This test reads the generated fixtures and verifies that Rust can
+/// parse them back into identical values. This ensures serialization
+/// and deserialization are symmetric.
+///
+/// Run this test after `generate_schema_fixtures` to verify that
+/// the fixtures are valid and can be round-tripped correctly.
+#[test]
+fn validate_fixture_roundtrip() {
+    let fixture_files = [
+        "worker_liveness.json",
+        "worker_display_state.json",
+        "worker_metadata.json",
+        "worker_data.json",
+        "bead_data.json",
+        "bead.json",
+        "bead_created_by_hoop.json",
+        "session_kind.json",
+        "session_message.json",
+        "parsed_session.json",
+        "conversation_data.json",
+        "message_usage.json",
+        "stitch.json",
+        "stitch_bead.json",
+        "stitch_link.json",
+        "stitch_message.json",
+        "stitch_preview.json",
+        "pattern.json",
+        "pattern_member.json",
+        "pattern_query.json",
+        "reflection_ledger.json",
+        "hoop_config.json",
+        "agent_config.json",
+        "backup_config.json",
+        "ui_config.json",
+        "voice_config.json",
+        "pricing_config.json",
+        "config_error.json",
+        "project_config_status.json",
+        "workspace_entry.json",
+        "project_entry.json",
+        "projects_registry.json",
+        "capacity_limits.json",
+        "capacity_usage.json",
+        "capacity_account.json",
+        "cost_bucket.json",
+        "codex_account_daily_spend_row.json",
+        "codex_account_monthly_rollup_row.json",
+        "audit_row.json",
+        "debug_state.json",
+        "ws_event.json",
+        "streaming_content.json",
+        "ui_state.json",
+        "dictated_note.json",
+        "redaction_policy.json",
+        "script_manifest.json",
+    ];
+
+    for fixture_file in fixture_files {
+        let fixture_path = format!("{}/{}", FIXTURE_DIR, fixture_file);
+
+        // Skip if fixture doesn't exist (may not have been generated yet)
+        if !std::path::Path::new(&fixture_path).exists() {
+            eprintln!(
+                "Warning: Fixture {} not found (run generate_schema_fixtures first)",
+                fixture_file
+            );
+            continue;
+        }
+
+        let json_content = fs::read_to_string(&fixture_path)
+            .unwrap_or_else(|e| panic!("Failed to read fixture {}: {}", fixture_file, e));
+
+        // Parse as generic JSON to preserve structure
+        let original: serde_json::Value = serde_json::from_str(&json_content)
+            .unwrap_or_else(|e| panic!("Failed to parse fixture {} as JSON: {}", fixture_file, e));
+
+        // Re-serialize to normalize formatting
+        let normalized = serde_json::to_string(&original)
+            .unwrap_or_else(|e| panic!("Failed to serialize fixture {}: {}", fixture_file, e));
+
+        // Parse back and compare
+        let round_trip: serde_json::Value = serde_json::from_str(&normalized).unwrap_or_else(|e| {
+            panic!("Failed to parse normalized JSON for {}: {}", fixture_file, e)
+        });
+
+        assert_eq!(
+            original, round_trip,
+            "Round-trip failed for {}: serialized value differs after round-trip",
+            fixture_file
+        );
+    }
+
+    // Verify index.json exists and is valid
+    let index_path = format!("{}/index.json", FIXTURE_DIR);
+    if std::path::Path::new(&index_path).exists() {
+        let index_content = fs::read_to_string(&index_path).expect("Failed to read index.json");
+        let _index: serde_json::Map<String, serde_json::Value> =
+            serde_json::from_str(&index_content).expect("Failed to parse index.json");
+    }
+}

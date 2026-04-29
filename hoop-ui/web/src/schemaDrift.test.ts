@@ -95,18 +95,148 @@ function deepEqual(a: unknown, b: unknown, path = ''): { match: boolean; diff?: 
   return { match: false, diff: [`${path}: type mismatch (${typeof a} vs ${typeof b})`] };
 }
 
+/**
+ * Validate that a value matches the expected TypeScript type structure.
+ * This checks for required fields to catch schema drift early.
+ */
+function validateTypeStructure(value: unknown, typeName: string): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  const has = (obj: unknown, prop: string): boolean => {
+    return typeof obj === 'object' && obj !== null && prop in (obj as Record<string, unknown>);
+  };
+
+  switch (typeName) {
+    case 'Bead':
+      if (!has(value, 'id')) errors.push('Bead.id: missing required field');
+      if (!has(value, 'title')) errors.push('Bead.title: missing required field');
+      if (!has(value, 'status')) errors.push('Bead.status: missing required field');
+      if (!has(value, 'schema_version')) errors.push('Bead.schema_version: missing required field');
+      break;
+
+    case 'Stitch':
+      if (!has(value, 'id')) errors.push('Stitch.id: missing required field');
+      if (!has(value, 'project')) errors.push('Stitch.project: missing required field');
+      if (!has(value, 'kind')) errors.push('Stitch.kind: missing required field');
+      if (!has(value, 'schema_version')) errors.push('Stitch.schema_version: missing required field');
+      break;
+
+    case 'HoopConfig':
+      if (!has(value, 'schema_version')) errors.push('HoopConfig.schema_version: missing required field');
+      break;
+
+    case 'CapacityAccount':
+      if (!has(value, 'id')) errors.push('CapacityAccount.id: missing required field');
+      if (!has(value, 'adapter')) errors.push('CapacityAccount.adapter: missing required field');
+      if (!has(value, 'limits')) errors.push('CapacityAccount.limits: missing required field');
+      if (!has(value, 'usage')) errors.push('CapacityAccount.usage: missing required field');
+      if (!has(value, 'schema_version')) errors.push('CapacityAccount.schema_version: missing required field');
+      break;
+
+    case 'AuditRow':
+      if (!has(value, 'id')) errors.push('AuditRow.id: missing required field');
+      if (!has(value, 'ts')) errors.push('AuditRow.ts: missing required field');
+      if (!has(value, 'actor')) errors.push('AuditRow.actor: missing required field');
+      if (!has(value, 'kind')) errors.push('AuditRow.kind: missing required field');
+      if (!has(value, 'target')) errors.push('AuditRow.target: missing required field');
+      break;
+
+    case 'WorkerData':
+      if (!has(value, 'worker')) errors.push('WorkerData.worker: missing required field');
+      if (!has(value, 'state')) errors.push('WorkerData.state: missing required field');
+      if (!has(value, 'liveness')) errors.push('WorkerData.liveness: missing required field');
+      if (!has(value, 'last_heartbeat')) errors.push('WorkerData.last_heartbeat: missing required field');
+      break;
+
+    case 'Pattern':
+      if (!has(value, 'id')) errors.push('Pattern.id: missing required field');
+      if (!has(value, 'title')) errors.push('Pattern.title: missing required field');
+      if (!has(value, 'status')) errors.push('Pattern.status: missing required field');
+      if (!has(value, 'schema_version')) errors.push('Pattern.schema_version: missing required field');
+      break;
+
+    case 'UiState':
+      if (!has(value, 'schema_version')) errors.push('UiState.schema_version: missing required field');
+      break;
+
+    case 'StitchBead':
+      if (!has(value, 'stitch_id')) errors.push('StitchBead.stitch_id: missing required field');
+      if (!has(value, 'bead_id')) errors.push('StitchBead.bead_id: missing required field');
+      if (!has(value, 'workspace')) errors.push('StitchBead.workspace: missing required field');
+      if (!has(value, 'schema_version')) errors.push('StitchBead.schema_version: missing required field');
+      break;
+
+    case 'StitchLink':
+      if (!has(value, 'from_stitch')) errors.push('StitchLink.from_stitch: missing required field');
+      if (!has(value, 'to_stitch')) errors.push('StitchLink.to_stitch: missing required field');
+      if (!has(value, 'kind')) errors.push('StitchLink.kind: missing required field');
+      if (!has(value, 'schema_version')) errors.push('StitchLink.schema_version: missing required field');
+      break;
+
+    case 'StitchMessage':
+      if (!has(value, 'id')) errors.push('StitchMessage.id: missing required field');
+      if (!has(value, 'stitch_id')) errors.push('StitchMessage.stitch_id: missing required field');
+      if (!has(value, 'ts')) errors.push('StitchMessage.ts: missing required field');
+      if (!has(value, 'role')) errors.push('StitchMessage.role: missing required field');
+      if (!has(value, 'content')) errors.push('StitchMessage.content: missing required field');
+      if (!has(value, 'schema_version')) errors.push('StitchMessage.schema_version: missing required field');
+      break;
+
+    case 'PatternMember':
+      if (!has(value, 'pattern_id')) errors.push('PatternMember.pattern_id: missing required field');
+      if (!has(value, 'stitch_id')) errors.push('PatternMember.stitch_id: missing required field');
+      if (!has(value, 'schema_version')) errors.push('PatternMember.schema_version: missing required field');
+      break;
+
+    case 'ReflectionLedger':
+      if (!has(value, 'id')) errors.push('ReflectionLedger.id: missing required field');
+      if (!has(value, 'scope')) errors.push('ReflectionLedger.scope: missing required field');
+      if (!has(value, 'rule')) errors.push('ReflectionLedger.rule: missing required field');
+      if (!has(value, 'status')) errors.push('ReflectionLedger.status: missing required field');
+      if (!has(value, 'schema_version')) errors.push('ReflectionLedger.schema_version: missing required field');
+      break;
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+// Map fixture names to their expected TypeScript type names
+const FIXTURE_TO_TYPE: Record<string, string> = {
+  'bead': 'Bead',
+  'stitch': 'Stitch',
+  'hoop_config': 'HoopConfig',
+  'capacity_account': 'CapacityAccount',
+  'audit_row': 'AuditRow',
+  'worker_data': 'WorkerData',
+  'pattern': 'Pattern',
+  'ui_state': 'UiState',
+  'stitch_bead': 'StitchBead',
+  'stitch_link': 'StitchLink',
+  'stitch_message': 'StitchMessage',
+  'stitch_preview': 'StitchPreview',
+  'pattern_member': 'PatternMember',
+  'pattern_query': 'PatternQuery',
+  'reflection_ledger': 'ReflectionLedger',
+  'dictated_note': 'DictatedNote',
+};
+
 // Type-safe round-trip test for each fixture type
 function testRoundTrip(fixtureName: string): void {
   it(`${fixtureName}: Rust → JSON → TS parse → TS → JSON → Rust parse`, () => {
     // Step 1: Load JSON fixture (serialized by Rust)
     const originalJson = loadFixture(fixtureName);
 
-    // Step 2: Parse with TypeScript type (runtime validation)
-    // This will throw if the JSON structure is invalid
-    const parsed = originalJson;
+    // Step 2: Validate structure matches TypeScript type
+    const typeName = FIXTURE_TO_TYPE[fixtureName];
+    if (typeName) {
+      const validation = validateTypeStructure(originalJson, typeName);
+      if (!validation.valid) {
+        expect(validation.errors).toEqual([]);
+      }
+    }
 
     // Step 3: Serialize back to JSON (as TypeScript would)
-    const roundTripJson = JSON.parse(JSON.stringify(parsed));
+    const roundTripJson = JSON.parse(JSON.stringify(originalJson));
 
     // Step 4: Verify deep equality
     // This ensures no fields are added or lost during the round-trip
@@ -116,7 +246,8 @@ function testRoundTrip(fixtureName: string): void {
       if (result.diff) {
         return [
           `Schema drift detected in fixture: ${fixtureName}`,
-          ...result.diff,
+          'Path: ' + (result.diff?.[0] || 'unknown'),
+          ...result.diff.slice(1),
           '',
           'Original JSON:',
           JSON.stringify(originalJson, null, 2),
