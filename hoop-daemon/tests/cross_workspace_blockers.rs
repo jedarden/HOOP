@@ -85,14 +85,14 @@ fn test_cross_workspace_blocker_chain() {
 
     // Create spawned links from parent to children with workspace tracking
     conn.execute(
-        "INSERT INTO stitch_links (from_stitch, to_stitch, kind, workspace_from, workspace_to, created_at)
-         VALUES (?1, ?2, 'spawned', ?3, ?4, datetime('now'))",
+        "INSERT INTO stitch_links (from_stitch, to_stitch, kind, workspace_from, workspace_to)
+         VALUES (?1, ?2, 'spawned', ?3, ?4)",
         [parent_stitch_id, child_stitch_b, workspace_a, workspace_b],
     ).expect("Failed to insert link to child B");
 
     conn.execute(
-        "INSERT INTO stitch_links (from_stitch, to_stitch, kind, workspace_from, workspace_to, created_at)
-         VALUES (?1, ?2, 'spawned', ?3, ?4, datetime('now'))",
+        "INSERT INTO stitch_links (from_stitch, to_stitch, kind, workspace_from, workspace_to)
+         VALUES (?1, ?2, 'spawned', ?3, ?4)",
         [parent_stitch_id, child_stitch_c, workspace_a, workspace_c],
     ).expect("Failed to insert link to child C");
 
@@ -203,8 +203,8 @@ fn test_stitch_links_schema_has_workspace_columns() {
 
     // Verify we can insert and query these columns
     conn.execute(
-        "INSERT INTO stitch_links (from_stitch, to_stitch, kind, workspace_from, workspace_to, created_at)
-         VALUES ('s1', 's2', 'spawned', '/ws/a', '/ws/b', datetime('now'))",
+        "INSERT INTO stitch_links (from_stitch, to_stitch, kind, workspace_from, workspace_to)
+         VALUES ('s1', 's2', 'spawned', '/ws/a', '/ws/b')",
         [],
     ).expect("Failed to insert stitch link with workspaces");
 
@@ -263,7 +263,6 @@ fn setup_test_schema(conn: &mut rusqlite::Connection) {
             kind TEXT NOT NULL CHECK(kind IN ('spawned', 'references')),
             workspace_from TEXT NOT NULL DEFAULT '',
             workspace_to TEXT NOT NULL DEFAULT '',
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
             PRIMARY KEY (from_stitch, to_stitch, kind),
             FOREIGN KEY (from_stitch) REFERENCES stitches(id) ON DELETE CASCADE,
             FOREIGN KEY (to_stitch) REFERENCES stitches(id) ON DELETE CASCADE
