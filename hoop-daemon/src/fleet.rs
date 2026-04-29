@@ -3331,6 +3331,7 @@ pub fn migrate_v133_to_v134(conn: &mut Connection) -> Result<()> {
 
     // Seed initial risk patterns
     let default_patterns = crate::risk_patterns::default_risk_patterns();
+    let pattern_count = default_patterns.len();
 
     for pattern in default_patterns {
         let keywords_json = serde_json::to_string(&pattern.keywords)?;
@@ -3360,7 +3361,7 @@ pub fn migrate_v133_to_v134(conn: &mut Connection) -> Result<()> {
 
     info!(
         "risk_patterns table created and seeded with {} default patterns",
-        default_patterns.len()
+        pattern_count
     );
     update_schema_version(conn, "1.34.0")?;
     Ok(())
