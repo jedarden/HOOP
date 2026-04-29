@@ -194,6 +194,21 @@ export interface BeadData {
   project: string;
 }
 
+// Cross-workspace blocker data from backend (§4.2)
+export interface CrossWorkspaceBlocker {
+  bead_id: string;
+  workspace: string;
+  title: string;
+  status: string;
+  priority: number;
+  issue_type: string;
+}
+
+export interface BeadBlockersResponse {
+  bead_id: string;
+  blockers: CrossWorkspaceBlocker[];
+}
+
 // Config error details (§17.5)
 export interface ConfigError {
   message: string;
@@ -231,6 +246,10 @@ export interface AccountCapacity {
   tokens_7d: number;
   turns_5h: number;
   turns_7d: number;
+  prompts_5h: number;
+  prompts_7d: number;
+  prompts_per_5h?: number | null;
+  prompts_per_7d?: number | null;
   burn_rate_per_min: number;
   forecast_full_5h_min?: number | null;
   forecast_full_7d_min?: number | null;
@@ -339,6 +358,46 @@ export interface CollisionAlert {
   overlapping_files: string[];
 }
 
+// Cost anomaly alert (§6 Phase 2 marquee #4)
+export interface CostBand {
+  mean_usd: number;
+  std_dev_usd: number;
+  upper_2sigma_usd: number;
+  similar_count: number;
+  min_similarity: number;
+  window_days: number;
+}
+
+export interface ClosestPatternMatch {
+  pattern_id: string;
+  pattern_name: string;
+  similarity: number;
+  recommended_fix_template_md: string;
+}
+
+export interface CostAnomalyAlert {
+  alert_id: string;
+  stitch_id: string;
+  stitch_title: string;
+  project: string;
+  cost_usd: number;
+  band: CostBand;
+  closest_pattern: ClosestPatternMatch | null;
+  detected_at: string;
+}
+
+// Saturation alert (§6 P2 d10, §8.3, hoop-ttb.3.22)
+export interface SaturationAlert {
+  alert_id: string;
+  detected_at: string;
+  account: string;
+  model: string;
+  utilization_percent: number;
+  threshold_percent: number;
+  current_tpm: number;
+  quota_tpm: number;
+}
+
 // Search palette open/closed state (cmd-K)
 export const searchPaletteOpenAtom = atom<boolean>(false);
 
@@ -352,7 +411,7 @@ export interface OptimisticStub {
 
 // WebSocket event from backend
 export interface WsEvent {
-  type: 'init' | 'worker_update' | 'workers_snapshot' | 'beads_snapshot' | 'conversations_snapshot' | 'conversation_update' | 'streaming_content' | 'config_status' | 'projects_snapshot' | 'capacity_snapshot' | 'stitch_created' | 'agent_session' | 'draft_update' | 'stuck_alert' | 'collision_alert';
+  type: 'init' | 'worker_update' | 'workers_snapshot' | 'beads_snapshot' | 'conversations_snapshot' | 'conversation_update' | 'streaming_content' | 'config_status' | 'projects_snapshot' | 'capacity_snapshot' | 'stitch_created' | 'agent_session' | 'draft_update' | 'stuck_alert' | 'collision_alert' | 'cost_anomaly_alert' | 'saturation_alert';
   subscriptions?: string[];
   worker?: WorkerData;
   workers?: WorkerData[];
@@ -368,6 +427,8 @@ export interface WsEvent {
   draft_update?: { draft_id: string; updated_at: string };
   stuck_alert?: StuckAlert;
   collision_alert?: CollisionAlert;
+  cost_anomaly_alert?: CostAnomalyAlert;
+  saturation_alert?: SaturationAlert;
 }
 
 // Cost bucket from backend aggregation
@@ -718,6 +779,10 @@ export const projectsReceivedAtom = atom<boolean>(false);
 export const stitchesAtom = atom<Stitch[]>([]);
 export const workersAtom = atom<WorkerData[]>([]);
 export const beadsAtom = atom<BeadData[]>([]);
+// atomFamily keyed by bead_id — stores cross-workspace blockers for each bead
+export const blockersAtomFamily = atomFamily((beadId: string) =>
+  atom<CrossWorkspaceBlocker[]>([])
+);
 export const beadEventsAtom = atom<Map<string, BeadEventFromEvents[]>>(new Map()); // bead_id -> events
 export const wsConnectedAtom = atom<boolean>(false);
 
@@ -743,6 +808,10 @@ export const stitchCreatedAtom = atom<StitchCreatedData[]>([]);
 export const stuckAlertsAtom = atom<Map<string, StuckAlert>>(new Map());
 // Collision detector alerts (§6 Phase 2, deliverable 12) — keyed by alert_id
 export const collisionAlertsAtom = atom<Map<string, CollisionAlert>>(new Map());
+// Cost anomaly alerts (§6 Phase 2 marquee #4) — keyed by alert_id
+export const costAnomalyAlertsAtom = atom<Map<string, CostAnomalyAlert>>(new Map());
+// Saturation alerts (§6 P2 d10, §8.3, hoop-ttb.3.22) — keyed by alert_id
+export const saturationAlertsAtom = atom<Map<string, SaturationAlert>>(new Map());
 
 // File attach context — set by the file-tree context menu to pipe a file
 // into whichever draft form is currently open (or will open next).

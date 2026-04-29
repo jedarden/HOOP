@@ -1,6 +1,6 @@
-import { useAtomValue } from 'jotai';
-import { useState, useMemo } from 'react';
-import { beadsAtom, workersAtom, BeadData, BeadStatus, BeadType } from './atoms';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { useState, useMemo, useEffect } from 'react';
+import { beadsAtom, workersAtom, blockersAtomFamily, BeadData, BeadStatus, BeadType, CrossWorkspaceBlocker } from './atoms';
 
 type SortField = 'title' | 'status' | 'priority' | 'issue_type' | 'created_at' | 'id';
 type SortOrder = 'asc' | 'desc';
@@ -43,7 +43,12 @@ function getTypeBadge(type: BeadType): { label: string; className: string } {
   }
 }
 
-function BeadRow({ bead, workers, expertMode }: { bead: BeadData; workers: ReturnType<typeof useAtomValue<typeof workersAtom>>; expertMode: boolean }) {
+function BeadRow({ bead, workers, expertMode, blockers }: {
+  bead: BeadData;
+  workers: ReturnType<typeof useAtomValue<typeof workersAtom>>;
+  expertMode: boolean;
+  blockers: CrossWorkspaceBlocker[];
+}) {
   const statusBadge = getStatusBadge(bead.status);
   const typeBadge = getTypeBadge(bead.issue_type);
 
@@ -51,6 +56,13 @@ function BeadRow({ bead, workers, expertMode }: { bead: BeadData; workers: Retur
   const assignedWorker = workers.find(w =>
     w.state.state === 'executing' && w.state.bead === bead.id
   );
+
+  // Build blocker indicator
+  const blockerIndicator = blockers.length > 0 ? (
+    <span className="bead-blockers" title={`Blocked by ${blockers.length} cross-workspace bead${blockers.length !== 1 ? 's' : ''}:\n${blockers.map(b => `  [${b.workspace}] ${b.title} (${b.status})`).join('\n')}`}>
+      {' '}· 🔒 {blockers.length} blocker{blockers.length !== 1 ? 's' : ''}
+    </span>
+  ) : null;
 
   return (
     <tr className="bead-row">
@@ -66,6 +78,7 @@ function BeadRow({ bead, workers, expertMode }: { bead: BeadData; workers: Retur
             {' '}· {bead.dependencies.length} dep{bead.dependencies.length !== 1 ? 's' : ''}
           </span>
         )}
+        {blockerIndicator}
       </td>
       <td className="bead-cell bead-cell-status">
         <span className={`badge ${statusBadge.className}`}>{statusBadge.label}</span>
@@ -105,6 +118,36 @@ export default function BeadList() {
   const workers = useAtomValue(workersAtom);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ field: 'created_at', order: 'desc' });
   const [expertMode, setExpertMode] = useState(false);
+  const [blockersMap, setBlockersMap] = useState<Map<string, CrossWorkspaceBlocker[]>>(new Map());
+
+  // Fetch blockers for all beads on mount and when beads change
+  useEffect(() => {
+    const fetchBlockers = async () => {
+      const blockersPromises = beads.map(async (bead) => {
+        try {
+          const response = await fetch(`/api/beads/${encodeURIComponent(bead.id)}/blockers`);
+          if (response.ok) {
+            const data = await response.json();
+            return { beadId: bead.id, blockers: data.blockers || [] };
+          }
+          return { beadId: bead.id, blockers: [] };
+        } catch {
+          return { beadId: bead.id, blockers: [] };
+        }
+      });
+
+      const results = await Promise.all(blockersPromises);
+      const newBlockersMap = new Map<string, CrossWorkspaceBlocker[]>();
+      for (const { beadId, blockers } of results) {
+        newBlockersMap.set(beadId, blockers);
+      }
+      setBlockersMap(newBlockersMap);
+    };
+
+    if (beads.length > 0) {
+      fetchBlockers();
+    }
+  }, [beads]);
 
   const sortedBeads = useMemo(() => {
     const sortable = [...beads];
@@ -223,6 +266,7 @@ export default function BeadList() {
                   bead={bead}
                   workers={workers}
                   expertMode={expertMode}
+                  blockers={blockersMap.get(bead.id) || []}
                 />
               ))}
             </tbody>
