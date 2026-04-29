@@ -20,6 +20,8 @@ import {
   agentInflightAtom,
   agentChatMessagesAtom,
   stuckAlertsAtom,
+  saturationAlertsAtom,
+  costAnomalyAlertsAtom,
   optimisticStubsAtom,
   WsEvent,
   AgentChatMessage,
@@ -51,6 +53,8 @@ export function useWebSocket() {
   const setAgentInflight = useSetAtom(agentInflightAtom);
   const setAgentChatMessages = useSetAtom(agentChatMessagesAtom);
   const setStuckAlerts = useSetAtom(stuckAlertsAtom);
+  const setSaturationAlerts = useSetAtom(saturationAlertsAtom);
+  const setCostAnomalyAlerts = useSetAtom(costAnomalyAlertsAtom);
   const setOptimisticStubs = useSetAtom(optimisticStubsAtom);
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -274,6 +278,18 @@ export function useWebSocket() {
               updated.set(data.stuck_alert!.worker, data.stuck_alert!);
               return updated;
             });
+          } else if (data.type === 'saturation_alert' && data.saturation_alert) {
+            setSaturationAlerts((prev) => {
+              const updated = new Map(prev);
+              updated.set(data.saturation_alert!.alert_id, data.saturation_alert!);
+              return updated;
+            });
+          } else if (data.type === 'cost_anomaly_alert' && data.cost_anomaly_alert) {
+            setCostAnomalyAlerts((prev) => {
+              const updated = new Map(prev);
+              updated.set(data.cost_anomaly_alert!.alert_id, data.cost_anomaly_alert!);
+              return updated;
+            });
           }
         } catch (e) {
           console.error('Failed to parse WebSocket message:', e);
@@ -322,5 +338,5 @@ export function useWebSocket() {
       }
       wsRef.current?.close();
     };
-  }, [setWorkers, setBeads, setConversations, dispatchSetStreaming, dispatchClearStreaming, dispatchClearAllStreaming, setConnected, setConnectionStatus, setReconnectAttempt, setReconnectDelay, setConfigStatus, setProjectCards, setProjectsReceived, setCapacity, setStitchCreated, setAgentSessionStatus, setAgentInflight, setAgentChatMessages, setStuckAlerts, setOptimisticStubs]);
+  }, [setWorkers, setBeads, setConversations, dispatchSetStreaming, dispatchClearStreaming, dispatchClearAllStreaming, setConnected, setConnectionStatus, setReconnectAttempt, setReconnectDelay, setConfigStatus, setProjectCards, setProjectsReceived, setCapacity, setStitchCreated, setAgentSessionStatus, setAgentInflight, setAgentChatMessages, setStuckAlerts, setSaturationAlerts, setCostAnomalyAlerts, setOptimisticStubs]);
 }
