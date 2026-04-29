@@ -9,6 +9,8 @@ import {
   AgentChatMessage,
   AgentToolCallInProgress,
 } from './atoms';
+import { InlinePrompt } from './components/OnboardingPromptBanner';
+import { useOnboarding } from './useOnboarding';
 
 interface PendingAttachment {
   id: string;
@@ -128,6 +130,7 @@ export default function AgentChatPane() {
   const inflight = useAtomValue(agentInflightAtom);
   const [scope, setScope] = useAtom(agentChatScopeAtom);
   const projectCards = useAtomValue(projectCardsAtom);
+  const { recordFeatureUsage } = useOnboarding();
 
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -192,6 +195,11 @@ export default function AgentChatPane() {
   const handleSend = useCallback(async () => {
     const text = input.trim();
     if (!text || isSending || !agentStatus?.active) return;
+
+    // Record agent usage on first message
+    if (messages.length === 0) {
+      recordFeatureUsage('agent');
+    }
 
     setSendError(null);
 
@@ -445,13 +453,25 @@ export default function AgentChatPane() {
       {/* Message list */}
       <div className="acp-messages" role="log" aria-label="Conversation" aria-live="polite">
         {messages.length === 0 && !inflight && (
-          <div className="acp-empty" aria-label="No messages yet">
-            {isActive
-              ? 'Send a message to start the conversation.'
-              : isConfigured
-                ? 'Start an agent session to begin.'
-                : 'Agent not configured in hoop config.'}
-          </div>
+          <>
+            {isActive && (
+              <InlinePrompt
+                promptId="agent_intro"
+                variant="tip"
+                onActionClick={() => {
+                  /* Focus textarea when action clicked */
+                  textareaRef.current?.focus();
+                }}
+              />
+            )}
+            <div className="acp-empty" aria-label="No messages yet">
+              {isActive
+                ? 'Send a message to start the conversation.'
+                : isConfigured
+                  ? 'Start an agent session to begin.'
+                  : 'Agent not configured in hoop config.'}
+            </div>
+          </>
         )}
 
         {messages.map((msg) => (

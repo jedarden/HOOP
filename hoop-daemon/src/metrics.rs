@@ -797,6 +797,20 @@ pub struct Metrics {
 
     /// Config reload attempts that applied successfully (§17.5).
     pub hoop_config_reload_success_total: Counter,
+
+    // ── §6.10.1 Embedding Service ─────────────────────────────────────────────
+    /// Embedding cache hits.
+    pub hoop_embedding_cache_hits_total: Counter,
+    /// Embedding cache misses.
+    pub hoop_embedding_cache_misses_total: Counter,
+    /// Remote embedding API calls.
+    pub hoop_embedding_remote_calls_total: Counter,
+    /// Remote embedding API failures.
+    pub hoop_embedding_remote_errors_total: Counter,
+    /// Fallbacks from remote to local embedding.
+    pub hoop_embedding_fallback_total: Counter,
+    /// Current cache hit rate (0.0-1.0 gauge).
+    pub hoop_embedding_cache_hit_rate: FloatGauge,
 }
 
 impl Metrics {
@@ -873,6 +887,13 @@ impl Metrics {
 
             hoop_config_reload_rejected_total: Counter::new(),
             hoop_config_reload_success_total: Counter::new(),
+
+            hoop_embedding_cache_hits_total: Counter::new(),
+            hoop_embedding_cache_misses_total: Counter::new(),
+            hoop_embedding_remote_calls_total: Counter::new(),
+            hoop_embedding_remote_errors_total: Counter::new(),
+            hoop_embedding_fallback_total: Counter::new(),
+            hoop_embedding_cache_hit_rate: FloatGauge::new(),
         }
     }
 
@@ -1206,6 +1227,44 @@ impl Metrics {
             "hoop_config_reload_success_total",
             "Config reload attempts that applied successfully (§17.5).",
             self.hoop_config_reload_success_total.get(),
+        );
+
+        // ── §6.10.1 Embedding Service ───────────────────────────────────────────
+        write_counter(
+            &mut out,
+            "hoop_embedding_cache_hits_total",
+            "Embedding cache hits.",
+            self.hoop_embedding_cache_hits_total.get(),
+        );
+        write_counter(
+            &mut out,
+            "hoop_embedding_cache_misses_total",
+            "Embedding cache misses.",
+            self.hoop_embedding_cache_misses_total.get(),
+        );
+        write_counter(
+            &mut out,
+            "hoop_embedding_remote_calls_total",
+            "Remote embedding API calls.",
+            self.hoop_embedding_remote_calls_total.get(),
+        );
+        write_counter(
+            &mut out,
+            "hoop_embedding_remote_errors_total",
+            "Remote embedding API failures.",
+            self.hoop_embedding_remote_errors_total.get(),
+        );
+        write_counter(
+            &mut out,
+            "hoop_embedding_fallback_total",
+            "Fallbacks from remote to local embedding.",
+            self.hoop_embedding_fallback_total.get(),
+        );
+        write_gauge_f64(
+            &mut out,
+            "hoop_embedding_cache_hit_rate",
+            "Current embedding cache hit rate (0.0-1.0).",
+            self.hoop_embedding_cache_hit_rate.get(),
         );
 
         out

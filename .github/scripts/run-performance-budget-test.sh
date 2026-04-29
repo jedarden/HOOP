@@ -39,14 +39,10 @@ if [ "$SCALE" = "full" ]; then
   export HOOP_LOAD_WORKERS="${HOOP_LOAD_WORKERS:-5}"
   export HOOP_LOAD_BEADS="${HOOP_LOAD_BEADS:-300}"
   export HOOP_LOAD_TEST_FULL_SCALE=1
-  TEST_FILTER="load_test_full_scale_performance_budgets"
-  TEST_FLAGS="--ignored"
 else
   export HOOP_LOAD_PROJECTS="${HOOP_LOAD_PROJECTS:-5}"
   export HOOP_LOAD_WORKERS="${HOOP_LOAD_WORKERS:-2}"
   export HOOP_LOAD_BEADS="${HOOP_LOAD_BEADS:-50}"
-  TEST_FILTER="load_test"
-  TEST_FLAGS=""
 fi
 
 TOTAL_BEADS=$((HOOP_LOAD_PROJECTS * HOOP_LOAD_WORKERS * HOOP_LOAD_BEADS))
@@ -71,6 +67,10 @@ echo ""
 # Track overall result
 OVERALL_RESULT=0
 
+# Temporary file for daemon URL
+DAEMON_URL_FILE=$(mktemp)
+trap "rm -f $DAEMON_URL_FILE" EXIT
+
 # Step 1: Build the daemon
 echo "Step 1: Building daemon..."
 cd "$REPO_ROOT"
@@ -81,30 +81,42 @@ fi
 echo -e "${GREEN}✓ Daemon built${NC}"
 echo ""
 
-# Step 2: Run the Rust integration test
+# Step 2: Run the Rust integration test (spawns daemon, runs load test)
 echo "Step 2: Running Rust load test integration..."
-echo "  Test filter: $TEST_FILTER"
-echo "  Test flags: $TEST_FLAGS"
+echo "  Test: load_test_ci_performance_budgets"
 echo ""
 
-if RUST_LOG=info cargo test --package hoop-daemon --test load_test_integration "$TEST_FILTER" -- $TEST_FLAGS --nocapture; then
+export HOOP_DAEMON_URL_FILE="$DAEMON_URL_FILE"
+
+if RUST_LOG=info cargo test --package hoop-daemon --test load_test_integration load_test_ci_performance_budgets -- --nocapture; then
   RUST_TEST_RESULT=0
   echo -e "${GREEN}✓ Rust load test integration passed${NC}"
 else
   RUST_TEST_RESULT=1
   echo -e "${RED}✗ Rust load test integration failed${NC}"
   OVERALL_RESULT=1
+  echo ""
+  echo "Rust test failure indicates performance budget violation."
+  echo "This blocks merge per hoop-ttb.7.11."
+  rm -f "$DAEMON_URL_FILE"
+  exit 1
 fi
 echo ""
 
 # Step 3: Run Playwright UI tests (if available)
-if [ -f "$REPO_ROOT/hoop-ui/web/package.json" ]; then
+if [ -f "$DAEMON_URL_FILE" ] && [ -s "$DAEMON_URL_FILE" ] && [ -f "$REPO_ROOT/hoop-ui/web/package.json" ]; then
   echo "Step 3: Running Playwright UI performance tests..."
+
+  # Read daemon URL from file
+  DAEMON_URL=$(cat "$DAEMON_URL_FILE")
+  echo "  Daemon URL: $DAEMON_URL"
+  echo ""
 
   cd "$REPO_ROOT/hoop-ui/web"
 
   # Set environment for Playwright
   export HOOP_LOAD_TEST_RUNNING=1
+  export HOOP_DAEMON_URL="$DAEMON_URL"
   export LOAD_TEST_SCALE="$SCALE"
   export CI=true
 
@@ -117,7 +129,7 @@ if [ -f "$REPO_ROOT/hoop-ui/web/package.json" ]; then
     fi
 
     # Run performance-budget tests
-    if pnpm test:e2e performance-budget.spec.ts 2>&1; then
+    if pnpm test:e2e load-test-performance.spec.ts 2>&1; then
       PLAYWRIGHT_RESULT=0
       echo -e "${GREEN}✓ Playwright UI performance tests passed${NC}"
     else
@@ -134,10 +146,17 @@ if [ -f "$REPO_ROOT/hoop-ui/web/package.json" ]; then
 
   echo ""
 else
-  echo "Step 3: Skipping Playwright tests (hoop-ui/web not found)"
+  if [ -f "$REPO_ROOT/hoop-ui/web/package.json" ]; then
+    echo "Step 3: Skipping Playwright tests (daemon URL not available)"
+  else
+    echo "Step 3: Skipping Playwright tests (hoop-ui/web not found)"
+  fi
   PLAYWRIGHT_RESULT=0
   echo ""
 fi
+
+# Clean up daemon URL file
+rm -f "$DAEMON_URL_FILE"
 
 # Step 4: Generate summary report
 echo "=== Performance Budget Test Summary ==="

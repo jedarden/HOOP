@@ -56,6 +56,7 @@ pub mod config_watcher;
 pub mod cost;
 pub mod dictated_notes;
 pub mod embedding;
+pub mod embedding_service;
 pub mod events;
 pub mod files;
 pub mod fleet;

@@ -1,0 +1,10 @@
+<svg width="1920" height="1080" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1920" height="1080" fill="#1a1a2e"/>
+  <rect x="960" y="540" width="800" height="400" rx="20" fill="#16213e" stroke="#0f3460" stroke-width="2"/>
+  <text x="960" y="400" font-family="Arial, sans-serif" font-size="48" fill="#e94560" text-anchor="middle" font-weight="bold">Stitch Timeline</text>
+  <text x="960" y="480" font-family="Arial, sans-serif" font-size="32" fill="#a0a0a0" text-anchor="middle">All conversations in a project — worker sessions, operator chats, dictated notes.</text>
+  <text x="960" y="550" font-family="Arial, sans-serif" font-size="24" fill="#666" text-anchor="middle">HOOP v1.0.0</text>
+  <text x="960" y="600" font-family="Arial, sans-serif" font-size="20" fill="#555" text-anchor="middle">Run 'hoop init' to see the live interface</text>
+  <rect x="760" y="650" width="400" height="50" rx="10" fill="#e94560"/>
+  <text x="960" y="685" font-family="Arial, sans-serif" font-size="24" fill="white" text-anchor="middle">Live Demo Available</text>
+</svg>

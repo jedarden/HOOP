@@ -17,6 +17,9 @@ use std::path::PathBuf;
 #[cfg(feature = "openapi")]
 use utoipa::ToSchema;
 
+// Syntax highlighting support
+use syntect::highlighting::{Theme, ThemeSet};
+
 /// Maximum file size for server-side syntax highlighting (50 KB)
 const MAX_HIGHLIGHT_SIZE: usize = 50 * 1024;
 
@@ -301,8 +304,7 @@ fn highlight_file(
 
     // Highlight using syntect directly
     use syntect::easy::HighlightLines;
-    use syntect::html::styled_line_to_highlighted_html;
-    use syntect::highlighting::IncludeBackground;
+    use syntect::html::{styled_line_to_highlighted_html, IncludeBackground};
 
     let mut h = HighlightLines::new(syntax, theme);
 

@@ -179,6 +179,13 @@ enum MigrateCommands {
     },
     /// Perform a major version upgrade (e.g., 1.x → 2.x)
     MajorUpgrade {
+        /// Source major version to upgrade from (e.g., "1" for 1.x → 2.x)
+        ///
+        /// This is an explicit safety check: the command will only run if the
+        /// current schema's major version matches. Use to avoid accidental
+        /// upgrades on the wrong database.
+        #[arg(long)]
+        from: Option<u32>,
         /// Required safety confirmation
         #[arg(long)]
         confirm: bool,
@@ -511,12 +518,31 @@ fn handle_migrate(cmd: MigrateCommands) -> anyhow::Result<()> {
                 }
             }
         }
-        MigrateCommands::MajorUpgrade { confirm } => {
+        MigrateCommands::MajorUpgrade { from, confirm } => {
             if !confirm {
                 eprintln!("hoop migrate major-upgrade: --confirm is required.");
                 eprintln!("  This will perform a major version upgrade (e.g., 1.x → 2.x).");
                 eprintln!("  Re-run with --confirm once you have verified you have a current backup.");
                 std::process::exit(1);
+            }
+
+            // If --from is provided, verify the current schema major version matches
+            if let Some(expected_major) = from {
+                let db_path = fleet::db_path();
+                let conn = rusqlite::Connection::open(&db_path)?;
+                let current_version = fleet::get_schema_version(&conn)?;
+                let current_major = current_version
+                    .split('.')
+                    .next()
+                    .and_then(|v| v.parse::<u32>().ok());
+
+                if current_major != Some(expected_major) {
+                    eprintln!("hoop migrate major-upgrade: --from {} does not match current schema version {}",
+                        expected_major, current_version);
+                    eprintln!("  This safety check prevents accidental upgrades on the wrong database.");
+                    eprintln!("  Omit --from to skip this check, or verify you're targeting the correct database.");
+                    std::process::exit(1);
+                }
             }
 
             if let Err(e) = fleet::run_major_upgrade() {

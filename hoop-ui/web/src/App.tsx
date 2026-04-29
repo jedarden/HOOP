@@ -23,6 +23,7 @@ import { StuckAlertBanner } from './components/StuckAlertBanner';
 import { CollisionAlertBanner } from './components/CollisionAlertBanner';
 import { WelcomeTour } from './components/WelcomeTour';
 import { SettingsMenu } from './components/SettingsMenu';
+import { WhatsNewBanner } from './components/OnboardingPromptBanner';
 import DraftsTab from './DraftsTab';
 import UnknownEventsDiagnostics from './UnknownEventsDiagnostics';
 import UnassignedSessions from './UnassignedSessions';
@@ -244,6 +245,7 @@ export default function App() {
     return (
       <>
         <ConnectionBanner />
+        <WhatsNewBanner />
         {showRestoreToast && (
           <div className="restore-toast" role="status">
             Restoring state...
@@ -290,6 +292,7 @@ export default function App() {
     return (
       <>
         <ConnectionBanner />
+        <WhatsNewBanner />
         {showRestoreToast && (
           <div className="restore-toast" role="status">
             Restoring state...

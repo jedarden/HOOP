@@ -2,6 +2,8 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import { dictationHotkeyAtom, DictationHotkey, DICTATION_HOTKEY_STORAGE_KEY, activeProjectNameAtom } from '../atoms';
 import { useDictationRecorder } from '../useDictationRecorder';
+import { InlinePrompt } from './OnboardingPromptBanner';
+import { useOnboarding } from '../useOnboarding';
 
 function formatHotkey(hk: DictationHotkey): string {
   const parts: string[] = [];
@@ -135,6 +137,7 @@ export function DictationWidget() {
   const [showSettings, setShowSettings] = useState(false);
   const [binding, setBinding] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const { recordFeatureUsage } = useOnboarding();
 
   const { phase, duration, error, analyser, clearError } = useDictationRecorder(projectName);
 
@@ -153,12 +156,14 @@ export function DictationWidget() {
     if ('vibrate' in navigator && phase === 'recording' && isMobile) {
       // Double vibration pattern when recording starts - more noticeable
       navigator.vibrate([50, 50, 50]);
+      // Record mic usage on first recording
+      recordFeatureUsage('mic');
     }
     if ('vibrate' in navigator && phase === 'idle' && isMobile) {
       // Single short vibration when recording stops
       navigator.vibrate(30);
     }
-  }, [phase, isMobile]);
+  }, [phase, isMobile, recordFeatureUsage]);
 
   const handleHotkeyChange = useCallback(
     (hk: DictationHotkey) => {
@@ -208,7 +213,19 @@ export function DictationWidget() {
 
   // Idle
   return (
-    <div className={`dictation-widget dictation-widget--idle${!projectName ? ' dictation-widget--no-project' : ''}`}>
+    <>
+      {!isMobile && phase === 'idle' && (
+        <div className="dictation-mic-prompt-wrapper">
+          <InlinePrompt
+            promptId="mic_intro"
+            variant="tip"
+            onDismiss={() => {
+              /* Prompt dismiss handled by InlinePrompt */
+            }}
+          />
+        </div>
+      )}
+      <div className={`dictation-widget dictation-widget--idle${!projectName ? ' dictation-widget--no-project' : ''}`}>
       {showSettings ? (
         binding ? (
           <HotkeyBinder
@@ -263,5 +280,6 @@ export function DictationWidget() {
         </>
       )}
     </div>
+    </>
   );
 }

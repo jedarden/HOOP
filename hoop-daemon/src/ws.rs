@@ -724,6 +724,27 @@ pub struct PatternSavedQuerySyncedData {
     pub synced_at: String,
 }
 
+/// Presence update event data (§19.4)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PresenceUpdateData {
+    pub operator_id: String,
+    pub project: Option<String>,
+    pub stitch_id: Option<String>,
+    pub visibility: String,
+    pub last_seen: String,
+}
+
+/// Reflection proposal event data (§19.2)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReflectionProposalData {
+    pub proposal_id: String,
+    pub status: String,
+    pub rule: String,
+    pub scope: String,
+    pub action: String,
+    pub actor: String,
+}
+
 /// WebSocket event sent to clients
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

@@ -501,6 +501,19 @@ fn validate_ui_sort(value: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Validate embedding.adapter value
+fn validate_embedding_adapter(value: &str) -> Result<(), String> {
+    const VALID_ADAPTERS: &[&str] = &["local", "remote", "cached"];
+    if !VALID_ADAPTERS.contains(&value) {
+        return Err(format!(
+            "invalid value: \"{}\"; expected one of: {}",
+            value,
+            VALID_ADAPTERS.join(", ")
+        ));
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // CLI overrides (passed from hoop-cli)
 // ---------------------------------------------------------------------------
@@ -583,6 +596,11 @@ pub struct ResolvedConfig {
 
     // Role-based access control (RBAC) - two-role model
     pub roles: Resolved<crate::auth::RoleConfig>,
+
+    // Embedding service configuration (§6.10.1)
+    pub embedding_adapter: Resolved<String>,
+    pub embedding_cache_enabled: Resolved<bool>,
+    pub embedding_cache_ttl_seconds: Resolved<u64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -1587,6 +1605,41 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
         )
     };
 
+    // Embedding service configuration (§6.10.1)
+    let embedding_adapter = resolve_opt(
+        None,
+        std::env::var("HOOP_EMBEDDING_ADAPTER").ok(),
+        yml_ref
+            .and_then(|y| yaml_get_str(y, "embedding.adapter"))
+            .map(|s| s.to_string()),
+        "local".to_string(),
+        "N/A",
+        "HOOP_EMBEDDING_ADAPTER",
+        "embedding.adapter",
+    );
+
+    let embedding_cache_enabled = resolve_opt(
+        None::<bool>,
+        env_parse("HOOP_EMBEDDING_CACHE_ENABLED"),
+        yml_ref.and_then(|y| yaml_get_bool(y, "embedding.cache_enabled")),
+        true,
+        "N/A",
+        "HOOP_EMBEDDING_CACHE_ENABLED",
+        "embedding.cache_enabled",
+    );
+
+    let embedding_cache_ttl_seconds = resolve_opt(
+        None::<u64>,
+        env_parse("HOOP_EMBEDDING_CACHE_TTL_SECONDS"),
+        yml_ref
+            .and_then(|y| yaml_get_u64(y, "embedding.cache_ttl_seconds"))
+            .map(|v| v as u64),
+        86400, // 24 hours default
+        "N/A",
+        "HOOP_EMBEDDING_CACHE_TTL_SECONDS",
+        "embedding.cache_ttl_seconds",
+    );
+
     // Mark restart-required keys (§17.4)
     let bind_addr = bind_addr.with_restart_required();
     let metrics_port = metrics_port.with_restart_required();
@@ -1629,6 +1682,9 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
         secrets_patterns,
         stuck_detector,
         roles,
+        embedding_adapter,
+        embedding_cache_enabled,
+        embedding_cache_ttl_seconds,
     };
 
     // Log the resolution summary
@@ -2254,6 +2310,7 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
                         "stuck_detector",
                         "roles",
                         "redaction",
+                        "embedding",
                     ];
                     if !VALID_TOP_LEVEL_KEYS.contains(&field_name) {
                         return Err(ConfigError::validation(
@@ -2402,6 +2459,38 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
                 "compiled default (no roles configured)".to_string(),
             )
         },
+        // Embedding service configuration (§6.10.1)
+        embedding_adapter: resolve_validated_str(
+            None,
+            "HOOP_EMBEDDING_ADAPTER",
+            yml_ref,
+            "embedding.adapter",
+            "local",
+            "N/A",
+            "HOOP_EMBEDDING_ADAPTER",
+            "embedding.adapter",
+            validate_embedding_adapter,
+        )?,
+        embedding_cache_enabled: resolve_opt(
+            None::<bool>,
+            env_parse("HOOP_EMBEDDING_CACHE_ENABLED"),
+            yml_ref.and_then(|y| yaml_get_bool(y, "embedding.cache_enabled")),
+            true,
+            "N/A",
+            "HOOP_EMBEDDING_CACHE_ENABLED",
+            "embedding.cache_enabled",
+        ),
+        embedding_cache_ttl_seconds: resolve_opt(
+            None::<u64>,
+            env_parse("HOOP_EMBEDDING_CACHE_TTL_SECONDS"),
+            yml_ref
+                .and_then(|y| yaml_get_u64(y, "embedding.cache_ttl_seconds"))
+                .map(|v| v as u64),
+            86400,
+            "N/A",
+            "HOOP_EMBEDDING_CACHE_TTL_SECONDS",
+            "embedding.cache_ttl_seconds",
+        ),
     })
 }
 

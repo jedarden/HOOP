@@ -4,10 +4,14 @@ import { CodeViewer as ShikiCodeViewer } from './CodeViewer';
 import { ImageViewer } from './ImageViewer';
 import { PdfViewer } from './PdfViewer';
 import { HexViewer } from './HexViewer';
+import { AudioViewer } from './AudioViewer';
+import { VideoViewer } from './VideoViewer';
 import type { TabId } from './ProjectDetail';
 import { fileNavigationAtom } from './atoms';
 
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']);
+const AUDIO_EXTENSIONS = new Set(['mp3', 'm4a', 'wav', 'ogg', 'oga', 'flac', 'opus', 'webm', 'aac']);
+const VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'mov', 'avi', 'mkv', 'm4v', 'wmv', 'flv']);
 
 function isImagePath(p: string): boolean {
   const ext = p.split('.').pop()?.toLowerCase() ?? '';
@@ -17,6 +21,16 @@ function isImagePath(p: string): boolean {
 function isPdfPath(p: string): boolean {
   const ext = p.split('.').pop()?.toLowerCase() ?? '';
   return ext === 'pdf';
+}
+
+function isAudioPath(p: string): boolean {
+  const ext = p.split('.').pop()?.toLowerCase() ?? '';
+  return AUDIO_EXTENSIONS.has(ext);
+}
+
+function isVideoPath(p: string): boolean {
+  const ext = p.split('.').pop()?.toLowerCase() ?? '';
+  return VIDEO_EXTENSIONS.has(ext);
 }
 
 // File extensions that are typically binary and should be viewed in hex mode by default
@@ -1218,7 +1232,7 @@ export default function FilesTab({ projectName, projectPath, onSwitchTab }: File
             <div className="file-preview-header">
               <span className="file-preview-path">{selectedFile.path}</span>
               <div className="file-preview-controls">
-                {!isImagePath(selectedFile.path) && !isPdfPath(selectedFile.path) && (
+                {!isImagePath(selectedFile.path) && !isPdfPath(selectedFile.path) && !isAudioPath(selectedFile.path) && !isVideoPath(selectedFile.path) && (
                   <>
                     {/* Toggle between diff view and file content view */}
                     {fileNavigation && fileNavigation.refRange && (
@@ -1271,7 +1285,7 @@ export default function FilesTab({ projectName, projectPath, onSwitchTab }: File
                 </button>
               </div>
             </div>
-            <div className={`file-preview-body${isImagePath(selectedFile.path) ? ' file-preview-body--image' : isPdfPath(selectedFile.path) ? ' file-preview-body--pdf' : ' file-preview-body--code'}`}>
+            <div className={`file-preview-body${isImagePath(selectedFile.path) ? ' file-preview-body--image' : isPdfPath(selectedFile.path) ? ' file-preview-body--pdf' : isAudioPath(selectedFile.path) ? ' file-preview-body--audio' : isVideoPath(selectedFile.path) ? ' file-preview-body--video' : ' file-preview-body--code'}`}>
               {isImagePath(selectedFile.path) ? (
                 <ImageViewer
                   projectName={projectName}
@@ -1279,6 +1293,16 @@ export default function FilesTab({ projectName, projectPath, onSwitchTab }: File
                 />
               ) : isPdfPath(selectedFile.path) ? (
                 <PdfViewer
+                  projectName={projectName}
+                  path={selectedFile.path}
+                />
+              ) : isAudioPath(selectedFile.path) ? (
+                <AudioViewer
+                  projectName={projectName}
+                  path={selectedFile.path}
+                />
+              ) : isVideoPath(selectedFile.path) ? (
+                <VideoViewer
                   projectName={projectName}
                   path={selectedFile.path}
                 />

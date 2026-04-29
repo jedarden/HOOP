@@ -1934,6 +1934,23 @@ body:has(.connection-banner) main {
 .fss-warn .fss-value { color: #f9ab00; }
 .fss-error .fss-value { color: #ea4335; }
 
+/* Clickable fleet summary item */
+.fss-clickable {
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.1s ease, opacity 0.1s ease;
+}
+
+.fss-clickable:hover {
+  opacity: 0.8;
+  transform: scale(1.05);
+}
+
+.fss-clickable:active {
+  transform: scale(0.98);
+}
+
 /* Fleet Cards Grid */
 .fleet-cards-grid {
   display: grid;
@@ -2085,6 +2102,21 @@ body:has(.connection-banner) main {
 
 .pcf-stat-warn .pcf-stat-label {
   color: #ea4335;
+}
+
+/* Clickable stuck badge */
+.pcf-stat-clickable {
+  cursor: pointer;
+  transition: transform 0.1s ease, opacity 0.1s ease;
+}
+
+.pcf-stat-clickable:hover {
+  opacity: 0.8;
+  transform: scale(1.05);
+}
+
+.pcf-stat-clickable:active {
+  transform: scale(0.98);
 }
 
 /* Footer */
@@ -10347,6 +10379,27 @@ body.wt-tour-active {
   color: #666;
   margin: 0 0 0.75rem;
   line-height: 1.4;
+}
+
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.settings-toggle input[type="checkbox"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  cursor: pointer;
+  accent-color: #1976d2;
+}
+
+.settings-toggle span {
+  font-size: 0.875rem;
+  color: #333;
 }
 
 @media (max-width: 640px) {
@@ -23958,4 +24011,651 @@ body.wt-tour-active {
 .search-page-number-current:hover {
   background: #1557b0;
   border-color: #1557b0;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   RIGHT PANEL (overview page stuck workers drill-down)
+   Fixed-position right sidebar for panels like stuck workers
+──────────────────────────────────────────────────────────────────────────── */
+
+.right-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 400px;
+  height: 100vh;
+  background: #fff;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  animation: slideInRight 0.2s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.right-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fafafa;
+}
+
+.right-panel-header h2 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.right-panel-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  color: #999;
+  transition: color 0.15s ease;
+}
+
+.right-panel-close:hover {
+  color: #333;
+}
+
+.stuck-workers-panel-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   STUCK WORKERS PANEL (hoop-ttb.3.7.1)
+   Displays stuck workers with heartbeat delta, supports cross-project fleet view
+──────────────────────────────────────────────────────────────────────────── */
+
+.stuck-workers-panel {
+  padding: 1.5rem;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.stuck-workers-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.stuck-workers-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #333;
+}
+
+.stuck-workers-summary {
+  display: flex;
+  gap: 1rem;
+}
+
+.stuck-summary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stuck-label {
+  font-size: 0.75rem;
+  color: #666;
+  text-transform: uppercase;
+}
+
+.stuck-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #f9ab00;
+}
+
+.stuck-workers-content {
+  flex: 1;
+}
+
+.stuck-workers-empty {
+  padding: 3rem 2rem;
+  text-align: center;
+  color: #888;
+}
+
+.stuck-workers-empty-hint {
+  font-size: 0.875rem;
+  color: #aaa;
+  margin-top: 0.5rem;
+}
+
+.stuck-workers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.stuck-worker-row {
+  padding: 1rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: #fff8e1;
+}
+
+.stuck-worker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.stuck-worker-name {
+  font-weight: 600;
+  color: #333;
+}
+
+.stuck-reason-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: #f9ab00;
+  color: #fff;
+}
+
+.stuck-reason-idle_timeout,
+.stuck-reason-content_seen_grace_exceeded {
+  background: #f9ab00;
+}
+
+.stuck-reason-max_runtime_exceeded {
+  background: #ea4335;
+}
+
+.stuck-reason-heartbeat_transition_silence {
+  background: #ff6d01;
+}
+
+.stuck-reason-repeated_retry {
+  background: #9334e6;
+}
+
+.stuck-reason-knot {
+  background: #ea4335;
+}
+
+.stuck-worker-details {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.stuck-detail-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.stuck-detail-label {
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.stuck-detail-value {
+  font-size: 0.875rem;
+  color: #333;
+  font-weight: 500;
+}
+
+.stuck-worker-message {
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+  font-size: 0.875rem;
+  color: #555;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stuck-workers-notes {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.stuck-note {
+  font-size: 0.875rem;
+  color: #666;
+  margin: 0.5rem 0;
+}
+
+.stuck-note strong {
+  color: #333;
+}
+
+/* Stuck panel overlay (modal) */
+.stuck-panel-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 1000;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.stuck-panel-content {
+  width: 500px;
+  max-width: 90vw;
+  height: 100vh;
+  background: #ffffff;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+  overflow-y: auto;
+  position: relative;
+  animation: slideIn 0.2s ease-out;
+  display: flex;
+  flex-direction: column;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.stuck-panel-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: #f0f0f0;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s;
+  z-index: 1;
+}
+
+.stuck-panel-close:hover {
+  background: #e0e0e0;
+}
+
+.stuck-panel-close:focus-visible {
+  outline: 2px solid #1976d2;
+  outline-offset: 2px;
+}
+
+/* Fleet summary clickable badge */
+.fss-clickable {
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  border-radius: 4px;
+  transition: background-color 0.15s;
+}
+
+.fss-clickable:hover {
+  background-color: rgba(249, 171, 0, 0.1);
+}
+
+.fss-clickable:focus-visible {
+  outline: 2px solid #f9ab00;
+  outline-offset: 2px;
+}
+
+/* Onboarding prompt components (progressive capability introduction - §12) */
+
+/* Onboarding prompt banner - full-width banner for important prompts */
+.onboarding-prompt-banner {
+  background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+  border: 1px solid #bbdefb;
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1rem;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.onboarding-prompt-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.onboarding-prompt-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.onboarding-prompt-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.onboarding-prompt-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem 0;
+  color: #1565c0;
+}
+
+.onboarding-prompt-message {
+  font-size: 0.875rem;
+  margin: 0;
+  color: #424242;
+  line-height: 1.4;
+}
+
+.onboarding-prompt-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.onboarding-prompt-action {
+  background: #1976d2;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.onboarding-prompt-action:hover {
+  background: #1565c0;
+}
+
+.onboarding-prompt-action:focus-visible {
+  outline: 2px solid #1976d2;
+  outline-offset: 2px;
+}
+
+.onboarding-prompt-dismiss {
+  background: transparent;
+  border: none;
+  color: #757575;
+  font-size: 1.25rem;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.onboarding-prompt-dismiss:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #424242;
+}
+
+.onboarding-prompt-dismiss:focus-visible {
+  outline: 2px solid #1976d2;
+  outline-offset: 2px;
+}
+
+/* What's new banner - version upgrade announcement */
+.whats-new-banner {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  border: 1px solid #ffcc80;
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1rem;
+  animation: slideDown 0.3s ease-out;
+}
+
+.whats-new-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.whats-new-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.whats-new-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.whats-new-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem 0;
+  color: #e65100;
+}
+
+.whats-new-message {
+  font-size: 0.875rem;
+  margin: 0;
+  color: #424242;
+  line-height: 1.4;
+}
+
+.whats-new-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.whats-new-action {
+  background: #f57c00;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.whats-new-action:hover {
+  background: #ef6c00;
+}
+
+.whats-new-action:focus-visible {
+  outline: 2px solid #f57c00;
+  outline-offset: 2px;
+}
+
+.whats-new-ack {
+  background: #fff;
+  color: #e65100;
+  border: 1px solid #ffcc80;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.whats-new-ack:hover {
+  background: #ffe0b2;
+}
+
+.whats-new-ack:focus-visible {
+  outline: 2px solid #f57c00;
+  outline-offset: 2px;
+}
+
+.whats-new-dismiss {
+  background: transparent;
+  border: none;
+  color: #757575;
+  font-size: 1.25rem;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.whats-new-dismiss:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #424242;
+}
+
+.whats-new-dismiss:focus-visible {
+  outline: 2px solid #f57c00;
+  outline-offset: 2px;
+}
+
+/* Inline prompt - smaller contextual prompts */
+.inline-prompt {
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  animation: slideDown 0.3s ease-out;
+}
+
+.inline-prompt--tip {
+  background: #e8f5e9;
+  border-color: #c8e6c9;
+}
+
+.inline-prompt--info {
+  background: #e3f2fd;
+  border-color: #bbdefb;
+}
+
+.inline-prompt-icon {
+  font-size: 1.125rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.inline-prompt-icon--tip {
+  color: #2e7d32;
+}
+
+.inline-prompt-icon--info {
+  color: #1565c0;
+}
+
+.inline-prompt-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.inline-prompt-title {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: #424242;
+}
+
+.inline-prompt-message {
+  font-size: 0.875rem;
+  color: #616161;
+  line-height: 1.4;
+}
+
+.inline-prompt-action-link {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.5rem;
+  color: #1976d2;
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: color 0.15s;
+}
+
+.inline-prompt-action-link:hover {
+  color: #1565c0;
+  text-decoration: underline;
+}
+
+.inline-prompt-action-link:focus-visible {
+  outline: 2px solid #1976d2;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.inline-prompt-dismiss {
+  background: transparent;
+  border: none;
+  color: #757575;
+  font-size: 1rem;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.inline-prompt-dismiss:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #424242;
+}
+
+.inline-prompt-dismiss:focus-visible {
+  outline: 2px solid #1976d2;
+  outline-offset: 2px;
 }

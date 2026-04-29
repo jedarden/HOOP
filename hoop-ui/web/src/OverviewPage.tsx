@@ -1,14 +1,17 @@
-import { useAtomValue, useSetAtom } from 'jotai';
-import { useMemo, useEffect, memo } from 'react';
+import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useMemo, useEffect, memo, useCallback } from 'react';
 import {
   wsConnectedAtom,
   configStatusAtom,
   projectCardsAtom,
   projectsReceivedAtom,
   currentTimeAtom,
+  stuckWorkersPanelOpenAtom,
   ProjectCardData,
 } from './atoms';
 import { SettingsMenu } from './components/SettingsMenu';
+import { WhatsNewBanner } from './components/OnboardingPromptBanner';
+import StuckWorkersPanel from './StuckWorkersPanel';
 
 function formatRelativeTime(iso?: string, now?: number): string {
   if (!iso) return '--';
@@ -34,7 +37,7 @@ const RelativeTime = memo(function RelativeTime({ iso }: { iso?: string }) {
   return <>{formatRelativeTime(iso, now)}</>;
 });
 
-const ProjectCard = memo(function ProjectCard({ card, onClick }: { card: ProjectCardData; onClick: () => void }) {
+const ProjectCard = memo(function ProjectCard({ card, onClick, onStuckClick }: { card: ProjectCardData; onClick: () => void; onStuckClick: (e: React.MouseEvent) => void }) {
   const runtimeState = card.runtime_state ?? 'unknown';
   const isDegraded = card.degraded;
   const hasError = isDegraded || runtimeState === 'failed' || runtimeState === 'error';
@@ -80,7 +83,14 @@ const ProjectCard = memo(function ProjectCard({ card, onClick }: { card: Project
           <span className="pcf-stat-label">today</span>
         </div>
         {card.stuck_count > 0 && (
-          <div className="pcf-stat pcf-stat-warn">
+          <div
+            className="pcf-stat pcf-stat-warn pcf-stat-clickable"
+            onClick={(e) => {
+              e.stopPropagation();
+              onStuckClick(e);
+            }}
+            title={`View ${card.stuck_count} stuck worker${card.stuck_count > 1 ? 's' : ''}`}
+          >
             <span className="pcf-stat-value">{card.stuck_count}</span>
             <span className="pcf-stat-label">stuck</span>
           </div>
@@ -100,12 +110,15 @@ const ProjectCard = memo(function ProjectCard({ card, onClick }: { card: Project
   );
 });
 
+const TOUR_PROJECT_NAME = '__hoop_tour__';
+
 export default function OverviewPage({ onNavigateProject }: { onNavigateProject: (card: ProjectCardData) => void }) {
   const wsConnected = useAtomValue(wsConnectedAtom);
   const configStatus = useAtomValue(configStatusAtom);
   const projectCards = useAtomValue(projectCardsAtom);
   const projectsReceived = useAtomValue(projectsReceivedAtom);
   const setCurrentTime = useSetAtom(currentTimeAtom);
+  const [stuckPanelOpen, setStuckPanelOpen] = useAtom(stuckWorkersPanelOpenAtom);
 
   // Tick every 30s to refresh relative time displays
   useEffect(() => {
@@ -113,14 +126,20 @@ export default function OverviewPage({ onNavigateProject }: { onNavigateProject:
     return () => clearInterval(id);
   }, [setCurrentTime]);
 
+  // Filter out the tour project for fleet summary (it's a demo, not a real project)
+  const realProjectCards = useMemo(() =>
+    projectCards.filter(c => c.name !== TOUR_PROJECT_NAME),
+    [projectCards]
+  );
+
   const fleetSummary = useMemo(() => {
-    const totalWorkers = projectCards.reduce((s, c) => s + c.worker_count, 0);
-    const totalStitches = projectCards.reduce((s, c) => s + c.active_stitch_count, 0);
-    const totalCost = projectCards.reduce((s, c) => s + c.cost_today, 0);
-    const totalStuck = projectCards.reduce((s, c) => s + c.stuck_count, 0);
-    const degradedCount = projectCards.filter(c => c.degraded).length;
+    const totalWorkers = realProjectCards.reduce((s, c) => s + c.worker_count, 0);
+    const totalStitches = realProjectCards.reduce((s, c) => s + c.active_stitch_count, 0);
+    const totalCost = realProjectCards.reduce((s, c) => s + c.cost_today, 0);
+    const totalStuck = realProjectCards.reduce((s, c) => s + c.stuck_count, 0);
+    const degradedCount = realProjectCards.filter(c => c.degraded).length;
     return { totalWorkers, totalStitches, totalCost, totalStuck, degradedCount };
-  }, [projectCards]);
+  }, [realProjectCards]);
 
   // Degraded/error projects sorted to top for visibility
   const sortedCards = useMemo(() => {
@@ -129,8 +148,22 @@ export default function OverviewPage({ onNavigateProject }: { onNavigateProject:
     return [...degraded, ...healthy];
   }, [projectCards]);
 
+  const handleStuckClick = useCallback((card: ProjectCardData) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Toggle the panel: if already open for this project, close it; otherwise open it
+    setStuckPanelOpen(prev => prev === card.name ? null : card.name);
+  }, [setStuckPanelOpen]);
+
+  const closeStuckPanel = useCallback(() => {
+    setStuckPanelOpen(null);
+  }, [setStuckPanelOpen]);
+
+  // Get the project name for the stuck panel
+  const stuckProjectName = stuckPanelOpen ?? undefined;
+
   return (
     <div className="app">
+      <WhatsNewBanner />
       {configStatus.error && (
         <div className="config-error-banner" role="alert">
           <div className="banner-content">
@@ -161,7 +194,7 @@ export default function OverviewPage({ onNavigateProject }: { onNavigateProject:
         {/* Cross-project summary strip */}
         <section className="fleet-summary-strip">
           <div className="fss-item">
-            <span className="fss-value">{projectCards.length}</span>
+            <span className="fss-value">{realProjectCards.length}</span>
             <span className="fss-label">projects</span>
           </div>
           <div className="fss-item">
@@ -177,10 +210,14 @@ export default function OverviewPage({ onNavigateProject }: { onNavigateProject:
             <span className="fss-label">spend today</span>
           </div>
           {fleetSummary.totalStuck > 0 && (
-            <div className="fss-item fss-warn">
+            <button
+              className="fss-item fss-warn fss-clickable"
+              onClick={() => setStuckPanelOpen('')}
+              title={`View ${fleetSummary.totalStuck} stuck worker${fleetSummary.totalStuck > 1 ? 's' : ''} across all projects`}
+            >
               <span className="fss-value">{fleetSummary.totalStuck}</span>
               <span className="fss-label">stuck</span>
-            </div>
+            </button>
           )}
           {fleetSummary.degradedCount > 0 && (
             <div className="fss-item fss-error">
@@ -216,12 +253,32 @@ export default function OverviewPage({ onNavigateProject }: { onNavigateProject:
                   key={card.name}
                   card={card}
                   onClick={() => onNavigateProject(card)}
+                  onStuckClick={handleStuckClick(card)}
                 />
               ))}
             </div>
           )}
         </section>
       </main>
+
+      {/* Stuck workers panel (right sidebar) */}
+      {stuckPanelOpen !== null && (
+        <aside className="right-panel stuck-workers-panel-wrapper">
+          <div className="right-panel-header">
+            <h2>
+              {stuckProjectName ? `${stuckProjectName} Stuck Workers` : 'Fleet Stuck Workers'}
+            </h2>
+            <button
+              className="right-panel-close"
+              onClick={closeStuckPanel}
+              aria-label="Close stuck workers panel"
+            >
+              ×
+            </button>
+          </div>
+          <StuckWorkersPanel projectName={stuckProjectName ?? ''} projectPath="" />
+        </aside>
+      )}
     </div>
   );
 }

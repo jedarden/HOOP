@@ -51,11 +51,38 @@ export interface ProjectDetailProps {
   projectPath: string;
 }
 
+const TOUR_PROJECT_NAME = '__hoop_tour__';
+
 export default function ProjectDetail({ projectName, projectPath }: ProjectDetailProps) {
   const [activeTab, setActiveTab] = useState<TabId>('stitches');
   const [expertMode, setExpertMode] = useState(false);
+  const [isRemovingTour, setIsRemovingTour] = useState(false);
   const tabsRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+
+  const isTourProject = projectName === TOUR_PROJECT_NAME;
+
+  const handleRemoveTour = async () => {
+    if (!confirm('Remove the HOOP Tour project? This will delete all example stitches and the tour workspace.')) {
+      return;
+    }
+    setIsRemovingTour(true);
+    try {
+      const response = await fetch('/api/tour/disable', {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        window.location.hash = '';
+      } else {
+        alert('Failed to remove tour project. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error removing tour:', error);
+      alert('Failed to remove tour project. Please try again.');
+    } finally {
+      setIsRemovingTour(false);
+    }
+  };
 
   // Tabs: include Orphans tab when in Expert mode
   const TABS: Tab[] = useMemo(() => {
@@ -196,14 +223,24 @@ export default function ProjectDetail({ projectName, projectPath }: ProjectDetai
               <span className="stat-value">{projectConversations.length}</span>
               <span className="stat-label">Conversations</span>
             </div>
-            <label className="expert-toggle">
-              <input
-                type="checkbox"
-                checked={expertMode}
-                onChange={(e) => setExpertMode(e.target.checked)}
-              />
-              Expert Mode
-            </label>
+            {isTourProject ? (
+              <button
+                className="remove-tour-btn"
+                onClick={handleRemoveTour}
+                disabled={isRemovingTour}
+              >
+                {isRemovingTour ? 'Removing...' : 'Remove Tour'}
+              </button>
+            ) : (
+              <label className="expert-toggle">
+                <input
+                  type="checkbox"
+                  checked={expertMode}
+                  onChange={(e) => setExpertMode(e.target.checked)}
+                />
+                Expert Mode
+              </label>
+            )}
           </div>
         </div>
 

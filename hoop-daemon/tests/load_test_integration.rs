@@ -405,6 +405,95 @@ fn setup_load_test_projects(config: &Config, load_config: LoadTestConfig) {
         .expect("Failed to write projects.yaml");
 }
 
+/// Integrated CI load test - main entry point for CI performance budget verification
+///
+/// This test:
+/// 1. Populates testrepo with load data (20 projects × 5 workers × 300 beads for full scale)
+/// 2. Spawns a daemon with the load data
+/// 3. Runs the load test to measure API latency, memory, and WS fan-out
+/// 4. Asserts all performance budgets are satisfied
+/// 5. Writes daemon URL to a file for Playwright tests to use
+///
+/// Environment variables:
+///   HOOP_LOAD_TEST_FULL_SCALE=1  - Run full scale (20×5×300) instead of medium (5×2×50)
+///   HOOP_LOAD_PROJECTS=20        - Number of projects
+///   HOOP_LOAD_WORKERS=5          - Workers per project
+///   HOOP_LOAD_BEADS=300          - Beads per worker
+///
+/// Plan reference: §6 Phase 6 deliverable 9
+/// Feeds into hoop-ttb.7.11 performance budget verification
+#[tokio::test]
+async fn load_test_ci_performance_budgets() {
+    // Check if we should run full scale
+    let is_full_scale = std::env::var("HOOP_LOAD_TEST_FULL_SCALE").is_ok();
+
+    let config = if is_full_scale {
+        LoadTestConfig {
+            num_projects: 20,
+            workers_per_project: 5,
+            beads_per_worker: 300,
+            ..Default::default()
+        }
+    } else {
+        // Medium scale for faster CI feedback
+        LoadTestConfig {
+            num_projects: 5,
+            workers_per_project: 2,
+            beads_per_worker: 50,
+            ..Default::default()
+        }
+    };
+
+    println!("=== CI Performance Budget Test ===");
+    println!("Scale: {}", if is_full_scale { "full" } else { "medium" });
+    println!("Projects: {}", config.num_projects);
+    println!("Workers per project: {}", config.workers_per_project);
+    println!("Beads per worker: {}", config.beads_per_worker);
+    println!("Total beads: {}", config.total_beads());
+    println!();
+
+    // Spawn daemon with load test data
+    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg| {
+        setup_load_test_projects(cfg, config.clone());
+    }))
+    .await
+    .expect("Failed to spawn daemon with load test data");
+
+    // Write daemon URL to a temp file for Playwright to use
+    if let Ok(tmp_path) = std::env::var("HOOP_DAEMON_URL_FILE") {
+        fs::write(&tmp_path, &base_url)
+            .expect("Failed to write daemon URL to file");
+        println!("Wrote daemon URL to: {}", tmp_path);
+    }
+
+    // Run the load test
+    let start = std::time::Instant::now();
+    let report = hoop_daemon::load_test::run_load_test(&base_url, config.clone())
+        .await
+        .expect("Load test failed");
+    let elapsed = start.elapsed();
+
+    println!("Load test completed in {:?}", elapsed);
+    println!();
+    println!("{}", report.summary());
+
+    // Assert all budgets are satisfied - this will fail the test if budgets exceeded
+    report
+        .assert_budgets(&config)
+        .expect("Performance budget violations detected - blocking merge per hoop-ttb.7.11");
+
+    assert!(report.passed, "Load test should pass all budgets");
+
+    println!();
+    println!("=== Performance Budgets Satisfied ===");
+    println!("✓ API Latency < {}ms", PERFORMANCE_BUDGETS.api_latency_ms);
+    println!("✓ Memory < {}GB", PERFORMANCE_BUDGETS.memory_gb);
+    println!("✓ WS Fan-out Lag < {}ms", PERFORMANCE_BUDGETS.ws_fanout_lag_ms);
+    println!();
+    println!("This test run confirms the system is within performance budgets.");
+    println!("Budget violations would block merge per hoop-ttb.7.11.");
+}
+
 #[cfg(test)]
 mod benchmark_tests {
     //! Benchmark tests for measuring absolute performance characteristics.

@@ -1,10 +1,12 @@
-import { useAtom } from 'jotai';
+import { useAtom, useAtomValue } from 'jotai';
 import { useEffect, useCallback } from 'react';
 import { settingsMenuOpenAtom } from '../atoms';
 import { WelcomeTourTrigger } from './WelcomeTour';
+import { useOnboarding } from '../useOnboarding';
 
 export function SettingsMenu() {
   const [isOpen, setIsOpen] = useAtom(settingsMenuOpenAtom);
+  const { promptsResponse, setPromptsEnabled } = useOnboarding();
 
   const handleOpen = useCallback(() => {
     setIsOpen(true);
@@ -91,6 +93,24 @@ export function SettingsMenu() {
                   Revisit the welcome tour to learn about HOOP features.
                 </p>
                 <WelcomeTourTrigger />
+              </div>
+              <div className="settings-menu-section">
+                <h4>Feature Discovery</h4>
+                <p className="settings-menu-description">
+                  Show tips and suggestions for unused features.
+                </p>
+                {promptsResponse && (
+                  <label className="settings-toggle">
+                    <input
+                      type="checkbox"
+                      checked={promptsResponse.prompts_enabled}
+                      onChange={e => {
+                        setPromptsEnabled(e.target.checked);
+                      }}
+                    />
+                    <span>Enable prompts</span>
+                  </label>
+                )}
               </div>
             </div>
           </div>

@@ -181,6 +181,9 @@ test.describe('Load Test - UI Responsiveness Under Load', () => {
 
 test.describe('Load Test - API Latency Under Load', () => {
   test('should respond to API requests within budget during load', async ({ page, request }) => {
+    // Get daemon URL from environment (set by CI script)
+    const daemonUrl = process.env.HOOP_DAEMON_URL || 'http://localhost:8080';
+
     // Track API request timings
     const requestTimes: number[] = [];
 
@@ -200,7 +203,7 @@ test.describe('Load Test - API Latency Under Load', () => {
     const apiStart = Date.now();
 
     try {
-      const response = await request.get('http://localhost:8080/api/beads');
+      const response = await request.get(`${daemonUrl}/api/beads`);
       const apiLatency = Date.now() - apiStart;
 
       expect(apiLatency).toBeLessThan(PERFORMANCE_BUDGETS.apiLatencyMs);
@@ -217,6 +220,8 @@ test.describe('Load Test - API Latency Under Load', () => {
   });
 
   test('should handle concurrent API requests during load', async ({ page, request }) => {
+    const daemonUrl = process.env.HOOP_DAEMON_URL || 'http://localhost:8080';
+
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
@@ -225,7 +230,7 @@ test.describe('Load Test - API Latency Under Load', () => {
     const startTime = Date.now();
 
     const promises = Array.from({ length: concurrentRequests }, (_, i) =>
-      request.get(`http://localhost:8080/api/beads?page=${i}`).catch(() => null)
+      request.get(`${daemonUrl}/api/beads?page=${i}`).catch(() => null)
     );
 
     await Promise.all(promises);
@@ -358,20 +363,22 @@ test.describe('Load Test - Integration Metrics', () => {
     // This test verifies that the load test is actually running
     // by checking for metrics from the daemon
 
+    const daemonUrl = process.env.HOOP_DAEMON_URL || 'http://localhost:8080';
+
     await page.goto('/');
     await page.waitForLoadState('networkidle');
 
     // Try to fetch metrics from the daemon
     try {
-      const metricsResponse = await page.evaluate(async () => {
+      const metricsResponse = await page.evaluate(async (url) => {
         try {
-          const response = await fetch('http://localhost:8080/metrics');
+          const response = await fetch(`${url}/metrics`);
           const text = await response.text();
           return text;
         } catch {
           return null;
         }
-      });
+      }, daemonUrl);
 
       if (metricsResponse) {
         // Verify load test metrics are present

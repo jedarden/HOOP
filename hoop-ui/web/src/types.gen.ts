@@ -803,6 +803,62 @@ export interface UiState {
   };
   theme?: "light" | "dark" | "auto";
   schema_version: string;
+  /**
+   * Track which prompts have been dismissed (progressive capability introduction)
+   */
+  prompts_dismissed?: {
+    /**
+     * ISO 8601 timestamp when 'What's new' v1.1.0 prompt was dismissed, null if not dismissed
+     */
+    whats_new_v1_1_0?: string | null;
+    /**
+     * ISO 8601 timestamp when 'Reflection Ledger empty' prompt was dismissed
+     */
+    reflection_ledger_empty_30d?: string | null;
+    /**
+     * ISO 8601 timestamp when 'Pattern suggestion' prompt was dismissed
+     */
+    pattern_suggestion_10plus?: string | null;
+    /**
+     * ISO 8601 timestamp when 'Agent intro' prompt was dismissed
+     */
+    agent_intro?: string | null;
+    /**
+     * ISO 8601 timestamp when 'Mic intro' prompt was dismissed
+     */
+    mic_intro?: string | null;
+    [k: string]: unknown;
+  };
+  /**
+   * Track first usage of features for progressive introduction
+   */
+  feature_usage?: {
+    /**
+     * First timestamp when agent was used
+     */
+    agent_first_used?: string | null;
+    /**
+     * First timestamp when dictation/mic was used
+     */
+    mic_first_used?: string | null;
+    /**
+     * First timestamp when patterns were created/used
+     */
+    patterns_first_used?: string | null;
+    /**
+     * First timestamp when reflection ledger was used
+     */
+    reflection_ledger_first_used?: string | null;
+    [k: string]: unknown;
+  };
+  /**
+   * Last HOOP version seen by this operator (for 'What's new' detection)
+   */
+  last_seen_version?: string | null;
+  /**
+   * Global 'don't bug me' setting - when false, no progressive prompts are shown
+   */
+  prompts_enabled?: boolean;
   [k: string]: unknown;
 }
 
@@ -1638,8 +1694,7 @@ export interface AuditRow {
     | "backup_failed"
     | "restore_started"
     | "restore_finished"
-    | "restore_failed"
-    | "saturation_alert";
+    | "restore_failed";
   /**
    * Target identifier (bead ID, stitch ID, etc.)
    */
@@ -1669,7 +1724,7 @@ export interface AuditRow {
   /**
    * Schema version at time of action
    */
-  schema_version: string;
+  schema_version?: string;
   [k: string]: unknown;
 }
 

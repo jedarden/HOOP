@@ -449,19 +449,30 @@ export const presenceForProjectAtom = atom<Map<string, Set<string>>>(new Map());
 export const presenceForStitchAtom = atom<Map<string, Set<string>>>(new Map());
 
 // Onboarding prompt types
+export type OnboardingPromptType =
+  | { whats_new: { version: string } }
+  | { reflection_ledger_empty: null }
+  | { pattern_suggestion: { theme: string; stitch_count: number } }
+  | { agent_intro: null }
+  | { mic_intro: null };
+
 export interface OnboardingPrompt {
   id: string;
+  prompt_type: OnboardingPromptType;
   title: string;
-  description: string;
-  action?: string;
+  message: string;
+  action_label: string | null;
+  action_url: string | null;
+  eligible_at: string;
+  dismissed_at: string | null;
   priority: number;
-  created_at: string;
-  dismissible: boolean;
 }
 
 export interface OnboardingPromptsResponse {
   prompts: OnboardingPrompt[];
-  dismissed: string[];
+  prompts_enabled: boolean;
+  hoop_version: string;
+  last_seen_version: string | null;
 }
 
 // Onboarding atoms - store the full response including dismissed list
@@ -904,6 +915,9 @@ export const optimisticStubsAtom = atom<OptimisticStub[]>([]);
 // Current time atom — updated every 30s by OverviewPage; used by RelativeTime
 // so that time-tick re-renders don't defeat memo on ProjectCard.
 export const currentTimeAtom = atom<number>(Date.now());
+
+// Stuck workers panel state — null = closed, string = project name (empty = fleet view)
+export const stuckWorkersPanelOpenAtom = atom<string | null>(null);
 
 // Format content for display (handles string and object content)
 export function formatContent(content: string | { [key: string]: any } | null): string {
