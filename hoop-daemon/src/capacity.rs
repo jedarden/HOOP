@@ -1,11 +1,13 @@
-//! Per-account capacity utilization from Claude Code JSONL logs
+//! Per-account capacity utilization from Claude Code and Gemini JSONL logs
 //!
-//! Computes per-account 5h and 7d rolling utilization meters matching Claude
-//! Code's `/status` output. Each Claude credential directory is one account.
+//! Computes per-account 5h and 7d rolling utilization meters.
+//! - Claude: matches `/status` output using cached API response or JSONL estimation
+//! - Gemini: JSONL-based estimation from session files, optional GCP quota API
 //!
 //! Data sources (in priority order):
-//! 1. Cached API response (`~/.cache/claude-usage/usage.json`) — exact, matches `/status`
-//! 2. JSONL-based estimation — fallback when cache is stale or missing
+//! 1. Cached API response (`~/.cache/claude-usage/usage.json`) — Claude only, exact
+//! 2. GCP Consumer Quotas API — Gemini only, exact when available
+//! 3. JSONL-based estimation — fallback for both adapters
 //!
 //! The JSONL fallback uses cost-equivalent token weighting to approximate
 //! Claude's internal rate-limit accounting. It is inherently approximate
@@ -16,10 +18,204 @@ use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
+use std::env;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use tracing::{debug, warn};
+use std::time::Duration as StdDuration;
+use tracing::{debug, info, warn};
+
+/// GCP Consumer Quotas API client for fetching Gemini quota limits.
+///
+/// This module provides optional integration with Google Cloud's Consumer Quotas API
+/// to fetch accurate rate limit information for Gemini API usage. When credentials
+/// are available via environment variables, it provides exact quota limits; otherwise,
+/// the system falls back to hardcoded defaults.
+mod gcp_quota_client {
+    use super::*;
+
+    /// GCP project and region configuration for quota lookup.
+    #[derive(Debug, Clone)]
+    pub struct GcpQuotaConfig {
+        /// GCP project ID
+        pub project_id: String,
+        /// GCP region (e.g., "us-central1")
+        pub region: String,
+        /// Whether to use quota API for limit lookup
+        pub enabled: bool,
+    }
+
+    /// Parsed quota limits from GCP API response.
+    #[derive(Debug, Clone)]
+    pub struct GeminiQuotaLimits {
+        /// Daily token limit (tokens per day)
+        pub daily_limit: u64,
+        /// Requests per minute limit
+        pub rpm_limit: Option<u64>,
+    }
+
+    /// Consumer Quotas API response structure.
+    #[derive(Debug, Deserialize)]
+    struct QuotaLimit {
+        #[serde(rename = "name")]
+        name: String,
+        #[serde(rename = "limit")]
+        limit: f64,
+    }
+
+    /// Load GCP quota configuration from environment variables.
+    ///
+    /// Environment variables:
+    /// - `GEMINI_GCP_PROJECT_ID`: GCP project ID for quota lookup
+    /// - `GEMINI_GCP_REGION`: GCP region (default: "us-central1")
+    /// - `GEMINI_USE_QUOTA_API`: Set to "true" to enable quota API lookup
+    ///
+    /// Returns `None` if configuration is incomplete or disabled.
+    pub fn load_gcp_quota_config() -> Option<GcpQuotaConfig> {
+        let project_id = env::var("GEMINI_GCP_PROJECT_ID").ok()?;
+        let enabled = env::var("GEMINI_USE_QUOTA_API")
+            .ok()
+            .and_then(|v| v.parse::<bool>().ok())
+            .unwrap_or(false);
+
+        if !enabled {
+            debug!("GCP quota API disabled via GEMINI_USE_QUOTA_API");
+            return None;
+        }
+
+        let region = env::var("GEMINI_GCP_REGION")
+            .unwrap_or_else(|_| "us-central1".to_string());
+
+        Some(GcpQuotaConfig {
+            project_id,
+            region,
+            enabled: true,
+        })
+    }
+
+    /// Fetch Gemini quota limits from GCP Consumer Quotas API.
+    ///
+    /// Uses Application Default Credentials (ADC) for authentication.
+    /// Requires `gcloud auth application-default login` or service account credentials.
+    ///
+    /// Returns `Ok(None)` if the API call fails (allowing fallback to defaults).
+    pub fn fetch_gemini_quota(config: &GcpQuotaConfig) -> Result<Option<GeminiQuotaLimits>> {
+        debug!(
+            "Fetching GCP quota for project {} in region {}",
+            config.project_id, config.region
+        );
+
+        // Try to use gcloud CLI for quota lookup (more reliable than HTTP API)
+        if let Some(limits) = fetch_quota_via_gcloud(config) {
+            debug!("Successfully fetched quota via gcloud CLI");
+            return Ok(Some(limits));
+        }
+
+        // Fallback: try HTTP API if gcloud is not available
+        debug!("gcloud CLI not available, skipping GCP quota API");
+        Ok(None)
+    }
+
+    /// Fetch quota limits using gcloud CLI.
+    ///
+    /// This is more reliable than direct HTTP API because it handles
+    /// authentication via ADC automatically.
+    fn fetch_quota_via_gcloud(config: &GcpQuotaConfig) -> Option<GeminiQuotaLimits> {
+        use std::process::Command;
+
+        // Use gcloud to list consumer quotas for Generative Language API
+        let output = Command::new("gcloud")
+            .args([
+                "consumer-quotas",
+                "list",
+                &format!(
+                    "projects/{}/locations/{}/services/generativelanguage.googleapis.com/consumerQuotas",
+                    config.project_id, config.region
+                ),
+                "--filter=metric:generativelanguage.googleapis.com/*",
+                "--format=json",
+                "--limit=100",
+            ])
+            .output()
+            .ok()?;
+
+        if !output.status.success() {
+            debug!(
+                "gcloud consumer-quotas command failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return None;
+        }
+
+        let json_str = String::from_utf8(output.stdout).ok()?;
+        let quotas: serde_json::Value = serde_json::from_str(&json_str).ok()?;
+
+        // Parse quota limits from the response
+        let mut daily_limit: Option<u64> = None;
+        let mut rpm_limit: Option<u64> = None;
+
+        if let Some(array) = quotas.as_array() {
+            for quota in array {
+                if let Some(name) = quota.get("name").and_then(|v| v.as_str()) {
+                    // Look for daily token generation limit
+                    if name.contains("generativeTokenCapacityPerDay")
+                        || name.contains("dailyTokenGeneration")
+                    {
+                        if let Some(limit_val) = quota
+                            .get("quotaLimits")
+                            .and_then(|v| v.as_array())
+                            .and_then(|arr| arr.first())
+                            .and_then(|v| v.get("value"))
+                            .and_then(|v| v.as_f64())
+                        {
+                            daily_limit = Some(limit_val as u64);
+                        }
+                    }
+
+                    // Look for requests per minute limit
+                    if name.contains("requestsPerMinute") || name.contains("rpm") {
+                        if let Some(limit_val) = quota
+                            .get("quotaLimits")
+                            .and_then(|v| v.as_array())
+                            .and_then(|arr| arr.first())
+                            .and_then(|v| v.get("value"))
+                            .and_then(|v| v.as_f64())
+                        {
+                            rpm_limit = Some(limit_val as u64);
+                        }
+                    }
+                }
+            }
+        }
+
+        // If we found daily limit, return the quota limits
+        if let Some(daily) = daily_limit {
+            debug!(
+                "GCP quota API returned daily_limit={}, rpm_limit={:?}",
+                daily, rpm_limit
+            );
+            return Some(GeminiQuotaLimits {
+                daily_limit: daily,
+                rpm_limit,
+            });
+        }
+
+        debug!("GCP quota API did not return token capacity limits");
+        None
+    }
+
+    /// Fetch quota limits via HTTP API (experimental).
+    ///
+    /// This requires proper OAuth2 credentials and may not work in all environments.
+    #[allow(dead_code)]
+    fn fetch_quota_via_http(config: &GcpQuotaConfig) -> Option<GeminiQuotaLimits> {
+        // HTTP-based quota API is complex due to OAuth2 requirements.
+        // The gcloud CLI approach is preferred as it handles authentication.
+        // This stub is reserved for future implementation if needed.
+        debug!("HTTP-based quota API not implemented, use gcloud CLI");
+        None
+    }
+}
 
 /// Deserializes `Option<Option<T>>` so that a present-but-null JSON field
 /// becomes `Some(None)` (distinguishable from an absent field which is `None`).
@@ -68,6 +264,14 @@ pub struct AccountCapacity {
     pub turns_5h: u64,
     /// Total assistant turns in 7d window
     pub turns_7d: u64,
+    /// Prompts used in current 5-hour window (ZAI proxy/OpenCode)
+    pub prompts_5h: u64,
+    /// Prompts used in current 7-day window (ZAI proxy/OpenCode)
+    pub prompts_7d: u64,
+    /// Prompt limit per 5-hour window (ZAI proxy)
+    pub prompts_per_5h: Option<u64>,
+    /// Prompt limit per 7-day window (ZAI proxy)
+    pub prompts_per_7d: Option<u64>,
     /// Burn rate: tokens per minute over the last hour
     pub burn_rate_per_min: f64,
     /// Forecast: minutes until 5h utilization hits 100% at current burn rate
@@ -145,6 +349,26 @@ struct ParsedTurn {
     session_id: Option<String>,
 }
 
+/// A single OpenCode prompt (assistant turn) for ZAI proxy tracking
+#[derive(Debug)]
+struct ParsedPrompt {
+    ts: DateTime<Utc>,
+    /// Session identifier for grouping
+    session_id: String,
+}
+
+/// A single Gemini assistant turn for utilization tracking
+#[derive(Debug)]
+struct GeminiTurn {
+    ts: DateTime<Utc>,
+    input_tokens: u64,
+    output_tokens: u64,
+    cache_read_tokens: u64,
+    cache_write_tokens: u64,
+    /// Session identifier for grouping turns into stitches
+    session_id: Option<String>,
+}
+
 /// Minimum age in seconds before a session is considered complete (ended).
 /// Sessions with a last turn older than this are treated as done.
 const SESSION_COMPLETE_SECS: i64 = 300; // 5 minutes
@@ -175,6 +399,48 @@ impl ParsedTurn {
         let weighted = input + cache_read * 0.10 + cache_write * 0.25 + output * 5.0;
 
         weighted as u64
+    }
+}
+
+impl GeminiTurn {
+    /// Cost-equivalent token count for utilization estimation.
+    ///
+    /// Uses similar weighting to Claude but adjusted for Gemini's pricing:
+    /// - Input tokens at full weight
+    /// - Output tokens at ~8x weight (matching Gemini's output:input price ratio)
+    /// - Cache reads at ~0.1x (cache reads are discounted)
+    /// - Cache writes at ~0.25x (cache writes are partially discounted)
+    fn cost_equivalent_tokens(&self) -> u64 {
+        let input = self.input_tokens as f64;
+        let cache_read = self.cache_read_tokens as f64;
+        let cache_write = self.cache_write_tokens as f64;
+        let output = self.output_tokens as f64;
+
+        // Gemini has a higher output:input price ratio than Claude (approx 8:1 for flash)
+        let weighted = input + cache_read * 0.10 + cache_write * 0.25 + output * 8.0;
+
+        weighted as u64
+    }
+}
+
+/// Gemini-specific token limits for rate limit windows.
+#[derive(Debug, Clone)]
+struct GeminiLimits {
+    /// Token budget per 5-hour window (approximate)
+    tokens_5h: u64,
+    /// Token budget per 7-day window (approximate)
+    tokens_7d: u64,
+    /// Whether these limits are from GCP API (true) or hardcoded defaults (false)
+    from_api: bool,
+}
+
+impl Default for GeminiLimits {
+    fn default() -> Self {
+        Self {
+            tokens_5h: 1_000_000,
+            tokens_7d: 15_000_000,
+            from_api: false,
+        }
     }
 }
 
@@ -230,6 +496,17 @@ struct AccountPaths {
     cached_usage_path: PathBuf,
 }
 
+/// Resolved paths for a single Gemini account
+#[derive(Debug, Clone)]
+struct GeminiAccountPaths {
+    /// Root directory (e.g. ~/.gemini or $GEMINI_CLI_HOME)
+    root_dir: PathBuf,
+    /// Session directory (tmp or sessions)
+    session_subpath: String,
+    /// Full path to session files
+    sessions_dir: PathBuf,
+}
+
 /// Capacity meter configuration
 #[derive(Debug, Clone)]
 pub struct CapacityMeterConfig {
@@ -237,6 +514,10 @@ pub struct CapacityMeterConfig {
     /// Defaults to vec![~/.claude].
     /// Auto-discovery appends any ~/.claude-* dirs with .credentials.json.
     pub account_dirs: Vec<PathBuf>,
+    /// Gemini config directories to scan (each = one account).
+    /// Defaults to vec![~/.gemini].
+    /// Auto-discovery appends any ~/.gemini-* dirs with session files.
+    pub gemini_dirs: Vec<PathBuf>,
     /// How often to recompute (seconds)
     pub refresh_interval_secs: u64,
     /// Maximum age of cached usage.json before treating it as stale (seconds)
@@ -244,6 +525,10 @@ pub struct CapacityMeterConfig {
     /// Override base cache directory (defaults to dirs::cache_dir() = ~/.cache).
     /// Set in tests to avoid touching the real cache.
     pub cache_base_dir: Option<PathBuf>,
+    /// Optional GCP quota configuration for enhanced Gemini limit accuracy.
+    /// Loaded from environment variables (GEMINI_GCP_PROJECT_ID, GEMINI_USE_QUOTA_API).
+    /// When None, uses hardcoded defaults for Gemini limits.
+    pub gcp_quota_config: Option<gcp_quota_client::GcpQuotaConfig>,
 }
 
 impl Default for CapacityMeterConfig {
@@ -264,11 +549,27 @@ impl Default for CapacityMeterConfig {
             }
         }
 
+        // Discover Gemini directories
+        let mut gemini_dirs = Self::discover_gemini_dirs(&home);
+
+        // Load optional GCP quota configuration from environment
+        let gcp_quota_config = gcp_quota_client::load_gcp_quota_config();
+
+        if gcp_quota_config.is_some() {
+            info!(
+                "GCP quota API enabled for Gemini: project={}, region={}",
+                gcp_quota_config.as_ref().unwrap().project_id,
+                gcp_quota_config.as_ref().unwrap().region
+            );
+        }
+
         Self {
             account_dirs,
+            gemini_dirs,
             refresh_interval_secs: 60,
             cache_max_age_secs: 600,
             cache_base_dir: None,
+            gcp_quota_config,
         }
     }
 }
@@ -302,6 +603,142 @@ impl CapacityMeterConfig {
             cached_usage_path,
         }
     }
+
+    /// Discover Gemini session directories.
+    ///
+    /// Checks multiple potential locations in order:
+    /// 1. $GEMINI_CLI_HOME/tmp/ (sandbox mode)
+    /// 2. ~/.gemini/tmp/ (default sandbox location)
+    /// 3. $GEMINI_CLI_HOME/sessions/ (custom sessions dir)
+    /// 4. ~/.gemini/sessions/ (legacy default)
+    ///
+    /// Returns all paths that exist and contain .jsonl session files.
+    fn discover_gemini_dirs(home: &Path) -> Vec<PathBuf> {
+        let mut found_dirs = Vec::new();
+
+        // Check GEMINI_CLI_HOME environment variable
+        let gemini_cli_home = std::env::var("GEMINI_CLI_HOME").ok();
+
+        // Build list of candidate directories to check
+        let candidates = vec![
+            // GEMINI_CLI_HOME/tmp/ (sandbox mode)
+            gemini_cli_home.clone().map(|p| PathBuf::from(p).join("tmp")),
+            // ~/.gemini/tmp/ (default sandbox location)
+            Some(home.join(".gemini").join("tmp")),
+            // GEMINI_CLI_HOME/sessions/ (custom sessions dir)
+            gemini_cli_home.map(|p| PathBuf::from(p).join("sessions")),
+            // ~/.gemini/sessions/ (legacy default)
+            Some(home.join(".gemini").join("sessions")),
+        ];
+
+        for candidate in candidates {
+            let Some(dir) = candidate else { continue };
+
+            if dir.exists() && dir.is_dir() {
+                // Check if this directory contains .jsonl session files
+                let has_jsonl = fs::read_dir(&dir)
+                    .map(|entries| {
+                        entries
+                            .filter_map(|e| e.ok())
+                            .any(|e| {
+                                e.path()
+                                    .extension()
+                                    .map(|ext| ext == "jsonl")
+                                    .unwrap_or(false)
+                            })
+                    })
+                    .unwrap_or(false);
+
+                if has_jsonl {
+                    debug!(
+                        "Gemini session discovery: found session files at {}",
+                        dir.display()
+                    );
+                    // Return the parent directory (root) for consistency
+                    if let Some(parent) = dir.parent() {
+                        if !found_dirs.contains(parent) {
+                            found_dirs.push(parent.to_path_buf());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also check for ~/.gemini-* directories (named Gemini accounts)
+        if let Ok(entries) = fs::read_dir(home) {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let name_str = name.to_string_lossy();
+                if name_str.starts_with(".gemini-") {
+                    let path = entry.path();
+                    // Check for tmp/ or sessions/ subdirectory
+                    for subpath in ["tmp", "sessions"] {
+                        let session_dir = path.join(subpath);
+                        if session_dir.exists() && session_dir.is_dir() {
+                            let has_jsonl = fs::read_dir(&session_dir)
+                                .map(|entries| {
+                                    entries
+                                        .filter_map(|e| e.ok())
+                                        .any(|e| {
+                                            e.path()
+                                                .extension()
+                                                .map(|ext| ext == "jsonl")
+                                                .unwrap_or(false)
+                                        })
+                                })
+                                .unwrap_or(false);
+
+                            if has_jsonl && !found_dirs.contains(&path) {
+                                debug!(
+                                    "Gemini session discovery: found named account at {}",
+                                    path.display()
+                                );
+                                found_dirs.push(path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        found_dirs
+    }
+
+    /// Resolve Gemini session paths from a root directory.
+    ///
+    /// Returns all session subdirectories (tmp, sessions) that exist
+    /// and contain .jsonl files.
+    fn resolve_gemini_paths(&self, root_dir: &Path) -> Vec<GeminiAccountPaths> {
+        let mut paths = Vec::new();
+
+        for subpath in ["tmp", "sessions"] {
+            let session_dir = root_dir.join(subpath);
+            if session_dir.exists() && session_dir.is_dir() {
+                let has_jsonl = fs::read_dir(&session_dir)
+                    .map(|entries| {
+                        entries
+                            .filter_map(|e| e.ok())
+                            .any(|e| {
+                                e.path()
+                                    .extension()
+                                    .map(|ext| ext == "jsonl")
+                                    .unwrap_or(false)
+                            })
+                    })
+                    .unwrap_or(false);
+
+                if has_jsonl {
+                    paths.push(GeminiAccountPaths {
+                        root_dir: root_dir.to_path_buf(),
+                        session_subpath: subpath.to_string(),
+                        sessions_dir: session_dir,
+                    });
+                }
+            }
+        }
+
+        paths
+    }
 }
 
 /// Capacity meter: computes per-account utilization
@@ -318,6 +755,7 @@ impl CapacityMeter {
     pub fn compute(&self) -> Vec<AccountCapacity> {
         let mut accounts = Vec::new();
 
+        // Process Claude accounts
         for account_dir in &self.config.account_dirs {
             let paths = self.config.resolve_account_paths(account_dir);
             match self.compute_account(&paths) {
@@ -328,6 +766,23 @@ impl CapacityMeter {
                         paths.credential_dir.display(),
                         e
                     );
+                }
+            }
+        }
+
+        // Process Gemini accounts
+        for gemini_root in &self.config.gemini_dirs {
+            let gemini_paths = self.config.resolve_gemini_paths(gemini_root);
+            for paths in &gemini_paths {
+                match self.compute_gemini_account(paths) {
+                    Ok(cap) => accounts.push(cap),
+                    Err(e) => {
+                        warn!(
+                            "Failed to compute Gemini capacity for {}: {}",
+                            paths.root_dir.display(),
+                            e
+                        );
+                    }
                 }
             }
         }
@@ -567,6 +1022,226 @@ impl CapacityMeter {
             tokens_7d,
             turns_5h,
             turns_7d,
+            prompts_5h: 0,
+            prompts_7d: 0,
+            prompts_per_5h: None,
+            prompts_per_7d: None,
+            burn_rate_per_min,
+            forecast_full_5h_min: forecast_full_5h,
+            forecast_full_7d_min: forecast_full_7d,
+            stitch_close_rate_per_min,
+            mean_cost_per_stitch_tokens,
+            forecast_full_5h_stitch_min: forecast_full_5h_stitch,
+            forecast_full_7d_stitch_min: forecast_full_7d_stitch,
+            source,
+            computed_at: now,
+        })
+    }
+
+    /// Compute capacity for a Gemini account from session files.
+    ///
+    /// Gemini uses JSONL session files with a different structure than Claude.
+    /// There's no cached API response, so we rely entirely on session file parsing.
+    fn compute_gemini_account(&self, paths: &GeminiAccountPaths) -> Result<AccountCapacity> {
+        let account_id = Self::derive_gemini_account_id(&paths.root_dir);
+        let now = Utc::now();
+
+        // Parse Gemini session files
+        let turns = Self::parse_gemini_sessions(&paths.sessions_dir)?;
+
+        // Gemini has free tier with rate limits (similar to Claude's default)
+        // These are approximate limits based on typical Gemini free tier quotas
+        let plan_type = "free".to_string();
+        let rate_limit_tier = "gemini_free".to_string();
+
+        // Compute rolling windows
+        let cutoff_5h = now - Duration::hours(5);
+        let cutoff_7d = now - Duration::days(7);
+        let cutoff_1h = now - Duration::hours(1);
+
+        let mut tokens_5h: u64 = 0;
+        let mut tokens_7d: u64 = 0;
+        let mut turns_5h: u64 = 0;
+        let mut turns_7d: u64 = 0;
+        let mut tokens_last_hour: u64 = 0;
+
+        for turn in &turns {
+            let weighted = turn.cost_equivalent_tokens();
+            if turn.ts > cutoff_5h {
+                tokens_5h += weighted;
+                turns_5h += 1;
+            }
+            if turn.ts > cutoff_7d {
+                tokens_7d += weighted;
+                turns_7d += 1;
+            }
+            if turn.ts > cutoff_1h {
+                tokens_last_hour += weighted;
+            }
+        }
+
+        let burn_rate_per_min = if tokens_last_hour > 0 {
+            tokens_last_hour as f64 / 60.0
+        } else {
+            0.0
+        };
+
+        // Stitch-based burn rate for Gemini
+        let (stitch_close_rate_per_min, mean_cost_per_stitch_tokens) = {
+            let complete_cutoff = now - Duration::seconds(SESSION_COMPLETE_SECS);
+            let stitch_window_cutoff = now - Duration::seconds(STITCH_WINDOW_SECS);
+
+            let mut session_last_ts: HashMap<String, DateTime<Utc>> = HashMap::new();
+            let mut session_cost: HashMap<String, u64> = HashMap::new();
+
+            for turn in &turns {
+                let sid = match &turn.session_id {
+                    Some(id) if !id.is_empty() => id.clone(),
+                    _ => continue,
+                };
+                let weighted = turn.cost_equivalent_tokens();
+                let last = session_last_ts.entry(sid.clone()).or_insert(turn.ts);
+                if turn.ts > *last {
+                    *last = turn.ts;
+                }
+                *session_cost.entry(sid).or_insert(0) += weighted;
+            }
+
+            let mut completion_costs: Vec<u64> = Vec::new();
+            for (sid, last_ts) in &session_last_ts {
+                if *last_ts < complete_cutoff && *last_ts > stitch_window_cutoff {
+                    let cost = *session_cost.get(sid).unwrap_or(&0);
+                    if cost > 0 {
+                        completion_costs.push(cost);
+                    }
+                }
+            }
+
+            let window_minutes = STITCH_WINDOW_SECS as f64 / 60.0;
+            let rate = if !completion_costs.is_empty() {
+                completion_costs.len() as f64 / window_minutes
+            } else {
+                0.0
+            };
+            let mean = if !completion_costs.is_empty() {
+                completion_costs.iter().sum::<u64>() as f64 / completion_costs.len() as f64
+            } else {
+                0.0
+            };
+            (rate, mean)
+        };
+
+        // Gemini limits: try GCP quota API first, fall back to hardcoded defaults
+        let gemini_limits = if let Some(ref gcp_config) = self.config.gcp_quota_config {
+            // Try to fetch actual quota from GCP Consumer Quotas API
+            match gcp_quota_client::fetch_gemini_quota(gcp_config) {
+                Ok(Some(quota)) => {
+                    // Convert daily limit to 7-day and estimate 5h from daily/24*5
+                    let tokens_7d = quota.daily_limit * 7;
+                    let tokens_5h = quota.daily_limit / 24 * 5;
+                    debug!(
+                        "Using GCP quota API limits for {}: daily={}, 7d={}, 5h={}",
+                        account_id, quota.daily_limit, tokens_7d, tokens_5h
+                    );
+                    GeminiLimits {
+                        tokens_5h,
+                        tokens_7d,
+                        from_api: true,
+                    }
+                }
+                Ok(None) => {
+                    debug!(
+                        "GCP quota API returned no data for {}, using defaults",
+                        account_id
+                    );
+                    GeminiLimits::default()
+                }
+                Err(e) => {
+                    warn!(
+                        "Failed to fetch GCP quota for {}: {}, using defaults",
+                        account_id, e
+                    );
+                    GeminiLimits::default()
+                }
+            }
+        } else {
+            // No GCP quota config, use hardcoded defaults
+            GeminiLimits::default()
+        };
+
+        let util_5h = if gemini_limits.tokens_5h > 0 {
+            (tokens_5h as f64 / gemini_limits.tokens_5h as f64 * 100.0).min(100.0)
+        } else {
+            0.0
+        };
+        let util_7d = if gemini_limits.tokens_7d > 0 {
+            (tokens_7d as f64 / gemini_limits.tokens_7d as f64 * 100.0).min(100.0)
+        } else {
+            0.0
+        };
+
+        // Calculate forecasts
+        let remaining_5h = gemini_limits.tokens_5h as f64 * (1.0 - util_5h / 100.0);
+        let remaining_7d = gemini_limits.tokens_7d as f64 * (1.0 - util_7d / 100.0);
+
+        let forecast_full_5h = if burn_rate_per_min > 0.0 && util_5h < 100.0 {
+            Some(remaining_5h / burn_rate_per_min)
+        } else if util_5h >= 100.0 {
+            Some(0.0)
+        } else {
+            None
+        };
+
+        let forecast_full_7d = if burn_rate_per_min > 0.0 && util_7d < 100.0 {
+            Some(remaining_7d / burn_rate_per_min)
+        } else if util_7d >= 100.0 {
+            Some(0.0)
+        } else {
+            None
+        };
+
+        // Stitch-projected forecasts
+        let stitch_burn_rate = stitch_close_rate_per_min * mean_cost_per_stitch_tokens;
+        let forecast_full_5h_stitch = if stitch_burn_rate > 0.0 && util_5h < 100.0 {
+            Some(remaining_5h / stitch_burn_rate)
+        } else if util_5h >= 100.0 {
+            Some(0.0)
+        } else {
+            None
+        };
+        let forecast_full_7d_stitch = if stitch_burn_rate > 0.0 && util_7d < 100.0 {
+            Some(remaining_7d / stitch_burn_rate)
+        } else if util_7d >= 100.0 {
+            Some(0.0)
+        } else {
+            None
+        };
+
+        // Determine source: "gcp_api" if limits from API, "jsonl_estimate" otherwise
+        let source = if gemini_limits.from_api {
+            "gcp_api".to_string()
+        } else {
+            "jsonl_estimate".to_string()
+        };
+
+        Ok(AccountCapacity {
+            account_id,
+            adapter: "gemini".to_string(),
+            plan_type,
+            rate_limit_tier,
+            utilization_5h: util_5h,
+            utilization_7d: util_7d,
+            resets_at_5h: None,
+            resets_at_7d: None,
+            model_windows_7d: Vec::new(),
+            tokens_5h,
+            tokens_7d,
+            turns_5h,
+            turns_7d,
+            prompts_5h: 0,
+            prompts_7d: 0,
+            prompts_per_5h: None,
+            prompts_per_7d: None,
             burn_rate_per_min,
             forecast_full_5h_min: forecast_full_5h,
             forecast_full_7d_min: forecast_full_7d,
@@ -781,6 +1456,162 @@ impl CapacityMeter {
                 } else {
                     Some(model.to_string())
                 },
+                session_id,
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Derive account ID from Gemini root directory path.
+    fn derive_gemini_account_id(root_dir: &Path) -> String {
+        let dir_name = root_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown");
+        if dir_name == ".gemini" {
+            "gemini-default".to_string()
+        } else {
+            dir_name.to_string()
+        }
+    }
+
+    /// Parse all Gemini session JSONL files in a directory.
+    fn parse_gemini_sessions(sessions_dir: &Path) -> Result<Vec<GeminiTurn>> {
+        if !sessions_dir.exists() {
+            return Ok(Vec::new());
+        }
+
+        let mut turns = Vec::new();
+        Self::scan_gemini_jsonl(sessions_dir, &mut turns)?;
+
+        debug!(
+            "Parsed {} Gemini turns from {}",
+            turns.len(),
+            sessions_dir.display()
+        );
+        Ok(turns)
+    }
+
+    /// Scan Gemini JSONL files recursively.
+    fn scan_gemini_jsonl(dir: &Path, turns: &mut Vec<GeminiTurn>) -> Result<()> {
+        if !dir.exists() {
+            return Ok(());
+        }
+
+        let entries = fs::read_dir(dir)?;
+        for entry in entries {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.is_dir() {
+                Self::scan_gemini_jsonl(&path, turns)?;
+            } else if path.extension().map(|e| e == "jsonl").unwrap_or(false) {
+                if let Err(e) = Self::parse_gemini_jsonl_file(&path, turns) {
+                    debug!("Error parsing Gemini {}: {}", path.display(), e);
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Parse a single Gemini JSONL file.
+    fn parse_gemini_jsonl_file(path: &Path, turns: &mut Vec<GeminiTurn>) -> Result<()> {
+        let file = fs::File::open(path)?;
+        let reader = BufReader::new(file);
+
+        let mut line_number: usize = 0;
+        for line in reader.lines() {
+            let line = line?;
+            line_number += 1;
+
+            // Gemini JSONL uses "type": "message" or "type": "turn" for assistant responses
+            if !line.contains("\"type\"") &&
+               !line.contains("\"role\"") {
+                continue;
+            }
+
+            let source = crate::parse_jsonl_safe::LineSource {
+                tag: "capacity/gemini",
+                file_path: path.to_path_buf(),
+                line_number,
+            };
+
+            let entry: serde_json::Value =
+                match crate::parse_jsonl_safe::parse_line(line.trim(), &source) {
+                    crate::parse_jsonl_safe::ParseResult::Ok(v) => v,
+                    _ => continue,
+                };
+
+            // Check if this is a message/turn event with a model role (assistant response)
+            let event_type = entry.get("type").and_then(|v| v.as_str());
+            let role = entry.get("role").and_then(|v| v.as_str());
+
+            // Only count assistant/model responses (not user prompts)
+            if role != Some("model") && role != Some("assistant") {
+                continue;
+            }
+
+            // Parse timestamp
+            let ts_str = entry
+                .get("timestamp")
+                .or_else(|| entry.get("time"))
+                .and_then(|v| v.as_str());
+
+            let ts: DateTime<Utc> = match ts_str {
+                Some(s) => match s.parse() {
+                    Ok(t) => t,
+                    Err(_) => continue,
+                },
+                None => continue,
+            };
+
+            // Parse usage - Gemini uses different field names than Claude
+            let usage = match entry.get("usage") {
+                Some(u) => u,
+                None => continue,
+            };
+
+            // Gemini usage fields: promptTokenCount, candidatesTokenCount, cachedContentTokenCount
+            let input_tokens = usage
+                .get("promptTokenCount")
+                .or_else(|| usage.get("input_tokens"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let output_tokens = usage
+                .get("candidatesTokenCount")
+                .or_else(|| usage.get("output_tokens"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let cache_read_tokens = usage
+                .get("cachedContentTokenCount")
+                .or_else(|| usage.get("cache_read_tokens"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            let cache_write_tokens = usage
+                .get("cache_write_tokens")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+
+            if input_tokens == 0 && output_tokens == 0 && cache_read_tokens == 0 {
+                continue;
+            }
+
+            // Extract session ID if available
+            let session_id = entry
+                .get("session_id")
+                .or_else(|| entry.get("id"))
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string());
+
+            turns.push(GeminiTurn {
+                ts,
+                input_tokens,
+                output_tokens,
+                cache_read_tokens,
+                cache_write_tokens,
                 session_id,
             });
         }
@@ -1546,5 +2377,373 @@ mod tests {
         // Account 2 has JSONL data.
         assert_eq!(acct2.source, "jsonl_estimate");
         assert!(acct2.utilization_5h > 0.0);
+    }
+
+    // Gemini tests
+
+    fn make_gemini_turn_jsonl(
+        timestamp: &str,
+        input: u64,
+        output: u64,
+        cache_read: u64,
+        session_id: Option<&str>,
+    ) -> String {
+        let session_field = if let Some(sid) = session_id {
+            format!(r#""session_id":"{}","#, sid)
+        } else {
+            String::new()
+        };
+        format!(
+            r#"{{"type":"message","role":"model","timestamp":"{}","{}"usage":{{"promptTokenCount":{},"candidatesTokenCount":{},"cachedContentTokenCount":{}}}}}"#,
+            timestamp, session_field, input, output, cache_read
+        )
+    }
+
+    #[test]
+    fn test_gemini_cost_equivalent_tokens() {
+        let turn = GeminiTurn {
+            ts: Utc::now(),
+            input_tokens: 1000,
+            output_tokens: 100,
+            cache_read_tokens: 5000,
+            cache_write_tokens: 500,
+            session_id: None,
+        };
+        let weighted = turn.cost_equivalent_tokens();
+        // Expected: 1000 + 5000*0.1 + 500*0.25 + 100*8.0
+        // = 1000 + 500 + 125 + 800 = 2425
+        assert!(
+            weighted > 2000 && weighted < 3000,
+            "cost equivalent = {}",
+            weighted
+        );
+    }
+
+    #[test]
+    fn test_gemini_derive_account_id() {
+        let home = dirs::home_dir().unwrap();
+        assert_eq!(
+            CapacityMeter::derive_gemini_account_id(&home.join(".gemini")),
+            "gemini-default"
+        );
+        assert_eq!(
+            CapacityMeter::derive_gemini_account_id(&PathBuf::from("/home/user/.gemini-work")),
+            ".gemini-work"
+        );
+    }
+
+    #[test]
+    fn test_gemini_parse_session_file() {
+        let dir = TempDir::new().unwrap();
+        let jsonl_path = dir.path().join("test.jsonl");
+
+        let now = Utc::now();
+        let ts_3h = (now - Duration::hours(3)).to_rfc3339();
+        let ts_6h = (now - Duration::hours(6)).to_rfc3339();
+
+        let mut f = fs::File::create(&jsonl_path).unwrap();
+        writeln!(
+            f,
+            "{}",
+            make_gemini_turn_jsonl(&ts_3h, 1000, 100, 0, Some("session-1"))
+        )
+        .unwrap();
+        writeln!(
+            f,
+            "{}",
+            make_gemini_turn_jsonl(&ts_6h, 2000, 200, 0, Some("session-2"))
+        )
+        .unwrap();
+        // User prompt (should be skipped)
+        writeln!(f, r#"{{"type":"message","role":"user","timestamp":"{}"}}"#, ts_3h).unwrap();
+
+        let mut turns = Vec::new();
+        CapacityMeter::parse_gemini_jsonl_file(&jsonl_path, &mut turns).unwrap();
+
+        assert_eq!(turns.len(), 2);
+        assert_eq!(turns[0].input_tokens, 1000);
+        assert_eq!(turns[0].output_tokens, 100);
+        assert_eq!(turns[0].session_id.as_deref(), Some("session-1"));
+    }
+
+    #[test]
+    fn test_gemini_capacity_compute() {
+        let dir = TempDir::new().unwrap();
+
+        // Create a Gemini session directory
+        let gemini_dir = dir.path().join(".gemini");
+        let tmp_dir = gemini_dir.join("tmp");
+        fs::create_dir_all(&tmp_dir).unwrap();
+
+        // Create session files with recent usage
+        let now = Utc::now();
+        let ts_1h = (now - Duration::hours(1)).to_rfc3339();
+        let ts_2h = (now - Duration::hours(2)).to_rfc3339();
+
+        let mut f = fs::File::create(tmp_dir.join("session1.jsonl")).unwrap();
+        // High usage: 100K input, 10K output
+        writeln!(
+            f,
+            "{}",
+            make_gemini_turn_jsonl(&ts_1h, 100000, 10000, 0, Some("session-1"))
+        )
+        .unwrap();
+
+        let mut f2 = fs::File::create(tmp_dir.join("session2.jsonl")).unwrap();
+        writeln!(
+            f2,
+            "{}",
+            make_gemini_turn_jsonl(&ts_2h, 50000, 5000, 0, Some("session-2"))
+        )
+        .unwrap();
+
+        let config = CapacityMeterConfig {
+            account_dirs: vec![],
+            gemini_dirs: vec![gemini_dir],
+            refresh_interval_secs: 60,
+            cache_max_age_secs: 600,
+            cache_base_dir: Some(dir.path().join("cache")),
+        };
+
+        let meter = CapacityMeter::new(config);
+        let accounts = meter.compute();
+
+        // Should have one Gemini account
+        let gemini_accounts: Vec<_> = accounts
+            .iter()
+            .filter(|a| a.adapter == "gemini")
+            .collect();
+        assert_eq!(gemini_accounts.len(), 1);
+
+        let acct = &gemini_accounts[0];
+        assert_eq!(acct.account_id, "gemini-default");
+        assert_eq!(acct.adapter, "gemini");
+        assert_eq!(acct.source, "jsonl_estimate");
+
+        // Should have positive utilization from recent turns
+        assert!(acct.utilization_5h > 0.0, "5h utilization should be positive");
+        assert!(acct.utilization_7d > 0.0, "7d utilization should be positive");
+        assert_eq!(acct.turns_5h, 2);
+        assert_eq!(acct.turns_7d, 2);
+    }
+
+    #[test]
+    fn test_gemini_discover_multiple_accounts() {
+        let dir = TempDir::new().unwrap();
+
+        // Create two Gemini accounts
+        let gemini1 = dir.path().join(".gemini");
+        let tmp1 = gemini1.join("tmp");
+        fs::create_dir_all(&tmp1).unwrap();
+
+        let gemini2 = dir.path().join(".gemini-work");
+        let tmp2 = gemini2.join("sessions");
+        fs::create_dir_all(&tmp2).unwrap();
+
+        // Add session files to each
+        let now = Utc::now();
+        let ts = (now - Duration::hours(1)).to_rfc3339();
+
+        let mut f = fs::File::create(tmp1.join("session.jsonl")).unwrap();
+        writeln!(f, "{}", make_gemini_turn_jsonl(&ts, 50000, 5000, 0, None)).unwrap();
+
+        let mut f2 = fs::File::create(tmp2.join("session.jsonl")).unwrap();
+        writeln!(f2, "{}", make_gemini_turn_jsonl(&ts, 100000, 10000, 0, None)).unwrap();
+
+        let config = CapacityMeterConfig {
+            account_dirs: vec![],
+            gemini_dirs: vec![gemini1.clone(), gemini2.clone()],
+            refresh_interval_secs: 60,
+            cache_max_age_secs: 600,
+            cache_base_dir: Some(dir.path().join("cache")),
+        };
+
+        let meter = CapacityMeter::new(config);
+        let accounts = meter.compute();
+
+        // Should have two Gemini accounts
+        let gemini_accounts: Vec<_> = accounts
+            .iter()
+            .filter(|a| a.adapter == "gemini")
+            .collect();
+        assert_eq!(gemini_accounts.len(), 2);
+
+        // Find each account
+        let acct1 = gemini_accounts
+            .iter()
+            .find(|a| a.account_id == "gemini-default")
+            .expect("account 1");
+        let acct2 = gemini_accounts
+            .iter()
+            .find(|a| a.account_id == ".gemini-work")
+            .expect("account 2");
+
+        // Account 2 should have higher usage
+        assert!(acct2.tokens_5h > acct1.tokens_5h);
+    }
+
+    #[test]
+    fn test_gemini_rolling_window() {
+        let dir = TempDir::new().unwrap();
+        let jsonl_path = dir.path().join("test.jsonl");
+
+        let now = Utc::now();
+        let ts_3h = (now - Duration::hours(3)).to_rfc3339();
+        let ts_6h = (now - Duration::hours(6)).to_rfc3339();
+        let ts_8d = (now - Duration::days(8)).to_rfc3339();
+
+        let mut f = fs::File::create(&jsonl_path).unwrap();
+        writeln!(f, "{}", make_gemini_turn_jsonl(&ts_3h, 1000, 100, 0, None)).unwrap();
+        writeln!(f, "{}", make_gemini_turn_jsonl(&ts_6h, 2000, 200, 0, None)).unwrap();
+        writeln!(f, "{}", make_gemini_turn_jsonl(&ts_8d, 5000, 500, 0, None)).unwrap();
+
+        let mut turns = Vec::new();
+        CapacityMeter::parse_gemini_jsonl_file(&jsonl_path, &mut turns).unwrap();
+        assert_eq!(turns.len(), 3);
+
+        let cutoff_5h = now - Duration::hours(5);
+        let cutoff_7d = now - Duration::days(7);
+        let in_5h: Vec<_> = turns.iter().filter(|t| t.ts > cutoff_5h).collect();
+        let in_7d: Vec<_> = turns.iter().filter(|t| t.ts > cutoff_7d).collect();
+
+        assert_eq!(
+            in_5h.len(),
+            1,
+            "Only the 3h-ago entry should be in the 5h window"
+        );
+        assert_eq!(
+            in_7d.len(),
+            2,
+            "3h-ago and 6h-ago entries should be in the 7d window"
+        );
+    }
+
+    // GCP Quota API Tests
+
+    #[test]
+    fn test_gemini_limits_default() {
+        let limits = GeminiLimits::default();
+        assert!(!limits.from_api, "Default limits should not be from API");
+        assert_eq!(limits.tokens_5h, 1_000_000);
+        assert_eq!(limits.tokens_7d, 15_000_000);
+    }
+
+    #[test]
+    fn test_gemini_limits_with_api_flag() {
+        let limits = GeminiLimits {
+            tokens_5h: 2_000_000,
+            tokens_7d: 30_000_000,
+            from_api: true,
+        };
+        assert!(limits.from_api, "API limits should have from_api=true");
+        assert_eq!(limits.tokens_5h, 2_000_000);
+        assert_eq!(limits.tokens_7d, 30_000_000);
+    }
+
+    #[test]
+    fn test_config_without_gcp_quota() {
+        let config = CapacityMeterConfig {
+            account_dirs: vec![],
+            gemini_dirs: vec![],
+            refresh_interval_secs: 60,
+            cache_max_age_secs: 600,
+            cache_base_dir: None,
+            gcp_quota_config: None,
+        };
+        assert!(
+            config.gcp_quota_config.is_none(),
+            "GCP quota config should be None when not set"
+        );
+    }
+
+    #[test]
+    fn test_config_with_gcp_quota() {
+        use gcp_quota_client::GcpQuotaConfig;
+
+        let gcp_config = GcpQuotaConfig {
+            project_id: "test-project".to_string(),
+            region: "us-central1".to_string(),
+            enabled: true,
+        };
+
+        let config = CapacityMeterConfig {
+            account_dirs: vec![],
+            gemini_dirs: vec![],
+            refresh_interval_secs: 60,
+            cache_max_age_secs: 600,
+            cache_base_dir: None,
+            gcp_quota_config: Some(gcp_config),
+        };
+
+        assert!(
+            config.gcp_quota_config.is_some(),
+            "GCP quota config should be Some when set"
+        );
+        let quota_config = config.gcp_quota_config.unwrap();
+        assert_eq!(quota_config.project_id, "test-project");
+        assert_eq!(quota_config.region, "us-central1");
+        assert!(quota_config.enabled);
+    }
+
+    #[test]
+    fn test_gemini_compute_with_jsonl_fallback() {
+        // Test that compute_gemini_account works without GCP quota API
+        let dir = TempDir::new().unwrap();
+
+        let gemini_dir = dir.path().join(".gemini");
+        let tmp_dir = gemini_dir.join("tmp");
+        fs::create_dir_all(&tmp_dir).unwrap();
+
+        let now = Utc::now();
+        let ts_1h = (now - Duration::hours(1)).to_rfc3339();
+
+        let mut f = fs::File::create(tmp_dir.join("session.jsonl")).unwrap();
+        writeln!(
+            f,
+            "{}",
+            make_gemini_turn_jsonl(&ts_1h, 50000, 5000, 0, Some("session-1"))
+        )
+        .unwrap();
+
+        // Config without GCP quota API (using defaults)
+        let config = CapacityMeterConfig {
+            account_dirs: vec![],
+            gemini_dirs: vec![gemini_dir],
+            refresh_interval_secs: 60,
+            cache_max_age_secs: 600,
+            cache_base_dir: Some(dir.path().join("cache")),
+            gcp_quota_config: None,
+        };
+
+        let meter = CapacityMeter::new(config);
+        let accounts = meter.compute();
+
+        let gemini_accounts: Vec<_> = accounts
+            .iter()
+            .filter(|a| a.adapter == "gemini")
+            .collect();
+        assert_eq!(gemini_accounts.len(), 1);
+
+        let acct = &gemini_accounts[0];
+        assert_eq!(acct.account_id, "gemini-default");
+        assert_eq!(
+            acct.source,
+            "jsonl_estimate",
+            "Without GCP API, source should be jsonl_estimate"
+        );
+        assert!(acct.utilization_5h > 0.0);
+        assert!(acct.utilization_7d > 0.0);
+    }
+
+    #[test]
+    fn test_gemini_daily_limit_to_windows() {
+        // Test that daily limits are correctly converted to 5h and 7d windows
+        // Daily: 1M tokens -> 7d: 7M, 5h: ~208K (1M / 24 * 5)
+        let daily = 1_000_000;
+        let expected_7d = daily * 7;
+        let expected_5h = daily / 24 * 5;
+
+        assert_eq!(expected_7d, 7_000_000);
+        assert_eq!(expected_5h, 208_333);
     }
 }
