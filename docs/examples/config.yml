@@ -1,0 +1,117 @@
+# HOOP Configuration Example
+# Location: ~/.hoop/config.yml
+#
+# This file controls HOOP daemon behavior and UI preferences.
+# All settings are optional - HOOP will use defaults if not specified.
+# Schema version: 1.0.0
+
+schema_version: "1.0.0"
+
+# Server configuration
+server:
+  # Socket address for the HTTP server (default: 127.0.0.1:3000)
+  # Use 0.0.0.0:3000 to expose on Tailscale interface
+  bind_addr: "127.0.0.1:3000"
+
+# UI preferences
+ui:
+  # Theme: light, dark, or auto (follows system preference)
+  theme: dark
+
+  # Default sort order for project cards: name, activity, or cost
+  default_project_sort: activity
+
+  # Number of items per page in Stitch lists
+  page_size: 50
+
+# Backup configuration (optional)
+backup:
+  # S3-compatible endpoint URL (Backblaze B2, AWS S3, MinIO, Garage, etc.)
+  endpoint: https://s3.us-west-000.backblazeb2.com
+
+  # Bucket name for backups
+  bucket: hoop-backups-yourname
+
+  # Key prefix for all backup objects
+  prefix: hoop/
+
+  # Cron schedule for automatic backups (default: "0 4 * * *" = daily at 4 AM)
+  schedule: "0 4 * * *"
+
+  # Days to retain backups before pruning (default: 30)
+  retention_days: 30
+
+  # Encrypt backups with age (default: false)
+  # If true, set HOOP_BACKUP_AGE_KEY environment variable with your age public key
+  encryption: false
+
+# Human-interface agent configuration (optional)
+agent:
+  # Anthropic model to use for the agent
+  # Options: claude-sonnet-4-6, claude-opus-4-7, claude-haiku-4-5
+  model: claude-sonnet-4-6
+
+  # Maximum context tokens per agent session (default: 200000)
+  max_tokens: 200000
+
+  # Enable Morning Brief generation (default: true)
+  morning_brief_enabled: true
+
+# Monitoring and metrics (optional)
+metrics:
+  # Enable Prometheus /metrics endpoint (default: false)
+  enabled: true
+
+  # Port for metrics endpoint (default: 9091)
+  port: 9091
+
+# Audit log configuration
+audit:
+  # Days to retain audit records (default: 90)
+  retention_days: 90
+
+  # Enable hash chain for tamper evidence (default: true)
+  hash_chain: true
+
+# Reflection ledger configuration
+reflection:
+  # Enable reflection learning (default: true)
+  enabled: true
+
+  # Detection threshold for rule extraction (0.0-1.0, default: 0.8)
+  detection_threshold: 0.8
+
+  # Auto-archive unused rules after N days (default: 30)
+  auto_archive_after_days: 30
+
+# Morning brief configuration
+morning_brief:
+  # Hour to generate brief (0-23, default: 8)
+  hour: 8
+
+  # Maximum drafts to suggest (default: 5)
+  max_drafts: 5
+
+# Pricing configuration (optional, overrides built-in defaults)
+pricing:
+  claude_opus_4_7:
+    input_per_million: 15.0
+    output_per_million: 75.0
+    cache_read_per_million: 0.3
+    cache_write_per_million: 3.75
+  claude_sonnet_4_6:
+    input_per_million: 3.0
+    output_per_million: 15.0
+    cache_read_per_million: 0.06
+    cache_write_per_million: 0.30
+
+# Role-based access control (optional)
+roles:
+  # Viewers have read-only access
+  viewers:
+    - user1@tailnet-name.ts.net
+    - user2@tailnet-name.ts.net
+
+  # Drafters can read and create Stitches
+  drafters:
+    - admin@tailnet-name.ts.net

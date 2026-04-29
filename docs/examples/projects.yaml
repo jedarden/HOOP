@@ -1,0 +1,52 @@
+# HOOP Projects Registry Example
+# Location: ~/.hoop/projects.yaml
+#
+# This file defines which projects HOOP tracks and their workspaces.
+# Normally managed via `hoop projects add` but can be edited directly.
+
+projects:
+  # Single-repo project
+  - name: HOOP
+    description: Control plane for NEEDLE fleets
+    workspaces:
+      - path: /home/coding/HOOP
+        role: primary  # primary, config, source, secrets, etc.
+
+  # Multi-repo project (deployment split across repos)
+  - name: kalshi-weather-deployment
+    description: Kalshi weather trading service deployment
+    workspaces:
+      - path: /home/coding/kalshi-weather
+        role: source
+      - path: /home/coding/declarative-config
+        role: manifests
+      - path: /home/coding/apexalgo-iad-secrets
+        role: secrets
+
+  # Migration project spanning multiple services
+  - name: calico-migration
+    description: Migrate cluster networking from Calico to Cilium
+    workspaces:
+      - path: /home/coding/ardenone-cluster
+        role: infrastructure
+      - path: /home/coding/declarative-config
+        role: manifests
+      - path: /home/coding/apexalgo-iad-secrets
+        role: secrets
+      - path: /home/coding/service-a
+        role: workload
+      - path: /home/coding/service-b
+        role: workload
+      - path: /home/coding/service-c
+        role: workload
+
+  # Research project with docs and code repos
+  - name: trading-research
+    description: Market microstructure research and backtesting
+    workspaces:
+      - path: /home/coding/trading-research-docs
+        role: documentation
+      - path: /home/coding/trading-research-code
+        role: source
+      - path: /home/coding/trading-research-data
+        role: data

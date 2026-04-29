@@ -4,7 +4,7 @@
 
 A single Rust daemon that runs on your coding host and serves as the human-facing interface to a multi-project NEEDLE worker fleet. Answers questions about what your workers are doing and drafts new work when you ask — without ever managing the workers themselves.
 
-> ⚠️ **Status — 2026-04:** HOOP is pre-v0.1. Implementation has not started. This README describes the target install flow; treat it as a preview of how things will work when v0.1 ships. See [`docs/plan/plan.md`](docs/plan/plan.md) for the current state, the full roadmap, and every design decision in detail.
+> **v1.0.0 Now Available** — Production-ready control plane for NEEDLE fleets. See [RELEASE_NOTES_v1.0.md](RELEASE_NOTES_v1.0.md) for what's new in this release.
 
 ---
 
@@ -52,14 +52,51 @@ You'll need:
 
 ## 📦 Install
 
+### Quick install (latest release)
+
 ```bash
-# 1. Pull the binary
-curl -sSL https://github.com/jedarden/HOOP/releases/latest/download/hoop-linux-x86_64 \
+# 1. Pull the v1.0.0 binary
+HOOP_VERSION="1.0.0"
+curl -sSL "https://github.com/jedarden/HOOP/releases/download/v${HOOP_VERSION}/hoop-linux-x86_64" \
   -o ~/.local/bin/hoop && chmod +x ~/.local/bin/hoop
 
-# 2. Run the first-time wizard
+# 2. Verify installation
+hoop --version
+# hoop 1.0.0
+
+# 3. Run the first-time wizard
 hoop init
 ```
+
+### Install from source
+
+```bash
+# Clone the repository
+git clone https://github.com/jedarden/HOOP.git
+cd HOOP
+
+# Build release binary
+cargo build --release
+
+# Install to PATH
+sudo cp target/release/hoop /usr/local/bin/
+# or for user-only install:
+cp target/release/hoop ~/.local/bin/
+
+# Run first-time setup
+hoop init
+```
+
+### Requirements
+
+| Tool | Minimum version | Install |
+|------|----------------|---------|
+| `br` (beads_rust) | 0.1.0 | `cargo install --git https://github.com/dicklesworthstone/beads_rust` |
+| `git` | 2.5+ | System package manager (`apt install git` / `dnf install git`) |
+| `tmux` | 3.0+ | System package manager (`apt install tmux` / `dnf install tmux`) |
+| Rust | 1.75+ | `rustup.rs` (for building from source only) |
+
+### First-time setup walkthrough
 
 `hoop init` walks you through:
 
@@ -98,6 +135,68 @@ You don't need to know what a bead is to use HOOP. You work in Stitches.
 3. 🎤 **Dictate a note.** Press the hotkey (or the mic button on your phone if you've set up ADB). Talk for 30 seconds about something you're thinking about. When you stop, a dictated Stitch appears in that project's timeline with audio + transcript.
 4. 💬 **Ask the agent something.** Open the chat pane. Try `what's going on in <project>?` — the agent summarizes active Stitches, recent failures, and cost trends.
 5. 📄 **Browse a file.** Open the file browser for the project. Hover any line in a code file; once Stitch-Provenance lands (phase 2), you'll see which Stitch last modified it.
+
+---
+
+## 📸 Screenshots
+
+<div align="center">
+
+### Project Dashboard
+![Project Dashboard](docs/screenshots/dashboard.png)
+*One card per project, aggregating active work, cost today, and alerts.*
+
+### Stitch Timeline
+![Stitch Timeline](docs/screenshots/stitches.png)
+*All conversations in a project — worker sessions, operator chats, dictated notes.*
+
+### Agent Chat
+![Agent Chat](docs/screenshots/agent.png)
+*Ask questions, draft work, get summaries — your primary interface to HOOP.*
+
+</div>
+
+> **Note:** Screenshots coming soon in v1.0.1. The UI features a responsive dark-themed design with project cards, timeline views, and an integrated chat interface for the human-interface agent. Run `hoop init` and open the provided URL to see the live interface.
+
+---
+
+## ✅ Quick-start verification
+
+Verify your installation in under 5 minutes:
+
+```bash
+# 1. Check HOOP is running
+hoop status
+# → HOOP daemon is running (v1.0.0)
+#    PID: 12345
+#    Uptime: 2 minutes
+
+# 2. Check projects are registered
+hoop projects list
+# → Registered projects:
+#   - HOOP (1 workspace)
+#   - kalshi-weather (1 workspace)
+
+# 3. Open the web UI
+echo "Open this URL in your browser:"
+hoop url
+# → http://localhost:3000
+#    or http://100.x.y.z:3000 (Tailscale)
+
+# 4. Verify you can see Stitches
+# In the UI: click on any project card → should see Stitch list
+# Each project shows: active Stitches, cost today, any alerts
+
+# 5. Test the agent (if enabled)
+# In the UI: open chat pane → ask "what projects are registered?"
+# Agent should respond with your project list and summaries
+
+# 6. Check service status
+systemctl --user status hoop
+# Should show: active (running)
+```
+
+If any step fails, see the [troubleshooting section](#-troubleshooting) below.
 
 ---
 
@@ -247,6 +346,102 @@ State in `~/.hoop/` persists across upgrades. Schema migrations run on startup; 
 
 ---
 
+## 🔧 Common configuration patterns
+
+### Pattern 1: Single developer, local-only
+
+Run HOOP locally without network exposure:
+
+```yaml
+# ~/.hoop/config.yml
+server:
+  bind_addr: "127.0.0.1:3000"
+
+ui:
+  theme: dark
+
+agent:
+  model: claude-sonnet-4-6
+  morning_brief_enabled: true
+
+backup:
+  enabled: false
+```
+
+### Pattern 2: Tailscale-exposed with backup
+
+Expose on Tailscale interface with automated backups:
+
+```yaml
+# ~/.hoop/config.yml
+server:
+  bind_addr: "0.0.0.0:3000"
+
+backup:
+  endpoint: https://s3.us-west-000.backblazeb2.com
+  bucket: hoop-backups-yourname
+  schedule: "0 4 * * *"
+  retention_days: 30
+  encryption: true
+```
+
+Set `HOOP_BACKUP_AGE_KEY` environment variable with your age public key.
+
+### Pattern 3: Multi-repo project
+
+Track a deployment spanning multiple repos:
+
+```bash
+hoop projects add-multi myservice-deployment \
+  /home/coding/myservice:source \
+  /home/coding/declarative-config:manifests \
+  /home/coding/secrets:secrets
+```
+
+### Pattern 4: High-volume Claude Max tier
+
+Configure rate limits for Claude Max:
+
+```yaml
+# ~/.hoop/accounts.yaml
+accounts:
+  claude-code-default:
+    adapter: claude-code
+    limits:
+      prompts_per_5h: 1600
+      prompts_per_7d: 8000
+      tokens_per_minute: 40000
+```
+
+---
+
+## 📁 Example configurations
+
+Example configuration files are available in [`docs/examples/`](docs/examples/):
+
+| File | Purpose |
+|------|---------|
+| [`config.yml`](docs/examples/config.yml) | UI preferences, backup settings, agent configuration |
+| [`accounts.yaml`](docs/examples/accounts.yaml) | Per-adapter rate limits and account settings |
+| [`projects.yaml`](docs/examples/projects.yaml) | Project registry examples (single-repo, multi-repo, migration) |
+| [`fleet.yaml`](docs/examples/fleet.yaml) | NEEDLE worker fleet configuration |
+
+See [`docs/examples/README.md`](docs/examples/README.md) for detailed usage patterns and common configuration scenarios.
+
+Copy these to `~/.hoop/` and customize for your environment:
+
+```bash
+# Create config directory
+mkdir -p ~/.hoop
+
+# Copy and customize examples
+cp docs/examples/config.yml ~/.hoop/
+cp docs/examples/accounts.yaml ~/.hoop/
+# Edit ~/.hoop/config.yml to set your preferences
+```
+
+---
+
 ## 💥 When HOOP dies
 
 Nothing else notices. NEEDLE keeps running. FABRIC keeps working. Your CLIs keep writing session files. The next time you start HOOP it rebuilds its view entirely from disk. HOOP is a convenience, not a dependency.
@@ -296,14 +491,56 @@ For more operational details, see [`docs/operations.md`](docs/operations.md).
 
 ---
 
-## 🤝 For contributors
+## 🤝 Contributing
 
-If you're reading this because you want to help build HOOP:
+We welcome contributions! HOOP is a Rust + TypeScript project with a focus on reliability and operator experience.
 
-- 📖 Read [`AGENTS.md`](AGENTS.md) — it's the LLM-facing version of this document and covers repo conventions.
-- 🪜 The plan's phased roadmap is strict — don't start phase N+1 work before phase N meets its success criteria.
-- 🔤 Match the terminology exactly. "Mayor" / "polecat" / "swarm" / "Gas Town" vocabulary was removed from earlier drafts; do not re-introduce it.
-- 🚫 Non-goals are not suggestions — they're the design. HOOP never steers workers, never enforces capacity, never mutates bead state beyond `br create`.
+### Development setup
+
+```bash
+# Clone the repository
+git clone https://github.com/jedarden/HOOP.git
+cd HOOP
+
+# Install dependencies
+cargo install just  # optional, for task running
+cargo build
+
+# Run tests
+cargo test
+
+# Run with hot-reload during development
+cargo run --bin hoop -- serve --dev
+```
+
+### Contribution guidelines
+
+1. **Read [`AGENTS.md`](AGENTS.md)** — Repository conventions, terminology, and LLM collaboration patterns
+2. **Follow the phased roadmap** — Don't start phase N+1 work before phase N meets its success criteria (see [`docs/plan/plan.md`](docs/plan/plan.md) §6)
+3. **Match terminology exactly** — Use "Stitch", "Pattern", "workspace", not "ticket", "epic", "repo"
+4. **Respect non-goals** — HOOP never steers workers, never enforces capacity, never mutates bead state beyond `br create`
+5. **Test your changes** — Run the full test suite including integration tests
+6. **Document schema changes** — Update CHANGELOG.md for any schema modifications
+
+### Pull request process
+
+1. Fork and create a feature branch
+2. Make your changes with tests
+3. Update CHANGELOG.md if applicable
+4. Submit PR with description linking to relevant beads/issues
+5. CI will run tests, schema drift check, and performance budget verification
+
+### Areas seeking contribution
+
+- **Mobile UI** — Responsive improvements for phone form factor
+- **Additional adapters** — Support for more CLI tools (Cursor, Windsurf, etc.)
+- **Reflection rules** — New rule types and learning patterns
+- **Morning Brief** — Enhanced summarization and draft quality
+- **Documentation** — Screenshots, demo videos, tutorials
+
+### Code of conduct
+
+Be respectful, constructive, and focused on the work. We're building tools for operators — empathy for the user experience is our north star.
 
 ---
 

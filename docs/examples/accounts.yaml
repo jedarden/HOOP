@@ -1,0 +1,98 @@
+# HOOP Accounts Configuration Example
+# Location: ~/.hoop/accounts.yaml
+#
+# This file configures rate limits per adapter and account.
+# All settings are optional - HOOP will use defaults if not specified.
+# Schema version: 1.0.0
+
+# Account-specific rate limits
+# Account IDs are derived from the adapter's root directory name:
+# - Claude Code: ~/.config/claude-code -> claude-code-default
+# - OpenCode: ~/.local/share/opencode -> opencode-default
+# - Aider: ~/.config/aider -> aider-default
+# - Codex: ~/.config/codex -> codex-default
+# - Gemini: ~/.config/gemini -> gemini-default
+
+accounts:
+  # Claude Code account configuration (Claude Max tier)
+  claude-code-default:
+    adapter: claude-code
+    limits:
+      # Anthropic Claude Max tier limits (as of 2026-04)
+      prompts_per_5h: 1600
+      prompts_per_7d: 8000
+      tokens_per_minute: 40000
+
+  # Claude Code build account (separate tier)
+  claude-code-build:
+    adapter: claude-code
+    limits:
+      # Claude Build tier limits
+      prompts_per_5h: 500
+      prompts_per_7d: 2000
+      tokens_per_minute: 20000
+
+  # OpenCode account configuration (ZAI proxy Max tier)
+  opencode-default:
+    adapter: opencode
+    limits:
+      # ZAI proxy limits for Max tier
+      prompts_per_5h: 1600
+      prompts_per_7d: 8000
+
+  # OpenCode work account (separate rate limits)
+  opencode-work:
+    adapter: opencode
+    limits:
+      prompts_per_5h: 800
+      prompts_per_7d: 4000
+
+  # Aider account configuration (OpenAI GPT-4)
+  aider-default:
+    adapter: aider
+    limits:
+      # OpenAI Tier 4 limits (as of 2026-04)
+      requests_per_hour: 500
+      tokens_per_minute: 150000
+      tokens_per_day: 300000
+
+  # Aider mini account (GPT-4o-mini)
+  aider-mini:
+    adapter: aider
+    limits:
+      # Higher limits for mini model
+      requests_per_hour: 10000
+      tokens_per_minute: 1000000
+
+  # Codex account configuration
+  codex-default:
+    adapter: codex
+    limits:
+      prompts_per_hour: 60
+      tokens_per_minute: 100000
+
+  # Gemini account configuration (Gemini 1.5 Pro)
+  gemini-default:
+    adapter: gemini
+    limits:
+      # Gemini rate limits (as of 2026-04)
+      requests_per_minute: 60
+      tokens_per_day: 1000000
+
+# Default limits for unknown accounts
+defaults:
+  claude-code:
+    prompts_per_5h: 500
+    prompts_per_7d: 2000
+  opencode:
+    prompts_per_5h: 500
+    prompts_per_7d: 2000
+  aider:
+    requests_per_hour: 100
+    tokens_per_minute: 50000
+  codex:
+    prompts_per_hour: 50
+    tokens_per_minute: 50000
+  gemini:
+    requests_per_minute: 15
+    tokens_per_day: 100000
