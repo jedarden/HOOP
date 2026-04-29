@@ -100,7 +100,7 @@ function FixPatternList({
 }
 
 function FixPatternDetail({
-  patternId,
+  patternId: _patternId,
   loading,
   error,
   pattern,

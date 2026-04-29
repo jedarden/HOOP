@@ -259,7 +259,7 @@ impl FixPatternService {
     /// Delete a pattern
     pub fn delete(id: &str) -> Result<()> {
         let db_path = fleet::db_path();
-        let mut conn = Connection::open(&db_path)?;
+        let conn = Connection::open(&db_path)?;
 
         let affected = conn.execute("DELETE FROM fix_patterns WHERE id = ?1", params![id])?;
         if affected == 0 {

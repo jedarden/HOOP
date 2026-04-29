@@ -18,6 +18,9 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
 use crate::fix_patterns::{CreatePatternRequest, FixPatternService, UpdatePatternRequest};
 
 // ---------------------------------------------------------------------------
@@ -25,11 +28,13 @@ use crate::fix_patterns::{CreatePatternRequest, FixPatternService, UpdatePattern
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct PatternListResponse {
     pub patterns: Vec<PatternDetail>,
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct PatternDetail {
     pub id: String,
     pub name: String,
@@ -42,16 +47,19 @@ pub struct PatternDetail {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct PatternCreatedResponse {
     pub id: String,
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct PatternMatchResponse {
     pub matches: Vec<PatternMatchDetail>,
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct PatternMatchDetail {
     pub pattern: PatternDetail,
     pub similarity: f32,
@@ -62,6 +70,7 @@ pub struct PatternMatchDetail {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct MatchRequest {
     pub signature_vector: Vec<f32>,
     #[serde(default = "default_threshold")]
@@ -84,6 +93,7 @@ pub struct SearchQuery {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct PatternsExportResponse {
     pub patterns: Vec<PatternExport>,
     pub exported_at: String,
@@ -91,6 +101,7 @@ pub struct PatternsExportResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct PatternExport {
     pub id: String,
     pub name: String,
@@ -103,11 +114,13 @@ pub struct PatternExport {
 }
 
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct PatternsImportRequest {
     pub patterns: Vec<PatternExport>,
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct PatternsImportResponse {
     pub imported: usize,
     pub skipped: usize,
@@ -135,6 +148,15 @@ pub fn router() -> Router<crate::DaemonState> {
 // Handlers
 // ---------------------------------------------------------------------------
 
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/fix-patterns",
+    tag = "fix_patterns",
+    request_body = CreatePatternRequest,
+    responses(
+        (status = 200, description = "Pattern created successfully", body = PatternCreatedResponse)
+    )
+))]
 async fn create_pattern(
     Json(req): Json<CreatePatternRequest>,
 ) -> Result<Json<PatternCreatedResponse>, (StatusCode, String)> {
@@ -148,6 +170,14 @@ async fn create_pattern(
     Ok(Json(PatternCreatedResponse { id }))
 }
 
+#[cfg_attr(feature = "openapi", utoipa::path(
+    get,
+    path = "/api/fix-patterns",
+    tag = "fix_patterns",
+    responses(
+        (status = 200, description = "List of all fix patterns", body = PatternListResponse)
+    )
+))]
 async fn list_patterns() -> Result<Json<PatternListResponse>, (StatusCode, String)> {
     let patterns = FixPatternService::list().map_err(|e| {
         (
@@ -173,6 +203,18 @@ async fn list_patterns() -> Result<Json<PatternListResponse>, (StatusCode, Strin
     Ok(Json(PatternListResponse { patterns: details }))
 }
 
+#[cfg_attr(feature = "openapi", utoipa::path(
+    get,
+    path = "/api/fix-patterns/{id}",
+    tag = "fix_patterns",
+    params(
+        ("id" = String, Path, description = "Pattern ID")
+    ),
+    responses(
+        (status = 200, description = "Pattern details", body = PatternDetail),
+        (status = 404, description = "Pattern not found")
+    )
+))]
 async fn get_pattern(Path(id): Path<String>) -> Result<Json<PatternDetail>, (StatusCode, String)> {
     let pattern = FixPatternService::get(&id)
         .map_err(|e| {
@@ -195,6 +237,19 @@ async fn get_pattern(Path(id): Path<String>) -> Result<Json<PatternDetail>, (Sta
     }))
 }
 
+#[cfg_attr(feature = "openapi", utoipa::path(
+    put,
+    path = "/api/fix-patterns/{id}",
+    tag = "fix_patterns",
+    params(
+        ("id" = String, Path, description = "Pattern ID")
+    ),
+    request_body = UpdatePatternRequest,
+    responses(
+        (status = 204, description = "Pattern updated successfully"),
+        (status = 404, description = "Pattern not found")
+    )
+))]
 async fn update_pattern(
     Path(id): Path<String>,
     Json(mut req): Json<UpdatePatternRequest>,
@@ -210,6 +265,18 @@ async fn update_pattern(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[cfg_attr(feature = "openapi", utoipa::path(
+    delete,
+    path = "/api/fix-patterns/{id}",
+    tag = "fix_patterns",
+    params(
+        ("id" = String, Path, description = "Pattern ID")
+    ),
+    responses(
+        (status = 204, description = "Pattern deleted successfully"),
+        (status = 404, description = "Pattern not found")
+    )
+))]
 async fn delete_pattern(Path(id): Path<String>) -> Result<StatusCode, (StatusCode, String)> {
     FixPatternService::delete(&id).map_err(|e| {
         if e.to_string().contains("not found") {
@@ -225,6 +292,15 @@ async fn delete_pattern(Path(id): Path<String>) -> Result<StatusCode, (StatusCod
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/fix-patterns/match",
+    tag = "fix_patterns",
+    request_body = MatchRequest,
+    responses(
+        (status = 200, description = "Matching patterns with similarity scores", body = PatternMatchResponse)
+    )
+))]
 async fn match_patterns(
     Json(req): Json<MatchRequest>,
 ) -> Result<Json<PatternMatchResponse>, (StatusCode, String)> {
@@ -257,6 +333,17 @@ async fn match_patterns(
     Ok(Json(PatternMatchResponse { matches: details }))
 }
 
+#[cfg_attr(feature = "openapi", utoipa::path(
+    get,
+    path = "/api/fix-patterns/search",
+    tag = "fix_patterns",
+    params(
+        ("q" = String, Query, description = "Search query for keywords")
+    ),
+    responses(
+        (status = 200, description = "Patterns matching the search query", body = PatternListResponse)
+    )
+))]
 async fn search_patterns(
     Query(query): Query<SearchQuery>,
 ) -> Result<Json<PatternListResponse>, (StatusCode, String)> {
@@ -284,6 +371,14 @@ async fn search_patterns(
     Ok(Json(PatternListResponse { patterns: details }))
 }
 
+#[cfg_attr(feature = "openapi", utoipa::path(
+    get,
+    path = "/api/fix-patterns/export",
+    tag = "fix_patterns",
+    responses(
+        (status = 200, description = "All patterns exported as JSON", body = PatternsExportResponse)
+    )
+))]
 async fn export_patterns() -> Result<Json<PatternsExportResponse>, (StatusCode, String)> {
     let patterns = FixPatternService::list().map_err(|e| {
         (
@@ -313,6 +408,15 @@ async fn export_patterns() -> Result<Json<PatternsExportResponse>, (StatusCode, 
     }))
 }
 
+#[cfg_attr(feature = "openapi", utoipa::path(
+    post,
+    path = "/api/fix-patterns/import",
+    tag = "fix_patterns",
+    request_body = PatternsImportRequest,
+    responses(
+        (status = 200, description = "Import results with imported/skipped counts", body = PatternsImportResponse)
+    )
+))]
 async fn import_patterns(
     Json(req): Json<PatternsImportRequest>,
 ) -> Result<Json<PatternsImportResponse>, (StatusCode, String)> {
