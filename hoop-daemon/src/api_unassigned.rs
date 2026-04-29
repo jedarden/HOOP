@@ -231,7 +231,7 @@ impl UnassignedTracker {
             );
 
             for file in discovered_files {
-                match adapter.parse_session_file(&file.path, None) {
+                match adapter.parse_session_file(file.path(), None) {
                     Ok(Some(session)) => {
                         all_sessions.push(session);
                     }
@@ -239,7 +239,7 @@ impl UnassignedTracker {
                         // File was skipped (not a valid session)
                     }
                     Err(e) => {
-                        warn!("Failed to parse session file {}: {}", file.path.display(), e);
+                        warn!("Failed to parse session file {}: {}", file.path().display(), e);
                     }
                 }
             }
@@ -269,29 +269,32 @@ impl UnassignedTracker {
                 true
             })
             .map(|session| {
-                let total_tokens: i64 = session
-                    .total_usage
-                    .as_ref()
-                    .map(|u| u.input_tokens + u.output_tokens)
-                    .unwrap_or(0);
+                let total_tokens: i64 = session.total_usage.input_tokens + session.total_usage.output_tokens;
 
                 UnassignedEntry {
                     session: UnassignedSession {
                         id: session.id.clone(),
                         provider: session.provider.clone(),
-                        kind: match session.kind {
-                            ParsedSessionKind::Worker => "worker".to_string(),
-                            ParsedSessionKind::Operator => "operator".to_string(),
-                            ParsedSessionKind::Dictated => "dictated".to_string(),
-                            ParsedSessionKind::AdHoc => "ad-hoc".to_string(),
+                        kind: match &session.kind {
+                            hoop_schema::ParsedSessionKind::Variant0 { .. } => "worker".to_string(),
+                            hoop_schema::ParsedSessionKind::Variant1(hoop_schema::ParsedSessionKindVariant1::Dictated) => "dictated".to_string(),
+                            hoop_schema::ParsedSessionKind::Variant2(hoop_schema::ParsedSessionKindVariant2::AdHoc) => "ad-hoc".to_string(),
+                            hoop_schema::ParsedSessionKind::Variant3(hoop_schema::ParsedSessionKindVariant3::Operator) => "operator".to_string(),
                         },
                         cwd: session.cwd.clone(),
-                        title: session.title.clone().unwrap_or_else(|| {
+                        title: if session.title.is_empty() {
                             session
                                 .messages
                                 .first()
-                                .and_then(|m| m.content.as_ref())
-                                .and_then(|c| c.as_str())
+                                .and_then(|m| {
+                                    if m.content.is_string() {
+                                        m.content.as_str()
+                                    } else if m.content.is_object() {
+                                        m.content.get("content").and_then(|c| c.as_str())
+                                    } else {
+                                        None
+                                    }
+                                })
                                 .map(|s| {
                                     let truncated = s.chars().take(60).collect::<String>();
                                     if s.len() > 60 {
@@ -301,7 +304,9 @@ impl UnassignedTracker {
                                     }
                                 })
                                 .unwrap_or_else(|| "Untitled".to_string())
-                        }),
+                        } else {
+                            session.title.clone()
+                        },
                         message_count: session.messages.len(),
                         total_tokens,
                         created_at: session.created_at.clone(),
