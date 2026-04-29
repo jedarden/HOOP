@@ -1,13 +1,7 @@
-{"type":"content_block_delta","delta":{"text":"I'll analyze your project structure."}}
-{"type":"tool_use","id":"aid_1","name":"read_file","input":{"file_path":"src/main.rs"}}
-{"type":"tool_result","id":"aid_1","output":"fn main() { println!(\"test\"); }","is_error":false}
-{"type":"content_block_delta","delta":{"text":"Let me also check the test file."}}
-{"type":"tool_use","id":"aid_2","name":"read_file","input":{"file_path":"tests/test.rs"}}
-{"type":"tool_result","id":"aid_2","output":"#[test]\nfn test() {}","is_error":false}
-{"type":"content_block_delta","delta":{"text":"Now let me look at the Cargo.toml."}}
-{"type":"tool_use","id":"aid_3","name":"read_file","input":{"file_path":"Cargo.toml"}}
-{"type":"tool_result","id":"aid_3","output":"[package]\nname = \"test\"\nversion = \"0.1.0\"","is_error":false}
-{"type":"content_block_delta","delta":{"text":"I've reviewed the project. It's a minimal Rust package."}}
-{"type":"tool_use","id":"aid_4","name":"write_file","input":{"file_path":"src/main.rs","content":"fn main() { println!(\"updated\"); }"}}
-{"type":"tool_result","id":"aid_4","output":"Successfully updated","is_error":false}
-{"type":"message_stop"}
+{"type":"metadata","cwd":"/home/user/project","title":"Refactor auth module","start_time":"2025-01-15T10:00:00Z","end_time":"2025-01-15T10:05:00Z"}
+{"type":"command","command":"aider --message 'refactor the auth module to use async/await'","message":"refactor the auth module to use async/await","timestamp":"2025-01-15T10:00:00Z","exit_code":0}
+{"type":"message","role":"user","content":"refactor the auth module to use async/await","timestamp":"2025-01-15T10:00:00Z"}
+{"type":"message","role":"assistant","content":"I'll refactor the auth module to use async/await patterns.","model":"gpt-4","timestamp":"2025-01-15T10:00:05Z"}
+{"type":"message","role":"assistant","content":"I'll start by reading the auth.rs file to understand the current implementation.","model":"gpt-4","usage":{"input_tokens":150,"output_tokens":45},"timestamp":"2025-01-15T10:00:10Z"}
+{"type":"message","role":"assistant","content":"Now I'll convert the synchronous functions to async.","model":"gpt-4","usage":{"input_tokens":180,"output_tokens":320},"timestamp":"2025-01-15T10:01:00Z"}
+{"type":"message","role":"assistant","content":"Done! The auth module now uses async/await throughout.","model":"gpt-4","usage":{"input_tokens":200,"output_tokens":85},"timestamp":"2025-01-15T10:02:00Z"}

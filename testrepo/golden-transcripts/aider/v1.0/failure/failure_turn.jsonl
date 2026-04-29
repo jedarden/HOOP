@@ -1,1 +1,5 @@
-{"type":"error","error":{"type":"git_error","message":"Git repository has uncommitted changes. Please commit or stash them first."}}
+{"type":"metadata","cwd":"/home/user/project","title":"Failed API call","start_time":"2025-01-15T10:00:00Z","end_time":"2025-01-15T10:01:00Z"}
+{"type":"message","role":"user","content":"Make an API call to the external service","timestamp":"2025-01-15T10:00:00Z"}
+{"type":"message","role":"assistant","content":"I'll make the API call to the external service.","model":"gpt-4","timestamp":"2025-01-15T10:00:05Z"}
+{"type":"message","role":"assistant","content":"Error: API rate limit exceeded. Please try again later.","model":"gpt-4","timestamp":"2025-01-15T10:00:30Z"}
+{"type":"message","role":"assistant","content":"The request failed due to rate limiting. The service returned a 429 status code.","model":"gpt-4","timestamp":"2025-01-15T10:00:45Z"}
