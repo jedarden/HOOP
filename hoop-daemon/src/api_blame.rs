@@ -28,8 +28,7 @@ use crate::{files, fleet, id_validators, DaemonState};
 // Response type
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Serialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct BlameLine {
     pub line_no: u32,
     pub sha: String,
@@ -56,8 +55,7 @@ pub fn router() -> Router<DaemonState> {
 // Handler
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 struct BlameQuery {
     path: String,
 }

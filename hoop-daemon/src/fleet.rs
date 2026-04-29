@@ -22,7 +22,7 @@ use uuid::Uuid;
 use utoipa::ToSchema;
 
 /// Current schema version
-pub const SCHEMA_VERSION: &str = "1.33.0";
+pub const SCHEMA_VERSION: &str = "1.34.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -3286,6 +3286,86 @@ pub fn migrate_v132_to_v133(conn: &mut Connection) -> Result<()> {
     Ok(())
 }
 
+/// Migration 1.33.0 → 1.34.0: Seed initial risk patterns
+///
+/// This migration creates the risk_patterns table and seeds it with
+/// the initial set of default risk patterns. These patterns are used
+/// by the preview API and cost anomaly detection to warn users about
+/// potential issues before they submit beads.
+///
+/// Acceptance (hoop-ttb.5.8.2):
+/// - Seeded on first-run + migrations
+/// - Synthetic test case triggers each seeded pattern
+/// - CLI covered in docs/operations.md
+///
+/// Plan reference: §6 Phase 4 marquee #8 bullet 4, §6 Phase 2 marquee #4
+pub fn migrate_v133_to_v134(conn: &mut Connection) -> Result<()> {
+    info!("Running migration 1.33.0 → 1.34.0: Seeding initial risk patterns");
+
+    // Create the risk_patterns table
+    conn.execute(
+        r#"
+        CREATE TABLE IF NOT EXISTS risk_patterns (
+            id TEXT PRIMARY KEY NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL,
+            keywords TEXT NOT NULL,
+            label_keywords TEXT NOT NULL,
+            fix_recommendation TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            category TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+        "#,
+        [],
+    )?;
+
+    // Create index for keyword search
+    conn.execute(
+        r#"
+        CREATE INDEX IF NOT EXISTS idx_risk_patterns_keywords
+        ON risk_patterns(keywords)
+        "#,
+        [],
+    )?;
+
+    // Seed initial risk patterns
+    let default_patterns = crate::risk_patterns::default_risk_patterns();
+
+    for pattern in default_patterns {
+        let keywords_json = serde_json::to_string(&pattern.keywords)?;
+        let label_keywords_json = serde_json::to_string(&pattern.label_keywords)?;
+        let severity_str = format!("{:?}", pattern.severity).to_lowercase();
+        let category_str = format!("{:?}", pattern.category);
+
+        conn.execute(
+            r#"
+            INSERT OR IGNORE INTO risk_patterns (
+                id, name, description, keywords, label_keywords,
+                fix_recommendation, severity, category
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+            "#,
+            params![
+                &pattern.id,
+                &pattern.name,
+                &pattern.description,
+                &keywords_json,
+                &label_keywords_json,
+                &pattern.fix_recommendation,
+                &severity_str,
+                &category_str,
+            ],
+        )?;
+    }
+
+    info!(
+        "risk_patterns table created and seeded with {} default patterns",
+        default_patterns.len()
+    );
+    update_schema_version(conn, "1.34.0")?;
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // §20.1 Major-upgrade gate
 // ---------------------------------------------------------------------------
@@ -5877,16 +5957,22 @@ fn normalize_rule_for_hash(rule: &str) -> String {
 /// Creates a new row with status='proposed' that can be approved/rejected by the operator.
 /// Returns the ID of the newly created entry (or existing ID if deduplicated).
 ///
-/// Propose a new reflection entry in the ledger.
-///
-/// Creates a new row with status='proposed' that can be approved/rejected by the operator.
-/// Returns the ID of the newly created entry (or existing ID if deduplicated).
-///
 /// §19.2 Multi-operator concurrency: proposals are deduplicated on create using content hash.
 /// - Hash is computed on normalized `rule` text (normalized)
 /// - Duplicate creation is a no-op: no new row, but source_stitches are merged
 /// - Source_stitches array includes all operators' source stitches (deduplicated)
 /// - If a proposal was rejected, rejection_count is incremented
+///
+/// # Concurrency
+///
+/// Uses INSERT OR IGNORE to handle concurrent proposals safely:
+/// 1. Try to insert with a new UUID
+/// 2. If the content_hash already exists (UNIQUE constraint), INSERT OR IGNORE does nothing
+/// 3. Fetch the actual row (either the one we just created, or an existing one)
+/// 4. Merge source_stitches and update rejection_count
+///
+/// This ensures that even if two operators propose the same rule concurrently,
+/// only one row is created and source_stitches from both are merged.
 pub fn propose_reflection_entry(
     rule: &str,
     reason: &str,
@@ -5900,83 +5986,67 @@ pub fn propose_reflection_entry(
     let normalized_rule = normalize_rule_for_hash(rule);
     let content_hash = hex::encode(sha256(normalized_rule.as_bytes()));
 
-    // Check if a proposal with this content_hash already exists
-    let existing_id: Option<String> = conn.query_row(
-        "SELECT id FROM reflection_ledger WHERE content_hash = ?1",
+    // Generate a potential ID for this proposal
+    let id = Uuid::new_v4().to_string();
+    let source_stitches_json = serde_json::to_string(source_stitches)?;
+    let now = Utc::now().to_rfc3339();
+
+    // Try to insert; INSERT OR IGNORE silently fails if content_hash already exists
+    conn.execute(
+        "INSERT OR IGNORE INTO reflection_ledger (id, scope, rule, reason, source_stitches, status, created_at, applied_count, content_hash, rejection_count)
+         VALUES (?1, ?2, ?3, ?4, ?5, 'proposed', ?6, 0, ?7, 0)",
+        params![id, scope, rule, reason, source_stitches_json, now, content_hash],
+    )?;
+
+    // Fetch the actual row (either the one we just created, or an existing one with the same content_hash)
+    let (existing_id, current_stitches_json, current_status): (String, String, String) = conn.query_row(
+        "SELECT id, source_stitches, status FROM reflection_ledger WHERE content_hash = ?1",
         params![content_hash],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    )?;
+
+    // Merge source_stitches (deduplicate)
+    use std::collections::HashSet;
+    let current_stitches: Vec<String> = serde_json::from_str(&current_stitches_json)?;
+    let mut merged_stitches: HashSet<String> = current_stitches.into_iter().collect();
+    for stitch in source_stitches {
+        merged_stitches.insert(stitch.clone());
+    }
+    let merged_stitches_json = serde_json::to_string(&merged_stitches)?;
+
+    // Update rejection_count if the proposal was rejected
+    let current_rejection_count: i64 = conn.query_row(
+        "SELECT rejection_count FROM reflection_ledger WHERE id = ?1",
+        params![&existing_id],
         |row| row.get(0),
-    ).ok();
+    )?;
+    let new_rejection_count = if current_status == "rejected" {
+        current_rejection_count + 1
+    } else {
+        current_rejection_count
+    };
 
-    if let Some(existing_id) = existing_id {
-        // Duplicate detected - merge source_stitches and update rejection_count
-        let current_stitches: Vec<String> = conn.query_row(
-            "SELECT source_stitches FROM reflection_ledger WHERE id = ?1",
-            params![&existing_id],
-            |row| row.get::<_, String>(0),
-        ).and_then(|json| Ok(serde_json::from_str::<Vec<String>>(&json)?))?;
+    // Always update the row to merge source_stitches and increment rejection_count if needed
+    conn.execute(
+        "UPDATE reflection_ledger SET source_stitches = ?1, rejection_count = ?2 WHERE id = ?3",
+        params![merged_stitches_json, new_rejection_count, &existing_id],
+    )?;
 
-        let current_status: String = conn.query_row(
-            "SELECT status FROM reflection_ledger WHERE id = ?1",
-            params![&existing_id],
-            |row| row.get(0),
-        )?;
-
-        // Merge source_stitches (deduplicate)
-        use std::collections::HashSet;
-        let mut merged_stitches: HashSet<String> = current_stitches.into_iter().collect();
-        for stitch in source_stitches {
-            merged_stitches.insert(stitch.clone());
-        }
-        let merged_stitches_json = serde_json::to_string(&merged_stitches)?;
-
-        // Update rejection_count if the proposal was rejected
-        let new_rejection_count = if current_status == "rejected" {
-            conn.query_row(
-                "SELECT rejection_count FROM reflection_ledger WHERE id = ?1",
-                params![&existing_id],
-                |row| row.get::<_, i64>(0),
-            )? + 1
-        } else {
-            conn.query_row(
-                "SELECT rejection_count FROM reflection_ledger WHERE id = ?1",
-                params![&existing_id],
-                |row| row.get::<_, i64>(0),
-            )?
-        };
-
-        // Update the existing proposal
-        conn.execute(
-            "UPDATE reflection_ledger SET source_stitches = ?1, rejection_count = ?2 WHERE id = ?3",
-            params![merged_stitches_json, new_rejection_count, &existing_id],
-        )?;
-
+    if existing_id == id {
+        tracing::debug!(
+            "Reflection proposal created with content_hash {} (id: {})",
+            content_hash,
+            id
+        );
+    } else {
         tracing::debug!(
             "Reflection proposal deduplicated with content_hash {} (existing id: {})",
             content_hash,
             existing_id
         );
-
-        return Ok(existing_id);
     }
 
-    // No duplicate - create new proposal
-    let id = Uuid::new_v4().to_string();
-    let source_stitches_json = serde_json::to_string(source_stitches)?;
-    let now = Utc::now().to_rfc3339();
-
-    conn.execute(
-        "INSERT INTO reflection_ledger (id, scope, rule, reason, source_stitches, status, created_at, applied_count, content_hash, rejection_count)
-         VALUES (?1, ?2, ?3, ?4, ?5, 'proposed', ?6, 0, ?7, 0)",
-        params![id, scope, rule, reason, source_stitches_json, now, content_hash],
-    )?;
-
-    tracing::debug!(
-        "Reflection proposal created with content_hash {} (id: {})",
-        content_hash,
-        id
-    );
-
-    Ok(id)
+    Ok(existing_id)
 }
 
 

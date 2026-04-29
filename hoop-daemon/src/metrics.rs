@@ -771,6 +771,8 @@ pub struct Metrics {
     pub hoop_backup_run_duration_seconds: Histogram,
 
     // ── §16.7 Business ─────────────────────────────────────────────────────
+    /// Cost per stitch in USD, by adapter (p50/p95/p99 percentiles over rolling window).
+    pub hoop_cost_per_stitch_usd: LabeledHistogramPercentiles,
     /// Cost anomaly alerts fired.
     pub hoop_cost_anomaly_alerts_total: Counter,
     /// "Already started" deduplication hits (session reuse without new bead).
@@ -875,6 +877,8 @@ impl Metrics {
             hoop_backup_failures_total: Counter::new(),
             hoop_backup_run_duration_seconds: Histogram::new(),
 
+            hoop_cost_per_stitch_usd: LabeledHistogramPercentiles::new(&["adapter"])
+                .with_time_window(30 * 24 * 3600), // 30-day window
             hoop_cost_anomaly_alerts_total: Counter::new(),
             hoop_already_started_dedup_hits_total: Counter::new(),
             hoop_capacity_meter_exhaustion_warnings_total: LabeledCounter::new(&["account"]),
@@ -1163,6 +1167,13 @@ impl Metrics {
         );
 
         // ── §16.7 Business ───────────────────────────────────────────────────
+        write_labeled_histogram_percentiles(
+            &mut out,
+            "hoop_cost_per_stitch_usd",
+            "Cost per stitch in USD, by adapter (p50/p95/p99 percentiles over rolling window).",
+            self.hoop_cost_per_stitch_usd.label_names,
+            &self.hoop_cost_per_stitch_usd.snapshot(),
+        );
         write_counter(
             &mut out,
             "hoop_cost_anomaly_alerts_total",

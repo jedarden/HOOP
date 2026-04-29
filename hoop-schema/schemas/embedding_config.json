@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://hoop.dev/schemas/embedding_config.json",
+  "title": "EmbeddingConfig",
+  "description": "Embedding service configuration for semantic deduplication and similarity search (§6.10.1). Supports local transformer models, remote APIs, and caching.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "adapter": {
+      "type": "string",
+      "enum": ["local", "remote", "cached"],
+      "default": "local",
+      "description": "Embedding adapter to use: 'local' (BGE-small transformer), 'remote' (Anthropic API), or 'cached' (local with caching). Hot-reloadable."
+    },
+    "cache_enabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable in-memory caching of embeddings keyed by content hash. Hot-reloadable."
+    },
+    "cache_ttl_seconds": {
+      "type": "integer",
+      "default": 86400,
+      "minimum": 0,
+      "description": "Cache entry TTL in seconds (default: 24 hours). Expired entries are evicted on next access. Hot-reloadable."
+    },
+    "rate_limit_rpm": {
+      "oneOf": [
+        {"type": "integer", "minimum": 1},
+        {"type": "null"}
+      ],
+      "default": null,
+      "description": "Rate limit for remote embedding API calls in requests per minute. Null = no limit. Only applies to 'remote' adapter. Hot-reloadable."
+    }
+  }
+}

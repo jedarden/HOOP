@@ -157,6 +157,9 @@
         }
       }
     },
+    "embedding": {
+      "$ref": "embedding_config.json"
+    },
     "redaction": {
       "$ref": "redaction_policy.json"
     }

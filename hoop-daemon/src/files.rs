@@ -32,7 +32,7 @@ pub enum GitStatus {
 }
 
 /// A single node in the file tree.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct FileEntry {
     /// Filename without path prefix.
     pub name: String,
@@ -225,7 +225,7 @@ pub fn list_dir(project_root: &Path, rel_dir: &str) -> Result<Vec<FileEntry>> {
 // ─── File Search ──────────────────────────────────────────────────────────────
 
 /// First matching line from a content grep.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct GrepMatch {
     pub line_number: u64,
     /// The full matching line (trailing newline stripped).
@@ -237,7 +237,7 @@ pub struct GrepMatch {
 }
 
 /// A file-search result (flat, not tree-structured).
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct FileSearchResult {
     pub path: String,
     pub name: String,

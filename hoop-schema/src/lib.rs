@@ -22,7 +22,24 @@ pub mod path_security;
 
 pub mod version {
     /// Current schema version following SemVer (X.Y.Z)
-    pub const SCHEMA_VERSION: &str = "1.0.0";
+    ///
+    /// ## Version policy (§20)
+    ///
+    /// - **Major** (X): Breaking changes, no backwards compat. One-way migration.
+    ///   Upgrade-gate: `hoop migrate major-upgrade --confirm` required.
+    /// - **Minor** (Y): Additive, backwards-compat. Old readers ignore new fields.
+    ///   Minor deprecations readable at least one full minor version.
+    /// - **Patch** (Z): Bug fix, no shape change.
+    ///
+    /// ## Deprecation window
+    ///
+    /// Minor deprecations are readable at least one full minor version after
+    /// introduction. For example, a field deprecated in 1.33.0 remains readable
+    /// through 1.34.0 and may be removed in 1.35.0.
+    ///
+    /// Major deprecations are one-way; the operator consciously accepts them
+    /// at the upgrade gate.
+    pub const SCHEMA_VERSION: &str = "1.33.0";
 
     // Minimum pinned br version, generated from br-compat.toml by build.rs
     include!(concat!(env!("OUT_DIR"), "/br_compat.rs"));

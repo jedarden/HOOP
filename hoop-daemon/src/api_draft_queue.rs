@@ -23,13 +23,14 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tracing::{info, warn};
 use uuid::Uuid;
+use utoipa::ToSchema;
 
 // ---------------------------------------------------------------------------
 // Request / response types
 // ---------------------------------------------------------------------------
 
 /// Response for a single draft
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct DraftResponse {
     #[serde(flatten)]
     pub draft: DraftRow,

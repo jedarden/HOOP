@@ -30,6 +30,8 @@ pub struct CostAnomalyStitch {
     pub cost_usd: f64,
     pub closed_at: DateTime<Utc>,
     pub attachment_count: usize,
+    /// Adapter that created this stitch (e.g., "claude", "openai")
+    pub adapter: String,
 }
 
 impl CostAnomalyStitch {
@@ -356,10 +358,10 @@ pub fn check_on_stitch_close(
 /// Load a Stitch's data for anomaly detection.
 fn load_stitch_for_anomaly(conn: &Connection, stitch_id: &str) -> anyhow::Result<CostAnomalyStitch> {
     // Load the Stitch row
-    let (title, last_activity_at): (String, String) = conn.query_row(
-        "SELECT title, last_activity_at FROM stitches WHERE id = ?1",
+    let (title, last_activity_at, adapter): (String, String, Option<String>) = conn.query_row(
+        "SELECT title, last_activity_at, created_by_adapter FROM stitches WHERE id = ?1",
         params![stitch_id],
-        |row| Ok((row.get(0)?, row.get(1)?)),
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
     )?;
 
     // Parse timestamp
@@ -411,6 +413,7 @@ fn load_stitch_for_anomaly(conn: &Connection, stitch_id: &str) -> anyhow::Result
         cost_usd,
         closed_at,
         attachment_count,
+        adapter: adapter.unwrap_or_else(|| "unknown".to_string()),
     })
 }
 
@@ -433,7 +436,8 @@ fn load_historical_stitches(
              ORDER BY sm.ts ASC LIMIT 1) AS body,
             s.attachments_path,
             (SELECT COALESCE(SUM(sm.tokens), 0) FROM stitch_messages sm
-             WHERE sm.stitch_id = s.id) AS total_tokens
+             WHERE sm.stitch_id = s.id) AS total_tokens,
+            s.created_by_adapter
         FROM stitches s
         WHERE s.last_activity_at >= ?1
         ORDER BY s.last_activity_at DESC
@@ -447,6 +451,7 @@ fn load_historical_stitches(
         let body: Option<String> = row.get(3).unwrap_or(None);
         let attachments_path: Option<String> = row.get(4).unwrap_or(None);
         let total_tokens: i64 = row.get(5).unwrap_or(0);
+        let adapter: Option<String> = row.get(6).unwrap_or(None);
 
         let closed_at = chrono::DateTime::parse_from_rfc3339(&last_activity_at)
             .map(|dt| dt.with_timezone(&chrono::Utc))
@@ -466,6 +471,7 @@ fn load_historical_stitches(
             cost_usd,
             closed_at,
             attachment_count,
+            adapter: adapter.unwrap_or_else(|| "unknown".to_string()),
         })
     })?;
 
@@ -566,6 +572,7 @@ mod tests {
             cost_usd: cost,
             closed_at: Utc::now() - Duration::days(days_ago),
             attachment_count: 0,
+            adapter: "claude".to_string(),
         }
     }
 
@@ -584,6 +591,7 @@ mod tests {
             cost_usd: cost,
             closed_at: Utc::now() - Duration::days(days_ago),
             attachment_count: attachments,
+            adapter: "claude".to_string(),
         }
     }
 

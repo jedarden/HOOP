@@ -8,6 +8,7 @@ mod config;
 mod new;
 mod projects;
 mod restore;
+mod risk_patterns;
 mod script;
 
 use clap::Parser;
@@ -109,6 +110,9 @@ enum Commands {
     /// Manage daemon configuration
     #[command(subcommand)]
     Config(config::ConfigCommands),
+    /// Manage risk patterns
+    #[command(subcommand)]
+    RiskPatterns(risk_patterns::RiskPatternsCommands),
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -313,6 +317,12 @@ async fn main() -> anyhow::Result<()> {
         Commands::Config(cmd) => {
             if let Err(e) = config::handle_config(cmd).await {
                 eprintln!("hoop config: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::RiskPatterns(cmd) => {
+            if let Err(e) = risk_patterns::handle_risk_patterns(cmd).await {
+                eprintln!("hoop risk-patterns: {}", e);
                 std::process::exit(1);
             }
         }

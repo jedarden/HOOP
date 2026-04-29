@@ -1017,6 +1017,24 @@ impl CapacityMeter {
             }
         }
 
+        // Emit capacity exhaustion warnings (§16.7)
+        // Warning when forecast is less than 30 minutes
+        const WARNING_THRESHOLD_MINUTES: f64 = 30.0;
+        for account in &accounts {
+            let needs_warning = account
+                .forecast_full_5h_min
+                .map_or(false, |f| f < WARNING_THRESHOLD_MINUTES && f > 0.0)
+                || account
+                    .forecast_full_7d_min
+                    .map_or(false, |f| f < WARNING_THRESHOLD_MINUTES && f > 0.0);
+
+            if needs_warning {
+                crate::metrics::metrics()
+                    .hoop_capacity_meter_exhaustion_warnings_total
+                    .inc(&[&account.account_id]);
+            }
+        }
+
         accounts
     }
 

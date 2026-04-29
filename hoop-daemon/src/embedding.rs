@@ -45,6 +45,8 @@ pub trait Embedder: Send + Sync {
     fn canonical_tokens(&self, text: &str) -> Vec<String>;
     /// Return the model name and version for persistence and change detection.
     fn model_info(&self) -> (String, String);
+    /// Return `self` as `Any` for downcasting.
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 /// Dimension of transformer embeddings (BGE-small-en-v1.5)
@@ -134,6 +136,10 @@ impl Embedder for TransformerEmbedder {
             .map(|s| s.trim_matches(|c: char| !c.is_alphanumeric()).to_string())
             .filter(|s| !s.is_empty())
             .collect()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

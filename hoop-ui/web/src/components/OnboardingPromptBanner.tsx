@@ -1,5 +1,4 @@
 import { useOnboardingPrompt, useOnboarding } from '../useOnboarding';
-import type { OnboardingPrompt } from '../atoms';
 
 interface OnboardingPromptBannerProps {
   promptId: string;

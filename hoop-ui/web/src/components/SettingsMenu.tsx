@@ -1,4 +1,4 @@
-import { useAtom, useAtomValue } from 'jotai';
+import { useAtom } from 'jotai';
 import { useEffect, useCallback } from 'react';
 import { settingsMenuOpenAtom } from '../atoms';
 import { WelcomeTourTrigger } from './WelcomeTour';

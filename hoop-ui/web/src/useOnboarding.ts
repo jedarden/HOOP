@@ -1,24 +1,12 @@
-import { useEffect, useState, useCallback } from 'react';
-import { useAtom, useAtomValue, useSetAtom } from 'jotai';
+import { useEffect, useCallback } from 'react';
+import { useAtom } from 'jotai';
 import {
   onboardingPromptsAtom,
   onboardingPromptsLoadedAtom,
   onboardingPromptsErrorAtom,
   OnboardingPrompt,
   OnboardingPromptsResponse,
-  OnboardingPromptType,
 } from './atoms';
-
-// Type guard to check prompt type
-function getPromptTypeKey(prompt: OnboardingPrompt): string | null {
-  const pt = prompt.prompt_type;
-  if ('whats_new' in pt) return 'whats_new';
-  if ('reflection_ledger_empty' in pt) return 'reflection_ledger_empty';
-  if ('pattern_suggestion' in pt) return 'pattern_suggestion';
-  if ('agent_intro' in pt) return 'agent_intro';
-  if ('mic_intro' in pt) return 'mic_intro';
-  return null;
-}
 
 // Fetch onboarding prompts from the server
 async function fetchOnboardingPrompts(): Promise<OnboardingPromptsResponse | null> {

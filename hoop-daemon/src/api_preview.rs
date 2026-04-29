@@ -32,79 +32,122 @@ use axum::{
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use utoipa::ToSchema;
 
 /// Preview request query parameters
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct PreviewRequest {
-    title: String,
-    description: Option<String>,
-    labels: Option<String>,
+    /// Bead title to preview
+    pub title: String,
+    /// Bead description/body
+    pub description: Option<String>,
+    /// Comma-separated labels
+    pub labels: Option<String>,
 }
 
 /// Stitch preview response (matches hoop-schema/schemas/stitch_preview.json)
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct StitchPreview {
-    schema_version: String,
-    prediction: Option<PredictionData>,
-    risk_patterns: Vec<RiskPatternMatch>,
-    file_conflicts: Vec<FileConflict>,
-    similar_stitches: Vec<SimilarStitchRef>,
+    /// Schema version for compatibility tracking
+    pub schema_version: String,
+    /// Cost and duration predictions
+    pub prediction: Option<PredictionData>,
+    /// Risk pattern matches from Fix Lineage library
+    pub risk_patterns: Vec<RiskPatternMatch>,
+    /// File conflicts with currently-executing beads
+    pub file_conflicts: Vec<FileConflict>,
+    /// Similar stitches for reference
+    pub similar_stitches: Vec<SimilarStitchRef>,
 }
 
-#[derive(Debug, Serialize)]
-struct PredictionData {
-    cost: PercentileEstimate,
-    duration: PercentileEstimate,
+/// Prediction data for cost and duration
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PredictionData {
+    /// Cost estimate in USD
+    pub cost: PercentileEstimate,
+    /// Duration estimate in seconds
+    pub duration: PercentileEstimate,
+    /// Likely adapter:model combination
     #[serde(skip_serializing_if = "Option::is_none")]
-    likely_adapter_model: Option<String>,
-    similar_count: usize,
-    data_range: DateRange,
+    pub likely_adapter_model: Option<String>,
+    /// Number of similar stitches used for prediction
+    pub similar_count: usize,
+    /// Date range of historical data
+    pub data_range: DateRange,
 }
 
-#[derive(Debug, Serialize)]
-struct PercentileEstimate {
-    p50: f64,
-    p90: f64,
-    count: usize,
+/// Percentile estimate for a metric
+#[derive(Debug, Serialize, ToSchema)]
+pub struct PercentileEstimate {
+    /// 50th percentile (median)
+    pub p50: f64,
+    /// 90th percentile
+    pub p90: f64,
+    /// Number of data points in the sample
+    pub count: usize,
 }
 
-#[derive(Debug, Serialize)]
-struct DateRange {
-    start: String,
-    end: String,
+/// Date range for historical data
+#[derive(Debug, Serialize, ToSchema)]
+pub struct DateRange {
+    /// Start date (RFC3339)
+    pub start: String,
+    /// End date (RFC3339)
+    pub end: String,
 }
 
-#[derive(Debug, Serialize)]
-struct RiskPatternMatch {
-    pattern: RiskPatternInfo,
-    confidence: f64,
-    matched_keywords: Vec<String>,
-    matched_labels: Vec<String>,
+/// Risk pattern match result
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RiskPatternMatch {
+    /// The matched risk pattern
+    pub pattern: RiskPatternInfo,
+    /// Confidence score (0-1)
+    pub confidence: f64,
+    /// Keywords that matched the pattern
+    pub matched_keywords: Vec<String>,
+    /// Labels that matched the pattern
+    pub matched_labels: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
-struct RiskPatternInfo {
-    id: String,
-    name: String,
-    description: String,
-    fix_recommendation: String,
-    severity: String,
-    category: String,
+/// Risk pattern information from Fix Lineage library
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RiskPatternInfo {
+    /// Pattern identifier
+    pub id: String,
+    /// Pattern name
+    pub name: String,
+    /// Pattern description
+    pub description: String,
+    /// Recommended fix
+    pub fix_recommendation: String,
+    /// Severity level (e.g., "high", "medium", "low")
+    pub severity: String,
+    /// Pattern category (e.g., "security", "performance")
+    pub category: String,
 }
 
-#[derive(Debug, Serialize)]
+/// File conflict with a currently-executing bead
+#[derive(Debug, Serialize, ToSchema)]
 pub struct FileConflict {
+    /// Bead ID
     pub bead_id: String,
+    /// Bead title
     pub title: String,
+    /// Project name
     pub project: String,
+    /// Overlapping file paths
     pub overlapping_files: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
-struct SimilarStitchRef {
-    id: String,
-    title: String,
-    similarity: f64,
+/// Reference to a similar stitch
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SimilarStitchRef {
+    /// Stitch ID
+    pub id: String,
+    /// Stitch title
+    pub title: String,
+    /// Similarity score (0-1)
+    pub similarity: f64,
 }
 
 /// Router for preview endpoints
@@ -113,6 +156,26 @@ pub fn router() -> Router<crate::DaemonState> {
 }
 
 /// GET /api/p/:project/beads/preview — preview what a bead will take
+///
+/// Returns cost/duration predictions, risk pattern matches, file conflicts,
+/// and similar stitches for a bead before submitting it.
+#[utoipa::path(
+    get,
+    path = "/api/p/{project}/beads/preview",
+    tag = "preview",
+    params(
+        ("project" = String, Path, description = "Project name"),
+        ("title" = String, Query, description = "Bead title to preview"),
+        ("description" = Option<String>, Query, description = "Bead description/body"),
+        ("labels" = Option<String>, Query, description = "Comma-separated labels"),
+    ),
+    responses(
+        (status = 200, description = "Stitch preview data", body = StitchPreview),
+        (status = 400, description = "Invalid request"),
+        (status = 404, description = "Project not found"),
+        (status = 500, description = "Internal server error"),
+    ),
+)]
 async fn preview_bead(
     Path(project): Path<String>,
     State(state): State<crate::DaemonState>,

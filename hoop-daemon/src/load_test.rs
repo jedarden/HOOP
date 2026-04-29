@@ -733,6 +733,9 @@ pub fn populate_testrepo(config: LoadTestConfig, testrepo_path: &Path) -> anyhow
     // Create load-test-data directory if it doesn't exist
     fs::create_dir_all(&load_test_dir)?;
 
+    let num_projects = config.num_projects;
+    let total_beads = config.total_beads();
+
     let generator = EventGenerator::new(config);
 
     // Write all synthetic events to testrepo
@@ -741,8 +744,8 @@ pub fn populate_testrepo(config: LoadTestConfig, testrepo_path: &Path) -> anyhow
     tracing::info!(
         "Populated testrepo at {} with {} projects ({} total beads)",
         load_test_dir.display(),
-        config.num_projects,
-        config.total_beads()
+        num_projects,
+        total_beads
     );
 
     Ok(())
