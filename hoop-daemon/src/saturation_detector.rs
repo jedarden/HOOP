@@ -233,10 +233,10 @@ mod tests {
             forecast_full_7d_min: None,
             stitch_close_rate_per_min: 0.0,
             mean_cost_per_stitch_tokens: 0.0,
-            limits: Default::default(),
-            usage: Default::default(),
-            window_start: None,
-            window_end: None,
+            forecast_full_5h_stitch_min: None,
+            forecast_full_7d_stitch_min: None,
+            source: "test".to_string(),
+            computed_at: Utc::now(),
         }
     }
 
