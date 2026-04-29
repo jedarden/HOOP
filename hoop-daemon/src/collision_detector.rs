@@ -223,3 +223,304 @@ impl CollisionDetector {
         });
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_tool_use_message(tool_name: &str, path: &str) -> SessionMessageData {
+        SessionMessageData {
+            role: "assistant".to_string(),
+            content: serde_json::json!([
+                {"type": "tool_use", "name": tool_name, "input": {"path": path}}
+            ]),
+            usage: None,
+            timestamp: None,
+        }
+    }
+
+    fn make_tool_use_message_file_path(tool_name: &str, file_path: &str) -> SessionMessageData {
+        SessionMessageData {
+            role: "assistant".to_string(),
+            content: serde_json::json!([
+                {"type": "tool_use", "name": tool_name, "input": {"file_path": file_path}}
+            ]),
+            usage: None,
+            timestamp: None,
+        }
+    }
+
+    fn make_tool_use_message_target_file(tool_name: &str, target_file: &str) -> SessionMessageData {
+        SessionMessageData {
+            role: "assistant".to_string(),
+            content: serde_json::json!([
+                {"type": "tool_use", "name": tool_name, "input": {"target_file": target_file}}
+            ]),
+            usage: None,
+            timestamp: None,
+        }
+    }
+
+    fn make_user_message(content: &str) -> SessionMessageData {
+        SessionMessageData {
+            role: "user".to_string(),
+            content: serde_json::json!(content),
+            usage: None,
+            timestamp: None,
+        }
+    }
+
+    fn make_non_tool_message() -> SessionMessageData {
+        SessionMessageData {
+            role: "assistant".to_string(),
+            content: serde_json::json!([
+                {"type": "text", "text": "Just explaining something"}
+            ]),
+            usage: None,
+            timestamp: None,
+        }
+    }
+
+    #[test]
+    fn test_extract_touched_files_write_file() {
+        let messages = vec![
+            make_tool_use_message("write_file", "/home/test/src/main.rs"),
+        ];
+        let paths = extract_touched_files(&messages, "/home/test");
+        assert_eq!(paths, vec!["/home/test/src/main.rs"]);
+    }
+
+    #[test]
+    fn test_extract_touched_files_write() {
+        let messages = vec![
+            make_tool_use_message("Write", "/home/test/README.md"),
+        ];
+        let paths = extract_touched_files(&messages, "/home/test");
+        assert_eq!(paths, vec!["/home/test/README.md"]);
+    }
+
+    #[test]
+    fn test_extract_touched_files_edit() {
+        let messages = vec![
+            make_tool_use_message("edit", "/home/test/src/lib.rs"),
+        ];
+        let paths = extract_touched_files(&messages, "/home/test");
+        assert_eq!(paths, vec!["/home/test/src/lib.rs"]);
+    }
+
+    #[test]
+    fn test_extract_touched_files_create_file() {
+        let messages = vec![
+            make_tool_use_message("create_file", "/home/test/new_file.rs"),
+        ];
+        let paths = extract_touched_files(&messages, "/home/test");
+        assert_eq!(paths, vec!["/home/test/new_file.rs"]);
+    }
+
+    #[test]
+    fn test_extract_touched_files_str_replace_editor() {
+        let messages = vec![
+            make_tool_use_message_file_path("str_replace_editor", "/home/test/config.yml"),
+        ];
+        let paths = extract_touched_files(&messages, "/home/test");
+        assert_eq!(paths, vec!["/home/test/config.yml"]);
+    }
+
+    #[test]
+    fn test_extract_touched_files_replace_in_file() {
+        let messages = vec![
+            make_tool_use_message("replace_in_file", "/home/test/src/main.rs"),
+        ];
+        let paths = extract_touched_files(&messages, "/home/test");
+        assert_eq!(paths, vec!["/home/test/src/main.rs"]);
+    }
+
+    #[test]
+    fn test_extract_touched_files_multi_edit() {
+        let messages = vec![
+            make_tool_use_message("MultiEdit", "/home/test/src/lib.rs"),
+        ];
+        let paths = extract_touched_files(&messages, "/home/test");
+        assert_eq!(paths, vec!["/home/test/src/lib.rs"]);
+    }
+
+    #[test]
+    fn test_extract_touched_files_str_replace_based_edit_tool() {
+        let messages = vec![
+            make_tool_use_message_file_path("str_replace_based_edit_tool", "/home/test/file.py"),
+        ];
+        let paths = extract_touched_files(&messages, "/home/test");
+        assert_eq!(paths, vec!["/home/test/file.py"]);
+    }
+
+    #[test]
+    fn test_extract_touched_files_create_or_overwrite_file() {
+        let messages = vec![
+            make_tool_use_message("create_or_overwrite_file", "/home/test/data.json"),
+        ];
+        let paths = extract_touched_files(&messages, "/home/test");
+        assert_eq!(paths, vec!["/home/test/data.json"]);
+    }
+
+    #[test]
+    fn test_extract_touched_files_overwrite_file() {
+        let messages = vec![
+            make_tool_use_message("overwrite_file", "/home/test/config.toml"),
+        ];
+        let paths = extract_touched_files(&messages, "/home/test");
+        assert_eq!(paths, vec!["/home/test/config.toml"]);
+    }
+
+    #[test]
+    fn test_extract_touched_files_relative_path() {
+        let messages = vec![
+            make_tool_use_message("edit", "src/utils.rs"),
+        ];
+        let paths = extract_touched_files(&messages, "/home/myproject");
+        assert_eq!(paths, vec!["/home/myproject/src/utils.rs"]);
+    }
+
+    #[test]
+    fn test_extract_touched_files_absolute_path() {
+        let messages = vec![
+            make_tool_use_message("write_file", "/tmp/test.txt"),
+        ];
+        let paths = extract_touched_files(&messages, "/home/project");
+        // Absolute paths should remain absolute
+        assert_eq!(paths, vec!["/tmp/test.txt"]);
+    }
+
+    #[test]
+    fn test_extract_touched_files_multiple_messages() {
+        let messages = vec![
+            make_tool_use_message("write_file", "/home/test/file1.rs"),
+            make_tool_use_message("edit", "/home/test/file2.rs"),
+            make_tool_use_message("Write", "/home/test/file3.rs"),
+        ];
+        let paths = extract_touched_files(&messages, "/home/test");
+        assert_eq!(paths.len(), 3);
+        assert!(paths.contains(&"/home/test/file1.rs".to_string()));
+        assert!(paths.contains(&"/home/test/file2.rs".to_string()));
+        assert!(paths.contains(&"/home/test/file3.rs".to_string()));
+    }
+
+    #[test]
+    fn test_extract_touched_files_ignores_user_messages() {
+        let messages = vec![
+            make_user_message("please edit /home/test/file.rs"),
+            make_tool_use_message("edit", "/home/test/actual_file.rs"),
+        ];
+        let paths = extract_touched_files(&messages, "/home/test");
+        // Only the assistant tool_use should be extracted
+        assert_eq!(paths, vec!["/home/test/actual_file.rs"]);
+    }
+
+    #[test]
+    fn test_extract_touched_files_ignores_non_tool_messages() {
+        let messages = vec![
+            make_non_tool_message(),
+            make_tool_use_message("edit", "/home/test/edited.rs"),
+        ];
+        let paths = extract_touched_files(&messages, "/home/test");
+        assert_eq!(paths, vec!["/home/test/edited.rs"]);
+    }
+
+    #[test]
+    fn test_extract_touched_files_ignores_non_write_tools() {
+        let messages = vec![
+            SessionMessageData {
+                role: "assistant".to_string(),
+                content: serde_json::json!([
+                    {"type": "tool_use", "name": "read_file", "input": {"path": "/home/test/file.rs"}}
+                ]),
+                usage: None,
+                timestamp: None,
+            },
+        ];
+        let paths = extract_touched_files(&messages, "/home/test");
+        // read_file is not in FILE_WRITE_TOOLS, so it should be ignored
+        assert!(paths.is_empty());
+    }
+
+    #[test]
+    fn test_extract_touched_files_empty_messages() {
+        let messages: Vec<SessionMessageData> = vec![];
+        let paths = extract_touched_files(&messages, "/home/test");
+        assert!(paths.is_empty());
+    }
+
+    #[test]
+    fn test_extract_touched_files_target_file_variant() {
+        let messages = vec![
+            make_tool_use_message_target_file("create_or_overwrite_file", "/home/test/target.txt"),
+        ];
+        let paths = extract_touched_files(&messages, "/home/test");
+        assert_eq!(paths, vec!["/home/test/target.txt"]);
+    }
+
+    #[test]
+    fn test_extract_touched_files_mixed_path_styles() {
+        let messages = vec![
+            make_tool_use_message("edit", "relative/path.rs"),
+            make_tool_use_message("Write", "/absolute/path.rs"),
+            make_tool_use_message_file_path("str_replace_editor", "another/relative.rs"),
+        ];
+        let paths = extract_touched_files(&messages, "/home/myproject");
+        assert_eq!(paths.len(), 3);
+        assert!(paths.contains(&"/home/myproject/relative/path.rs".to_string()));
+        assert!(paths.contains(&"/absolute/path.rs".to_string()));
+        assert!(paths.contains(&"/home/myproject/another/relative.rs".to_string()));
+    }
+
+    #[test]
+    fn test_extract_touched_files_all_write_tools() {
+        // Test that all FILE_WRITE_TOOLS are recognized
+        let tools = FILE_WRITE_TOOLS;
+        assert!(!tools.is_empty());
+        assert!(tools.contains(&"write_file"));
+        assert!(tools.contains(&"Write"));
+        assert!(tools.contains(&"edit"));
+        assert!(tools.contains(&"Edit"));
+        assert!(tools.contains(&"create_file"));
+        assert!(tools.contains(&"str_replace_editor"));
+        assert!(tools.contains(&"replace_in_file"));
+        assert!(tools.contains(&"MultiEdit"));
+        assert!(tools.contains(&"str_replace_based_edit_tool"));
+        assert!(tools.contains(&"create_or_overwrite_file"));
+        assert!(tools.contains(&"overwrite_file"));
+    }
+
+    #[test]
+    fn test_extract_touched_files_cwd_trailing_slash() {
+        let messages = vec![
+            make_tool_use_message("edit", "src/main.rs"),
+        ];
+        // Trailing slash should be handled correctly
+        let paths = extract_touched_files(&messages, "/home/test/");
+        assert_eq!(paths, vec!["/home/test/src/main.rs"]);
+    }
+
+    #[test]
+    fn test_extract_touched_files_empty_path() {
+        let messages = vec![
+            make_tool_use_message("edit", ""),
+        ];
+        let paths = extract_touched_files(&messages, "/home/test");
+        // Empty path should still be included
+        assert_eq!(paths, vec!["/home/test"]);
+    }
+
+    #[test]
+    fn test_extract_touched_files_deduplication() {
+        // The function itself doesn't deduplicate - that's done upstream
+        let messages = vec![
+            make_tool_use_message("edit", "/home/test/file.rs"),
+            make_tool_use_message("edit", "/home/test/file.rs"),
+        ];
+        let paths = extract_touched_files(&messages, "/home/test");
+        // Both entries should be present (caller handles dedup)
+        assert_eq!(paths.len(), 2);
+        assert_eq!(paths[0], "/home/test/file.rs");
+        assert_eq!(paths[1], "/home/test/file.rs");
+    }
+}
