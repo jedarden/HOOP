@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { CodeViewer as ShikiCodeViewer } from './CodeViewer';
 import { ImageViewer } from './ImageViewer';
+import { PdfViewer } from './PdfViewer';
+import { HexViewer } from './HexViewer';
 import type { TabId } from './ProjectDetail';
 import { fileNavigationAtom } from './atoms';
 
@@ -10,6 +12,25 @@ const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'b
 function isImagePath(p: string): boolean {
   const ext = p.split('.').pop()?.toLowerCase() ?? '';
   return IMAGE_EXTENSIONS.has(ext);
+}
+
+function isPdfPath(p: string): boolean {
+  const ext = p.split('.').pop()?.toLowerCase() ?? '';
+  return ext === 'pdf';
+}
+
+// File extensions that are typically binary and should be viewed in hex mode by default
+const BINARY_EXTENSIONS = new Set([
+  'exe', 'dll', 'so', 'dylib', 'bin', 'rom', 'iso', 'img',
+  'zip', 'tar', 'gz', 'bz2', 'xz', '7z', 'rar', 'zst',
+  'o', 'a', 'lib', 'obj',
+  'class', 'jar', 'war', 'ear',
+  'pdb', 'idb', 'dat', 'db', 'sqlite', 'mdb',
+]);
+
+function isLikelyBinary(p: string): boolean {
+  const ext = p.split('.').pop()?.toLowerCase() ?? '';
+  return BINARY_EXTENSIONS.has(ext);
 }
 
 const SHIKI_MAX_BYTES = 50 * 1024;
@@ -926,6 +947,9 @@ export default function FilesTab({ projectName, projectPath, onSwitchTab }: File
   // Blame mode state
   const [blameEnabled, setBlameEnabled] = useState(false);
 
+  // Hex mode state
+  const [hexEnabled, setHexEnabled] = useState(false);
+
   // Search state
   const [searchResults, setSearchResults] = useState<FileSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -1049,9 +1073,14 @@ export default function FilesTab({ projectName, projectPath, onSwitchTab }: File
     setSelectedFile(prev =>
       prev?.path === entry.path ? null : { path: entry.path, size: entry.size },
     );
-    // Reset blame mode and diff view when switching files manually
+    // Reset blame mode, hex mode, and diff view when switching files manually
     setBlameEnabled(false);
+    setHexEnabled(false);
     setShowDiffView(false);
+    // Auto-enable hex mode for binary files
+    if (!isImagePath(entry.path) && !isPdfPath(entry.path) && isLikelyBinary(entry.path)) {
+      setHexEnabled(true);
+    }
   }, []);
 
   // Stub handler for context menu requests (file attach functionality)
@@ -1189,7 +1218,7 @@ export default function FilesTab({ projectName, projectPath, onSwitchTab }: File
             <div className="file-preview-header">
               <span className="file-preview-path">{selectedFile.path}</span>
               <div className="file-preview-controls">
-                {!isImagePath(selectedFile.path) && (
+                {!isImagePath(selectedFile.path) && !isPdfPath(selectedFile.path) && (
                   <>
                     {/* Toggle between diff view and file content view */}
                     {fileNavigation && fileNavigation.refRange && (
@@ -1234,9 +1263,14 @@ export default function FilesTab({ projectName, projectPath, onSwitchTab }: File
                 </button>
               </div>
             </div>
-            <div className={`file-preview-body${isImagePath(selectedFile.path) ? ' file-preview-body--image' : ' file-preview-body--code'}`}>
+            <div className={`file-preview-body${isImagePath(selectedFile.path) ? ' file-preview-body--image' : isPdfPath(selectedFile.path) ? ' file-preview-body--pdf' : ' file-preview-body--code'}`}>
               {isImagePath(selectedFile.path) ? (
                 <ImageViewer
+                  projectName={projectName}
+                  path={selectedFile.path}
+                />
+              ) : isPdfPath(selectedFile.path) ? (
+                <PdfViewer
                   projectName={projectName}
                   path={selectedFile.path}
                 />
