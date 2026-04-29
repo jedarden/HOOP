@@ -16,7 +16,6 @@ use tokio::sync::RwLock;
 use tracing::{debug, info, warn};
 
 use crate::api_scripts::{discover_scripts, execute_script, OverlapPolicy};
-use crate::fleet::{self, ActionKind, ActionResult};
 use crate::shutdown::ShutdownPhase;
 
 /// Tracking state for a scheduled script
