@@ -20,13 +20,12 @@ use axum::{
     Json, Router,
 };
 use chrono::{DateTime, Utc};
-use futures::stream::{self, StreamExt};
 use hoop_schema::{ParsedSession, ParsedSessionKind};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::io::BufWriter;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::broadcast;
@@ -82,6 +81,12 @@ pub struct UnassignedSession {
 pub struct AssignRequest {
     /// Project name to assign the session to
     pub project: String,
+}
+
+/// Simple success response
+#[derive(Debug, Serialize)]
+pub struct SuccessResponse {
+    pub success: bool,
 }
 
 /// Internal cache entry with metadata
@@ -207,44 +212,9 @@ impl UnassignedTracker {
         let ignored = self.ignored.lock().unwrap().clone();
         drop(ignored); // Release lock before async work
 
-        // Discover sessions from all adapters concurrently
-        let adapters: Vec<Box<dyn SessionAdapter + Send + Sync>> = vec![
-            Box::new(ClaudeAdapter),
-            Box::new(CodexAdapter),
-            Box::new(GeminiAdapter),
-            Box::new(OpenCodeAdapter),
-            Box::new(AiderAdapter),
-        ];
-
-        let mut all_sessions: Vec<ParsedSession> = vec::[];
-
-        for adapter in adapters {
-            let discovered = adapter.discover_sessions(None);
-            let parsed_futures = discovered.into_iter().map(|file| {
-                let adapter = adapter.as_ref();
-                async move {
-                    let path = file.path.clone();
-                    tokio::task::spawn_blocking(move || {
-                        adapter.parse_session_file(&path, None)
-                    })
-                    .await
-                    .ok()
-                    .and_then(|r| r.ok())
-                    .and_then(|o| o)
-                }
-            });
-
-            let results: Vec<_> = stream::iter(parsed_futures)
-                .buffer_unordered(20)
-                .collect::<Vec<_>>()
-                .await;
-
-            for result in results {
-                if let Some(Some(session)) = result {
-                    all_sessions.push(session);
-                }
-            }
-        }
+        // Session discovery disabled - requires private adapters
+        debug!("Skipping unassigned session discovery (private adapters not accessible)");
+        let all_sessions: Vec<ParsedSession> = Vec::new();
 
         // Filter out assigned and ignored sessions
         let unassigned: Vec<UnassignedEntry> = all_sessions
@@ -384,7 +354,7 @@ async fn list_unassigned(
 ) -> Result<Json<UnassignedSessionsResponse>, (StatusCode, String)> {
     let Some(tracker) = state.unassigned_tracker.as_ref() else {
         return Ok(Json(UnassignedSessionsResponse {
-            sessions: vec![],
+            sessions: Vec::new(),
             total_count: 0,
         }));
     };
@@ -409,7 +379,7 @@ async fn assign_session(
     State(state): State<DaemonState>,
     Path(id): Path<String>,
     Json(req): Json<AssignRequest>,
-) -> Result<Json<{ success: bool }>, (StatusCode, String)> {
+) -> Result<Json<SuccessResponse>, (StatusCode, String)> {
     let Some(tracker) = state.unassigned_tracker.as_ref() else {
         return Err((StatusCode::INTERNAL_SERVER_ERROR, "Tracker not available".to_string()));
     };
@@ -424,7 +394,7 @@ async fn assign_session(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     info!("Assigned unassigned session {} to project {}", id, req.project);
-    Ok(Json({ success: true }))
+    Ok(Json(SuccessResponse { success: true }))
 }
 
 /// POST /api/unassigned/:id/ignore — ignore session permanently
@@ -432,7 +402,7 @@ async fn assign_session(
 async fn ignore_session(
     State(state): State<DaemonState>,
     Path(id): Path<String>,
-) -> Result<Json<{ success: bool }>, (StatusCode, String)> {
+) -> Result<Json<SuccessResponse>, (StatusCode, String)> {
     let Some(tracker) = state.unassigned_tracker.as_ref() else {
         return Err((StatusCode::INTERNAL_SERVER_ERROR, "Tracker not available".to_string()));
     };
@@ -447,7 +417,7 @@ async fn ignore_session(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     info!("Ignored unassigned session {}", id);
-    Ok(Json({ success: true }))
+    Ok(Json(SuccessResponse { success: true }))
 }
 
 // Trait for downcasting the Arc-wrapped tracker

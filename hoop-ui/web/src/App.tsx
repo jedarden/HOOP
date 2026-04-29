@@ -24,6 +24,7 @@ import { WelcomeTour } from './components/WelcomeTour';
 import { SettingsMenu } from './components/SettingsMenu';
 import DraftsTab from './DraftsTab';
 import UnknownEventsDiagnostics from './UnknownEventsDiagnostics';
+import UnassignedSessions from './UnassignedSessions';
 
 type Route =
   | { view: 'overview' }
@@ -32,6 +33,7 @@ type Route =
   | { view: 'timeline' }
   | { view: 'audit' }
   | { view: 'redaction-audit' }
+  | { view: 'unassigned' }
   | { view: 'dashboard' }
   | { view: 'patterns'; patternId?: string }
   | { view: 'conversations' }
@@ -75,6 +77,7 @@ function parseHash(hash: string): Route {
   if (path === 'timeline') return { view: 'timeline' };
   if (path === 'audit') return { view: 'audit' };
   if (path === 'redaction-audit') return { view: 'redaction-audit' };
+  if (path === 'unassigned') return { view: 'unassigned' };
   if (path === 'dashboard') return { view: 'dashboard' };
   if (path === 'patterns') return { view: 'patterns' };
   if (path === 'conversations') return { view: 'conversations' };
@@ -409,6 +412,7 @@ export default function App() {
                 <a href="#/patterns" className="header-nav-link">Patterns</a>
                 <a href="#/conversations" className="header-nav-link">Conversations</a>
                 <a href="#/drafts" className="header-nav-link">Drafts</a>
+                <a href="#/unassigned" className="header-nav-link">Unassigned</a>
                 <a href="#/fleet" className="header-nav-link">Fleet</a>
                 <a href="#/timeline" className="header-nav-link">Timeline</a>
                 <a href="#/audit" className="header-nav-link">Audit</a>
@@ -561,6 +565,48 @@ export default function App() {
         </div>
         <SearchPalette />
         <DictationWidget />
+      </>
+    );
+  }
+
+  // Unassigned sessions view (§5.4)
+  if (route.view === 'unassigned') {
+    return (
+      <>
+        <ConnectionBanner />
+        {showRestoreToast && (
+          <div className="restore-toast" role="status">
+            Restoring state...
+          </div>
+        )}
+        <div className="app app-project-detail">
+          {configStatus.error && <ConfigBanner error={configStatus.error} />}
+          {configStatus.restart_required && <RestartRequiredBanner restart_required={configStatus.restart_required} />}
+          <header className="app-header-mini">
+            <div className="header-top">
+              <div className="header-nav">
+                <a href="#/" className="back-link">&larr; All Projects</a>
+                <a href="#/dashboard" className="header-nav-link">Dashboard</a>
+                <a href="#/patterns" className="header-nav-link">Patterns</a>
+                <a href="#/conversations" className="header-nav-link">Conversations</a>
+                <a href="#/drafts" className="header-nav-link">Drafts</a>
+                <a href="#/fleet" className="header-nav-link">Fleet</a>
+                <a href="#/audit" className="header-nav-link">Audit</a>
+              </div>
+              <div className={`connection-indicator ${wsConnected ? 'connected' : 'disconnected'}`}>
+                <span className="indicator-dot" />
+                {wsConnected ? 'Connected' : 'Connecting...'}
+              </div>
+            </div>
+          </header>
+          <main>
+            <UnassignedSessions />
+          </main>
+        </div>
+        <SearchPalette />
+        <DictationWidget />
+        <StuckAlertBanner />
+        <CollisionAlertBanner />
       </>
     );
   }

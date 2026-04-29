@@ -6,7 +6,6 @@
 
 pub mod adb_dictate;
 pub mod agent_adapter;
-// pub mod api_blockers; // TODO: implement
 pub mod agent_context;
 pub mod agent_session;
 pub mod ansi_strip;
@@ -37,7 +36,7 @@ pub mod api_stitch_read;
 pub mod api_stitch_replay;
 pub mod api_timeline;
 pub mod api_transcription;
-// pub mod api_unassigned; // TODO: implement
+pub mod api_unassigned;
 pub mod api_uploads;
 pub mod api_skills;
 pub mod atomic_write;
@@ -63,7 +62,7 @@ pub mod heartbeats;
 pub mod id_validators;
 pub mod identity;
 // pub mod multi_operator; // TODO: implement
-// pub mod api_presence; // TODO: implement
+pub mod api_presence;
 
 // Integration test utilities and load testing are only needed for tests
 // These are public for integration tests but not part of the stable API
@@ -121,6 +120,7 @@ pub mod bead_commit_index;
 pub mod net_diff;
 pub mod orphan_beads;
 pub mod screen_capture;
+pub mod saturation_detector;
 pub mod secrets_scanner;
 pub mod observer;
 pub mod cost_anomaly;
@@ -325,8 +325,7 @@ pub struct DaemonState {
     /// Broadcast channel for bead_created_by_hoop events sent after each successful br create via HOOP (hoop-ttb.3.53)
     pub bead_created_by_hoop_tx: broadcast::Sender<ws::BeadCreatedByHoopData>,
     /// Broadcast channel for saturation alert events (§6 P2 d10, §8.3, hoop-ttb.3.22)
-    // TODO: Uncomment when ws::SaturationAlertData is implemented
-    pub saturation_alert_tx: broadcast::Sender<()>, // ws::SaturationAlertData>,
+    pub saturation_alert_tx: broadcast::Sender<ws::SaturationAlertData>,
     /// Per-project redaction policy resolver (§18.5)
     pub redaction_policy_state: Arc<tokio::sync::RwLock<redaction_policy::RedactionPolicyState>>,
     /// Stuck detector — monitors worker events for idle/max-runtime/content-seen timeouts (§C1)
@@ -1210,7 +1209,6 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_stitch_read::router())
         .merge(api_stitch_replay::router())
         .merge(api_stitch_links::router())
-        .merge(api_blockers::router())
         .merge(api_patterns::router())
         .merge(api_diff::router())
         .merge(api_blame::router())
@@ -1231,7 +1229,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_cost_per_stitch::router())
         .merge(api_config::router())
         .merge(api_scripts::router())
-        // .merge(api_unassigned::router()) // TODO: Uncomment when api_unassigned is implemented
+        .merge(api_unassigned::router())
         .merge(openapi_router())
         .nest_service("/assets", AssetsHandler::router())
         .fallback_service(AssetsHandler::router())
@@ -2634,20 +2632,19 @@ Note: This is an automated synthesis from voice dictation."#,
     let projects = Arc::new(std::sync::RwLock::new(initial_projects));
 
     // Initialize unassigned sessions tracker (§5.4)
-    // TODO: Uncomment when api_unassigned is implemented
-    let unassigned_tracker: Option<Arc<()>> = None;
-    /*
     let unassigned_tracker = match api_unassigned::UnassignedTracker::new(projects.clone()) {
         Ok(tracker) => {
             info!("Unassigned sessions tracker initialized");
-            Some(Arc::new(tracker))
+            let tracker = Arc::new(tracker);
+            // Spawn background discovery task
+            Arc::clone(&tracker).spawn(60, shutdown_coordinator.subscribe());
+            Some(tracker)
         }
         Err(e) => {
             warn!("Failed to initialize unassigned sessions tracker: {}", e);
             None
         }
     };
-    */
 
     let state = DaemonState {
         config: config.clone(),
@@ -3483,6 +3480,7 @@ async fn load_hoop_config() -> Option<hoop_schema::HoopConfig> {
             stuck_detector: None,
             morning_brief: None,
             roles: None,
+            redaction: None,
         };
 
         if !config_path.exists() {
