@@ -15,7 +15,8 @@ A single Rust daemon that runs on your coding host and serves as the human-facin
 | [`README.md`](README.md) (this file) | Humans | Quickstart — install, concepts, first five minutes |
 | [`AGENTS.md`](AGENTS.md) | LLM contributors | Repository guide, terminology, non-goals, conventions |
 | [`CHANGELOG.md`](CHANGELOG.md) | Everyone | Version history following Keep-a-Changelog / SemVer |
-| [`docs/operations.md`](docs/operations.md) | Operators | Systemd service, logs, upgrades, backup, troubleshooting |
+| [`docs/operations.md`](docs/operations.md) | Operators | Systemd service, logs, upgrades, backups, migrations, Tailscale routing |
+| [`docs/troubleshooting.md`](docs/troubleshooting.md) | Operators | Common failures mapped to `hoop audit` output, recovery steps |
 | [`docs/plan/plan.md`](docs/plan/plan.md) | Everyone going deep | **The canonical implementation plan.** 13 sections covering vision, principles, architecture, data flows, phased roadmap (v0.1 → v1.0), marquee capabilities, technology decisions, non-goals, open questions, milestones, onboarding, and a Kubernetes appendix. Your first stop after this README. |
 | [`docs/notes/`](docs/notes/) | Contributors & LLMs | Prior-art research: feature inventory, architecture patterns, interop with NEEDLE, orchestrator problems and solutions |
 
@@ -819,13 +820,14 @@ Nothing else notices. NEEDLE keeps running. FABRIC keeps working. Your CLIs keep
 | Agent won't respond | Anthropic key not set, or rate limit hit — check the capacity widget |
 | Morning Brief empty | Needs at least a few closed operator Stitches to have material; try again tomorrow |
 
-For more operational details, see [`docs/operations.md`](docs/operations.md).
+For more operational details, see [`docs/operations.md`](docs/operations.md) and [`docs/troubleshooting.md`](docs/troubleshooting.md).
 
 ---
 
 ## 🧭 Where to go next
 
-- 🔧 [`docs/operations.md`](docs/operations.md) — systemd service management, logs, upgrades, backup, and troubleshooting.
+- 🔧 [`docs/operations.md`](docs/operations.md) — systemd service management, logs, upgrades, backups, migrations, Tailscale routing.
+- 🔧 [`docs/troubleshooting.md`](docs/troubleshooting.md) — common failures mapped to `hoop audit` output, recovery steps.
 - 📘 [`docs/plan/plan.md`](docs/plan/plan.md) — the full implementation plan. Your next read if you want to understand *why* HOOP is shaped the way it is. Covers:
   - §1 Vision, §1.5 Roles, §1.6 Hierarchy (Pattern → Stitch → Bead)
   - §2 Environment, §2.1 The `br` dependency

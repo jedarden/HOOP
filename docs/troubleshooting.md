@@ -1,6 +1,52 @@
 # HOOP Troubleshooting Guide
 
-This guide helps diagnose and recover from common HOOP issues.
+This guide helps diagnose and recover from common HOOP issues, with mappings to `hoop audit` output for quick identification.
+
+## Quick diagnostic: `hoop audit`
+
+The `hoop audit check` command performs a comprehensive runtime audit and reports issues with fix commands. It should be your first diagnostic step.
+
+```bash
+# Run the full audit
+hoop audit check
+
+# Output includes checks for:
+# - br (beads_rust) installation and version
+# - tmux availability
+# - git version
+# - Tailscale membership
+# - systemd service status
+# - disk space
+# - port availability
+# - project paths validity
+```
+
+### Audit output mapping
+
+Each audit check reports:
+- **Check name** - What's being verified
+- **Status** - ✅ passed, ❌ critical failure, ⚠️ warning
+- **Description** - What the check found
+- **Fix command** - Exact command to resolve the issue
+
+### Common audit failures and recovery
+
+| Check Name | Failure Symptom | Fix Command | Recovery Steps |
+|------------|----------------|-------------|---------------|
+| `br_installed` | `br not found in PATH` | `cargo install --git https://github.com/dicklesworthstone/beads_rust br` | Install beads_rust |
+| `br_version` | `br version too old` | `cargo install --git https://github.com/dicklesworthstone/beads_rust br --force` | Update beads_rust |
+| `tmux_installed` | `tmux not found` | `sudo apt install tmux` | Install tmux |
+| `git_version` | `git too old (need 2.5+)` | `sudo apt install git` | Update git |
+| `tailscale_status` | `Not connected to Tailscale` | `tailscale up` | Connect to Tailscale |
+| `systemd_service` | `hoop.service not found` | `hoop install-systemd` | Install systemd service |
+| `disk_space` | `Less than 1GB free` | `clean up disk space` | Free up disk space |
+| `port_available` | `Port 3000 already in use` | `lsof -i :3000` to find process | Stop conflicting process |
+
+### Audit severity levels
+
+- **Critical** - Daemon will not start. Must fix before running `hoop serve`.
+- **Warning** - Daemon will start with degraded features. Fix for full functionality.
+- **Info** - Informational only. No action required.
 
 ## Quick diagnostic: `/debug/state`
 
@@ -221,6 +267,446 @@ curl http://127.0.0.1:3000/debug/state | jq '.open_stitches'
 ## Getting help
 
 When reporting issues, include:
+
+1. `hoop audit check` output: `hoop audit check`
+2. `/debug/state` output: `curl http://127.0.0.1:3000/debug/state`
+3. Recent logs: `journalctl --user -u hoop -n 200`
+4. Daemon version: from `version.daemon` in `/debug/state`
+5. Schema version: from `version.schema` in `/debug/state`
+
+This information helps diagnose the issue quickly.
+
+## Common failures mapped to `hoop audit` output
+
+### Dependency failures
+
+#### `br_installed` check fails
+
+**Audit output:**
+```
+❌ br_installed
+   br (beads_rust) is required for bead operations
+   Fix: cargo install --git https://github.com/dicklesworthstone/beads_rust br
+```
+
+**Recovery:**
+```bash
+# Install beads_rust
+cargo install --git https://github.com/dicklesworthstone/beads_rust br
+
+# Verify installation
+br --version
+
+# Re-run audit
+hoop audit check
+```
+
+#### `br_version` check fails
+
+**Audit output:**
+```
+❌ br_version
+   br version is too old (need 0.1.28+, have 0.1.0)
+   Fix: cargo install --git https://github.com/dicklesworthstone/beads_rust br --force
+```
+
+**Recovery:**
+```bash
+# Force reinstall to get latest version
+cargo install --git https://github.com/dicklesworthstone/beads_rust br --force
+
+# Verify version
+br --version
+
+# Re-run audit
+hoop audit check
+```
+
+#### `tmux_installed` check fails
+
+**Audit output:**
+```
+❌ tmux_installed
+   tmux is required for observing NEEDLE workers
+   Fix: sudo apt install tmux
+```
+
+**Recovery:**
+```bash
+# Debian/Ubuntu
+sudo apt install tmux
+
+# Fedora/RHEL
+sudo dnf install tmux
+
+# Verify
+tmux -V
+```
+
+#### `git_version` check fails
+
+**Audit output:**
+```
+❌ git_version
+   git version is too old (need 2.5+, have 2.0.0)
+   Fix: sudo apt install git
+```
+
+**Recovery:**
+```bash
+# Update git
+sudo apt install git
+
+# Verify version
+git --version
+```
+
+### Environment failures
+
+#### `tailscale_status` check fails
+
+**Audit output:**
+```
+⚠️  tailscale_status
+   Not connected to Tailscale (optional but recommended)
+   Fix: tailscale up
+```
+
+**Recovery:**
+```bash
+# Connect to Tailscale
+sudo tailscale up
+
+# Verify connection
+tailscale status
+
+# Get Tailscale IP
+tailscale ip -4
+```
+
+#### `systemd_service` check fails
+
+**Audit output:**
+```
+⚠️  systemd_service
+   hoop.service not found in ~/.config/systemd/user/
+   Fix: hoop install-systemd
+```
+
+**Recovery:**
+```bash
+# Install systemd service
+hoop install-systemd
+
+# Enable and start
+systemctl --user daemon-reload
+systemctl --user enable hoop
+systemctl --user start hoop
+```
+
+#### `disk_space` check fails
+
+**Audit output:**
+```
+❌ disk_space
+   Less than 1GB free on /home partition
+   Fix: clean up disk space
+```
+
+**Recovery:**
+```bash
+# Check disk usage
+df -h ~/
+
+# Find large files
+du -sh ~/.hoop/*
+
+# Clean up if needed
+# - Remove old backups
+# - Clear attachment cache
+# - Clean journal logs
+sudo journalctl --vacuum-size=500M
+```
+
+#### `port_available` check fails
+
+**Audit output:**
+```
+❌ port_available
+   Port 3000 is already in use
+   Fix: lsof -i :3000 to find process
+```
+
+**Recovery:**
+```bash
+# Find process using port 3000
+lsof -i :3000
+
+# Stop the conflicting process
+kill <PID>
+
+# Or change HOOP's port in config.yml
+vim ~/.hoop/config.yml
+# Change: bind_addr: "127.0.0.1:3001"
+```
+
+### Project path failures
+
+#### `project_path_exists` check fails
+
+**Audit output:**
+```
+❌ project_path_exists
+   Project path does not exist: /path/to/project
+   Fix: hoop projects remove <name> && hoop projects add /correct/path
+```
+
+**Recovery:**
+```bash
+# Remove invalid project
+hoop projects remove <project-name>
+
+# Re-add with correct path
+hoop projects add /correct/path --name <project-name>
+
+# Verify
+hoop projects list
+```
+
+#### `project_has_beads` check fails (warning)
+
+**Audit output:**
+```
+⚠️  project_has_beads
+   Project /path/to/project has no .beads/ directory
+   Fix: Initialize beads with: br init
+```
+
+**Recovery:**
+```bash
+# Navigate to project
+cd /path/to/project
+
+# Initialize beads
+br init
+
+# Verify
+ls .beads/
+```
+
+## Startup failures
+
+### Daemon won't start
+
+**Symptoms:**
+- `systemctl --user start hoop` fails immediately
+- Service enters failed state
+- No logs in journal
+
+**Diagnosis:**
+```bash
+# Check service status
+systemctl --user status hoop
+
+# Check logs
+journalctl --user -u hoop -n 50
+
+# Run audit
+hoop audit check
+```
+
+**Recovery:**
+1. Fix any critical audit failures
+2. Verify dependencies are installed
+3. Check port availability
+4. Ensure disk space is sufficient
+5. Restart service: `systemctl --user restart hoop`
+
+### Daemon crashes on startup
+
+**Symptoms:**
+- Service starts but immediately exits
+- Logs show panic or assertion failure
+- Repeated restart failures
+
+**Diagnosis:**
+```bash
+# Get crash details
+journalctl --user -u hoop -n 100 | grep -i panic
+
+# Check database integrity
+sqlite3 ~/.hoop/fleet.db "PRAGMA integrity_check;"
+
+# Verify config file syntax
+cat ~/.hoop/config.yml
+```
+
+**Recovery:**
+1. If database corrupted: restore from backup
+2. If config invalid: fix YAML syntax
+3. If missing directory: `mkdir -p ~/.hoop`
+4. Check for version mismatch: `hoop --version`
+
+## Migration failures
+
+### Schema migration fails on startup
+
+**Symptoms:**
+- Daemon starts but exits with migration error
+- Logs show "migration failed" or "schema version mismatch"
+- `hoop migrate status` shows pending migrations
+
+**Diagnosis:**
+```bash
+# Check migration status
+hoop migrate status
+
+# View current schema version
+sqlite3 ~/.hoop/fleet.db "SELECT value FROM metadata WHERE key = 'schema_version';"
+
+# Check logs for error details
+journalctl --user -u hoop -n 100 | grep -i migration
+```
+
+**Recovery:**
+```bash
+# 1. Ensure you have a backup
+cp ~/.hoop/fleet.db ~/.hoop/fleet.db.backup.$(date +%Y%m%d)
+
+# 2. Run migrations manually
+hoop migrate run --confirm
+
+# 3. If migration fails, rollback
+hoop migrate rollback <previous-version> --confirm
+
+# 4. If rollback fails, restore from backup
+cp ~/.hoop/fleet.db.backup.YYYYMMDD ~/.hoop/fleet.db
+```
+
+### Major version upgrade blocked
+
+**Symptoms:**
+- `hoop migrate run` fails with "major upgrade required"
+- Daemon refuses to start with version mismatch
+
+**Diagnosis:**
+```bash
+# Check versions
+hoop --version
+hoop migrate status
+
+# Look for major version gate error
+journalctl --user -u hoop -n 50 | grep -i "major.*upgrade"
+```
+
+**Recovery:**
+```bash
+# Run major upgrade
+hoop migrate major-upgrade --confirm
+
+# This performs one-way migration
+# Cannot rollback after major upgrade
+# Ensure backup exists first!
+```
+
+## Backup failures
+
+### Backup not running
+
+**Symptoms:**
+- `backup_timestamps.last_success_iso` is old or null
+- No backup logs in journal
+- S3 sync not happening
+
+**Diagnosis:**
+```bash
+# Check last backup
+curl http://127.0.0.1:3000/debug/state | jq '.backup_timestamps'
+
+# Check backup config
+cat ~/.hoop/config.yml | grep -A 10 backup:
+
+# Check for credential errors
+journalctl --user -u hoop --since today | grep -i backup
+```
+
+**Recovery:**
+1. Verify backup configuration in `~/.hoop/config.yml`
+2. Check S3 credentials are set: `env | grep AWS_`
+3. Test S3 access manually
+4. Trigger manual backup: `curl -X POST http://localhost:3000/api/backup/trigger`
+
+### Restore fails mid-operation
+
+**Symptoms:**
+- `hoop restore` fails with partial download
+- Rollback directories left behind
+- Daemon refuses to start after failed restore
+
+**Diagnosis:**
+```bash
+# Check for rollback directories
+ls -la ~/.hoop.rollback.*
+
+# Check restore logs
+journalctl --user -u hoop -n 100 | grep -i restore
+
+# Verify S3 credentials
+env | grep HOOP_BACKUP
+```
+
+**Recovery:**
+```bash
+# 1. Clean up rollback directories
+rm -rf ~/.hoop.rollback.*
+
+# 2. Restore from original state
+mv ~/.hoop.rollback.YYYYMMDDTHHMMSSZ ~/.hoop
+
+# 3. Verify S3 credentials and retry
+export HOOP_BACKUP_ENDPOINT="..."
+export AWS_ACCESS_KEY_ID="..."
+export AWS_SECRET_ACCESS_KEY="..."
+
+# 4. Retry restore
+hoop restore --from s3://bucket/prefix/snapshot-id
+```
+
+## Getting help (detailed)
+
+When reporting issues, include the following information:
+
+### 1. Audit output
+
+```bash
+hoop audit check > ~/hoop-audit.txt
+```
+
+### 2. Debug state
+
+```bash
+curl http://127.0.0.1:3000/debug/state > ~/hoop-debug-state.json
+```
+
+### 3. Recent logs
+
+```bash
+journalctl --user -u hoop -n 200 > ~/hoop-logs.txt
+```
+
+### 4. Version information
+
+```bash
+hoop --version > ~/hoop-version.txt
+```
+
+### 5. Schema version
+
+```bash
+hoop migrate status --json > ~/hoop-migration-status.json
+```
+
+Attach all five files when reporting issues for fastest diagnosis.
 
 1. `/debug/state` output: `curl http://127.0.0.1:3000/debug/state`
 2. Recent logs: `journalctl --user -u hoop -n 200`

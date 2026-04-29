@@ -115,6 +115,346 @@ systemctl --user restart hoop
 
 State in `~/.hoop/` persists across upgrades. Schema migrations run on startup.
 
+### Schema migrations
+
+HOOP uses SQLite for `~/.hoop/fleet.db` and supports automatic schema migrations when upgrading between minor versions. Migrations are tracked in the database and run once per version bump.
+
+#### Migration types
+
+| Type | Example | Rollback |
+|------|---------|----------|
+| **Minor version** | `1.27.0` → `1.28.0` | Yes, via `hoop migrate rollback` |
+| **Major version** | `1.x` → `2.0` | No, one-way migration |
+
+#### Checking migration status
+
+```bash
+# Show current schema version and pending migrations
+hoop migrate status
+
+# Output example:
+# Schema version: 1.28.0
+# Binary version: 1.28.0
+#
+# No pending migrations.
+```
+
+When pending migrations exist, the output shows:
+
+```bash
+# Pending migrations:
+#   1.27.0 → 1.28.0 (rollbackable)
+#     Add redaction_audit table for secret detection events
+#
+# Can rollback to: 1.27.0
+```
+
+#### Running migrations manually
+
+Migrations normally run automatically on daemon startup. To run them manually:
+
+```bash
+# Run pending minor version migrations
+hoop migrate run --confirm
+
+# Output:
+# Running migration 1.27.0 → 1.28.0: Add redaction_audit table
+# Migration completed in 12.34 ms (156 rows touched)
+# Migration complete. Schema version is now 1.28.0.
+```
+
+#### Major version upgrades
+
+For major version jumps (e.g., `1.x` → `2.0`), use the dedicated upgrade path:
+
+```bash
+# 1. Ensure you have a current backup
+hoop migrate status
+
+# 2. Run the major upgrade
+hoop migrate major-upgrade --confirm
+
+# 3. Verify and restart
+systemctl --user restart hoop
+```
+
+Major upgrades:
+- Cannot be rolled back
+- May include data format changes
+- Always create a backup before running
+
+#### Rolling back a minor version
+
+If a minor version migration causes issues, you can rollback:
+
+```bash
+# Rollback to a previous minor version
+hoop migrate rollback 1.27.0 --confirm
+
+# Output:
+# Rolling back migration 1.28.0 → 1.27.0: Dropping redaction_audit table
+# Rollback completed in 8.12 ms (0 rows touched)
+# Rollback complete. Schema version is now 1.27.0.
+```
+
+After rolling back:
+1. Restart the daemon with the previous HOOP binary
+2. Consider filing an issue about the migration problem
+
+#### Migration failure recovery
+
+If a migration fails mid-operation:
+
+1. **Check the error message** in `journalctl --user -u hoop -n 100`
+2. **Restore from backup** if the database is corrupted:
+
+```bash
+systemctl --user stop hoop
+cp ~/.hoop/fleet.db.backup.YYYYMMDD ~/.hoop/fleet.db
+systemctl --user start hoop
+```
+
+3. **Report the issue** with the exact error message and schema versions
+
+#### Rebuilding indexes
+
+Some migrations include index rebuilds that can be slow on large databases. To rebuild the percentile index manually:
+
+```bash
+hoop migrate rebuild-percentile-index
+
+# Output:
+# Rebuilding percentile index from closed Stitches...
+# Percentile index rebuilt successfully.
+# Total buckets: 1234
+```
+
+## Tailscale routing
+
+HOOP is designed to run on hosts connected via Tailscale. The daemon's `bind_addr` configuration controls network exposure.
+
+### Network modes
+
+| Mode | Configuration | Exposure | Use case |
+|------|-------------|----------|----------|
+| **Localhost only** | `bind_addr: "127.0.0.1:3000"` | Local machine only | Single-user development |
+| **Tailscale exposed** | `bind_addr: "0.0.0.0:3000"` | All interfaces | Multi-host access via Tailscale |
+| **Specific IP** | `bind_addr: "100.x.y.z:3000"` | Specific Tailscale IP | Single-interface binding |
+
+### Configuration
+
+Edit `~/.hoop/config.yml`:
+
+```yaml
+server:
+  # Expose on all interfaces (accessible via Tailscale)
+  bind_addr: "0.0.0.0:3000"
+```
+
+Or use the CLI:
+
+```bash
+# Start with specific bind address
+hoop serve --addr 0.0.0.0:3000
+```
+
+### systemd service considerations
+
+When exposing via Tailscale, update the systemd service file:
+
+```bash
+# Edit the service file
+vim ~/.config/systemd/user/hoop.service
+
+# Change ExecStart line:
+ExecStart=/home/coding/.local/bin/hoop serve --addr 0.0.0.0:3000
+
+# Reload and restart
+systemctl --user daemon-reload
+systemctl --user restart hoop
+```
+
+### Accessing via Tailscale
+
+Once bound to `0.0.0.0:3000`, HOOP is accessible at:
+
+- **From the host:** `http://localhost:3000` or `http://127.0.0.1:3000`
+- **From other Tailscale nodes:** `http://<host-tailscale-ip>:3000`
+
+Find your Tailscale IP:
+
+```bash
+# Show Tailscale IP addresses
+tailscale ip -4
+
+# Example output:
+# 100.x.y.z
+```
+
+Then access from another Tailscale-connected device:
+
+```bash
+# From another machine on the Tailscale network
+curl http://100.x.y.z:3000/debug/state
+```
+
+### Firewall considerations
+
+When binding to `0.0.0.0:3000`:
+
+1. **Tailscale firewall** automatically allows traffic between mesh peers
+2. **Local firewall** (ufw, firewalld) may block the port:
+
+```bash
+# Check if port 3000 is listening
+ss -tlnp | grep :3000
+
+# Allow traffic on port 3000 (if using ufw)
+sudo ufw allow 3000/tcp
+
+# Allow traffic from Tailscale interface only (more restrictive)
+sudo ufw allow in on tailscale0 to any port 3000
+```
+
+### Troubleshooting Tailscale access
+
+| Symptom | Check | Fix |
+|---------|-------|-----|
+| Cannot access from another Tailscale host | `tailscale status` | Verify both hosts are on the same mesh |
+| Connection timeout | `ss -tlnp \| grep :3000` | Ensure daemon is bound to `0.0.0.0` |
+| "Connection refused" | `systemctl --user status hoop` | Daemon may not be running |
+| Accessible locally but not remotely | `sudo ufw status` | Check local firewall rules |
+
+## Log management
+
+HOOP integrates with systemd's journal for log management. All daemon output is captured and can be queried, filtered, and exported.
+
+### Viewing logs
+
+```bash
+# Follow logs in real-time
+journalctl --user -u hoop -f
+
+# View last 100 lines
+journalctl --user -u hoop -n 100
+
+# View logs since today
+journalctl --user -u hoop --since today
+
+# View logs from the last hour
+journalctl --user -u hoop --since "1 hour ago"
+```
+
+### Filtering by priority
+
+```bash
+# Show only errors and above
+journalctl --user -u hoop -p err
+
+# Show warnings and above
+journalctl --user -u hoop -p warning
+
+# Show debug messages (verbose)
+journalctl --user -u hoop -p debug
+```
+
+Priority levels: `emerg` (0), `alert` (1), `crit` (2), `err` (3), `warning` (4), `notice` (5), `info` (6), `debug` (7)
+
+### Filtering by content
+
+```bash
+# Search for specific keywords
+journalctl --user -u hoop | grep -i "backup"
+
+# Show only migration-related messages
+journalctl --user -u hoop | grep -i "migration"
+
+# Show only error messages
+journalctl --user -u hoop | grep -i "error"
+```
+
+### Time-based queries
+
+```bash
+# Logs from a specific date
+journalctl --user -u hoop --since "2024-04-01" --until "2024-04-02"
+
+# Logs from the last boot
+journalctl --user -u hoop -b
+
+# Logs from the previous boot
+journalctl --user -u hoop -b -1
+```
+
+### Exporting logs
+
+```bash
+# Export to a file
+journalctl --user -u hoop --since today > ~/hoop-logs.txt
+
+# Export in JSON format
+journalctl --user -u hoop -o json > ~/hoop-logs.json
+
+# Export with verbose output (includes all fields)
+journalctl --user -u hoop -o verbose > ~/hoop-logs-verbose.txt
+```
+
+### Log rotation
+
+systemd journald handles log rotation automatically. Journal size is controlled by `/etc/systemd/journald.conf`:
+
+```ini
+# System-wide journal size limit
+SystemMaxUse=500M
+# Max file size for a single journal file
+RuntimeMaxUse=100M
+# Retention period
+MaxRetentionSec=30day
+```
+
+To check current journal disk usage:
+
+```bash
+# Show disk usage for all journals
+journalctl --disk-usage
+
+# Show disk usage for HOOP service only
+du -sh ~/.local/share/journal/*/user-*.journal*
+```
+
+### Persisting logs across reboots
+
+By default, user journals may not persist across reboots. To enable persistent storage:
+
+```bash
+# Create persistent journal directory
+sudo mkdir -p /var/log/journal/<user-id>
+sudo systemd-tmpfiles --create --prefix=/var/log/journal
+
+# Or configure in /etc/systemd/journald.conf:
+# Storage=persistent
+```
+
+### Centralized logging (optional)
+
+For centralized log aggregation, consider:
+
+1. **Loki + promtail** (Grafana stack)
+2. **Elasticsearch + Filebeat**
+3. **Cloud logging services** (CloudWatch, Logs, etc.)
+
+Example promtail configuration for HOOP logs:
+
+```yaml
+scrape_configs:
+  - job_name: hoop
+    journal:
+      matches:
+        _SYSTEMD_UNIT: hoop.service
+      labels:
+        job: hoop
+```
+
 ## Backups
 
 HOOP includes automated daily backups to S3-compatible storage (Backblaze B2, AWS S3, MinIO, Garage, etc.). Backups are configured in `~/.hoop/config.yml`:
