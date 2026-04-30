@@ -9,6 +9,8 @@ zero-write-v01 = []
 create-only-write = []
 # Internal feature for integration tests and load testing
 testing = []
+# OpenAPI spec generation (optional feature for API documentation)
+openapi = []
 
 [dependencies]
 anyhow = "1.0"
