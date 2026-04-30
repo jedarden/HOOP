@@ -17,6 +17,7 @@
 //! - **Rust**: Generated via typify in build.rs → `OUT_DIR/types.rs`
 //! - **TypeScript**: Generated via json-schema-to-typescript → `hoop-ui/web/src/types.gen.ts`
 
+pub mod effort;
 pub mod id_validators;
 pub mod path_security;
 
