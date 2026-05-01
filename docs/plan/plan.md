@@ -128,6 +128,54 @@ Beads created outside HOOP (plain `br create` from a terminal) remain orphans �
 
 ---
 
+## 1.7. Scope lock doctrine
+
+The plan is the contract. Mid-implementation additions require a plan update first — the plan, not the code, is the source of truth for what HOOP is.
+
+1. **Additions.** Propose the addition in writing (a plan PR or a note in the nearest relevant section). If it fits within the spirit of an existing deliverable, it lands as a sub-item. If it adds a new surface or capability the plan didn't contemplate, it requires an explicit plan edit and a `[scope-add]` tag in the commit message.
+2. **Removals / deferrals.** Any phase deliverable that won't land in its planned phase gets moved to the next phase in a plan edit before the phase is declared complete. A phase is never "done" with skipped deliverables.
+3. **Marquee features.** Phase 2 marquee items (14–17) are "phase-2-if-foundation-lands-early, otherwise Phase 2.5." If Phase 2's core 13 deliverables are not green, marquee features defer automatically — no plan edit required. The phase gate table in §10 makes this testable.
+4. **Terminology.** HOOP's vocabulary (Stitch, Pattern, Reflection Ledger, bead, workspace, project) is locked at plan ratification. New synonyms introduced during implementation must map to an existing term. `AGENTS.md` enforces this for LLM contributors.
+5. **Churn-magnet decisions.** The five ADRs in §24 are locked. Re-opening an ADR requires a plan amendment with written justification. Inline "I think we should switch to X" in a PR is not a re-opening.
+
+---
+
+## 1.8. Acceptance scenarios
+
+Written before architecture as independently verifiable definitions of done. Pass and fail criteria are stated for each.
+
+**S1 — Morning review (Phase 2)**
+Operator opens HOOP in a browser. Without clicking into any project: reads total workers running, total cost today, which project has the longest-running open bead, and which project had a stuck-worker alert overnight. All figures are derived from on-disk event files; HOOP has not contacted any external service.
+- **Pass:** All four facts present on the overview card; numbers match `br list --json | jq` output within ±2%; page renders in under 3 seconds on a host with 10 projects and 50 active workers.
+- **Fail:** Any figure is stale by more than one event-cycle (5s); page requires a manual refresh to show current state.
+
+**S2 — Transcript archaeology (Phase 2)**
+Operator asks: "why did bead `bd-3qvi` cost $2.80?" HOOP opens the visual debug panel: full prompt sequence, every tool call and result, stderr lines, and cost breakdown by turn — all without the operator having touched a CLI. The originating worker Stitch is visible alongside the bead view.
+- **Pass:** Full cycle reconstructed with no gaps (every turn, every tool call visible); operator Stitch → worker Stitch → bead linked in one click; panel load time under 5 seconds.
+- **Fail:** Any turn missing; bead–Stitch link absent; panel requires manual file path entry.
+
+**S3 — Bead creation from chat (Phase 4)**
+Operator types "create a fix bead for the Calico IP selection issue on iad-acb" into the chat pane. HOOP produces a draft Stitch with pre-filled title, body, and target workspace. Operator reviews, confirms. `br list --json` in the relevant workspace shows the new bead within 3 seconds. `fleet.db` audit log carries the Stitch id and operator identity.
+- **Pass:** Bead visible in workspace queue; audit row present; no `br` error in HOOP logs.
+- **Fail:** HOOP creates a bead without operator confirmation; bead missing from queue; audit row absent.
+
+**S4 — Daemon restart with no fleet disruption (Phase 1)**
+NEEDLE fleet is running. `systemctl --user restart hoop` is executed. Workers continue claiming and closing beads without interruption. HOOP UI, reconnected after restart, rebuilds state entirely from disk in under 5 seconds for a 500-bead workspace. No bead is duplicated or dropped from any view.
+- **Pass:** Fleet unaffected (verified by `br list` count before and after); UI state matches `br list` output within ±0 beads after rebuild.
+- **Fail:** Any NEEDLE worker process is disrupted; any bead disappears or duplicates in the UI post-restart.
+
+**S5 — Degraded: project workspace deleted at runtime (Phase 2)**
+Operator removes a project's `.beads/` directory while HOOP is running. Within one event-cycle (≤10s), HOOP shows an error card for that project on the dashboard. All other projects continue updating normally. Restoring the `.beads/` directory causes auto-recovery within one event-cycle.
+- **Pass:** Error card appears within 10s; other project cards unaffected; auto-recovery on restore without daemon restart.
+- **Fail:** HOOP crashes; other projects' state is corrupted; recovery requires a manual restart.
+
+**S6 — Machine mode / non-interactive (Phase 1)**
+`hoop status --json` produces valid JSON pipeable to `jq`. `hoop projects scan ~ --yes` completes without emitting a user prompt to stdout. Exit codes: 0 success, 1 partial failure, 2 fatal. All CLI commands that mutate state require an explicit flag (`--confirm`) when `--no-interactive` is set and the operation is destructive.
+- **Pass:** `hoop status --json | jq .` succeeds; `hoop projects scan ~ --yes | wc -l` returns without prompt; exit codes match spec.
+- **Fail:** Any prompt emitted to stdout in `--no-interactive` mode; malformed JSON; wrong exit code.
+
+---
+
 ## 2. The environment HOOP targets
 
 - **Host:** Hetzner EX44-class. Bare metal, long-lived, Tailscale-only.
@@ -189,6 +237,8 @@ hoop stitch list [project]    # list open Stitches; use --beads for the underlyi
 Notably absent: `launch`, `stop`, `salvage`, `steer`, anything that touches a worker process. Those verbs belong to NEEDLE.
 
 `hoop serve` is the long-lived process; other subcommands are clients over a Unix socket (`~/.hoop/control.sock`).
+
+**Non-interactive / automation policy.** Every CLI command that queries or reads supports `--json` for machine-readable output (JSON on stdout, no color). Every CLI command that might prompt supports `--no-interactive` / `-y` to accept safe defaults without prompting. Destructive operations (`hoop restore`, `hoop projects remove`) additionally require `--confirm` when `--no-interactive` is set; without it, they exit with code 2 and an error message. No prompt is ever emitted to stdout (only stderr) — stdout is always either clean JSON or plain human-readable text suitable for piping. Exit codes: `0` success, `1` partial failure (some subcommand data unavailable), `2` fatal / precondition not met.
 
 ### 4.2 Project registry
 
@@ -347,7 +397,155 @@ reflection_ledger(id, scope, rule, reason, source_stitches, status,
 - Every injection is auditable: the ledger records `last_applied` and `applied_count` per rule; the session log records which rules were injected.
 - Rules are editable and pruneable. Nothing is learned silently. An entry marked `archived` stops being injected but is kept for history.
 
+**Stitch status state machine.** A Stitch's UI-visible status is always *derived on read* from the state of its linked beads and its own turn activity. It is never stored as a field in `stitches`.
+
+```
+                        ┌─────────────────────────────────────────┐
+                        │              Stitch (created)           │
+                        └──────┬──────────────────────────────────┘
+                               │
+                    ┌──────────▼──────────┐
+                    │    In Progress      │  streaming turn or linked bead claimed
+                    └──────────┬──────────┘
+                               │  turn completes; no linked beads in-flight
+                    ┌──────────▼──────────┐
+             ┌──────│      Quiet          │  no activity; last_activity_at recedes
+             │      └──────────┬──────────┘
+             │                 │  linked review-kind bead opens
+             │      ┌──────────▼──────────┐
+             │      │  Awaiting Review    │  derived: open review bead exists
+             │      └──────────┬──────────┘
+             │                 │  review bead closes
+             │                 └──────────────────────────────────┐
+             │      ┌──────────────────────────────────────────────▼────┐
+             │      │                  Quiet (resumed)                   │
+             └──────►  (activity_at > archive_threshold → auto-archive) │
+                    └──────────────────────────────────────────────────┘
+                               │  archive_after_days of inactivity
+                    ┌──────────▼──────────┐
+                    │      Archived       │  hidden from default views; fully retrievable
+                    └─────────────────────┘
+```
+
+Derived status mapping:
+- **In Progress:** `stitch_messages` has a turn with `role=assistant` and no `end_ts`, OR a linked bead has `status=claimed`.
+- **Awaiting Review:** a linked bead has `kind=review` and `status=open`.
+- **Quiet N days:** no event in `stitch_messages` or `stitch_beads` for N days; N shown as a fading indicator.
+- **Archived:** `archived_at IS NOT NULL` (set by the auto-archive background task or explicit operator action).
+
 **No direct bead mutation** across all three services. HOOP overlays bead state; never modifies it.
+
+---
+
+### 4.8 Concurrency model
+
+HOOP runs on a single Tokio multi-thread runtime (`tokio::main`, default thread count: `num_cpus`). State ownership follows a structured hierarchy; no shared mutable state outside designated channels or `Arc<RwLock<>>` with documented hold-time constraints.
+
+**Task topology:**
+
+```
+tokio::main
+├── axum HTTP + WS listener            — one long-lived task
+│   ├── per WS connection: RX task     — inbound messages
+│   └── WS broadcaster                 — broadcast::channel(1024), fan-out to all clients
+│
+├── project_supervisor (one per project)
+│   ├── event_tailer                   — inotify watch on .beads/events.jsonl (per workspace)
+│   ├── heartbeat_monitor              — inotify watch on .beads/heartbeats.jsonl
+│   ├── session_tailer                 — inotify watch on CLI session dirs (per workspace)
+│   ├── bead_state_reader              — spawns br subprocess on demand
+│   └── git_reader                     — spawns git subprocess on demand
+│
+├── stitch_service                     — one task; serializes all fleet.db writes via mpsc
+├── reflection_detector                — one task; async, fires after stitch-close signals
+├── backup_scheduler                   — one task; runs on cron schedule
+└── human_interface_agent (phase 5+)   — one task per agent session
+```
+
+**Shared state rules:**
+
+- `fleet.db` writes are serialized through the `stitch_service` task via an `mpsc` channel. No other task writes to `fleet.db` directly.
+- WS fan-out uses `tokio::sync::broadcast` (capacity: 1024 events). Slow receivers are dropped; the client reconnects and rebuilds state from scratch (Principle #3: "Server is the epoch").
+- Per-project state (active bead set, worker liveness map, session index) is owned by `project_supervisor`, exposed to HTTP handlers via `Arc<tokio::sync::RwLock<ProjectSnapshot>>`. Writers hold the lock for ≤1ms (compute new snapshot, then `Arc` swap). Readers never block on writers.
+- `br` and `git` subprocesses are **never called while holding any lock**. Spawn the subprocess, `await`, then re-acquire the lock to apply the result.
+- Maximum concurrent `br` subprocesses: `min(registered_projects, 10)` enforced by a global semaphore. Prevents shell process-table pressure on large project counts.
+
+**Cancellation:**
+
+- Each `project_supervisor` holds a `CancellationToken`. Removing a project cancels the token; all sub-tasks shut down within 5s.
+- On SIGTERM, the supervisor cancels all tokens, waits for clean shutdown, flushes the WS broadcaster, then closes `fleet.db` with `PRAGMA wal_checkpoint(FULL)`.
+
+**CI-enforced thread-safety:**
+
+- All `hoop-schema` types must derive `Send + Sync` — compile-time check.
+- No `std::sync::Mutex` in event-tailer or WS-broadcast hot paths — Clippy rule in CI.
+- No `.unwrap()` on lock acquisition — `.expect("lock poisoned: <reason>")` only.
+
+---
+
+### 4.9 Module / crate layout
+
+```
+hoop/                          ← repo root
+├── Cargo.toml                 ← workspace root
+├── Cargo.lock
+│
+├── hoop-schema/               ← JSON Schema source + Rust + TS codegen
+│   ├── schemas/               ← .json source files (events, Stitch, Pattern, Ledger, config)
+│   ├── src/lib.rs             ← Rust types via typify (generated; do not hand-edit)
+│   └── ts/                    ← TS types via json-schema-to-typescript (generated)
+│
+├── hoop-daemon/               ← main binary (`hoop serve` + CLI subcommands)
+│   ├── build.rs               ← embeds web/ compiled assets into binary
+│   └── src/
+│       ├── main.rs
+│       ├── cli/               ← arg parsing, subcommand dispatch, --no-interactive handling
+│       ├── serve/             ← axum routes, WS handler, static asset embed
+│       ├── project/           ← project_supervisor + per-workspace readers
+│       │   ├── supervisor.rs
+│       │   ├── event_tailer.rs
+│       │   ├── heartbeat_monitor.rs
+│       │   ├── session_tailer.rs
+│       │   └── bead_reader.rs  ← br subprocess wrapper (all br calls live here)
+│       ├── stitch/            ← stitch_service, pattern_service, reflection_detector
+│       ├── backup/            ← S3 scheduler, VACUUM INTO, manifest.json
+│       ├── audit/             ← fleet.db schema, migration runner, hash-chain append
+│       ├── agent/             ← human-interface agent session manager (phase 5+)
+│       └── config/            ← config.yml parsing, hot-reload, schema validation
+│
+├── hoop-mcp/                  ← MCP server (separate binary, phase 5+)
+│   └── src/main.rs            ← Unix socket listener, tool definitions, create_stitch proxy
+│
+├── web/                       ← React + Vite + TypeScript frontend
+│   ├── src/
+│   │   ├── pages/             ← Overview, ProjectDetail, Conversations, Search, Audit
+│   │   ├── components/        ← shared UI primitives (ExplainThis, StitchCard, BeadGraph…)
+│   │   ├── state/             ← Jotai atoms; committed-vs-streaming split enforced here
+│   │   ├── ws/                ← WS client, topic subscription, reconnect + back-pressure
+│   │   └── schema/            ← imported from hoop-schema/ts/ (never hand-written)
+│   └── vite.config.ts         ← dev: proxy to hoop-daemon; prod: output to hoop-daemon/assets/
+│
+├── testrepo/                  ← canonical test workspace (committed to repo)
+│   ├── src/                   ← dummy Rust crate (~500 files)
+│   ├── .beads/
+│   │   ├── beads.db           ← synthetic bead state in known configurations
+│   │   ├── events.jsonl       ← canned events driving deterministic test runs
+│   │   ├── heartbeats.jsonl
+│   │   └── sessions/          ← pre-recorded JSONL per adapter (Claude, Codex, OpenCode…)
+│   └── stubs/
+│       └── br                 ← stub binary: records calls to a log file, returns canned JSON
+│
+└── docs/
+    ├── plan/plan.md           ← this document
+    ├── concepts/              ← one-page docs: Stitch, Pattern, Project, Workspace, Agent, Ledger
+    ├── operations.md
+    └── troubleshooting.md
+
+README.md                      ← install + quickstart + concepts overview
+AGENTS.md                      ← LLM-facing guide: scope, non-goals, vocabulary, conventions
+```
+
+**Naming conventions:** Rust modules `snake_case`, public types `PascalCase`. No `mod.rs` files — use `module_name.rs` at the directory level. WS message types match `hoop-schema` names exactly (no local aliases). Feature flags: none in phases 1–4; `feature = "agent"` introduced in phase 5 for `hoop-mcp` conditional compilation.
 
 ---
 
@@ -794,6 +992,20 @@ Explicit. HOOP deliberately does not grow into these.
 
 Dates are planning fiction; ordering matters. **Do not build Stitch creation before observability is real.** Drafting work against a backlog the operator can't inspect is worse than no drafting at all. **Do not seat the human-interface agent before direct Stitch creation and the marquee observability features exist** — the human-interface agent is a productivity multiplier on top of those surfaces; without them it's a chatbot without tools.
 
+**Phase entry criteria.** A phase may not begin until all of the following pass on the same commit for the preceding phase:
+
+| Gate | Applies from |
+|---|---|
+| `cargo test` (all unit + integration tests) green | Phase 1 exit |
+| `cargo clippy -- -D warnings` clean | Phase 1 exit |
+| Phase N success criteria all have passing automated tests in CI against `testrepo/` | Phase N exit |
+| Load test: 20 projects × 5 workers × 200 beads synthetic run completes within responsiveness budget | Phase 2 exit (and each subsequent phase) |
+| `hoop status --json \| jq .` succeeds (non-interactive mode verified) | Phase 1 exit |
+| UI Playwright tests green on desktop + phone viewport | Phase 2 exit |
+| Phase 2 core deliverables (items 1–13) green before any marquee feature (14–17) is merged | Phase 2 → Phase 3 |
+
+A phase is declared done when its success criteria tests are green in CI and the entry criteria for the *next* phase are also green. Partial phase completion does not exist — deliverables move to the next phase intact, not half-finished.
+
 ---
 
 ## 11. Relationship diagram
@@ -920,6 +1132,18 @@ Living in the repo itself:
 ---
 
 ## 13. Security model
+
+**Threat model.** HOOP's security posture rests on a narrow, explicit threat surface:
+
+| Attacker | Attack surface | HOOP's control |
+|---|---|---|
+| **Tailscale network misconfiguration** (ACL too permissive) | HOOP port reachable by unintended Tailscale nodes | Tailscale whois identity logged on every request; phase 7 adds role enforcement at the schema boundary |
+| **Malicious file content in a project workspace** | JSONL injection via a crafted `events.jsonl` that tricks HOOP's parser | All JSONL parsed strictly; unknown fields discarded; bead IDs regex-validated before any filesystem use |
+| **Path traversal via bead or session IDs** | A crafted ID that resolves outside the project workspace | All paths canonicalized and checked against the registered workspace root before any filesystem operation |
+| **Attachment containing malicious content** | SVG with embedded scripts, PDF with macro payloads | SVG scripts stripped; PDF metadata validated; file type verified by content sniff, not extension |
+| **Compromised `br` binary** | Malicious `br` that produces shell-injection payloads in its stdout | All `br` output is parsed as JSON, never eval'd or interpolated into shell commands; `br` path is resolved once at startup via `which`, not user-supplied |
+
+Non-threat (explicitly out of scope): external network attackers (HOOP never has a public port); credential theft (HOOP never holds credentials); cross-operator privilege escalation before phase 7 (single-operator until then).
 
 **HOOP inherits security from its host environment.** It does not implement its own authentication layer. The design:
 
@@ -1101,7 +1325,29 @@ HOOP exposes Prometheus-format metrics on `/metrics` from phase 6 onward. The me
 - `hoop_already_started_dedup_hits_total`
 - `hoop_capacity_meter_exhaustion_warnings_total{account}`
 
-### 16.8 `/debug/state` endpoint
+### 16.8 Memory & allocation budget
+
+Performance budget at the canonical load target (20 projects × 5 workers × 300 beads):
+
+| Component | Budget | Measurement point |
+|---|---|---|
+| Resident set size (RSS) at idle | ≤ 150 MB | After 5 min running with no active WS clients |
+| RSS under canonical load | ≤ 400 MB | During load test (§14.2) with 5 concurrent WS clients |
+| Per-project in-memory snapshot | ≤ 5 MB | `ProjectSnapshot` struct size in heap profiler |
+| WS broadcast channel buffer | ≤ 8 MB | 1024 events × ≤8KB each |
+| `fleet.db` WAL | ≤ 10 MB steady-state | Metric `hoop_fleet_db_wal_size_bytes` |
+| Single `br` subprocess stdout buffer | ≤ 2 MB | Max expected `br list --json` output for 1000 beads |
+
+**Hot-path allocation policy:**
+- Event tailer inner loop: zero heap allocation per event. Events are parsed into pre-allocated structs via `serde_json::from_slice` on a fixed read buffer.
+- WS fan-out: events are `Arc`-wrapped once at broadcast; all receivers share the same allocation.
+- No `String` allocations in the heartbeat monitor inner loop — use `&str` borrowed from the read buffer.
+
+These budgets are enforced by the load test in CI (§14.2). A load test run that exceeds RSS 400 MB is a CI failure.
+
+---
+
+### 16.9 `/debug/state` endpoint
 
 Complementing metrics, a JSON endpoint surfaces runtime structure for incident triage: fleet roster, open Stitches with statuses, agent session IDs, every pid HOOP observes, every WS client, current config hash, backup timestamps. Local-only access by default.
 
@@ -1351,6 +1597,217 @@ Skills and scripts run with the HOOP user's privileges. HOOP does not sandbox th
 ## 23. Appendix — Kubernetes worker deployment (someday, sketched)
 
 If the EX44 saturates, NEEDLE can graduate worker execution to Kubernetes pods — this is a NEEDLE concern, not a HOOP concern. HOOP's role when that happens is the same as today: read the bead events (now streamed from cluster sidecars into a shared log or event bus), offer UI, create beads on operator intent. HOOP does not become a cluster controller.
+
+---
+
+## 24. Architecture Decision Records
+
+Contentious decisions locked before implementation. Re-opening an ADR requires a plan amendment with written justification — an inline "I think we should switch to X" in a PR is not a re-opening.
+
+### ADR-1: `br` shell-out instead of library linking
+
+**Decision:** HOOP calls `br` as a subprocess (`tokio::process::Command`) for all bead operations. HOOP never links against `beads_rust` as a Cargo dependency.
+
+**Alternatives considered:**
+- Link `beads_rust` as a Cargo dependency — faster, type-safe, no subprocess overhead.
+- Embed a minimal SQLite reader that directly speaks the `.beads/` schema.
+
+**Rationale:** Upstream `beads_rust` has recurring index corruption (issue #171); the rusqlite shim fork and upstream may diverge. Linking locks HOOP to a specific fork. Shell-out pins HOOP to whatever `br` binary is in PATH and lets both evolve independently. Shell-out also enforces the "one write path" invariant in a way auditable in code review: any file containing `Command::new("br")` can be grepped for non-`create` verbs.
+
+**Reversal condition:** If `br` subprocess overhead causes measurable UI latency at 20-project scale and upstream resolves #171 with a stable API surface, re-evaluate library linking.
+
+---
+
+### ADR-2: SQLite for `fleet.db`
+
+**Decision:** `fleet.db` holds only HOOP-owned state: Stitches, Patterns, Reflection Ledger, audit log. HOOP's own migration runner manages the schema. `br` owns `.beads/beads.db`; HOOP never opens it.
+
+**Alternatives considered:**
+- Postgres — operational overhead; no Postgres server on the EX44; overkill for single-operator.
+- DuckDB — better analytical queries for cost roll-ups, but no WAL mode and less mature tooling.
+- Plain JSONL for everything — loses join capability needed for Stitch-to-bead linkage.
+
+**Rationale:** Single-file, no server, backup via `VACUUM INTO`, restore by file copy — matches the EX44 operational profile. WAL mode provides concurrent reads without blocking the `stitch_service` write serialization. `rusqlite` is mature and well-audited.
+
+**Reversal condition:** If `fleet.db` exceeds 10 GB or analytical query latency becomes the bottleneck, add a DuckDB export for reporting while keeping SQLite as the write store.
+
+---
+
+### ADR-3: Per-project Tokio task tree (no actor framework)
+
+**Decision:** Each project runtime is a Tokio task tree rooted at `project_supervisor`, with state shared via channels and `Arc<RwLock<>>`. No actor framework (Actix, Kameo, etc.).
+
+**Alternatives considered:**
+- Actix actors — mature, but adds a dependency and makes the concurrency model opaque.
+- Kameo — lighter but less documentation.
+- Bare `Arc<Mutex<>>` everywhere — leads to lock-held-during-I/O bugs.
+
+**Rationale:** Tokio's task model maps directly to the supervision hierarchy in §4.8. `CancellationToken` handles the project-removal lifecycle cleanly. Idiomatic Tokio is faster to onboard for a small team than a framework. `Arc<RwLock<>>` with documented hold-time constraints is auditable.
+
+**Reversal condition:** If the `project_supervisor` task tree exceeds 200 lines and becomes hard to reason about, introduce a thin actor wrapper around the supervisor only.
+
+---
+
+### ADR-4: `hoop-mcp` as a separate binary (Phase 5+)
+
+**Decision:** The MCP server that gives the human-interface agent its context and write capability is a separate binary (`hoop-mcp`) communicating with `hoop-daemon` over a Unix socket.
+
+**Alternatives considered:**
+- In-process MCP server — simpler, no IPC overhead.
+- HTTP MCP endpoint served by axum — accessible but requires auth management.
+
+**Rationale:** `hoop-daemon` has no compile-time dependency on MCP libraries; if MCP evolves, only `hoop-mcp` changes. The Unix socket boundary is a clean auth boundary (same OS user only — §13 Security). `hoop-mcp` can crash and be respawned independently without taking down the daemon.
+
+**Reversal condition:** If Unix socket round-trip latency causes measurable agent response lag, move the MCP server in-process behind `feature = "agent"`.
+
+---
+
+### ADR-5: Embedded static assets (no separate HTTP origin)
+
+**Decision:** The web client's compiled assets are embedded in the `hoop-daemon` binary via `rust-embed`. One binary, one port, no nginx.
+
+**Alternatives considered:**
+- Serve assets from disk at a configured path — hot-swap without rebuild, but requires deploy coordination.
+- Separate nginx — operational overhead; contradicts "if HOOP dies, nothing else notices."
+
+**Rationale:** Single binary is the easiest install and upgrade path. One port minimizes the Tailscale exposure surface. Development uses Vite dev server proxying to `hoop serve`; no production nginx needed.
+
+**Reversal condition:** If binary size exceeds 100 MB or client hot-patching without daemon restart becomes operationally necessary.
+
+---
+
+## 25. Edge case catalog
+
+Numbered, dedicated catalog. Each entry: name, scenario, resolution. Discovered during planning; updated during implementation.
+
+| # | Name | Scenario | Resolution |
+|---|---|---|---|
+| EC-01 | Invalid bead ID format | `br` returns an ID that doesn't match `^bd-[a-z0-9]+$` (truncated output, CLI version mismatch). | Reject the ID; log `invalid_bead_id`; increment `hoop_errors_total{kind="invalid_bead_id"}`; quarantine the row from display until `hoop audit` clears it. |
+| EC-02 | `br` subprocess non-zero exit | `br create` exits with code 1 (logic error) or 2 (DB corruption). | Code 1: surface `br` stderr as a user-facing error. Code 2: same + emit `hoop_br_subprocess_total{result="corruption"}` + display "run `br doctor --repair`" banner. Never retry silently. |
+| EC-03 | Two projects share the same workspace path | Operator adds `/home/coding/declarative-config` to two projects. | Reject at registration. Error: "workspace already registered to project `ardenone-cluster`." `hoop projects scan` skips already-claimed paths. |
+| EC-04 | JSONL file truncated mid-line | Event or session tailer reads a partial JSON line (writer is mid-append). | Skip the partial line; do not parse. Re-attempt on next inotify event. Never emit a partial event to WS. Track `last_valid_byte_offset` per file; never rewind past it. |
+| EC-05 | Project workspace deleted while running | Operator runs `rm -rf .beads/` for a live project. | inotify `DELETE` triggers. `project_supervisor` transitions project to `Error`. Other projects unaffected. On restore, inotify `CREATE` triggers auto-recovery within one event-cycle. |
+| EC-06 | Hot-reload during in-flight `br create` | `projects.yaml` changes while a `br create` subprocess is running. | In-flight subprocess completes against the old project config. Hot-reload applies after subprocess completes. No cancellation of in-flight `br` calls on hot-reload. |
+| EC-07 | `fleet.db` WAL present on startup after crash | HOOP crashed without checkpointing. WAL contains uncommitted transactions. | SQLite WAL recovery is automatic on connection open. HOOP logs `WARN` if WAL > 10 MB. Metric `hoop_fleet_db_wal_size_bytes` tracks it. |
+| EC-08 | Cross-workspace bead dependency in a Stitch draft | Operator draft in workspace A has `depends_on` a bead in workspace B. | Rejected at draft validation. Error: "cross-workspace bead dependencies not supported by `br`; express as a Stitch-child relationship." |
+| EC-09 | Attachment upload interrupted mid-stream | Browser closes or network drops during a large file upload. | Chunked transfer leaves a `.partial` file. On HOOP restart or next upload to the same bead, partial files are detected and deleted. No partial attachment is ever referenced from a bead body. |
+| EC-10 | Session tailer reads a file being actively written | CLI agent is mid-turn; its JSONL is being appended at the moment of read. | Same as EC-04 — partial JSON line skipped; re-processed on next inotify event. |
+| EC-11 | `br` binary missing or below minimum version | `br` not installed, or predates the pinned minimum. | `hoop serve` starts in **degraded mode**: read-only surfaces work; bead creation endpoint returns `503` with the install command. Logged at `ERROR`. |
+| EC-12 | `projects.yaml` references nonexistent path | Registered path not on disk. | Project marked `Unavailable` (not `Error`) on startup or hot-reload. Dashboard shows "path not found" card. When path appears on disk, `project_supervisor` auto-transitions to `Running` within one cycle. |
+| EC-13 | Human-interface agent session disconnects mid-turn | Claude Code process dies or Unix socket drops mid-response. | Partial response stored as incomplete turn with `status: interrupted`. UI shows "agent session interrupted — reconnecting." HOOP reattaches to existing session id; if unavailable, starts a new session and injects interrupted context as a system message. |
+| EC-14 | Duplicate Reflection Ledger proposal | Two Stitches trigger detection of the same rule before either is reviewed. | Content-hash deduplication at proposal creation: if a proposal with the same hash exists in `proposed` status, no new row. Existing proposal's `source_stitches` list is updated. |
+| EC-15 | `br create` killed before returning (OOM, SIGKILL) | HOOP calls `br create` but the subprocess is killed before exit code is returned. | Audit row is written **only after exit code 0 is received**. If subprocess is killed, no audit row. UI shows draft as "failed — bead may not have been created." Operator instructed to verify with `br list --json`. |
+
+---
+
+## 26. Anti-patterns catalog
+
+Things not to do during implementation, with the reason and the correct approach. Each entry is a "seemed reasonable at the time" decision that would cause a pivot or invariant violation.
+
+| # | Anti-Pattern | Why wrong | Correct approach |
+|---|---|---|---|
+| AP-01 | Open `.beads/beads.db` directly in HOOP | Bypasses `br`'s locking model; causes corruption when `br` and HOOP write concurrently; violates ADR-1. | Always shell out to `br` read verbs. |
+| AP-02 | Write to `.beads/events.jsonl` or `.beads/heartbeats.jsonl` | These are NEEDLE's append-only records. Any write risks corrupting NEEDLE's event log. | HOOP never writes to any `.beads/` file. `br create` runs in the project cwd — that's `br`'s write, not HOOP's. |
+| AP-03 | Cache bead state to disk in HOOP's own files | Duplicates `br`'s authoritative store; creates split-brain on divergence. Principle #1: events are authoritative, projections derived. | Compute bead projections on demand from `br list --json`. Never persist bead content to `fleet.db`. |
+| AP-04 | Call `br close`, `br update`, `br claim`, `br release` | Violates the "one write" invariant (Principle #8). These verbs change bead lifecycle state that NEEDLE owns. | HOOP's only `br` write is `create`. All other verbs belong to the operator via `br` directly. |
+| AP-05 | Spawn or kill tmux sessions or NEEDLE worker processes | Violates "HOOP does not steer workers" (§1.5, Non-goal #2). HOOP is an observer, not a controller. | HOOP has no tmux interaction at any point. Worker lifecycle is NEEDLE's exclusive domain. |
+| AP-06 | Store secrets in `fleet.db` or `config.yml` | Secrets in any HOOP-owned file create exposure; violates §17.1. | Secrets always from environment variables at runtime. `config.yml` references adapter names, never credential values. |
+| AP-07 | Log above `TRACE` without the redaction filter | CLI session content, file content, and attachment text can contain API keys and PII (§18.4). | Every log line above `TRACE` goes through the redaction filter. Use the `redacted_log!` macro in hot paths. |
+| AP-08 | Hold a lock while calling `br` or `git` | Subprocess latency (hundreds of ms) while holding a lock blocks all readers and causes WS fan-out lag. | Release all locks before shelling out. Spawn subprocess, await, then re-acquire lock to apply result. |
+| AP-09 | `unwrap()` on `br` output parsing | If `br` changes its output format on a version bump, a panic takes down the daemon. | Parse `br` output with `?`. Log raw stdout on parse failure. Never panic on external I/O. |
+| AP-10 | Hardcode the `br` binary path | Non-portable; breaks if operator installs `br` outside `~/.local/bin/`. | Resolve `br` via `which br` at startup audit. Store resolved path in daemon state. |
+| AP-11 | `panic!` for recoverable errors in async tasks | A panic in a Tokio task may kill the scheduler thread and crash the daemon. | Use `Result` for all recoverable errors. `panic!` only for programming invariant violations (unreachable arms). Log, emit metric, recover. |
+| AP-12 | Broadcast full `fleet.db` state on every WS connect | O(history) cost per connect; WS message size scales with accumulated Stitches and Patterns. | WS connect receives a minimal "current snapshot" (open Stitches, active workers). Full history is paginated REST. |
+| AP-13 | Re-introduce worker-steering vocabulary | Terms like `steer`, `throttle`, `rotate`, `pause_worker`, `launch_fleet` signal HOOP acquiring excluded responsibilities. | Flag in code review as a scope violation. `AGENTS.md` carries this list explicitly for LLM contributors. |
+
+---
+
+## 27. Error taxonomy
+
+Structured error categories for consistent `hoop_errors_total{subsystem,kind}` metrics and `hoop audit` actionability.
+
+### E1 — Configuration Errors
+
+| Code | Name | Meaning | User action |
+|---|---|---|---|
+| E1-001 | `config_schema_invalid` | `config.yml` fails JSON Schema validation | Fix the offending field; HOOP continues with previous valid config |
+| E1-002 | `project_path_not_found` | A registered workspace path does not exist | Create directory or remove project registration |
+| E1-003 | `project_path_duplicate` | Two projects share the same workspace path | Remove one registration |
+| E1-004 | `br_version_below_minimum` | Installed `br` below pinned minimum | Upgrade `br`; see diagnostic message |
+| E1-005 | `br_not_found` | `br` binary not in PATH | Install `br`; verify with `which br` |
+
+### E2 — Bead Operation Errors
+
+| Code | Name | Meaning | User action |
+|---|---|---|---|
+| E2-001 | `br_create_failed` | `br create` exited non-zero | Check `br` stderr in audit log; may be a workspace lock conflict |
+| E2-002 | `br_output_parse_failed` | `br` stdout not valid JSON | Check `br` version compatibility; file issue if persistent |
+| E2-003 | `br_timeout` | `br` subprocess exceeded 10 s | Run `br doctor --repair`; may indicate DB corruption |
+| E2-004 | `br_invalid_bead_id` | `br` returned an ID failing format validation | Check `br` version; log raw output for debugging |
+| E2-005 | `br_corruption_signal` | `br` exited with code 2 (DB corruption indicator) | Run `br doctor --repair`; see EC-02 |
+
+### E3 — Event / Session Tailer Errors
+
+| Code | Name | Meaning | User action |
+|---|---|---|---|
+| E3-001 | `jsonl_parse_error` | A JSONL line is not valid JSON | Usually transient (partial write); auto-recovers; persistent = check `br` version |
+| E3-002 | `unknown_event_kind` | Event record has unrecognized `kind` field | May indicate newer `br` or NEEDLE; update HOOP |
+| E3-003 | `inotify_limit_exceeded` | OS inotify watch limit hit | Increase `fs.inotify.max_user_watches`; reduce registered projects |
+| E3-004 | `session_dir_unreadable` | CLI session directory not readable by HOOP user | Check file permissions; session excluded from conversation views |
+
+### E4 — Stitch / Pattern Errors
+
+| Code | Name | Meaning | User action |
+|---|---|---|---|
+| E4-001 | `stitch_create_db_error` | `fleet.db` write failed during Stitch creation | Check disk space and `fleet.db` integrity via `hoop audit` |
+| E4-002 | `cross_workspace_dependency` | Draft bead depends on a bead in a different workspace | Express as Stitch-child relationship (see EC-08) |
+| E4-003 | `attachment_partial` | Previous upload left a partial attachment file | Re-upload; HOOP cleans up the partial on next attempt |
+
+### E5 — Agent Errors (Phase 5+)
+
+| Code | Name | Meaning | User action |
+|---|---|---|---|
+| E5-001 | `agent_session_disconnected` | Human-interface agent session lost | HOOP attempts auto-reconnect; check adapter config if persistent |
+| E5-002 | `agent_context_overflow` | Agent context window exceeded | Session will be compacted; operator notified in chat pane |
+| E5-003 | `agent_unauthorized_write` | Agent attempted a write not via `create_stitch` | HOOP bug; file an issue; the write is blocked |
+
+### E6 — Storage / Backup Errors
+
+| Code | Name | Meaning | User action |
+|---|---|---|---|
+| E6-001 | `fleet_db_wal_oversized` | WAL > 10 MB at startup | Checkpoint ran automatically; if recurring, check write load |
+| E6-002 | `backup_upload_failed` | S3 backup upload incomplete | Check credentials and endpoint; `hoop_backup_last_success_timestamp` will stale |
+| E6-003 | `backup_encryption_key_missing` | Encryption configured but `HOOP_BACKUP_AGE_KEY` unset | Set the env var before next scheduled backup run |
+
+**Error surfaces:** All E-codes appear as structured JSON in `hoop audit` output. `hoop_errors_total{subsystem,kind}` increments on each occurrence. E1 and E2 produce a UI banner. E3 and E4 log at `WARN` unless rate exceeds 10/min (then `ERROR` + banner). E5 produces a chat-pane notification. E6 produces a metric alert and a daily-digest log entry.
+
+---
+
+## 28. Risk register & fallbacks
+
+Scannable table of named risks. Revisited at the start of each phase; risks that materialize trigger Plan B before work continues.
+
+| # | Risk | Likelihood | Impact | Mitigation | Plan B |
+|---|---|---|---|---|---|
+| R-01 | `br` fork diverges from upstream before v1.0 ships | M | H | Maintain rusqlite shim diff summary in `AGENTS.md`; track upstream #171; pin minimum `br` version; CI tests against pinned version | If fork and upstream are incompatible: HOOP stays on fork; add a compile-time `br_variant` config flag distinguishing fork from upstream behavior differences |
+| R-02 | Phase 2 scope overrun — 13 deliverables + 5 marquee features in 12 weeks | H | H | Marquee features (14–17) explicitly gate behind core deliverables (§1.7 scope lock doctrine). Core 13 is the exit criterion; marquee moves to Phase 2.5 automatically. | Declare Phase 2.5 as a named phase; adjust milestone table; no architecture change needed |
+| R-03 | Session tailer falls behind at multi-year JSONL accumulation | M | M | Cache-digest index in `~/.hoop/session-cache.db` (§9 Q7); startup > 10 s auto-triggers cache rebuild | Scope tailer to sessions modified in last 90 days; operator-configurable window via `config.yml` |
+| R-04 | `fleet.db` WAL checkpoint under sustained high-write load | L | M | WAL checkpoint on clean shutdown; alert at 10 MB; integration test with 1000 Stitch inserts/min | Add periodic checkpoint task (every 60 s); or switch to WAL2 if SQLite experimental mode stabilizes |
+| R-05 | Claude API outage or model deprecation during Phase 5 | L | M | ZAI adapter with GLM models is the specified fallback in §7; switching requires only a `config.yml` change; HOOP read-only surfaces unaffected | Operator falls back to ZAI; agent off-switch (§6 Phase 5 item 7) keeps HOOP fully functional without the agent |
+| R-06 | Audio transcription quality insufficient for Reflection Ledger signal extraction | M | L | Whisper large model as default; Anthropic transcription endpoint as cloud override; word-level timestamps enable partial redaction | Remove transcription-derived signals from Reflection Ledger detection; use only text-based operator correction signals |
+| R-07 | `hoop-mcp` IPC overhead causes visible agent latency | L | M | Benchmark Unix socket round-trip in Phase 5 before shipping (target: ≤1 ms on same host) | Move MCP server in-process behind `feature = "agent"` per ADR-4 reversal condition |
+| R-08 | Multi-project `br` subprocess fan-out causes shell process-table pressure | L | M | Global semaphore caps concurrent `br` subprocesses at `min(num_projects, 10)` (§4.8 concurrency model) | Reduce semaphore cap; queue `br` calls per project with backpressure |
+| R-09 | Stitch Net-Diff viewer requires NEEDLE's `Bead-Id` commit trailer — hook regression in NEEDLE | M | M | Trailer hook already merged (hoop-ttb.3.34, 2026-04-22). Monitor in NEEDLE test suite. | Fall back to heuristic git blame by bead title match in commit message; feature degrades gracefully to "best-effort" mode |
+| R-10 | Whisper local model download blocked on first `hoop init` | L | L | Download at `hoop init` time with progress; `--skip-whisper` flag skips download and disables transcription until configured | Use Anthropic transcription endpoint as fallback with operator-provided key in `HOOP_ANTHROPIC_KEY` env var |
+
+### Phase-scoped review checkpoints
+
+At the start of each phase, review this table and:
+1. Update likelihood/impact based on current evidence.
+2. Mark any risk that materialized; document the actual outcome and which Plan B was triggered.
+3. Add new risks discovered during the previous phase.
+
+A materialized risk triggers Plan B immediately before work continues in the affected area — not after the phase is complete.
 
 Rackspace-spot-terraform automation was retired 2026-04-22; spot clusters are now manually provisioned — fine for this deferred work since cluster churn is no longer a background concern.
 
