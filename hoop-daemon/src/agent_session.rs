@@ -25,7 +25,7 @@ use tracing::{info, warn};
 // ---------------------------------------------------------------------------
 
 /// Snapshot of the current (or absent) agent session, sent to WS clients.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct AgentSessionStatus {
     pub active: bool,
     pub enabled: bool,

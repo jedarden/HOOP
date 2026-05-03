@@ -3700,7 +3700,7 @@ pub fn list_agent_sessions(limit: usize) -> Result<Vec<AgentSessionRow>> {
 // ---------------------------------------------------------------------------
 
 /// A row from the `draft_queue` table.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct DraftRow {
     pub id: String,
     pub project: String,

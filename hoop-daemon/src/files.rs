@@ -12,7 +12,7 @@ use std::process::Command;
 use std::time::UNIX_EPOCH;
 
 /// Git working-tree status for a single node.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, utoipa::ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum GitStatus {
     /// File is tracked and unchanged.

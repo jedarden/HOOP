@@ -64,7 +64,7 @@ pub struct OnboardingPrompt {
 }
 
 /// Response for GET /api/onboarding/prompts
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct OnboardingPromptsResponse {
     /// Eligible prompts that haven't been dismissed
     pub prompts: Vec<OnboardingPrompt>,
@@ -77,14 +77,14 @@ pub struct OnboardingPromptsResponse {
 }
 
 /// Request to dismiss a prompt
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct DismissPromptRequest {
     /// Prompt ID to dismiss
     pub prompt_id: String,
 }
 
 /// Request to record feature usage
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct RecordFeatureUsageRequest {
     /// Feature name (agent, mic, patterns, reflection_ledger)
     pub feature: String,
@@ -144,7 +144,7 @@ async fn list_onboarding_prompts(
         let (key, value) = row.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         ui_state.insert(key, value);
     }
-    drop(conn);
+    drop(stmt);
 
     // Check if prompts are globally enabled
     let prompts_enabled: bool = ui_state
@@ -260,7 +260,6 @@ async fn dismiss_onboarding_prompt(
             },
         )
         .ok()
-        .flatten()
         .unwrap_or_default();
 
     // Add/update the dismissed prompt

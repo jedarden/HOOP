@@ -216,7 +216,6 @@ impl UnassignedTracker {
 
         // Get ignored IDs
         let ignored = self.ignored.lock().unwrap().clone();
-        drop(ignored); // Release lock before async work
 
         // Discover all sessions from CLI adapters (no project filter)
         let mut all_sessions: Vec<ParsedSession> = Vec::new();

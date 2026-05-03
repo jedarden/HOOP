@@ -104,8 +104,7 @@ async fn enable_tour_project(
             (&operator_id, TOUR_PATH_KEY),
             |row| row.get::<_, String>(0),
         )
-        .ok()
-        .flatten();
+        .ok();
 
     if let Some(path) = existing_path {
         // Tour already enabled, return current state
@@ -254,8 +253,7 @@ async fn disable_tour_project(
             (&operator_id, TOUR_PATH_KEY),
             |row| row.get::<_, String>(0),
         )
-        .ok()
-        .flatten();
+        .ok();
 
     // Remove tour stitches from database
     if let Err(e) = conn.execute(
@@ -345,8 +343,7 @@ async fn get_tour_status(
             (&operator_id, TOUR_PATH_KEY),
             |row| row.get::<_, String>(0),
         )
-        .ok()
-        .flatten();
+        .ok();
 
     let example_stitches = if enabled {
         list_tour_stitches(&conn, TOUR_PROJECT_NAME)

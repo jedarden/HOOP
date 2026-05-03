@@ -22,8 +22,7 @@ use crate::stitch_traversal;
 // Response types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Serialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ParentsResponse {
     pub stitch_id: String,
     pub parents: Vec<StitchLinkInfo>,
@@ -31,8 +30,7 @@ pub struct ParentsResponse {
     pub elapsed_ms: Option<f64>,
 }
 
-#[derive(Debug, Serialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ChildrenResponse {
     pub stitch_id: String,
     pub children: Vec<StitchLinkInfo>,
@@ -40,8 +38,7 @@ pub struct ChildrenResponse {
     pub elapsed_ms: Option<f64>,
 }
 
-#[derive(Debug, Serialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ReferencedByResponse {
     pub stitch_id: String,
     pub references: Vec<StitchLinkInfo>,
@@ -49,8 +46,7 @@ pub struct ReferencedByResponse {
     pub elapsed_ms: Option<f64>,
 }
 
-#[derive(Debug, Serialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct ClosureResponse {
     pub root_stitch_id: String,
     pub kind: String,

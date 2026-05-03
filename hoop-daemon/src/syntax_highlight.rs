@@ -52,7 +52,7 @@ fn color_to_css(c: syntect::highlighting::Color) -> String {
 }
 
 /// The JSON payload returned by the content endpoint.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct HighlightResult {
     /// Detected language name (e.g. "Rust", "TypeScript").
     pub language: String,

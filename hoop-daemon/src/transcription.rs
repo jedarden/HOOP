@@ -887,17 +887,17 @@ impl TranscriptionJobProcessor {
                 move || {
                     let db_path = crate::fleet::db_path();
                     let conn = Connection::open(&db_path)?;
-                    conn.query_row(
+                    Ok(conn.query_row(
                         "SELECT project FROM stitches WHERE id = ?1",
                         params![stitch_id],
                         |row| row.get::<_, String>(0),
                     )
-                    .ok()
-                    .flatten()
+                    .ok())
                 }
             })
             .await
             .ok()
+            .flatten()
             .flatten();
 
             // Scan the transcript for secrets
