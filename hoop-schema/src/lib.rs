@@ -750,6 +750,7 @@ mod tests {
             redaction: None,
             roles: None,
             server: None,
+            embedding: None,
         });
 
         // Pattern
