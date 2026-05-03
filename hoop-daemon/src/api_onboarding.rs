@@ -144,7 +144,7 @@ async fn list_onboarding_prompts(
         let (key, value) = row.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         ui_state.insert(key, value);
     }
-    drop(stmt);
+    drop(rows);
 
     // Check if prompts are globally enabled
     let prompts_enabled: bool = ui_state
