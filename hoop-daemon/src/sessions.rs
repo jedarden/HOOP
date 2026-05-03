@@ -266,6 +266,13 @@ pub struct DiscoveredFile {
     size: u64,
 }
 
+impl DiscoveredFile {
+    /// Get the file path
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
+}
+
 /// Adapter name for session discovery
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AdapterName {
@@ -274,6 +281,12 @@ pub enum AdapterName {
     OpenCode,
     Gemini,
     Aider,
+}
+
+impl std::fmt::Display for AdapterName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
 }
 
 impl AdapterName {

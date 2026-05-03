@@ -890,16 +890,15 @@ impl TranscriptionJobProcessor {
                     conn.query_row(
                         "SELECT project FROM stitches WHERE id = ?1",
                         params![stitch_id],
-                        |row| row.get(0),
+                        |row| row.get::<_, String>(0),
                     )
-                    .optional()
                     .ok()
+                    .flatten()
                 }
             })
             .await
             .ok()
-            .and_then(|r| r.ok()
-                .flatten());
+            .flatten();
 
             // Scan the transcript for secrets
             let findings = crate::redaction::scan_voice_transcript(&transcript);

@@ -337,6 +337,7 @@ fn main() {
                 redaction: None,
                 roles: None,
                 server: None,
+                embedding: None,
             })
             .unwrap(),
         ),

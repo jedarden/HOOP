@@ -102,10 +102,10 @@ async fn enable_tour_project(
         .query_row(
             "SELECT value FROM ui_state WHERE operator_id = ?1 AND key = ?2",
             (&operator_id, TOUR_PATH_KEY),
-            |row| row.get::<_, Option<String>>(0),
+            |row| row.get::<_, String>(0),
         )
-        .unwrap_or(Ok(None))
-        .unwrap_or(None);
+        .ok()
+        .flatten();
 
     if let Some(path) = existing_path {
         // Tour already enabled, return current state
@@ -252,10 +252,10 @@ async fn disable_tour_project(
         .query_row(
             "SELECT value FROM ui_state WHERE operator_id = ?1 AND key = ?2",
             (&operator_id, TOUR_PATH_KEY),
-            |row| row.get::<_, Option<String>>(0),
+            |row| row.get::<_, String>(0),
         )
-        .unwrap_or(Ok(None))
-        .unwrap_or(None);
+        .ok()
+        .flatten();
 
     // Remove tour stitches from database
     if let Err(e) = conn.execute(
@@ -336,17 +336,17 @@ async fn get_tour_status(
                 Ok(value == "true")
             },
         )
-        .unwrap_or(Ok(false))
+        .ok()
         .unwrap_or(false);
 
     let path: Option<String> = conn
         .query_row(
             "SELECT value FROM ui_state WHERE operator_id = ?1 AND key = ?2",
             (&operator_id, TOUR_PATH_KEY),
-            |row| row.get(0),
+            |row| row.get::<_, String>(0),
         )
-        .unwrap_or(Ok(None))
-        .unwrap_or(None);
+        .ok()
+        .flatten();
 
     let example_stitches = if enabled {
         list_tour_stitches(&conn, TOUR_PROJECT_NAME)

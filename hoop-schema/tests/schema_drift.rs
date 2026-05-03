@@ -235,6 +235,8 @@ fn generate_schema_fixtures() {
                 to_stitch: uuid,
                 kind: StitchLinkKind::Spawned,
                 created_at: Some(ts),
+                workspace_from: "/home/coding/project".to_string(),
+                workspace_to: "/home/coding/project".to_string(),
                 schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
             })
             .unwrap(),

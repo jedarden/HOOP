@@ -132,11 +132,16 @@ async fn list_onboarding_prompts(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mut ui_state: HashMap<String, String> = HashMap::new();
-    let rows = stmt.query((&operator_id,)).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut rows = stmt
+        .query_map((&operator_id,), |row| {
+            let key: String = row.get(0)?;
+            let value: String = row.get(1)?;
+            Ok((key, value))
+        })
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    for row in rows {
-        let key: String = row.get(0).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        let value: String = row.get(1).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    while let Some(row) = rows.next() {
+        let (key, value) = row.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         ui_state.insert(key, value);
     }
     drop(conn);
@@ -164,6 +169,7 @@ async fn list_onboarding_prompts(
         ("reflection_ledger_first_used", ui_state.get("reflection_ledger_first_used").cloned()),
     ]
     .into_iter()
+    .map(|(k, v)| (k.to_string(), v))
     .collect();
 
     let mut eligible_prompts = Vec::new();
@@ -249,10 +255,12 @@ async fn dismiss_onboarding_prompt(
             (&operator_id,),
             |row| {
                 let value: String = row.get(0)?;
-                serde_json::from_str(&value).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))
+                serde_json::from_str::<HashMap<String, String>>(&value)
+                    .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))
             },
         )
-        .unwrap_or(Ok(HashMap::new()))
+        .ok()
+        .flatten()
         .unwrap_or_default();
 
     // Add/update the dismissed prompt

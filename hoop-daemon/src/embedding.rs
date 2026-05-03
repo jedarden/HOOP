@@ -405,6 +405,10 @@ impl Embedder for NgramEmbedder {
             .filter(|t| !STOP_WORDS.contains(&t.as_str()))
             .collect()
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// Compute cosine similarity between two embeddings
