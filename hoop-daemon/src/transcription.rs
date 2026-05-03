@@ -897,7 +897,7 @@ impl TranscriptionJobProcessor {
             })
             .await
             .ok()
-            .flatten()
+            .and_then(|r| r.ok())
             .flatten();
 
             // Scan the transcript for secrets

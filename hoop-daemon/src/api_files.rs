@@ -122,12 +122,12 @@ async fn list_directory(
             .ok_or((StatusCode::NOT_FOUND, "project not found".into()))?
     };
 
-    let rel_dir = params.path.as_deref().unwrap_or("");
-    if !files::is_safe_rel_path(rel_dir) {
+    let rel_dir = params.path.as_deref().unwrap_or("").to_string();
+    if !files::is_safe_rel_path(&rel_dir) {
         return Err((StatusCode::FORBIDDEN, "unsafe path".into()));
     }
 
-    tokio::task::spawn_blocking(move || files::list_dir(&project_root, rel_dir))
+    tokio::task::spawn_blocking(move || files::list_dir(&project_root, &rel_dir))
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
