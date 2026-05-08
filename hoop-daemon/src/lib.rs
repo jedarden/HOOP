@@ -1584,7 +1584,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         // Check if this bead belongs to a Stitch and run cost anomaly detection
                         if let Some(stitch_id) = find_stitch_for_bead(&bead.id).await {
                             tokio::task::spawn_blocking(move || {
-                                if let Err(e) = crate::cost_anomaly::check_on_stitch_close(&stitch_id)
+                                if let Err(e) = crate::cost_anomaly::check_on_stitch_close(&stitch_id, None)
                                 {
                                     tracing::debug!(
                                         "Failed to check cost anomaly for stitch {}: {}",

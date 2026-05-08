@@ -84,8 +84,7 @@ async fn get_ui_state(
         .query((&operator_id,))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    while let Some(row) = rows.next() {
-        let row = row.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    while let Ok(Some(row)) = rows.next() {
         let key: String = row.get(0).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         let value: String = row.get(1).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         state_map.insert(key, value);
@@ -151,8 +150,7 @@ async fn put_ui_state(
         .query((&operator_id,))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    while let Some(row) = rows.next() {
-        let row = row.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    while let Ok(Some(row)) = rows.next() {
         let key: String = row.get(0).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         let value: String = row.get(1).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         state_map.insert(key, value);
@@ -211,8 +209,7 @@ async fn put_ui_state_batch(
         .query((&operator_id,))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    while let Some(row) = rows.next() {
-        let row = row.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    while let Ok(Some(row)) = rows.next() {
         let key: String = row.get(0).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         let value: String = row.get(1).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         state_map.insert(key, value);
@@ -262,8 +259,7 @@ async fn delete_ui_state(
         .query((&operator_id,))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    while let Some(row) = rows.next() {
-        let row = row.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    while let Ok(Some(row)) = rows.next() {
         let key: String = row.get(0).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         let value: String = row.get(1).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         state_map.insert(key, value);
