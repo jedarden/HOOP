@@ -69,6 +69,48 @@ This assessment documents the current state for future sessions. The Genesis bea
 
 ---
 **Assessment Date**: 2026-05-08
-**Assessor**: claude-code-glm-4.7-foxtrot
+**Assessor**: claude-code-glm-4.7-golf (hoop-ttb:auto)
 **Session**: Genesis bead hoop-ttb review
 **Action**: Document state, do NOT close bead
+
+---
+
+## Follow-up Assessment: 2026-05-08 (Session 2)
+
+**Worker**: claude-code-glm-4.7-golf
+**Environment**: NixOS shell, cargo unavailable
+
+### Updated Count
+
+- **Total beads**: 356
+- **Closed beads**: 177
+- **Open beads**: 179
+- **Completion**: 49.7%
+
+### Verification Attempts
+
+1. ❌ **Compilation check failed**: `cargo: command not found`
+   - NixOS environment lacks cargo
+   - Cannot verify code builds per Phase 1 exit criteria
+
+2. ✅ **Plan closing criteria confirmed**: Per Genesis bead description:
+   > "Close this genesis bead when all seven phase epics close with success criteria met and public README published (phase 7 v1.0 target)."
+
+   - Phase 0: ✅ COMPLETE
+   - Phases 1-7: ❌ INCOMPLETE (154+ open beads)
+
+### Final Recommendation
+
+**DO NOT CLOSE** the Genesis bead hoop-ttb.
+
+The disconnect between README.md's "v1.0.0 Now Available" claim and the actual state (50% bead completion, no verified compilation, no CI evidence) indicates the documentation is aspirational, not reflective of delivered work.
+
+### Path Forward
+
+To properly close this bead, the following must occur:
+
+1. **Environment with Rust tooling** - Run `cargo build --release` to verify compilation
+2. **Run test suite** - `cargo test`, `cargo clippy`, Playwright tests
+3. **Close child beads** - Complete or defer 179 open beads per plan gating
+4. **Phase verification** - Each phase must meet its success criteria before declaring done
+5. **CI evidence** - All acceptance tests passing in CI pipeline
