@@ -1,12 +1,12 @@
-{ pkgs ? import <nixpkgs> {} }:
-let
-  rustToolchain = pkgs.rust-bin.stable.latest.default.override {
-    extensions = [ "rust-src" "rust-analyzer" "rustfmt" "clippy" ];
-  };
-in
+# Use the pinned nixpkgs that has newer Rust
+{ pkgs ? import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/nixpkgs-unstable.tar.gz") {} }:
 pkgs.mkShell {
   buildInputs = with pkgs; [
-    rustToolchain
+    rustc
+    cargo
+    rust-analyzer
+    rustfmt
+    clippy
     nodejs_20
     pnpm
     git
@@ -18,6 +18,7 @@ pkgs.mkShell {
   ];
 
   RUST_BACKTRACE = "1";
+  RUSTFLAGS = "-C target-feature=-crt-static";
 
   shellHook = ''
     echo "HOOP development environment loaded"
