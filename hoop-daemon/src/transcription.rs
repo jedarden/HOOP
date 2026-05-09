@@ -849,30 +849,34 @@ impl TranscriptionJobProcessor {
         let transcribed_at = Utc::now().to_rfc3339();
         let status_json = serde_json::to_string(&status)?;
 
-        tokio::task::spawn_blocking(move || {
-            let db_path = crate::fleet::db_path();
-            let conn = Connection::open(&db_path)?;
-            conn.pragma_update(None, "journal_mode", "WAL")?;
+        tokio::task::spawn_blocking({
+            let transcript = transcript.clone();
+            let stitch_id = stitch_id.clone();
+            move || {
+                let db_path = crate::fleet::db_path();
+                let conn = Connection::open(&db_path)?;
+                conn.pragma_update(None, "journal_mode", "WAL")?;
 
-            conn.execute(
-                r#"
-                UPDATE dictated_notes
-                SET transcript = ?1, transcript_words = ?2, transcribed_at = ?3,
-                    duration_secs = ?4, language = ?5, transcription_status = ?6
-                WHERE stitch_id = ?7
-                "#,
-                params![
-                    transcript,
-                    words_json,
-                    transcribed_at,
-                    duration_secs,
-                    language,
-                    status_json,
-                    stitch_id
-                ],
-            )?;
+                conn.execute(
+                    r#"
+                    UPDATE dictated_notes
+                    SET transcript = ?1, transcript_words = ?2, transcribed_at = ?3,
+                        duration_secs = ?4, language = ?5, transcription_status = ?6
+                    WHERE stitch_id = ?7
+                    "#,
+                    params![
+                        transcript,
+                        words_json,
+                        transcribed_at,
+                        duration_secs,
+                        language,
+                        status_json,
+                        stitch_id
+                    ],
+                )?;
 
-            Ok::<(), anyhow::Error>(())
+                Ok::<(), anyhow::Error>(())
+            }
         })
         .await??;
 
