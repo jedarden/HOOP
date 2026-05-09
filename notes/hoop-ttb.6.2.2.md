@@ -128,3 +128,27 @@ Fixed compilation errors related to `anthropic_base_url` field:
 - `hoop-daemon/src/lib.rs`: Added `anthropic_base_url` field in two locations (agent initialization and hot-reload handler)
 
 These changes ensure the code compiles correctly with the updated `AgentAdapterConfig` struct that includes the `anthropic_base_url` field.
+
+## Final Verification (2026-05-09)
+
+Verified all implementation components are in place:
+
+### Integration Tests (hoop-daemon/tests/adapter_failover.rs)
+- `test_anthropic_5xx_doesnt_crash_daemon` - Adapter errors don't crash daemon
+- `test_adapter_switch_archives_session_as_stitch` - Session transcript archived as Stitch
+- `test_adapter_switch_archives_session_row` - Session row marked as switched
+- `test_multiple_adapter_switches_single_active` - Only one active session
+- `test_reflection_ledger_preserved_across_switch` - Reflection Ledger preserved
+- `test_session_status_shows_new_adapter_after_switch` - Status reflects new adapter
+- `test_archived_stitch_metadata` - Stitch has correct metadata
+- `test_session_history_round_trip` - History preserved with special characters
+- `test_handoff_context_includes_reflection_ledger` - Handoff includes approved rules
+
+### Unit Tests (hoop-daemon/src/agent_session.rs)
+- `adapter_failover_archives_session_preserves_reflection_ledger` (line 1853)
+- `adapter_error_doesnt_crash_daemon` (line 1986)
+- `hot_reload_config_change_triggers_adapter_switch` (line 2071)
+
+## Status: COMPLETE
+
+All acceptance criteria verified. Implementation is complete and ready for use.
