@@ -18,6 +18,7 @@ pub mod auth;
 pub mod api_beads;
 pub mod api_bead_blockers;
 pub mod api_bead_files;
+pub mod api_bulk_create;
 pub mod api_config;
 pub mod api_cost_per_stitch;
 pub mod api_conversations;
@@ -1237,6 +1238,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_conversations::router())
         .merge(api_beads::router())
         .merge(api_bead_blockers::router())
+        .merge(api_bulk_create::router())
         .merge(api_draft_queue::router())
         .merge(api_presence::router())
         .merge(api_preview::router())

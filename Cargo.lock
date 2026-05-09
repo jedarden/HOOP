@@ -1311,7 +1311,7 @@ dependencies = [
 
 [[package]]
 name = "hoop"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1338,7 +1338,7 @@ dependencies = [
 
 [[package]]
 name = "hoop-daemon"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -1398,7 +1398,7 @@ dependencies = [
 
 [[package]]
 name = "hoop-mcp"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1426,7 +1426,7 @@ dependencies = [
 
 [[package]]
 name = "hoop-schema"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "dirs 5.0.1",
@@ -1444,7 +1444,7 @@ dependencies = [
 
 [[package]]
 name = "hoop-ui"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "axum 0.7.9",
  "mime_guess",
