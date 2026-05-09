@@ -24,6 +24,7 @@ pub mod api_cost_per_stitch;
 pub mod api_conversations;
 pub mod api_dictated_notes;
 pub mod api_draft_queue;
+pub mod api_notes;
 pub mod api_metrics;
 pub mod api_morning_brief;
 pub mod api_onboarding;
@@ -253,7 +254,7 @@ use tokio::{
     time::Instant,
 };
 use tower_http::trace::TraceLayer;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 pub use config_resolver::{CliOverrides, ConfigSource, ResolvedConfig};
 
@@ -358,6 +359,10 @@ pub struct DaemonState {
     pub template_library: template_library::TemplateStore,
     /// Prompt library — reusable prompt bodies with substitution (§22.5)
     pub prompt_library: api_prompts::PromptStore,
+    /// Notes library — markdown files the agent can read (§22.4)
+    pub note_library: api_notes::NoteStore,
+    /// Skills library — agent-invocable custom tools (§22.2)
+    pub skill_library: api_skills::SkillStore,
     /// Identity cache for Tailscale whois lookups (§13 Security)
     pub identity_cache: Arc<identity::IdentityCache>,
     /// Role resolver for RBAC (maps Tailscale identities to viewer/drafter roles)
@@ -1255,6 +1260,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(net_diff::router())
         .merge(template_library::router())
         .merge(api_prompts::router())
+        .merge(api_notes::router())
         .merge(api_onboarding::router())
         .merge(api_tour_project::router())
         .merge(api_ui_state::router())
@@ -1274,6 +1280,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_cost_per_stitch::router())
         .merge(api_config::router())
         .merge(api_scripts::router())
+        .merge(api_skills::router())
         .merge(api_unassigned::router())
         .merge(api_screen_capture::router())
         .merge(api_reflection_ledger::router())
@@ -2270,6 +2277,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         adapter: adapter_config.adapter.clone(),
         model: adapter_config.model.clone(),
         anthropic_api_key: adapter_config.anthropic_api_key.clone(),
+        anthropic_base_url: adapter_config.anthropic_base_url.clone(),
         zai_base_url: adapter_config.zai_base_url.clone(),
         zai_api_key: adapter_config.zai_api_key.clone(),
         rate_limit_rpm: adapter_config.rate_limit_rpm,
@@ -2679,6 +2687,44 @@ Note: This is an automated synthesis from voice dictation."#,
     );
     info!("Prompt library initialized and watcher started");
 
+    // Initialize notes library (§22.4)
+    let notes_dir = api_notes::ensure_notes_dir(&home);
+    let note_library = Arc::new(std::sync::RwLock::new(api_notes::NoteLibrary::new()));
+
+    // Load initial global notes
+    {
+        let mut lib = note_library.write().unwrap();
+        if let Err(e) = lib.load_global(&notes_dir) {
+            warn!("Failed to load initial global notes: {}", e);
+        }
+    }
+
+    // Start global notes file watcher for hot-reload
+    let _notes_watcher = api_notes::start_global_watcher(
+        notes_dir,
+        note_library.clone(),
+    );
+    info!("Notes library initialized and watcher started");
+
+    // Initialize skills library (§22.2)
+    let skills_dir = api_skills::ensure_skills_dir(&home);
+    let skill_library = Arc::new(std::sync::RwLock::new(api_skills::SkillLibrary::new()));
+
+    // Load initial skills
+    {
+        let mut lib = skill_library.write().unwrap();
+        if let Err(e) = lib.load(&skills_dir) {
+            warn!("Failed to load initial skills: {}", e);
+        }
+    }
+
+    // Start skills file watcher for hot-reload
+    let _skills_watcher = api_skills::start_watcher(
+        skills_dir,
+        skill_library.clone(),
+    );
+    info!("Skills library initialized and watcher started");
+
     let bead_tx_for_rebuild = bead_tx.clone();
     let stitch_tx_for_rebuild = stitch_tx.clone();
     let vector_index_for_rebuild = vector_index.clone();
@@ -2745,6 +2791,8 @@ Note: This is an automated synthesis from voice dictation."#,
         backup_runner,
         template_library,
         prompt_library,
+        note_library,
+        skill_library,
         identity_cache: identity_cache.clone(),
         role_resolver: Arc::new(
             auth::RoleResolver::new(config_resolver::resolve(cli_overrides.clone()).roles.value.clone())
@@ -2956,14 +3004,16 @@ Note: This is an automated synthesis from voice dictation."#,
 
                     // Build the new AgentAdapterConfig from the changed values
                     // Note: we load the full config to get rate_limit_rpm, cost_cap_usd, etc.
+                    let loaded_config = agent_adapter::load_adapter_config();
                     let new_config = agent_session::AgentAdapterConfig {
                         adapter: agent_config_changed.new_adapter.clone(),
                         model: agent_config_changed.new_model.clone(),
-                        anthropic_api_key: agent_adapter::load_adapter_config().anthropic_api_key,
-                        zai_base_url: agent_adapter::load_adapter_config().zai_base_url,
-                        zai_api_key: agent_adapter::load_adapter_config().zai_api_key,
-                        rate_limit_rpm: agent_adapter::load_adapter_config().rate_limit_rpm,
-                        cost_cap_usd: agent_adapter::load_adapter_config().cost_cap_usd,
+                        anthropic_api_key: loaded_config.anthropic_api_key,
+                        anthropic_base_url: loaded_config.anthropic_base_url,
+                        zai_base_url: loaded_config.zai_base_url,
+                        zai_api_key: loaded_config.zai_api_key,
+                        rate_limit_rpm: loaded_config.rate_limit_rpm,
+                        cost_cap_usd: loaded_config.cost_cap_usd,
                         system_prompt_budget_bytes: agent_adapter::load_system_prompt_budget_bytes(),
                     };
 

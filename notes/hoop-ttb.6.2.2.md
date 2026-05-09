@@ -100,3 +100,31 @@ All acceptance criteria are met with comprehensive test coverage:
 ## Plan Reference
 - §6 Phase 5 deliverable 7: Agent-off switch and adapter failover
 - §7 LLM-agnostic: "HOOP is LLM-agnostic — the agent is an adapter-configured resource"
+
+## Additional Test Files (Integration Tests)
+
+Beyond the unit tests in agent_session.rs, three additional test files exist:
+
+1. **`hoop-daemon/tests/adapter_failover_integration.rs`**
+   - Unit-style tests using direct fleet DB access
+   - 10+ tests covering all acceptance criteria
+   - Uses serial_test for test isolation
+
+2. **`hoop-daemon/tests/adapter_failover_test.rs`**
+   - Full integration tests with daemon spawning
+   - Tests API endpoints (/api/agent/switch, /api/agent/status, /api/agent/sessions)
+   - Tests config.yml hot-reload with file watcher
+   - Tests concurrent switch requests
+
+3. **`hoop-daemon/tests/adapter_failover.rs`**
+   - Additional unit tests for adapter build and session archival
+   - Tests Reflection Ledger preservation
+   - Tests usage statistics preservation
+
+## Recent Changes (2026-05-09)
+
+Fixed compilation errors related to `anthropic_base_url` field:
+- `hoop-daemon/src/api_agent.rs`: Added `anthropic_base_url: None` to `AgentAdapterConfig` initialization
+- `hoop-daemon/src/lib.rs`: Added `anthropic_base_url` field in two locations (agent initialization and hot-reload handler)
+
+These changes ensure the code compiles correctly with the updated `AgentAdapterConfig` struct that includes the `anthropic_base_url` field.
