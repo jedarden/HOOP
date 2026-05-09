@@ -15,7 +15,7 @@ use hoop_daemon::agent_adapter::AdapterKind;
 use hoop_daemon::agent_session::AgentAdapterConfig;
 use hoop_daemon::fleet;
 use hoop_daemon::DaemonState;
-use log::info;
+use tracing::info;
 use reqwest::Client;
 use tokio::time::timeout;
 
