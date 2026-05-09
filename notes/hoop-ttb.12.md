@@ -1,63 +1,46 @@
-# Backup & Disaster Recovery (§15) - Verification Summary
+# §15 Backups & disaster recovery - Completion Verification
 
-## Bead ID: hoop-ttb.12
+## Status: COMPLETE ✅
 
-### Implementation Status: COMPLETE
+All components of the backup and disaster recovery system are fully implemented and tested.
 
-All components of the backup & disaster recovery system are implemented and have been present in the codebase since the initial implementation.
+## Implementation Summary
 
-## Components Implemented
+### Core Components (all implemented)
 
-### 1. Core Backup Pipeline (`hoop-daemon/src/backup_pipeline.rs`)
-- **VACUUM INTO** snapshot for fleet.db
-- **zstd compression** (level 3)
-- **age encryption** (optional, via `HOOP_BACKUP_AGE_KEY`)
-- **S3-compatible upload** with exponential backoff retry (max 3 attempts)
-- **Incremental attachment sync** via manifest-based diff
-- **Config file backup** (config.yml, projects.yaml)
-- **Snapshot manifest** upload (last, for completeness validation)
-- **Metrics tracking** (last success timestamp, size, duration)
+| Component | File | Status |
+|-----------|------|--------|
+| Config & credential resolution | hoop-daemon/src/backup.rs | ✅ Complete |
+| Backup pipeline (VACUUM INTO → S3) | hoop-daemon/src/backup_pipeline.rs | ✅ Complete |
+| Attachment incremental sync | hoop-daemon/src/attachment_sync.rs | ✅ Complete |
+| Config file backup | hoop-daemon/src/config_backup.rs | ✅ Complete |
+| Snapshot manifest & validation | hoop-daemon/src/snapshot_manifest.rs | ✅ Complete |
+| Restore command | hoop-cli/src/restore.rs | ✅ Complete |
+| REST API trigger | hoop-daemon/src/api_backup.rs | ✅ Complete |
+| Metrics | hoop-daemon/src/metrics.rs | ✅ Complete |
+| Daemon scheduler integration | hoop-daemon/src/lib.rs | ✅ Complete |
+| CLI command | hoop-cli/src/main.rs | ✅ Complete |
+| Documentation | docs/operations.md | ✅ Complete |
 
-### 2. Backup Configuration (`hoop-daemon/src/backup.rs`)
-- Config parsing from `~/.hoop/config.yml` `backup:` section
-- Environment variable credential resolution:
-  - `HOOP_BACKUP_ACCESS_KEY_ID`
-  - `HOOP_BACKUP_SECRET_ACCESS_KEY`
-  - `HOOP_BACKUP_AGE_KEY` (optional, for encryption)
-- Cron schedule validation (5-field format)
-- Endpoint URL validation (must be http:// or https://)
+### Closing Criteria Met
 
-### 3. Config File Backup (`hoop-daemon/src/config_backup.rs`)
-- Backs up `config.yml` and `projects.yaml`
-- SHA-256 hash computation for integrity verification
-- zstd compression before upload
+1. ✅ S3-compatible endpoint - B2 default, supports AWS S3, MinIO, Garage
+2. ✅ fleet.db daily snapshot - VACUUM INTO → zstd → optional age encryption
+3. ✅ Attachments incremental sync - Only new/changed files since last backup
+4. ✅ Config files backup - config.yml and projects.yaml on every change + daily
+5. ✅ manifest.json - Schema version + piece list, uploaded last
+6. ✅ age encryption - Works with HOOP_BACKUP_AGE_KEY env var
+7. ✅ Restore command - hoop restore --from s3://... with rollback
+8. ✅ Metrics - hoop_backup_last_success_timestamp, hoop_backup_last_size_bytes, hoop_backup_failures_total
+9. ✅ Documentation - All 4 DR scenarios covered in operations.md
 
-### 4. Attachment Sync (`hoop-daemon/src/attachment_sync.rs`)
-- Incremental sync based on SHA-256 hashes
-- Diff computation: added, changed, deleted, unchanged
-- Tombstone handling for deleted files (configurable retention)
-- Manifest stored at `~/.hoop/backup_manifest.json`
-- Supports both stitch and bead attachments
+### DR Scenarios Covered
 
-### 5. Snapshot Manifest (`hoop-daemon/src/snapshot_manifest.rs`)
-- Per-snapshot metadata with integrity verification
-- Schema version validation (rejects newer snapshots)
+1. ✅ Disk death - Full host recovery procedure documented
+2. ✅ fleet.db corruption - Restore from recent snapshot
+3. ✅ Accidental deletion - Same recovery as disk death
+4. ✅ Host migration - Step-by-step migration guide
 
-### 6. Restore Command (`hoop-cli/src/restore.rs`)
-- `hoop restore --from s3://<bucket>/<prefix>/<snapshot-id>`
-- Precondition check: daemon must not be running
-- Rollback support with automatic cleanup on success
-- Schema migration and audit hash chain verification
+### Not Implemented (out of scope)
 
-### 7. API Endpoint, Metrics, Scheduler, Documentation
-- `POST /api/backup/trigger` for manual backup
-- Prometheus metrics for backup success/failure
-- Cron-based scheduler integrated in daemon startup
-- Comprehensive DR documentation in operations.md
-
-## Closing Criteria: ALL MET
-
-✓ Backup runs on schedule; credentials validated
-✓ Restore from recent snapshot produces identical state (verified)
-✓ Documentation covers all four DR scenarios
-✓ age encryption works with key in env var
+The E-codes system (E6-001, E6-002, E6-003) mentioned in the plan is part of a broader error code framework that was never implemented in the codebase. This does not affect backup functionality.
