@@ -1,201 +1,80 @@
-# Performance Budget Verification in CI - Implementation Summary
-
-**Bead ID:** hoop-ttb.7.11
-**Plan Reference:** §6 Phase 6 deliverable 9
-**Status:** COMPLETE
-
-## Task
-
-CI load test harness asserts: UI responsive (<500ms interaction) and memory <4GB under the target load. Budget violations block merge.
+# Performance Budget Verification in CI (hoop-ttb.7.11)
 
 ## Acceptance Criteria - ALL MET ✓
 
 ### 1. testrepo/ populated with the load case ✓
-
-**Implementation:**
-- Location: `/testrepo/load-test-data/`
-- Configuration: 20 projects × 5 workers × 300 beads
-- Generated files per project:
-  - `.beads/events.jsonl` - Synthetic NEEDLE events (claim, dispatch, complete/close)
-  - `.beads/heartbeats.jsonl` - Worker state snapshots
-  - `.beads/beads.jsonl` - Bead metadata
-
-**Verification:**
-```bash
-ls testrepo/load-test-data/  # Shows 20 projects (load-test-project-000 through 019)
-wc -l testrepo/load-test-data/load-test-project-000/.beads/events.jsonl  # 6000 events
-```
-
-**Components:**
-- `hoop-daemon/src/load_test.rs` - EventGenerator and populate_testrepo()
-- `hoop-daemon/tests/populate_testrepo_load.sh` - Shell script for manual generation
-- `hoop-daemon/tests/load_test_integration.rs` - Integration test harness
+- **20 projects** created: `load-test-project-000` through `load-test-project-019`
+- **5 workers per project**
+- **300 beads per worker** (30,000 total beads)
+- **4 events per bead** (Claim, Dispatch, Complete/Close or Fail/Release)
+- **6,000 events per project** (120,000 total events)
+- Location: `testrepo/load-test-data/`
 
 ### 2. Playwright measures interaction latencies ✓
-
-**Implementation:**
 - File: `hoop-ui/web/e2e/load-test-performance.spec.ts`
-- Configuration: `hoop-ui/web/playwright.config.ts` (load-test project)
+- Tests measure:
+  - Connection time to daemon
+  - Bead list render time
+  - Bead interaction latency
+  - Rapid navigation latency
+  - API request latency
+  - Concurrent request handling
+- All tests assert `< 500ms` response time budget
+- Run via: `pnpm test:load` (uses `load-test` project in playwright.config.ts)
 
-**Tests:**
-- UI responsiveness under load (<500ms interaction budget)
-- API latency measurements
-- Frame rate maintenance (>30fps)
-- WebSocket connectivity during load
-- Rendering performance
-
-**Metrics collected:**
-- Page load time
-- Navigation latency
-- API request/response timing
-- Frame rate (fps)
-- WebSocket fan-out lag
-
-**Verification:**
-```bash
-cd hoop-ui/web
-pnpm test:load  # Runs load-test-performance.spec.ts
-```
-
-### 3. Memory ceiling measured via RSS snapshots ✓
-
-**Implementation:**
-- Function: `hoop-daemon/src/load_test.rs::measure_memory()`
-- Method: Reads `/proc/self/status` for VmRSS on Linux
-- Fallback: Heap size estimation on other platforms
-
-**Usage:**
-```rust
-let memory = measure_memory();  // Returns RSS in bytes
-assert!(memory < PERFORMANCE_BUDGETS.memory_bytes());
-```
-
-**Test coverage:**
-- `load_test_memory_within_ceiling()` - Verifies memory stays under 4GB
-- `load_test_ci_performance_budgets()` - CI integration test
-- Playwright tests validate server memory via `/metrics` endpoint
+### 3. Memory ceiling measured via rss snapshots ✓
+- File: `hoop-daemon/src/load_test.rs`
+- Function: `measure_memory()` reads `/proc/self/status` for VmRSS
+- Memory samples collected during load test
+- `< 4GB` ceiling enforced in `PerformanceReport::assert_budgets()`
+- Memory sampled before, during, and after load generation
 
 ### 4. CI green = within budget; red = exceeded ✓
+- **Argo Workflow**: `.argo/workflowtemplates/hoop-load-test.yaml`
+  - Runs on medium scale (5×2×50) for PRs
+  - Runs on full scale (20×5×300) for releases
+  - Budget violations cause workflow failure
 
-**Implementation:**
-- CI Script: `.github/scripts/run-performance-budget-test.sh`
-- Argo Workflow: `.argo/workflowtemplates/hoop-load-test.yaml`
+- **CI Script**: `.github/scripts/run-performance-budget-test.sh`
+  - Builds daemon
+  - Runs Rust integration test (`load_test_ci_performance_budgets`)
+  - Runs Playwright UI performance tests
+  - Exits with non-zero on budget violations
 
-**Budget enforcement:**
-```rust
-// From hoop-daemon/src/load_test.rs::PerformanceReport::assert_budgets()
-pub fn assert_budgets(&self, config: &LoadTestConfig) -> anyhow::Result<()> {
-    // Check API latency budget (500ms)
-    // Check WS fan-out lag budget (100ms)
-    // Check memory ceiling (4GB)
-    // Returns Err if any budget exceeded
-}
-```
-
-**CI behavior:**
-- Budget violations → test failure → CI red → blocks merge
-- All budgets satisfied → test pass → CI green → merge allowed
-
-**Scales:**
-- Medium (default): 5 projects × 2 workers × 50 beads (~2 minutes)
-- Full: 20 projects × 5 workers × 300 beads (~10 minutes)
+- **Rust Test**: `hoop-daemon/tests/load_test_integration.rs::load_test_ci_performance_budgets`
+  - Calls `report.assert_budgets()` which fails test if any budget exceeded
 
 ## Performance Budgets
 
-| Metric | Budget | Enforcement |
-|--------|--------|-------------|
-| API Latency | < 500ms | CI blocks on exceed |
-| Memory | < 4GB RSS | CI blocks on exceed |
-| WS Fan-out Lag | < 100ms | CI blocks on exceed |
-| Interaction Latency | < 500ms | Playwright assertion |
+| Metric | Budget | Implementation |
+|--------|--------|----------------|
+| API Latency | < 500ms | `PERFORMANCE_BUDGETS.api_latency_ms` |
+| Memory | < 4GB | `PERFORMANCE_BUDGETS.memory_gb` |
+| WS Fan-out Lag | < 100ms | `PERFORMANCE_BUDGETS.ws_fanout_lag_ms` |
 
-## Component Integration
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  CI: run-performance-budget-test.sh                         │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │ 1. Build daemon (cargo build --release)            │    │
-│  │ 2. Run Rust integration test:                      │    │
-│  │    - Spawn daemon with load test data              │    │
-│  │    - Run load_test_ci_performance_budgets()        │    │
-│  │    - Measure API latency, memory, WS fan-out       │    │
-│  │    - Assert budgets via PerformanceReport          │    │
-│  │ 3. Run Playwright tests (if daemon URL available)  │    │
-│  │    - UI responsiveness under load                  │    │
-│  │    - Server memory monitoring                      │    │
-│  │ 4. Fail if any budget exceeded                     │    │
-│  └─────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## File Manifest
-
-### Load Test Implementation (Rust)
-- `hoop-daemon/src/load_test.rs` - Core load test driver
-- `hoop-daemon/tests/load_test_integration.rs` - Integration tests
-- `hoop-daemon/tests/load_test_README.md` - Documentation
-
-### Load Test Data Generation
-- `hoop-daemon/tests/populate_testrepo_load.sh` - Shell script
-- `testrepo/load-test-data/` - Generated synthetic data
-
-### Playwright Tests
-- `hoop-ui/web/e2e/load-test-performance.spec.ts` - UI load tests
-- `hoop-ui/web/e2e/performance-budget.spec.ts` - Budget tests
-- `hoop-ui/web/playwright.config.ts` - Test configuration
-
-### CI Integration
-- `.github/scripts/run-performance-budget-test.sh` - CI orchestrator
-- `.argo/workflowtemplates/hoop-load-test.yaml` - Argo workflow
-
-## Running the Tests
-
-### Locally
+## Running Locally
 
 ```bash
-# Medium scale (quick)
-LOAD_TEST_SCALE=medium .github/scripts/run-performance-budget-test.sh
+# Medium scale (quick test)
+cargo test --package hoop-daemon --test load_test_integration load_test_ci_performance_budgets -- --nocapture
 
-# Full scale (comprehensive)
-LOAD_TEST_SCALE=full .github/scripts/run-performance-budget-test.sh
+# Full scale (requires explicit enable)
+HOOP_LOAD_TEST_FULL_SCALE=1 cargo test --package hoop-daemon --test load_test_integration load_test_ci_performance_budgets -- --ignored --nocapture
 
-# Custom configuration
-HOOP_LOAD_PROJECTS=10 HOOP_LOAD_WORKERS=3 HOOP_LOAD_BEADS=100 \
-  .github/scripts/run-performance-budget-test.sh
+# With Playwright UI tests
+pnpm test:load
 ```
 
-### CI (Argo Workflows)
+## Files Modified/Created for This Implementation
 
-```bash
-# Submit medium-scale test
-argo submit .argo/workflowtemplates/hoop-load-test.yaml \
-  --parameter scale=medium
+1. `hoop-daemon/src/load_test.rs` - Core load test implementation
+2. `hoop-daemon/tests/load_test_integration.rs` - Integration tests with performance assertions
+3. `hoop-ui/web/e2e/load-test-performance.spec.ts` - Playwright UI performance tests
+4. `.github/scripts/run-performance-budget-test.sh` - CI test runner script
+5. `.argo/workflowtemplates/hoop-load-test.yaml` - Argo workflow template
+6. `hoop-daemon/tests/populate_testrepo_load.sh` - Shell script to populate testrepo
+7. `scripts/populate-load-test-data.py` - Python script to populate testrepo
+8. `testrepo/load-test-data/` - 20 projects with synthetic load data
 
-# Submit full-scale test
-argo submit .argo/workflowtemplates/hoop-load-test.yaml \
-  --parameter scale=full
-```
-
-## Verification Results
-
-All acceptance criteria verified:
-
-1. ✓ testrepo/ populated with 20 projects of synthetic load data
-2. ✓ Playwright tests measure interaction latencies (<500ms budget)
-3. ✓ Memory ceiling measured via RSS snapshots (4GB limit)
-4. ✓ CI blocks merge on budget violations (assert_budgets enforcement)
-
-## Implementation Notes
-
-- The load test generates realistic synthetic event streams (70% success, 30% failure)
-- Memory measurement uses `/proc/self/status` for accurate RSS on Linux
-- Playwright tests run against the live daemon spawned by Rust tests
-- Budget violations are surfaced as test failures, blocking CI pipelines
-- Medium-scale tests run on PRs; full-scale on releases
-
-## References
-
-- Plan: §6 Phase 6 deliverable 9
-- Plan: §14.2 bullet 5 (load-test driver)
-- Plan: §16.8 (memory & allocation budget)
+## Plan Reference
+§6 Phase 6 deliverable 9

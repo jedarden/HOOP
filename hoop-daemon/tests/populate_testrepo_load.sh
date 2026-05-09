@@ -67,48 +67,40 @@ for proj_idx in $(seq 0 $((NUM_PROJECTS - 1))); do
       # Determine success/failure (70% success)
       if [ $((bead_idx % 10)) -lt 7 ]; then
         # Success path
-        cat >> "$events_file" <<EOF
-{"ts":"$(date -u -d @$((current_ts / 1000)) +"%Y-%m-%dT%H:%M:%S.%3NZ")","type":"claim","worker":"$worker_name","bead":"$bead_id","strand":"$strand_id"}
-EOF
+        claim_ts=$(date -u -d @$((current_ts / 1000)) +"%Y-%m-%dT%H:%M:%S.%3NZ")
         current_ts=$((current_ts + EVENT_CADENCE_MS))
-
-        cat >> "$events_file" <<EOF
-{"ts":"$(date -u -d @$((current_ts / 1000)) +"%Y-%m-%dT%H:%M:%S.%3NZ")","type":"dispatch","worker":"$worker_name","bead":"$bead_id","adapter":"claude","model":"claude-sonnet-4-6"}
-EOF
+        dispatch_ts=$(date -u -d @$((current_ts / 1000)) +"%Y-%m-%dT%H:%M:%S.%3NZ")
         current_ts=$((current_ts + EVENT_CADENCE_MS))
-
         duration_ms=$((1000 + (bead_idx % 5000)))
-        cat >> "$events_file" <<EOF
-{"ts":"$(date -u -d @$((current_ts / 1000)) +"%Y-%m-%dT%H:%M:%S.%3NZ")","type":"complete","worker":"$worker_name","bead":"$bead_id","outcome":"success","duration_ms":$duration_ms,"exit_code":0}
-EOF
+        complete_ts=$(date -u -d @$((current_ts / 1000)) +"%Y-%m-%dT%H:%M:%S.%3NZ")
         current_ts=$((current_ts + EVENT_CADENCE_MS))
+        close_ts=$(date -u -d @$((current_ts / 1000)) +"%Y-%m-%dT%H:%M:%S.%3NZ")
+        current_ts=$((current_ts + EVENT_CADENCE_MS * 2))
 
         cat >> "$events_file" <<EOF
-{"ts":"$(date -u -d @$((current_ts / 1000)) +"%Y-%m-%dT%H:%M:%S.%3NZ")","type":"close","worker":"$worker_name","bead":"$bead_id"}
+{"ts":"$claim_ts","type":"claim","worker":"$worker_name","bead":"$bead_id","strand":"$strand_id"}
+{"ts":"$dispatch_ts","type":"dispatch","worker":"$worker_name","bead":"$bead_id","adapter":"claude","model":"claude-sonnet-4-6"}
+{"ts":"$complete_ts","type":"complete","worker":"$worker_name","bead":"$bead_id","outcome":"success","duration_ms":$duration_ms,"exit_code":0}
+{"ts":"$close_ts","type":"close","worker":"$worker_name","bead":"$bead_id"}
 EOF
-        current_ts=$((current_ts + EVENT_CADENCE_MS * 2))
       else
         # Failure path
-        cat >> "$events_file" <<EOF
-{"ts":"$(date -u -d @$((current_ts / 1000)) +"%Y-%m-%dT%H:%M:%S.%3NZ")","type":"claim","worker":"$worker_name","bead":"$bead_id","strand":"$strand_id"}
-EOF
+        claim_ts=$(date -u -d @$((current_ts / 1000)) +"%Y-%m-%dT%H:%M:%S.%3NZ")
         current_ts=$((current_ts + EVENT_CADENCE_MS))
-
-        cat >> "$events_file" <<EOF
-{"ts":"$(date -u -d @$((current_ts / 1000)) +"%Y-%m-%dT%H:%M:%S.%3NZ")","type":"dispatch","worker":"$worker_name","bead":"$bead_id","adapter":"claude","model":"claude-sonnet-4-6"}
-EOF
+        dispatch_ts=$(date -u -d @$((current_ts / 1000)) +"%Y-%m-%dT%H:%M:%S.%3NZ")
         current_ts=$((current_ts + EVENT_CADENCE_MS))
-
         duration_ms=$((500 + (bead_idx % 2000)))
-        cat >> "$events_file" <<EOF
-{"ts":"$(date -u -d @$((current_ts / 1000)) +"%Y-%m-%dT%H:%M:%S.%3NZ")","type":"fail","worker":"$worker_name","bead":"$bead_id","error":"simulated failure","duration_ms":$duration_ms}
-EOF
+        fail_ts=$(date -u -d @$((current_ts / 1000)) +"%Y-%m-%dT%H:%M:%S.%3NZ")
         current_ts=$((current_ts + EVENT_CADENCE_MS))
+        release_ts=$(date -u -d @$((current_ts / 1000)) +"%Y-%m-%dT%H:%M:%S.%3NZ")
+        current_ts=$((current_ts + EVENT_CADENCE_MS * 2))
 
         cat >> "$events_file" <<EOF
-{"ts":"$(date -u -d @$((current_ts / 1000)) +"%Y-%m-%dT%H:%M:%S.%3NZ")","type":"release","worker":"$worker_name","bead":"$bead_id"}
+{"ts":"$claim_ts","type":"claim","worker":"$worker_name","bead":"$bead_id","strand":"$strand_id"}
+{"ts":"$dispatch_ts","type":"dispatch","worker":"$worker_name","bead":"$bead_id","adapter":"claude","model":"claude-sonnet-4-6"}
+{"ts":"$fail_ts","type":"fail","worker":"$worker_name","bead":"$bead_id","error":"simulated failure","duration_ms":$duration_ms}
+{"ts":"$release_ts","type":"release","worker":"$worker_name","bead":"$bead_id"}
 EOF
-        current_ts=$((current_ts + EVENT_CADENCE_MS * 2))
       fi
     done
   done
