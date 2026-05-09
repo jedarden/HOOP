@@ -39,9 +39,11 @@ use jsonschema::JSONSchema;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
+use std::net::SocketAddr;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path as StdPath, PathBuf};
 use std::sync::Arc;
@@ -49,7 +51,7 @@ use tracing::{debug, info, warn};
 
 // Axum imports for REST API
 use axum::{
-    extract::{Path, State},
+    extract::{ConnectInfo, Path, State},
     http::StatusCode,
     routing::{get, post},
     Json, Router,
@@ -161,7 +163,7 @@ pub struct ValidationError {
 }
 
 /// Discover all skills in the configured skills directory
-pub fn discover_skills(skills_dir: &Path) -> Vec<SkillEntry> {
+pub fn discover_skills(skills_dir: &StdPath) -> Vec<SkillEntry> {
     let mut skills = Vec::new();
 
     let Ok(entries) = fs::read_dir(skills_dir) else {
@@ -269,7 +271,7 @@ pub fn validate_args_against_schema(
 
 /// Execute a skill and capture its output
 pub fn execute_skill(
-    skill_path: &Path,
+    skill_path: &StdPath,
     args: &Value,
     timeout_secs: u64,
 ) -> Result<SkillRunResponse, String> {
@@ -434,6 +436,45 @@ pub fn execute_skill(
         status: format!("Skill timed out after {} seconds", timeout_secs),
         validation_errors: None,
     })
+}
+
+/// Resolve the actor identity for audit purposes.
+///
+/// Per §13: identity from Tailscale whois where available,
+/// falling back to the OS user running the HOOP process.
+fn resolve_actor(remote_addr: Option<SocketAddr>) -> String {
+    if let Some(addr) = remote_addr {
+        let ip = addr.ip();
+        let output = std::process::Command::new("tailscale")
+            .arg("whois")
+            .arg(ip.to_string())
+            .output();
+        if let Ok(out) = output {
+            if let Ok(s) = String::from_utf8(out.stdout) {
+                let user = s
+                    .lines()
+                    .find(|line| line.starts_with("User["))
+                    .and_then(|line| line.strip_prefix("User["))
+                    .and_then(|s| s.split(' ').next())
+                    .unwrap_or("unknown")
+                    .to_string();
+                return format!("tailscale:{}", user);
+            }
+        }
+    }
+    // Fallback to OS user
+    let user = std::env::var("USER")
+        .or_else(|_| std::env::var("USERNAME"))
+        .unwrap_or_else(|_| "unknown".to_string());
+    format!("os:{}", user)
+}
+
+/// Compute SHA-256 hash of skill arguments for audit integrity
+fn hash_args(args: &Value) -> String {
+    let json_str = serde_json::to_string(args).unwrap_or_default();
+    let mut hasher = Sha256::new();
+    hasher.update(json_str.as_bytes());
+    hex::encode(hasher.finalize())
 }
 
 /// Get skills directory path
@@ -816,7 +857,7 @@ impl SkillLibrary {
     }
 
     /// Load all skills from the skills directory.
-    pub fn load(&mut self, skills_dir: &Path) -> Result<()> {
+    pub fn load(&mut self, skills_dir: &StdPath) -> Result<()> {
         self.skills = discover_skills(skills_dir);
         Ok(())
     }
@@ -1141,6 +1182,7 @@ async fn get_skill(
 async fn run_skill(
     Path(name): Path<String>,
     State(state): State<crate::DaemonState>,
+    connect_info: Option<ConnectInfo<std::net::SocketAddr>>,
     Json(req): Json<SkillRunRequest>,
 ) -> Result<Json<SkillRunResponse>, (StatusCode, String)> {
     let lib = state.skill_library.read().unwrap();
@@ -1184,6 +1226,36 @@ async fn run_skill(
                 format!("Skill execution failed: {}", e),
             )
         })?;
+
+    // Write audit row for skill execution
+    let actor = resolve_actor(connect_info.map(|ci| ci.0));
+    let args_json = serde_json::to_string(&req.args).ok();
+    let args_hash = hash_args(&req.args);
+    let audit_result = if result.exit_code == Some(0) {
+        crate::fleet::ActionResult::Success
+    } else {
+        crate::fleet::ActionResult::Failure
+    };
+    let audit_error = if result.exit_code != Some(0) {
+        Some(result.status.clone())
+    } else {
+        None
+    };
+
+    if let Err(e) = crate::fleet::write_audit_row(
+        &actor,
+        crate::fleet::ActionKind::SkillInvoked,
+        &name,
+        req.project.as_deref(),
+        args_json,
+        audit_result,
+        audit_error,
+        Some("api"),
+        None,
+        Some(&args_hash),
+    ) {
+        warn!("Failed to write audit row for skill execution: {}", e);
+    }
 
     info!("Skill '{}' completed with status: {}", name, result.status);
 
