@@ -514,11 +514,11 @@ fn test_pitfall_env_vars_documented() {
 fn test_pitfall_encryption_key_env_var_documented() {
     // Pitfall: if encryption enabled, age key must be set
     // This test documents the expected env var from the runbook
-    std::env::remove_var("HOUP_BACKUP_AGE_IDENTITY");
+    std::env::remove_var("HOOP_BACKUP_AGE_IDENTITY");
     std::env::remove_var("AGE_IDENTITY");
 
     // Verify env vars are not set
-    assert!(std::env::var("HOUP_BACKUP_AGE_IDENTITY").is_err());
+    assert!(std::env::var("HOOP_BACKUP_AGE_IDENTITY").is_err());
     assert!(std::env::var("AGE_IDENTITY").is_err());
 
     // The runbook documents these must be set for encrypted backups

@@ -379,18 +379,11 @@ pub async fn run_restore(from_uri: &str) -> Result<()> {
             }
         }
 
-        // 9. Restore projects.yaml from backup if available
-        let projects_backup = backup_dir.join("projects.yaml");
-        if projects_backup.exists() {
-            let dst = hoop.join("projects.yaml");
-            std::fs::copy(&projects_backup, &dst).with_context(|| {
-                format!(
-                    "Failed to copy projects.yaml from backup {}",
-                    projects_backup.display()
-                )
-            })?;
-            println!("Preserved projects.yaml from previous state");
-        }
+        // 9. Restore config files (config.yml and projects.yaml) from S3 snapshot
+        // This restores the config files as they were at backup time
+        let snapshot_prefix = format!("{}/{}", locator.key, manifest.snapshot_id);
+        restore_config_files(&s3_config, &locator.bucket, &snapshot_prefix, &hoop).await
+            .context("Failed to restore config files from S3 snapshot")?;
 
         // 10. Run schema migrations on restored fleet.db
         println!("Running schema migrations ...");

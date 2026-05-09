@@ -600,7 +600,7 @@ systemctl --user enable hoop
 **Pitfalls:**
 - **Version mismatch:** If the snapshot's schema version is newer than the installed HOOP binary, restore will fail with a clear error. Upgrade HOOP before restoring.
 - **Missing credentials:** S3 credentials must be set as environment variables. If not set, restore will fail with "Set HOOP_BACKUP_ENDPOINT..."
-- **Encryption key:** If backups were encrypted and `HOUP_BACKUP_AGE_IDENTITY` is not set, restore will fail during fleet.db decryption.
+- **Encryption key:** If backups were encrypted and `HOOP_BACKUP_AGE_IDENTITY` is not set, restore will fail during fleet.db decryption.
 - **NEEDLE workspaces:** HOOP restores its own state, but NOT bead state in each project's `.beads/`. If those were on the failed disk, you'll need to restore those separately from their own backups.
 
 ### Scenario 2: fleet.db corruption
@@ -1735,7 +1735,7 @@ backup:
 **Credentials (environment variables):**
 ```bash
 export HOOP_BACKUP_ACCESS_KEY_ID="your-access-key"
-export HOUP_BACKUP_SECRET_ACCESS_KEY="your-secret-key"
+export HOOP_BACKUP_SECRET_ACCESS_KEY="your-secret-key"
 # If encryption is enabled:
 export HOUP_BACKUP_AGE_KEY="age1...your-public-key"
 ```
