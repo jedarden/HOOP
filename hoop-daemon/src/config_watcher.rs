@@ -86,6 +86,10 @@ pub struct ConfigWatcher {
     _shutdown_tx: mpsc::Sender<()>,
     debouncer: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     cli_overrides: CliOverrides,
+    /// Channel for agent config change events (hoop-ttb.6.2.2)
+    /// When agent config changes, AgentConfigChanged is sent here
+    /// to trigger adapter switch in AgentSessionManager.
+    agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
 }
 
 impl ConfigWatcher {
@@ -116,6 +120,7 @@ impl ConfigWatcher {
             _shutdown_tx: shutdown_tx,
             debouncer: Arc::new(Mutex::new(None)),
             cli_overrides,
+            agent_config_changed_tx: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -140,14 +145,43 @@ impl ConfigWatcher {
         }
     }
 
+    /// Set the agent config changed channel (hoop-ttb.6.2.2)
+    ///
+    /// This should be called after the ConfigWatcher and AgentSessionManager
+    /// are both created, to wire up agent config change events to trigger
+    /// adapter switches.
+    pub async fn set_agent_config_changed_tx(
+        &self,
+        tx: tokio::sync::broadcast::Sender<AgentConfigChanged>,
+    ) {
+        *self.agent_config_changed_tx.lock().await = Some(tx);
+    }
+
+    /// Subscribe to agent config change events (hoop-ttb.6.2.2)
+    ///
+    /// Returns a receiver that will receive AgentConfigChanged events
+    /// when the agent adapter, model, or API key changes.
+    pub fn subscribe_agent_config_changed(&self) -> tokio::sync::broadcast::Receiver<AgentConfigChanged> {
+        // Create a new channel if not already set
+        let tx = self.agent_config_changed_tx.blocking_lock();
+        if tx.is_none() {
+            drop(tx);
+            let (new_tx, _) = tokio::sync::broadcast::channel(8);
+            *self.agent_config_changed_tx.blocking_lock() = Some(new_tx);
+            new_tx.subscribe()
+        } else {
+            tx.as_ref().unwrap().subscribe()
+        }
+    }
+
     /// Start watching the config.yml file for changes
     pub fn start(&mut self) -> Result<()> {
         let watch_path = config_path()?;
 
         // Ensure the .hoop directory exists
-        if let Some(parent) = watch_path.parent() {
-            if !parent.exists() {
-                fs::create_dir_all(parent).context("Failed to create .hoop directory")?;
+        if let Some(parent_dir) = watch_path.parent() {
+            if !parent_dir.exists() {
+                fs::create_dir_all(parent_dir).context("Failed to create .hoop directory")?;
             }
         }
 
@@ -156,6 +190,7 @@ impl ConfigWatcher {
         let config = self.config.clone();
         let debouncer = self.debouncer.clone();
         let cli_overrides = self.cli_overrides.clone();
+        let agent_config_changed_tx = self.agent_config_changed_tx.clone();
 
         let mut watcher = notify::recommended_watcher(move |res| {
             if let Err(e) = Self::handle_watch_event(
@@ -165,6 +200,7 @@ impl ConfigWatcher {
                 config.clone(),
                 debouncer.clone(),
                 cli_overrides.clone(),
+                agent_config_changed_tx.clone(),
             ) {
                 warn!("Error handling config watch event: {}", e);
             }
@@ -202,6 +238,7 @@ impl ConfigWatcher {
         let event_tx = self.event_tx.clone();
         let config = self.config.clone();
         let cli_overrides = self.cli_overrides.clone();
+        let agent_config_changed_tx = self.agent_config_changed_tx.clone();
 
         // Cancel any pending debounced reload and trigger immediate reload
         let mut debouncer_guard = self.debouncer.lock().await;
@@ -211,7 +248,7 @@ impl ConfigWatcher {
         drop(debouncer_guard);
 
         // Trigger immediate reload (no debounce for SIGHUP)
-        Self::reload_config(&watch_path, event_tx, config, cli_overrides).await;
+        Self::reload_config(&watch_path, event_tx, config, cli_overrides, agent_config_changed_tx).await;
         Ok(())
     }
 
@@ -222,6 +259,7 @@ impl ConfigWatcher {
         config: Arc<Mutex<ResolvedConfig>>,
         debouncer: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
         cli_overrides: CliOverrides,
+        agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
     ) -> Result<()> {
         let event = res?;
 
@@ -243,11 +281,12 @@ impl ConfigWatcher {
             let event_tx = event_tx.clone();
             let config_clone = config.clone();
             let watch_path = watch_path.to_path_buf();
+            let agent_config_changed_tx_clone = agent_config_changed_tx.clone();
 
             let handle = tokio::spawn(async move {
                 // Wait 2 seconds before reloading (debounce)
                 tokio::time::sleep(Duration::from_secs(2)).await;
-                Self::reload_config(&watch_path, event_tx, config_clone, cli_overrides).await;
+                Self::reload_config(&watch_path, event_tx, config_clone, cli_overrides, agent_config_changed_tx_clone).await;
             });
 
             *debouncer_guard = Some(handle);
@@ -266,6 +305,7 @@ impl ConfigWatcher {
         event_tx: tokio::sync::broadcast::Sender<ConfigEvent>,
         config: Arc<Mutex<ResolvedConfig>>,
         cli_overrides: CliOverrides,
+        agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
     ) {
         debug!("Reloading config.yml from {}", path.display());
 
@@ -362,6 +402,14 @@ impl ConfigWatcher {
             info!("║                                                                                ║");
             info!("║ Current agent session will be archived and new session spawned.               ║");
             info!("╚════════════════════════════════════════════════════════════════════════════════╝");
+
+            // Send agent config changed event to dedicated channel (hoop-ttb.6.2.2)
+            // This triggers the AgentSessionManager to switch adapters
+            if let Some(tx) = agent_config_changed_tx.lock().await.as_ref() {
+                let _ = tx.send(acc.clone());
+            } else {
+                debug!("Agent config changed but no listener subscribed yet (AgentSessionManager not initialized)");
+            }
         }
 
         let _ = event_tx.send(ConfigEvent::ConfigReloaded {

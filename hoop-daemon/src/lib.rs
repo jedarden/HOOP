@@ -1915,9 +1915,10 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         .update_config_map(new_sd_config);
                     info!("Stuck detector configuration reloaded");
 
-                    // Note: agent config changes require a restart for the adapter switch
-                    // The spawn block here cannot access agent_session_manager since it's
-                    // defined later. Operators should restart the daemon for agent config changes.
+                    // Note: agent config changes (adapter, model, API keys) are handled
+                    // by the AgentConfigChanged channel (hoop-ttb.6.2.2). The config_watcher
+                    // sends AgentConfigChanged events which trigger switch_adapter in the
+                    // AgentSessionManager. This is handled by a separate task spawned below.
 
                     // Note: config.yml changes don't trigger runtime reconcile
                     // because they only affect defaults for new sessions
@@ -2926,6 +2927,63 @@ Note: This is an automated synthesis from voice dictation."#,
             }
         });
         info!("Fleet notification integration started (listens to bead_created_by_hoop events)");
+    }
+
+    // Agent config change listener: trigger adapter switch on config reload (hoop-ttb.6.2.2)
+    //
+    // When the operator edits config.yml to change agent.adapter, agent.model, or API keys,
+    // the ConfigWatcher detects the change and sends an AgentConfigChanged event.
+    // This task subscribes to those events and triggers AgentSessionManager::switch_adapter,
+    // which archives the old session as a Stitch and starts a new session with the new config.
+    {
+        let config_watcher_for_agent = config_watcher.clone();
+        let agent_mgr_for_agent = agent_session_manager.clone();
+        tokio::spawn(async move {
+            // Subscribe to agent config change events from the ConfigWatcher
+            let mut rx = config_watcher_for_agent.lock().await.subscribe_agent_config_changed();
+
+            while let Ok(agent_config_changed) = rx.recv().await {
+                if let Some(ref mgr) = agent_mgr_for_agent {
+                    use config_watcher::AgentConfigChanged;
+
+                    info!(
+                        "Agent config changed: adapter {} → {}, model {} → {}, calling switch_adapter",
+                        agent_config_changed.old_adapter,
+                        agent_config_changed.new_adapter,
+                        agent_config_changed.old_model,
+                        agent_config_changed.new_model
+                    );
+
+                    // Build the new AgentAdapterConfig from the changed values
+                    // Note: we load the full config to get rate_limit_rpm, cost_cap_usd, etc.
+                    let new_config = agent_session::AgentAdapterConfig {
+                        adapter: agent_config_changed.new_adapter.clone(),
+                        model: agent_config_changed.new_model.clone(),
+                        anthropic_api_key: agent_adapter::load_adapter_config().anthropic_api_key,
+                        zai_base_url: agent_adapter::load_adapter_config().zai_base_url,
+                        zai_api_key: agent_adapter::load_adapter_config().zai_api_key,
+                        rate_limit_rpm: agent_adapter::load_adapter_config().rate_limit_rpm,
+                        cost_cap_usd: agent_adapter::load_adapter_config().cost_cap_usd,
+                        system_prompt_budget_bytes: agent_adapter::load_system_prompt_budget_bytes(),
+                    };
+
+                    match mgr.switch_adapter(new_config).await {
+                        Ok(new_session_id) => {
+                            info!(
+                                "Successfully switched adapter, new session {}",
+                                new_session_id
+                            );
+                        }
+                        Err(e) => {
+                            warn!("Failed to switch adapter: {}", e);
+                        }
+                    }
+                } else {
+                    debug!("Agent config changed but no agent session manager available");
+                }
+            }
+        });
+        info!("Agent config change listener started (listens for adapter/model/API key changes)");
     }
 
     // Periodic project card refresh for live metrics (every 5s)

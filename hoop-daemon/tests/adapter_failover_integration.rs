@@ -40,7 +40,7 @@ fn setup_test_db() -> (TempDir, PathBuf) {
 /// Restore the env var after the test.
 fn teardown_test_db() {
     let _guard = LOCK.lock().unwrap();
-    teardown_test_db();
+    std::env::remove_var("_HOOP_FLEET_DB_PATH");
 }
 
 /// Test: Simulated Anthropic 5xx error doesn't crash daemon
