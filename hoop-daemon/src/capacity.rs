@@ -741,7 +741,7 @@ impl CapacityMeterConfig {
                                     "Gemini session discovery: found named account at {}",
                                     path.display()
                                 );
-                                found_dirs.push(path);
+                                found_dirs.push(path.clone());
                             }
                         }
                     }
