@@ -1,94 +1,96 @@
-# Phase 5 (hoop-ttb.6) Verification Notes
+# Phase 5: Human-interface agent (v0.5) - Completion Summary
 
-## Date: 2026-05-08
+## Overview
 
-## Summary
+Phase 5 of the HOOP implementation plan is now **complete**. This phase delivers the human-interface agent — a persistent, LLM-agnostic conversational partner that serves as the operator's primary interface to HOOP.
 
-Phase 5 (The human-interface agent, v0.5) implementation was **already completed** in commit de5ed19 "feat: complete Phase 5 - Human-interface agent (v0.5)". A completion summary was added in commit c18615b.
+## Version Target
+- **v0.5** — Phase 5 complete
+- **Timeline:** +28 weeks from Phase 0
 
-## Implementation Verification
+## What Was Implemented
 
-### Core Deliverables (All Complete)
+### Core Agent Infrastructure
 
-1. **Agent Session Persistence** ✓
-   - File: `hoop-daemon/src/agent_session.rs` (1838 lines)
-   - Sessions survive daemon restarts via fleet.db
-   - `has_started_session` flag ensures correct CLI adapter invocation
+1. **Agent Session Manager** (`hoop-daemon/src/agent_session.rs`)
+   - Persistent session lifecycle: spawn, persist, attach-on-restart, resume-on-adapter-switch
+   - Session state persisted to `fleet.db` for daemon restart recovery
+   - Reattach logic preserves conversation context across `systemctl restart hoop`
+   - Turn ID generation for audit trail tracking
 
-2. **LLM-Agnostic Design** ✓
-   - File: `hoop-daemon/src/agent_adapter.rs` (2254 lines)
-   - Supports: Claude Code, Anthropic API, ZAI/GLM, Codex, OpenCode, Gemini, Aider
-   - Adapter switch archives old session as Stitch
+2. **LLM-Agnostic Adapter Abstraction** (`hoop-daemon/src/agent_adapter.rs`)
+   - Unified `AgentAdapter` trait with identical event stream shape
+   - Three implemented adapters:
+     - `ClaudeCodeAdapter` — shells out to `claude` CLI (default)
+     - `AnthropicApiAdapter` — direct Anthropic Messages API
+     - `ZaiGlmAdapter` — ZAI proxy with GLM models
+   - Adapter selection via `~/.hoop/config.yml` — no code change required
 
-3. **MCP Server with Tool Belt** ✓
-   - Directory: `hoop-mcp/src/`
-   - Read tools: find_stitches, read_stitch, find_beads, read_bead, read_file, grep, search_conversations, summarize_project, summarize_day
-   - Write tool: create_stitch (routes through draft queue)
-   - Forbidden verbs: launch_fleet, stop_fleet, release_claim, boost_priority, close_stitch, close_bead
+3. **Lazy Context Builder** (`hoop-daemon/src/agent_context.rs`)
+   - Thin index (~4KB token budget) injected into system prompt
+   - Project names, recent activity summaries, open Stitch titles
+   - Fleet notifications ring (last 20 events)
+   - Budget watchdog emits warning at 75% window usage
 
-4. **Lazy Context** ✓
-   - File: `hoop-daemon/src/agent_context.rs`
-   - Thin index (~4KB budget) with on-demand detail fetching
+### MCP Server (`hoop-mcp/`)
 
-5. **Notification Channel** ✓
-   - File: `hoop-daemon/src/fleet_notifications.rs`
-   - Fleet notifications delivered within 5s via broadcast
+4. **Tool Belt Implementation** (`hoop-mcp/src/tools.rs`)
+   - **Write tools (one write):**
+     - `create_stitch(project, title, description, kind, attachments[])` — creates draft in preview queue
+   - **Read tools:**
+     - `find_stitches`, `read_stitch` — Stitch discovery and inspection
+     - `find_beads`, `read_bead` — Bead data (expert-only)
+     - `read_file`, `grep` — File system access
+     - `search_conversations` — Transcript search
+     - `summarize_project`, `summarize_day` — Aggregation views
+   - **Utility tools:**
+     - `escalate_to_operator` — UI banner for human intervention
+   - **Forbidden actions (enforced):**
+     - `launch_fleet`, `stop_fleet`, `release_claim`, `boost_priority`, `close_stitch`, `close_bead`
+     - Runtime guard rejects these with clear error message
 
-6. **Operator ↔ Agent Chat Pane** ✓
-   - UI component with streaming, multimodal input, tool visualization
+### Marquee Features
 
-7. **Agent-Off Switch** ✓
-   - Persisted state, HOOP functional without agent
+5. **Morning Brief** (`hoop-daemon/src/morning_brief.rs`, `api_morning_brief.rs`)
+   - Autonomous daily briefing at operator login or configured time
+   - Queries overnight activity from `fleet.db`
+   - Produces structured briefing with pre-drafted Stitches
 
-8. **Audit Trail** ✓
-   - Every agent-drafted Stitch carries `actor:hoop:agent:<session>` with turn_id
+6. **Cross-Project Stitch Propagation** (`hoop-daemon/src/cross_project_propagation.rs`)
+   - Detects when a fix pattern has structural siblings in other projects
+   - Surfaces suggestions for operator approval
 
-### Marquee Capabilities (All Complete)
-
-**Marquee #10: Morning Brief** ✓
-   - File: `hoop-daemon/src/morning_brief.rs` (1114 lines)
-   - API: `hoop-daemon/src/api_morning_brief.rs`
-   - Autonomous daily briefing with pre-drafted Stitches
-
-**Marquee #11: Cross-Project Stitch Propagation** ✓
-   - File: `hoop-daemon/src/cross_project_propagation.rs`
-   - API: `hoop-daemon/src/api_propagation.rs`
-   - Sibling detection with similarity scoring
-
-**Marquee #12: Reflection Ledger** ✓
-   - APIs: `hoop-daemon/src/api_reflection_ledger.rs`, `hoop-daemon/src/api_reflection_detection.rs`
-   - Proposal detection, approval workflow, session injection
-
-### Database Schema (All Present)
-
-- `agent_sessions` table (migration 1.7.0 → 1.8.0)
-- `reflection_ledger` table (migration 1.8.0 → 1.9.0)
-- `morning_briefs` table (migration 1.10.0 → 1.11.0)
-
-### API Endpoints (All Present)
-
-- `/api/agent/status`, `/api/agent/spawn`, `/api/agent/disable`, `/api/agent/switch`, `/api/agent/turn`, `/api/agent/sessions`
-- `/api/agent/morning-brief/latest`, `/api/agent/morning-brief/list`, `/api/agent/morning-brief/trigger`, `/api/agent/morning-brief/status`
-- `/api/propagation/detect`, `/api/propagation/{stitch_id}`
-- `/api/reflections/proposals`, `/api/reflections`, `/api/reflections/{id}/approve`, `/api/reflections/{id}/reject`
-- `/api/reflections/detect`, `/api/reflections/detect/status`
+7. **Reflection Ledger** (`hoop-daemon/src/reflection_detector.rs`)
+   - Scans closed operator Stitches for repeated patterns
+   - Proposals surface in UI for operator approval
 
 ## Success Criteria Verification
 
-✓ Agent session survives `systemctl restart hoop` with context intact
-✓ Cross-project summary correct in Stitch language
-✓ Agent never performs a worker action (forbidden verbs enforced in MCP server)
-✓ Morning Brief produces useful daily summary with correctly-scoped pre-drafted Stitch
-✓ Cross-project propagation hits real sibling across 3+ projects
-✓ Reflection proposals flag repeated instructions and are operator-approvable
+✅ **1. Agent session survives `systemctl restart hoop` with full context intact**
+✅ **2. Operator gets coherent cross-project summary in Stitch language**
+✅ **3. Agent reviews recent Stitches, conversations, files**
+✅ **4. Agent never performs worker actions**
+✅ **5. Morning Brief produces useful daily summary**
+✅ **6. Cross-Project Propagation catches fix-siblings**
+✅ **7. Audit trail reconstructs any drafted Stitch back to chat turn**
 
-## Documentation
+## Files Modified/Created
 
-Complete documentation exists in:
-- `/home/coding/HOOP/docs/phase5_completion_summary.md`
-- `/home/coding/HOOP/docs/plan/plan.md` (Phase 5 section)
-- `/home/coding/HOOP/AGENTS.md` (agent terminology)
+- `hoop-daemon/src/agent_session.rs` — Session lifecycle manager
+- `hoop-daemon/src/agent_adapter.rs` — LLM-agnostic adapter abstraction
+- `hoop-daemon/src/agent_context.rs` — Lazy context index builder
+- `hoop-daemon/src/morning_brief.rs` — Morning Brief generator
+- `hoop-daemon/src/reflection_detector.rs` — Pattern detection
+- `hoop-daemon/src/cross_project_propagation.rs` — Sibling detection
+- `hoop-daemon/src/fleet_notifications.rs` — Notification ring
+- `hoop-mcp/` — MCP server implementation
+- `hoop-ui/web/src/AgentChatPane.tsx` — Agent chat component
+- `AGENTS.md` — Updated with Phase 5 details
 
-## Conclusion
+## Testing
 
-Phase 5 implementation is **complete and verified**. All deliverables, marquee capabilities, and success criteria have been implemented. The human-interface agent is fully functional as the operator's primary interface to HOOP.
+Comprehensive test coverage exists for session persistence, forbidden verbs, MCP protocol, and socket permissions.
+
+## Next Steps
+
+Phase 5 is complete. The next phase is Phase 6 — Operational polish (v0.6).
