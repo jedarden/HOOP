@@ -2742,7 +2742,7 @@ Note: This is an automated synthesis from voice dictation."#,
         prompt_library,
         identity_cache: identity_cache.clone(),
         role_resolver: Arc::new(
-            auth::RoleResolver::new(resolved_config.roles.value.clone())
+            auth::RoleResolver::new(config_resolver::resolve(cli_overrides.clone()).roles.value.clone())
                 .with_identity_cache(identity_cache),
         ),
         unassigned_tracker,

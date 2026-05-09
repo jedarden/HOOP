@@ -85,7 +85,8 @@ pub fn is_restart_required_key(key: &str) -> bool {
 ///
 /// Exposes the current secret scanning patterns to the client for pre-upload
 /// warning. This ensures client and backend use the same pattern set.
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SecretsPatternsResponse {
     /// Schema version for compatibility tracking
     pub schema_version: String,
