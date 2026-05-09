@@ -167,8 +167,9 @@ impl ConfigWatcher {
         if tx.is_none() {
             drop(tx);
             let (new_tx, _) = tokio::sync::broadcast::channel(8);
+            let rx = new_tx.subscribe();
             *self.agent_config_changed_tx.blocking_lock() = Some(new_tx);
-            new_tx.subscribe()
+            rx
         } else {
             tx.as_ref().unwrap().subscribe()
         }
