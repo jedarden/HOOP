@@ -83,7 +83,7 @@ fn test_anthropic_5xx_doesnt_crash_daemon() {
     // but the daemon should remain responsive.
 
     // Simulate an agent session manager
-    let config = hoop_daemon::agent_session::AgentAdapterConfig {
+    let config = hoop_daemon::agent_adapter::AgentAdapterConfig {
         adapter: "anthropic".to_string(),
         model: "claude-opus-4-7".to_string(),
         anthropic_api_key: Some("sk-ant-test-key".to_string()),
@@ -91,7 +91,6 @@ fn test_anthropic_5xx_doesnt_crash_daemon() {
         zai_api_key: None,
         rate_limit_rpm: None,
         cost_cap_usd: None,
-        system_prompt_budget_bytes: 4096,
     };
 
     // Build the adapter - this should not fail
@@ -105,7 +104,7 @@ fn test_anthropic_5xx_doesnt_crash_daemon() {
     // The daemon's AgentSessionManager would log the error but remain running.
     // This is verified by the fact that we can create another adapter afterward.
 
-    let config2 = hoop_daemon::agent_session::AgentAdapterConfig {
+    let config2 = hoop_daemon::agent_adapter::AgentAdapterConfig {
         adapter: "zai".to_string(),
         model: "glm-5".to_string(),
         anthropic_api_key: None,
@@ -113,7 +112,6 @@ fn test_anthropic_5xx_doesnt_crash_daemon() {
         zai_api_key: Some("zai-test-key".to_string()),
         rate_limit_rpm: None,
         cost_cap_usd: None,
-        system_prompt_budget_bytes: 4096,
     };
 
     let adapter_result2 = hoop_daemon::agent_adapter::build_adapter(&config2);
@@ -354,29 +352,39 @@ fn test_reflection_ledger_preserved_across_switch() {
     let now = chrono::Utc::now().to_rfc3339();
 
     let entry1_id = uuid::Uuid::new_v4().to_string();
-    let entry1 = hoop_daemon::fleet::ReflectionLedgerRow {
+    let entry1 = hoop_daemon::fleet::ReflectionLedgerEntry {
         id: entry1_id.clone(),
         scope: "global".to_string(),
         rule: "always run tests before closing".to_string(),
         reason: "operator repeated 3 times".to_string(),
-        source_stitches: vec![],
+        source_stitches: "[]".to_string(),
         status: "approved".to_string(),
         created_at: now.clone(),
         last_applied: None,
         applied_count: 0,
+        content_hash: "hash1".to_string(),
+        rejection_count: 0,
+        approved_by: None,
+        approved_at: None,
+        archived_at: None,
     };
 
     let entry2_id = uuid::Uuid::new_v4().to_string();
-    let entry2 = hoop_daemon::fleet::ReflectionLedgerRow {
+    let entry2 = hoop_daemon::fleet::ReflectionLedgerEntry {
         id: entry2_id.clone(),
         scope: "project:hoop".to_string(),
         rule: "never edit fleet.db directly".to_string(),
         reason: "one incident of corruption".to_string(),
-        source_stitches: vec![],
+        source_stitches: "[]".to_string(),
         status: "approved".to_string(),
         created_at: now.clone(),
         last_applied: None,
         applied_count: 0,
+        content_hash: "hash2".to_string(),
+        rejection_count: 0,
+        approved_by: None,
+        approved_at: None,
+        archived_at: None,
     };
 
     hoop_daemon::fleet::insert_reflection_entry(&entry1).expect("insert entry 1");
@@ -718,44 +726,59 @@ fn test_handoff_context_includes_reflection_ledger() {
     // Create Reflection Ledger entries
     let now = chrono::Utc::now().to_rfc3339();
 
-    let entry1 = hoop_daemon::fleet::ReflectionLedgerRow {
+    let entry1 = hoop_daemon::fleet::ReflectionLedgerEntry {
         id: uuid::Uuid::new_v4().to_string(),
         scope: "global".to_string(),
         rule: "always commit before closing".to_string(),
         reason: "operator repeated 5 times".to_string(),
-        source_stitches: vec![],
+        source_stitches: "[]".to_string(),
         status: "approved".to_string(),
         created_at: now.clone(),
         last_applied: None,
         applied_count: 0,
+        content_hash: "hash1".to_string(),
+        rejection_count: 0,
+        approved_by: None,
+        approved_at: None,
+        archived_at: None,
     };
 
-    let entry2 = hoop_daemon::fleet::ReflectionLedgerRow {
+    let entry2 = hoop_daemon::fleet::ReflectionLedgerEntry {
         id: uuid::Uuid::new_v4().to_string(),
         scope: "project:hoop".to_string(),
         rule: "use consistent error handling".to_string(),
         reason: "code review feedback".to_string(),
-        source_stitches: vec![],
+        source_stitches: "[]".to_string(),
         status: "approved".to_string(),
         created_at: now.clone(),
         last_applied: None,
         applied_count: 0,
+        content_hash: "hash2".to_string(),
+        rejection_count: 0,
+        approved_by: None,
+        approved_at: None,
+        archived_at: None,
     };
 
     hoop_daemon::fleet::insert_reflection_entry(&entry1).expect("insert entry 1");
     hoop_daemon::fleet::insert_reflection_entry(&entry2).expect("insert entry 2");
 
     // Create a rejected entry (should NOT appear)
-    let rejected = hoop_daemon::fleet::ReflectionLedgerRow {
+    let rejected = hoop_daemon::fleet::ReflectionLedgerEntry {
         id: uuid::Uuid::new_v4().to_string(),
         scope: "global".to_string(),
         rule: "bad rule".to_string(),
         reason: "n/a".to_string(),
-        source_stitches: vec![],
+        source_stitches: "[]".to_string(),
         status: "rejected".to_string(),
         created_at: now.clone(),
         last_applied: None,
         applied_count: 0,
+        content_hash: "hash3".to_string(),
+        rejection_count: 0,
+        approved_by: None,
+        approved_at: None,
+        archived_at: None,
     };
 
     hoop_daemon::fleet::insert_reflection_entry(&rejected).expect("insert rejected");
