@@ -1,116 +1,122 @@
-# §15 Backups & Disaster Recovery — Implementation Summary
+# §15 Backups & disaster recovery - Completion Summary
 
-## Status: ✅ COMPLETE
+## Task
+Implement S3-compatible backup and disaster recovery for HOOP.
 
-All closing criteria for §15 have been verified as implemented.
+## What was implemented
+All components were already in place. This task verified completeness.
 
-## Closing Criteria Verification
+### Core modules (hoop-daemon/src/)
+1. **backup.rs** - Configuration parser and credential resolver
+   - Reads `backup:` section from config.yml
+   - Resolves S3 credentials from environment variables (never stored in YAML)
+   - Validates cron schedule and endpoint URL format
 
-### 1. Backup runs on schedule; credentials validated ✅
-- **Location:** `hoop-daemon/src/backup_pipeline.rs` (scheduler), `hoop-daemon/src/backup.rs` (credential resolution)
-- **Implementation:**
-  - Cron-based scheduler with 5-field expression matching
-  - S3 credentials resolved from `HOOP_BACKUP_ACCESS_KEY_ID` and `HOOP_BACKUP_SECRET_ACCESS_KEY`
-  - Optional age encryption key from `HOOP_BACKUP_AGE_KEY`
-  - Scheduler started in `lib.rs` when backup config is `Ready`
-- **Verification:** Configuration validation, credential checking, and scheduler startup all implemented
+2. **backup_pipeline.rs** - Daily backup pipeline
+   - VACUUM INTO snapshot for fleet.db
+   - zstd compression
+   - Optional age encryption
+   - S3 upload with AWS SigV4 signing
+   - Exponential backoff retry (max 3 attempts)
+   - Incremental attachment sync
+   - Config file backup (config.yml, projects.yaml)
+   - Manifest upload (last, for completeness validation)
+   - Cron scheduler that fires daily per config schedule
 
-### 2. Restore from recent snapshot produces identical state ✅
-- **Location:** `hoop-cli/src/restore.rs`, `hoop-daemon/tests/backup_restore_cycle.rs`
-- **Implementation:**
-  - `hoop restore --from s3://<bucket>/<prefix>/<snapshot-id>` CLI command
-  - Manifest validation before any destructive action
-  - Rollback mechanism: `~/.hoop.rollback.YYYYMMDDTHHMMSSZ`
-  - Integrity checks with SHA-256 verification
-  - Schema migrations on restored database
-- **Verification:** Integration test `backup_restore_cycle_produces_identical_state` verifies checksums match
+3. **attachment_sync.rs** - Incremental attachment sync
+   - Manifest-based diff engine
+   - Tracks added/changed/deleted files
+   - Tombstones for deleted files (configurable retention)
+   - SHA-256 integrity verification
+   - mtime+size shortcut for unchanged files
 
-### 3. Documentation covers all four DR scenarios ✅
-- **Location:** `docs/operations.md` (lines 516-832)
-- **Coverage:**
-  - **Scenario 1: Disk death** — Full recovery procedure with host provisioning steps
-  - **Scenario 2: fleet.db corruption** — Corruption detection and restore steps
-  - **Scenario 3: Accidental deletion** — Recovery from `rm -rf ~/.hoop/`
-  - **Scenario 4: Host migration** — Complete migration checklist
-  - **Rollback on failed restore** — Automatic rollback mechanism documented
+4. **config_backup.rs** - Config file backup
+   - Backs up config.yml and projects.yaml
+   - SHA-256 hash for integrity verification
+   - Uploaded to each snapshot directory
 
-### 4. age encryption works with key in env var ✅
-- **Location:** `hoop-daemon/src/backup_pipeline.rs` (age_encrypt function)
-- **Implementation:**
-  - Optional encryption via `encryption: true` in config.yml
-  - Reads `HOOP_BACKUP_AGE_KEY` for public key
-  - Decrypt during restore with `HOOP_BACKUP_AGE_IDENTITY` or `AGE_IDENTITY`
-- **Verification:** Test `age_encryption_with_env_key` in `backup_restore_cycle.rs`
+5. **snapshot_manifest.rs** - Snapshot metadata
+   - Ties all backup pieces together
+   - Schema version validation (rejects newer snapshots)
+   - SHA-256 integrity verification
+   - Audit hash chain verification
 
-## Implementation Architecture
+6. **api_backup.rs** - REST API endpoint
+   - POST /api/backup/trigger for manual backup
 
-### Backup Pipeline Components
-| Component | File | Purpose |
-|-----------|------|---------|
-| Config loader | `backup.rs` | Parse `backup:` section, resolve env vars |
-| Snapshot pipeline | `backup_pipeline.rs` | VACUUM INTO → zstd → age → S3 |
-| Attachment sync | `attachment_sync.rs` | Incremental attachment backup |
-| Config backup | `config_backup.rs` | Backup config.yml and projects.yaml |
-| Manifest | `snapshot_manifest.rs` | Tie pieces together, schema version |
+### CLI commands (hoop-cli/src/)
+1. **backup.rs** - `hoop backup` commands
+   - `hoop backup trigger` - Manual backup trigger
+   - `hoop backup status` - Show configuration and last run status
 
-### CLI Commands
-| Command | Location | Purpose |
-|---------|----------|---------|
-| `hoop backup trigger` | `hoop-cli/src/backup.rs` | Manual backup trigger |
-| `hoop backup status` | `hoop-cli/src/backup.rs` | Show backup configuration and status |
-| `hoop restore --from s3://...` | `hoop-cli/src/restore.rs` | Restore from snapshot |
+2. **restore.rs** - `hoop restore` command
+   - Fetches snapshot from S3
+   - Validates manifest before destructive action
+   - Moves existing ~/.hoop/ aside for rollback
+   - Restores fleet.db, attachments, config
+   - Runs schema migrations
+   - Idempotent with automatic rollback on failure
 
-### REST API
-| Endpoint | Location | Purpose |
-|----------|----------|---------|
-| `POST /api/backup/trigger` | `api_backup.rs` | Manual backup trigger via API |
+### Tests (hoop-daemon/tests/)
+1. **backup_restore_cycle.rs** - Integration tests
+   - Backup/restore cycle produces identical state
+   - Credentials validation (missing, invalid, valid)
+   - age encryption with env key
+   - Scheduler runs on cron schedule
 
-### Metrics (§16.6)
-| Metric | Type | Purpose |
-|--------|------|---------|
-| `hoop_backup_last_success_timestamp` | Gauge | Unix timestamp of last successful backup |
-| `hoop_backup_last_size_bytes` | Gauge | Size of last successful backup |
-| `hoop_backup_failures_total` | Counter | Total failed backup runs |
-| `hoop_backup_run_duration_seconds` | Histogram | Backup run duration |
+2. **disaster_recovery_runbook.rs** - DR scenario tests
+   - Scenario 1: Disk death
+   - Scenario 2: fleet.db corruption
+   - Scenario 3: Accidental deletion
+   - Scenario 4: Host migration
+   - Rollback mechanism
+   - Pitfall detection
 
-## Configuration Example
+### Documentation (docs/operations.md)
+Complete backup and disaster recovery runbook covering:
+- Configuration (S3 endpoint, bucket, schedule, retention)
+- What gets backed up (fleet.db, attachments, config files)
+- Manual backup trigger
+- Four DR scenarios with step-by-step procedures
+- Rollback on failed restore
+- Expected duration bounds
+- Common pitfalls
 
-```yaml
-# ~/.hoop/config.yml
-backup:
-  endpoint: https://s3.us-west-000.backblazeb2.com
-  bucket: hoop-backups-<operator>
-  prefix: ex44/
-  schedule: "0 4 * * *"         # daily 04:00 local
-  retention_days: 30
-  encryption: false              # set to true for age encryption
-```
+## Closing criteria verification
 
-Credentials (environment variables only):
-```bash
-export HOOP_BACKUP_ACCESS_KEY_ID="your-access-key"
-export HOOP_BACKUP_SECRET_ACCESS_KEY="your-secret-key"
-# If encryption is enabled:
-export HOOP_BACKUP_AGE_KEY="age1...your-public-key"
-```
+1. ✅ **Backup runs on schedule; credentials validated**
+   - `backup_pipeline::BackupPipeline::start_scheduler()` fires on cron schedule
+   - `backup::BackupCredentials::from_env()` validates credentials
+   - Missing credentials log warnings and disable backups
 
-## What Gets Backed Up
-- `fleet.db` — SQLite `VACUUM INTO` snapshot (daily)
-- Attachments — Incremental sync (only new/changed files)
-- Config files — `config.yml` and `projects.yaml` (on change + daily)
-- `manifest.json` — Snapshot metadata with schema version (uploaded last)
+2. ✅ **Restore from recent snapshot produces identical state (verified)**
+   - `backup_restore_cycle::backup_restore_cycle_produces_identical_state()` test
+   - SHA-256 checksum verification for fleet.db
+   - File size verification for attachments
 
-## What's NOT Backed Up (per §15.6)
-- Bead state (`br`'s job, in each workspace's `.beads/`)
+3. ✅ **Documentation covers all four DR scenarios**
+   - Disk death (Scenario 1)
+   - fleet.db corruption (Scenario 2)
+   - Accidental deletion (Scenario 3)
+   - Host migration (Scenario 4)
+
+4. ✅ **age encryption works with key in env var**
+   - `backup_pipeline::BackupPipeline::age_encrypt()`
+   - `restore::decrypt_with_age()`
+   - `backup_restore_cycle::age_encryption_with_env_key()` test
+
+## DR scenarios covered
+- Disk death → restore to new host from S3 snapshot
+- fleet.db corruption → restore from recent backup (≤1 day data loss)
+- Accidental deletion → restore after rm -rf ~/.hoop/
+- Host migration → fresh HOOP install + restore + workspace migration
+
+## What's explicitly not backed up (as planned)
+- Bead state (br's job, in each workspace's .beads/)
 - NEEDLE worker state (separate)
 - CLI session files (each CLI owns these)
 - Git worktree state (git's job)
 
-## Test Coverage
-- `backup_restore_cycle.rs` — Backup-restore cycle, credentials validation, age encryption
-- `disaster_recovery_runbook.rs` — All four DR scenarios
-- Unit tests in each module (cron parsing, manifest validation, etc.)
-
 ## References
-- Plan §15: `/home/coding/HOOP/docs/plan/plan.md` (lines 1202-1263)
-- Operations guide: `/home/coding/HOOP/docs/operations.md` (lines 458-832)
+- Plan §15
+- Memory: project_armor_backup_strategy.md (ARMOR encrypted S3 proxy for B2)
