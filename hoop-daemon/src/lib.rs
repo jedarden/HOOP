@@ -364,6 +364,8 @@ pub struct DaemonState {
     /// Unassigned sessions tracker — tracks sessions outside registered projects (§5.4)
     // TODO: Uncomment when api_unassigned module is implemented
     pub unassigned_tracker: Option<Arc<api_unassigned::UnassignedTracker>>,
+    /// Reflection detection state — coordinates pattern detection runs (Marquee #12, Phase 5)
+    pub reflection_detection_state: Option<Arc<tokio::sync::Mutex<api_reflection_detection::DetectionState>>>,
 }
 
 /// Health check endpoint handler — returns 200 if the process is responsive.
@@ -2746,6 +2748,7 @@ Note: This is an automated synthesis from voice dictation."#,
                 .with_identity_cache(identity_cache),
         ),
         unassigned_tracker,
+        reflection_detection_state: Some(api_reflection_detection::new_detection_state()),
     };
 
     // Forward project runtime status updates to shared store and broadcast

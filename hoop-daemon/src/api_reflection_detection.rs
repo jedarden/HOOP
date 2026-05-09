@@ -24,7 +24,7 @@ pub fn router() -> Router<DaemonState> {
 }
 
 /// Shared state for detection coordination (prevents concurrent runs)
-struct DetectionState {
+pub struct DetectionState {
     last_run: Option<chrono::DateTime<chrono::Utc>>,
     running: bool,
     last_result: Option<DetectionResult>,
