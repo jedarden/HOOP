@@ -166,7 +166,7 @@ async fn list_directory(
     params(
         ("project" = String, Path, description = "Project name"),
         ("path" = String, Query, description = "File path relative to project root"),
-        ("theme" = String, Query, description = "Syntax highlighting theme (light or dark)")
+        ("theme" = String, Query, description = "Syntax highlighting theme - light or dark")
     ),
     responses(
         (status = 200, description = "File content with syntax highlighting", body = HighlightResult),
@@ -351,24 +351,6 @@ fn highlight_file(
     })
 }
 
-/// GET /api/projects/:project/files/preview — unified file preview endpoint
-///
-/// Returns syntax-highlighted text or hex dump for binary files.
-/// Automatically detects file type and returns appropriate preview.
-#[utoipa::path(
-    get,
-    path = "/api/projects/{project}/files/preview",
-    tag = "files",
-    params(
-        ("project" = String, Path, description = "Project name"),
-        ("path" = String, Query, description = "File path relative to project root"),
-        ("theme" = String, Query, description = "Syntax highlighting theme (light or dark)")
-    ),
-    responses(
-        (status = 200, description = "File preview", body = FilePreviewResult),
-        (status = 400, description = "Invalid project name or unsafe path"),
-        (status = 404, description = "Project or file not found")
-    )]
 async fn get_file_preview(
     Path(project): Path<String>,
     Query(params): Query<ContentQuery>,
