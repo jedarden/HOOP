@@ -26,6 +26,7 @@ use crate::stuck_detector::StuckDetectorConfigMap;
 /// Each pattern has a unique identifier, a human-readable name, a severity level,
 /// and one or more regular expressions that match secrets of this type.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SecretPattern {
     /// Unique snake_case identifier for this pattern (e.g., "anthropic_api_key").
     /// This is used as the canonical identifier across client and backend.
