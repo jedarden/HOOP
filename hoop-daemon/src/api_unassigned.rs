@@ -100,6 +100,7 @@ struct UnassignedEntry {
 /// Discovers sessions from all CLI adapters, filters out those that match
 /// registered projects, and maintains a bounded cache of unassigned sessions.
 /// Ignores are persisted to disk and survive restarts.
+#[derive(Debug)]
 pub struct UnassignedTracker {
     /// Cached unassigned sessions (bounded to MAX_UNASSIGNED_SESSIONS)
     cache: Arc<Mutex<Vec<UnassignedEntry>>>,

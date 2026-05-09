@@ -24,9 +24,8 @@ use crate::fleet;
 const HOOP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Prompt types for progressive introduction
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, utoipa::ToSchema)]
 #[serde(rename_all = "snake_case")]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum OnboardingPromptType {
     /// "What's new" card when upgrading to a new version
     WhatsNew { version: String },
@@ -41,8 +40,7 @@ pub enum OnboardingPromptType {
 }
 
 /// Onboarding prompt data sent to the frontend
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct OnboardingPrompt {
     /// Unique prompt identifier
     pub id: String,
@@ -66,8 +64,7 @@ pub struct OnboardingPrompt {
 }
 
 /// Response for GET /api/onboarding/prompts
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct OnboardingPromptsResponse {
     /// Eligible prompts that haven't been dismissed
     pub prompts: Vec<OnboardingPrompt>,
@@ -80,8 +77,7 @@ pub struct OnboardingPromptsResponse {
 }
 
 /// Request to dismiss a prompt
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct DismissPromptRequest {
     /// Prompt ID to dismiss
     pub prompt_id: String,

@@ -363,6 +363,8 @@ pub struct DaemonState {
     pub note_library: api_notes::NoteStore,
     /// Skills library — agent-invocable custom tools (§22.2)
     pub skill_library: api_skills::SkillStore,
+    /// Scripts library — operator-triggered automation (§22.3)
+    pub script_library: api_scripts::ScriptStore,
     /// Identity cache for Tailscale whois lookups (§13 Security)
     pub identity_cache: Arc<identity::IdentityCache>,
     /// Role resolver for RBAC (maps Tailscale identities to viewer/drafter roles)
@@ -2596,20 +2598,26 @@ Note: This is an automated synthesis from voice dictation."#,
         None
     };
 
+    // Initialize script library (§22.3)
+    let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    home.push(".hoop");
+    let scripts_dir = api_scripts::ensure_scripts_dir(&home);
+    let script_library = Arc::new(std::sync::RwLock::new(api_scripts::ScriptLibrary::new()));
+
+    // Load initial scripts
+    {
+        let mut lib = script_library.write().unwrap();
+        lib.load(&scripts_dir);
+    }
+
+    // Start scripts file watcher for hot-reload
+    let _scripts_watcher = api_scripts::start_watcher(
+        scripts_dir.clone(),
+        script_library.clone(),
+    );
+    info!("Scripts library initialized and watcher started");
+
     // Initialize script scheduler (§22.3)
-    let scripts_dir_str = resolved_config
-        .agent_extensions_scripts
-        .value
-        .clone()
-        .unwrap_or_else(|| {
-            dirs::home_dir()
-                .unwrap_or_else(|| PathBuf::from("."))
-                .join(".hoop")
-                .join("scripts")
-                .to_string_lossy()
-                .to_string()
-        });
-    let scripts_dir = PathBuf::from(&scripts_dir_str);
     let script_scheduler = Arc::new(script_scheduler::ScriptScheduler::new(scripts_dir));
     let sched_shutdown = shutdown_coordinator.subscribe();
     script_scheduler.clone().start_scheduler(sched_shutdown);
@@ -2793,6 +2801,7 @@ Note: This is an automated synthesis from voice dictation."#,
         prompt_library,
         note_library,
         skill_library,
+        script_library,
         identity_cache: identity_cache.clone(),
         role_resolver: Arc::new(
             auth::RoleResolver::new(config_resolver::resolve(cli_overrides.clone()).roles.value.clone())

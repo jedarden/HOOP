@@ -1128,7 +1128,7 @@ async fn list_skills(
 
 /// GET /api/skills/:name — get a single skill by name
 async fn get_skill(
-    AxumPath(name): AxumPath<String>,
+    Path(name): Path<String>,
     State(state): State<crate::DaemonState>,
 ) -> Result<Json<SkillEntry>, (StatusCode, String)> {
     let lib = state.skill_library.read().unwrap();
@@ -1139,7 +1139,7 @@ async fn get_skill(
 
 /// POST /api/skills/:name/run — execute a skill
 async fn run_skill(
-    AxumPath(name): AxumPath<String>,
+    Path(name): Path<String>,
     State(state): State<crate::DaemonState>,
     Json(req): Json<SkillRunRequest>,
 ) -> Result<Json<SkillRunResponse>, (StatusCode, String)> {

@@ -194,7 +194,7 @@ pub struct WsConnectionGuard {
 impl Drop for WsConnectionGuard {
     fn drop(&mut self) {
         let mut lock = self.clients.write().unwrap();
-        lock.retain(|(id, _)| *id != self.conn_id);
+        lock.retain(|(id, _, _)| *id != self.conn_id);
     }
 }
 

@@ -232,6 +232,12 @@ impl McpServerState {
                 input_schema: input_schema_summarize_day(),
                 output_schema: Some(output_schema_summarize_day()),
             },
+            Tool {
+                name: "read_note".to_string(),
+                description: "Read a note from the notes library. Notes are markdown files containing team conventions, glossaries, and reference material. Use this tool to access structured knowledge about the project.".to_string(),
+                input_schema: input_schema_read_note(),
+                output_schema: Some(output_schema_read_note()),
+            },
             // Write tools
             Tool {
                 name: "create_stitch".to_string(),
@@ -300,6 +306,7 @@ impl McpServerState {
             "search_conversations" => self.search_conversations(args),
             "summarize_project" => self.summarize_project(args),
             "summarize_day" => self.summarize_day(args),
+            "read_note" => self.read_note(args),
             // Write tools
             "create_stitch" => self.create_stitch(args),
             "create_bead" => self.create_bead(args),
@@ -826,6 +833,31 @@ impl McpServerState {
         Ok(ToolCallResult {
             content: vec![Content::Text {
                 text: format!("Escalation sent: {}", message),
+            }],
+            is_error: None,
+        })
+    }
+
+    fn read_note(&self, args: &Map<String, Value>) -> Result<ToolCallResult, String> {
+        let name = args
+            .get("name")
+            .and_then(|v| v.as_str())
+            .ok_or("name parameter is required")?;
+
+        // Try to read the note from the notes library
+        let note = crate::notes::read_note_by_name(name, &self.projects)
+            .ok_or_else(|| format!("Note '{}' not found. Available notes: {}", name, crate::notes::list_note_names(&self.projects).join(", ")))?;
+
+        // Build the response
+        let mut response = format!("# {}\n", note.title);
+        if let Some(description) = &note.description {
+            response.push_str(&format!("{}\n\n", description));
+        }
+        response.push_str(&note.body);
+
+        Ok(ToolCallResult {
+            content: vec![Content::Text {
+                text: response,
             }],
             is_error: None,
         })
@@ -1673,6 +1705,24 @@ fn input_schema_summarize_day() -> InputSchema {
     }
 }
 
+fn input_schema_read_note() -> InputSchema {
+    InputSchema {
+        schema_type: "object".to_string(),
+        properties: {
+            let mut props = serde_json::Map::new();
+            props.insert(
+                "name".to_string(),
+                json!({
+                    "type": "string",
+                    "description": "Note name (filename without .md extension)"
+                }),
+            );
+            props
+        },
+        required: Some(vec!["name".to_string()]),
+    }
+}
+
 fn input_schema_create_stitch() -> InputSchema {
     InputSchema {
         schema_type: "object".to_string(),
@@ -2135,6 +2185,30 @@ fn output_schema_summarize_day() -> OutputSchema {
             "date".to_string(),
             "total_stitches".to_string(),
             "active_stitches_24h".to_string(),
+        ]),
+    }
+}
+
+fn output_schema_read_note() -> OutputSchema {
+    OutputSchema {
+        schema_type: "object".to_string(),
+        properties: {
+            let mut props = serde_json::Map::new();
+            props.insert("name".to_string(), json!({ "type": "string" }));
+            props.insert("title".to_string(), json!({ "type": "string" }));
+            props.insert("description".to_string(), json!({ "type": "string" }));
+            props.insert("tags".to_string(), json!({ "type": "array", "items": { "type": "string" } }));
+            props.insert("scope".to_string(), json!({ "type": "string", "enum": ["global", "project"] }));
+            props.insert("project".to_string(), json!({ "type": "string" }));
+            props.insert("body".to_string(), json!({ "type": "string" }));
+            props.insert("size_bytes".to_string(), json!({ "type": "number" }));
+            props.insert("modified".to_string(), json!({ "type": "string" }));
+            props
+        },
+        required: Some(vec![
+            "name".to_string(),
+            "title".to_string(),
+            "body".to_string(),
         ]),
     }
 }

@@ -1224,8 +1224,23 @@ mod tests {
             stuck_detector: Arc::new(std::sync::Mutex::new(crate::stuck_detector::StuckDetector::new())),
             backup_runner: None,
             template_library: crate::template_library::TemplateStore::default(),
+            prompt_library: Arc::new(std::sync::RwLock::new(crate::api_prompts::PromptLibrary::new())),
+            note_library: Arc::new(std::sync::RwLock::new(crate::api_notes::NoteLibrary::new())),
+            skill_library: Arc::new(std::sync::RwLock::new(crate::api_skills::SkillLibrary::new())),
+            script_library: Arc::new(std::sync::RwLock::new(crate::api_scripts::ScriptLibrary::new())),
             identity_cache: identity_cache.clone(),
             role_resolver,
+            config_status: Arc::new(std::sync::RwLock::new(crate::ws::ConfigStatusData {
+                file_hash: String::new(),
+                last_reload_at: String::new(),
+                last_reload_status: crate::ws::ConfigReloadStatus::Ok,
+                last_reload_error: None,
+            })),
+            saturation_alert_tx: tokio::sync::broadcast::channel(1).0,
+            presence_tx: tokio::sync::broadcast::channel(1).0,
+            reflection_tx: tokio::sync::broadcast::channel(1).0,
+            unassigned_tracker: None,
+            reflection_detection_state: None,
         };
 
         let actor = resolve_actor(None, &state);

@@ -10,14 +10,16 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use notify::{RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
     io::{BufRead, BufReader},
     net::SocketAddr,
     os::unix::fs::PermissionsExt,
-    path::{Path, PathBuf},
+    path::{Path as StdPath, PathBuf},
     process::{Command, Stdio},
+    sync::Arc,
     time::{Duration, Instant},
 };
 use sha2::{Digest, Sha256};
@@ -224,7 +226,7 @@ fn hash_args(args: &[String]) -> String {
 }
 
 /// Discover all scripts in the configured scripts directory
-pub fn discover_scripts(scripts_dir: &Path) -> Vec<ScriptEntry> {
+pub fn discover_scripts(scripts_dir: &StdPath) -> Vec<ScriptEntry> {
     let mut scripts = Vec::new();
 
     let Ok(entries) = fs::read_dir(scripts_dir) else {
@@ -294,7 +296,7 @@ pub fn discover_scripts(scripts_dir: &Path) -> Vec<ScriptEntry> {
 
 /// Execute a script and capture its output
 pub fn execute_script(
-    script_path: &Path,
+    script_path: &StdPath,
     args: &[String],
     timeout_secs: u64,
 ) -> Result<ScriptRunResponse, String> {
@@ -665,6 +667,132 @@ async fn run_script(
     info!("Script '{}' completed with status: {}", name, result.status);
 
     Ok(Json(result))
+}
+
+// ---------------------------------------------------------------------------
+// Script Library and Store
+// ---------------------------------------------------------------------------
+
+/// Shared script store behind an RwLock.
+pub type ScriptStore = Arc<std::sync::RwLock<ScriptLibrary>>;
+
+/// In-memory collection of discovered scripts.
+#[derive(Debug, Clone, Default)]
+pub struct ScriptLibrary {
+    /// All discovered scripts
+    scripts: Vec<ScriptEntry>,
+}
+
+impl ScriptLibrary {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Load all scripts from the scripts directory.
+    pub fn load(&mut self, scripts_dir: &StdPath) {
+        self.scripts = discover_scripts(scripts_dir);
+    }
+
+    /// Return all scripts.
+    pub fn list(&self) -> Vec<ScriptEntry> {
+        self.scripts.clone()
+    }
+
+    /// Get a single script by name.
+    pub fn get(&self, name: &str) -> Option<ScriptEntry> {
+        self.scripts.iter().find(|s| s.name == name).cloned()
+    }
+}
+
+/// Ensure the scripts directory exists and seed example if empty.
+pub fn ensure_scripts_dir(scripts_dir: &StdPath) -> PathBuf {
+    if !scripts_dir.exists() {
+        std::fs::create_dir_all(scripts_dir).unwrap_or_else(|e| {
+            warn!("Failed to create scripts directory: {}", e);
+        });
+    }
+
+    // Seed example script if directory is empty
+    let has_files = std::fs::read_dir(scripts_dir)
+        .map(|mut d| d.next().is_some())
+        .unwrap_or(false);
+
+    if !has_files {
+        seed_example_script(scripts_dir);
+    }
+
+    scripts_dir.to_path_buf()
+}
+
+fn seed_example_script(dir: &StdPath) {
+    let script_path = dir.join("hello-world");
+    let manifest_path = dir.join("hello-world.yml");
+
+    let script_content = r#"#!/bin/bash
+# Example HOOP script
+# Prints a friendly message to stdout
+echo "Hello from HOOP!"
+echo "Current time: $(date)"
+echo "Working directory: $(pwd)"
+exit 0
+"#;
+
+    let manifest_content = r#"name: hello-world
+description: Print a friendly hello message
+scope: global
+timeout_secs: 30
+"#;
+
+    crate::atomic_write::atomic_write_file_str(&script_path, script_content)
+        .unwrap_or_else(|e| warn!("Failed to write example script: {}", e));
+
+    crate::atomic_write::atomic_write_file_str(&manifest_path, manifest_content)
+        .unwrap_or_else(|e| warn!("Failed to write example script manifest: {}", e));
+
+    // Make script executable
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(metadata) = std::fs::metadata(&script_path) {
+            let mut perms = metadata.permissions();
+            perms.set_mode(perms.mode() | 0o111);
+            let _ = std::fs::set_permissions(&script_path, perms);
+        }
+    }
+
+    info!("Seeded example script: hello-world");
+}
+
+/// Start file watcher for the scripts directory.
+/// Returns the watcher (must be kept alive for watching to work).
+pub fn start_watcher(
+    scripts_dir: PathBuf,
+    store: ScriptStore,
+) -> notify::RecommendedWatcher {
+    let watcher_scripts_dir = scripts_dir.clone();
+    let mut watcher =
+        notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
+            match res {
+                Ok(_event) => {
+                    debug!("Scripts directory changed, reloading");
+                    let mut lib = store.write().unwrap();
+                    lib.load(&watcher_scripts_dir);
+                }
+                Err(e) => {
+                    warn!("Scripts watch error: {}", e);
+                }
+            }
+        })
+        .expect("failed to create scripts file watcher");
+
+    if scripts_dir.exists() {
+        watcher
+            .watch(&scripts_dir, RecursiveMode::NonRecursive)
+            .unwrap_or_else(|e| warn!("Cannot watch scripts dir: {}", e));
+    }
+
+    info!("Scripts file watcher started");
+    watcher
 }
 
 pub fn router() -> Router<DaemonState> {

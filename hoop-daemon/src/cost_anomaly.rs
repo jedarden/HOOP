@@ -325,7 +325,7 @@ pub fn check_on_stitch_close(
                 crate::ws::ClosestPatternMatch {
                     pattern_id: p.pattern_id.clone(),
                     pattern_name: p.pattern_name.clone(),
-                    similarity: p.similarity,
+                    similarity: p.similarity as f64,
                     recommended_fix_template_md: p.recommended_fix_template_md.clone(),
                 }
             });

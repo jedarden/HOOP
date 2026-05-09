@@ -9,6 +9,7 @@ mod audit;
 mod br_verbs;
 mod id_validators;
 mod log_rotation;
+mod notes;
 mod protocol;
 mod redaction;
 mod skills;

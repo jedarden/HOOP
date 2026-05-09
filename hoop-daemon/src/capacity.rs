@@ -662,7 +662,7 @@ impl CapacityMeterConfig {
     ///
     /// Returns all paths that exist and contain .jsonl session files.
     fn discover_gemini_dirs(home: &Path) -> Vec<PathBuf> {
-        let mut found_dirs = Vec::new();
+        let mut found_dirs: Vec<PathBuf> = Vec::new();
 
         // Check GEMINI_CLI_HOME environment variable
         let gemini_cli_home = std::env::var("GEMINI_CLI_HOME").ok();
@@ -704,7 +704,7 @@ impl CapacityMeterConfig {
                     );
                     // Return the parent directory (root) for consistency
                     if let Some(parent) = dir.parent() {
-                        if !found_dirs.contains(parent) {
+                        if !found_dirs.contains(&parent.to_path_buf()) {
                             found_dirs.push(parent.to_path_buf());
                         }
                     }
@@ -761,7 +761,7 @@ impl CapacityMeterConfig {
     ///
     /// Returns all paths that exist and contain session files.
     fn discover_opencode_dirs(home: &Path) -> Vec<PathBuf> {
-        let mut found_dirs = Vec::new();
+        let mut found_dirs: Vec<PathBuf> = Vec::new();
 
         // Primary: XDG data directory
         let xdg_data_home = std::env::var("XDG_DATA_HOME")
@@ -2144,7 +2144,8 @@ impl CapacityMeter {
                 continue;
             }
 
-            let value: serde_json::Value = serde_json::from_str(&line).ok()?;
+            let value: serde_json::Value = serde_json::from_str(&line)
+                .map_err(|e| anyhow::anyhow!("Failed to parse JSON: {}", e))?;
             let event_type = value.get("type").and_then(|v| v.as_str());
 
             match event_type {

@@ -6,6 +6,7 @@
 pub mod audit;
 pub mod br_verbs;
 pub mod id_validators;
+pub mod notes;
 pub mod protocol;
 pub mod redaction;
 pub mod skills;
