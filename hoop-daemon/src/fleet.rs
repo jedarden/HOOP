@@ -4228,8 +4228,8 @@ pub fn insert_reflection_entry(entry: &ReflectionLedgerEntry) -> Result<()> {
     let path = db_path();
     let conn = Connection::open(&path)?;
     conn.execute(
-        r#"INSERT INTO reflection_ledger (id, scope, rule, reason, source_stitches, status, created_at, last_applied, applied_count)
-           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"#,
+        r#"INSERT INTO reflection_ledger (id, scope, rule, reason, source_stitches, status, created_at, last_applied, applied_count, content_hash, rejection_count, approved_by, approved_at, archived_at)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)"#,
         params![
             &entry.id,
             &entry.scope,
@@ -4240,6 +4240,11 @@ pub fn insert_reflection_entry(entry: &ReflectionLedgerEntry) -> Result<()> {
             &entry.created_at,
             &entry.last_applied,
             &entry.applied_count,
+            &entry.content_hash,
+            &entry.rejection_count,
+            &entry.approved_by,
+            &entry.approved_at,
+            &entry.archived_at,
         ],
     )?;
     Ok(())

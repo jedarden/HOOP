@@ -1675,8 +1675,13 @@ mod tests {
                 output: serde_json::json!("ok"),
                 is_error: false,
             },
+            AgentSessionEvent::TurnStarted {
+                session_id: "s1".into(),
+                turn_id: "turn-123".into(),
+            },
             AgentSessionEvent::TurnComplete {
                 session_id: "s1".into(),
+                turn_id: "turn-123".into(),
                 cost_usd: 0.025,
                 input_tokens: 100,
                 output_tokens: 50,
@@ -2129,7 +2134,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(old_status, "switched");
-        assert_eq!(old_stitch, Some(stitch_id));
+        assert_eq!(old_stitch, Some(stitch_id.clone()));
 
         // 4. Verify new session is active on ZAI adapter.
         let (new_status, new_adapter): (String, String) = db
