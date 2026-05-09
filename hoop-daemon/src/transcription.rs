@@ -886,20 +886,19 @@ impl TranscriptionJobProcessor {
                 let stitch_id = stitch_id.clone();
                 move || {
                     let db_path = crate::fleet::db_path();
-                    let conn = Connection::open(&db_path)?;
+                    let conn = Connection::open(&db_path).ok()?;
                     let result = conn.query_row(
                         "SELECT project FROM stitches WHERE id = ?1",
                         params![stitch_id],
                         |row| row.get::<_, String>(0),
                     )
-                    .ok()
-                    .map(|r: Option<String>| r);
-                    result
+                    .ok();
+                    Some(result)
                 }
             })
             .await
             .ok()
-            .and_then(|r: Result<Option<String>, _>| r.ok())
+            .flatten()
             .flatten();
 
             // Scan the transcript for secrets

@@ -11,6 +11,7 @@ import {
 } from './atoms';
 import { InlinePrompt } from './components/OnboardingPromptBanner';
 import { useOnboarding } from './useOnboarding';
+import { getFileTreeDropData, fetchFileContext, formatFileContextAsMarkdown } from './components/fileContext';
 
 interface PendingAttachment {
   id: string;
@@ -338,9 +339,32 @@ export default function AgentChatPane() {
     setIsDragOver(false);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
+
+    // Check if this is a file tree drop from FilesTab (path-sensitive routing, §6 Phase 3)
+    const fileTreeData = getFileTreeDropData(e);
+    if (fileTreeData) {
+      try {
+        // Fetch file context with path + revision + snippet
+        const context = await fetchFileContext(fileTreeData.projectName, fileTreeData.path, {
+          maxLines: 20,
+          includeLineNumbers: true,
+        });
+
+        // Format as markdown and insert into input
+        const markdown = formatFileContextAsMarkdown(context);
+        setInput(prev => prev + (prev ? '\n\n' : '') + markdown);
+        return;
+      } catch (err) {
+        console.error('Failed to fetch file context:', err);
+        setSendError(`Failed to load file context: ${err instanceof Error ? err.message : String(err)}`);
+        return;
+      }
+    }
+
+    // Regular file attachment drop
     const files = Array.from(e.dataTransfer.files);
     if (files.length === 0) return;
     const cap = getAdapterCap(agentStatus?.adapter ?? null);

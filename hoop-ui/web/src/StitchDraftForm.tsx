@@ -3,6 +3,7 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import { projectCardsAtom, beadsAtom, BeadData, draftAutosaveAtom, draftUpdateAtom, TemplateValues, type StitchTemplate } from './atoms';
 import { UploadManager, formatBytes } from './components/UploadManager';
 import TemplatePicker from './TemplatePicker';
+import { getFileTreeDropData, fetchFileContext, formatFileContextAsMarkdown } from './components/fileContext';
 
 // Stitch kind — determines decomposition behavior
 export type StitchKind = 'task' | 'fix' | 'investigation' | 'genesis' | 'review';
@@ -1106,9 +1107,35 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
     setIsDragOver(false);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
+
+    // Check if this is a file tree drop from FilesTab (path-sensitive routing, §6 Phase 3)
+    const fileTreeData = getFileTreeDropData(e);
+    if (fileTreeData) {
+      try {
+        // Fetch file context with path + revision + snippet
+        const context = await fetchFileContext(fileTreeData.projectName, fileTreeData.path, {
+          maxLines: 20,
+          includeLineNumbers: true,
+        });
+
+        // Format as markdown and insert into description
+        const markdown = formatFileContextAsMarkdown(context);
+        setForm(f => ({
+          ...f,
+          description: f.description + (f.description ? '\n\n' : '') + markdown,
+        }));
+        return;
+      } catch (err) {
+        console.error('Failed to fetch file context:', err);
+        setSubmitError(`Failed to load file context: ${err instanceof Error ? err.message : String(err)}`);
+        return;
+      }
+    }
+
+    // Regular file attachment drop
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) addFiles(files);
   }, [addFiles]);
