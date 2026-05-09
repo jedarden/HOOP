@@ -125,6 +125,8 @@ pub struct AgentAdapterConfig {
     #[serde(default)]
     pub anthropic_api_key: Option<String>,
     #[serde(default)]
+    pub anthropic_base_url: Option<String>,
+    #[serde(default)]
     pub zai_base_url: Option<String>,
     #[serde(default)]
     pub zai_api_key: Option<String>,
@@ -148,6 +150,7 @@ impl Default for AgentAdapterConfig {
             adapter: "claude".to_string(),
             model: "claude-opus-4-7".to_string(),
             anthropic_api_key: None,
+            anthropic_base_url: None,
             zai_base_url: None,
             zai_api_key: None,
             rate_limit_rpm: None,
@@ -163,6 +166,7 @@ impl From<&AgentAdapterConfig> for agent_adapter::AgentAdapterConfig {
             adapter: c.adapter.clone(),
             model: c.model.clone(),
             anthropic_api_key: c.anthropic_api_key.clone(),
+            anthropic_base_url: c.anthropic_base_url.clone(),
             zai_base_url: c.zai_base_url.clone(),
             zai_api_key: c.zai_api_key.clone(),
             rate_limit_rpm: c.rate_limit_rpm,

@@ -725,5 +725,246 @@ agent:
 }
 
 // ---------------------------------------------------------------------------
+// Child beads .1 and .2: HTTP mock for Anthropic 5xx errors
+// ---------------------------------------------------------------------------
+
+/// Mock Anthropic API server that returns 503 Service Unavailable
+///
+/// This implements child bead hoop-ttb.6.2.2.1: HTTP intercept in test context
+/// returning 503 on all LLM calls. The mock can be toggled on/off per test.
+struct MockAnthropicServer {
+    /// Local address the mock server is listening on
+    addr: String,
+    /// Handle to keep the server alive
+    _shutdown: tokio::sync::oneshot::Sender<()>,
+}
+
+impl MockAnthropicServer {
+    /// Create a new mock Anthropic API server that returns 503 on all requests
+    ///
+    /// The server listens on a random port and returns 503 Service Unavailable
+    /// for all requests to /v1/messages. This simulates an Anthropic outage.
+    async fn new() -> anyhow::Result<Self> {
+        use axum::{routing::post, Router};
+        use tokio::net::TcpListener;
+
+        // Bind to port 0 to get a random available port
+        let listener = TcpListener::bind("127.0.0.1:0").await?;
+        let addr = listener.local_addr()?;
+        let base_url = format!("http://{}", addr);
+
+        // Build axum app that returns 503 for all requests
+        let app = Router::new().route("/v1/messages", post(|| async {
+            // Return 503 Service Unavailable - simulating Anthropic outage
+            (
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                serde_json::json!({
+                    "error": {
+                        "type": "internal_server_error",
+                        "message": "Simulated Anthropic 5xx outage for testing"
+                    }
+                }),
+            )
+        }));
+
+        // Channel to signal shutdown
+        let (shutdown_tx, mut shutdown_rx) = tokio::sync::oneshot::channel();
+
+        // Spawn the mock server in the background
+        tokio::spawn(async move {
+            axum::serve(listener, app)
+                .with_graceful_shutdown(async {
+                    // Wait for shutdown signal
+                    let _ = shutdown_rx.await;
+                })
+                .await
+                .ok();
+        });
+
+        Ok(Self {
+            addr: base_url,
+            _shutdown: shutdown_tx,
+        })
+    }
+
+    /// Get the base URL to use as anthropic_base_url in config
+    fn base_url(&self) -> &str {
+        &self.addr
+    }
+}
+
+#[tokio::test]
+async fn anthropic_5xx_mock_server_daemon_survives() {
+    // Acceptance (hoop-ttb.6.2.2.2): daemon starts with Anthropic adapter, mock returns 5xx,
+    // no crash, error logged. Daemon stays alive for 30s, /readyz still responds.
+
+    use std::time::{Duration, Instant};
+
+    // Start the mock Anthropic server that returns 503
+    let mock_server = MockAnthropicServer::new()
+        .await
+        .expect("Failed to start mock Anthropic server");
+
+    // Spawn daemon with custom config pointing to mock server
+    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config| {
+        config.allow_br_mismatch = true;
+    }))
+    .await
+    .expect("Failed to spawn daemon");
+
+    let client = FailoverClient::new(_base_url.clone()).await.expect("Failed to create client");
+
+    // Verify daemon is healthy initially
+    let health = client.healthz().await.expect("Health check failed");
+    assert_eq!(health["status"], "ok", "Daemon should be healthy initially");
+
+    // Create a custom config that points to our mock server
+    // We need to manually update the agent config to use the mock server
+    let config_path = _daemon.temp_dir.path().join(".hoop").join("config.yml");
+
+    // Write config with anthropic adapter pointing to mock server
+    let mock_config = format!(
+        r#"schema_version: "1.0.0"
+agent:
+  adapter: anthropic
+  model: claude-opus-4-7
+  anthropic_api_key: test-key-for-mock
+  anthropic_base_url: {}
+"#,
+        mock_server.base_url()
+    );
+
+    std::fs::write(&config_path, mock_config)
+        .expect("Failed to write config with mock server URL");
+
+    info!("Wrote config pointing to mock Anthropic server at {}", mock_server.base_url());
+
+    // Spawn agent session - it will attempt to connect to mock server
+    // The mock will return 503, which should be handled gracefully
+    let spawn_result = client.spawn_agent().await;
+
+    // The spawn might fail due to 503, but daemon should stay alive
+    // Log the result for debugging
+    match &spawn_result {
+        Ok(resp) => info!("Spawn response: {:?}", resp),
+        Err(e) => info!("Spawn failed as expected with 503: {}", e),
+    }
+
+    // Critical assertion: daemon must still be healthy after the 5xx error
+    let health_after = client.healthz().await.expect("Health check failed");
+    assert_eq!(
+        health_after["status"], "ok",
+        "Daemon must remain healthy after Anthropic 5xx error"
+    );
+
+    // Verify /readyz still responds
+    let ready_resp = reqwest::Client::new()
+        .get(&format!("{}/readyz", _base_url))
+        .timeout(Duration::from_secs(5))
+        .send()
+        .await
+        .expect("Ready endpoint request failed");
+
+    assert_eq!(
+        ready_resp.status(),
+        200,
+        "/readyz should return 200 after 5xx error"
+    );
+
+    // Wait 30 seconds (as per child bead .2 acceptance) and verify daemon stays alive
+    // This is the key assertion: daemon survives for 30s with 503 responses
+    let start = Instant::now();
+    let mut checks = 0;
+
+    while start.elapsed() < Duration::from_secs(30) {
+        tokio::time::sleep(Duration::from_secs(5)).await;
+
+        // Check health every 5 seconds
+        let health = client.healthz().await.expect("Health check failed");
+        assert_eq!(
+            health["status"], "ok",
+            "Daemon should stay healthy during 503 outage (check {})",
+            checks + 1
+        );
+        checks += 1;
+    }
+
+    // Final verification: daemon is still alive after 30s of 503 responses
+    let final_health = client.healthz().await.expect("Health check failed");
+    assert_eq!(
+        final_health["status"], "ok",
+        "Daemon must still be healthy after 30s of Anthropic 5xx errors"
+    );
+
+    // Verify daemon didn't crash or panic
+    assert!(checks >= 6, "Should have performed at least 6 health checks over 30s");
+}
+
+#[tokio::test]
+async fn anthropic_5xx_mock_then_adapter_switch_recovery() {
+    // Acceptance: After 5xx error, operator can recover by switching adapter
+    // This tests the full failover scenario: 5xx → operator switches → service restored
+
+    // Start the mock Anthropic server that returns 503
+    let mock_server = MockAnthropicServer::new()
+        .await
+        .expect("Failed to start mock Anthropic server");
+
+    // Spawn daemon
+    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config| {
+        config.allow_br_mismatch = true;
+    }))
+    .await
+    .expect("Failed to spawn daemon");
+
+    let client = FailoverClient::new(_base_url.clone()).await.expect("Failed to create client");
+
+    // Initial health check
+    let health = client.healthz().await.expect("Health check failed");
+    assert_eq!(health["status"], "ok");
+
+    // Configure to use mock server (simulating Anthropic outage)
+    let config_path = _daemon.temp_dir.path().join(".hoop").join("config.yml");
+    let mock_config = format!(
+        r#"schema_version: "1.0.0"
+agent:
+  adapter: anthropic
+  model: claude-opus-4-7
+  anthropic_api_key: test-key-for-mock
+  anthropic_base_url: {}
+"#,
+        mock_server.base_url()
+    );
+    std::fs::write(&config_path, mock_config).expect("Failed to write config");
+
+    // Try to spawn agent - will get 503 from mock
+    let _spawn_result = client.spawn_agent().await;
+
+    // Verify daemon is still healthy after 503
+    let health_after_503 = client.healthz().await.expect("Health check failed");
+    assert_eq!(health_after_503["status"], "ok");
+
+    // Operator recovery: switch adapter to ZAI (which uses different endpoint)
+    let switch_resp = client
+        .switch_adapter("zai", Some("glm-5"), None, Some("https://zai.example.com"), Some("test-key"))
+        .await
+        .expect("Adapter switch should succeed");
+
+    assert_eq!(switch_resp["status"], "ok", "Switch to ZAI should succeed");
+
+    // Verify service is restored: new agent session is active
+    let status = client
+        .get_agent_status()
+        .await
+        .expect("Failed to get agent status");
+    assert_eq!(status["active"], true, "Agent should be active after switch");
+    assert_eq!(status["adapter"], "zai", "Should be using ZAI adapter");
+
+    // Verify daemon is healthy after recovery
+    let final_health = client.healthz().await.expect("Health check failed");
+    assert_eq!(final_health["status"], "ok", "Daemon should be healthy after recovery");
+}
+
+// ---------------------------------------------------------------------------
 // Fleet DB helpers for Stitch verification
 // ---------------------------------------------------------------------------

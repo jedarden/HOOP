@@ -297,6 +297,9 @@ pub struct AgentAdapterConfig {
     pub model: String,
     /// Optional Anthropic API key (for `anthropic` adapter).
     pub anthropic_api_key: Option<String>,
+    /// Optional Anthropic API base URL (for testing/mock servers).
+    /// Defaults to https://api.anthropic.com
+    pub anthropic_base_url: Option<String>,
     /// Optional ZAI proxy base URL.
     pub zai_base_url: Option<String>,
     /// Optional ZAI API key.
@@ -317,6 +320,7 @@ impl Default for AgentAdapterConfig {
             adapter: "claude".to_string(),
             model: default_model(),
             anthropic_api_key: None,
+            anthropic_base_url: None,
             zai_base_url: None,
             zai_api_key: None,
             rate_limit_rpm: None,
@@ -336,6 +340,10 @@ pub fn build_adapter(config: &AgentAdapterConfig) -> Result<Box<dyn AgentAdapter
         }),
         AdapterKind::Anthropic => Box::new(AnthropicApiAdapter {
             api_key: config.anthropic_api_key.clone().unwrap_or_default(),
+            base_url: config
+                .anthropic_base_url
+                .clone()
+                .unwrap_or_else(|| "https://api.anthropic.com".to_string()),
             default_model: config.model.clone(),
         }),
         AdapterKind::Zai => Box::new(ZaiGlmAdapter {
@@ -674,6 +682,7 @@ fn parse_usage_from_value(val: &serde_json::Value) -> Option<TurnUsage> {
 /// maintained in-memory and replayed with each turn.
 pub struct AnthropicApiAdapter {
     api_key: String,
+    base_url: String,
     default_model: String,
 }
 
@@ -751,8 +760,12 @@ impl AgentAdapter for AnthropicApiAdapter {
         }
 
         let client = reqwest_like_client();
+        let url = format!(
+            "{}/v1/messages",
+            self.base_url.trim_end_matches('/')
+        );
         let response = client
-            .post("https://api.anthropic.com/v1/messages")
+            .post(&url)
             .header("x-api-key", api_key)
             .header("anthropic-version", "2023-06-01")
             .header("content-type", "application/json")
