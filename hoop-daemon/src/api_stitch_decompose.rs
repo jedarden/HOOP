@@ -1231,10 +1231,9 @@ mod tests {
             identity_cache: identity_cache.clone(),
             role_resolver,
             config_status: Arc::new(std::sync::RwLock::new(crate::ws::ConfigStatusData {
-                file_hash: String::new(),
-                last_reload_at: String::new(),
-                last_reload_status: crate::ws::ConfigReloadStatus::Ok,
-                last_reload_error: None,
+                valid: true,
+                error: None,
+                restart_required: None,
             })),
             saturation_alert_tx: tokio::sync::broadcast::channel(1).0,
             presence_tx: tokio::sync::broadcast::channel(1).0,
