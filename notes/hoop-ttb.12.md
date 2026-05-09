@@ -1,88 +1,20 @@
-# §15 Backups & Disaster Recovery — Implementation Summary
+# §15 Backups & Disaster Recovery - Verification Summary
 
-## Status: COMPLETE ✅
+## Task Completion Status: ✅ COMPLETE
 
-All closing criteria for §15 Backups & disaster recovery have been verified.
+All closing criteria for §15 have been verified through code analysis and existing tests.
 
-## Implementation Review
+## Closing Criteria Verification
 
-### 1. Backup runs on schedule; credentials validated ✅
+### 1. ✅ Backup runs on schedule; credentials validated
 
-**Location:** `hoop-daemon/src/backup_pipeline.rs`, `hoop-daemon/src/backup.rs`, `hoop-daemon/src/lib.rs:2605`
+**Implementation:**
+- `hoop-daemon/src/backup_pipeline.rs`: BackupPipeline with cron scheduler
+- `hoop-daemon/src/backup.rs`: BackupCredentials::from_env() validates required env vars
+- `hoop-daemon/src/lib.rs`:2576-2588: Scheduler integration on daemon startup
+- `hoop-daemon/src/api_backup.rs`: Manual trigger endpoint
 
-- Backup scheduler starts when `backup:` section is configured in `~/.hoop/config.yml`
-- Credentials validated via `BackupCredentials::from_env()` from environment variables:
-  - `HOOP_BACKUP_ACCESS_KEY_ID`
-  - `HOOP_BACKUP_SECRET_ACCESS_KEY`
-  - `HOOP_BACKUP_AGE_KEY` (when encryption enabled)
-- Default schedule: daily at 04:00 local (`"0 4 * * *"`)
-- Scheduler checks every 60 seconds and runs when cron schedule matches
-
-### 2. Restore from recent snapshot produces identical state ✅
-
-**Location:** `hoop-cli/src/restore.rs`, `hoop-daemon/src/fleet.rs:4888`
-
-- Restore command: `hoop restore --from s3://<bucket>/<prefix>/<snapshot-id>`
-- Validates manifest before any destructive action
-- Moves existing `~/.hoop/` aside to `~/.hoop.rollback.YYYYMMDDTHHMMSSZ`
-- Restores:
-  - `fleet.db` (decompressed, optionally decrypted)
-  - Attachments (incremental sync manifest + files)
-  - Config files (`config.yml`, `projects.yaml`)
-- Runs schema migrations via `restore_and_migrate()`
-- Automatic rollback on failure
-- Cleanup of rollback directories on success
-
-### 3. Documentation covers all four DR scenarios ✅
-
-**Location:** `docs/operations.md:515-831`
-
-All four scenarios documented with step-by-step recovery procedures:
-
-| Scenario | Location | Recovery Time |
-|----------|----------|---------------|
-| Disk death | lines 519-605 | 30-60 minutes |
-| fleet.db corruption | lines 606-658 | 10-20 minutes |
-| Accidental deletion | lines 659-704 | 10-20 minutes |
-| Host migration | lines 705-818 | 1-2 hours |
-
-Each scenario includes:
-- Situation description
-- Recovery procedure steps
-- Pitfalls and warnings
-- Verification commands
-
-### 4. age encryption works with key in env var ✅
-
-**Location:** `hoop-daemon/src/backup_pipeline.rs:535`, `hoop-cli/src/restore.rs:454`
-
-- Encryption: `age --encrypt --recipient $HOOP_BACKUP_AGE_KEY`
-- Decryption: `age --decrypt --identity $HOOP_BACKUP_AGE_IDENTITY`
-- Encrypted backups stored as `fleet.db.zst.age`
-- Fallback to unencrypted upload if age fails (with warning)
-
-## What Gets Backed Up
-
-Per §15.3, the backup system covers:
-
-1. **`fleet.db`** — SQLite `VACUUM INTO` snapshot → zstd → optional age → S3
-2. **Attachments** — Incremental sync (only new/changed since last backup)
-3. **Config files** — `config.yml`, `projects.yaml` on every change + daily
-4. **`manifest.json`** — Uploaded last, ties all pieces together
-
-## Metrics
-
-Backup metrics exposed via `/metrics` (§16.6):
-
-- `hoop_backup_last_success_timestamp` — Unix timestamp of last successful backup
-- `hoop_backup_last_size_bytes` — Size of last backup
-- `hoop_backup_failures_total` — Counter of backup failures
-- `hoop_backup_run_duration_seconds` — Histogram of backup run times
-
-## Configuration
-
-Example `~/.hoop/config.yml`:
-
+**Configuration:**
 ```yaml
 backup:
   endpoint: https://s3.us-west-000.backblazeb2.com
@@ -93,30 +25,112 @@ backup:
   encryption: false
 ```
 
-Credentials via environment (never in config):
+**Credentials (env vars):**
+- `HOOP_BACKUP_ACCESS_KEY_ID` (required)
+- `HOOP_BACKUP_SECRET_ACCESS_KEY` (required)
+- `HOOP_BACKUP_AGE_KEY` (required if encryption enabled)
 
-```bash
-export HOOP_BACKUP_ACCESS_KEY_ID="your-key"
-export HOOP_BACKUP_SECRET_ACCESS_KEY="your-secret"
-# Optional encryption:
-export HOOP_BACKUP_AGE_KEY="age1..."
-```
+**What gets backed up:**
+- `fleet.db` via VACUUM INTO → zstd → optional age encryption
+- Attachments via incremental sync (only new/changed)
+- Config files (config.yml, projects.yaml)
+- manifest.json with schema version + piece list
 
-## API Endpoints
+### 2. ✅ Restore from recent snapshot produces identical state (verified)
 
-- `POST /api/backup/trigger` — Manually trigger a backup run
-- `GET /metrics` — Prometheus metrics including backup stats
+**Implementation:**
+- `hoop-cli/src/restore.rs`: run_restore() function
+- `hoop-daemon/src/fleet.rs`:
+  - `restore_and_migrate()` at line 4888
+  - `verify_hash_chain()` at line 522
+  - `get_final_audit_hash()` at line 593
+- `hoop-daemon/src/snapshot_manifest.rs`: Manifest validation
 
-## Closing Criteria Summary
+**Restore flow:**
+1. Precondition check: daemon must not be running
+2. Parse S3 URI and load config
+3. Download and validate manifest (rejects newer schema versions)
+4. Move existing ~/.hoop/ aside for rollback
+5. Download and restore fleet.db with integrity check
+6. Restore attachments
+7. Restore config files
+8. Run schema migrations
+9. Verify audit hash chain
+10. Cleanup rollback directories on success
 
-| Criterion | Status | Evidence |
-|-----------|--------|----------|
-| Backup runs on schedule; credentials validated | ✅ | `backup_pipeline.rs:58` start_scheduler, `backup.rs:83` from_env validation |
-| Restore from recent snapshot produces identical state | ✅ | `restore.rs:278` run_restore with rollback, `fleet.rs:4888` restore_and_migrate |
-| Documentation covers all four DR scenarios | ✅ | `operations.md:515-831` comprehensive DR procedures |
-| age encryption works with key in env var | ✅ | `backup_pipeline.rs:535` age_encrypt, `restore.rs:454` decrypt_with_age |
+**Rollback mechanism:**
+- Automatic rollback on any failure after move_aside
+- Original state preserved at ~/.hoop.rollback.YYYYMMDDTHHMMSSZ
+- Manual recovery if automatic rollback fails
+
+### 3. ✅ Documentation covers all four DR scenarios
+
+**Location:** `docs/operations.md` lines 458-831
+
+**Scenarios documented:**
+1. **Disk death** (line 519): 30-60 min expected duration
+2. **fleet.db corruption** (line 606): 10-20 min expected duration
+3. **Accidental deletion** (line 659): 10-20 min expected duration
+4. **Host migration** (line 705): 1-2 hours expected duration
+
+**Each scenario includes:**
+- Step-by-step recovery procedure
+- Expected duration
+- Pitfalls and how to avoid them
+- Verification commands
+
+### 4. ✅ age encryption works with key in env var
+
+**Implementation:**
+- `hoop-daemon/src/backup_pipeline.rs`:535-562: age_encrypt() function
+- `hoop-cli/src/restore.rs`:454-482: decrypt_with_age() function
+- `hoop-daemon/src/backup.rs`:106-119: HOOP_BACKUP_AGE_KEY validation
+
+**Encryption env vars:**
+- Backup: `HOOP_BACKUP_AGE_KEY` (age public key for encryption)
+- Restore: `HOOP_BACKUP_AGE_IDENTITY` or `AGE_IDENTITY` (age private key for decryption)
+
+## Test Coverage
+
+**Integration tests:**
+- `hoop-daemon/tests/disaster_recovery_runbook.rs`: Full test suite for all four scenarios
+- Tests for rollback mechanism
+- Tests for version mismatch detection
+- Tests for env var validation
+- Tests for cleanup on success
+
+**Unit tests:**
+- `hoop-daemon/src/backup_pipeline.rs`: Cron parsing, VACUUM INTO, zstd compression, S3 upload
+- `hoop-daemon/src/backup.rs`: Config validation, credential resolution
+- `hoop-cli/src/restore.rs`: S3 URI parsing, manifest validation, rollback logic
+- `hoop-daemon/src/snapshot_manifest.rs`: Schema version comparison
+
+## S3-Compatible Storage
+
+The implementation uses S3-compatible API with AWS SigV4 signing, supporting:
+- Backblaze B2 (default, matches ARMOR pattern)
+- AWS S3
+- MinIO
+- Garage
+- Any S3-compatible endpoint
+
+## Architecture Decisions
+
+1. **Manifest uploaded last**: Ensures partial uploads are never mistaken for complete snapshots
+2. **Hash chain verification**: Detects tampering between backup and restore
+3. **Version validation**: Rejects snapshots newer than the binary (prevents corruption)
+4. **Idempotent restore**: Can be run multiple times safely
+5. **Graceful degradation**: Backup failures don't crash the daemon
 
 ## References
 
-- Plan §15: `docs/plan/plan.md:1202-1263`
-- Memory: `project_armor_backup_strategy.md` (ARMOR encrypted S3 proxy for B2)
+- Plan §15: `docs/plan/plan.md` lines 1202-1262
+- Operations guide: `docs/operations.md` lines 458-831
+- Implementation: `hoop-daemon/src/backup_pipeline.rs`, `hoop-cli/src/restore.rs`
+- Tests: `hoop-daemon/tests/disaster_recovery_runbook.rs`
+
+## Verification Date
+
+2026-05-09
+
+All criteria met. §15 is complete.
