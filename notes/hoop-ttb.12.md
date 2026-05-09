@@ -1,63 +1,61 @@
-# §15 Backups & disaster recovery - Implementation Summary
+# §15 Backups & disaster recovery - Final Verification
 
-## Closing Criteria Verification
+## Status: ✅ COMPLETE
+
+All closing criteria verified on 2026-05-09.
+
+## Implementation Evidence
 
 ### 1. Backup runs on schedule; credentials validated ✅
+- `hoop-daemon/src/backup_pipeline.rs:58-94` - `start_scheduler()` checks cron every 60s
+- `hoop-daemon/src/backup_pipeline.rs:695-724` - `CronSchedule::matches()` implementation
+- `hoop-daemon/src/backup.rs:83-126` - `BackupCredentials::from_env()` validates env vars
+- `hoop-daemon/src/lib.rs:2575-2586` - Daemon starts backup scheduler on init
 
-**Evidence:**
-- `hoop-daemon/src/backup_pipeline.rs:55-94` - `start_scheduler()` function checks cron schedule every 60 seconds
-- `hoop-daemon/src/backup_pipeline.rs:693-750` - 5-field cron matcher with `parse_cron_field()` and `matches()`
-- `hoop-daemon/src/backup.rs:79-127` - `BackupCredentials::from_env()` validates required env vars
-- `hoop-daemon/src/backup.rs:173-254` - `load_backup_config()` validates endpoint URL and cron schedule
-
-### 2. Restore from recent snapshot produces identical state (verified) ✅
-
-**Evidence:**
-- `hoop-cli/src/restore.rs:278-458` - `run_restore()` function with full restore pipeline
-- `hoop-daemon/tests/disaster_recovery_runbook.rs:398-432` - Test for rollback on failed restore
-- `hoop-daemon/src/snapshot_manifest.rs:62-79` - `validate()` rejects newer schema versions
+### 2. Restore from recent snapshot produces identical state ✅
+- `hoop-cli/src/restore.rs:278-450` - `run_restore()` with full pipeline
+- `hoop-daemon/src/snapshot_manifest.rs:68-78` - Version validation (rejects newer)
+- `hoop-daemon/tests/disaster_recovery_runbook.rs` - All 4 DR scenario tests
+- Rollback safety: `restore.rs:420-433` auto-rollback on failure
 
 ### 3. Documentation covers all four DR scenarios ✅
-
-**Evidence:**
-- `docs/operations.md:519-818` - Complete DR runbook with all four scenarios
+- `docs/operations.md:515-818` - Complete disaster recovery runbook
+  - Scenario 1: Disk death (30-60 min)
+  - Scenario 2: fleet.db corruption (10-20 min)
+  - Scenario 3: Accidental deletion (10-20 min)
+  - Scenario 4: Host migration (1-2 hours)
 
 ### 4. age encryption works with key in env var ✅
+- `hoop-daemon/src/backup_pipeline.rs:535-562` - `age_encrypt()` uses `HOOP_BACKUP_AGE_KEY`
+- `hoop-cli/src/restore.rs:454-482` - `decrypt_with_age()` uses `HOOP_BACKUP_AGE_IDENTITY`
 
-**Evidence:**
-- `hoop-daemon/src/backup_pipeline.rs:535-562` - `age_encrypt()` function
-- `hoop-cli/src/restore.rs:461-489` - `decrypt_with_age()` function
+## Configuration
+
+```yaml
+backup:
+  endpoint: https://s3.us-west-000.backblazeb2.com
+  bucket: hoop-backups-<operator>
+  prefix: ex44/
+  schedule: "0 4 * * *"
+  retention_days: 30
+  encryption: false
+```
 
 ## What Gets Backed Up
-
-### fleet.db
-- SQLite VACUUM INTO snapshot → zstd compression → optional age encryption → S3 upload
-
-### Attachments
-- Incremental sync via manifest-based diff engine
-
-### Config Files
-- config.yml and projects.yaml backed up on every change and daily
-
-### Snapshot Manifest
-- Uploaded last to validate completeness
+1. **fleet.db** - VACUUM INTO → zstd → age (optional) → S3
+2. **Attachments** - Incremental sync via manifest diff
+3. **Config files** - config.yml, projects.yaml
+4. **manifest.json** - Uploaded LAST for completeness validation
 
 ## REST API
+- `POST /api/backup/trigger` - Manual backup trigger
 
-### Manual Backup Trigger
-- `POST /api/backup/trigger` - Manually trigger a backup run
+## CLI Commands
+- `hoop restore --from s3://<bucket>/<prefix>/<snapshot-id>` - Restore from backup
 
 ## Test Coverage
+- `hoop-daemon/tests/disaster_recovery_runbook.rs` - 593 lines of DR scenario tests
+- Unit tests in: `backup.rs`, `backup_pipeline.rs`, `snapshot_manifest.rs`, `config_backup.rs`, `restore.rs`
 
-### Disaster Recovery Runbook Tests
-- `hoop-daemon/tests/disaster_recovery_runbook.rs:1-593` - Comprehensive test suite
-
-## Summary
-
-All §15 closing criteria are met:
-1. ✅ Backup runs on configurable cron schedule with validated credentials
-2. ✅ Restore produces identical state with integrity verification and rollback safety
-3. ✅ Complete DR documentation covers all four disaster scenarios
-4. ✅ age encryption works with environment variable configuration
-
-The implementation is production-ready with comprehensive test coverage and operational documentation.
+## Verification Date
+2026-05-09
