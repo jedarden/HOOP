@@ -161,6 +161,7 @@ async fn switch_adapter(
         adapter: req.adapter,
         model: req.model.unwrap_or_else(|| "claude-opus-4-7".to_string()),
         anthropic_api_key: req.anthropic_api_key,
+        anthropic_base_url: None,
         zai_base_url: req.zai_base_url,
         zai_api_key: req.zai_api_key,
         rate_limit_rpm: None,
