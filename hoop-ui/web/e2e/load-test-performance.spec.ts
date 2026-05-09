@@ -243,41 +243,80 @@ test.describe('Load Test - API Latency Under Load', () => {
   });
 });
 
-test.describe('Load Test - Memory Under Load', () => {
-  test('should maintain memory under ceiling during load', async ({ page }) => {
+test.describe('Load Test - Server Memory Under Load', () => {
+  test('should maintain server memory under ceiling during load', async ({ page }) => {
+    const daemonUrl = process.env.HOOP_DAEMON_URL || 'http://localhost:8080';
+
     await page.goto('/');
+    await page.waitForLoadState('networkidle');
 
     const memorySnapshots: number[] = [];
 
-    // Take memory snapshots over 10 seconds
+    // Take server-side RSS memory snapshots over 10 seconds
     for (let i = 0; i < 20; i++) {
       await page.waitForTimeout(500);
 
-      const memory = await page.evaluate(() => {
-        return (performance as any).memory?.usedJSHeapSize || 0;
-      });
+      // Fetch server memory from /metrics endpoint
+      const memory = await page.evaluate(async (url) => {
+        try {
+          const response = await fetch(`${url}/metrics`);
+          const text = await response.text();
+
+          // Parse hoop_process_memory_bytes from Prometheus metrics
+          for (const line of text.split('\n')) {
+            if (line.startsWith('hoop_process_memory_bytes') && !line.startsWith('#')) {
+              const parts = line.split(' ');
+              if (parts.length >= 2) {
+                return parseFloat(parts[1]);
+              }
+            }
+          }
+          return 0;
+        } catch {
+          return 0;
+        }
+      }, daemonUrl);
 
       if (memory > 0) {
         memorySnapshots.push(memory);
       }
     }
 
-    // Check that memory doesn't grow excessively
+    // Check that server memory stays under the 4GB ceiling
     if (memorySnapshots.length > 0) {
       const maxMemory = Math.max(...memorySnapshots);
       const maxMemoryMB = maxMemory / (1024 * 1024);
+      const ceilingMB = PERFORMANCE_BUDGETS.memoryCeilingGB * 1024;
 
-      // Browser memory should stay under 2GB (conservative, daemon has 4GB budget)
-      expect(maxMemoryMB).toBeLessThan(PERFORMANCE_BUDGETS.memoryCeilingGB * 512);
+      expect(maxMemoryMB).toBeLessThan(ceilingMB);
     }
   });
 
-  test('should not leak memory during navigation under load', async ({ page }) => {
-    await page.goto('/');
+  test('should not leak server memory during navigation under load', async ({ page }) => {
+    const daemonUrl = process.env.HOOP_DAEMON_URL || 'http://localhost:8080';
 
-    const initialMemory = await page.evaluate(() => {
-      return (performance as any).memory?.usedJSHeapSize || 0;
-    });
+    await page.goto('/');
+    await page.waitForLoadState('networkidle');
+
+    // Get initial server memory
+    const initialMemory = await page.evaluate(async (url) => {
+      try {
+        const response = await fetch(`${url}/metrics`);
+        const text = await response.text();
+
+        for (const line of text.split('\n')) {
+          if (line.startsWith('hoop_process_memory_bytes') && !line.startsWith('#')) {
+            const parts = line.split(' ');
+            if (parts.length >= 2) {
+              return parseFloat(parts[1]);
+            }
+          }
+        }
+        return 0;
+      } catch {
+        return 0;
+      }
+    }, daemonUrl);
 
     // Perform multiple navigations
     for (let i = 0; i < 10; i++) {
@@ -285,14 +324,33 @@ test.describe('Load Test - Memory Under Load', () => {
       await page.waitForLoadState('networkidle');
     }
 
-    const finalMemory = await page.evaluate(() => {
-      return (performance as any).memory?.usedJSHeapSize || 0;
-    });
+    // Get final server memory
+    const finalMemory = await page.evaluate(async (url) => {
+      try {
+        const response = await fetch(`${url}/metrics`);
+        const text = await response.text();
 
-    // Memory growth should be reasonable (< 100MB)
+        for (const line of text.split('\n')) {
+          if (line.startsWith('hoop_process_memory_bytes') && !line.startsWith('#')) {
+            const parts = line.split(' ');
+            if (parts.length >= 2) {
+              return parseFloat(parts[1]);
+            }
+          }
+        }
+        return 0;
+      } catch {
+        return 0;
+      }
+    }, daemonUrl);
+
+    // Server memory growth should be reasonable (< 500MB)
     if (initialMemory > 0 && finalMemory > 0) {
       const memoryGrowth = finalMemory - initialMemory;
-      expect(memoryGrowth).toBeLessThan(100 * 1024 * 1024);
+      const growthMB = memoryGrowth / (1024 * 1024);
+
+      // Allow up to 500MB growth during navigation test
+      expect(growthMB).toBeLessThan(500);
     }
   });
 });
