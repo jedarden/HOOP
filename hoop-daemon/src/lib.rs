@@ -918,7 +918,7 @@ async fn get_file_content_stream(
         }
     });
 
-    Ok(axum::response::Sse::new(Box::pin(sse_stream)).keep_alive(
+    Ok(axum::response::Sse::new(sse_stream).keep_alive(
         axum::response::sse::KeepAlive::new()
             .interval(std::time::Duration::from_secs(15))
             .text("keepalive"),

@@ -183,7 +183,7 @@ impl UnassignedTracker {
     pub fn spawn(
         self: Arc<Self>,
         interval_secs: u64,
-        mut shutdown_rx: broadcast::Receiver<()>,
+        mut shutdown_rx: broadcast::Receiver<crate::shutdown::ShutdownPhase>,
     ) {
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(interval_secs));
