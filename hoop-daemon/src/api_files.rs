@@ -69,6 +69,29 @@ struct HighlightResult {
     lines: Vec<String>,
 }
 
+/// Binary preview result with hex dump
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+struct BinaryPreviewResult {
+    /// File size in bytes
+    pub size: u64,
+    /// MIME type if detected
+    pub mime_type: Option<String>,
+    /// Hex dump lines (offset, hex bytes, ASCII representation)
+    pub lines: Vec<String>,
+    /// Number of bytes skipped if file is larger than preview limit
+    pub truncated_bytes: u64,
+}
+
+/// Unified file preview response
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[serde(untagged)]
+enum FilePreviewResult {
+    Text(HighlightResult),
+    Binary(BinaryPreviewResult),
+}
+
 fn default_theme() -> String {
     "light".to_string()
 }
@@ -81,6 +104,7 @@ pub fn router() -> Router<crate::DaemonState> {
     Router::new()
         .route("/api/projects/:project/files", get(list_directory))
         .route("/api/projects/:project/files/content", get(get_file_content))
+        .route("/api/projects/:project/files/preview", get(get_file_preview))
         .route("/api/projects/:project/files/search", get(search_files))
 }
 
@@ -325,6 +349,181 @@ fn highlight_file(
         theme_fg,
         lines: html_lines,
     })
+}
+
+/// GET /api/projects/:project/files/preview — unified file preview endpoint
+///
+/// Returns syntax-highlighted text or hex dump for binary files.
+/// Automatically detects file type and returns appropriate preview.
+#[utoipa::path(
+    get,
+    path = "/api/projects/{project}/files/preview",
+    tag = "files",
+    params(
+        ("project" = String, Path, description = "Project name"),
+        ("path" = String, Query, description = "File path relative to project root"),
+        ("theme" = String, Query, description = "Syntax highlighting theme (light or dark)")
+    ),
+    responses(
+        (status = 200, description = "File preview", body = FilePreviewResult),
+        (status = 400, description = "Invalid project name or unsafe path"),
+        (status = 404, description = "Project or file not found")
+    )]
+async fn get_file_preview(
+    Path(project): Path<String>,
+    Query(params): Query<ContentQuery>,
+    State(state): State<crate::DaemonState>,
+) -> Result<Json<FilePreviewResult>, (StatusCode, String)> {
+    crate::id_validators::validate_project_name(&project)
+        .map_err(crate::id_validators::rejection)?;
+
+    let project_root = {
+        let projects = state.projects.read().unwrap();
+        projects
+            .iter()
+            .find(|p| p.name == project)
+            .map(|p| PathBuf::from(&p.path))
+            .ok_or((StatusCode::NOT_FOUND, "project not found".into()))?
+    };
+
+    if !files::is_safe_rel_path(&params.path) {
+        return Err((StatusCode::FORBIDDEN, "unsafe path".into()));
+    }
+
+    let abs_path = project_root.join(&params.path);
+
+    // Read file content
+    let content = std::fs::read(&abs_path).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            (StatusCode::NOT_FOUND, "file not found".into())
+        } else {
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("read error: {}", e))
+        }
+    })?;
+
+    // Detect if file is text or binary
+    let is_text = is_text_content(&content);
+
+    if is_text {
+        // Use syntax highlighting for text files
+        let result = tokio::task::spawn_blocking(move || {
+            highlight_file(&project_root, &params.path, &params.theme)
+        })
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{:?}", e)))?
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{:?}", e)))?;
+
+        Ok(Json(FilePreviewResult::Text(result)))
+    } else {
+        // Use hex dump for binary files
+        let result = tokio::task::spawn_blocking(move || {
+            hex_dump_preview(&content)
+        })
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{:?}", e)))?
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{:?}", e)))?;
+
+        Ok(Json(FilePreviewResult::Binary(result)))
+    }
+}
+
+/// Maximum bytes to preview for binary files (16 KB)
+const MAX_BINARY_PREVIEW: usize = 16 * 1024;
+
+/// Generate a hex dump preview for binary content
+///
+/// Returns lines in the format:
+/// ```
+/// 00000000: 48 65 6c 6c 6f 20 57 6f 72 6c 64 21 0a     Hello World!.
+/// ```
+fn hex_dump_preview(content: &[u8]) -> Result<BinaryPreviewResult, (StatusCode, String)> {
+    let size = content.len() as u64;
+    let bytes_to_preview = content.len().min(MAX_BINARY_PREVIEW);
+    let truncated_bytes = if content.len() > MAX_BINARY_PREVIEW {
+        (content.len() - MAX_BINARY_PREVIEW) as u64
+    } else {
+        0
+    };
+
+    // Detect MIME type
+    let mime_type = crate::attachments::sniff_mime(content);
+
+    let mut lines = Vec::new();
+
+    // Process in chunks of 16 bytes per line
+    for chunk in content[..bytes_to_preview].chunks(16) {
+        let offset = (lines.len() * 16) as usize;
+        let offset_hex = format!("{:08x}", offset);
+
+        // Hex bytes
+        let hex_bytes: Vec<String> = chunk
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect();
+
+        // Pad to 16 bytes for alignment
+        let hex_display = if chunk.len() < 16 {
+            let mut padded = hex_bytes;
+            for _ in chunk.len()..16 {
+                padded.push("  ".to_string());
+            }
+            padded
+        } else {
+            hex_bytes
+        };
+
+        // ASCII representation
+        let ascii: String = chunk
+            .iter()
+            .map(|&b| {
+                if b.is_ascii_graphic() || b == b' ' {
+                    b as char
+                } else {
+                    '.'
+                }
+            })
+            .collect();
+
+        // Format: offset: hex bytes (grouped by 8)  ASCII
+        let line = format!(
+            "{}: {}  {}    {}",
+            offset_hex,
+            hex_display[0..8.min(hex_display.len())].join(" "),
+            hex_display[8..hex_display.len()].join(" "),
+            ascii
+        );
+
+        lines.push(line);
+    }
+
+    Ok(BinaryPreviewResult {
+        size,
+        mime_type,
+        lines,
+        truncated_bytes,
+    })
+}
+
+/// Check if content is likely text (UTF-8 decodable)
+///
+/// Returns true if the content is valid UTF-8 and contains a reasonable
+/// proportion of printable characters.
+fn is_text_content(content: &[u8]) -> bool {
+    // Try to decode as UTF-8
+    let text = match std::str::from_utf8(content) {
+        Ok(t) => t,
+        Err(_) => return false,
+    };
+
+    // Count printable characters (excluding whitespace)
+    let printable_count = text
+        .chars()
+        .filter(|&c| c.is_ascii_graphic())
+        .count();
+
+    // If more than 90% of characters are printable, consider it text
+    let total_chars = text.chars().count().max(1);
+    printable_count as f64 / total_chars as f64 > 0.9
 }
 
 /// Resolve a theme name to a Theme, falling back to light if unknown

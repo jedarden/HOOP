@@ -90,7 +90,7 @@ async fn get_ui_state(
         state_map.insert(key, value);
     }
 
-    drop(conn); // Release lock before returning
+    // conn is dropped automatically here
 
     Ok(Json(UiStateResponse {
         schema_version: UI_STATE_SCHEMA_VERSION.to_string(),
@@ -156,7 +156,7 @@ async fn put_ui_state(
         state_map.insert(key, value);
     }
 
-    drop(conn);
+    // conn is dropped automatically here
 
     Ok(Json(UiStateResponse {
         schema_version: UI_STATE_SCHEMA_VERSION.to_string(),
@@ -215,7 +215,7 @@ async fn put_ui_state_batch(
         state_map.insert(key, value);
     }
 
-    drop(conn);
+    // conn is dropped automatically here
 
     Ok(Json(UiStateResponse {
         schema_version: UI_STATE_SCHEMA_VERSION.to_string(),
@@ -265,7 +265,7 @@ async fn delete_ui_state(
         state_map.insert(key, value);
     }
 
-    drop(conn);
+    // conn is dropped automatically here
 
     Ok(Json(UiStateResponse {
         schema_version: UI_STATE_SCHEMA_VERSION.to_string(),
