@@ -119,12 +119,12 @@ pub fn router() -> Router<crate::DaemonState> {
     tag = "files",
     params(
         ("project" = String, Path, description = "Project name"),
-        ("path" = Option<String>, Query, description = "Directory path relative to project root (empty for root)")
+        ("path" = Option<String>, Query, description = "Directory path relative to project root - empty for root")
     ),
     responses(
         (status = 200, description = "Directory contents", body = Vec<FileEntry>),
         (status = 400, description = "Invalid project name"),
-        (status = 403, description = "Unsafe path (contains ..)"),
+        (status = 403, description = "Unsafe path - contains .."),
         (status = 404, description = "Project not found"),
         (status = 500, description = "Failed to list directory")
     )
