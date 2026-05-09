@@ -887,12 +887,13 @@ impl TranscriptionJobProcessor {
                 move || {
                     let db_path = crate::fleet::db_path();
                     let conn = Connection::open(&db_path)?;
-                    let result: Result<Option<String>, _> = Ok(conn.query_row(
+                    let result = conn.query_row(
                         "SELECT project FROM stitches WHERE id = ?1",
                         params![stitch_id],
                         |row| row.get::<_, String>(0),
                     )
-                    .ok());
+                    .ok()
+                    .map(|r: Option<String>| r);
                     result
                 }
             })

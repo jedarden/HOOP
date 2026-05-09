@@ -249,7 +249,7 @@ fn generate_schema_fixtures() {
                 ts,
                 role: StitchMessageRole::User,
                 content: serde_json::Value::String("Hello".to_string()),
-                attachments: None,
+                attachments: vec![],
                 tokens: None,
                 tool_use: None,
                 schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
@@ -325,6 +325,8 @@ fn generate_schema_fixtures() {
                 approved_by: None,
                 approved_at: None,
                 archived_at: None,
+                content_hash: "abc123".to_string(),
+                rejection_count: 0,
                 schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
             })
             .unwrap(),
@@ -350,6 +352,7 @@ fn generate_schema_fixtures() {
                 redaction: None,
                 roles: None,
                 server: None,
+                embedding: None,
             })
             .unwrap(),
         ),
@@ -401,7 +404,7 @@ fn generate_schema_fixtures() {
         (
             "pricing_config",
             serde_json::to_string_pretty(&PricingConfig {
-                adapters: None,
+                adapters: serde_json::Map::new(),
             })
             .unwrap(),
         ),
