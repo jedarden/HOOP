@@ -51,6 +51,37 @@ The implementation includes additional tests for robustness:
 
 `hoop-daemon/tests/adapter_failover_test.rs` (729 lines, 8 tests)
 
+## Supporting Implementation Verified
+
+**config_watcher.rs**:
+- `AgentConfigChanged` event type for agent config changes
+- `detect_agent_config_changes()` function to detect adapter/model/API key changes
+- `agent_config_changed_tx` broadcast channel for triggering adapter switches
+- Hot-reload with 2-second debounce
+
+**agent_session.rs**:
+- `switch_adapter()` method that:
+  - Archives old session as a Stitch via `fleet::archive_session_as_stitch()`
+  - Builds new adapter with fresh session
+  - Carries forward Reflection Ledger + recent activity context
+- `build_handoff_context()` for continuity
+
+**fleet.rs**:
+- `archive_session_as_stitch()` - Creates Stitch from session transcript
+- `load_stitch_by_id()` - For test verification
+- `StitchRow` type with required fields (id, project, kind, title, created_by, etc.)
+
+**lib.rs**:
+- Agent config change listener task that subscribes to events and calls `switch_adapter()`
+
+**integration_harness.rs**:
+- `spawn_test_daemon_with_config()` for isolated test daemon instances
+- Temporary directories with isolated `.hoop/` config
+
+## Verification Date
+
+2026-05-09
+
 ## Status
 
 **COMPLETE** - All acceptance criteria verified and implemented.
