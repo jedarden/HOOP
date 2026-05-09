@@ -715,6 +715,13 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
+  // Dry-run mode for first-time users (plan §12)
+  const [isDryRun, setIsDryRun] = useState(() => {
+    // Enable dry-run by default for first-time users
+    const hasCreatedStitchBefore = localStorage.getItem('hoop_has_created_stitch');
+    return !hasCreatedStitchBefore;
+  });
+
   // Template state (§22 Extensibility)
   const [selectedTemplate, setSelectedTemplate] = useState<StitchTemplate | null>(null);
   const [templateValues, setTemplateValues] = useState<TemplateValues>({});
@@ -1040,9 +1047,15 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
   const titleValid = form.title.trim().length > 0;
   const projectValid = projectHasWorkspace;
   const canSubmit = titleValid && projectValid && !isSubmitting;
+  const canActuallySubmit = canSubmit && !isDryRun;
 
   const handleLabelAdd = useCallback((label: string) => {
     setForm(f => ({ ...f, labels: f.labels.includes(label) ? f.labels : [...f.labels, label] }));
+  }, []);
+
+  const handleDisableDryRun = useCallback(() => {
+    setIsDryRun(false);
+    localStorage.setItem('hoop_has_created_stitch', 'true');
   }, []);
 
   const handleLabelRemove = useCallback((label: string) => {
@@ -1184,6 +1197,14 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
+
+    // In dry-run mode, just show a message instead of submitting
+    if (isDryRun) {
+      // Toggle off dry-run mode so user can submit for real
+      handleDisableDryRun();
+      return;
+    }
+
     setIsSubmitting(true);
     setSubmitError(null);
 
@@ -1628,14 +1649,16 @@ export default function StitchDraftForm({ projectName, onClose, onCreated }: Sti
             </button>
             <button
               type="submit"
-              className="bdf-btn-submit sdf-btn-stitch"
+              className={`bdf-btn-submit sdf-btn-stitch ${isDryRun ? 'sdf-dry-run' : ''}`}
               disabled={!canSubmit}
             >
-              {isSubmitting
-                ? 'Creating…'
-                : isDecomposable(form.kind)
-                  ? `Create Stitch (${decomposeGraph?.beads.length ?? '?'} beads)`
-                  : 'Create Stitch'}
+              {isDryRun
+                ? 'Preview Only (Dry-run Mode)'
+                : isSubmitting
+                  ? 'Creating…'
+                  : isDecomposable(form.kind)
+                    ? `Create Stitch (${decomposeGraph?.beads.length ?? '?'} beads)`
+                    : 'Create Stitch'}
             </button>
           </div>
         </form>
