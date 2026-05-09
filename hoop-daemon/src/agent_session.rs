@@ -949,6 +949,7 @@ fn estimate_cost(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
     use chrono::Utc;
 
     #[test]
