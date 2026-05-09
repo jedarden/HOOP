@@ -67,7 +67,7 @@ pub mod stitch_traversal;
 pub mod heartbeats;
 pub mod id_validators;
 pub mod identity;
-// pub mod multi_operator; // TODO: implement
+pub mod multi_operator;
 pub mod api_presence;
 pub mod api_reflection_ledger;
 pub mod api_stitch_traversal;
