@@ -2357,6 +2357,9 @@ Note: This is an automated synthesis from voice dictation."#,
                                 let kind = parsed["kind"].as_str().unwrap_or("task").to_string();
 
                                 // Store synthesis result in dictated_notes for later use
+                                let log_stitch_id = stitch_id.clone();
+                                let log_title = title.clone();
+                                let log_kind = kind.clone();
                                 tokio::task::spawn_blocking(move || {
                                     use rusqlite::{params, Connection};
                                     let db_path = crate::fleet::db_path();
@@ -2377,9 +2380,9 @@ Note: This is an automated synthesis from voice dictation."#,
 
                                 tracing::info!(
                                     "Synthesis complete for {}: {} ({})",
-                                    stitch_id,
-                                    title,
-                                    kind
+                                    log_stitch_id,
+                                    log_title,
+                                    log_kind
                                 );
                             }
                         }
