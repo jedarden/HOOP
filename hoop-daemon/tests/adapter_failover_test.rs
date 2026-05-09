@@ -349,7 +349,7 @@ async fn reflection_ledger_continuity_preserved_on_switch() {
     // Add a reflection ledger entry before switching
     let entry_id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
-    fleet::insert_reflection_entry(&fleet::ReflectionLedgerRow {
+    fleet::insert_reflection_entry(&fleet::ReflectionLedgerEntry {
         id: entry_id.clone(),
         scope: "global".to_string(),
         rule: "test continuity rule".to_string(),
@@ -359,6 +359,11 @@ async fn reflection_ledger_continuity_preserved_on_switch() {
         created_at: now.clone(),
         last_applied: None,
         applied_count: 0,
+        content_hash: "test-hash".to_string(),
+        rejection_count: 0,
+        approved_by: None,
+        approved_at: None,
+        archived_at: None,
     })
     .expect("Failed to insert reflection entry");
 
@@ -483,7 +488,7 @@ async fn adapter_switch_with_active_turn_preserves_continuity() {
     // Add reflection entries that should be carried forward
     let entry_id = uuid::Uuid::new_v4().to_string();
     let now = chrono::Utc::now().to_rfc3339();
-    fleet::insert_reflection_entry(&fleet::ReflectionLedgerRow {
+    fleet::insert_reflection_entry(&fleet::ReflectionLedgerEntry {
         id: entry_id.clone(),
         scope: "global".to_string(),
         rule: "prefer async over sync".to_string(),
@@ -493,6 +498,11 @@ async fn adapter_switch_with_active_turn_preserves_continuity() {
         created_at: now.clone(),
         last_applied: None,
         applied_count: 0,
+        content_hash: "test-hash-2".to_string(),
+        rejection_count: 0,
+        approved_by: None,
+        approved_at: None,
+        archived_at: None,
     })
     .expect("Failed to insert reflection entry");
 
@@ -611,7 +621,7 @@ async fn config_yml_hot_reload_triggers_adapter_switch() {
 
     // Get the config.yml path from the temp directory
     let config_path = daemon
-        ._temp_dir
+        .temp_dir
         .path()
         .join(".hoop")
         .join("config.yml");
