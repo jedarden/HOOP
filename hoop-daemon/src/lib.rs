@@ -26,6 +26,7 @@ pub mod api_draft_queue;
 pub mod api_metrics;
 pub mod api_morning_brief;
 pub mod api_onboarding;
+pub mod api_propagation;
 
 #[cfg(feature = "openapi")]
 pub mod openapi;
@@ -70,6 +71,7 @@ pub mod identity;
 pub mod multi_operator;
 pub mod api_presence;
 pub mod api_reflection_ledger;
+pub mod api_reflection_detection;
 pub mod api_stitch_traversal;
 pub mod api_tour_project;
 
@@ -122,6 +124,7 @@ pub mod worker_ack;
 pub mod ws;
 pub mod collision_detector;
 pub mod config_backup;
+pub mod cross_project_propagation;
 pub mod api_blame;
 pub mod api_content_blocks;
 pub mod api_diff;
@@ -1262,6 +1265,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_agent::router())
         .merge(api_backup::router())
         .merge(api_morning_brief::router())
+        .merge(api_propagation::router())
         .merge(api_metrics::router())
         .merge(api_cost_per_stitch::router())
         .merge(api_config::router())
@@ -1269,6 +1273,8 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_unassigned::router())
         .merge(api_screen_capture::router())
         .merge(api_reflection_ledger::router())
+        .merge(api_reflection_detection::router())
+        .merge(api_propagation::router())
         .merge(api_stitch_traversal::router())
         .nest_service("/assets", AssetsHandler::router())
         .fallback_service(AssetsHandler::router())
