@@ -1,71 +1,97 @@
-# Adapter Failover Test Final Verification (hoop-ttb.6.2.2)
+# Adapter Failover Test Implementation (hoop-ttb.6.2.2)
 
-## Task
-Integration test simulates Anthropic 5xx. Operator-initiated switch to ZAI via `/reload`. Agent session survives (or starts fresh cleanly). Old transcript archived as a Stitch.
+## Summary
 
-## Final Verification Status: COMPLETE ✅
+Implementation complete. Integration test simulates Anthropic 5xx error and verifies operator-initiated switch to ZAI/GLM via config.yml hot-reload, with session continuity and transcript archival.
 
-### Test Coverage Summary
+## Acceptance Criteria Met
 
-All acceptance criteria are covered by comprehensive tests across multiple test files:
+✅ **Simulated Anthropic 500 doesn't crash daemon**
+- Test: `daemon_survives_simulated_anthropic_5xx`
+- Mock server: `MockAnthropicServer` returns 503 Service Unavailable
+- Daemon remains healthy after 5xx errors
+- `/readyz` continues responding
 
-#### 1. Simulated Anthropic 500 doesn't crash daemon ✅
-**Tests**:
-- `daemon_survives_simulated_anthropic_5xx` (adapter_failover_test.rs:148)
-- `test_anthropic_5xx_doesnt_crash_daemon` (adapter_failover_integration.rs:51)
-- `adapter_error_doesnt_crash_daemon` (agent_session.rs:1985)
+✅ **Operator switches adapter via config.yml edit → hot-reload triggers new session**
+- Test: `config_yml_hot_reload_triggers_adapter_switch`
+- ConfigWatcher detects file changes with 2-second debounce
+- `AgentConfigChanged` event triggers `AgentSessionManager::switch_adapter`
+- New session starts with new adapter configuration
 
-**Coverage**: Verifies daemon remains healthy after adapter errors, healthz endpoints continue responding
+✅ **Old session's final transcript preserved as closed Stitch (kind=operator, archived)**
+- Test: `old_session_transcript_preserved_as_stitch`
+- `fleet::archive_session_as_stitch` creates Stitch with kind=operator
+- Session row linked to stitch_id
+- Stitch created in hoop-agent project with creator hoop:agent
 
-#### 2. Operator switches adapter via config edit → new session created ✅
-**Tests**:
-- `adapter_switch_creates_new_session_and_archives_old` (adapter_failover_test.rs:182)
-- `hot_reload_config_change_triggers_adapter_switch` (agent_session.rs:2070)
+✅ **Reflection Ledger continuity preserved**
+- Test: `reflection_ledger_continuity_preserved_on_switch`
+- `build_handoff_context` carries forward approved Reflection Ledger entries
+- New session's system prompt includes operator preferences from previous session
 
-**Coverage**: Verifies POST /api/agent/switch creates new session, old session archived with `status='switched'`
+## Test Coverage
 
-#### 3. Old session transcript preserved as closed Stitch (kind=operator) ✅
-**Tests**:
-- `old_session_transcript_preserved_as_stitch` (adapter_failover_test.rs:260)
-- `adapter_failover_archives_session_preserves_reflection_ledger` (agent_session.rs:1852)
+### Primary Tests (adapter_failover_test.rs)
 
-**Coverage**: Verifies Stitch created with `kind='operator'`, `project='hoop-agent'`, linked via `stitch_id`
+1. `daemon_survives_simulated_anthropic_5xx` - Basic health check during error
+2. `adapter_switch_creates_new_session_and_archives_old` - API-based switch
+3. `old_session_transcript_preserved_as_stitch` - Stitch archival verification
+4. `reflection_ledger_continuity_preserved_on_switch` - Reflection ledger preservation
+5. `config_yml_hot_reload_triggers_adapter_switch` - Config file hot-reload
+6. `multiple_adapter_switches_create_multiple_stitches` - Multiple switches
+7. `adapter_switch_with_active_turn_preserves_continuity` - Mid-turn switch
+8. `concurrent_switch_requests_are_handled_gracefully` - Concurrent requests
+9. `anthropic_5xx_mock_server_daemon_survives` - Mock server 30-second survival
+10. `anthropic_5xx_mock_then_adapter_switch_recovery` - Full failover scenario
 
-#### 4. Reflection Ledger continuity preserved ✅
-**Tests**:
-- `reflection_ledger_continuity_preserved_on_switch` (adapter_failover_test.rs:339)
-- `adapter_failover_archives_session_preserves_reflection_ledger` (agent_session.rs:1852)
+### Unit Tests (agent_session.rs)
 
-**Coverage**: Verifies approved Reflection Ledger entries persist and are included in new session's system prompt
+1. `adapter_failover_archives_session_preserves_reflection_ledger` - DB-level verification
+2. `adapter_error_doesnt_crash_daemon` - Error handling
+3. `hot_reload_config_change_triggers_adapter_switch` - Config change flow
 
-### Test Files Inventory
+## Implementation Components
 
-| File | Location | Type |
-|------|----------|------|
-| `adapter_failover_test.rs` | hoop-daemon/tests/ | Integration (HTTP client) |
-| `adapter_failover.rs` | hoop-daemon/tests/ | Unit (DB-backed) |
-| `adapter_failover_integration.rs` | hoop-daemon/tests/ | Integration (DB-backed) |
-| `integration_harness.rs` | hoop-daemon/tests/ | Test harness |
-| Unit tests | hoop-daemon/src/agent_session.rs | Unit (lines 1843-2166) |
+### Config Hot-Reload (config_watcher.rs)
+- `AgentConfigChanged` event emitted when agent config changes
+- `detect_agent_config_changes` function detects adapter/model/API key changes
+- `subscribe_agent_config_changed` returns receiver for events
+- 2-second debounce prevents rapid reloads
 
-### Implementation Files
+### Agent Session Management (agent_session.rs)
+- `switch_adapter` method archives old session and spawns new one
+- `build_handoff_context` carries forward Reflection Ledger + recent activity
+- `archive_session_as_stitch` creates Stitch from session transcript
 
-| Component | File | Key Functions |
-|-----------|------|---------------|
-| Session Manager | agent_session.rs | `switch_adapter()` (647), `build_handoff_context()` (798) |
-| Fleet DB | fleet.rs | `archive_session_as_stitch()` (4590), `list_approved_reflection_entries()` |
-| Adapter | agent_adapter.rs | `build_adapter()`, `AdapterKind` enum |
+### REST API (api_agent.rs)
+- `POST /api/agent/switch` - Manual adapter switch
+- `GET /api/agent/sessions` - List recent sessions
+- `GET /api/agent/status` - Current session status
 
-### Key Verification Points
+### Fleet DB (fleet.rs)
+- `archive_session_as_stitch` - Create Stitch from session
+- `list_agent_sessions` - List all sessions
+- `load_stitch_by_id` - Retrieve Stitch by ID
+- `insert_reflection_entry` - Add Reflection Ledger entry
+- `list_approved_reflection_entries` - List approved rules
 
-1. **Session archival**: Old session marked `status='switched'` with `archived_reason='adapter_switch'`
-2. **Stitch creation**: Stitch with `kind='operator'`, `project='hoop-agent'`, `created_by='hoop:agent'`
-3. **Session linkage**: `agent_sessions.stitch_id` references the created Stitch
-4. **Clean transition**: Exactly one active session after switch
-5. **Reflection Ledger**: Approved rules persist and are carried into new session's system prompt
+## Mock Server
+
+`MockAnthropicServer`:
+- Listens on random port (127.0.0.1)
+- Returns 503 Service Unavailable for all `/v1/messages` requests
+- Simulates Anthropic outage for testing
 
 ## Plan Reference
-§6 Phase 5 deliverable 7, §7 LLM-agnostic
 
-## Date
-2026-05-09
+- §6 Phase 5 deliverable 7
+- §7 LLM-agnostic
+
+## Files Modified
+
+- `hoop-daemon/tests/adapter_failover_test.rs` (970 lines)
+- `hoop-daemon/src/agent_session.rs` (unit tests)
+- `hoop-daemon/src/config_watcher.rs` (AgentConfigChanged event)
+- `hoop-daemon/src/lib.rs` (agent config change subscriber task)
+- `hoop-daemon/src/api_agent.rs` (switch endpoint)
+- `hoop-daemon/src/fleet.rs` (archive_session_as_stitch, list_agent_sessions)
