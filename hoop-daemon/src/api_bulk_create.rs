@@ -12,7 +12,7 @@
 use axum::{
     extract::{ConnectInfo, State},
     http::StatusCode,
-    routing::{get, post},
+    routing::post,
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -161,7 +161,8 @@ async fn parse_bulk(
     let _project_path = crate::api_draft_queue::resolve_project_path(&req.project, &state)?;
 
     // Parse the markdown content
-    let drafts = parse_markdown_to_drafts(&req.content, &req.kind, req.priority, req.labels)?;
+    let drafts = parse_markdown_to_drafts(&req.content, &req.kind, req.priority, req.labels)
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))?;
 
     let exceeds_limit = drafts.len() > MAX_BULK_DRAFTS;
 
@@ -247,7 +248,7 @@ async fn submit_bulk(
 
         // Validate stitch kind
         if let Err(e) = crate::api_stitch_decompose::validate_stitch_kind(&draft_item.kind, false) {
-            errors.push(format!("Draft #{}: {}", idx + 1, e));
+            errors.push(format!("Draft #{}: {}", idx + 1, e.1));
             continue;
         }
 
