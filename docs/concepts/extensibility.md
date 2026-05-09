@@ -48,6 +48,53 @@ fi
 exit 0
 ```
 
+### Example Skill: lookup-git-log
+
+A practical skill for querying git commit history:
+
+`~/.hoop/skills/lookup-git-log/manifest.yml`:
+```yaml
+name: lookup-git-log
+description: Query git log history with filtering options
+summary: Look up git commit history with optional filters
+scope: global
+args_schema:
+  type: object
+  properties:
+    project_path:
+      type: string
+      description: Path to the git repository
+    max_count:
+      type: integer
+      description: Maximum commits to return (1-100)
+      minimum: 1
+      maximum: 100
+    author:
+      type: string
+      description: Filter by author name or email
+    since:
+      type: string
+      description: Show commits since date (e.g. "2 weeks ago")
+    path:
+      type: string
+      description: Filter commits affecting a file/directory
+  required: []
+timeout_secs: 60
+```
+
+Usage:
+```bash
+curl -X POST http://localhost:3000/api/skills/lookup-git-log/run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "args": {
+      "project_path": "/home/coding/HOOP",
+      "max_count": 10,
+      "author": "jedarden"
+    }
+  }'
+```
+
 ### Skill Manifest Schema
 
 | Field | Type | Required | Description |
@@ -326,17 +373,25 @@ git clone https://github.com/example/hoop-skills.git ~/.hoop/skills/
 HOOP seeds example extensions on first run:
 
 - **Skill**: `echo` — Simple echo skill for testing
+- **Skill**: `lookup-git-log` — Query git commit history with filtering
 - **Note**: `team-conventions` — Example team conventions
 - **Note**: `glossary` — HOOP terminology glossary
 - **Prompt**: `fix-linting` — Fix linting violations
 - **Prompt**: `write-plan-stub` — Create plan.md stub
 - **Prompt**: `investigate-error` — Error investigation template
 
-Test the example skill:
+Test the echo skill:
 ```bash
 curl -X POST http://localhost:3000/api/skills/echo/run \
   -H "Content-Type: application/json" \
   -d '{"args": {"message": "Hello from HOOP!"}}'
+```
+
+Test the git log lookup skill:
+```bash
+curl -X POST http://localhost:3000/api/skills/lookup-git-log/run \
+  -H "Content-Type: application/json" \
+  -d '{"args": {"project_path": "/home/coding/HOOP", "max_count": 5}}'
 ```
 
 ## API Reference
