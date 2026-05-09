@@ -128,6 +128,7 @@ impl From<FleetAuditRow> for AuditRow {
             ActionKind::SchemaMigrated => "schema_migrated".to_string(),
             ActionKind::ReflectionInjected => "reflection_injected".to_string(),
             ActionKind::SkillInvoked => "skill_invoked".to_string(),
+            ActionKind::SaturationAlert => "saturation_alert".to_string(),
         };
 
         let result_str = match row.result {
@@ -225,6 +226,7 @@ pub async fn query_audit(
         Some("words_redacted") => Some(ActionKind::WordsRedacted),
         Some("redaction_flagged") => Some(ActionKind::RedactionFlagged),
         Some("skill_invoked") => Some(ActionKind::SkillInvoked),
+        Some("saturation_alert") => Some(ActionKind::SaturationAlert),
         Some(_) => {
             return Err((
                 StatusCode::BAD_REQUEST,

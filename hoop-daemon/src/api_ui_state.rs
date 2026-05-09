@@ -80,7 +80,7 @@ async fn get_ui_state(
         )
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let rows = stmt
+    let mut rows = stmt
         .query((&operator_id,))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -146,7 +146,7 @@ async fn put_ui_state(
         .prepare("SELECT key, value FROM ui_state WHERE operator_id = ?1")
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let rows = stmt
+    let mut rows = stmt
         .query((&operator_id,))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -176,7 +176,7 @@ async fn put_ui_state_batch(
     let operator_id = state.identity_cache.resolve(connect_info.map(|ci| ci.0));
 
     let db_path = crate::fleet::db_path();
-    let conn = Connection::open(&db_path)
+    let mut conn = Connection::open(&db_path)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let tx = conn.transaction().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -205,7 +205,7 @@ async fn put_ui_state_batch(
         .prepare("SELECT key, value FROM ui_state WHERE operator_id = ?1")
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let rows = stmt
+    let mut rows = stmt
         .query((&operator_id,))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -255,7 +255,7 @@ async fn delete_ui_state(
         .prepare("SELECT key, value FROM ui_state WHERE operator_id = ?1")
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let rows = stmt
+    let mut rows = stmt
         .query((&operator_id,))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 

@@ -828,6 +828,8 @@ impl WsEvent {
             bead_created_by_hoop: None,
             pattern_saved_query_synced: None,
             stuck_alert: None,
+            saturation_alert: None,
+            cost_anomaly_alert: None,
             subscriptions: None,
         }
     }
@@ -856,6 +858,8 @@ impl WsEvent {
             bead_created_by_hoop: None,
             pattern_saved_query_synced: None,
             stuck_alert: None,
+            saturation_alert: None,
+            cost_anomaly_alert: None,
             subscriptions: None,
         }
     }
@@ -884,6 +888,8 @@ impl WsEvent {
             bead_created_by_hoop: None,
             pattern_saved_query_synced: None,
             stuck_alert: None,
+            saturation_alert: None,
+            cost_anomaly_alert: None,
             subscriptions: None,
         }
     }
@@ -912,6 +918,8 @@ impl WsEvent {
             bead_created_by_hoop: None,
             pattern_saved_query_synced: None,
             stuck_alert: None,
+            saturation_alert: None,
+            cost_anomaly_alert: None,
             subscriptions: None,
         }
     }
@@ -941,6 +949,8 @@ impl WsEvent {
             bead_created_by_hoop: None,
             pattern_saved_query_synced: None,
             stuck_alert: None,
+            saturation_alert: None,
+            cost_anomaly_alert: None,
             subscriptions: None,
         }
     }
@@ -970,6 +980,8 @@ impl WsEvent {
             bead_created_by_hoop: None,
             pattern_saved_query_synced: None,
             stuck_alert: None,
+            saturation_alert: None,
+            cost_anomaly_alert: None,
             subscriptions: None,
         }
     }
@@ -998,6 +1010,8 @@ impl WsEvent {
             bead_created_by_hoop: None,
             pattern_saved_query_synced: None,
             stuck_alert: None,
+            saturation_alert: None,
+            cost_anomaly_alert: None,
             subscriptions: None,
         }
     }
@@ -1026,6 +1040,8 @@ impl WsEvent {
             bead_created_by_hoop: None,
             pattern_saved_query_synced: None,
             stuck_alert: None,
+            saturation_alert: None,
+            cost_anomaly_alert: None,
             subscriptions: None,
         }
     }
@@ -1054,6 +1070,8 @@ impl WsEvent {
             bead_created_by_hoop: None,
             pattern_saved_query_synced: None,
             stuck_alert: None,
+            saturation_alert: None,
+            cost_anomaly_alert: None,
             subscriptions: None,
         }
     }
@@ -1082,6 +1100,8 @@ impl WsEvent {
             bead_created_by_hoop: None,
             pattern_saved_query_synced: None,
             stuck_alert: None,
+            saturation_alert: None,
+            cost_anomaly_alert: None,
             subscriptions: None,
         }
     }
@@ -1110,6 +1130,8 @@ impl WsEvent {
             bead_created_by_hoop: None,
             pattern_saved_query_synced: None,
             stuck_alert: None,
+            saturation_alert: None,
+            cost_anomaly_alert: None,
             subscriptions: None,
         }
     }
@@ -1138,6 +1160,8 @@ impl WsEvent {
             bead_created_by_hoop: None,
             pattern_saved_query_synced: None,
             stuck_alert: None,
+            saturation_alert: None,
+            cost_anomaly_alert: None,
             subscriptions: None,
         }
     }
@@ -1166,6 +1190,8 @@ impl WsEvent {
             bead_created_by_hoop: None,
             pattern_saved_query_synced: None,
             stuck_alert: None,
+            saturation_alert: None,
+            cost_anomaly_alert: None,
             subscriptions: None,
         }
     }
@@ -1194,6 +1220,8 @@ impl WsEvent {
             bead_created_by_hoop: None,
             pattern_saved_query_synced: None,
             stuck_alert: None,
+            saturation_alert: None,
+            cost_anomaly_alert: None,
             subscriptions: None,
         }
     }
@@ -1250,6 +1278,8 @@ impl WsEvent {
             bead_created_by_hoop: None,
             pattern_saved_query_synced: None,
             stuck_alert: None,
+            saturation_alert: None,
+            cost_anomaly_alert: None,
             subscriptions: None,
         }
     }
@@ -1278,6 +1308,8 @@ impl WsEvent {
             bead_created_by_hoop: None,
             pattern_saved_query_synced: None,
             stuck_alert: None,
+            saturation_alert: None,
+            cost_anomaly_alert: None,
             subscriptions: None,
         }
     }
@@ -1306,6 +1338,8 @@ impl WsEvent {
             bead_created_by_hoop: None,
             pattern_saved_query_synced: None,
             stuck_alert: None,
+            saturation_alert: None,
+            cost_anomaly_alert: None,
             subscriptions: None,
         }
     }
@@ -1334,6 +1368,8 @@ impl WsEvent {
             bead_created_by_hoop: Some(data),
             pattern_saved_query_synced: None,
             stuck_alert: None,
+            saturation_alert: None,
+            cost_anomaly_alert: None,
             subscriptions: None,
         }
     }

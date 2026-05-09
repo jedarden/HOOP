@@ -2459,6 +2459,7 @@ Note: This is an automated synthesis from voice dictation."#,
             morning_brief: None,
             roles: None,
             redaction: None,
+            embedding: None,
         };
 
         tokio::task::spawn_blocking(|| {
@@ -2484,6 +2485,7 @@ Note: This is an automated synthesis from voice dictation."#,
                 morning_brief: None,
                 roles: None,
                 redaction: None,
+                embedding: None,
             };
 
             if !config_path.exists() {
@@ -2606,7 +2608,7 @@ Note: This is an automated synthesis from voice dictation."#,
     let audit_retention_days = resolved_config.audit_retention_days.value;
     fleet::start_redaction_audit_cleanup_scheduler(
         redaction_audit_cleanup_shutdown,
-        move || audit_retention_days,
+        move || audit_retention_days as i64,
     );
     info!("Redaction audit cleanup scheduler started (retention: {} days)", audit_retention_days);
 
@@ -2723,6 +2725,7 @@ Note: This is an automated synthesis from voice dictation."#,
         bead_created_by_hoop_tx: broadcast::channel::<ws::BeadCreatedByHoopData>(64).0,
         saturation_alert_tx: broadcast::channel::<ws::SaturationAlertData>(64).0,
         presence_tx: broadcast::channel::<ws::PresenceUpdateData>(64).0,
+        reflection_tx: broadcast::channel::<ws::ReflectionProposalData>(64).0,
         redaction_policy_state,
         stuck_detector,
         backup_runner,
@@ -3540,6 +3543,7 @@ async fn load_hoop_config() -> Option<hoop_schema::HoopConfig> {
             morning_brief: None,
             roles: None,
             redaction: None,
+            embedding: None,
         };
 
         if !config_path.exists() {
