@@ -4,6 +4,7 @@
 //! single long-lived host that holds many repos, many NEEDLE fleets, and
 //! many native-CLI conversations.
 
+mod backup;
 mod config;
 mod init;
 mod new;
@@ -96,6 +97,9 @@ enum Commands {
     },
     /// Install systemd user service
     InstallSystemd,
+    /// Manage backups
+    #[command(subcommand)]
+    Backup(backup::BackupCommands),
     /// Restore from a prior snapshot (requires daemon stopped)
     #[command(arg_required_else_help = true)]
     Restore {
@@ -300,6 +304,12 @@ async fn main() -> anyhow::Result<()> {
         Commands::InstallSystemd => {
             if let Err(e) = install_systemd() {
                 eprintln!("hoop install-systemd: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Backup(cmd) => {
+            if let Err(e) = backup::handle_backup(cmd).await {
+                eprintln!("hoop backup: {}", e);
                 std::process::exit(1);
             }
         }
