@@ -2924,7 +2924,6 @@ Note: This is an automated synthesis from voice dictation."#,
         let projects_ref = state.projects.clone();
         let status_ref = state.project_status_tx.clone();
         let vindex_ref = state.vector_index.clone();
-        let fleet_db_ref = state.fleet_db.clone();
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(5));
             let mut vindex_counter: u32 = 0;
@@ -3026,10 +3025,9 @@ Note: This is an automated synthesis from voice dictation."#,
                 // Include tour project if enabled
                 let mut cards_with_tour = new_cards.clone();
                 {
-                    let fleet_db = fleet_db_ref.clone();
-                    if let Ok(conn) = fleet_db.lock() {
-                        // Use a default operator_id for tour project check
-                        // (tour state is global, not per-operator)
+                    // Use a default operator_id for tour project check
+                    // (tour state is global, not per-operator)
+                    if let Ok(conn) = rusqlite::Connection::open(crate::fleet::db_path()) {
                         if let Some(tour_card) = api_tour_project::get_tour_project_card(&conn, "") {
                             cards_with_tour.push(tour_card);
                         }
