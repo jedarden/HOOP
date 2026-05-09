@@ -1,27 +1,37 @@
 # AGENTS.md — HOOP repository guide for LLMs
 
-This repository is **HOOP** — a control-plane daemon in the NEEDLE / `br` ecosystem. It is documentation-only at present; no implementation code has been written. If you are an LLM asked to work in this repository, read this file first.
+This repository is **HOOP** — a control-plane daemon in the NEEDLE / `br` ecosystem. If you are an LLM asked to work in this repository, read this file first.
 
 ## What HOOP is
 
-A long-lived Rust daemon (planned) that runs on a single operator host and serves as the human-facing interface to a multi-project NEEDLE worker fleet. HOOP reads artifacts across projects (beads, events, conversations, files, costs, capacity) and writes only one thing: it creates beads via `br create` when the operator or the human-interface agent drafts new work.
+A long-lived Rust daemon that runs on a single operator host and serves as the human-facing interface to a multi-project NEEDLE worker fleet. HOOP reads artifacts across projects (beads, events, conversations, files, costs, capacity) and writes only one thing: it creates beads via `br create` when the operator or the human-interface agent drafts new work.
 
 HOOP does **not** steer NEEDLE workers (no launch / stop / kill / signal / release / reassign). NEEDLE manages itself; HOOP is adjacent.
 
-## Current repository state
+## Current repository state (Phase 5 complete)
 
-- `docs/plan/plan.md` — canonical implementation plan. Read this first; it is always authoritative over anything else.
-- `docs/operations.md` — systemd service management, logs, upgrades, backup, and disaster recovery runbooks.
-- `docs/notes/` — prior-art research:
-  - `reference-feature-inventory.md`
-  - `architecture-patterns.md`
-  - `interop-with-needle.md`
-  - `orchestrator-problems-and-solutions.md`
-- `docs/research/` — reserved for future research material.
-- `README.md` at repo root — human-facing quickstart (install + concepts + first-run; may reference future-state install steps).
-- `AGENTS.md` — this file.
+**Phase 5 (v0.5) — The human-interface agent — is now complete.** HOOP provides:
 
-There is **no source code yet**. Any Rust crate skeleton, web client scaffolding, or binary artifacts should be created following the plan's phased roadmap, not ad-hoc.
+- `hoop-daemon/` — Main Rust daemon with REST API, WebSocket, and agent session management
+- `hoop-cli/` — CLI client for project management and status queries
+- `hoop-mcp/` — MCP server exposing HOOP's read APIs + one write (`create_stitch`)
+- `hoop-schema/` — JSON Schema source + Rust/TS codegen
+- `hoop-ui/web/` — React + TypeScript + Jotai web UI with agent chat pane
+- `docs/plan/plan.md` — Canonical implementation plan (always authoritative)
+- `docs/operations.md` — systemd service management, logs, upgrades, backup runbooks
+
+**Key Phase 5 components:**
+- `agent_session.rs` — Persistent agent session manager (spawn, persist, attach-on-restart)
+- `agent_adapter.rs` — LLM-agnostic adapter abstraction (Claude Code, Anthropic API, ZAI/GLM)
+- `agent_context.rs` — Lazy context index builder (thin index + budget watchdog)
+- `morning_brief.rs` — Autonomous daily briefing generator
+- `reflection_detector.rs` — Pattern detection for the Reflection Ledger
+- `cross_project_propagation.rs` — Sibling project detection for Stitch propagation
+- `fleet_notifications.rs` — Notification ring for fleet → agent events
+- `api_agent.rs` — REST API for agent lifecycle control
+- `api_draft_queue.rs` — Draft preview flow (read-first default)
+- `api_reflection_ledger.rs` — Reflection proposal/approval API
+- `AgentChatPane.tsx` — Operator ↔ agent chat UI with multimodal input
 
 ## Key abstractions (must use these terms correctly)
 
@@ -30,8 +40,82 @@ There is **no source code yet**. Any Rust crate skeleton, web client scaffolding
 - **Stitch** — a single conversation within a project. Four kinds: `operator` (human ↔ agent chat), `dictated` (voice note), `worker` (NEEDLE worker's CLI session), `ad-hoc` (operator's direct CLI session). Stitches are HOOP's user-facing unit; users don't see beads in normal flow.
 - **Pattern** — optional, operator-curated grouping of Stitches toward a goal. May span projects.
 - **Bead** — NEEDLE's internal execution unit, managed by `br` (beads_rust). HOOP never touches bead state directly beyond `br create`.
-- **Human-interface agent** — persistent Claude Code session (Opus-class) HOOP hosts as the operator's primary conversation partner. Reads everything; writes only by drafting Stitches.
+- **Human-interface agent** — Persistent LLM session (LLM-agnostic: Claude Code / Anthropic API / ZAI+GLM) hosted by HOOP as the operator's primary conversation partner. Reads everything; writes only by drafting Stitches via the preview flow.
 - **Reflection Ledger** — HOOP's learned-rules store. After each closed operator Stitch, the agent proposes rules from repeated patterns; operator approves/rejects; approved rules inject into every subsequent session.
+
+## Phase 5: Human-interface agent (v0.5)
+
+### Agent tool belt (canonical)
+
+The human-interface agent has access to these tools via the MCP server:
+
+**Write tools (one write, many reads):**
+- `create_stitch(project, title, description, kind, attachments[])` — the ONE write. Creates a draft in the preview queue; operator must approve before any beads are created.
+
+**Read tools:**
+- `find_stitches(project, filter)` — List stitches with optional filtering
+- `read_stitch(id)` — Get detailed stitch information including messages and linked beads
+- `find_beads(project, filter)` — List beads with optional filtering
+- `read_bead(id)` — Get detailed bead information
+- `read_file(project, path, revision)` — Read a file from a project's repository
+- `grep(project, pattern)` — Search for a pattern across files
+- `search_conversations(query, project?)` — Search conversation transcripts
+- `summarize_project(project)` — Get project activity summary
+- `summarize_day()` — Get daily summary across all projects
+
+**Utility tools:**
+- `escalate_to_operator(message)` — Send a message to the operator as a UI banner
+
+**Forbidden actions (never available):**
+- `launch_fleet`, `stop_fleet`, `release_claim`, `boost_priority`, `close_stitch`, `close_bead`
+- If the agent concludes work needs stopping, it MUST escalate to the operator
+
+### Marquee features (Phase 5)
+
+1. **Morning Brief** — Autonomous daily briefing at login or configured time:
+   - What closed successfully, what failed (with cost impact)
+   - What's stuck, what's anomalous
+   - Pre-drafted Stitches for follow-ups (always unsubmitted)
+   - **One headline** — the single priority for today
+
+2. **Cross-Project Stitch Propagation** — Sibling project detection:
+   - Recognizes when a fix pattern applied in one project has structural siblings
+   - Surfaces: "you just closed `fix Calico IP selection` in `iad-acb`. The same pattern exists in `iad-ci`, `rs-manager`..."
+   - Always preview; operator accepts per-project or all-at-once
+
+3. **Reflection Ledger** — Learn from repetition:
+   - After each closed operator Stitch, scan for repeated patterns
+   - Proposals surface in UI for operator approval
+   - Approved rules inject into every subsequent agent session
+   - Nothing is learned silently
+
+### Agent configuration
+
+Agent settings in `~/.hoop/config.yml`:
+
+```yaml
+agent:
+  adapter: claude  # claude | anthropic | zai
+  model: claude-opus-4-7
+  anthropic_api_key: sk-ant-...  # optional for claude adapter
+  zai_base_url: https://...      # required for zai adapter
+  zai_api_key: ...               # required for zai adapter
+  rate_limit_rpm: 50             # optional rate limit
+  cost_cap_usd: 100.00           # optional cost cap
+  system_prompt_budget_bytes: 4096  # default 4KB
+
+morning_brief:
+  window_hours: 24               # how far back to look
+  schedule_hour: 7               # when to auto-run
+  auto_run_enabled: true         # enable scheduled runs
+```
+
+### Agent-off switch
+
+HOOP remains fully functional without the agent. Enabling/disabling:
+- UI: "Start Session" / "Disable" buttons in agent chat pane
+- API: `POST /api/agent/spawn` / `POST /api/agent/disable`
+- Config: Remove `agent` section from `config.yml` to disable at startup
 
 ## Non-goals (do not violate these)
 
@@ -76,7 +160,11 @@ If asked to make a change:
 4. Match terminology (Stitch / Pattern / human-interface agent / Project / Workspace) exactly. Do not use `Mayor`, `polecat`, `swarm`, `convoy`, or Gas Town vocabulary; those were used in earlier drafts and have been deliberately removed.
 5. Never suggest features that steer workers, enforce capacity, or route by strand. Refer back to non-goals.
 
-If asked to write code and there is no code yet, create scaffolding that matches the plan's technology decisions; commit with a clear message referencing the plan section it implements.
+If asked to write code:
+1. Check existing implementations first — most Phase 5 components are already complete
+2. Match the patterns used in existing code (e.g., agent session management, MCP tools)
+3. Add tests for new functionality (see existing test files for patterns)
+4. Commit with a clear message referencing the plan section it implements
 
 If asked a question about HOOP, answer from the plan — do not invent semantics. The plan is the source of truth; this file is a synopsis.
 
