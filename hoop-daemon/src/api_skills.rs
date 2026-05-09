@@ -36,15 +36,24 @@
 use anyhow::{anyhow, Result};
 use fnv::FnvBuildHasher;
 use jsonschema::JSONSchema;
+use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::{Path as StdPath, PathBuf};
 use std::sync::Arc;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
+
+// Axum imports for REST API
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    routing::{get, post},
+    Json, Router,
+};
 
 /// Skill manifest metadata (from manifest.yml)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -785,4 +794,405 @@ timeout_secs: 120
         assert!(json.contains("Required property missing"));
         assert!(json.contains("/url"));
     }
+}
+
+// ---------------------------------------------------------------------------
+// Skill Library and Store
+// ---------------------------------------------------------------------------
+
+/// Shared skill store behind an RwLock.
+pub type SkillStore = Arc<std::sync::RwLock<SkillLibrary>>;
+
+/// In-memory collection of discovered skills.
+#[derive(Debug, Clone, Default)]
+pub struct SkillLibrary {
+    /// All discovered skills
+    skills: Vec<SkillEntry>,
+}
+
+impl SkillLibrary {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Load all skills from the skills directory.
+    pub fn load(&mut self, skills_dir: &Path) -> Result<()> {
+        self.skills = discover_skills(skills_dir);
+        Ok(())
+    }
+
+    /// Return all skills.
+    pub fn list(&self) -> Vec<SkillEntry> {
+        self.skills.clone()
+    }
+
+    /// Get a single skill by name.
+    pub fn get(&self, name: &str) -> Option<SkillEntry> {
+        self.skills.iter().find(|s| s.name == name).cloned()
+    }
+
+    /// Return only executable skills.
+    pub fn executable(&self) -> Vec<SkillEntry> {
+        self.skills.iter().filter(|s| s.executable).cloned().collect()
+    }
+}
+
+/// Ensure the skills directory exists.
+pub fn ensure_skills_dir(home: &Path) -> PathBuf {
+    let skills_dir = home.join(".hoop").join("skills");
+
+    if !skills_dir.exists() {
+        std::fs::create_dir_all(&skills_dir).unwrap_or_else(|e| {
+            warn!("Failed to create skills directory: {}", e);
+        });
+    }
+
+    // Seed example skill if directory is empty
+    let has_files = std::fs::read_dir(&skills_dir)
+        .map(|mut d| d.next().is_some())
+        .unwrap_or(false);
+
+    if !has_files {
+        seed_example_skill(&skills_dir);
+    }
+
+    skills_dir
+}
+
+fn seed_example_skill(dir: &Path) {
+    // Seed echo skill (for testing)
+    let echo_dir = dir.join("echo");
+    std::fs::create_dir_all(&echo_dir).unwrap_or_else(|e| {
+        warn!("Failed to create echo skill directory: {}", e);
+    });
+
+    let echo_manifest = r#"name: echo
+description: Echo back the input message for testing
+summary: Simple echo skill for testing the skills system
+scope: global
+args_schema:
+  type: object
+  properties:
+    message:
+      type: string
+  required:
+    - message
+timeout_secs: 30
+"#;
+
+    let echo_run = r#"#!/bin/bash
+INPUT=$(cat)
+if command -v jq >/dev/null 2>&1; then
+    MESSAGE=$(echo "$INPUT" | jq -r '.message')
+    echo "{\"output\": \"$MESSAGE\"}"
+else
+    echo "{\"output\": \"$INPUT\"}"
+fi
+exit 0
+"#;
+
+    let echo_readme = r#"# Echo Skill
+
+A simple skill that echoes back the input message. Useful for testing the skills system.
+
+## Usage
+
+```json
+{
+  "message": "Hello, HOOP!"
+}
+```
+"#;
+
+    crate::atomic_write::atomic_write_file_str(&echo_dir.join("manifest.yml"), echo_manifest)
+        .unwrap_or_else(|e| warn!("Failed to write echo skill manifest: {}", e));
+    crate::atomic_write::atomic_write_file_str(&echo_dir.join("run"), echo_run)
+        .unwrap_or_else(|e| warn!("Failed to write echo skill run: {}", e));
+    crate::atomic_write::atomic_write_file_str(&echo_dir.join("README.md"), echo_readme)
+        .unwrap_or_else(|e| warn!("Failed to write echo skill README: {}", e));
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let run_path = echo_dir.join("run");
+        if let Ok(metadata) = std::fs::metadata(&run_path) {
+            let mut perms = metadata.permissions();
+            perms.set_mode(perms.mode() | 0o111);
+            let _ = std::fs::set_permissions(&run_path, perms);
+        }
+    }
+
+    info!("Seeded example skill: echo");
+
+    // Seed lookup-git-log skill (practical example)
+    let gitlog_dir = dir.join("lookup-git-log");
+    std::fs::create_dir_all(&gitlog_dir).unwrap_or_else(|e| {
+        warn!("Failed to create lookup-git-log skill directory: {}", e);
+    });
+
+    let gitlog_manifest = r#"name: lookup-git-log
+description: Query git log history with filtering options
+summary: Look up git commit history with optional filters for author, date range, file path, and commit message pattern
+scope: global
+args_schema:
+  type: object
+  properties:
+    project_path:
+      type: string
+      description: Path to the git repository (defaults to current working directory)
+    max_count:
+      type: integer
+      description: Maximum number of commits to return (default: 20)
+      minimum: 1
+      maximum: 100
+    author:
+      type: string
+      description: Filter by author name or email
+    since:
+      type: string
+      description: Show commits since this date (e.g., "2 weeks ago", "2024-01-01")
+    path:
+      type: string
+      description: Filter commits affecting a specific file or directory
+    grep:
+      type: string
+      description: Filter commits by message pattern
+  required: []
+timeout_secs: 60
+"#;
+
+    let gitlog_run = r#"#!/bin/bash
+# lookup-git-log skill - Query git history
+# Reads JSON arguments from stdin, outputs formatted results
+
+INPUT=$(cat)
+
+# Parse arguments with fallbacks
+PROJECT_PATH=$(echo "$INPUT" | jq -r '.project_path // "."')
+MAX_COUNT=$(echo "$INPUT" | jq -r '.max_count // "20"')
+AUTHOR=$(echo "$INPUT" | jq -r '.author // ""')
+SINCE=$(echo "$INPUT" | jq -r '.since // ""')
+PATH_FILTER=$(echo "$INPUT" | jq -r '.path // ""')
+GREP=$(echo "$INPUT" | jq -r '.grep // ""')
+
+# Build git log command
+CMD=("git" "-C" "$PROJECT_PATH" "log" "--max-count=$MAX_COUNT" "--format=%H|%an|%ae|%ad|%s" "--date=iso")
+
+if [ -n "$AUTHOR" ]; then
+    CMD+=("--author=$AUTHOR")
+fi
+
+if [ -n "$SINCE" ]; then
+    CMD+=("--since=$SINCE")
+fi
+
+if [ -n "$PATH_FILTER" ]; then
+    CMD+=("--" "$PATH_FILTER")
+fi
+
+if [ -n "$GREP" ]; then
+    CMD+=("--grep=$GREP")
+fi
+
+# Execute git log
+if OUTPUT=$("${CMD[@]}" 2>&1); then
+    # Parse and format as JSON
+    echo "$OUTPUT" | awk -F'|' 'BEGIN {print "["}
+    NR > 1 {print ","}
+    {
+        printf "  {\n"
+        printf "    \"hash\": \"%s\",\n", $1
+        printf "    \"author_name\": \"%s\",\n", $2
+        printf "    \"author_email\": \"%s\",\n", $3
+        printf "    \"date\": \"%s\",\n", $4
+        printf "    \"message\": \"%s\"\n", $5
+        for (i = 6; i <= NF; i++) printf " %s", $i
+        printf "  }\n"
+    }
+    END {print "]"}'
+    exit 0
+else
+    # Error occurred
+    echo "{\"error\": \"git log failed\", \"details\": \"$OUTPUT\"}"
+    exit 1
+fi
+"#;
+
+    let gitlog_readme = r#"# lookup-git-log Skill
+
+A practical skill for querying git commit history with filtering options.
+
+## Use Cases
+
+- Investigating recent changes in a project
+- Finding commits by a specific author
+- Checking when a file was last modified
+- Searching for commits matching a pattern
+
+## Arguments
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `project_path` | string | No | Path to git repository (default: current directory) |
+| `max_count` | integer | No | Maximum commits to return (1-100, default: 20) |
+| `author` | string | No | Filter by author name or email |
+| `since` | string | No | Show commits since date (e.g., "2 weeks ago") |
+| `path` | string | No | Filter commits affecting a specific file/directory |
+| `grep` | string | No | Filter commits by message pattern |
+
+## Examples
+
+```json
+{
+  "project_path": "/home/coding/HOOP",
+  "max_count": 10,
+  "author": "jedarden"
+}
+```
+
+```json
+{
+  "project_path": "/home/coding/HOOP",
+  "since": "1 week ago",
+  "path": "hoop-daemon/src"
+}
+```
+"#;
+
+    crate::atomic_write::atomic_write_file_str(&gitlog_dir.join("manifest.yml"), gitlog_manifest)
+        .unwrap_or_else(|e| warn!("Failed to write lookup-git-log skill manifest: {}", e));
+    crate::atomic_write::atomic_write_file_str(&gitlog_dir.join("run"), gitlog_run)
+        .unwrap_or_else(|e| warn!("Failed to write lookup-git-log skill run: {}", e));
+    crate::atomic_write::atomic_write_file_str(&gitlog_dir.join("README.md"), gitlog_readme)
+        .unwrap_or_else(|e| warn!("Failed to write lookup-git-log skill README: {}", e));
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let run_path = gitlog_dir.join("run");
+        if let Ok(metadata) = std::fs::metadata(&run_path) {
+            let mut perms = metadata.permissions();
+            perms.set_mode(perms.mode() | 0o111);
+            let _ = std::fs::set_permissions(&run_path, perms);
+        }
+    }
+
+    info!("Seeded example skill: lookup-git-log");
+}
+
+/// Start file watcher for the skills directory.
+/// Returns the watcher (must be kept alive for watching to work).
+pub fn start_watcher(
+    skills_dir: PathBuf,
+    store: SkillStore,
+) -> notify::RecommendedWatcher {
+    let watcher_skills_dir = skills_dir.clone();
+    let mut watcher =
+        notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
+            match res {
+                Ok(_event) => {
+                    debug!("Skills directory changed, reloading");
+                    let mut lib = store.write().unwrap();
+                    if let Err(e) = lib.load(&watcher_skills_dir) {
+                        warn!("Skills reload failed: {}", e);
+                    }
+                }
+                Err(e) => {
+                    warn!("Skills watch error: {}", e);
+                }
+            }
+        })
+        .expect("failed to create skills file watcher");
+
+    if skills_dir.exists() {
+        watcher
+            .watch(&skills_dir, RecursiveMode::NonRecursive)
+            .unwrap_or_else(|e| warn!("Cannot watch skills dir: {}", e));
+    }
+
+    info!("Skills file watcher started");
+    watcher
+}
+
+// ---------------------------------------------------------------------------
+// REST API
+// ---------------------------------------------------------------------------
+
+/// GET /api/skills — list all skills
+async fn list_skills(
+    State(state): State<crate::DaemonState>,
+) -> Json<Vec<SkillEntry>> {
+    let lib = state.skill_library.read().unwrap();
+    Json(lib.list())
+}
+
+/// GET /api/skills/:name — get a single skill by name
+async fn get_skill(
+    AxumPath(name): AxumPath<String>,
+    State(state): State<crate::DaemonState>,
+) -> Result<Json<SkillEntry>, (StatusCode, String)> {
+    let lib = state.skill_library.read().unwrap();
+    lib.get(&name)
+        .map(Json)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Skill '{}' not found", name)))
+}
+
+/// POST /api/skills/:name/run — execute a skill
+async fn run_skill(
+    AxumPath(name): AxumPath<String>,
+    State(state): State<crate::DaemonState>,
+    Json(req): Json<SkillRunRequest>,
+) -> Result<Json<SkillRunResponse>, (StatusCode, String)> {
+    let lib = state.skill_library.read().unwrap();
+    let skill = lib.get(&name)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Skill '{}' not found", name)))?;
+
+    if !skill.executable {
+        return Err((
+            StatusCode::FORBIDDEN,
+            format!("Skill '{}' is not executable", name),
+        ));
+    }
+
+    // Validate arguments against schema
+    if let Err(validation_errors) = validate_args_against_schema(&req.args, &skill.manifest.args_schema) {
+        let error_messages: Vec<String> = validation_errors
+            .iter()
+            .map(|e| e.message.clone())
+            .collect();
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Argument validation failed: {}", error_messages.join("; ")),
+        ));
+    }
+
+    // Execute the skill (blocking call in spawn_blocking)
+    let skill_run_path = skill.run_path.clone();
+    let skill_timeout = skill.manifest.timeout_secs;
+    let args = req.args.clone();
+    let result = tokio::task::spawn_blocking(move || execute_skill(&skill_run_path, &args, skill_timeout))
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to join skill execution task: {}", e),
+            )
+        })?
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Skill execution failed: {}", e),
+            )
+        })?;
+
+    info!("Skill '{}' completed with status: {}", name, result.status);
+
+    Ok(Json(result))
+}
+
+pub fn router() -> Router<crate::DaemonState> {
+    Router::new()
+        .route("/api/skills", get(list_skills))
+        .route("/api/skills/:name", get(get_skill))
+        .route("/api/skills/:name/run", post(run_skill))
 }
