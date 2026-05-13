@@ -8,6 +8,7 @@ mod backup;
 mod config;
 mod init;
 mod new;
+mod patterns;
 mod projects;
 mod restore;
 mod risk_patterns;
@@ -122,6 +123,9 @@ enum Commands {
     /// Manage agent-invocable skills
     #[command(subcommand)]
     Skills(skills::SkillsCommands),
+    /// Manage patterns (operator-curated groups of Stitches)
+    #[command(subcommand)]
+    Pattern(patterns::PatternCommands),
     /// First-time setup wizard
     Init,
 }
@@ -346,6 +350,12 @@ async fn main() -> anyhow::Result<()> {
         Commands::Skills(cmd) => {
             if let Err(e) = skills::handle_skills(cmd).await {
                 eprintln!("hoop skills: {}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::Pattern(cmd) => {
+            if let Err(e) = patterns::handle_patterns(cmd).await {
+                eprintln!("hoop pattern: {}", e);
                 std::process::exit(1);
             }
         }
