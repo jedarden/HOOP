@@ -9,3 +9,4 @@ target/
 
 # Load testing data (regenerated)
 load-test-data/
+*.backup
