@@ -498,6 +498,8 @@ mod tests {
                 spend_usd_per_day: None,
                 tokens_per_5h: None,
                 tokens_per_7d: Some(1000000),
+                prompts_per_5h: None,
+                prompts_per_7d: None,
             },
             usage: CapacityAccountUsage {
                 active_requests: None,
@@ -505,6 +507,8 @@ mod tests {
                 spend_usd_today: 50.0,
                 tokens_5h: 50000,
                 tokens_7d: 500000,
+                prompts_5h: 0,
+                prompts_7d: 0,
             },
             window_start: None,
             window_end: None,
@@ -644,6 +648,7 @@ mod tests {
             redaction: None,
             roles: None,
             server: None,
+            embedding: None,
         };
 
         let json = serde_json::to_string(&original).expect("serialize");
@@ -702,6 +707,8 @@ mod tests {
                 spend_usd_per_day: None,
                 tokens_per_5h: None,
                 tokens_per_7d: Some(1000000),
+                prompts_per_5h: None,
+                prompts_per_7d: None,
             },
             usage: CapacityAccountUsage {
                 active_requests: None,
@@ -709,6 +716,8 @@ mod tests {
                 spend_usd_today: 50.0,
                 tokens_5h: 50000,
                 tokens_7d: 500000,
+                prompts_5h: 0,
+                prompts_7d: 0,
             },
             window_start: None,
             window_end: None,
@@ -881,6 +890,10 @@ mod tests {
             panel_layout: None,
             filters: None,
             theme: UiStateTheme::Auto,
+            prompts_dismissed: None,
+            feature_usage: None,
+            last_seen_version: None,
+            prompts_enabled: None,
         });
     }
 }
