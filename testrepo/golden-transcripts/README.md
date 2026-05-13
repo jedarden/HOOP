@@ -1,8 +1,12 @@
-# Golden Transcripts Corpus
+# Golden Transcripts Fixture
 
-This directory contains expected-parsed-output fixtures for adapter parser regression testing.
+This directory contains golden transcripts for testing agent adapter parsers.
 
-## Structure
+## Purpose
+
+Golden transcripts are canonical CLI session recordings that validate parser behavior across different LLM adapters (Claude, Codex, OpenCode, Gemini, Aider).
+
+## Directory Structure
 
 ```
 golden-transcripts/
@@ -10,11 +14,8 @@ golden-transcripts/
 ├── claude/
 │   └── v1.0/
 │       ├── simple/
-│       │   └── simple_turn.jsonl
 │       ├── tool_heavy/
-│       │   └── tool_heavy_turn.jsonl
 │       └── failure/
-│           └── failure_turn.jsonl
 ├── codex/
 │   └── v1.0/
 │       ├── simple/
@@ -37,52 +38,79 @@ golden-transcripts/
         └── failure/
 ```
 
-## File Format
+## Scenarios
 
-Each `.jsonl` file contains newline-delimited JSON objects representing events from an adapter's stream output.
+### simple
+Basic single-turn interactions: list, show, claim. Tests fundamental parsing without complexity.
 
-### Scenarios
+### tool_heavy
+Multi-turn sessions with many tool calls: searches, file reads, updates. Tests parser performance and state management.
 
-Each adapter must have three scenarios:
+### failure
+Error conditions and edge cases: timeouts, crashes, malformed output. Tests error handling and recovery.
 
-1. **simple**: A basic text-only turn with minimal events
-2. **tool_heavy**: A turn with multiple tool invocations and results
-3. **failure**: A turn that results in an error condition
+## Format
 
-### Event Types
+Each `.jsonl` file contains one JSON object per line:
 
-Events vary by adapter format but generally include:
+```json
+{"ts":"2026-04-21T18:42:10Z","cmd":"br list","output":"[needle:alpha:bd-abc123:pluck] tr-open-001|Fix memory leak|open|bug"}
+```
 
-- **Text/content deltas**: Streaming text responses from the model
-- **Tool use/calls**: Model invoking tools
-- **Tool results**: Output from tool execution
-- **Turn completion**: End-of-turn markers with usage stats
-- **Errors**: Error conditions (rate limits, auth failures, etc.)
+Fields:
+- `ts`: ISO 8601 timestamp in UTC
+- `cmd`: The CLI command that was executed
+- `output`: The command output, including the `[needle:<worker>:<bead>:<strand>]` prefix
 
-## Updating Golden Transcripts
+## Needle Prefix Convention
 
-When an adapter's parser changes or a new event type is added:
-
-1. Run the adapter to generate fresh output
-2. Validate the output matches the expected event schema
-3. Update the appropriate `.jsonl` file in the version directory
-4. If the format changes fundamentally, create a new version directory (e.g., `v1.1/`)
+All outputs include the `[needle:<worker>:<bead>:<strand>]` prefix to tag the NEEDLE worker context:
+- `worker`: alpha, bravo, charlie, delta, echo (NEEDLE worker ID)
+- `bead`: bd-<alphanumeric> (bead ID)
+- `strand`: pluck, mend, explore, weave, graft (operation type)
 
 ## Size Constraints
 
-The total corpus size must remain under 10MB to keep CI fast and git operations manageable.
+The entire golden-transcripts directory must remain under 10MB to keep the HOOP repo manageable.
 
-## Tests
+## Integration Tests
 
-The regression test at `hoop-daemon/tests/golden_transcripts_regression.rs` validates:
+Tests that use golden transcripts:
 
-- Directory structure matches the spec
-- All adapters have all required scenarios
-- All `.jsonl` files contain valid JSON
-- Each scenario file has non-empty content
-- Scenario types contain appropriate event types (text, tools, errors)
-- Total corpus size is bounded
+- `golden_transcripts_regression` — Validates transcript parsing
+- `adapter_parser_contract` — Verifies adapter-specific behavior
 
-## Plan Reference
+Run all integration tests:
 
-§14.3 golden transcripts — Real LLM integration is tested via recorded fixtures.
+```bash
+cd /home/coding/HOOP
+cargo test --test golden_transcripts_regression
+cargo test --test adapter_parser_contract
+```
+
+## Adding New Transcripts
+
+When adding new test scenarios:
+
+1. Create new `.jsonl` files in the appropriate adapter/version/scenario directory
+2. Follow the JSONL format exactly
+3. Include the `[needle:...]` prefix in all outputs
+4. Use realistic timestamps and commands
+5. Update this README if new scenarios or adapters are added
+6. Run `./scripts/regenerate-cli-sessions.py` to rebuild fixtures
+
+## Versioning
+
+The `v1.0` directory represents the first version of the golden transcripts. When the transcript format changes significantly:
+
+1. Create a new `v2.0` directory
+2. Copy and update the scenario directories
+3. Update integration tests to reference the new version
+4. Keep old versions for regression testing
+
+## Notes
+
+- All timestamps are in UTC (ISO 8601 format)
+- Bead IDs use the `tr-` prefix (testrepo)
+- Worker names follow the alpha/bravo/charlie/delta/echo pattern
+- Session IDs use `<worker>-<number>` format
