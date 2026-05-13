@@ -28,12 +28,12 @@ pub mod api_notes;
 pub mod api_metrics;
 pub mod api_morning_brief;
 pub mod api_onboarding;
+pub mod api_pattern_mutations;
+pub mod api_patterns;
 pub mod api_propagation;
 
 #[cfg(feature = "openapi")]
 pub mod openapi;
-
-pub mod api_patterns;
 pub mod api_preview;
 pub mod api_scripts;
 pub mod api_stitch_decompose;
@@ -1254,6 +1254,7 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_stitch_replay::router())
         .merge(api_stitch_links::router())
         .merge(api_patterns::router())
+        .merge(api_pattern_mutations::router())
         .merge(api_diff::router())
         .merge(api_blame::router())
         .merge(api_screen_capture::router())
