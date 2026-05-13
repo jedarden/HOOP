@@ -1,0 +1,6 @@
+{"ts":"2026-04-21T18:42:10Z","cmd":"br list","output":"[needle:alpha:bd-abc123:pluck] tr-open-001|Fix memory leak in parser|open|bug"}
+{"ts":"2026-04-21T18:42:15Z","cmd":"br show tr-open-001","output":"{"id":"tr-open-001","title":"Fix memory leak in parser","status":"open","priority":3,"issue_type":"bug"}"}
+{"ts":"2026-04-21T18:42:20Z","cmd":"br claim tr-open-001 alpha","output":"Claimed tr-open-001 for worker alpha"}
+{"ts":"2026-04-21T18:43:45Z","cmd":"br list --worker alpha","output":"[needle:alpha:bd-abc123:pluck] tr-open-001|Fix memory leak in parser|in_progress|bug"}
+{"ts":"2026-04-21T18:45:30Z","cmd":"br close tr-open-001 --reason 'Fixed leak in parser by adding proper drop handlers'","output":"Closed tr-open-001: Fixed leak in parser by adding proper drop handlers"}
+{"ts":"2026-04-21T18:45:35Z","cmd":"br list","output":"[needle:alpha:bd-abc123:pluck] tr-open-002|Add streaming support|open|feature"}

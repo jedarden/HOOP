@@ -1,0 +1,5 @@
+{"ts":"2026-04-23T14:20:00Z","cmd":"br list","output":"[needle:charlie:bd-ghi789:weave] tr-open-003|Update documentation|open|task"}
+{"ts":"2026-04-23T14:20:15Z","cmd":"br show tr-open-003","output":"{"id":"tr-open-003","title":"Update documentation","status":"open","priority":1,"issue_type":"task"}"}
+{"ts":"2026-04-23T14:20:25Z","cmd":"br claim tr-open-003 charlie","output":"Claimed tr-open-003 for worker charlie"}
+{"ts":"2026-04-23T14:45:00Z","cmd":"br comment tr-open-003 'Documentation updates complete for API modules'","output":"Added comment to tr-open-003"}
+{"ts":"2026-04-23T15:00:00Z","cmd":"br close tr-open-003 --reason 'All documentation updated to reflect current API'","output":"Closed tr-open-003: All documentation updated to reflect current API"}

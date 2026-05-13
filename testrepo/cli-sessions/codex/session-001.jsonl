@@ -1,0 +1,5 @@
+{"ts":"2026-04-22T09:15:00Z","cmd":"br list","output":"[needle:bravo:bd-def456:mend] tr-open-002|Add streaming support|open|feature"}
+{"ts":"2026-04-22T09:15:10Z","cmd":"br show tr-open-002","output":"{"id":"tr-open-002","title":"Add streaming support","status":"open","priority":2,"issue_type":"feature"}"}
+{"ts":"2026-04-22T09:15:20Z","cmd":"br claim tr-open-002 bravo","output":"Claimed tr-open-002 for worker bravo"}
+{"ts":"2026-04-22T09:30:45Z","cmd":"br update tr-open-002 --status 'in_progress'","output":"Updated tr-open-002: status=in_progress"}
+{"ts":"2026-04-22T10:15:30Z","cmd":"br close tr-open-002 --reason 'Implemented async streaming with tokio','exit_code':0","output":"Closed tr-open-002: Implemented async streaming with tokio"}

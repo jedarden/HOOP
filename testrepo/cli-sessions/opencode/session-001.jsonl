@@ -1,0 +1,4 @@
+{"ts":"2026-04-24T11:30:00Z","cmd":"br list","output":"[needle:delta:bd-jkl012:unravel] tr-claimed-001|Implement retry logic|in_progress|feature"}
+{"ts":"2026-04-24T11:30:15Z","cmd":"br show tr-claimed-001","output":"{"id":"tr-claimed-001","title":"Implement retry logic","status":"in_progress","priority":3,"assignee":"alpha","issue_type":"feature"}"}
+{"ts":"2026-04-24T12:00:00Z","cmd":"br update tr-claimed-001 --note 'Added exponential backoff with jitter'","output":"Updated tr-claimed-001: Added exponential backoff with jitter"}
+{"ts":"2026-04-24T13:30:00Z","cmd":"br close tr-claimed-001 --reason 'Retry logic implemented with configurable backoff strategy'","output":"Closed tr-claimed-001: Retry logic implemented with configurable backoff strategy"}

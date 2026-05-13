@@ -1,0 +1,5 @@
+{"ts":"2026-04-25T16:00:00Z","cmd":"br list","output":"[needle:echo:bd-mno345:knot] tr-claimed-002|Refactor database layer|in_progress|refactor"}
+{"ts":"2026-04-25T16:00:15Z","cmd":"br show tr-claimed-002","output":"{"id":"tr-claimed-002","title":"Refactor database layer","status":"in_progress","priority":2,"assignee":"bravo","issue_type":"refactor"}"}
+{"ts":"2026-04-25T16:30:00Z","cmd":"br update tr-claimed-002 --note 'Extracted connection pool into separate module'","output":"Updated tr-claimed-002: Extracted connection pool into separate module"}
+{"ts":"2026-04-25T17:45:00Z","cmd":"br close tr-claimed-002 --reason 'Database layer refactored with proper separation of concerns'","output":"Closed tr-claimed-002: Database layer refactored with proper separation of concerns"}
+{"ts":"2026-04-25T17:50:00Z","cmd":"br list --all","output":"[needle:echo:bd-mno345:knot] tr-closed-001|Fix authentication bug|closed|bug"}

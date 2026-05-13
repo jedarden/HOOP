@@ -1,5 +1,0 @@
-{"worker": "load-test-project-000-worker-00", "ts": "2026-05-09T13:28:56.795389Z", "state": {"Executing": {"bead": "load-test-project-000-bd-000000", "pid": 12345, "adapter": "claude"}}}
-{"worker": "load-test-project-000-worker-01", "ts": "2026-05-09T13:28:56.795389Z", "state": {"Idle": {"last_strand": "pluck"}}}
-{"worker": "load-test-project-000-worker-02", "ts": "2026-05-09T13:28:56.795389Z", "state": {"Idle": {"last_strand": "pluck"}}}
-{"worker": "load-test-project-000-worker-03", "ts": "2026-05-09T13:28:56.795389Z", "state": {"Executing": {"bead": "load-test-project-000-bd-000030", "pid": 12348, "adapter": "claude"}}}
-{"worker": "load-test-project-000-worker-04", "ts": "2026-05-09T13:28:56.795389Z", "state": {"Idle": {"last_strand": "pluck"}}}
