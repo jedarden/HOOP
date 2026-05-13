@@ -40,6 +40,11 @@ use crate::fleet::{
     migrate_v126_to_v127,
     migrate_v127_to_v128,
     migrate_v128_to_v129,
+    migrate_v129_to_v130,
+    migrate_v130_to_v131,
+    migrate_v131_to_v132,
+    migrate_v132_to_v133,
+    migrate_v133_to_v134,
 };
 use anyhow::{bail, Result};
 use rusqlite::Connection;
@@ -539,6 +544,41 @@ pub fn get_migration_registry() -> MigrationRegistry {
         description: "Add workspace_from/to to stitch_links for cross-workspace blocker resolution",
         up: migrate_v128_to_v129,
         down: Some(rollback_v129_to_v128),
+    });
+
+    let _ = registry.register(Migration {
+        version: "1.30.0",
+        description: "Multi-operator concurrency (§19)",
+        up: migrate_v129_to_v130,
+        down: Some(rollback_v130_to_v129),
+    });
+
+    let _ = registry.register(Migration {
+        version: "1.31.0",
+        description: "Add UNIQUE constraint on reflection_ledger.content_hash",
+        up: migrate_v130_to_v131,
+        down: Some(rollback_v131_to_v130),
+    });
+
+    let _ = registry.register(Migration {
+        version: "1.32.0",
+        description: "Add content_blocks table for multimodal input",
+        up: migrate_v131_to_v132,
+        down: Some(rollback_v132_to_v131),
+    });
+
+    let _ = registry.register(Migration {
+        version: "1.33.0",
+        description: "Add template_id and created_by to fix_patterns",
+        up: migrate_v132_to_v133,
+        down: Some(rollback_v133_to_v132),
+    });
+
+    let _ = registry.register(Migration {
+        version: "1.34.0",
+        description: "Seed initial risk patterns",
+        up: migrate_v133_to_v134,
+        down: Some(rollback_v134_to_v133),
     });
 
     registry
@@ -1126,6 +1166,144 @@ fn rollback_v129_to_v128(conn: &mut Connection) -> Result<()> {
         "CREATE INDEX IF NOT EXISTS idx_stitch_links_to ON stitch_links(to_stitch)",
         [],
     )?;
+
+    Ok(())
+}
+
+/// Rollback 1.30.0 → 1.29.0: Remove multi-operator concurrency features
+fn rollback_v130_to_v129(conn: &mut Connection) -> Result<()> {
+    info!("Rolling back migration 1.30.0 → 1.29.0: Removing multi-operator concurrency features");
+
+    // Drop presence table
+    conn.execute("DROP TABLE IF EXISTS presence", [])?;
+
+    // Remove columns from reflection_ledger (SQLite doesn't support DROP COLUMN)
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS reflection_ledger_backup (
+            id TEXT PRIMARY KEY NOT NULL,
+            rule TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'proposed',
+            source_stitches TEXT NOT NULL,
+            proposed_at TEXT NOT NULL DEFAULT (datetime('now')),
+            reviewed_at TEXT,
+            archived_at TEXT
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "INSERT INTO reflection_ledger_backup (id, rule, reason, status, source_stitches, proposed_at, reviewed_at, archived_at)
+         SELECT id, rule, reason, status, source_stitches, proposed_at, reviewed_at, archived_at FROM reflection_ledger",
+        [],
+    )?;
+
+    conn.execute("DROP TABLE reflection_ledger", [])?;
+    conn.execute("ALTER TABLE reflection_ledger_backup RENAME TO reflection_ledger", [])?;
+
+    // Recreate indexes
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_reflection_ledger_status ON reflection_ledger(status)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_reflection_ledger_proposed_at ON reflection_ledger(proposed_at DESC)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Rollback 1.31.0 → 1.30.0: Remove UNIQUE constraint on reflection_ledger.content_hash
+fn rollback_v131_to_v130(conn: &mut Connection) -> Result<()> {
+    info!("Rolling back migration 1.31.0 → 1.30.0: Removing UNIQUE constraint on reflection_ledger.content_hash");
+
+    // SQLite doesn't support dropping constraints, need to recreate table
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS reflection_ledger_backup (
+            id TEXT PRIMARY KEY NOT NULL,
+            rule TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'proposed',
+            source_stitches TEXT NOT NULL,
+            proposed_at TEXT NOT NULL DEFAULT (datetime('now')),
+            reviewed_at TEXT,
+            archived_at TEXT,
+            content_hash TEXT NOT NULL DEFAULT '',
+            rejection_count INTEGER NOT NULL DEFAULT 0,
+            approved_by TEXT,
+            approved_at TEXT
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "INSERT INTO reflection_ledger_backup (id, rule, reason, status, source_stitches, proposed_at, reviewed_at, archived_at, content_hash, rejection_count, approved_by, approved_at)
+         SELECT id, rule, reason, status, source_stitches, proposed_at, reviewed_at, archived_at, content_hash, rejection_count, approved_by, approved_at FROM reflection_ledger",
+        [],
+    )?;
+
+    conn.execute("DROP TABLE reflection_ledger", [])?;
+    conn.execute("ALTER TABLE reflection_ledger_backup RENAME TO reflection_ledger", [])?;
+
+    // Recreate indexes (without UNIQUE constraint)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_reflection_ledger_status ON reflection_ledger(status)",
+        [],
+    )?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_reflection_ledger_proposed_at ON reflection_ledger(proposed_at DESC)",
+        [],
+    )?;
+
+    Ok(())
+}
+
+/// Rollback 1.32.0 → 1.31.0: Drop content_blocks table
+fn rollback_v132_to_v131(conn: &mut Connection) -> Result<()> {
+    info!("Rolling back migration 1.32.0 → 1.31.0: Dropping content_blocks table");
+
+    conn.execute("DROP TABLE IF EXISTS content_blocks", [])?;
+
+    Ok(())
+}
+
+/// Rollback 1.33.0 → 1.32.0: Remove template_id and created_by from fix_patterns
+fn rollback_v133_to_v132(conn: &mut Connection) -> Result<()> {
+    info!("Rolling back migration 1.33.0 → 1.32.0: Removing template_id and created_by from fix_patterns");
+
+    // SQLite doesn't support DROP COLUMN
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS fix_patterns_backup (
+            id TEXT PRIMARY KEY NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL,
+            pattern_regex TEXT NOT NULL,
+            example_match TEXT NOT NULL,
+            fix_instructions TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )",
+        [],
+    )?;
+
+    conn.execute(
+        "INSERT INTO fix_patterns_backup (id, title, description, pattern_regex, example_match, fix_instructions, created_at, updated_at)
+         SELECT id, title, description, pattern_regex, example_match, fix_instructions, created_at, updated_at FROM fix_patterns",
+        [],
+    )?;
+
+    conn.execute("DROP TABLE fix_patterns", [])?;
+    conn.execute("ALTER TABLE fix_patterns_backup RENAME TO fix_patterns", [])?;
+
+    Ok(())
+}
+
+/// Rollback 1.34.0 → 1.33.0: Drop risk_patterns table
+fn rollback_v134_to_v133(conn: &mut Connection) -> Result<()> {
+    info!("Rolling back migration 1.34.0 → 1.33.0: Dropping risk_patterns table");
+
+    conn.execute("DROP TABLE IF EXISTS risk_patterns", [])?;
 
     Ok(())
 }
