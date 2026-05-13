@@ -1,0 +1,5 @@
+{"ts":"2026-04-21T19:00:00Z","cmd":"br list","output":"[needle:alpha:bd-abc123:pluck] tr-open-002|Add streaming support|open|feature"}
+{"ts":"2026-04-21T19:00:30Z","cmd":"br claim tr-open-002","output":"[needle:alpha:bd-abc123:pluck] Claimed tr-open-002"}
+{"ts":"2026-04-21T19:01:00Z","cmd":"br timeout","output":"[needle:alpha:bd-abc123:pluck] Command timed out after 30s"}
+{"ts":"2026-04-21T19:01:30Z","cmd":"br show tr-open-002","output":"[needle:alpha:bd-abc123:pluck] Error: Unable to read bead database"}
+{"ts":"2026-04-21T19:02:00Z","cmd":"br update tr-open-002 --status failed","output":"[needle:alpha:bd-abc123:pluck] Updated tr-open-002 to failed"}

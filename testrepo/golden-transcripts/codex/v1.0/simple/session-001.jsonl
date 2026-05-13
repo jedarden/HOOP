@@ -1,0 +1,3 @@
+{"ts":"2026-04-21T18:55:00Z","cmd":"br list","output":"[needle:bravo:bd-def456:mend] tr-open-002|Add streaming support|open|feature"}
+{"ts":"2026-04-21T18:55:30Z","cmd":"br show tr-open-002","output":"[needle:bravo:bd-def456:mend] ID: tr-open-002\nTitle: Add streaming support\nStatus: open\nType: feature\nPriority: 2"}
+{"ts":"2026-04-21T18:56:45Z","cmd":"br claim tr-open-002","output":"[needle:bravo:bd-def456:mend] Claimed tr-open-002"}

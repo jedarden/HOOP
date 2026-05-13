@@ -1,0 +1,4 @@
+{"ts":"2026-04-21T20:00:00Z","cmd":"br list","output":"[needle:delta:bd-jkl012:weave] tr-failed-003|Multi-file refactor|open|refactor"}
+{"ts":"2026-04-21T20:00:30Z","cmd":"br claim tr-failed-003","output":"[needle:delta:bd-jkl012:weave] Claimed tr-failed-003"}
+{"ts":"2026-04-21T20:01:00Z","cmd":"br crash","output":"[needle:delta:bd-jkl012:weave] Process crashed with exit code 139"}
+{"ts":"2026-04-21T20:01:30Z","cmd":"br update tr-failed-003 --status failed","output":"[needle:delta:bd-jkl012:weave] Updated tr-failed-003 to failed"}

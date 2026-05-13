@@ -1,0 +1,3 @@
+{"ts":"2026-04-21T20:10:00Z","cmd":"br list --status ready","output":"[needle:echo:bd-mno345:graft] tr-open-001|Fix memory leak|open|bug"}
+{"ts":"2026-04-21T20:10:30Z","cmd":"br show tr-open-001","output":"[needle:echo:bd-mno345:graft] ID: tr-open-001\nTitle: Fix memory leak\nStatus: open\nType: bug\nPriority: 1"}
+{"ts":"2026-04-21T20:11:00Z","cmd":"br claim tr-open-001","output":"[needle:echo:bd-mno345:graft] Claimed tr-open-001"}

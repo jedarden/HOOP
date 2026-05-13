@@ -1,0 +1,4 @@
+{"ts":"2026-04-21T19:40:00Z","cmd":"br list","output":"[needle:charlie:bd-ghi789:explore] tr-failed-001|Complex migration script|open|task"}
+{"ts":"2026-04-21T19:40:30Z","cmd":"br claim tr-failed-001","output":"[needle:charlie:bd-ghi789:explore] Claimed tr-failed-001"}
+{"ts":"2026-04-21T19:41:00Z","cmd":"br timeout","output":"[needle:charlie:bd-ghi789:explore] Command timed out"}
+{"ts":"2026-04-21T19:41:30Z","cmd":"br update tr-failed-001 --status failed","output":"[needle:charlie:bd-ghi789:explore] Updated tr-failed-001 to failed"}

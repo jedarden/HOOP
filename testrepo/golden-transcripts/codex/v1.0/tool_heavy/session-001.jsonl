@@ -1,0 +1,8 @@
+{"ts":"2026-04-21T19:10:00Z","cmd":"br list --status ready","output":"[needle:bravo:bd-def456:mend] tr-open-002|Add streaming support|open|feature\ntr-open-003|Update documentation|open|task"}
+{"ts":"2026-04-21T19:10:30Z","cmd":"br search streaming","output":"[needle:bravo:bd-def456:mend] tr-open-002|Add streaming support|open|feature"}
+{"ts":"2026-04-21T19:11:00Z","cmd":"br show tr-open-002 --json","output":"[needle:bravo:bd-def456:mend] {\"id\":\"tr-open-002\",\"title\":\"Add streaming support\",\"status\":\"open\",\"priority\":2}"}
+{"ts":"2026-04-21T19:11:30Z","cmd":"br grep async stream","output":"[needle:bravo:bd-def456:mend] Found 5 matches in src/stream.rs"}
+{"ts":"2026-04-21T19:12:00Z","cmd":"br read src/stream.rs","output":"[needle:bravo:bd-def456:mend] // Stream implementation\npub struct Stream { ... }"}
+{"ts":"2026-04-21T19:12:30Z","cmd":"br update tr-open-002 --status in_progress","output":"[needle:bravo:bd-def456:mend] Updated tr-open-002 to in_progress"}
+{"ts":"2026-04-21T19:13:00Z","cmd":"br list --assignee bravo","output":"[needle:bravo:bd-def456:mend] tr-open-002|Add streaming support|in_progress|feature"}
+{"ts":"2026-04-21T19:13:30Z","cmd":"br close tr-open-002 --body 'Implemented async streaming'","output":"[needle:bravo:bd-def456:mend] Closed tr-open-002"}

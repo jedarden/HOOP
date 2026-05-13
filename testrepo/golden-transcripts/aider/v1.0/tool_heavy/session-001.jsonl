@@ -1,0 +1,9 @@
+{"ts":"2026-04-21T20:20:00Z","cmd":"br list","output":"[needle:echo:bd-mno345:graft] tr-claimed-001|Implement retry logic|in_progress|feature\ntr-claimed-002|Refactor database layer|in_progress|refactor"}
+{"ts":"2026-04-21T20:20:30Z","cmd":"br search retry","output":"[needle:echo:bd-mno345:graft] tr-claimed-001|Implement retry logic|in_progress|feature"}
+{"ts":"2026-04-21T20:21:00Z","cmd":"br show tr-claimed-001 --json","output":"[needle:echo:bd-mno345:graft] {\"id\":\"tr-claimed-001\",\"title\":\"Implement retry logic\",\"status\":\"in_progress\",\"assignee\":\"alpha\"}"}
+{"ts":"2026-04-21T20:21:30Z","cmd":"br grep retry exponential","output":"[needle:echo:bd-mno345:graft] Found 3 matches in src/retry.rs"}
+{"ts":"2026-04-21T20:22:00Z","cmd":"br read src/retry.rs","output":"[needle:echo:bd-mno345:graft] // Retry logic\npub struct Retry { ... }"}
+{"ts":"2026-04-21T20:22:30Z","cmd":"br search database refactor","output":"[needle:echo:bd-mno345:graft] tr-claimed-002|Refactor database layer|in_progress|refactor"}
+{"ts":"2026-04-21T20:23:00Z","cmd":"br show tr-claimed-002","output":"[needle:echo:bd-mno345:graft] ID: tr-claimed-002\nTitle: Refactor database layer\nStatus: in_progress\nAssignee: bravo"}
+{"ts":"2026-04-21T20:23:30Z","cmd":"br grep database pool","output":"[needle:echo:bd-mno345:graft] Found 6 matches in src/db.rs"}
+{"ts":"2026-04-21T20:24:00Z","cmd":"br read src/db.rs","output":"[needle:echo:bd-mno345:graft] // Database layer\npub struct Database { ... }"}

@@ -1,0 +1,4 @@
+{"ts":"2026-04-21T19:20:00Z","cmd":"br list","output":"[needle:bravo:bd-def456:mend] tr-open-003|Update documentation|open|task"}
+{"ts":"2026-04-21T19:20:30Z","cmd":"br claim tr-open-003","output":"[needle:bravo:bd-def456:mend] Claimed tr-open-003"}
+{"ts":"2026-04-21T19:21:00Z","cmd":"br crash","output":"[needle:bravo:bd-def456:mend] Process crashed with exit code 139"}
+{"ts":"2026-04-21T19:21:30Z","cmd":"br update tr-open-003 --status failed","output":"[needle:bravo:bd-def456:mend] Updated tr-open-003 to failed"}

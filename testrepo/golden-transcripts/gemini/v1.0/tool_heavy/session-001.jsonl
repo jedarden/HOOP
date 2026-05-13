@@ -1,0 +1,9 @@
+{"ts":"2026-04-21T19:50:00Z","cmd":"br list","output":"[needle:delta:bd-jkl012:weave] tr-failed-001|Complex migration script|open|task\ntr-failed-002|Deep code analysis|open|investigation"}
+{"ts":"2026-04-21T19:50:30Z","cmd":"br search migration","output":"[needle:delta:bd-jkl012:weave] tr-failed-001|Complex migration script|open|task"}
+{"ts":"2026-04-21T19:51:00Z","cmd":"br show tr-failed-001 --json","output":"[needle:delta:bd-jkl012:weave] {\"id\":\"tr-failed-001\",\"title\":\"Complex migration script\",\"status\":\"open\",\"priority\":2}"}
+{"ts":"2026-04-21T19:51:30Z","cmd":"br grep migration schema","output":"[needle:delta:bd-jkl012:weave] Found 4 matches in src/schema.rs"}
+{"ts":"2026-04-21T19:52:00Z","cmd":"br read src/schema.rs","output":"[needle:delta:bd-jkl012:weave] // Schema migration\npub struct Migration { ... }"}
+{"ts":"2026-04-21T19:52:30Z","cmd":"br search code analysis","output":"[needle:delta:bd-jkl012:weave] tr-failed-002|Deep code analysis|open|investigation"}
+{"ts":"2026-04-21T19:53:00Z","cmd":"br show tr-failed-002","output":"[needle:delta:bd-jkl012:weave] ID: tr-failed-002\nTitle: Deep code analysis\nStatus: open\nType: investigation"}
+{"ts":"2026-04-21T19:53:30Z","cmd":"br grep analysis parser","output":"[needle:delta:bd-jkl012:weave] Found 7 matches in src/analysis.rs"}
+{"ts":"2026-04-21T19:54:00Z","cmd":"br read src/analysis.rs","output":"[needle:delta:bd-jkl012:weave] // Code analysis\npub fn analyze() { ... }"}

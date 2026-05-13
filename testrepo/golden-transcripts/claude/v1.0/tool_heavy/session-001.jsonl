@@ -1,0 +1,8 @@
+{"ts":"2026-04-21T18:50:00Z","cmd":"br list","output":"[needle:alpha:bd-abc123:pluck] tr-open-001|Fix memory leak|open|bug\ntr-open-002|Add streaming support|open|feature\ntr-open-003|Update documentation|open|task"}
+{"ts":"2026-04-21T18:50:15Z","cmd":"br search memory leak","output":"[needle:alpha:bd-abc123:pluck] tr-open-001|Fix memory leak|open|bug"}
+{"ts":"2026-04-21T18:50:30Z","cmd":"br show tr-open-001 --json","output":"[needle:alpha:bd-abc123:pluck] {\"id\":\"tr-open-001\",\"title\":\"Fix memory leak\",\"status\":\"open\",\"priority\":1}"}
+{"ts":"2026-04-21T18:51:00Z","cmd":"br grep parser tokenization","output":"[needle:alpha:bd-abc123:pluck] Found 3 matches in src/parser.rs"}
+{"ts":"2026-04-21T18:51:30Z","cmd":"br read src/parser.rs","output":"[needle:alpha:bd-abc123:pluck] // Parser implementation\npub struct Parser { ... }"}
+{"ts":"2026-04-21T18:52:00Z","cmd":"br update tr-open-001 --status in_progress","output":"[needle:alpha:bd-abc123:pluck] Updated tr-open-001 to in_progress"}
+{"ts":"2026-04-21T18:52:30Z","cmd":"br list --assignee alpha","output":"[needle:alpha:bd-abc123:pluck] tr-open-001|Fix memory leak|in_progress|bug"}
+{"ts":"2026-04-21T18:53:00Z","cmd":"br close tr-open-001 --body 'Fixed leak in parser tokenization'","output":"[needle:alpha:bd-abc123:pluck] Closed tr-open-001"}

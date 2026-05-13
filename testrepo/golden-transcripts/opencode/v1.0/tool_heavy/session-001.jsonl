@@ -1,0 +1,7 @@
+{"ts":"2026-04-21T19:30:00Z","cmd":"br list","output":"[needle:charlie:bd-ghi789:explore] tr-closed-001|Initial scaffold|closed|task\ntr-closed-002|Add test suite|closed|task"}
+{"ts":"2026-04-21T19:30:30Z","cmd":"br show tr-closed-001 --json","output":"[needle:charlie:bd-ghi789:explore] {\"id\":\"tr-closed-001\",\"title\":\"Initial scaffold\",\"status\":\"closed\",\"closed_at\":\"2026-04-21T18:52:01Z\"}"}
+{"ts":"2026-04-21T19:31:00Z","cmd":"br grep scaffold","output":"[needle:charlie:bd-ghi789:explore] Found 2 matches in src/lib.rs"}
+{"ts":"2026-04-21T19:31:30Z","cmd":"br read src/lib.rs","output":"[needle:charlie:bd-ghi789:explore] // Library scaffold\npub fn test() { ... }"}
+{"ts":"2026-04-21T19:32:00Z","cmd":"br search test suite","output":"[needle:charlie:bd-ghi789:explore] tr-closed-002|Add test suite|closed|task"}
+{"ts":"2026-04-21T19:32:30Z","cmd":"br show tr-closed-002","output":"[needle:charlie:bd-ghi789:explore] ID: tr-closed-002\nTitle: Add test suite\nStatus: closed\nType: task"}
+{"ts":"2026-04-21T19:33:00Z","cmd":"br list --status closed","output":"[needle:charlie:bd-ghi789:explore] tr-closed-001|Initial scaffold|closed|task\ntr-closed-002|Add test suite|closed|task"}

@@ -1,0 +1,4 @@
+{"ts":"2026-04-21T20:30:00Z","cmd":"br list","output":"[needle:echo:bd-mno345:graft] tr-failed-001|Complex migration script|open|task"}
+{"ts":"2026-04-21T20:30:30Z","cmd":"br claim tr-failed-001","output":"[needle:echo:bd-mno345:graft] Claimed tr-failed-001"}
+{"ts":"2026-04-21T20:31:00Z","cmd":"br timeout","output":"[needle:echo:bd-mno345:graft] Command timed out after 30s"}
+{"ts":"2026-04-21T20:31:30Z","cmd":"br update tr-failed-001 --status failed","output":"[needle:echo:bd-mno345:graft] Updated tr-failed-001 to failed"}
