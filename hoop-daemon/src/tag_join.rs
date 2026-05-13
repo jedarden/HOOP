@@ -413,4 +413,131 @@ mod tests {
         );
         assert!(result.binding.is_none());
     }
+
+    // --- Fixture validation tests (all four adapters) ---
+
+    #[test]
+    fn test_fixture_claude_session_001() {
+        // Validate against actual Claude fixture: [needle:alpha:bd-abc123:pluck]
+        let first_line = "[needle:alpha:bd-abc123:pluck] tr-open-001|Fix memory leak in parser|open|bug";
+        let result = resolve(first_line, None);
+
+        match result.kind {
+            ParsedSessionKind::Variant0 {
+                worker,
+                bead,
+                strand,
+            } => {
+                assert_eq!(worker, "alpha");
+                assert_eq!(bead, "bd-abc123");
+                assert_eq!(strand.as_deref(), Some("pluck"));
+            }
+            _ => panic!("Expected Worker kind for Claude fixture"),
+        }
+
+        let binding = result.binding.expect("Claude fixture should have binding");
+        assert_eq!(binding.worker, "alpha");
+        assert_eq!(binding.bead, "bd-abc123");
+        assert_eq!(binding.strand.as_deref(), Some("pluck"));
+    }
+
+    #[test]
+    fn test_fixture_codex_session_001() {
+        // Validate against actual Codex fixture: [needle:bravo:bd-def456:mend]
+        let first_line = "[needle:bravo:bd-def456:mend] tr-open-002|Add streaming support|open|feature";
+        let result = resolve(first_line, None);
+
+        match result.kind {
+            ParsedSessionKind::Variant0 {
+                worker,
+                bead,
+                strand,
+            } => {
+                assert_eq!(worker, "bravo");
+                assert_eq!(bead, "bd-def456");
+                assert_eq!(strand.as_deref(), Some("mend"));
+            }
+            _ => panic!("Expected Worker kind for Codex fixture"),
+        }
+
+        let binding = result.binding.expect("Codex fixture should have binding");
+        assert_eq!(binding.worker, "bravo");
+        assert_eq!(binding.bead, "bd-def456");
+        assert_eq!(binding.strand.as_deref(), Some("mend"));
+    }
+
+    #[test]
+    fn test_fixture_opencode_session_001() {
+        // Validate against actual OpenCode fixture: [needle:charlie:bd-ghi789:weave]
+        let first_line = "[needle:charlie:bd-ghi789:weave] tr-open-003|Update documentation|open|task";
+        let result = resolve(first_line, None);
+
+        match result.kind {
+            ParsedSessionKind::Variant0 {
+                worker,
+                bead,
+                strand,
+            } => {
+                assert_eq!(worker, "charlie");
+                assert_eq!(bead, "bd-ghi789");
+                assert_eq!(strand.as_deref(), Some("weave"));
+            }
+            _ => panic!("Expected Worker kind for OpenCode fixture"),
+        }
+
+        let binding = result.binding.expect("OpenCode fixture should have binding");
+        assert_eq!(binding.worker, "charlie");
+        assert_eq!(binding.bead, "bd-ghi789");
+        assert_eq!(binding.strand.as_deref(), Some("weave"));
+    }
+
+    #[test]
+    fn test_fixture_gemini_session_001() {
+        // Validate against actual Gemini fixture: [needle:delta:bd-jkl012:unravel]
+        let first_line = "[needle:delta:bd-jkl012:unravel] tr-claimed-001|Implement retry logic|in_progress|feature";
+        let result = resolve(first_line, None);
+
+        match result.kind {
+            ParsedSessionKind::Variant0 {
+                worker,
+                bead,
+                strand,
+            } => {
+                assert_eq!(worker, "delta");
+                assert_eq!(bead, "bd-jkl012");
+                assert_eq!(strand.as_deref(), Some("unravel"));
+            }
+            _ => panic!("Expected Worker kind for Gemini fixture"),
+        }
+
+        let binding = result.binding.expect("Gemini fixture should have binding");
+        assert_eq!(binding.worker, "delta");
+        assert_eq!(binding.bead, "bd-jkl012");
+        assert_eq!(binding.strand.as_deref(), Some("unravel"));
+    }
+
+    #[test]
+    fn test_fixture_aider_session_001() {
+        // Validate against actual Aider fixture: Aider uses the same tag format
+        let first_line = "[needle:echo:bd-mno345:explore] Implement new feature";
+        let result = resolve(first_line, None);
+
+        match result.kind {
+            ParsedSessionKind::Variant0 {
+                worker,
+                bead,
+                strand,
+            } => {
+                assert_eq!(worker, "echo");
+                assert_eq!(bead, "bd-mno345");
+                assert_eq!(strand.as_deref(), Some("explore"));
+            }
+            _ => panic!("Expected Worker kind for Aider fixture"),
+        }
+
+        let binding = result.binding.expect("Aider fixture should have binding");
+        assert_eq!(binding.worker, "echo");
+        assert_eq!(binding.bead, "bd-mno345");
+        assert_eq!(binding.strand.as_deref(), Some("explore"));
+    }
 }
