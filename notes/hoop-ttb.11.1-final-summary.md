@@ -2,6 +2,7 @@
 
 **Date:** 2026-05-13
 **Status:** COMPLETE ✅
+**Bead Closed:** 2026-05-13 (commit 3dd0157)
 
 ## Verification Results
 
@@ -77,6 +78,42 @@ The testrepo fixture is used by:
 
 Primary documentation: `testrepo/FIXTURE.md`
 
+## Retrospective
+
+### What worked
+- The fixture was built incrementally with clear documentation at each step
+- Using a bash script for the br stub binary made it easy to emulate all read verbs and record write verbs
+- Separating concerns (synthetic Rust workspace vs .beads data vs CLI sessions) made the fixture maintainable
+- The stub-log approach provides an audit trail of all br calls during testing, making debugging easier
+
+### What didn't
+- Initial approach tried to make the fixture too realistic with real file sizes, which would have bloated the repo
+- Switched to minimal valid files (PNG headers, WAV headers) to stay under the 50MB limit
+- Integration tests were implemented but blocked by compilation errors (separate issue: hoop-ttb.11.3)
+
+### Surprise
+- The stub-log approach proved more valuable than expected
+- The fixture size (25MB) came in well under the 50MB limit, allowing room for future expansion
+- The synthetic Rust workspace ended up with 589 files, close to the 500-file target
+
+### Reusable pattern
+For fixture-based integration tests:
+1. Create synthetic data in known states (open, claimed, closed, failed)
+2. Use stub binaries that record calls to a log file
+3. Provide regeneration scripts for all fixture data
+4. Document all components in a FIXTURE.md file
+5. Include verification scripts to validate fixture integrity
+6. Use minimal valid files (not full content) to stay under size limits
+
+## Final Commits
+
+- 3dd0157: chore(testrepo): update stub-log with verification session (2026-05-13)
+- a338ac1: docs: complete bead hoop-ttb.11.1 (testrepo fixture)
+- 607e090: chore: close bead hoop-ttb.11.1 (testrepo fixture complete)
+- 99c97a0: feat(testrepo): complete testrepo fixture for integration testing
+
 ## Conclusion
 
 All acceptance criteria for hoop-ttb.11.1 have been met. The testrepo fixture is complete, committed, and ready for use in HOOP integration testing.
+
+**Bead hoop-ttb.11.1 closed successfully.**
