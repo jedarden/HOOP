@@ -1,9 +1,9 @@
-{"event":"claim","ts":"2026-05-13T22:50:44Z","worker":"alpha","bead":"bd-abc123","strand":"pluck"}
-{"event":"dispatch","ts":"2026-05-13T22:50:44Z","worker":"alpha","bead":"bd-abc123","adapter":"claude","model":"claude-opus-4-6"}
-{"event":"complete","ts":"2026-05-13T22:50:44Z","worker":"alpha","bead":"bd-abc123","outcome":"success","duration_ms":287104,"exit_code":0}
-{"event":"fail","ts":"2026-05-13T22:50:44Z","worker":"bravo","bead":"bd-def456","error":"context limit exceeded","duration_ms":90000}
-{"event":"release","ts":"2026-05-13T22:50:44Z","worker":"alpha","bead":"bd-abc123"}
-{"event":"timeout","ts":"2026-05-13T22:50:44Z","worker":"charlie","bead":"bd-ghi789"}
-{"event":"crash","ts":"2026-05-13T22:50:44Z","worker":"delta","bead":"bd-jkl012","exit_code":137}
-{"event":"close","ts":"2026-05-13T22:50:44Z","worker":"alpha","bead":"bd-abc123"}
-{"event":"update","ts":"2026-05-13T22:50:44Z","worker":"alpha","bead":"bd-abc123","changes":["status"]}
+{"event":"claim","ts":"2026-05-13T22:53:36Z","worker":"alpha","bead":"bd-abc123","strand":"pluck"}
+{"event":"dispatch","ts":"2026-05-13T22:53:36Z","worker":"alpha","bead":"bd-abc123","adapter":"claude","model":"claude-opus-4-6"}
+{"event":"complete","ts":"2026-05-13T22:53:36Z","worker":"alpha","bead":"bd-abc123","outcome":"success","duration_ms":287104,"exit_code":0}
+{"event":"fail","ts":"2026-05-13T22:53:36Z","worker":"bravo","bead":"bd-def456","error":"context limit exceeded","duration_ms":90000}
+{"event":"release","ts":"2026-05-13T22:53:36Z","worker":"alpha","bead":"bd-abc123"}
+{"event":"timeout","ts":"2026-05-13T22:53:36Z","worker":"charlie","bead":"bd-ghi789"}
+{"event":"crash","ts":"2026-05-13T22:53:36Z","worker":"delta","bead":"bd-jkl012","exit_code":137}
+{"event":"close","ts":"2026-05-13T22:53:36Z","worker":"alpha","bead":"bd-abc123"}
+{"event":"update","ts":"2026-05-13T22:53:36Z","worker":"alpha","bead":"bd-abc123","changes":["status"]}

@@ -1,3 +1,3 @@
-{"ts":"2026-05-13T22:50:44Z","worker":"alpha","state":"idle"}
-{"ts":"2026-05-13T22:50:44Z","worker":"alpha","state":"executing","bead":"bd-abc123","pid":12345,"adapter":"claude"}
-{"ts":"2026-05-13T22:50:44Z","worker":"alpha","state":"knot","reason":"adapter unavailable"}
+{"ts":"2026-05-13T22:53:36Z","worker":"alpha","state":"idle"}
+{"ts":"2026-05-13T22:53:36Z","worker":"alpha","state":"executing","bead":"bd-abc123","pid":12345,"adapter":"claude"}
+{"ts":"2026-05-13T22:53:36Z","worker":"alpha","state":"knot","reason":"adapter unavailable"}
