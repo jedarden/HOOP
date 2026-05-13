@@ -39,7 +39,7 @@ desktop.ini
 
 # HOOP-local test artifacts
 .hoop/
-testrepo/
+# testrepo/ is now a committed fixture (removed from gitignore)
 
 # ML embedding cache (hoop-daemon)
 hoop-daemon/.fastembed_cache/
