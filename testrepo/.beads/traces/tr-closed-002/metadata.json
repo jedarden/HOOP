@@ -8,5 +8,11 @@
   "captured_at": "2026-04-21T19:10:15Z",
   "trace_format": "v1",
   "pruned": false,
-  "template_version": "1.0.0"
+  "template_version": "1.0.0",
+  "commit": {
+    "sha": "b2c3d4e5f6789012345678901234567890123456",
+    "message": "test(testrepo): add comprehensive test suite",
+    "author": "Claude Code",
+    "date": "2026-04-21T19:10:15Z"
+  }
 }

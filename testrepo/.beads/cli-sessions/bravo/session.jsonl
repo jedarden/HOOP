@@ -1,0 +1,4 @@
+{"ts":"2026-04-21T18:55:00Z","cmd":"br list","output":"[needle:bravo:bd-def456:mend] tr-open-002|Add streaming support|open|feature"}
+{"ts":"2026-04-21T18:55:30Z","cmd":"br claim tr-open-002","output":"[needle:bravo:bd-def456:mend] Claimed tr-open-002"}
+{"ts":"2026-04-21T18:56:45Z","cmd":"br update tr-open-002 --status failed","output":"[needle:bravo:bd-def456:mend] Updated tr-open-002 to failed"}
+{"ts":"2026-04-21T18:57:00Z","cmd":"br release tr-open-002","output":"[needle:bravo:bd-def456:mend] Released tr-open-002"}

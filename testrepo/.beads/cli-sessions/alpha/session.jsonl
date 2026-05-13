@@ -1,0 +1,5 @@
+{"ts":"2026-04-21T18:42:10Z","cmd":"br list","output":"[needle:alpha:bd-abc123:pluck] tr-open-001|Fix memory leak|open|bug"}
+{"ts":"2026-04-21T18:42:15Z","cmd":"br show tr-open-001","output":"[needle:alpha:bd-abc123:pluck] ID: tr-open-001\nTitle: Fix memory leak in parser\nStatus: open\nType: bug\nPriority: 1"}
+{"ts":"2026-04-21T18:47:33Z","cmd":"br claim tr-open-001","output":"[needle:alpha:bd-abc123:pluck] Claimed tr-open-001"}
+{"ts":"2026-04-21T18:52:01Z","cmd":"br close tr-open-001 --body 'Fixed leak in parser tokenization'","output":"[needle:alpha:bd-abc123:pluck] Closed tr-open-001"}
+{"ts":"2026-04-21T18:52:05Z","cmd":"br list --status ready","output":"[needle:alpha:bd-abc123:pluck] tr-open-002|Add streaming support|open|feature\ntr-open-003|Update documentation|open|task"}

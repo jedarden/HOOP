@@ -1,0 +1,3 @@
+{"ts":"2026-04-21T19:15:00Z","cmd":"br list","output":"[needle:delta:bd-jkl012:weave] tr-closed-001|Initial scaffold|closed|task\ntr-closed-002|Add test suite|closed|task"}
+{"ts":"2026-04-21T19:15:30Z","cmd":"br show tr-closed-001 --json","output":"[needle:delta:bd-jkl012:weave] {\"id\":\"tr-closed-001\",\"title\":\"Initial scaffold\",\"status\":\"closed\",\"closed_at\":\"2026-04-21T18:52:01Z\"}"}
+{"ts":"2026-04-21T19:17:00Z","cmd":"br crash","output":"[needle:delta:bd-jkl012:weave] Process crashed with exit code 139"}

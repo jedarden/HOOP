@@ -7,7 +7,7 @@ Implementing mock fixtures...
 [needle:output] File created successfully
 Running cargo test...
 [needle:tool] {"type": "bash", "command": "cargo test --quiet"}
-[needle:output] 
+[needle:output]
    Compiling testrepo v0.1.0
     Finished test [unoptimized + debuginfo] target(s) in 2.34s
      Running unittests src/lib.rs
@@ -16,3 +16,4 @@ Running cargo test...
 Test result: ok. 15 passed; 0 failed
 [needle:complete] 2026-04-21T19:10:15Z
 All tests passing
+[needle:commit] {"sha": "b2c3d4e5f6789012345678901234567890123456", "message": "test(testrepo): add comprehensive test suite", "trailer": "Bead-ID: tr-closed-002"}
