@@ -40,6 +40,9 @@ desktop.ini
 # HOOP-local test artifacts
 .hoop/
 # testrepo/ is now a committed fixture (removed from gitignore)
+# But runtime-generated files within testrepo should be ignored
+testrepo/.stub-log.jsonl
+testrepo/.beads/beads.db
 
 # ML embedding cache (hoop-daemon)
 hoop-daemon/.fastembed_cache/
