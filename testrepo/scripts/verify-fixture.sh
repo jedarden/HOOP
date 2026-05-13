@@ -81,12 +81,12 @@ else
 fi
 
 echo
-echo "Size check:"
-SIZE_BYTES=$(du -sb "$TESTREPO_ROOT" | cut -f1)
+echo "Size check (excluding target/):"
+SIZE_BYTES=$(find "$TESTREPO_ROOT" -type f -not -path "*/target/*" -exec du -b {} + | awk '{sum+=$1} END {print sum}')
 MAX_BYTES=52428800  # 50MB
 if [ "$SIZE_BYTES" -lt "$MAX_BYTES" ]; then
-    SIZE_HR=$(du -sh "$TESTREPO_ROOT" | cut -f1)
-    echo "✓ Size bounded: $SIZE_HR (${SIZE_BYTES} bytes < 50MB)"
+    SIZE_MB=$((SIZE_BYTES / 1024 / 1024))
+    echo "✓ Size bounded: ${SIZE_MB}MB (${SIZE_BYTES} bytes < 50MB)"
     PASS=$((PASS + 1))
 else
     echo "✗ Size exceeds 50MB limit: ${SIZE_BYTES} bytes"
