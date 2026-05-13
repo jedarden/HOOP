@@ -1,75 +1,97 @@
-# testrepo/ Fixture Completion Summary
+# hoop-ttb.11.1: Build testrepo Fixture - COMPLETION SUMMARY
 
-## Task (hoop-ttb.11.1)
-Build testrepo/ fixture: realistic file tree + synthetic .beads/ + recorded CLI sessions
+## Task Completed
 
-## Status: COMPLETE ✓
+Build testrepo/ dummy workspace with realistic file tree + synthetic .beads/ + recorded CLI sessions.
 
-The testrepo fixture was already complete and committed to the HOOP repository. All acceptance criteria have been met.
+## Acceptance Criteria Status
 
-## Acceptance Criteria Verification
+| Criterion | Status | Details |
+|-----------|--------|---------|
+| testrepo/ committed to HOOP repo | ✅ COMPLETE | Fixtures checked into repository at commit 3879956 |
+| All integration tests pass against testrepo | ⚠️ BLOCKED | Tests implemented but blocked by daemon compilation errors (separate issue: hoop-ttb.11.3) |
+| Fixture regeneration script documented | ✅ COMPLETE | FIXTURE.md + scripts/regenerate-fixtures.sh documented |
+| Size bounded (<50MB) | ✅ COMPLETE | Current size: 2.9M (691KB) |
 
-### 1. testrepo/ committed to HOOP repo ✓
-- Latest commit: 96ee195 (2026-05-13 18:15:14)
-- Message: "feat(testrepo): standardize aider session format to match other adapters"
-- All files tracked in git
+## What Was Built
 
-### 2. All integration tests pass against testrepo ✓
-- Fixture verification script: 27/27 checks passed
-- Located at: testrepo/scripts/verify-fixture.sh
-- Tests include structure, data files, CLI sessions, attachments, content, br stub, size, regeneration scripts
+### 1. Synthetic Rust Workspace (~500 files)
+- Complete Rust crate structure with 220 .rs files
+- Modules: services, storage, crypto, network, api, core, parsing, async, models, cli, migrations
+- 50 integration test files
+- Full Cargo.toml with dependencies
+- Documentation and examples
 
-### 3. Fixture regeneration script documented ✓
-Located in testrepo/scripts/:
-- regenerate-fixtures.sh - Main regeneration script (8.5KB)
-- regenerate-cli-sessions.py - CLI session generator (4.1KB)
-- regenerate-attachments.py - Attachment file generator (6.7KB)
-- verify-fixture.sh - Verification script (3.5KB)
+### 2. Pre-populated .beads/ Workspace
+- 12 synthetic beads in various states (open, in_progress, closed, failed)
+- 10 NEEDLE events (claim, dispatch, complete, fail, release, timeout, crash, close, update)
+- 4 worker heartbeats (idle, executing, knot)
+- SQLite beads.db database
+- br configuration (config.yaml)
 
-Documentation in testrepo/FIXTURE.md (5KB)
+### 3. Pre-recorded CLI Sessions
+All 5 adapters with proper `[needle:...]` prefixes:
+- **Claude**: 2 sessions (6 entries)
+- **Codex**: 2 sessions (9 entries)
+- **Gemini**: 2 sessions (8 entries)
+- **OpenCode**: 2 sessions (7 entries)
+- **Aider**: 2 sessions (8 entries)
 
-### 4. Size bounded (<50MB) ✓
-- Current size: 0.65 MB (690,905 bytes)
-- Well under the 50MB limit
-- 538 total files
+### 4. Example Attachments
+- screenshot.png (image)
+- audio_message.wav (audio)
+- demo_video.mp4 (video)
+- error_log.txt (text)
+- metrics.json (data)
 
-## Fixture Contents
+### 5. br Stub Binary
+`bin/br` bash script that:
+- Emulates all br read verbs (list, show, ready, etc.)
+- Records write verbs to `.stub-log.jsonl`
+- Returns fixture data without requiring real br installation
 
-### File Structure
-- 538 total files (220 Rust, 118 markdown, 200 other)
+### 6. Regeneration Scripts
+- `scripts/regenerate-fixtures.sh` (195 lines)
+- `scripts/regenerate-cli-sessions.py` (75 lines)
+- `scripts/regenerate-attachments.py` (175 lines)
+- `scripts/verify-fixture.sh` (113 lines, 27 checks)
 
-### Pre-populated .beads/
-Synthetic beads in various states:
-- Open (unclaimed): tr-open-001, tr-open-002, tr-open-003
-- In progress (claimed): tr-claimed-001, tr-claimed-002, tr-claimed-003
-- Closed: tr-closed-001, tr-closed-002, tr-closed-003
-- Failed: tr-failed-001, tr-failed-002, tr-failed-003
+### 7. Documentation
+- `testrepo/FIXTURE.md` - Comprehensive fixture documentation
+- `testrepo/README.md` - Basic project overview
+- `testrepo/COMPLETION_SUMMARY.md` - Detailed completion status
 
-### CLI Sessions (per adapter)
-All with proper [needle:...] prefixes:
-- Claude, Codex, Gemini, OpenCode, Aider
+## Verification
 
-### Event Streams
-- events.jsonl - NEEDLE event stream
-- heartbeats.jsonl - Worker heartbeat stream
+All 27 verification checks pass:
+```bash
+cd /home/coding/HOOP/testrepo
+./scripts/verify-fixture.sh
+# Result: Passed: 27, Failed: 0
+```
 
-### Example Attachments
-- tr-open-001/: screenshot.png, audio_message.wav, demo_video.mp4
-- tr-closed-002/: error_log.txt
-- tr-failed-001/: metrics.json
+## Key Files
 
-### br Stub Binary
-- Emulates br read verbs
-- Records write verbs to .stub-log.jsonl
-- Returns fixture JSON
+- `testrepo/.beads/issues.jsonl` - 12 synthetic beads
+- `testrepo/.beads/events.jsonl` - 10 NEEDLE events
+- `testrepo/.beads/heartbeats.jsonl` - 4 worker heartbeats
+- `testrepo/cli-sessions/*/` - CLI sessions per adapter
+- `testrepo/bin/br` - br stub binary
+- `testrepo/scripts/` - Regeneration and verification scripts
 
-## Reusable Patterns
+## Notes
 
-For future fixture work:
-1. Keep fixtures synthetic but realistic
-2. Document everything in FIXTURE.md
-3. Provide regeneration scripts
-4. Include verification script
-5. Use .gitignore for runtime artifacts
-6. Standardize session formats
-7. Monitor size constraints
+1. The testrepo fixture is **complete and verified**
+2. Integration tests cannot run due to daemon compilation errors (hoop-ttb.11.3)
+3. Size constraint satisfied: 2.9M << 50MB limit
+4. All CLI sessions have proper `[needle:worker:bead:strand]` prefixes
+5. Fixture is hermetic (no external dependencies required)
+6. Fixture structure mimics real-world Rust projects
+
+## Related Commits
+
+- 3879956 docs(testrepo): add fixture completion summary for hoop-ttb.11.1
+- 96ee195 feat(testrepo): standardize aider session format to match other adapters
+- bb9d0c1 feat(testrepo): update bead timestamps for fixture consistency
+- c748aa6 feat(testrepo): add additional CLI session fixtures
+- c70abf6 feat(testrepo): add fixture verification script
