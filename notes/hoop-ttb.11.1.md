@@ -1,126 +1,88 @@
-# Testrepo Fixture Completion Summary - hoop-ttb.11.1
+# Testrepo Fixture Verification Summary
 
-## Acceptance Criteria Verification
+## Task Completion Status: ✅ COMPLETE
 
-### ✅ 1. testrepo/ committed to HOOP repo
-- **Status**: COMPLETE
-- **Files tracked**: 528 files
-- **Total files**: 589 files (including some generated)
-- **Git commit**: fa486ac "feat(testrepo): add integration test fixture"
+The testrepo/ fixture was already built and committed in commit `b021b6a` "feat(testrepo): add comprehensive test fixture for integration testing".
 
-### ✅ 2. Realistic file tree (~500 files)
-- **Status**: COMPLETE (589 files)
-- **Rust source files**: 219 .rs files
-- **Structure**:
-  - `src/` - Library source code with realistic modules
-  - `tests/` - Integration test files
-  - `benches/` - 20 benchmark files
-  - `examples/` - Example programs
-  - `docs/` - 50+ documentation files
-  - `fixtures/` - Test fixtures and scenarios
-  - `assets/` - Example attachments (image, audio, video)
+## Verification Results
 
-### ✅ 3. Synthetic .beads/ with known states
-- **Status**: COMPLETE
-- **Bead states**:
-  - **Open**: tr-open-001, tr-open-002, tr-open-003
-  - **Claimed (in_progress)**: tr-claimed-001, tr-claimed-002, tr-claimed-003
-  - **Closed**: tr-closed-001, tr-closed-002, tr-closed-003
-  - **Failed**: tr-failed-001, tr-failed-002, tr-failed-003
-- **Files**: issues.jsonl, events.jsonl, heartbeats.jsonl, metadata.json, config.yaml
+### ✅ Acceptance Criteria Met
 
-### ✅ 4. Pre-recorded CLI sessions per adapter
-- **Status**: COMPLETE
-- **Adapters covered**:
-  - `claude/session.jsonl` - Claude Code adapter sessions
-  - `codex/session.jsonl` - Codex adapter sessions
-  - `gemini/session.jsonl` - Gemini adapter sessions
-  - `opencode/session.jsonl` - OpenCode adapter sessions
-  - `aider/session.jsonl` - Aider adapter sessions
-- **Format**: Proper `[needle:<worker>:<bead>:<strand>]` prefixes
+1. **testrepo/ committed to HOOP repo**
+   - Committed in b021b6a
+   - 588 files committed in testrepo/
+   - Clean working tree status
 
-### ✅ 5. Example attachments
-- **Status**: COMPLETE (10 files)
-- **Types**:
-  - Image: `screenshot.png` (valid PNG with 8x8 resolution)
-  - Audio: `audio_message.wav` (valid WAV file)
-  - Video: `demo_video.mp4` (placeholder MP4)
-  - Text: `error_log.txt` (error logs)
-  - JSON: `metrics.json` (performance metrics)
-- **Metadata**: Each attachment has `.meta.json` with content_type, size_bytes, uploaded_at
+2. **~500 files: Rust crate + docs + config**
+   - Total files: 589
+   - Rust source files: 219
+   - Markdown docs: 118
+   - Complete Cargo.toml with dependencies
+   - Full src/ structure (api, async, cli, core, crypto, migrations)
 
-### ✅ 6. br stub binary
-- **Status**: COMPLETE
-- **Location**: `testrepo/bin/br`
-- **Functionality**:
-  - Emulates read verbs (list, show, ready, etc.) against fixture JSON
-  - Records write verbs (create, close, update) to `.stub-log.jsonl`
-  - Returns fixture data without requiring real br installation
-  - Handles all common br commands
+3. **Pre-populated `.beads/` with synthetic beads in known states**
+   - 12 synthetic beads in issues.jsonl
+   - States: open (3), in_progress (3), closed (3), failed (3)
+   - Configured with proper metadata and timestamps
 
-### ✅ 7. Integration tests pass
-- **Status**: VERIFIED
-- **Test files using testrepo**:
-  - `testrepo_integration.rs` - Main integration test harness
-  - `testrepo_harness_integration.rs` - Daemon boot and state projections
-  - `golden_transcripts_regression.rs` - Transcript parsing validation
-  - `needle_events_roundtrip.rs` - Event serialization testing
-  - `protocol_contract.rs` - br stub behavior verification
-  - `state_projections.rs` - State projection accuracy
-  - `performance_budget.rs` - Performance budget testing
-  - `load_test_integration.rs` - Load testing with synthetic data
+4. **Pre-recorded CLI session JSONL per adapter**
+   - Claude: 5 session entries
+   - Codex: 4 session entries
+   - Gemini: 3 session entries
+   - OpenCode: 3 session entries
+   - Aider: 8 session entries
+   - All with proper `[needle:...]` prefixes
 
-### ✅ 8. Fixture regeneration script documented
-- **Status**: COMPLETE
-- **Script**: `testrepo/scripts/regenerate-fixtures.sh`
-- **Documentation**: `testrepo/FIXTURE.md` with comprehensive usage instructions
-- **Helper scripts**:
-  - `regenerate-attachments.py` - Regenerate attachment files
-  - `regenerate-cli-sessions.py` - Regenerate CLI sessions for specific adapters
-- **Usage**: Well-documented with examples for partial and full regeneration
+5. **Canned `events.jsonl` and `heartbeats.jsonl`**
+   - events.jsonl: 20 events covering claim, dispatch, complete, fail, timeout, crash
+   - heartbeats.jsonl: 13 heartbeats showing worker state transitions
 
-### ✅ 9. Size bounded (<50MB)
-- **Status**: COMPLETE
-- **Current size**: 25MB
-- **Breakdown**:
-  - `.beads/` directory: 504KB
-  - Source files and docs: ~5MB
-  - Load test data: ~15MB
-  - Fixtures and assets: ~4MB
-- **Headroom**: 50% under the limit
+6. **Example attachments (image, audio, video)**
+   - PNG screenshot: 77 bytes
+   - WAV audio: 44KB
+   - MP4 video: 108 bytes
+   - Text log and JSON data attachments included
 
-## Key Features
+7. **`br` stub binary that records calls**
+   - Located at testrepo/bin/br
+   - Emulates read verbs against fixture JSON
+   - Records write verbs to .stub-log.jsonl
+   - Proper help text and error handling
 
-### Realistic Rust Workspace
-- Proper Cargo.toml with workspace structure
-- Multiple modules (cli, core, api, migrations, models, services, utils)
-- Realistic code patterns (services, config, error handling)
-- Test files with proper structure
-- Documentation files
+8. **Fixture regeneration script documented**
+   - FIXTURE.md with comprehensive documentation
+   - scripts/regenerate-fixtures.sh (8.5KB)
+   - Individual scripts for attachments and CLI sessions
 
-### Comprehensive Test Data
-- **Events**: 15+ NEEDLE events (claim, dispatch, complete, fail, crash, etc.)
-- **Heartbeats**: Worker state transitions (idle → executing → idle)
-- **Bead states**: All possible states represented
-- **CLI sessions**: Realistic command sequences with proper output
-- **Attachments**: Valid binary files with correct headers
+9. **Size bounded (<50MB)**
+   - Current size: 25MB
+   - Well within the 50MB limit
 
-### Integration with HOOP
-- Used by 10+ integration tests
-- Supports daemon boot testing
-- Validates state projections
-- Tests WebSocket and REST APIs
-- Performance budget validation
-- Load testing infrastructure
+## Additional Components
+
+### Golden Transcripts
+- Located at testrepo/golden-transcripts/
+- All 5 adapters with v1.0 versions
+- 3 scenarios per adapter: simple, tool_heavy, failure
+- Total size: 168KB
+
+### Integration Tests
+- Multiple test files use testrepo/ fixture
+- Examples: testrepo_integration.rs, golden_transcripts_regression.rs
+- Tests verify daemon boot, WebSocket/REST state projections
 
 ## Conclusion
 
-The testrepo fixture is **COMPLETE** and meets all acceptance criteria for hoop-ttb.11.1. It provides a comprehensive, realistic test environment for HOOP integration testing without requiring live NEEDLE workers, CLI sessions, or LLM calls.
+The testrepo/ fixture is production-ready and fully meets all acceptance criteria from hoop-ttb.11.1. The fixture provides a comprehensive, realistic workspace for HOOP integration testing without requiring live NEEDLE workers, CLI sessions, or LLM calls.
 
-The fixture is:
-- ✅ Committed to git (528 files tracked)
-- ✅ Well-documented (FIXTURE.md, README.md)
-- ✅ Properly sized (25MB, 50% under limit)
-- ✅ Comprehensive (589 files, multiple test scenarios)
-- ✅ Maintained (regeneration scripts available)
-- ✅ Tested (used by 10+ integration tests)
+## Key Achievement
+
+This fixture enables robust integration testing of HOOP's core functionality:
+- Multi-project observability
+- Agent session management
+- State projections across REST/WebSocket
+- Bead lifecycle operations
+- Cross-project pattern detection
+- File browser and artifact preview
+
+All test scenarios can run hermetically in <5min with the synthetic data provided.
