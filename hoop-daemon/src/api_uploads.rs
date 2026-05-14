@@ -12,12 +12,13 @@ use serde::Deserialize;
 
 /// Request body for upload initiation
 #[derive(Debug, Deserialize)]
-struct InitUploadRequest {
-    filename: String,
-    total_size: u64,
-    checksum: String,
-    attachment_type: String,
-    resource_id: String,
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct InitUploadRequest {
+    pub filename: String,
+    pub total_size: u64,
+    pub checksum: String,
+    pub attachment_type: String,
+    pub resource_id: String,
 }
 
 /// Initiate a new chunked upload
@@ -72,6 +73,20 @@ async fn init_upload(
 /// - Content-Length: size of chunk body
 ///
 /// Body: raw chunk bytes
+#[utoipa::path(
+    patch,
+    path = "/api/uploads/{upload_id}",
+    tag = "uploads",
+    params(
+        ("upload_id" = String, Path, description = "Upload session ID")
+    ),
+    request_body(description = "Raw chunk bytes", content_type = "application/octet-stream"),
+    responses(
+        (status = 200, description = "Chunk uploaded successfully", body = crate::uploads::UploadProgressResponse),
+        (status = 400, description = "Invalid upload ID or offset"),
+        (status = 404, description = "Upload not found")
+    )
+)]
 async fn upload_chunk(
     State(state): State<DaemonState>,
     Path(upload_id): Path<String>,

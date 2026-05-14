@@ -328,7 +328,7 @@ struct ParsedSessionFile {
 }
 
 /// Trait for adapter-specific session discovery and parsing
-pub trait SessionAdapter: Send + Sync {
+pub trait SessionAdapter: Send + Sync + std::fmt::Debug {
     /// Get the adapter name
     fn name(&self) -> AdapterName;
 
@@ -362,6 +362,7 @@ pub fn create_all_adapters() -> Vec<Box<dyn SessionAdapter>> {
 }
 
 /// Claude Code adapter - parses ~/.claude/projects/**/*.jsonl
+#[derive(Debug)]
 pub struct ClaudeAdapter;
 
 impl SessionAdapter for ClaudeAdapter {
@@ -393,6 +394,7 @@ impl SessionAdapter for ClaudeAdapter {
 }
 
 /// Codex adapter - parses OpenAI Codex sessions with token_count events
+#[derive(Debug)]
 pub struct CodexAdapter;
 
 impl SessionAdapter for CodexAdapter {
@@ -434,6 +436,7 @@ impl SessionAdapter for CodexAdapter {
 /// ```
 ///
 /// Falls back to legacy `~/.opencode/sessions/*.jsonl` for older installations.
+#[derive(Debug)]
 pub struct OpenCodeAdapter;
 
 impl OpenCodeAdapter {
@@ -542,6 +545,7 @@ impl OpenCodeAdapter {
 /// Per §A1: Registry-based path resolution to handle GEMINI_CLI_HOME variations.
 /// Sessions may be at ~/.gemini/tmp/ (when GEMINI_CLI_HOME is set) or
 /// ~/.gemini/sessions/ (legacy/default). Probes on startup and warns on drift.
+#[derive(Debug)]
 pub struct GeminiAdapter;
 
 /// Session path registry entry for Gemini.
@@ -688,6 +692,7 @@ impl SessionAdapter for GeminiAdapter {
 }
 
 /// Aider adapter - parses Aider sessions (similar format to Claude)
+#[derive(Debug)]
 pub struct AiderAdapter;
 
 impl SessionAdapter for AiderAdapter {

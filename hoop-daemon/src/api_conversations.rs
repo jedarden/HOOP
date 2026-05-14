@@ -155,6 +155,28 @@ pub fn router() -> Router<DaemonState> {
 }
 
 /// GET /api/conversations — query conversations across all projects
+#[cfg_attr(feature = "openapi", utoipa::path(
+    get,
+    path = "/api/conversations",
+    tag = "conversations",
+    params(
+        ("cursor" = Option<String>, Query, description = "Cursor for pagination (base64-encoded timestamp + id)"),
+        ("limit" = Option<usize>, Query, description = "Maximum number of results to return (default: 50, max: 200)"),
+        ("project" = Option<String>, Query, description = "Filter by project name"),
+        ("provider" = Option<String>, Query, description = "Filter by provider (claude, codex, gemini, opencode, aider)"),
+        ("kind" = Option<String>, Query, description = "Filter by kind (worker, operator, dictated, ad-hoc)"),
+        ("fleet" = Option<bool>, Query, description = "Filter by fleet vs ad-hoc (fleet=true for worker, fleet=false for ad-hoc)"),
+        ("search" = Option<String>, Query, description = "Search in title and cwd"),
+        ("after" = Option<String>, Query, description = "Date range start (ISO 8601)"),
+        ("before" = Option<String>, Query, description = "Date range end (ISO 8601)"),
+        ("sort" = Option<String>, Query, description = "Sort field (created_at, updated_at, title)"),
+        ("order" = Option<String>, Query, description = "Sort order (asc, desc)"),
+    ),
+    responses(
+        (status = 200, description = "Conversations query successful", body = ConversationsResponse),
+        (status = 400, description = "Invalid request parameters"),
+    )
+))]
 #[axum::debug_handler]
 async fn list_conversations(
     State(state): State<DaemonState>,

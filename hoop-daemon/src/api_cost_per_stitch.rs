@@ -16,6 +16,7 @@ use crate::fleet;
 
 /// Cost trend data point
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct CostTrendPoint {
     /// Date in YYYY-MM-DD format
     pub date: String,
@@ -29,6 +30,7 @@ pub struct CostTrendPoint {
 
 /// Cost trend response grouped by adapter
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct AdapterCostTrend {
     /// Adapter name (e.g., "claude", "codex", "gemini")
     pub adapter: String,
@@ -44,6 +46,7 @@ pub struct AdapterCostTrend {
 
 /// Cost trend response grouped by project
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ProjectCostTrend {
     /// Project name
     pub project: String,
@@ -57,6 +60,7 @@ pub struct ProjectCostTrend {
 
 /// Combined cost trends response
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct CostTrendsResponse {
     /// Trend window in days
     pub window_days: i64,
@@ -83,10 +87,21 @@ fn default_window_days() -> i64 {
 pub fn router() -> Router<crate::DaemonState> {
     Router::new()
         .route("/api/cost/stitch-trends", axum::routing::get(get_stitch_trends))
-        .route("/api/stitches/:id/cost", axum::routing::get(get_stitch_cost))
+        .route("/api/stitches/{id}/cost", axum::routing::get(get_stitch_cost))
 }
 
 /// Get cost trends for all stitches over a time window
+#[cfg_attr(feature = "openapi", utoipa::path(
+    get,
+    path = "/api/cost/stitch-trends",
+    tag = "cost",
+    params(
+        ("window_days" = Option<i64>, Query, description = "Time window in days (default: 30, max: 180)"),
+    ),
+    responses(
+        (status = 200, description = "Cost trends data", body = CostTrendsResponse),
+    )
+))]
 async fn get_stitch_trends(
     Query(params): Query<CostTrendsQuery>,
     State(_state): State<crate::DaemonState>,
@@ -292,6 +307,7 @@ async fn get_stitch_trends(
 
 /// Stitch cost response
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct StitchCostResponse {
     /// Stitch ID
     pub stitch_id: String,
@@ -306,6 +322,18 @@ pub struct StitchCostResponse {
 }
 
 /// Get cost breakdown for a specific stitch
+#[cfg_attr(feature = "openapi", utoipa::path(
+    get,
+    path = "/api/stitches/{id}/cost",
+    tag = "cost",
+    params(
+        ("id" = String, Path, description = "Stitch ID"),
+    ),
+    responses(
+        (status = 200, description = "Stitch cost breakdown", body = StitchCostResponse),
+        (status = 404, description = "Stitch not found"),
+    )
+))]
 async fn get_stitch_cost(
     Path(stitch_id): Path<String>,
     State(_state): State<crate::DaemonState>,

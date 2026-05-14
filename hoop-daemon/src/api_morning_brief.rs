@@ -48,7 +48,8 @@ async fn list_briefs() -> Result<Json<Vec<fleet::MorningBriefRow>>, axum::http::
 }
 
 #[derive(Serialize)]
-struct TriggerResponse {
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct TriggerResponse {
     status: String,
     brief_id: Option<String>,
     message: String,
@@ -82,8 +83,9 @@ async fn trigger_brief(
 }
 
 #[derive(Serialize)]
-struct StatusResponse {
-    running: bool,
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct StatusResponse {
+    pub running: bool,
 }
 
 /// GET /api/agent/morning-brief/status

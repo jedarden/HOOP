@@ -1,6 +1,6 @@
 //! Stitch-provenance file blame endpoint.
 //!
-//! `GET /api/projects/:project/files/blame?path=<filepath>`
+//! `GET /api/projects/{project}/files/blame?path=<filepath>`
 //!
 //! Runs `git blame --porcelain` on the file, then enriches each line with
 //! Stitch attribution via the `bead_commits` index and `stitch_beads` join.
@@ -28,7 +28,8 @@ use crate::{files, fleet, id_validators, DaemonState};
 // Response type
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct BlameLine {
     pub line_no: u32,
     pub sha: String,
@@ -48,19 +49,20 @@ pub struct BlameLine {
 // ---------------------------------------------------------------------------
 
 pub fn router() -> Router<DaemonState> {
-    Router::new().route("/api/projects/:project/files/blame", get(get_file_blame))
+    Router::new().route("/api/projects/{project}/files/blame", get(get_file_blame))
 }
 
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 struct BlameQuery {
     path: String,
 }
 
-/// GET /api/projects/:project/files/blame — get file blame with Stitch attribution
+/// GET /api/projects/{project}/files/blame — get file blame with Stitch attribution
 #[utoipa::path(
     get,
     path = "/api/projects/{project}/files/blame",

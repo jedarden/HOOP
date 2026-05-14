@@ -337,7 +337,8 @@ fn highlight_file(
             .highlight_line(line, &ps)
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("highlight error: {}", e)))?;
 
-        let html = styled_line_to_highlighted_html(&ranges, IncludeBackground::Yes);
+        let html = styled_line_to_highlighted_html(&ranges, IncludeBackground::Yes)
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("html error: {}", e)))?;
         html_lines.push(html);
     }
 

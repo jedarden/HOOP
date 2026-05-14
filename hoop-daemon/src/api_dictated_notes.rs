@@ -410,7 +410,8 @@ async fn get_audio(
 
 /// PATCH request body for updating a dictated note
 #[derive(Debug, Deserialize)]
-struct UpdateNoteRequest {
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct UpdateNoteRequest {
     title: Option<String>,
     transcript: Option<String>,
     tags: Option<Vec<String>>,
@@ -517,7 +518,8 @@ async fn update_note(
 
 /// Request body for redacting words from a dictated note
 #[derive(Debug, Deserialize)]
-struct RedactWordsRequest {
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct RedactWordsRequest {
     /// Indices of words to redact (into transcript_words array)
     word_indices: Vec<usize>,
 }
@@ -651,7 +653,8 @@ async fn redact_words(
 
 /// Request to synthesize a title and body from a dictated note transcript
 #[derive(Debug, Clone, Deserialize)]
-struct SynthesizeRequest {
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct SynthesizeRequest {
     /// Optional override for the stitch kind (defaults to "task")
     #[serde(default)]
     kind: Option<String>,
@@ -659,7 +662,8 @@ struct SynthesizeRequest {
 
 /// Response with synthesized title and body
 #[derive(Debug, Serialize)]
-struct SynthesizeResponse {
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct SynthesizeResponse {
     /// Synthesized title (max 280 chars)
     pub title: String,
     /// Synthesized body/description

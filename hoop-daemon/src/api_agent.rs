@@ -124,8 +124,9 @@ async fn disable_agent(
     }
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
-struct SwitchRequest {
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct SwitchRequest {
     adapter: String,
     model: Option<String>,
     #[serde(default)]
@@ -183,16 +184,18 @@ async fn switch_adapter(
 }
 
 /// Inline attachment sent with a turn (base64-encoded file content).
-#[derive(Debug, Deserialize, ToSchema)]
-struct TurnAttachment {
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct TurnAttachment {
     name: String,
     /// Base64-encoded file content.
     content: String,
     mime: String,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
-struct TurnRequest {
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct TurnRequest {
     prompt: String,
     #[serde(default)]
     attachments: Vec<TurnAttachment>,

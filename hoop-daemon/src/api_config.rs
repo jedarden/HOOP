@@ -9,8 +9,12 @@ use serde::{Deserialize, Serialize};
 use crate::config_resolver::SecretPattern;
 use crate::DaemonState;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
 /// Response for GET /api/config
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ConfigResponse {
     /// Schema version for compatibility tracking
     pub schema_version: String,
@@ -19,7 +23,8 @@ pub struct ConfigResponse {
 }
 
 /// Subset of running config values relevant for diff (restart-required keys first)
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct RunningConfig {
     /// Server bind address (RESTART REQUIRED)
     pub server_bind_addr: String,
@@ -94,6 +99,19 @@ pub struct SecretsPatternsResponse {
     pub patterns: Vec<SecretPattern>,
 }
 
+/// GET /api/config
+///
+/// Returns the current running config values for comparison with config.yml.
+/// The CLI's `hoop config diff` command queries this endpoint to show
+/// which values would change and which require restart.
+#[utoipa::path(
+    get,
+    path = "/api/config",
+    tag = "config",
+    responses(
+        (status = 200, description = "Running config returned successfully", body = ConfigResponse)
+    )
+)]
 async fn get_config(State(state): State<DaemonState>) -> Json<ConfigResponse> {
     let cfg = &*state.resolved_config;
 
@@ -133,6 +151,14 @@ async fn get_config(State(state): State<DaemonState>) -> Json<ConfigResponse> {
 ///
 /// Returns the current secret scanning patterns for client-side pre-upload
 /// warning (§18). Ensures parity between client warning and backend blocking.
+#[utoipa::path(
+    get,
+    path = "/api/config/secrets-patterns",
+    tag = "config",
+    responses(
+        (status = 200, description = "Secret patterns returned successfully", body = SecretsPatternsResponse)
+    )
+)]
 async fn get_secrets_patterns(State(state): State<DaemonState>) -> Json<SecretsPatternsResponse> {
     let cfg = &*state.resolved_config;
 

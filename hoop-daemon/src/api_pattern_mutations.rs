@@ -18,7 +18,13 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
 use crate::fleet;
+
+// Needed for URL decoding in remove_query
+use urlencoding;
 
 // ---------------------------------------------------------------------------
 // Request types
@@ -59,11 +65,13 @@ pub struct AddQueryRequest {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PatternResponse {
     pub pattern: PatternRow,
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PatternRow {
     pub id: String,
     pub title: String,
@@ -83,6 +91,7 @@ pub struct PatternRow {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct MessageResponse {
     pub message: String,
 }
@@ -172,7 +181,7 @@ async fn create_pattern(
         owner: req.owner,
         deadline: req.deadline,
         parent_pattern: req.parent_pattern,
-        created_at: now,
+        created_at: now.clone(),
         updated_at: now,
         closed_at: None,
     };

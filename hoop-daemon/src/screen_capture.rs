@@ -25,7 +25,8 @@ use uuid::Uuid;
 
 /// A frame sample representing a UI change captured during screen recording.
 /// These become chapter markers in the video player.
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct FrameSample {
     pub timestamp_secs: f64,
     pub label: String,

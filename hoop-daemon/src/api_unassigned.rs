@@ -85,11 +85,13 @@ pub struct AssignRequest {
 
 /// Simple success response
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SuccessResponse {
     pub success: bool,
 }
 
 /// Internal cache entry with metadata
+#[derive(Debug, Clone)]
 struct UnassignedEntry {
     session: UnassignedSession,
     discovered_at: DateTime<Utc>,

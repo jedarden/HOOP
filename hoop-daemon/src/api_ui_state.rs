@@ -22,7 +22,8 @@ use crate::DaemonState;
 const UI_STATE_SCHEMA_VERSION: &str = "1.1.0";
 
 /// Response for GET /api/ui/state
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct UiStateResponse {
     /// Schema version for compatibility tracking
     pub schema_version: String,
@@ -33,7 +34,8 @@ pub struct UiStateResponse {
 }
 
 /// Request body for PUT /api/ui/state
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct UiStateUpdate {
     /// State key to update (e.g., "pinned_projects", "active_project", "filters")
     pub key: String,
@@ -42,7 +44,8 @@ pub struct UiStateUpdate {
 }
 
 /// Batch update request for PUT /api/ui/state/batch
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct UiStateBatchUpdate {
     /// Multiple key-value pairs to update
     pub state: HashMap<String, String>,

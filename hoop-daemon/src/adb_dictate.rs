@@ -44,6 +44,7 @@ struct DictateQuery {
 
 /// Response returned after successfully creating an ADB dictated note
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct AdbDictateResponse {
     pub stitch_id: String,
     pub project: String,

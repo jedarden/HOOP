@@ -17,7 +17,7 @@ use tracing::{info, warn};
 // ---------------------------------------------------------------------------
 
 /// A single bead in a decomposed graph
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, utoipa::ToSchema)]
 pub struct GraphBead {
     /// Unique key within this graph (used for dependency references, not the br bead ID)
     pub key: String,
@@ -40,7 +40,7 @@ pub struct GraphBead {
 }
 
 /// A complete bead graph produced by decomposition
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, utoipa::ToSchema)]
 pub struct BeadGraph {
     /// The rule name that produced this graph
     pub rule_name: String,
@@ -69,6 +69,7 @@ pub struct StitchIntent {
 
 /// Override applied by the operator at preview time
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct GraphOverride {
     /// Beads to add (not in the original graph)
     #[serde(default)]

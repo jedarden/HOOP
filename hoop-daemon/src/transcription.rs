@@ -100,7 +100,7 @@ const MAX_CONCURRENT_JOBS: usize = 2;
 const MAX_RETRIES: u32 = 3;
 
 /// Transcription job status
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, utoipa::ToSchema)]
 pub enum JobStatus {
     /// Job is queued and waiting to start
     Pending,
@@ -113,10 +113,11 @@ pub enum JobStatus {
 }
 
 /// A transcription job in the queue
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct TranscriptionJob {
     pub id: String,
     pub stitch_id: String,
+    #[schema(value_type = String)]
     pub audio_path: PathBuf,
     pub status: JobStatus,
     pub attempts: u32,

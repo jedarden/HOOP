@@ -38,6 +38,7 @@ pub struct DraftResponse {
 
 /// Response for listing drafts
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct DraftListResponse {
     pub drafts: Vec<DraftRow>,
     pub count: usize,
@@ -45,6 +46,7 @@ pub struct DraftListResponse {
 
 /// Request to create a new draft
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct CreateDraftRequest {
     pub project: String,
     pub title: String,
@@ -66,14 +68,14 @@ pub struct CreateDraftRequest {
 }
 
 /// Response after creating a draft
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct CreateDraftResponse {
     pub draft_id: String,
     pub status: String,
 }
 
 /// Request to approve a draft
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct ApproveRequest {
     /// Optional override for the decomposition graph
     pub override_: Option<crate::stitch_decompose::GraphOverride>,
@@ -83,7 +85,7 @@ pub struct ApproveRequest {
 }
 
 /// Request to edit a draft
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct EditDraftRequest {
     pub title: Option<String>,
     pub description: Option<String>,
@@ -93,14 +95,14 @@ pub struct EditDraftRequest {
 }
 
 /// Request to reject a draft
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct RejectRequest {
     /// Optional reason for rejection
     pub reason: Option<String>,
 }
 
 /// Response after approving and submitting a draft
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ApproveResponse {
     pub draft_id: String,
     pub stitch_id: String,
@@ -109,7 +111,7 @@ pub struct ApproveResponse {
 }
 
 /// Response after editing a draft
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct EditResponse {
     pub draft_id: String,
     pub version: i64,
@@ -117,7 +119,7 @@ pub struct EditResponse {
 }
 
 /// Response after rejecting a draft
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct RejectResponse {
     pub draft_id: String,
     pub status: String,
@@ -125,21 +127,21 @@ pub struct RejectResponse {
 }
 
 /// Request to report a false positive dedup match
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct ReportFalsePositiveRequest {
     /// The match ID that was incorrectly flagged
     pub match_id: String,
 }
 
 /// Response after reporting a false positive
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ReportFalsePositiveResponse {
     pub success: bool,
     pub false_positive_rate: f64,
 }
 
 /// Response for deduplication statistics
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct DedupStatsResponse {
     pub total_checks: u64,
     pub duplicates_found: u64,
@@ -155,13 +157,13 @@ pub struct DedupStatsResponse {
 // ---------------------------------------------------------------------------
 
 /// Request to open a draft form
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct OpenDraftRequest {
     pub project: String,
 }
 
 /// Response after opening a draft
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct OpenDraftResponse {
     pub draft_id: String,
     pub status: String,
@@ -169,7 +171,7 @@ pub struct OpenDraftResponse {
 }
 
 /// Request to autosave draft content
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct AutosaveDraftRequest {
     pub title: Option<String>,
     pub description: Option<String>,
@@ -180,6 +182,7 @@ pub struct AutosaveDraftRequest {
 
 /// Response after autosaving a draft
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct AutosaveDraftResponse {
     pub draft_id: String,
     pub last_autosave_at: String,
@@ -187,6 +190,7 @@ pub struct AutosaveDraftResponse {
 
 /// Response after abandoning a draft
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct AbandonDraftResponse {
     pub draft_id: String,
     pub status: String,

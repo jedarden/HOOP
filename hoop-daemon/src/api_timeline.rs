@@ -30,6 +30,7 @@ fn default_hours() -> u32 {
 
 /// A single segment of worker activity on the timeline
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TimelineSegment {
     /// ISO 8601 timestamp when this segment started
     pub start: String,
@@ -43,6 +44,7 @@ pub struct TimelineSegment {
 
 /// Per-worker timeline data
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct WorkerTimeline {
     /// Worker name
     pub worker: String,
@@ -56,6 +58,7 @@ pub struct WorkerTimeline {
 
 /// Timeline response
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TimelineResponse {
     /// Start of the time window (ISO 8601)
     pub window_start: String,

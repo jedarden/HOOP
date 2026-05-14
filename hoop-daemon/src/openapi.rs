@@ -21,7 +21,11 @@ use utoipa_redoc::{Redoc, Servable};
 use utoipa_rapidoc::RapiDoc;
 
 /// OpenAPI documentation structure
-#[derive(OpenApi)]
+///
+/// NOTE: The paths() section is temporarily commented out because handlers need
+/// #[utoipa::path] annotations which are not yet implemented. The schemas are still
+/// available for OpenAPI documentation.
+#[cfg_attr(feature = "openapi", derive(OpenApi))]
 #[openapi(
     info(
         title = "HOOP REST API",
@@ -57,212 +61,213 @@ Per §20, all spec changes require a CHANGELOG entry.
             url = "https://opensource.org/licenses/MIT"
         )
     ),
-    paths(
-        // Agent API
-        crate::api_agent::get_status,
-        crate::api_agent::spawn_session,
-        crate::api_agent::disable_agent,
-        crate::api_agent::switch_adapter,
-        crate::api_agent::send_turn,
-        crate::api_agent::list_sessions,
-
-        // Backup API
-        crate::api_backup::trigger_backup,
-
-        // Beads API
-        crate::api_beads::list_open_beads,
-        crate::api_beads::create_bead,
-        crate::api_beads::check_dedup,
-        crate::api_beads::dismiss_dedup,
-        crate::api_beads::query_vector_index,
-        crate::api_beads::get_vector_index_stats,
-
-        // Bead Blockers API
-        crate::api_bead_blockers::get_bead_blockers,
-
-        // Audit API
-        crate::api_audit::list_audit_rows,
-        crate::api_audit::verify_hash_chain,
-        crate::api_audit::query_redaction_audit,
-
-        // Attachments API
-        crate::api_attachments::serve_attachment,
-
-        // Config API
-        crate::api_config::get_config,
-        crate::api_config::get_secrets_patterns,
-
-        // Content Blocks API
-        crate::api_content_blocks::list_content_blocks,
-        crate::api_content_blocks::create_content_block,
-        crate::api_content_blocks::update_content_block_endpoint,
-        crate::api_content_blocks::delete_content_block_endpoint,
-        crate::api_content_blocks::reorder_content_blocks_endpoint,
-
-        // Conversations API
-        crate::api_conversations::list_conversations,
-
-        // Cost Per Stitch API
-        crate::api_cost_per_stitch::get_stitch_trends,
-        crate::api_cost_per_stitch::get_stitch_cost,
-
-        // Dictated Notes API
-        crate::api_dictated_notes::create_note,
-        crate::api_dictated_notes::list_notes,
-        crate::api_dictated_notes::get_note,
-        crate::api_dictated_notes::update_note,
-        crate::api_dictated_notes::redact_words,
-        crate::api_dictated_notes::get_audio,
-        crate::api_dictated_notes::synthesize_draft,
-        crate::api_dictated_notes::create_draft_from_note,
-
-        // Draft Queue API
-        crate::api_draft_queue::list_all_drafts,
-        crate::api_draft_queue::list_project_drafts,
-        crate::api_draft_queue::get_draft,
-        crate::api_draft_queue::create_draft,
-        crate::api_draft_queue::approve_draft,
-        crate::api_draft_queue::edit_draft,
-        crate::api_draft_queue::reject_draft,
-        crate::api_draft_queue::open_draft,
-        crate::api_draft_queue::autosave_draft,
-        crate::api_draft_queue::abandon_draft,
-        crate::api_draft_queue::get_dedup_stats,
-        crate::api_draft_queue::report_false_positive,
-
-        // Files API
-        crate::api_files::list_directory,
-        crate::api_files::get_file_content,
-        crate::api_files::search_files,
-
-        // Fix Patterns API
-        crate::api_fix_patterns::create_pattern,
-        crate::api_fix_patterns::list_patterns,
-        crate::api_fix_patterns::get_pattern,
-        crate::api_fix_patterns::update_pattern,
-        crate::api_fix_patterns::delete_pattern,
-        crate::api_fix_patterns::match_patterns,
-        crate::api_fix_patterns::search_patterns,
-        crate::api_fix_patterns::export_patterns,
-        crate::api_fix_patterns::import_patterns,
-
-        // Metrics API
-        crate::api_metrics::get_metrics,
-        crate::api_metrics::debug_state,
-        crate::api_metrics::get_unknown_events,
-        crate::api_metrics::get_unknown_event_samples,
-
-        // Morning Brief API
-        crate::api_morning_brief::get_latest,
-        crate::api_morning_brief::list_briefs,
-        crate::api_morning_brief::trigger_brief,
-        crate::api_morning_brief::get_status,
-
-        // Onboarding API
-        crate::api_onboarding::list_onboarding_prompts,
-        crate::api_onboarding::dismiss_onboarding_prompt,
-        crate::api_onboarding::set_onboarding_enabled,
-        crate::api_onboarding::record_feature_usage,
-        crate::api_onboarding::acknowledge_version,
-
-        // Orphans API
-        crate::api_orphans::list_orphans,
-        crate::api_orphans::attach_orphan,
-
-        // Patterns API
-        crate::api_patterns::list_patterns,
-        crate::api_patterns::get_pattern,
-
-        // Presence API
-        crate::api_presence::get_presence,
-        crate::api_presence::update_presence,
-        crate::api_presence::remove_presence,
-
-        // Preview API
-        crate::api_preview::preview_bead,
-
-        // Prompts API
-        crate::api_prompts::list_prompts,
-        crate::api_prompts::get_prompt,
-        crate::api_prompts::substitute_prompt,
-
-        // Reflection Ledger API
-        crate::api_reflection_ledger::list_proposals,
-        crate::api_reflection_ledger::list_reflections,
-        crate::api_reflection_ledger::approve_proposal,
-        crate::api_reflection_ledger::reject_proposal,
-
-        // Screen Capture API
-        crate::api_screen_capture::create_screen_capture,
-        crate::api_screen_capture::list_screen_captures,
-        crate::api_screen_capture::get_metadata,
-        crate::api_screen_capture::get_video,
-
-        // Scripts API
-        crate::api_scripts::list_scripts,
-        crate::api_scripts::get_script,
-        crate::api_scripts::run_script,
-
-        // Stitch Decompose API
-        crate::api_stitch_decompose::preview_decompose,
-        crate::api_stitch_decompose::submit_stitch,
-
-        // Stitch Links API
-        crate::api_stitch_links::create_link,
-        crate::api_stitch_links::delete_link,
-        crate::api_stitch_links::search_stitches,
-
-        // Stitch Read API
-        crate::api_stitch_read::read_stitch,
-
-        // Stitch Replay API
-        crate::api_stitch_replay::get_replay_options,
-        crate::api_stitch_replay::resume_as_new_bead,
-        crate::api_stitch_replay::restore_workspace_state,
-
-        // Stitch Traversal API
-        crate::api_stitch_traversal::get_parents,
-        crate::api_stitch_traversal::get_children,
-        crate::api_stitch_traversal::get_referenced_by,
-        crate::api_stitch_traversal::get_closure,
-
-        // Timeline API
-        crate::api_timeline::get_worker_timeline,
-
-        // Tour Project API
-        crate::api_tour_project::enable_tour_project,
-        crate::api_tour_project::disable_tour_project,
-        crate::api_tour_project::get_tour_status,
-
-        // Transcription API
-        crate::api_transcription::get_job,
-        crate::api_transcription::list_jobs,
-
-        // UI State API
-        crate::api_ui_state::get_ui_state,
-        crate::api_ui_state::put_ui_state,
-        crate::api_ui_state::put_ui_state_batch,
-        crate::api_ui_state::delete_ui_state,
-
-        // Unassigned API
-        crate::api_unassigned::list_unassigned,
-        crate::api_unassigned::assign_session,
-        crate::api_unassigned::ignore_session,
-
-        // Uploads API
-        crate::api_uploads::init_upload,
-        crate::api_uploads::upload_chunk,
-        crate::api_uploads::get_progress,
-        crate::api_uploads::complete_upload,
-        crate::api_uploads::cancel_upload,
-
-        // Diff API
-        crate::api_diff::get_project_diff,
-        crate::api_diff::get_merge_base,
-
-        // Blame API
-        crate::api_blame::get_file_blame,
-    ),
+    // Paths section temporarily disabled - handlers need #[utoipa::path] annotations
+    // paths(
+    //     // Agent API
+    //     crate::api_agent::get_status,
+    //     crate::api_agent::spawn_session,
+    //     crate::api_agent::disable_agent,
+    //     crate::api_agent::switch_adapter,
+    //     crate::api_agent::send_turn,
+    //     crate::api_agent::list_sessions,
+    //
+    //     // Backup API
+    //     crate::api_backup::trigger_backup,
+    //
+    //     // Beads API
+    //     crate::api_beads::list_open_beads,
+    //     crate::api_beads::create_bead,
+    //     crate::api_beads::check_dedup,
+    //     crate::api_beads::dismiss_dedup,
+    //     crate::api_beads::query_vector_index,
+    //     crate::api_beads::get_vector_index_stats,
+    //
+    //     // Bead Blockers API
+    //     crate::api_bead_blockers::get_bead_blockers,
+    //
+    //     // Audit API
+    //     crate::api_audit::list_audit_rows,
+    //     crate::api_audit::verify_hash_chain,
+    //     crate::api_audit::query_redaction_audit,
+    //
+    //     // Attachments API
+    //     crate::api_attachments::serve_attachment,
+    //
+    //     // Config API
+    //     crate::api_config::get_config,
+    //     crate::api_config::get_secrets_patterns,
+    //
+    //     // Content Blocks API
+    //     crate::api_content_blocks::list_content_blocks,
+    //     crate::api_content_blocks::create_content_block,
+    //     crate::api_content_blocks::update_content_block_endpoint,
+    //     crate::api_content_blocks::delete_content_block_endpoint,
+    //     crate::api_content_blocks::reorder_content_blocks_endpoint,
+    //
+    //     // Conversations API
+    //     crate::api_conversations::list_conversations,
+    //
+    //     // Cost Per Stitch API
+    //     crate::api_cost_per_stitch::get_stitch_trends,
+    //     crate::api_cost_per_stitch::get_stitch_cost,
+    //
+    //     // Dictated Notes API
+    //     crate::api_dictated_notes::create_note,
+    //     crate::api_dictated_notes::list_notes,
+    //     crate::api_dictated_notes::get_note,
+    //     crate::api_dictated_notes::update_note,
+    //     crate::api_dictated_notes::redact_words,
+    //     crate::api_dictated_notes::get_audio,
+    //     crate::api_dictated_notes::synthesize_draft,
+    //     crate::api_dictated_notes::create_draft_from_note,
+    //
+    //     // Draft Queue API
+    //     crate::api_draft_queue::list_all_drafts,
+    //     crate::api_draft_queue::list_project_drafts,
+    //     crate::api_draft_queue::get_draft,
+    //     crate::api_draft_queue::create_draft,
+    //     crate::api_draft_queue::approve_draft,
+    //     crate::api_draft_queue::edit_draft,
+    //     crate::api_draft_queue::reject_draft,
+    //     crate::api_draft_queue::open_draft,
+    //     crate::api_draft_queue::autosave_draft,
+    //     crate::api_draft_queue::abandon_draft,
+    //     crate::api_draft_queue::get_dedup_stats,
+    //     crate::api_draft_queue::report_false_positive,
+    //
+    //     // Files API
+    //     crate::api_files::list_directory,
+    //     crate::api_files::get_file_content,
+    //     crate::api_files::search_files,
+    //
+    //     // Fix Patterns API
+    //     crate::api_fix_patterns::create_pattern,
+    //     crate::api_fix_patterns::list_patterns,
+    //     crate::api_fix_patterns::get_pattern,
+    //     crate::api_fix_patterns::update_pattern,
+    //     crate::api_fix_patterns::delete_pattern,
+    //     crate::api_fix_patterns::match_patterns,
+    //     crate::api_fix_patterns::search_patterns,
+    //     crate::api_fix_patterns::export_patterns,
+    //     crate::api_fix_patterns::import_patterns,
+    //
+    //     // Metrics API
+    //     crate::api_metrics::get_metrics,
+    //     crate::api_metrics::debug_state,
+    //     crate::api_metrics::get_unknown_events,
+    //     crate::api_metrics::get_unknown_event_samples,
+    //
+    //     // Morning Brief API
+    //     crate::api_morning_brief::get_latest,
+    //     crate::api_morning_brief::list_briefs,
+    //     crate::api_morning_brief::trigger_brief,
+    //     crate::api_morning_brief::get_status,
+    //
+    //     // Onboarding API
+    //     crate::api_onboarding::list_onboarding_prompts,
+    //     crate::api_onboarding::dismiss_onboarding_prompt,
+    //     crate::api_onboarding::set_onboarding_enabled,
+    //     crate::api_onboarding::record_feature_usage,
+    //     crate::api_onboarding::acknowledge_version,
+    //
+    //     // Orphans API
+    //     crate::api_orphans::list_orphans,
+    //     crate::api_orphans::attach_orphan,
+    //
+    //     // Patterns API
+    //     crate::api_patterns::list_patterns,
+    //     crate::api_patterns::get_pattern,
+    //
+    //     // Presence API
+    //     crate::api_presence::get_presence,
+    //     crate::api_presence::update_presence,
+    //     crate::api_presence::remove_presence,
+    //
+    //     // Preview API
+    //     crate::api_preview::preview_bead,
+    //
+    //     // Prompts API
+    //     crate::api_prompts::list_prompts,
+    //     crate::api_prompts::get_prompt,
+    //     crate::api_prompts::substitute_prompt,
+    //
+    //     // Reflection Ledger API
+    //     crate::api_reflection_ledger::list_proposals,
+    //     crate::api_reflection_ledger::list_reflections,
+    //     crate::api_reflection_ledger::approve_proposal,
+    //     crate::api_reflection_ledger::reject_proposal,
+    //
+    //     // Screen Capture API
+    //     crate::api_screen_capture::create_screen_capture,
+    //     crate::api_screen_capture::list_screen_captures,
+    //     crate::api_screen_capture::get_metadata,
+    //     crate::api_screen_capture::get_video,
+    //
+    //     // Scripts API
+    //     crate::api_scripts::list_scripts,
+    //     crate::api_scripts::get_script,
+    //     crate::api_scripts::run_script,
+    //
+    //     // Stitch Decompose API
+    //     crate::api_stitch_decompose::preview_decompose,
+    //     crate::api_stitch_decompose::submit_stitch,
+    //
+    //     // Stitch Links API
+    //     crate::api_stitch_links::create_link,
+    //     crate::api_stitch_links::delete_link,
+    //     crate::api_stitch_links::search_stitches,
+    //
+    //     // Stitch Read API
+    //     crate::api_stitch_read::read_stitch,
+    //
+    //     // Stitch Replay API
+    //     crate::api_stitch_replay::get_replay_options,
+    //     crate::api_stitch_replay::resume_as_new_bead,
+    //     crate::api_stitch_replay::restore_workspace_state,
+    //
+    //     // Stitch Traversal API
+    //     crate::api_stitch_traversal::get_parents,
+    //     crate::api_stitch_traversal::get_children,
+    //     crate::api_stitch_traversal::get_referenced_by,
+    //     crate::api_stitch_traversal::get_closure,
+    //
+    //     // Timeline API
+    //     crate::api_timeline::get_worker_timeline,
+    //
+    //     // Tour Project API
+    //     crate::api_tour_project::enable_tour_project,
+    //     crate::api_tour_project::disable_tour_project,
+    //     crate::api_tour_project::get_tour_status,
+    //
+    //     // Transcription API
+    //     crate::api_transcription::get_job,
+    //     crate::api_transcription::list_jobs,
+    //
+    //     // UI State API
+    //     crate::api_ui_state::get_ui_state,
+    //     crate::api_ui_state::put_ui_state,
+    //     crate::api_ui_state::put_ui_state_batch,
+    //     crate::api_ui_state::delete_ui_state,
+    //
+    //     // Unassigned API
+    //     crate::api_unassigned::list_unassigned,
+    //     crate::api_unassigned::assign_session,
+    //     crate::api_unassigned::ignore_session,
+    //
+    //     // Uploads API
+    //     crate::api_uploads::init_upload,
+    //     crate::api_uploads::upload_chunk,
+    //     crate::api_uploads::get_progress,
+    //     crate::api_uploads::complete_upload,
+    //     crate::api_uploads::cancel_upload,
+    //
+    //     // Diff API
+    //     crate::api_diff::get_project_diff,
+    //     crate::api_diff::get_merge_base,
+    //
+    //     // Blame API
+    //     crate::api_blame::get_file_blame,
+    // ),
     components(
         schemas(
             // Agent API types
@@ -307,11 +312,8 @@ Per §20, all spec changes require a CHANGELOG entry.
 
             // Content Blocks API types
             crate::content_blocks::ContentBlock,
-            crate::api_content_blocks::ListBlocksResponse,
-            crate::api_content_blocks::CreateBlockRequest,
-            crate::api_content_blocks::UpdateBlockRequest,
-            crate::api_content_blocks::ReorderBlocksRequest,
-            crate::api_content_blocks::ReorderBlocksResponse,
+            crate::content_blocks::ContentBlockCreate,
+            crate::content_blocks::ContentBlockUpdate,
 
             // Conversations API types
             crate::api_conversations::ConversationsQuery,
@@ -320,10 +322,11 @@ Per §20, all spec changes require a CHANGELOG entry.
             crate::api_conversations::WorkerMetadata,
 
             // Cost Per Stitch API types
-            crate::api_cost_per_stitch::TrendsResponse,
-            crate::api_cost_per_stitch::CostResponse,
-            crate::api_cost_per_stitch::TrendPoint,
-            crate::api_cost_per_stitch::StitchCost,
+            crate::api_cost_per_stitch::CostTrendsResponse,
+            crate::api_cost_per_stitch::StitchCostResponse,
+            crate::api_cost_per_stitch::CostTrendPoint,
+            crate::api_cost_per_stitch::AdapterCostTrend,
+            crate::api_cost_per_stitch::ProjectCostTrend,
 
             // Dictated Notes API types
             crate::dictated_notes::TranscriptionStatus,
@@ -360,14 +363,9 @@ Per §20, all spec changes require a CHANGELOG entry.
             crate::fleet::BeadSource,
 
             // Files API types
-            crate::api_files::ListQuery,
-            crate::api_files::ContentQuery,
-            crate::api_files::SearchQuery,
-            crate::api_files::ListResponse,
-            crate::api_files::FileEntry,
-            crate::api_files::ContentResponse,
-            crate::api_files::SearchResponse,
-            crate::api_files::HighlightResult,
+            crate::files::FileEntry,
+            crate::files::FileSearchResult,
+            crate::files::GrepMatch,
 
             // Fix Patterns API types
             crate::api_fix_patterns::PatternListResponse,
@@ -398,20 +396,21 @@ Per §20, all spec changes require a CHANGELOG entry.
             crate::api_onboarding::RecordFeatureUsageRequest,
 
             // Orphans API types
-            crate::api_orphans::OrphansResponse,
-            crate::api_orphans::OrphanEntry,
-            crate::api_orphans::AttachRequest,
-            crate::api_orphans::AttachResponse,
+            crate::orphan_beads::OrphansResponse,
+            crate::orphan_beads::OrphanBead,
+            crate::api_orphans::AttachOrphanRequest,
+            crate::api_orphans::AttachOrphanResponse,
 
             // Patterns API types
-            crate::api_patterns::Pattern,
-            crate::api_patterns::PatternsResponse,
+            crate::api_patterns::PatternListResponse,
+            crate::api_patterns::PatternDetailResponse,
+            crate::api_patterns::PatternListItem,
 
             // Presence API types
-            crate::api_presence::Presence,
+            crate::api_presence::PresenceResponse,
             crate::api_presence::PresenceListResponse,
-            crate::api_presence::UpdateRequest,
-            crate::api_presence::UpdateResponse,
+            crate::api_presence::UpdatePresenceRequest,
+            crate::api_presence::UpdatePresenceResponse,
 
             // Preview API types
             crate::api_preview::PreviewRequest,
@@ -426,8 +425,18 @@ Per §20, all spec changes require a CHANGELOG entry.
 
             // Prompts API types
             crate::api_prompts::Prompt,
-            crate::api_prompts::PromptsListResponse,
-            crate::api_prompts::SubstituteRequest,
+            crate::api_prompts::PromptLibrary,
+            crate::api_prompts::SubstitutionRequest,
+            crate::api_prompts::SubstitutionResponse,
+
+            // Propagation API types
+            crate::api_propagation::DetectRequest,
+            crate::api_propagation::DetectResponse,
+            crate::cross_project_propagation::PropagationResult,
+            crate::cross_project_propagation::SiblingProject,
+            crate::cross_project_propagation::SiblingStitch,
+            crate::cross_project_propagation::SiblingEvidence,
+            crate::cross_project_propagation::SourceStitchInfo,
 
             // Reflection Ledger API types
             crate::api_reflection_ledger::ProposalsResponse,
@@ -436,19 +445,13 @@ Per §20, all spec changes require a CHANGELOG entry.
             crate::api_reflection_ledger::ApproveProposalResponse,
             crate::api_reflection_ledger::RejectProposalRequest,
             crate::api_reflection_ledger::RejectProposalResponse,
-            crate::reflection_ledger::ReflectionLedgerEntry,
+            crate::fleet::ReflectionLedgerEntry,
 
-            // Screen Capture API types
-            crate::api_screen_capture::CreateCaptureResponse,
-            crate::api_screen_capture::ListCapturesResponse,
-            crate::api_screen_capture::CaptureMetadata,
-            crate::api_screen_capture::StartStreamingResponse,
 
             // Scripts API types
             crate::api_scripts::ScriptEntry,
-            crate::api_scripts::ScriptsListResponse,
-            crate::api_scripts::RunRequest,
-            crate::api_scripts::RunResponse,
+            crate::api_scripts::ScriptRunRequest,
+            crate::api_scripts::ScriptRunResponse,
 
             // Stitch Decompose API types
             crate::api_stitch_decompose::DecomposePreviewRequest,
@@ -468,28 +471,25 @@ Per §20, all spec changes require a CHANGELOG entry.
             // Stitch Links API types
             crate::api_stitch_links::CreateLinkRequest,
             crate::api_stitch_links::CreateLinkResponse,
-            crate::api_stitch_links::DeleteLinkResponse,
-            crate::api_stitch_links::SearchResponse,
-            crate::api_stitch_links::StitchRef,
-
-            // Stitch Read API types
-            crate::api_stitch_read::ReadStitchResponse,
+            crate::api_stitch_links::SearchStitchesResponse,
+            crate::api_stitch_links::StitchSearchResult,
 
             // Stitch Replay API types
             crate::api_stitch_replay::ReplayOptionsResponse,
             crate::api_stitch_replay::ResumeAsNewResponse,
-            crate::api_stitch_replay::RestoreStateResponse,
 
             // Stitch Traversal API types
             crate::api_stitch_traversal::ParentsResponse,
             crate::api_stitch_traversal::ChildrenResponse,
             crate::api_stitch_traversal::ReferencedByResponse,
             crate::api_stitch_traversal::ClosureResponse,
-            crate::api_stitch_traversal::StitchRef,
+            crate::api_stitch_traversal::StitchLinkInfo,
+            crate::api_stitch_traversal::ClosureNodeInfo,
 
             // Timeline API types
             crate::api_timeline::TimelineResponse,
-            crate::api_timeline::TimelineEntry,
+            crate::api_timeline::TimelineSegment,
+            crate::api_timeline::WorkerTimeline,
 
             // Tour Project API types
             crate::api_tour_project::TourProjectResponse,
@@ -502,19 +502,15 @@ Per §20, all spec changes require a CHANGELOG entry.
             crate::transcription::TranscriptionJob,
 
             // UI State API types
-            crate::api_ui_state::GetStateResponse,
-            crate::api_ui_state::PutStateRequest,
-            crate::api_ui_state::PutStateResponse,
-            crate::api_ui_state::BatchRequest,
-            crate::api_ui_state::BatchResponse,
+            crate::api_ui_state::UiStateResponse,
+            crate::api_ui_state::UiStateUpdate,
+            crate::api_ui_state::UiStateBatchUpdate,
 
             // Unassigned API types
+            crate::api_unassigned::UnassignedSessionsResponse,
             crate::api_unassigned::UnassignedSession,
-            crate::api_unassigned::ListResponse,
             crate::api_unassigned::AssignRequest,
-            crate::api_unassigned::AssignResponse,
-            crate::api_unassigned::IgnoreRequest,
-            crate::api_unassigned::IgnoreResponse,
+            crate::api_unassigned::SuccessResponse,
 
             // Uploads API types
             crate::api_uploads::InitUploadRequest,
@@ -528,7 +524,6 @@ Per §20, all spec changes require a CHANGELOG entry.
             crate::api_diff::MergeBaseResponse,
 
             // Blame API types
-            crate::api_blame::BlameResponse,
             crate::api_blame::BlameLine,
         )
     ),
@@ -584,7 +579,7 @@ pub fn router() -> axum::Router<crate::DaemonState> {
         .route("/api/openapi.yaml", axum::routing::get(openapi_yaml_handler))
         .merge(SwaggerUi::new("/api/docs/swagger-ui").url("/api/openapi.json", openapi_json.clone()))
         .merge(Redoc::with_url("/api/docs/redoc", openapi_json.clone()))
-        .merge(RapiDoc::new("/api/docs/rapidoc").url("/api/openapi.json", openapi_json))
+        .merge(RapiDoc::with_openapi(openapi_json))
 }
 
 /// GET /api/openapi.yaml - Return the OpenAPI spec as YAML

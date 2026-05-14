@@ -43,7 +43,7 @@ pub struct CrossWorkspaceBlocker {
     pub issue_type: String,
 }
 
-/// Response for GET /api/beads/:id/blockers
+/// Response for GET /api/beads/{id}/blockers
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct BeadBlockersResponse {

@@ -21,11 +21,13 @@ use crate::{Bead, BeadStatus};
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PatternListResponse {
     pub patterns: Vec<PatternListItem>,
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PatternListItem {
     pub id: String,
     pub title: String,
@@ -52,6 +54,7 @@ pub struct PatternListItem {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PatternDetailResponse {
     pub pattern: PatternRow,
     pub parent_chain: Vec<PatternBreadcrumb>,
@@ -60,6 +63,7 @@ pub struct PatternDetailResponse {
 }
 
 #[derive(Debug, Serialize, Clone)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PatternRow {
     pub id: String,
     pub title: String,
@@ -78,6 +82,7 @@ pub struct PatternRow {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PatternBreadcrumb {
     pub id: String,
     pub title: String,
@@ -85,6 +90,7 @@ pub struct PatternBreadcrumb {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PatternMemberDetail {
     pub stitch_id: String,
     pub project: String,
@@ -99,6 +105,7 @@ pub struct PatternMemberDetail {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct BeadSummary {
     pub bead_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -109,6 +116,7 @@ pub struct BeadSummary {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PatternAggregate {
     pub total_members: usize,
     pub closed_members: usize,

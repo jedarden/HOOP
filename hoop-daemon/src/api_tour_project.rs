@@ -578,7 +578,6 @@ pub fn get_tour_project_card(
                 Ok(value == "true")
             },
         )
-        .unwrap_or(Ok(false))
         .unwrap_or(false);
 
     if !enabled {
@@ -592,7 +591,6 @@ pub fn get_tour_project_card(
             (operator_id, TOUR_PATH_KEY),
             |row| row.get(0),
         )
-        .unwrap_or_else(|_| Ok(String::from(".hoop/tour")))
         .unwrap_or_else(|_| String::from(".hoop/tour"));
 
     // Count tour stitches
@@ -602,7 +600,6 @@ pub fn get_tour_project_card(
             (TOUR_PROJECT_NAME,),
             |row| row.get(0),
         )
-        .unwrap_or(Ok(0))
         .unwrap_or(0);
 
     Some(ProjectCardData {

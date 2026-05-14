@@ -22,11 +22,14 @@ use base64::Engine;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use utoipa::ToSchema;
 use tower::ServiceExt;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
 /// Request body for creating a screen capture
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 struct CreateScreenCaptureRequest {
     project: String,
     video_data: String,
@@ -37,7 +40,8 @@ struct CreateScreenCaptureRequest {
 }
 
 /// Response after creating a screen capture
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 struct CreateScreenCaptureResponse {
     stitch_id: String,
     project: String,
@@ -345,7 +349,8 @@ async fn get_video(
 }
 
 /// Request body for starting a streaming screen capture upload
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 struct StartStreamingUploadRequest {
     project: String,
     video_content_type: String,
@@ -433,6 +438,7 @@ async fn start_streaming_upload(
         ("project" = String, Path, description = "Project name"),
         ("stream_id" = String, Path, description = "Stream session ID")
     ),
+    request_body(description = "Raw video bytes", content_type = "application/octet-stream"),
     responses(
         (status = 200, description = "Chunk appended successfully"),
         (status = 400, description = "Invalid stream ID"),
@@ -462,7 +468,8 @@ async fn append_stream_chunk(
 }
 
 /// Request body for completing a streaming upload
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 struct CompleteStreamingUploadRequest {
     duration_secs: f64,
     frame_samples: Vec<screen_capture::FrameSample>,

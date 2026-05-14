@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use tracing::info;
 
 /// Request body for attaching an orphan bead to a Stitch
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct AttachOrphanRequest {
     /// The orphan bead ID to attach
     bead_id: String,
@@ -25,7 +25,7 @@ pub struct AttachOrphanRequest {
 }
 
 /// Response after attaching an orphan bead
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, utoipa::ToSchema)]
 pub struct AttachOrphanResponse {
     pub bead_id: String,
     pub stitch_id: String,

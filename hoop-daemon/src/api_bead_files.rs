@@ -1,6 +1,6 @@
 //! Bead file links API endpoints
 //!
-//! `GET /api/beads/:bead_id/files` — returns files touched by a specific bead
+//! `GET /api/beads/{bead_id}/files` — returns files touched by a specific bead
 //! with revision information for artifact-aware navigation.
 //!
 //! This enables artifact-aware links: from a bead view, navigate to the file browser
@@ -24,7 +24,8 @@ use crate::{bead_commit_index, id_validators};
 // Response types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct BeadFileLink {
     /// File path relative to workspace root
     pub path: String,
@@ -43,7 +44,8 @@ pub struct BeadFileLink {
     pub removed: Option<i64>,
 }
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct BeadFilesResponse {
     pub bead_id: String,
     pub files: Vec<BeadFileLink>,
@@ -60,14 +62,14 @@ pub struct BeadFilesResponse {
 // ---------------------------------------------------------------------------
 
 pub fn router() -> Router<crate::DaemonState> {
-    Router::new().route("/api/beads/:bead_id/files", get(get_bead_files))
+    Router::new().route("/api/beads/{bead_id}/files", get(get_bead_files))
 }
 
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
 
-/// GET /api/beads/:bead_id/files — get files touched by a bead
+/// GET /api/beads/{bead_id}/files — get files touched by a bead
 ///
 /// Returns all files modified by commits linked to this bead, with revision
 /// information for artifact-aware navigation. Each file includes the workspace,

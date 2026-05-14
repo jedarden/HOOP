@@ -50,6 +50,7 @@ pub struct AgentMetadata {
 
 /// Request to preview a decomposition
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct DecomposePreviewRequest {
     pub kind: String,
     pub title: String,
@@ -61,6 +62,7 @@ pub struct DecomposePreviewRequest {
 
 /// Response to a decomposition preview
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct DecomposePreviewResponse {
     pub graph: BeadGraph,
     pub rule_name: String,
@@ -75,6 +77,7 @@ pub struct DecomposePreviewResponse {
 
 /// "What Will This Take?" preview data for a Stitch
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct StitchPreviewData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub schema_version: Option<String>,
@@ -85,6 +88,7 @@ pub struct StitchPreviewData {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PredictionData {
     pub cost: PercentileEstimate,
     pub duration: PercentileEstimate,
@@ -95,6 +99,7 @@ pub struct PredictionData {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct RiskPatternMatch {
     pub pattern: RiskPatternInfo,
     pub confidence: f64,
@@ -103,6 +108,7 @@ pub struct RiskPatternMatch {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct RiskPatternInfo {
     pub id: String,
     pub name: String,
@@ -113,6 +119,7 @@ pub struct RiskPatternInfo {
 }
 
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SimilarStitchRef {
     pub id: String,
     pub title: String,
@@ -121,6 +128,7 @@ pub struct SimilarStitchRef {
 
 /// A dedup match found during stitch preview/submit
 #[derive(Debug, Serialize, Clone)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct DedupMatchRef {
     pub id: String,
     pub project: String,
@@ -131,6 +139,7 @@ pub struct DedupMatchRef {
 
 /// Request to submit a decomposed Stitch (possibly with overrides)
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct StitchSubmitRequest {
     pub kind: String,
     pub title: String,
@@ -152,6 +161,7 @@ pub struct StitchSubmitRequest {
 
 /// Response after submitting a decomposed Stitch
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct StitchSubmitResponse {
     pub stitch_id: String,
     pub graph: BeadGraph,
@@ -163,6 +173,7 @@ pub struct StitchSubmitResponse {
 
 /// A bead that was created as part of Stitch decomposition
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct CreatedBead {
     pub key: String,
     pub id: String,
@@ -172,6 +183,7 @@ pub struct CreatedBead {
 
 /// Result of a successful stitch submission (shared between direct submit and draft approve)
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SubmitResult {
     pub stitch_id: String,
     pub graph: BeadGraph,

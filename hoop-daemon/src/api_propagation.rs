@@ -12,6 +12,8 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "openapi")]
 use utoipa::ToSchema;
 
 /// Build the propagation API router
@@ -21,8 +23,9 @@ pub fn router() -> Router<DaemonState> {
         .route("/api/propagation/:stitch_id", get(get_propagation_result))
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
-struct DetectRequest {
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct DetectRequest {
     /// Stitch ID that was just closed
     stitch_id: String,
     /// Minimum similarity threshold (0-1, default: 0.5)
@@ -48,8 +51,9 @@ fn default_lookback_days() -> i64 {
     90
 }
 
-#[derive(Debug, Serialize, ToSchema)]
-struct DetectResponse {
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct DetectResponse {
     /// Propagation detection result
     #[serde(flatten)]
     result: PropagationResult,

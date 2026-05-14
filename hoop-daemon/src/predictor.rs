@@ -24,6 +24,7 @@ pub struct HistoricalStitch {
 
 /// Percentile estimates for a metric
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PercentileEstimate {
     /// 50th percentile (median)
     pub p50: f64,
@@ -51,6 +52,7 @@ pub struct StitchPrediction {
 
 /// Date range for historical data
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct DateRange {
     pub start: String,
     pub end: String,

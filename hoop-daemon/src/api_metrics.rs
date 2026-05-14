@@ -318,7 +318,8 @@ async fn append_scrape_time_metrics(out: &mut String, state: &DaemonState) {
 
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case")]
-struct DebugStateResponse {
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct DebugStateResponse {
     schema_version: String,
     uptime_secs: u64,
     version: VersionInfo,
@@ -339,12 +340,14 @@ struct DebugStateResponse {
 }
 
 #[derive(Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 struct VersionInfo {
     daemon: String,
     schema: String,
 }
 
 #[derive(Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 struct WorkerSnapshot {
     name: String,
     state: String,
@@ -356,12 +359,14 @@ struct WorkerSnapshot {
 }
 
 #[derive(Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 struct WorkerPidEntry {
     worker: String,
     pid: u32,
 }
 
 #[derive(Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 struct ClaimEntry {
     worker: String,
     bead: String,
@@ -371,6 +376,7 @@ struct ClaimEntry {
 }
 
 #[derive(Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 struct WsClientEntry {
     conn_id: u64,
     connected_at: String,
@@ -378,6 +384,7 @@ struct WsClientEntry {
 }
 
 #[derive(Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 struct SessionAliasEntry {
     session_id: String,
     provider: String,
@@ -390,6 +397,7 @@ struct SessionAliasEntry {
 }
 
 #[derive(Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 struct BackupTimestamps {
     last_success_unix: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -569,7 +577,8 @@ fn sha256_hex(input: &str) -> String {
 
 /// Response for GET /api/diagnostics/unknown-events
 #[derive(Serialize)]
-struct UnknownEventsResponse {
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct UnknownEventsResponse {
     total_count: u64,
     labeled_totals: Vec<LabeledEntry>,
     daemon_version: String,
@@ -578,7 +587,8 @@ struct UnknownEventsResponse {
 
 /// Response for GET /api/diagnostics/unknown-events/samples
 #[derive(Serialize)]
-struct UnknownEventSamplesResponse {
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct UnknownEventSamplesResponse {
     samples: Vec<UnknownEventSampleDto>,
     total_count: u64,
     daemon_version: String,
@@ -587,6 +597,7 @@ struct UnknownEventSamplesResponse {
 
 /// DTO for unknown event samples (matches frontend interface).
 #[derive(Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 struct UnknownEventSampleDto {
     adapter: String,
     event_kind: String,
@@ -612,6 +623,7 @@ impl From<crate::unknown_event_sink::UnknownEventSample> for UnknownEventSampleD
 }
 
 #[derive(Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 struct LabeledEntry {
     adapter: String,
     event_kind: String,

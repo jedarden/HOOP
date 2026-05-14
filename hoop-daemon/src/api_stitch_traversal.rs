@@ -15,6 +15,9 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
 use crate::fleet;
 use crate::stitch_traversal;
 
@@ -22,7 +25,8 @@ use crate::stitch_traversal;
 // Response types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ParentsResponse {
     pub stitch_id: String,
     pub parents: Vec<StitchLinkInfo>,
@@ -30,7 +34,8 @@ pub struct ParentsResponse {
     pub elapsed_ms: Option<f64>,
 }
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ChildrenResponse {
     pub stitch_id: String,
     pub children: Vec<StitchLinkInfo>,
@@ -38,7 +43,8 @@ pub struct ChildrenResponse {
     pub elapsed_ms: Option<f64>,
 }
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ReferencedByResponse {
     pub stitch_id: String,
     pub references: Vec<StitchLinkInfo>,
@@ -46,7 +52,8 @@ pub struct ReferencedByResponse {
     pub elapsed_ms: Option<f64>,
 }
 
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ClosureResponse {
     pub root_stitch_id: String,
     pub kind: String,
@@ -107,7 +114,7 @@ pub fn router() -> Router<crate::DaemonState> {
     path = "/api/stitches/{id}/parents",
     tag = "stitch_traversal",
     params(
-        ("id", description = "Stitch UUID")
+        ("id" = String, Path, description = "Stitch UUID")
     ),
     responses(
         (status = 200, description = "Parent stitches found", body = ParentsResponse),
@@ -183,7 +190,7 @@ async fn get_parents(
     path = "/api/stitches/{id}/children",
     tag = "stitch_traversal",
     params(
-        ("id", description = "Stitch UUID")
+        ("id" = String, Path, description = "Stitch UUID")
     ),
     responses(
         (status = 200, description = "Child stitches found", body = ChildrenResponse),
@@ -259,7 +266,7 @@ async fn get_children(
     path = "/api/stitches/{id}/referenced_by",
     tag = "stitch_traversal",
     params(
-        ("id", description = "Stitch UUID")
+        ("id" = String, Path, description = "Stitch UUID")
     ),
     responses(
         (status = 200, description = "Referencing stitches found", body = ReferencedByResponse),
@@ -336,9 +343,9 @@ async fn get_referenced_by(
     path = "/api/stitches/{id}/closure",
     tag = "stitch_traversal",
     params(
-        ("id", description = "Stitch UUID"),
-        ("kind", description = "Link kind to follow ('spawned', 'references', 'all')"),
-        ("max_depth", description = "Maximum traversal depth")
+        ("id" = String, Path, description = "Stitch UUID"),
+        ("kind" = Option<String>, Query, description = "Link kind to follow ('spawned', 'references', 'all')"),
+        ("max_depth" = Option<u32>, Query, description = "Maximum traversal depth")
     ),
     responses(
         (status = 200, description = "Closure computed", body = ClosureResponse),

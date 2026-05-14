@@ -104,7 +104,7 @@ pub fn resolve_syntax(filename: &str) -> Arc<SyntaxReference> {
             };
             alt.and_then(|name| ss.find_syntax_for_file(name).unwrap_or(None))
         })
-        .map(|syntax| Arc::clone(syntax))
+        .map(|syntax| Arc::new(syntax.clone()))
         .unwrap_or_else(|| Arc::new(ss.find_syntax_plain_text().clone()))
 }
 

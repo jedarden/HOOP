@@ -8,10 +8,9 @@ use chrono::Utc;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use tracing::info;
-use utoipa::ToSchema;
-
 /// Content block type
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ContentBlockType {
     Text,
@@ -47,7 +46,8 @@ impl From<ContentBlockType> for String {
 }
 
 /// Content block for multimodal input
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ContentBlock {
     pub id: String,
     pub stitch_id: String,
@@ -59,7 +59,8 @@ pub struct ContentBlock {
 }
 
 /// Create content block request
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ContentBlockCreate {
     pub block_type: ContentBlockType,
     pub content: Option<String>,
@@ -68,7 +69,8 @@ pub struct ContentBlockCreate {
 }
 
 /// Update content block request
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ContentBlockUpdate {
     pub content: Option<String>,
     pub metadata: Option<serde_json::Value>,

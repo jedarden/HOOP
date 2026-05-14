@@ -10,6 +10,7 @@
 #[cfg(not(feature = "zero-write-v01"))]
 use crate::br_verbs::invoke_br_create;
 use crate::br_verbs::{invoke_br_read, propagate_stitch_labels, ReadVerb};
+use crate::DaemonState;
 use crate::fleet::{self, ActionKind, ActionResult, BeadActionArgs, BeadSource};
 use crate::pattern_query_evaluator;
 use crate::ws::StitchCreatedData;
@@ -23,11 +24,17 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tracing::warn;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+#[cfg(feature = "openapi")]
+use utoipa::path;
+
 /// Valid issue types for bead creation
 const VALID_ISSUE_TYPES: &[&str] = &["task", "bug", "epic", "genesis", "review", "fix"];
 
 /// Open bead summary for the dep picker
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct BeadSummary {
     pub id: String,
     pub title: String,
@@ -38,6 +45,7 @@ pub struct BeadSummary {
 
 /// Request body for creating a bead
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct CreateBeadRequest {
     pub title: String,
     pub description: Option<String>,
@@ -63,6 +71,7 @@ pub struct CreateBeadRequest {
 
 /// Response after creating a bead
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct CreateBeadResponse {
     pub id: String,
     pub title: String,
@@ -84,6 +93,7 @@ pub fn router() -> Router<crate::DaemonState> {
 
 /// Request body for dedup check
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct DedupCheckRequest {
     pub title: String,
     pub description: Option<String>,
@@ -91,6 +101,7 @@ pub struct DedupCheckRequest {
 
 /// A match found during dedup check
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct DedupMatchRef {
     pub id: String,
     pub project: String,
@@ -101,6 +112,7 @@ pub struct DedupMatchRef {
 
 /// Response from dedup check
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct DedupCheckResponse {
     pub matches: Vec<DedupMatchRef>,
     pub threshold: f64,
@@ -109,6 +121,7 @@ pub struct DedupCheckResponse {
 
 /// Vector index statistics (hoop-ttb.5.9.1)
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct VectorIndexStats {
     pub num_entries: usize,
     pub rebuild_progress_current: usize,
@@ -124,7 +137,17 @@ pub struct VectorIndexStats {
 ///
 /// Returns potential duplicates across all projects above the configured threshold.
 /// Used by Already-Started Detection and Cross-Project Propagation (hoop-ttb.5.9.1).
-async fn query_vector_index(
+#[utoipa::path(
+    post,
+    path = "/api/vector-index/query",
+    request_body = DedupCheckRequest,
+    responses(
+        (status = 200, description = "Vector index query results", body = DedupCheckResponse),
+        (status = 400, description = "Invalid request")
+    ),
+    tag = "beads"
+)]
+pub async fn query_vector_index(
     State(state): State<crate::DaemonState>,
     Json(req): Json<DedupCheckRequest>,
 ) -> Result<Json<DedupCheckResponse>, (StatusCode, String)> {
@@ -155,7 +178,20 @@ async fn query_vector_index(
 /// POST /api/p/:project/beads/dedup — check for similar existing work
 ///
 /// Returns potential duplicates across all projects above the configured threshold.
-async fn check_dedup(
+#[utoipa::path(
+    post,
+    path = "/api/p/{project}/beads/dedup",
+    params(
+        ("project" = String, Path, description = "Project name")
+    ),
+    request_body = DedupCheckRequest,
+    responses(
+        (status = 200, description = "Dedup check results", body = DedupCheckResponse),
+        (status = 400, description = "Invalid request")
+    ),
+    tag = "beads"
+)]
+pub async fn check_dedup(
     Path(project): Path<String>,
     State(state): State<crate::DaemonState>,
     Json(req): Json<DedupCheckRequest>,
@@ -201,7 +237,19 @@ async fn check_dedup(
 }
 
 /// POST /api/p/:project/beads/dedup-dismiss — report a false positive
-async fn dismiss_dedup(
+#[utoipa::path(
+    post,
+    path = "/api/p/{project}/beads/dedup-dismiss",
+    params(
+        ("project" = String, Path, description = "Project name")
+    ),
+    responses(
+        (status = 200, description = "False positive reported"),
+        (status = 404, description = "Project not found")
+    ),
+    tag = "beads"
+)]
+pub async fn dismiss_dedup(
     Path(project): Path<String>,
     State(state): State<crate::DaemonState>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
@@ -216,7 +264,15 @@ async fn dismiss_dedup(
 ///
 /// Returns index size, rebuild progress, model info, and false positive rate.
 /// Used by the UI to show rebuild progress during model changes (hoop-ttb.5.9.1).
-async fn get_vector_index_stats(State(state): State<crate::DaemonState>) -> Json<VectorIndexStats> {
+#[utoipa::path(
+    get,
+    path = "/api/vector-index/stats",
+    responses(
+        (status = 200, description = "Vector index statistics", body = VectorIndexStats),
+    ),
+    tag = "beads"
+)]
+pub async fn get_vector_index_stats(State(state): State<crate::DaemonState>) -> Json<VectorIndexStats> {
     let index = state.vector_index.read().unwrap();
     let (current, total) = index.rebuild_progress();
     Json(VectorIndexStats {
@@ -305,7 +361,19 @@ fn validate_draft(req: &CreateBeadRequest) -> Result<(), (StatusCode, String)> {
 }
 
 /// GET /api/p/:project/beads — list open beads from the project's .beads/issues.jsonl
-async fn list_open_beads(
+#[utoipa::path(
+    get,
+    path = "/api/p/{project}/beads",
+    params(
+        ("project" = String, Path, description = "Project name")
+    ),
+    responses(
+        (status = 200, description = "List of open beads", body = Vec<BeadSummary>),
+        (status = 404, description = "Project not found")
+    ),
+    tag = "beads"
+)]
+pub async fn list_open_beads(
     Path(project): Path<String>,
     State(state): State<crate::DaemonState>,
 ) -> Result<Json<Vec<BeadSummary>>, (StatusCode, String)> {
@@ -378,16 +446,44 @@ async fn list_open_beads(
 /// 4. Insert audit row with actor + source
 /// 5. Emit stitch_created event on WS
 /// 6. Return response with bead data
+#[utoipa::path(
+    post,
+    path = "/api/p/{project}/beads",
+    params(
+        ("project" = String, Path, description = "Project name")
+    ),
+    request_body = CreateBeadRequest,
+    responses(
+        (status = 200, description = "Bead created successfully", body = CreateBeadResponse),
+        (status = 400, description = "Invalid request"),
+        (status = 409, description = "Duplicate detected"),
+        (status = 422, description = "Project has no .beads directory")
+    ),
+    tag = "beads"
+)]
 pub async fn create_bead(
     Path(project): Path<String>,
     State(state): State<crate::DaemonState>,
     connect_info: Option<ConnectInfo<SocketAddr>>,
     Json(req): Json<CreateBeadRequest>,
 ) -> Result<Json<CreateBeadResponse>, (StatusCode, String)> {
+    create_bead_internal(project, &state, connect_info, req).await.map(Json)
+}
+
+/// Internal helper function for bead creation logic
+///
+/// This function contains the core logic for creating a bead, shared between
+/// the `create_bead` endpoint and other internal callers like `resume_as_new_bead`.
+pub async fn create_bead_internal(
+    project: String,
+    state: &DaemonState,
+    connect_info: Option<ConnectInfo<SocketAddr>>,
+    req: CreateBeadRequest,
+) -> Result<CreateBeadResponse, (StatusCode, String)> {
     // Zero-write guard: bead creation is a write operation
     #[cfg(feature = "zero-write-v01")]
     {
-        let _ = (&state, connect_info, req);
+        let _ = (state, connect_info, req);
         return Err((
             StatusCode::FORBIDDEN,
             "Bead creation is disabled in zero-write mode".to_string(),
@@ -675,14 +771,14 @@ pub async fn create_bead(
     }
 
     // 6. Return response
-    Ok(Json(CreateBeadResponse {
+    Ok(CreateBeadResponse {
         id,
         title: req.title,
         project,
         source: source_str,
         actor,
         stitch_id,
-    }))
+    })
 }
 
 pub fn resolve_project_path(

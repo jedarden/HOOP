@@ -31,7 +31,8 @@ const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
 pub const GENESIS_HASH: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 /// Action kind for audit log
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ActionKind {
     BeadCreated,
@@ -77,7 +78,8 @@ pub enum ActionKind {
 }
 
 /// Action result for audit log
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum ActionResult {
     Success,
@@ -87,6 +89,7 @@ pub enum ActionResult {
 
 /// Source of a bead creation action
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum BeadSource {
     Form,
@@ -3467,7 +3470,8 @@ pub fn run_major_upgrade() -> Result<()> {
 // ---------------------------------------------------------------------------
 
 /// A row from the `agent_sessions` table.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct AgentSessionRow {
     pub id: String,
     pub adapter_session_id: String,
@@ -4428,14 +4432,14 @@ pub fn remove_presence(
 
     if let Some(p) = project {
         sql.push_str(" AND (project = ?2 OR project IS NULL)");
-        params.push(p);
+        params.push(&p);
     } else {
         sql.push_str(" AND project IS NULL");
     }
 
     if let Some(s) = stitch_id {
         sql.push_str(" AND (stitch_id = ?3 OR stitch_id IS NULL)");
-        params.push(s);
+        params.push(&s);
     } else {
         sql.push_str(" AND stitch_id IS NULL");
     }
@@ -4727,6 +4731,7 @@ pub struct StitchRow {
 
 /// A row from the `morning_briefs` table.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct MorningBriefRow {
     pub id: String,
     pub generated_at: String,

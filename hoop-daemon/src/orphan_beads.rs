@@ -17,7 +17,7 @@ use std::path::Path;
 use tracing::{debug, info, warn};
 
 /// Summary of an orphan bead
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema)]
 pub struct OrphanBead {
     pub id: String,
     pub title: String,
@@ -32,7 +32,7 @@ pub struct OrphanBead {
 }
 
 /// Response for the orphans list endpoint
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, utoipa::ToSchema)]
 pub struct OrphansResponse {
     pub project: String,
     pub orphans: Vec<OrphanBead>,

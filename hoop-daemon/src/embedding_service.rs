@@ -10,7 +10,7 @@
 //!
 //! Plan reference: §6 Phase 5 marquee #11, hoop-ttb.6.10.1
 
-use crate::embedding::{Embedder, Embedding, TransformerEmbedder, NgramEmbedder};
+use crate::embedding::{Embedder, Embedding, NgramEmbedder};
 use crate::metrics::metrics;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -107,21 +107,9 @@ pub struct EmbeddingService {
 impl EmbeddingService {
     /// Create a new embedding service with the given configuration.
     pub fn new(config: EmbeddingConfig) -> Result<Self> {
-        // Initialize local embedder (always available as fallback)
-        let local_embedder: Box<dyn Embedder + Send + Sync> =
-            match TransformerEmbedder::new() {
-                Ok(model) => {
-                    tracing::info!("Using TransformerEmbedder (BGE-small-en-v1.5)");
-                    Box::new(model)
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        "Failed to initialize TransformerEmbedder: {}. Falling back to NgramEmbedder",
-                        e
-                    );
-                    Box::new(NgramEmbedder::new())
-                }
-            };
+        // Initialize local embedder (NgramEmbedder as fallback)
+        let local_embedder: Box<dyn Embedder + Send + Sync> = Box::new(NgramEmbedder::new());
+        tracing::info!("Using NgramEmbedder for embeddings");
 
         // Initialize rate limiter if configured
         let rate_limiter = config.rate_limit_rpm.map(|rpm| {
@@ -295,11 +283,6 @@ impl EmbeddingService {
 
     /// Generate embeddings for multiple texts using local model.
     fn embed_batch_local(&self, texts: &[&str]) -> Result<Vec<EmbeddingVec>> {
-        // Try to use batch embedding if available (TransformerEmbedder)
-        if let Some(transformer) = self.local_embedder.as_any().downcast_ref::<TransformerEmbedder>() {
-            return transformer.embed_batch(texts);
-        }
-
         // Fallback to individual embedding
         texts.iter().map(|text| Ok(self.local_embedder.embed(text))).collect()
     }

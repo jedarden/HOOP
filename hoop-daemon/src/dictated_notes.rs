@@ -19,9 +19,12 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
 
 /// Transcription status for a dictated note
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum TranscriptionStatus {
     /// Waiting in queue or currently transcribing
     Pending,
@@ -33,6 +36,7 @@ pub enum TranscriptionStatus {
 
 /// A dictated note with all metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct DictatedNote {
     /// FK to the parent stitch (kind=dictated)
     pub stitch_id: String,
@@ -67,6 +71,7 @@ pub struct DictatedNote {
 
 /// A single word with timing from Whisper
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TranscriptWord {
     pub word: String,
     pub start: f64,
@@ -78,6 +83,7 @@ pub struct TranscriptWord {
 /// Stores metadata about redacted words for audit trail and audio muting.
 /// The word itself is replaced with "[REDACTED]" in the transcript.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct RedactedWord {
     /// Index into the original transcript_words array
     pub word_index: usize,
@@ -93,6 +99,7 @@ pub struct RedactedWord {
 
 /// Request to create a new dictated note
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct CreateNoteRequest {
     /// Project to create the note in
     pub project: String,
@@ -116,6 +123,7 @@ pub struct CreateNoteRequest {
 
 /// Response after creating a dictated note
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct CreateNoteResponse {
     pub stitch_id: String,
     pub project: String,
@@ -127,6 +135,7 @@ pub struct CreateNoteResponse {
 
 /// Summary of a dictated note for list views
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct NoteSummary {
     pub stitch_id: String,
     pub project: String,

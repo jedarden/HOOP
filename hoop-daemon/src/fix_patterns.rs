@@ -44,6 +44,7 @@ pub struct PatternMatch {
 
 /// Create pattern request
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct CreatePatternRequest {
     pub name: String,
     pub signature_vector: Vec<f32>,
@@ -54,6 +55,7 @@ pub struct CreatePatternRequest {
 
 /// Update pattern request
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct UpdatePatternRequest {
     pub id: String,
     #[serde(skip_serializing_if = "Option::is_none")]

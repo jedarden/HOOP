@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::process::Command;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
 use crate::files::is_safe_rel_path;
 use crate::DaemonState;
 
@@ -13,6 +16,7 @@ use crate::DaemonState;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum DiffLineKind {
     Context,
     Add,
@@ -20,6 +24,7 @@ pub enum DiffLineKind {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct DiffLine {
     pub kind: DiffLineKind,
     /// Content of the line (without the leading +/-/space prefix).
@@ -31,6 +36,7 @@ pub struct DiffLine {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct DiffHunk {
     pub old_start: u32,
     pub old_count: u32,
@@ -41,7 +47,7 @@ pub struct DiffHunk {
     pub lines: Vec<DiffLine>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct FileDiff {
     pub old_path: String,
     pub new_path: String,
@@ -54,6 +60,7 @@ pub struct FileDiff {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct DiffResponse {
     pub files: Vec<FileDiff>,
     pub total_added: usize,
@@ -66,6 +73,7 @@ pub struct DiffResponse {
 
 /// Merge-base SHA response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct MergeBaseResponse {
     pub sha: Option<String>,
     pub upstream: String,

@@ -175,7 +175,7 @@ impl From<FleetRedactionAuditRow> for RedactionAuditRow {
 
 pub fn router() -> axum::Router<crate::DaemonState> {
     axum::Router::new()
-        .route("/api/audit", get(query_audit))
+        .route("/api/audit", get(list_audit_rows))
         .route("/api/audit/verify", get(verify_hash_chain))
         .route("/api/redaction-audit", get(query_redaction_audit))
 }
@@ -199,7 +199,7 @@ pub fn router() -> axum::Router<crate::DaemonState> {
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn query_audit(
+pub async fn list_audit_rows(
     Query(params): Query<AuditQuery>,
 ) -> Result<Json<AuditResponse>, (StatusCode, String)> {
     // Validate project filter if provided

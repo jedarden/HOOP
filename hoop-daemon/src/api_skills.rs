@@ -57,6 +57,9 @@ use axum::{
     Json, Router,
 };
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
 /// Skill manifest metadata (from manifest.yml)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillManifest {
@@ -131,6 +134,7 @@ pub struct SkillRunRequest {
 
 /// Skill execution response
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SkillRunResponse {
     /// Skill name
     pub skill: String,
@@ -879,7 +883,7 @@ impl SkillLibrary {
 }
 
 /// Ensure the skills directory exists.
-pub fn ensure_skills_dir(home: &Path) -> PathBuf {
+pub fn ensure_skills_dir(home: &StdPath) -> PathBuf {
     let skills_dir = home.join(".hoop").join("skills");
 
     if !skills_dir.exists() {
@@ -900,7 +904,7 @@ pub fn ensure_skills_dir(home: &Path) -> PathBuf {
     skills_dir
 }
 
-fn seed_example_skill(dir: &Path) {
+fn seed_example_skill(dir: &StdPath) {
     // Seed echo skill (for testing)
     let echo_dir = dir.join("echo");
     std::fs::create_dir_all(&echo_dir).unwrap_or_else(|e| {
@@ -1179,7 +1183,7 @@ async fn get_skill(
 }
 
 /// POST /api/skills/:name/run — execute a skill
-async fn run_skill(
+pub async fn run_skill(
     Path(name): Path<String>,
     State(state): State<crate::DaemonState>,
     connect_info: Option<ConnectInfo<std::net::SocketAddr>>,

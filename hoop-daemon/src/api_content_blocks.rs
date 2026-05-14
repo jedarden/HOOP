@@ -196,9 +196,9 @@ pub async fn reorder_content_blocks_endpoint(
 /// Build the router for content block endpoints
 pub fn router() -> Router<DaemonState> {
     Router::new()
-        .route("/api/stitches/:stitch_id/content-blocks", get(list_content_blocks))
-        .route("/api/stitches/:stitch_id/content-blocks", post(create_content_block))
-        .route("/api/stitches/:stitch_id/content-blocks/:block_id", put(update_content_block_endpoint))
-        .route("/api/stitches/:stitch_id/content-blocks/:block_id", delete(delete_content_block_endpoint))
-        .route("/api/stitches/:stitch_id/content-blocks/reorder", post(reorder_content_blocks_endpoint))
+        .route("/api/stitches/{stitch_id}/content-blocks", get(list_content_blocks))
+        .route("/api/stitches/{stitch_id}/content-blocks", post(create_content_block))
+        .route("/api/stitches/{stitch_id}/content-blocks/{block_id}", put(update_content_block_endpoint))
+        .route("/api/stitches/{stitch_id}/content-blocks/{block_id}", delete(delete_content_block_endpoint))
+        .route("/api/stitches/{stitch_id}/content-blocks/reorder", post(reorder_content_blocks_endpoint))
 }

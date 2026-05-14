@@ -19,7 +19,7 @@ use std::sync::RwLock;
 
 use crate::embedding::{
     cosine_similarity, jaccard_similarity, DedupMatch, Embedder, Embedding, IndexedItem,
-    NgramEmbedder, TransformerEmbedder, EMBEDDING_DIM,
+    NgramEmbedder, EMBEDDING_DIM,
 };
 use crate::fleet::db_path;
 
@@ -107,27 +107,14 @@ impl Default for VectorIndex {
 impl VectorIndex {
     /// Create a new empty vector index with default configuration
     ///
-    /// Uses TransformerEmbedder (BGE-small-en-v1.5) with automatic fallback
-    /// to NgramEmbedder if model loading fails.
+    /// Uses NgramEmbedder for semantic dedup.
     pub fn new() -> Self {
         Self::with_config(DedupConfig::default())
     }
 
     /// Create a new vector index with custom configuration
     pub fn with_config(config: DedupConfig) -> Self {
-        let embedder: Box<dyn Embedder> = match TransformerEmbedder::new() {
-            Ok(model) => {
-                tracing::info!("Using TransformerEmbedder (BGE-small-en-v1.5) for semantic dedup");
-                Box::new(model)
-            }
-            Err(e) => {
-                tracing::warn!(
-                    "Failed to initialize TransformerEmbedder: {}. Falling back to NgramEmbedder",
-                    e
-                );
-                Box::new(NgramEmbedder::new())
-            }
-        };
+        let embedder: Box<dyn Embedder> = Box::new(NgramEmbedder::new());
         let (model_name, model_version) = embedder.model_info();
         Self {
             embedder,

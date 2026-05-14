@@ -25,7 +25,8 @@ use tracing::info;
 // ---------------------------------------------------------------------------
 
 /// Response for a single presence entry
-#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PresenceResponse {
     pub operator_id: String,
     pub project: Option<String>,
@@ -35,14 +36,16 @@ pub struct PresenceResponse {
 }
 
 /// Response for listing presence entries
-#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PresenceListResponse {
     pub presence: Vec<PresenceResponse>,
     pub count: usize,
 }
 
 /// Request to update presence
-#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct UpdatePresenceRequest {
     /// Operator identifier (auto-resolved from connection if not provided)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -70,7 +73,8 @@ pub struct PresenceQueryParams {
 }
 
 /// Request to remove presence
-#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct RemovePresenceRequest {
     /// Project name to remove presence for
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -81,14 +85,16 @@ pub struct RemovePresenceRequest {
 }
 
 /// Response after updating presence
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct UpdatePresenceResponse {
     pub operator_id: String,
     pub last_seen: String,
 }
 
 /// Response after removing presence
-#[derive(Debug, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct RemovePresenceResponse {
     pub success: bool,
 }

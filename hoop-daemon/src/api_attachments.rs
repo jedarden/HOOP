@@ -15,6 +15,21 @@ use axum::{extract::Path, response::IntoResponse};
 ///
 /// Bead attachments are served from `<workspace>/.beads/attachments/<bead-id>/<filename>`
 /// Stitch attachments are served from `~/.hoop/attachments/<stitch-id>/<filename>`
+#[utoipa::path(
+    get,
+    path = "/api/attachments/{attachment_type}/{id}/{filename}",
+    tag = "attachments",
+    params(
+        ("attachment_type" = String, Path, description = "Either 'bead' or 'stitch'"),
+        ("id" = String, Path, description = "Bead ID or stitch UUID"),
+        ("filename" = String, Path, description = "Attachment filename")
+    ),
+    responses(
+        (status = 200, description = "Attachment file served", content_type = "application/octet-stream"),
+        (status = 400, description = "Invalid attachment type or ID"),
+        (status = 404, description = "Attachment not found")
+    )
+)]
 pub async fn serve_attachment(
     Path((attachment_type, id, filename)): Path<(String, String, String)>,
 ) -> impl IntoResponse {

@@ -24,7 +24,8 @@ use crate::fleet;
 const HOOP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Prompt types for progressive introduction
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum OnboardingPromptType {
     /// "What's new" card when upgrading to a new version
@@ -40,7 +41,8 @@ pub enum OnboardingPromptType {
 }
 
 /// Onboarding prompt data sent to the frontend
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct OnboardingPrompt {
     /// Unique prompt identifier
     pub id: String,
@@ -64,7 +66,8 @@ pub struct OnboardingPrompt {
 }
 
 /// Response for GET /api/onboarding/prompts
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct OnboardingPromptsResponse {
     /// Eligible prompts that haven't been dismissed
     pub prompts: Vec<OnboardingPrompt>,
@@ -77,14 +80,16 @@ pub struct OnboardingPromptsResponse {
 }
 
 /// Request to dismiss a prompt
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct DismissPromptRequest {
     /// Prompt ID to dismiss
     pub prompt_id: String,
 }
 
 /// Request to record feature usage
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct RecordFeatureUsageRequest {
     /// Feature name (agent, mic, patterns, reflection_ledger)
     pub feature: String,
@@ -117,7 +122,8 @@ pub struct OnboardingPromptsQuery {
         (status = 500, description = "Internal server error"),
     )
 )]
-async fn list_onboarding_prompts(
+#[axum::debug_handler]
+pub async fn list_onboarding_prompts(
     State(state): State<DaemonState>,
     connect_info: Option<ConnectInfo<SocketAddr>>,
     Query(query): Query<OnboardingPromptsQuery>,

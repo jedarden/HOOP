@@ -46,6 +46,7 @@ use crate::prompt_substitute::{substitute_with_args, SubstitutionContext};
 
 /// A parsed prompt ready for API responses.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Prompt {
     /// Unique name (filename without .md, or explicit `name` in frontmatter)
     pub name: String,
@@ -62,6 +63,7 @@ pub struct Prompt {
 
 /// Substitution request
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SubstitutionRequest {
     /// Built-in variables
     #[serde(default)]
@@ -77,6 +79,7 @@ pub struct SubstitutionRequest {
 
 /// Substitution response
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SubstitutionResponse {
     /// Substituted prompt body
     pub body: String,
@@ -100,6 +103,7 @@ pub type PromptStore = Arc<std::sync::RwLock<PromptLibrary>>;
 
 /// In-memory collection of loaded prompts.
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PromptLibrary {
     prompts: HashMap<String, Prompt>,
 }

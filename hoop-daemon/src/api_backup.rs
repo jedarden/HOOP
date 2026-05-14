@@ -21,7 +21,7 @@ pub fn router() -> Router<DaemonState> {
 
 #[derive(Serialize)]
 #[cfg_attr(feature = "openapi", derive(ToSchema))]
-struct TriggerResponse {
+pub struct TriggerResponse {
     status: String,
     message: String,
 }

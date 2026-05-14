@@ -12,7 +12,8 @@ use std::process::Command;
 use std::time::UNIX_EPOCH;
 
 /// Git working-tree status for a single node.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum GitStatus {
     /// File is tracked and unchanged.
@@ -32,7 +33,8 @@ pub enum GitStatus {
 }
 
 /// A single node in the file tree.
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct FileEntry {
     /// Filename without path prefix.
     pub name: String,
@@ -225,7 +227,8 @@ pub fn list_dir(project_root: &Path, rel_dir: &str) -> Result<Vec<FileEntry>> {
 // ─── File Search ──────────────────────────────────────────────────────────────
 
 /// First matching line from a content grep.
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct GrepMatch {
     pub line_number: u64,
     /// The full matching line (trailing newline stripped).

@@ -217,7 +217,7 @@ pub enum ControlResponse {
 }
 
 /// Project status for CLI display
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
 pub struct ProjectStatus {
     pub name: String,
     pub path: String,
@@ -229,6 +229,7 @@ pub struct ProjectStatus {
 
 /// Status response for CLI
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct StatusResponse {
     pub daemon_running: bool,
     pub uptime_secs: u64,
@@ -931,7 +932,10 @@ async fn get_file_content_stream(
         }
     });
 
-    Ok(axum::response::Sse::new(sse_stream).keep_alive(
+    let boxed: Pin<Box<dyn futures_util::Stream<Item = Result<axum::response::sse::Event, axum::Error>> + Send>> =
+        Box::pin(sse_stream);
+
+    Ok(axum::response::Sse::new(boxed).keep_alive(
         axum::response::sse::KeepAlive::new()
             .interval(std::time::Duration::from_secs(15))
             .text("keepalive"),
@@ -1854,7 +1858,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     });
 
     // Start config.yml watcher (§17)
-    let mut config_watcher = config_watcher::ConfigWatcher::new(cli_overrides)?;
+    let mut config_watcher = config_watcher::ConfigWatcher::new(cli_overrides.clone())?;
     config_watcher.start()?;
 
     // Wrap config_watcher in Arc for sharing with SIGHUP handler
@@ -2781,7 +2785,7 @@ Note: This is an automated synthesis from voice dictation."#,
         upload_registry,
         active_project: Arc::new(std::sync::RwLock::new(None)),
         vector_index,
-        agent_session_manager,
+        agent_session_manager: agent_session_manager.clone(),
         morning_brief_runner,
         script_scheduler: Some(script_scheduler),
         brief_tx,

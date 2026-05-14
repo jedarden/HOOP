@@ -32,6 +32,7 @@ pub struct ResumeAsNewRequest {
 
 /// Response for replay options
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ReplayOptionsResponse {
     /// The original bead ID that failed
     pub original_bead_id: String,
@@ -59,6 +60,7 @@ pub struct ReplayOptionsResponse {
 
 /// Response for resume-as-new-bead
 #[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ResumeAsNewResponse {
     /// The new bead ID
     pub bead_id: String,
@@ -235,11 +237,11 @@ async fn resume_as_new_bead(
     };
 
     // Call create_bead
-    let create_response = crate::api_beads::create_bead(
-        axum::extract::Path(project),
-        State(state.clone()),
+    let create_response = crate::api_beads::create_bead_internal(
+        project,
+        &state,
         connect_info,
-        Json(create_req),
+        create_req,
     )
     .await
     .map_err(|(status, msg)| {

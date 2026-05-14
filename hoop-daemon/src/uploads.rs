@@ -20,6 +20,7 @@ use uuid::Uuid;
 
 /// Upload state stored alongside the partial file
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct UploadMetadata {
     pub upload_id: String,
     pub filename: String,
@@ -34,6 +35,7 @@ pub struct UploadMetadata {
 
 /// Response for upload initiation
 #[derive(Debug, serde::Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct InitUploadResponse {
     pub upload_id: String,
     pub upload_url: String,
@@ -43,6 +45,7 @@ pub struct InitUploadResponse {
 
 /// Response for upload progress query
 #[derive(Debug, serde::Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct UploadProgressResponse {
     pub upload_id: String,
     pub received_size: u64,

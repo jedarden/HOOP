@@ -210,7 +210,7 @@ pub fn run_pending_migrations(
         // Record migration duration metric (§16.6)
         metrics::metrics()
             .hoop_schema_migration_duration_ms
-            .observe(&[from_version, migration.version], elapsed_ms);
+            .observe(&[&from_version, &migration.version], elapsed_ms);
 
         from_version = migration.version.to_string();
     }

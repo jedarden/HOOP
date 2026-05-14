@@ -16,6 +16,7 @@ use serde::Deserialize;
 
 /// Query parameters for listing transcription jobs
 #[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ListJobsQuery {
     /// Filter by stitch_id
     pub stitch_id: Option<String>,

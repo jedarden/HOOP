@@ -32,10 +32,9 @@ use axum::{
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use utoipa::ToSchema;
-
 /// Preview request query parameters
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PreviewRequest {
     /// Bead title to preview
     pub title: String,
@@ -46,7 +45,8 @@ pub struct PreviewRequest {
 }
 
 /// Stitch preview response (matches hoop-schema/schemas/stitch_preview.json)
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct StitchPreview {
     /// Schema version for compatibility tracking
     pub schema_version: String,
@@ -61,7 +61,8 @@ pub struct StitchPreview {
 }
 
 /// Prediction data for cost and duration
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PredictionData {
     /// Cost estimate in USD
     pub cost: PercentileEstimate,
@@ -77,7 +78,8 @@ pub struct PredictionData {
 }
 
 /// Percentile estimate for a metric
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct PercentileEstimate {
     /// 50th percentile (median)
     pub p50: f64,
@@ -88,7 +90,8 @@ pub struct PercentileEstimate {
 }
 
 /// Date range for historical data
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct DateRange {
     /// Start date (RFC3339)
     pub start: String,
@@ -97,7 +100,8 @@ pub struct DateRange {
 }
 
 /// Risk pattern match result
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct RiskPatternMatch {
     /// The matched risk pattern
     pub pattern: RiskPatternInfo,
@@ -110,7 +114,8 @@ pub struct RiskPatternMatch {
 }
 
 /// Risk pattern information from Fix Lineage library
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct RiskPatternInfo {
     /// Pattern identifier
     pub id: String,
@@ -127,7 +132,8 @@ pub struct RiskPatternInfo {
 }
 
 /// File conflict with a currently-executing bead
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct FileConflict {
     /// Bead ID
     pub bead_id: String,
@@ -140,7 +146,8 @@ pub struct FileConflict {
 }
 
 /// Reference to a similar stitch
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Serialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SimilarStitchRef {
     /// Stitch ID
     pub id: String,

@@ -106,7 +106,7 @@ async fn trigger_detection(
 
     // Check if already running
     {
-        let state_guard = detection_state.lock().await;
+        let mut state_guard = detection_state.lock().await;
         if state_guard.running {
             return Err(axum::http::StatusCode::CONFLICT);
         }
@@ -124,7 +124,7 @@ async fn trigger_detection(
 
     // Run detection in background so we don't block the response
     tokio::spawn(async move {
-        let proposed = run_detection(&config).await.unwrap_or(0);
+        let proposed = run_detection(&config).unwrap_or(0);
 
         let ran_at = chrono::Utc::now();
 
@@ -166,10 +166,7 @@ async fn trigger_detection(
 async fn get_detection_status(
     State(state): State<DaemonState>,
 ) -> Json<StatusResponse> {
-    let detection_state = state
-        .reflection_detection_state
-        .as_ref()
-        .ok_or(());
+    let detection_state = state.reflection_detection_state.as_ref();
 
     let (running, last_run, last_result) = match detection_state {
         Some(state) => {
