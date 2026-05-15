@@ -1,15 +1,15 @@
 # Bead bf-1sjxx: Fix hoop-daemon compile errors
 
-## Status: Already Complete
+## Status: Complete
 
-This bead was already completed in commit `b5576d1` on 2026-05-14:
+This bead was completed in commit `b5576d1` on 2026-05-14:
 "fix(hoop-daemon): resolve 95 compilation errors to 0"
 
-## Verification
+## Final Verification (2026-05-15)
 
-I verified the current state:
-- `cargo check --package hoop-daemon`: **0 errors**
-- `cargo clippy --package hoop-daemon`: **0 errors**
+Re-verified the current state:
+- `cargo check --package hoop-daemon`: **0 errors** (141 warnings)
+- `cargo clippy --package hoop-daemon`: **0 errors** (305 warnings)
 
 ## What was fixed
 
