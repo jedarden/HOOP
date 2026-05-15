@@ -1,7 +1,0 @@
-[
-  {
-    "op": "close",
-    "id": "bf-1sjxx",
-    "reason": "All compile errors in hoop-daemon fixed and verified. cargo check: 0 errors. cargo clippy: 0 errors. Fixes completed in commit b5576d1 (2026-05-14), resolving ~60 ToSchema/PartialSchema errors and ~20 misc bugs. Verification complete (2026-05-15)."
-  }
-]
