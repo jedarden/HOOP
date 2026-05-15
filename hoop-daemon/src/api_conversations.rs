@@ -177,7 +177,6 @@ pub fn router() -> Router<DaemonState> {
         (status = 400, description = "Invalid request parameters"),
     )
 ))]
-#[axum::debug_handler]
 async fn list_conversations(
     State(state): State<DaemonState>,
     Query(params): Query<ConversationsQuery>,

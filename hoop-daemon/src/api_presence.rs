@@ -20,6 +20,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tracing::info;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
 // ---------------------------------------------------------------------------
 // Request / response types
 // ---------------------------------------------------------------------------

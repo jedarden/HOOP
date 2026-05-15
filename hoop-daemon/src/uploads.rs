@@ -565,6 +565,9 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
     fn test_config() -> (UploadConfig, TempDir) {
         let tmp = TempDir::new().unwrap();
         let config = UploadConfig {

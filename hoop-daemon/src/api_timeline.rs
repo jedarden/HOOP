@@ -16,6 +16,9 @@ use crate::{
     DaemonState,
 };
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
 /// Query parameters for the timeline endpoint
 #[derive(Debug, Deserialize)]
 pub struct TimelineQuery {

@@ -33,6 +33,9 @@ use tracing::{debug, info, warn};
 
 use crate::DaemonState;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
 /// Maximum number of unassigned sessions to keep in memory
 const MAX_UNASSIGNED_SESSIONS: usize = 100;
 
@@ -91,7 +94,7 @@ pub struct SuccessResponse {
 }
 
 /// Internal cache entry with metadata
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct UnassignedEntry {
     session: UnassignedSession,
     discovered_at: DateTime<Utc>,
@@ -389,7 +392,6 @@ pub fn router() -> Router<DaemonState> {
 }
 
 /// GET /api/unassigned — list unassigned sessions
-#[axum::debug_handler]
 async fn list_unassigned(
     State(state): State<DaemonState>,
 ) -> Result<Json<UnassignedSessionsResponse>, (StatusCode, String)> {
@@ -415,7 +417,6 @@ async fn list_unassigned(
 }
 
 /// POST /api/unassigned/:id/assign — assign session to a project
-#[axum::debug_handler]
 async fn assign_session(
     State(state): State<DaemonState>,
     AxumPath(id): AxumPath<String>,
@@ -439,7 +440,6 @@ async fn assign_session(
 }
 
 /// POST /api/unassigned/:id/ignore — ignore session permanently
-#[axum::debug_handler]
 async fn ignore_session(
     State(state): State<DaemonState>,
     AxumPath(id): AxumPath<String>,

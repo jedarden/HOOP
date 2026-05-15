@@ -520,6 +520,9 @@ fn search_without_grep(
 mod tests {
     use super::*;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
     #[test]
     fn test_is_safe_rel_path_valid_paths() {
         assert!(is_safe_rel_path("src/main.rs"));

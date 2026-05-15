@@ -570,16 +570,21 @@ Per §20, all spec changes require a CHANGELOG entry.
 )]
 pub struct ApiDoc;
 
+/// GET /api/openapi.json - Return the OpenAPI spec as JSON
+async fn openapi_json_handler() -> axum::Json<utoipa::openapi::OpenApi> {
+    axum::Json(ApiDoc::openapi())
+}
+
 /// Build the OpenAPI router with all documentation endpoints
 pub fn router() -> axum::Router<crate::DaemonState> {
     let openapi_json = ApiDoc::openapi();
 
     axum::Router::new()
-        .route("/api/openapi.json", axum::routing::get(|| async { axum::Json(openapi_json) }))
+        .route("/api/openapi.json", axum::routing::get(openapi_json_handler))
         .route("/api/openapi.yaml", axum::routing::get(openapi_yaml_handler))
         .merge(SwaggerUi::new("/api/docs/swagger-ui").url("/api/openapi.json", openapi_json.clone()))
         .merge(Redoc::with_url("/api/docs/redoc", openapi_json.clone()))
-        .merge(RapiDoc::with_openapi(openapi_json))
+        .merge(RapiDoc::with_openapi("/api/docs/rapidoc", openapi_json))
 }
 
 /// GET /api/openapi.yaml - Return the OpenAPI spec as YAML

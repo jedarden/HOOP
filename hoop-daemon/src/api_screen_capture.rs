@@ -27,6 +27,11 @@ use tower::ServiceExt;
 #[cfg(feature = "openapi")]
 use utoipa::ToSchema;
 
+/// Wrapper for raw bytes that implements ToSchema
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct RawBytes(pub Vec<u8>);
+
 /// Request body for creating a screen capture
 #[derive(Debug, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -438,7 +443,7 @@ async fn start_streaming_upload(
         ("project" = String, Path, description = "Project name"),
         ("stream_id" = String, Path, description = "Stream session ID")
     ),
-    request_body(description = "Raw video bytes", content_type = "application/octet-stream"),
+    request_body(content = RawBytes, description = "Raw video bytes", content_type = "application/json"),
     responses(
         (status = 200, description = "Chunk appended successfully"),
         (status = 400, description = "Invalid stream ID"),
@@ -450,12 +455,12 @@ async fn start_streaming_upload(
 async fn append_stream_chunk(
     Path((_project, stream_id)): Path<(String, String)>,
     State(_state): State<crate::DaemonState>,
-    body: axum::body::Bytes,
+    Json(body): Json<RawBytes>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let registry = screen_capture::StreamingUploadRegistry::new()
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create registry".into()))?;
 
-    let received_bytes = registry.append_chunk(&stream_id, &body)
+    let received_bytes = registry.append_chunk(&stream_id, &body.0)
         .map_err(|e| {
             tracing::error!("Failed to append chunk to stream {}: {}", stream_id, e);
             (StatusCode::NOT_FOUND, format!("Stream not found or error: {}", e))

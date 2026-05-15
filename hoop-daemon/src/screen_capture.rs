@@ -563,6 +563,9 @@ impl Default for StreamingUploadRegistry {
 mod tests {
     use super::*;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
     #[test]
     fn test_screen_capture_meta_default() {
         let meta = ScreenCaptureMeta {

@@ -290,6 +290,7 @@ impl From<ParsedSessionMessagesItem> for SessionMessageData {
 
 /// Worker metadata for worker sessions
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct WorkerMetadataData {
     pub worker: String,
     pub bead: String,
@@ -2205,6 +2206,9 @@ async fn handle_socket(socket: WebSocket, state: DaemonState, actor: String) {
 mod tests {
     use super::{should_deliver, ClientMessage, WsEvent, WsTopic};
     use std::collections::HashSet;
+
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
 
     // ── WsTopic::parse ───────────────────────────────────────────────────────
 

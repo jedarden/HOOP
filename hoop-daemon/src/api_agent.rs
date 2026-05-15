@@ -16,7 +16,6 @@ use axum::{
     Json, Router,
 };
 use serde::Deserialize;
-use utoipa::ToSchema;
 
 /// Build the agent API router.
 pub fn router() -> Router<DaemonState> {
@@ -244,6 +243,9 @@ async fn send_turn(
     match mgr.send_turn(req.prompt, attachments).await {
         Ok(mut stream) => {
             use futures_util::StreamExt;
+
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
             // Consume the stream, processing each event.
             // This runs synchronously to completion; for long-running turns
             // the WS channel gets events as they arrive.

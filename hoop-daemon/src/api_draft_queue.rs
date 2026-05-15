@@ -23,6 +23,8 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tracing::{info, warn};
 use uuid::Uuid;
+
+#[cfg(feature = "openapi")]
 use utoipa::ToSchema;
 
 // ---------------------------------------------------------------------------

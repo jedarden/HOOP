@@ -122,7 +122,8 @@ pub struct SkillEntry {
 }
 
 /// Skill execution request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SkillRunRequest {
     /// Arguments to pass to the skill (validated against args_schema)
     pub args: Value,
@@ -1183,25 +1184,36 @@ async fn get_skill(
 }
 
 /// POST /api/skills/:name/run — execute a skill
-pub async fn run_skill(
-    Path(name): Path<String>,
+#[axum::debug_handler]
+async fn run_skill(
     State(state): State<crate::DaemonState>,
-    connect_info: Option<ConnectInfo<std::net::SocketAddr>>,
+    Path(name): Path<String>,
+    connect_info: Option<ConnectInfo<SocketAddr>>,
     Json(req): Json<SkillRunRequest>,
 ) -> Result<Json<SkillRunResponse>, (StatusCode, String)> {
-    let lib = state.skill_library.read().unwrap();
-    let skill = lib.get(&name)
-        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Skill '{}' not found", name)))?;
+    // Clone needed data from skill library before any await points
+    let (skill_run_path, skill_timeout, args_schema) = {
+        let lib = state.skill_library.read().unwrap();
+        let skill = lib.get(&name)
+            .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Skill '{}' not found", name)))?;
 
-    if !skill.executable {
-        return Err((
-            StatusCode::FORBIDDEN,
-            format!("Skill '{}' is not executable", name),
-        ));
-    }
+        if !skill.executable {
+            return Err((
+                StatusCode::FORBIDDEN,
+                format!("Skill '{}' is not executable", name),
+            ));
+        }
+
+        (
+            skill.run_path.clone(),
+            skill.manifest.timeout_secs,
+            skill.manifest.args_schema.clone(),
+        )
+        // Lock guard dropped here at end of scope
+    };
 
     // Validate arguments against schema
-    if let Err(validation_errors) = validate_args_against_schema(&req.args, &skill.manifest.args_schema) {
+    if let Err(validation_errors) = validate_args_against_schema(&req.args, &args_schema) {
         let error_messages: Vec<String> = validation_errors
             .iter()
             .map(|e| e.message.clone())
@@ -1213,8 +1225,6 @@ pub async fn run_skill(
     }
 
     // Execute the skill (blocking call in spawn_blocking)
-    let skill_run_path = skill.run_path.clone();
-    let skill_timeout = skill.manifest.timeout_secs;
     let args = req.args.clone();
     let result = tokio::task::spawn_blocking(move || execute_skill(&skill_run_path, &args, skill_timeout))
         .await
@@ -1269,6 +1279,6 @@ pub async fn run_skill(
 pub fn router() -> Router<crate::DaemonState> {
     Router::new()
         .route("/api/skills", get(list_skills))
-        .route("/api/skills/:name", get(get_skill))
-        .route("/api/skills/:name/run", post(run_skill))
+        .route("/api/skills/{name}", get(get_skill))
+        .route("/api/skills/{name}/run", post(run_skill))
 }

@@ -288,6 +288,9 @@ pub fn router() -> Router<DaemonState> {
 mod tests {
     use super::*;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
     #[test]
     fn test_ui_state_response_serialization() {
         let mut state = HashMap::new();

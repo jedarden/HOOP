@@ -436,6 +436,9 @@ pub fn load_config_from_file() -> DecomposeConfig {
 mod tests {
     use super::*;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
     fn intent(kind: &str, title: &str) -> StitchIntent {
         StitchIntent {
             kind: kind.to_string(),

@@ -2259,6 +2259,9 @@ mod tests {
     async fn adapter_failover_integration_full_flow() {
         use std::sync::atomic::{AtomicBool, Ordering};
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
         let db = test_db();
 
         // 1. Create an active Anthropic session with some usage history

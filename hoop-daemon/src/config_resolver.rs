@@ -2334,7 +2334,7 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
 
     // Validate metrics.port is in valid port range (1-65535)
     let port = metrics_port.value;
-    if port == 0 || port > 65535 {
+    if port == 0 {
         return Err(ConfigError::validation(
             format!("metrics.port {} is out of valid port range [1-65535]", port),
             Some("metrics.port".to_string()),
@@ -2503,6 +2503,9 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
 mod tests {
     use super::*;
     use std::net::SocketAddr;
+
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
 
     fn parse_addr(s: &str) -> SocketAddr {
         s.parse().unwrap()

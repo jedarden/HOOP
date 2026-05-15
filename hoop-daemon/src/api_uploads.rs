@@ -10,6 +10,9 @@ use axum::{
 };
 use serde::Deserialize;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
 /// Request body for upload initiation
 #[derive(Debug, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]

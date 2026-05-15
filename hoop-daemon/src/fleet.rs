@@ -19,7 +19,6 @@ use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
-use utoipa::ToSchema;
 
 /// Current schema version
 pub const SCHEMA_VERSION: &str = "1.34.0";
@@ -4428,23 +4427,24 @@ pub fn remove_presence(
     let conn = Connection::open(&path)?;
 
     let mut sql = "DELETE FROM presence WHERE operator_id = ?1".to_string();
-    let mut params: Vec<&dyn rusqlite::ToSql> = vec![&operator_id];
+    let mut params: Vec<String> = vec![operator_id.to_string()];
 
     if let Some(p) = project {
         sql.push_str(" AND (project = ?2 OR project IS NULL)");
-        params.push(&p);
+        params.push(p.to_string());
     } else {
         sql.push_str(" AND project IS NULL");
     }
 
     if let Some(s) = stitch_id {
         sql.push_str(" AND (stitch_id = ?3 OR stitch_id IS NULL)");
-        params.push(&s);
+        params.push(s.to_string());
     } else {
         sql.push_str(" AND stitch_id IS NULL");
     }
 
-    conn.execute(&sql, params.as_slice())
+    let params_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|s| s as &dyn rusqlite::ToSql).collect();
+    conn.execute(&sql, params_refs.as_slice())
         .map_err(|e| anyhow::anyhow!("Failed to remove presence: {}", e))?;
 
     Ok(())
@@ -7329,6 +7329,9 @@ mod tests {
         run_migrations(&mut conn, "0.1.0")?;
 
         use uuid::Uuid;
+
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
 
         let id = Uuid::new_v4().to_string();
         let now = Utc::now().to_rfc3339();

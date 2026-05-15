@@ -122,61 +122,66 @@ pub struct OnboardingPromptsQuery {
         (status = 500, description = "Internal server error"),
     )
 )]
-#[axum::debug_handler]
 pub async fn list_onboarding_prompts(
     State(state): State<DaemonState>,
-    connect_info: Option<ConnectInfo<SocketAddr>>,
     Query(query): Query<OnboardingPromptsQuery>,
+    connect_info: Option<ConnectInfo<SocketAddr>>,
 ) -> Result<Json<OnboardingPromptsResponse>, StatusCode> {
     let operator_id = state.identity_cache.resolve(connect_info.map(|ci| ci.0));
 
-    // Get current UI state
-    let conn = Connection::open(fleet::db_path())
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let mut stmt = conn
-        .prepare("SELECT key, value FROM ui_state WHERE operator_id = ?1")
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // Get current UI state (run in spawn_blocking to avoid Send issues)
+    let (prompts_enabled, dismissed_prompts, last_seen_version, feature_usage) = tokio::task::spawn_blocking(move || {
+        let conn = Connection::open(fleet::db_path())
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let mut stmt = conn
+            .prepare("SELECT key, value FROM ui_state WHERE operator_id = ?1")
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let mut ui_state: HashMap<String, String> = HashMap::new();
-    let mut rows = stmt
-        .query_map((&operator_id,), |row| {
-            let key: String = row.get(0)?;
-            let value: String = row.get(1)?;
-            Ok((key, value))
-        })
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let ui_state: HashMap<String, String> = stmt
+            .query_map((&operator_id,), |row| {
+                let key: String = row.get(0)?;
+                let value: String = row.get(1)?;
+                Ok((key, value))
+            })
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .into_iter()
+            .collect();
 
-    while let Some(row) = rows.next() {
-        let (key, value) = row.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        ui_state.insert(key, value);
-    }
-    drop(rows);
+        drop(stmt);
+        drop(conn);
 
-    // Check if prompts are globally enabled
-    let prompts_enabled: bool = ui_state
-        .get("prompts_enabled")
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(true);
+        // Check if prompts are globally enabled
+        let prompts_enabled: bool = ui_state
+            .get("prompts_enabled")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(true);
 
-    // Get dismissed prompts
-    let dismissed_prompts: HashMap<String, String> = ui_state
-        .get("prompts_dismissed")
-        .and_then(|v| serde_json::from_str(v).ok())
-        .unwrap_or_default();
+        // Get dismissed prompts
+        let dismissed_prompts: HashMap<String, String> = ui_state
+            .get("prompts_dismissed")
+            .and_then(|v| serde_json::from_str(v).ok())
+            .unwrap_or_default();
 
-    // Get last seen version
-    let last_seen_version = ui_state.get("last_seen_version").cloned();
+        // Get last seen version
+        let last_seen_version = ui_state.get("last_seen_version").cloned();
 
-    // Get feature usage timestamps
-    let feature_usage: HashMap<String, Option<String>> = [
-        ("agent_first_used", ui_state.get("agent_first_used").cloned()),
-        ("mic_first_used", ui_state.get("mic_first_used").cloned()),
-        ("patterns_first_used", ui_state.get("patterns_first_used").cloned()),
-        ("reflection_ledger_first_used", ui_state.get("reflection_ledger_first_used").cloned()),
-    ]
-    .into_iter()
-    .map(|(k, v)| (k.to_string(), v))
-    .collect();
+        // Get feature usage timestamps
+        let feature_usage: HashMap<String, Option<String>> = [
+            ("agent_first_used", ui_state.get("agent_first_used").cloned()),
+            ("mic_first_used", ui_state.get("mic_first_used").cloned()),
+            ("patterns_first_used", ui_state.get("patterns_first_used").cloned()),
+            ("reflection_ledger_first_used", ui_state.get("reflection_ledger_first_used").cloned()),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect();
+
+        Ok::<(bool, HashMap<String, String>, Option<String>, HashMap<String, Option<String>>), StatusCode>((prompts_enabled, dismissed_prompts, last_seen_version, feature_usage))
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
 
     let mut eligible_prompts = Vec::new();
 

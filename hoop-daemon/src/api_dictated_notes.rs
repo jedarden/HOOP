@@ -727,6 +727,7 @@ Be concise and actionable. Focus on what needs to be done."#,
     // Collect the full response
     let mut full_response = String::new();
     use futures_util::StreamExt;
+
     while let Some(item) = stream.next().await {
         match item {
             Ok(crate::agent_adapter::AgentEvent::TextDelta { text }) => {

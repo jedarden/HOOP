@@ -1048,6 +1048,9 @@ pub fn resolve_actor_no_state(_remote_addr: Option<SocketAddr>) -> String {
 mod tests {
     use super::*;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
     #[test]
     fn test_validate_stitch_draft_valid() {
         let req = StitchSubmitRequest {

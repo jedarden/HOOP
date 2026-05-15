@@ -615,6 +615,9 @@ fn resolve_project_path(
 mod tests {
     use super::*;
 
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
+
     #[test]
     fn test_preview_request_parse() {
         let params = PreviewRequest {

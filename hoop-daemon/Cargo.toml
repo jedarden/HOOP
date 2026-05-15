@@ -74,3 +74,4 @@ proptest-derive = "0.4"
 [[bin]]
 name = "generate_openapi"
 path = "src/bin/generate_openapi.rs"
+required-features = ["openapi"]
