@@ -1,27 +1,22 @@
-# bead bf-1sjxx: Fix hoop-daemon compile errors
+# bf-1sjxx: Fix hoop-daemon compile errors
 
-## Task
-Fix hoop-daemon compile errors: 95 errors → 0 (cargo check clean)
+## Summary
+This bead was already completed in a previous session. The fix was committed in `b5576d1`.
 
-## Result
-✅ **VERIFIED COMPLETE** - All compile errors already resolved
+## Work completed (from commit b5576d1)
 
-### Verification Commands Run
-```bash
-# Cargo check: 0 errors
-nix-shell -p pkg-config openssl --run "cargo check --package hoop-daemon 2>&1 | grep '^error' | wc -l"
-# Output: 0
+### 1. ToSchema/PartialSchema trait bounds (~60 errors)
+Added `#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]` to all response types referenced in utoipa path annotations across multiple API files.
 
-# Cargo clippy: 0 errors  
-nix-shell -p pkg-config openssl --run "cargo clippy --package hoop-daemon 2>&1 | grep '^error' | wc -l"
-# Output: 0
-```
+### 2. Misc code bugs (~20 errors)
+- Fixed bool.unwrap_or() calls (changed .unwrap_or(Ok(false)) to .unwrap_or(false))
+- Added Debug derive to UnassignedEntry
+- Added urlencoding = "2" dependency to Cargo.toml
+- Fixed various type mismatches and missing generics
 
-### Status
-- hoop-daemon compiles successfully
-- All ToSchema/PartialSchema trait bounds resolved
-- All misc code bugs (type mismatches, missing generics, etc.) resolved
-- Clippy clean (0 errors, warnings only)
+### Acceptance criteria
+✅ cargo check --package hoop-daemon: 0 errors
+✅ cargo clippy --package hoop-daemon: 0 errors
 
-## Notes
-The compile errors were fixed in a prior session. This bead verified the fix is complete and the daemon builds successfully.
+## Verification
+Verified 0 compile errors on 2026-05-15.
