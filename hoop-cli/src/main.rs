@@ -14,6 +14,7 @@ mod restore;
 mod risk_patterns;
 mod script;
 mod skills;
+mod status;
 
 use clap::Parser;
 use hoop_daemon::{audit, fleet, serve, Config as DaemonConfig};
@@ -71,10 +72,12 @@ enum Commands {
         name: String,
     },
     /// CLI overview of fleets / beads / cost
-    #[command(arg_required_else_help = true)]
     Status {
         /// Optional project filter
         project: Option<String>,
+        /// Output as JSON
+        #[arg(short, long)]
+        json: bool,
     },
     /// Audit operations
     #[command(subcommand)]
@@ -281,9 +284,11 @@ async fn main() -> anyhow::Result<()> {
             eprintln!("hoop remove: not yet implemented");
             std::process::exit(1);
         }
-        Commands::Status { project: _ } => {
-            eprintln!("hoop status: not yet implemented");
-            std::process::exit(1);
+        Commands::Status { project, json } => {
+            if let Err(e) = status::run(project, json) {
+                eprintln!("hoop status: {}", e);
+                std::process::exit(1);
+            }
         }
         Commands::Audit(cmd) => {
             if let Err(e) = handle_audit(cmd) {
