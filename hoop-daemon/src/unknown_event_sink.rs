@@ -222,9 +222,11 @@ impl UnknownEventSink {
 }
 
 /// Truncate a string for logging (max 200 chars).
+///
+/// Uses character-safe truncation to avoid panicking on multi-byte UTF-8 characters.
 pub fn truncate_for_log(s: &str) -> String {
-    if s.len() > 200 {
-        format!("{}...", &s[..200])
+    if s.chars().count() > 200 {
+        s.chars().take(200).collect::<String>() + "..."
     } else {
         s.to_string()
     }
