@@ -211,7 +211,8 @@ pub async fn handle_patterns(cmd: PatternCommands) -> Result<()> {
                 if json {
                     println!("{}", serde_json::to_string_pretty(&data)?);
                 } else {
-                    let patterns = data["patterns"].as_array().unwrap_or(&vec![]);
+                    let empty = vec![];
+                    let patterns = data["patterns"].as_array().unwrap_or(&empty);
                     if patterns.is_empty() {
                         println!("No patterns found");
                     } else {
@@ -267,7 +268,8 @@ pub async fn handle_patterns(cmd: PatternCommands) -> Result<()> {
                     println!("  Closed: {}", aggregate["closed_members"]);
                     println!("  Progress: {:.1}%", aggregate["progress_percent"]);
 
-                    let members = data["members"].as_array().unwrap_or(&vec![]);
+                    let empty = vec![];
+                    let members = data["members"].as_array().unwrap_or(&empty);
                     if !members.is_empty() {
                         println!("\nMembers:");
                         for m in members {

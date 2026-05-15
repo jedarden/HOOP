@@ -239,6 +239,7 @@ pub fn verify_heartbeat_states(heartbeats: &[WorkerHeartbeat]) -> anyhow::Result
             WorkerState::Idle { .. } => has_idle = true,
             WorkerState::Executing { .. } => has_executing = true,
             WorkerState::Knot { .. } => {}
+            WorkerState::Unknown => {}
         }
     }
 
@@ -459,6 +460,7 @@ fn test_heartbeat_coverage_all_states() {
             WorkerState::Idle { .. } => "idle",
             WorkerState::Executing { .. } => "executing",
             WorkerState::Knot { .. } => "knot",
+            WorkerState::Unknown => "unknown",
         })
         .map(|s| s.to_string())
         .collect();
@@ -1250,8 +1252,9 @@ async fn test_daemon_handles_concurrent_rest_requests() {
     // Spawn multiple concurrent requests
     let mut handles = Vec::new();
 
-    for i in 0..10 {
+    for _i in 0..10 {
         let base_url_clone = base_url.clone();
+        let client = client.clone();
         let handle = tokio::spawn(async move {
             let resp = client
                 .get(&format!("{}/api/beads", base_url_clone))

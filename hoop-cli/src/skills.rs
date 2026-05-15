@@ -333,10 +333,20 @@ pub fn show_skill(name: &str) -> Result<SkillDetail> {
         None
     };
 
+    let manifest_public = SkillManifestPublic {
+        name: manifest.name.clone(),
+        description: manifest.description.clone(),
+        summary: manifest.summary.clone(),
+        scope: format!("{:?}", manifest.scope),
+        projects: manifest.projects.clone(),
+        pattern: manifest.pattern.clone(),
+        timeout_secs: manifest.timeout_secs,
+    };
+
     Ok(SkillDetail {
         name: name.to_string(),
         state,
-        manifest,
+        manifest: manifest_public,
         manifest_yaml,
         run_info,
         readme: readme_content,
@@ -463,10 +473,10 @@ fn analyze_run_script(path: &Path) -> Result<RunScriptInfo> {
         .map_err(|e| anyhow!("Failed to read run script: {}", e))?;
 
     let shebang = if content.starts_with(b"#!") {
-        content.iter()
+        Some(content.iter()
             .take_while(|&&b| b != b'\n')
             .map(|&b| b as char)
-            .collect::<String>()
+            .collect::<String>())
     } else {
         None
     };
@@ -578,7 +588,7 @@ fn write_skill_enable_audit(event: &SkillEnableEvent) -> Result<()> {
         event.actor,
         "skill_enabled",
         event.skill_name,
-        Option::<String>::None, // project
+        "", // project
         args_json_str
     );
     let mut hasher = Sha256::new();

@@ -256,7 +256,13 @@ fn get_nested_yaml_value(yaml: &serde_yaml::Value, parts: &[&str]) -> Option<Str
             Some(v) => {
                 if i == parts.len() - 1 {
                     // Last part - return the value as string
-                    return Some(v.to_string());
+                    return match v {
+                        serde_yaml::Value::String(s) => Some(s.clone()),
+                        serde_yaml::Value::Number(n) => Some(n.to_string()),
+                        serde_yaml::Value::Bool(b) => Some(b.to_string()),
+                        serde_yaml::Value::Null => Some("null".to_string()),
+                        _ => Some(serde_yaml::to_string(v).unwrap_or_else(|_| "[complex value]".to_string())),
+                    };
                 }
                 current = v;
             }
