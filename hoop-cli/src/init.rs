@@ -323,7 +323,7 @@ fn stage_5_health_check() -> Result<()> {
     println!();
 
     // Start the daemon in the background
-    let child = Command::new("hoop")
+    let mut child = Command::new("hoop")
         .args(&["serve", "--addr", DEFAULT_BIND_ADDR])
         .spawn()
         .context("Failed to start hoop daemon. Is it installed and in PATH?")?;
