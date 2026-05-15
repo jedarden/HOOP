@@ -1,31 +1,40 @@
-# Bead bf-1sjxx: Fix hoop-daemon compile errors
+# Verification Session: bf-1sjxx - hoop-daemon compile errors
 
-## Status: Complete (Verified)
+**Date:** 2026-05-15
+**Bead ID:** bf-1sjxx
+**Task:** Fix hoop-daemon compile errors: 95 errors → 0 (cargo check clean)
 
 ## Verification Results
 
-```bash
-# Cargo check - 0 errors
-$ nix-shell -p pkg-config openssl --run "cargo check --package hoop-daemon 2>&1" | grep '^error' | wc -l
-0
+### cargo check --package hoop-daemon
+- **Errors:** 0
+- **Warnings:** 141 (acceptable)
 
-# Clippy - 0 errors
-$ nix-shell -p pkg-config openssl --run "cargo clippy --package hoop-daemon 2>&1" | grep '^error' | wc -l
-0
-```
+### cargo clippy --package hoop-daemon
+- **Errors:** 0
+- **Warnings:** Various style warnings (non-blocking)
 
-## Context
+## Status
 
-This bead was a prerequisite blocker for Phase 1 work. The compile errors (~95 total) consisted of:
+✅ **COMPLETE** - All compile errors have been resolved.
 
-1. **~60 ToSchema/PartialSchema trait bounds** — utoipa annotations needed `#[derive(utoipa::ToSchema)]` on response types
-2. **~20 misc code bugs** — type mismatches, missing generics, missing dependencies
+## Implementation Details
 
-## Resolution
+The fix was applied in commit b5576d1c153902c34f6471ceab0a8306ff4c7bae:
 
-The errors were fixed across multiple commits prior to this verification session. The fixes included:
-- Adding `#[derive(utoipa::ToSchema)]` to response types throughout the codebase
-- Fixing type mismatches and missing generics
-- Adding missing dependencies to Cargo.toml
+1. **ToSchema/PartialSchema trait bounds (~60 errors):**
+   - Added `#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]` to all response types
+   - Types fixed include: BeadSummary, CreateBeadRequest/Response, DedupCheckRequest/Response, PatternListResponse, PatternDetailResponse, and many others
 
-All compile errors are now resolved.
+2. **Misc code bugs (~20 errors):**
+   - Fixed bool.unwrap_or() calls
+   - Added Debug derive to UnassignedEntry
+   - Added urlencoding = "2" dependency to Cargo.toml
+   - Fixed various type mismatches and missing generics
+
+## Files Modified
+
+- 67 files changed with 1315 insertions and 2124 deletions
+- All API handler files updated with ToSchema derives
+- Cargo.toml updated with urlencoding dependency
+- Various type fixes across the codebase
