@@ -1,28 +1,32 @@
 # bf-1sjxx: Fix hoop-daemon compile errors
 
-## Status: VERIFIED - Complete
-
-Upon verification, the hoop-daemon compile errors were already fixed in previous work.
+## Task
+Fix hoop-daemon compile errors: 95 errors → 0 (cargo check clean)
 
 ## Verification (2026-05-15)
+The compile errors were already fixed by prior commits in this branch.
 
+### Commands run:
 ```bash
-$ nix-shell -p pkg-config openssl --run "cargo check --package hoop-daemon 2>&1 | grep -c '^error'"
-0
+# Verify cargo check passes with 0 errors
+nix-shell -p pkg-config openssl --run "cargo check --package hoop-daemon 2>&1 | grep '^error' | wc -l"
+# Output: 0
 
-$ nix-shell -p pkg-config openssl --run "cargo clippy --package hoop-daemon 2>&1 | grep -c '^error'"
-0
+# Verify clippy passes with 0 errors  
+nix-shell -p pkg-config openssl --run "cargo clippy --package hoop-daemon 2>&1 | grep '^error' | wc -l"
+# Output: 0
 ```
 
-Both acceptance criteria met:
-- cargo check: 0 errors (141 warnings OK)
-- cargo clippy: 0 errors
+### Results
+- **cargo check**: 0 compile errors ✓
+- **cargo clippy**: 0 clippy errors ✓
 
-## Notes
+### Warnings present
+Several unused import warnings remain (non-blocking):
+- `utoipa::ToSchema` unused in multiple API files
+- Various unused imports in handlers
 
-The hoop-daemon package compiles cleanly. All compile errors have been resolved in previous iterations.
+These warnings do not block compilation or functionality.
 
-### Build Output Summary
-- Compilation successful with 0 errors
-- 141 warnings (all dead code or unused imports - acceptable per acceptance criteria)
-- Clean build confirmed with nix-shell wrapper
+## Status
+**COMPLETE** - Task was already completed by prior work on this bead.
