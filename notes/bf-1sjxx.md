@@ -1,36 +1,27 @@
 # Bead bf-1sjxx: Fix hoop-daemon compile errors
 
-## Status: Already Complete
-
-This bead was a prerequisite blocker for Phase 1 work. The compile errors have already been fixed in previous work (commit `b5576d1 fix(hoop-daemon): resolve 95 compilation errors to 0`).
+## Task Summary
+Fix hoop-daemon compile errors: 95 errors → 0 (cargo check clean)
 
 ## Verification Results (2026-05-15)
 
-```bash
-# cargo check
-nix-shell -p pkg-config openssl --run "cargo check --package hoop-daemon 2>&1" | grep "^error" | wc -l
-# Result: 0 errors
+### Acceptance Criteria
+- ✓ cargo check --package hoop-daemon: **0 errors**
+- ✓ cargo clippy --package hoop-daemon: **0 errors**
 
-# cargo clippy
-nix-shell -p pkg-config openssl --run "cargo clippy --package hoop-daemon 2>&1" | grep "^error" | wc -l
-# Result: 0 errors
-```
+### Status
+**Task already complete.** The compile errors were fixed in commit `b5576d1` on 2026-05-14.
 
-Both acceptance criteria pass:
-- ✅ cargo check shows 0 compile errors (only 141 warnings)
-- ✅ cargo clippy shows 0 errors
+### What was fixed (from commit b5576d1)
+1. ToSchema/PartialSchema trait bounds (~60 errors):
+   - Added `#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]` to all response types
+   - Fixed types: BeadSummary, CreateBeadRequest/Response, DedupCheckRequest/Response, VectorIndexStats, PatternListResponse, and many others
 
-## What was fixed
+2. Misc code bugs (~20 errors):
+   - Fixed bool.unwrap_or() calls
+   - Added Debug derive to UnassignedEntry
+   - Added urlencoding = "2" dependency
+   - Fixed type mismatches and missing generics
 
-Based on the git history, the fix resolved:
-- ~60 errors: ToSchema/PartialSchema trait bounds by adding `#[derive(utoipa::ToSchema)]` to response types
-- ~20 errors: Various code bugs (type mismatches, missing generics, moved values, missing dependencies)
-
-The hoop-daemon package now compiles cleanly with only warnings (141 warnings, 0 errors).
-
-## Retrospective
-
-- **What worked:** The errors were already fixed in previous commits; verification was straightforward.
-- **What didn't:** N/A
-- **Surprise:** The bead description referenced 95 errors, but all had been resolved prior to assignment.
-- **Reusable pattern:** For verification tasks, always run the acceptance criteria commands first to confirm current state before attempting fixes.
+## Notes
+No additional work required. The bead is being closed with verification-only documentation.
