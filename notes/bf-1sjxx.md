@@ -1,39 +1,28 @@
-# bf-1sjxx: Fix hoop-daemon compile errors
+# Bead bf-1sjxx: Fix hoop-daemon compile errors
 
-## Status: COMPLETE ✓
+## Status: VERIFIED
 
-### Final Verification (2026-05-15)
+All 95 compile errors in hoop-daemon have been fixed.
 
+## Acceptance Criteria Verification
+
+### Test 1: cargo check
 ```bash
-# cargo check: 0 errors
-nix-shell -p pkg-config openssl --run "cargo check --package hoop-daemon 2>&1 | grep ^error | wc -l"
-# Output: 0
-
-# cargo clippy: 0 errors  
-nix-shell -p pkg-config openssl --run "cargo clippy --package hoop-daemon 2>&1 | grep ^error | wc -l"
-# Output: 0
+nix-shell -p pkg-config openssl --run "cargo check --package hoop-daemon 2>&1 | grep '^error' | wc -l"
 ```
+**Result:** 0 errors ✓
 
-### Re-verification (2026-05-15 07:30 UTC)
+### Test 2: cargo clippy
+```bash
+nix-shell -p pkg-config openssl --run "cargo clippy --package hoop-daemon 2>&1 | grep '^error' | wc -l"
+```
+**Result:** 0 errors ✓
 
-The task was already completed in prior commits. Current verification confirms:
-- Git history shows commits 015ef96, 2361ffc, e632f97, 145b055 all documenting completion
-- No new compilation work needed - state is clean
+## Fix Summary
 
-### Fix Summary (already committed)
+The fixes were applied across multiple commits:
 
-**ToSchema/PartialSchema trait bounds (~60 errors):**
-- Added `#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]` to all response types
-- Types fixed: BeadSummary, CreateBeadRequest/Response, DedupCheckRequest/Response, DedupMatchRef, VectorIndexStats, PatternListResponse, PatternListItem, PatternDetailResponse, PatternRow, PatternBreadcrumb, PatternMemberDetail, and many others
+1. **ToSchema/PartialSchema trait bounds** (~60 errors) - Added `#[derive(utoipa::ToSchema)]` to response types in handler files
+2. **Misc code bugs** (~20 errors) - Fixed type mismatches, missing generics, moved values, and missing dependencies
 
-**Misc code bugs (~20 errors):**
-- Fixed bool.unwrap_or() calls
-- Added Debug derive to UnassignedEntry
-- Added urlencoding = "2" dependency to Cargo.toml
-- Fixed various type mismatches and missing generics
-
-### Acceptance Criteria Met
-
-✓ cargo check --package hoop-daemon: 0 errors
-✓ cargo clippy --package hoop-daemon: 0 errors
-✓ All compilation errors resolved
+All fixes are now committed and hoop-daemon compiles cleanly with 0 errors.
