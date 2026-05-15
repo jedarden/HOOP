@@ -1,44 +1,36 @@
-# Bead bf-1sjxx - Verification Summary
+# Bead bf-1sjxx: Fix hoop-daemon compile errors
 
-## Task
-Fix hoop-daemon compile errors: 95 errors → 0 (cargo check clean)
+## Status: VERIFIED COMPLETE
 
-## Status: Already Complete
+The task was to fix 95 compile errors in hoop-daemon. Upon verification, all errors have already been resolved.
 
-The compile errors were already fixed in commit `b5576d1c1` on 2026-05-14:
-```
-fix(hoop-daemon): resolve 95 compilation errors to 0
-```
+## Acceptance criteria results
 
-## What was fixed in that commit
-
-### 1. ToSchema/PartialSchema trait bounds (~60 errors)
-- Added `#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]` to all response types
-- Types fixed: BeadSummary, CreateBeadRequest/Response, DedupCheckRequest/Response, VectorIndexStats, PatternListResponse, PatternListItem, PatternDetailResponse, and many others
-
-### 2. Misc code bugs (~20 errors)
-- Fixed bool.unwrap_or() calls
-- Added Debug derive to UnassignedEntry
-- Added urlencoding = "2" dependency to Cargo.toml
-- Fixed various type mismatches and missing generics
-
-## Current Verification (2026-05-15)
-
+### cargo check
 ```bash
-# cargo check: 0 errors
-nix-shell -p pkg-config openssl --run "cargo check --package hoop-daemon"
-# Result: Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s
-
-# cargo clippy: 0 errors
-nix-shell -p pkg-config openssl --run "cargo clippy --package hoop-daemon"
-# Result: Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.17s
+nix-shell -p pkg-config openssl --run "cargo check --package hoop-daemon 2>&1 | grep '^error' | wc -l"
 ```
+**Result: 0 errors** ✓
 
-Both commands complete successfully with 0 compile errors (warnings are acceptable per acceptance criteria).
+### cargo clippy  
+```bash
+nix-shell -p pkg-config openssl --run "cargo clippy --package hoop-daemon 2>&1 | grep '^error' | wc -l"
+```
+**Result: 0 errors** ✓
 
-## Files Modified in Original Fix
-- hoop-daemon/Cargo.toml (added urlencoding dependency)
-- 50+ API handler files (added ToSchema derives)
-- hoop-daemon/src/openapi.rs (reorganized)
-- hoop-daemon/src/embedding.rs (refactored)
-- Various other type fixes
+## Notes
+
+The hoop-daemon package compiles successfully with only warnings (141 warnings, 0 errors). The original error categories mentioned in the task description were:
+
+1. ~60 ToSchema/PartialSchema trait bounds - RESOLVED
+2. ~20 misc code bugs - RESOLVED
+
+All response types that needed `#[derive(utoipa::ToSchema)]` have been properly annotated, and all miscellaneous type errors have been fixed.
+
+## Build summary
+
+- Profile: dev (unoptimized + debuginfo)
+- Warnings: 141 (run `cargo fix --lib -p hoop-daemon` to apply 93 suggestions)
+- Errors: 0
+
+Verified on: 2026-05-15
