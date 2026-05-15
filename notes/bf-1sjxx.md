@@ -2,7 +2,7 @@
 
 ## Status: Already Complete
 
-This bead was a prerequisite blocker for Phase 1 work. The compile errors have already been fixed in previous work.
+This bead was a prerequisite blocker for Phase 1 work. The compile errors have already been fixed in previous work (commit `b5576d1 fix(hoop-daemon): resolve 95 compilation errors to 0`).
 
 ## Verification Results (2026-05-15)
 
@@ -20,15 +20,11 @@ Both acceptance criteria pass:
 - ✅ cargo check shows 0 compile errors (only 141 warnings)
 - ✅ cargo clippy shows 0 errors
 
-## Notes
+## What was fixed
 
-This bead has been verified multiple times in previous commits. All compile errors in hoop-daemon have been resolved, including:
-- ToSchema/PartialSchema trait bounds (~60 errors)
-- Missing generics for axum::extract::Path
-- Type mismatches and moved value errors
-- Missing dependencies (urlencoding)
-- Debug trait derivation
-- Various type conversion errors
+Based on the git history, the fix resolved:
+- ~60 errors: ToSchema/PartialSchema trait bounds by adding `#[derive(utoipa::ToSchema)]` to response types
+- ~20 errors: Various code bugs (type mismatches, missing generics, moved values, missing dependencies)
 
 The hoop-daemon package now compiles cleanly with only warnings (141 warnings, 0 errors).
 
