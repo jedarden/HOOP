@@ -31,3 +31,9 @@ All acceptance criteria met. The hoop-daemon package compiles cleanly with 0 err
 
 ## Date
 2026-05-15
+
+## Retrospective
+- **What worked:** Systematic approach of adding ToSchema derives with conditional compilation (`#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]`) worked perfectly. This allows the derives to only apply when the openapi feature is enabled.
+- **What didn't:** N/A - fixes were successful and comprehensive
+- **Surprise:** None - errors were straightforward categorization and resolution
+- **Reusable pattern:** When adding utoipa path annotations, always ensure referenced types have ToSchema derives. Use conditional derives to avoid compilation issues when the openapi feature is disabled.
