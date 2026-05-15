@@ -1,27 +1,20 @@
-# Bead bf-1sjxx: Fix hoop-daemon compile errors
+# bf-1sjxx: Fix hoop-daemon compile errors
 
-## Task Summary
+## Task
 Fix hoop-daemon compile errors: 95 errors → 0 (cargo check clean)
 
-## Verification Results (2026-05-15)
+## Verification
+Both acceptance criteria pass:
 
-### Acceptance Criteria
-- ✓ cargo check --package hoop-daemon: **0 errors**
-- ✓ cargo clippy --package hoop-daemon: **0 errors**
+```bash
+$ nix-shell -p pkg-config openssl --run "cargo check --package hoop-daemon 2>&1 | grep '^error\[ ' | wc -l"
+0
 
-### Status
-**Task already complete.** The compile errors were fixed in commit `b5576d1` on 2026-05-14.
+$ nix-shell -p pkg-config openssl --run "cargo clippy --package hoop-daemon 2>&1 | grep '^error\[' | wc -l"
+0
+```
 
-### What was fixed (from commit b5576d1)
-1. ToSchema/PartialSchema trait bounds (~60 errors):
-   - Added `#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]` to all response types
-   - Fixed types: BeadSummary, CreateBeadRequest/Response, DedupCheckRequest/Response, VectorIndexStats, PatternListResponse, and many others
+The package compiles cleanly with 0 errors. The 95 errors mentioned in the task description (ToSchema trait bounds, type mismatches, missing generics) have already been resolved in the codebase.
 
-2. Misc code bugs (~20 errors):
-   - Fixed bool.unwrap_or() calls
-   - Added Debug derive to UnassignedEntry
-   - Added urlencoding = "2" dependency
-   - Fixed type mismatches and missing generics
-
-## Notes
-No additional work required. The bead is being closed with verification-only documentation.
+## Status
+Complete - all acceptance criteria met.
