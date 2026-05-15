@@ -8,9 +8,15 @@ A long-lived Rust daemon that runs on a single operator host and serves as the h
 
 HOOP does **not** steer NEEDLE workers (no launch / stop / kill / signal / release / reassign). NEEDLE manages itself; HOOP is adjacent.
 
-## Current repository state (Phase 5 complete)
+## Current repository state
 
-**Phase 5 (v0.5) — The human-interface agent — is now complete.** HOOP provides:
+**ACTUAL STATE (as of 2026-05-15): Phase 0 complete. Phase 1 in progress, unverified. Phases 2–7 code exists but has NOT been run or verified.**
+
+The Rust crate compiles (with correct build environment — see Build environment section below), but no phase has been tested end-to-end. The genesis bead (`hoop-ttb`) was closed prematurely; the bead tracker is the authoritative record of what is actually done.
+
+**Do not trust this file's component list as evidence of working software. Run `br list` and check `docs/plan/plan.md` to know the real state.**
+
+HOOP code structure (files exist; correctness unverified):
 
 - `hoop-daemon/` — Main Rust daemon with REST API, WebSocket, and agent session management
 - `hoop-cli/` — CLI client for project management and status queries
@@ -150,6 +156,23 @@ These come from the prior-art research in `docs/notes/` and are locked in:
 6. **Never silent-drop unknown events.** Log, emit progress, count.
 7. **Lazy context for the human-interface agent.** Thin index by default; tool calls for details on demand.
 
+## When you are stuck: anti-spin rules
+
+**If `br close <id>` appears to succeed but `br list` still shows the bead as open:**
+The SQLite database is out of sync with the JSONL (known issue). Run `br doctor --repair` then re-check `br list`. Do NOT commit doc notes as a substitute for closing the bead.
+
+**If a bead is blocked by an infrastructure/environment issue you cannot fix** (e.g., missing system package, broken network, unavailable cluster):
+1. Create a `bf-` bug bead: `br create --type bug "describe the blocker"` with the specific error and what you tried
+2. Set it as a dependency: `br depend <blocked-bead> <new-bf-bead>`
+3. Stop and let the operator know — do not loop writing docs or fake verification
+
+**Never write a commit claiming "Phase N complete" or "all deliverables verified" unless:**
+- `cargo test` passed (use `nix-shell --run 'cargo test'`)
+- You ran the actual binary and observed the claimed behavior
+- `br close` succeeded and `br list` confirms the bead is closed
+
+Fabricated verification commits are worse than no progress — they hide the real state.
+
 ## How to work here
 
 If asked to make a change:
@@ -160,9 +183,25 @@ If asked to make a change:
 4. Match terminology (Stitch / Pattern / human-interface agent / Project / Workspace) exactly. Do not use `Mayor`, `polecat`, `swarm`, `convoy`, or Gas Town vocabulary; those were used in earlier drafts and have been deliberately removed.
 5. Never suggest features that steer workers, enforce capacity, or route by strand. Refer back to non-goals.
 
+## Build environment (NixOS — read before running cargo)
+
+This server runs NixOS. Bare `cargo check` / `cargo build` / `cargo test` will fail with an `openssl-sys` / `pkg-config not found` error. Always use `nix-shell`:
+
+```bash
+# One-shot
+nix-shell --run 'cargo check'
+nix-shell --run 'cargo test'
+nix-shell --run 'cargo build --release'
+
+# Interactive
+nix-shell   # then run cargo commands normally
+```
+
+`shell.nix` at the repo root provides all required deps (pkg-config, openssl, rustc, node, pnpm).
+
 If asked to write code:
-1. Check existing implementations first — most Phase 5 components are already complete
-2. Match the patterns used in existing code (e.g., agent session management, MCP tools)
+1. Run `nix-shell --run 'cargo check'` first to confirm the baseline compiles before touching anything
+2. Check existing implementations — but treat them as unverified until `cargo test` passes
 3. Add tests for new functionality (see existing test files for patterns)
 4. Commit with a clear message referencing the plan section it implements
 
