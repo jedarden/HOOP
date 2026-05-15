@@ -15,6 +15,22 @@ use hoop_daemon::agent_adapter::AdapterKind;
 use std::fs;
 use std::path::PathBuf;
 
+// Use std::fs instead of walkdir for simplicity
+fn walk_dir(path: &std::path::Path) -> Vec<std::path::PathBuf> {
+    let mut entries = Vec::new();
+    if let Ok(dir) = fs::read_dir(path) {
+        for entry in dir.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                entries.extend(walk_dir(&path));
+            } else {
+                entries.push(path);
+            }
+        }
+    }
+    entries
+}
+
 // ── Fixture paths ────────────────────────────────────────────────────────────
 
 fn testrepo_root() -> PathBuf {
@@ -146,7 +162,7 @@ fn all_jsonl_files_contain_valid_json() {
 
     for entry in walkdir::WalkDir::new(&root)
         .into_iter()
-        .filter_map(|e| e.ok())
+        .filter_map(|e: Result<walkdir::DirEntry, _>| e.ok())
     {
         let path = entry.path();
         if path.extension().map(|ext| ext == "jsonl").unwrap_or(false) {
@@ -181,7 +197,7 @@ fn all_scenario_files_have_content() {
             let scenario_dir = root.join(adapter).join(VERSION).join(scenario);
             let entries: Vec<_> = fs::read_dir(&scenario_dir)
                 .unwrap_or_else(|e| panic!("Failed to read {:?}: {}", scenario_dir, e))
-                .filter_map(|e| e.ok())
+                .filter_map(|e: Result<std::fs::DirEntry, _>| e.ok())
                 .filter(|e| {
                     e.path()
                         .extension()
@@ -439,7 +455,7 @@ fn corpus_contains_only_jsonl_files() {
 
     for entry in walkdir::WalkDir::new(&root)
         .into_iter()
-        .filter_map(|e| e.ok())
+        .filter_map(|e: Result<walkdir::DirEntry, _>| e.ok())
     {
         let path = entry.path();
         if path.is_file() {
@@ -478,7 +494,7 @@ fn all_golden_transcripts_parse_successfully() {
 
     for entry in walkdir::WalkDir::new(&root)
         .into_iter()
-        .filter_map(|e| e.ok())
+        .filter_map(|e: Result<walkdir::DirEntry, _>| e.ok())
     {
         let path = entry.path();
         if path.extension().map(|ext| ext == "jsonl").unwrap_or(false) {

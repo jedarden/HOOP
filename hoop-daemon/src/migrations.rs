@@ -278,14 +278,14 @@ pub fn rollback_migration(
 }
 
 /// Get migration status information
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct MigrationStatus {
     pub current_version: String,
     pub pending_migrations: Vec<PendingMigrationInfo>,
     pub can_rollback_to: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct PendingMigrationInfo {
     pub version: String,
     pub description: String,
