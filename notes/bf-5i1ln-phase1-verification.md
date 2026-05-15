@@ -16,25 +16,42 @@ Phase 1 deliverables are **implemented in code** but currently **blocked by comp
 
 ## Compilation Blockers
 
-**Location:** `hoop-cli/src/`  
-**Errors:** 3 compilation errors
+**Updated 2026-05-15:** Build blocker has changed from Rust compilation errors to build environment dependency.
 
-1. **`skills.rs:479`** - Type mismatch in shebang detection
-   ```rust
-   error[E0308]: `if` and `else` have incompatible types
-   ```
+### Current Blocker (2026-05-15)
 
-2. **`skills.rs:589`** - Option<String> doesn't implement Display
-   ```rust
-   error[E0277]: `std::option::Option<std::string::String>` doesn't implement `std::fmt::Display`
-   ```
+**Location:** Build environment  
+**Error:** Missing `make` dependency for OpenSSL vendoring
 
-3. **`main.rs:549`** - MigrationStatus missing Serialize trait
-   ```rust
-   error[E0277]: the trait bound `MigrationStatus: serde::Serialize` is not satisfied
-   ```
+```
+Error building OpenSSL dependencies:
+    Command 'make' not found. Is make installed?
+    Command failed: cd ".../openssl-build/build/src" && "make" "depend"
+```
 
-**Impact:** Cannot build `hoop` binary, cannot run `hoop serve`, cannot test CLI commands interactively.
+**Impact:**
+- Cannot build `hoop` binary
+- Cannot run `hoop serve`
+- Cannot test CLI commands interactively
+- Cannot run `cargo test` for integration verification
+
+**Attempted Fix:**
+- Modified `hoop-daemon/Cargo.toml` to add: `openssl-sys = { version = "0.9", features = ["vendored"] }`
+- Modified `hoop-mcp/Cargo.toml` to use `rustls-tls` instead of native TLS
+- **Result:** Still requires `make` to build vendored OpenSSL from source
+
+**Required Action:**
+- Install `make` (build-essential on Debian/Ubuntu)
+- OR: Fully migrate to rustls TLS across all crates
+
+### Previous Blocker (Already Resolved)
+
+The previous report noted 3 Rust compilation errors in `hoop-cli/src/`:
+1. `skills.rs:479` - Type mismatch in shebang detection
+2. `skills.rs:589` - Option<String> doesn't implement Display
+3. `main.rs:549` - MigrationStatus missing Serialize trait
+
+These appear to have been resolved in recent commits.
 
 ## Deliverable Verification
 
@@ -259,9 +276,18 @@ From plan §6 Phase 1 success criteria:
 
 ## Conclusion
 
-Phase 1 deliverables are **code-complete** with all 14 items implemented. The primary blocker is 3 compilation errors that prevent building and testing the binary. Once these are resolved, runtime verification can proceed immediately using the fully-populated testrepo fixture.
+Phase 1 deliverables are **code-complete** with all 14 items implemented. The current blocker is a build environment issue (missing `make` for OpenSSL vendoring), not a code issue. Once the build environment is resolved, runtime verification can proceed immediately using the fully-populated testrepo fixture.
 
-**Recommendation:** Address compilation errors first, then verify all deliverables end-to-end before declaring Phase 1 complete.
+**Updated Assessment 2026-05-15:**
+- ✅ Code Implementation: 14/14 deliverables implemented
+- ❌ Build Environment: Missing `make` dependency
+- ⚠️ Runtime Testing: Blocked by build failure
+- ✅ Test Fixture: testrepo/ fully populated
+
+**Recommendation:** Install build dependencies (`make` / `build-essential`) OR complete migration to rustls TLS, then verify all deliverables end-to-end before declaring Phase 1 complete.
+
+**Child Beads Needed:**
+Once the build blocker is resolved, create 14 child beads for comprehensive runtime verification of each deliverable against the testrepo fixture.
 
 ---
 
