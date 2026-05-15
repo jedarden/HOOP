@@ -48,6 +48,7 @@ use crate::fleet::{
 };
 use anyhow::{bail, Result};
 use rusqlite::Connection;
+use serde::Serialize;
 use std::collections::HashMap;
 use tracing::info;
 
