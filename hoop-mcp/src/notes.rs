@@ -21,7 +21,7 @@ pub fn notes_dir() -> Result<PathBuf> {
 
 /// Project workspace path
 pub fn project_workspace(project: &str, projects: &HashMap<String, String>) -> Option<PathBuf> {
-    projects.get(project).map(|p| PathBuf::from(p))
+    projects.get(project).map(PathBuf::from)
 }
 
 /// A parsed note ready for reading

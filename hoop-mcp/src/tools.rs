@@ -47,10 +47,6 @@ pub fn forbidden_worker_steering_error(tool_name: &str) -> String {
 struct TurnContext {
     session_id: String,
     turn_id: String,
-    #[serde(skip)]
-    adapter: String,
-    #[serde(skip)]
-    model: String,
 }
 
 /// MCP server state
@@ -1141,9 +1137,8 @@ impl McpServerState {
 
         let base_path = if let Some(p) = path_arg {
             let full = PathBuf::from(project_path).join(p);
-            let canonical = hoop_schema::path_security::canonicalize_and_check(&full, &allowlist)
-                .map_err(|_| "Invalid path parameter".to_string())?;
-            canonical
+            hoop_schema::path_security::canonicalize_and_check(&full, &allowlist)
+                .map_err(|_| "Invalid path parameter".to_string())?
         } else {
             PathBuf::from(project_path)
         };
@@ -1354,7 +1349,7 @@ impl McpServerState {
         };
 
         // Build the request body matching CreateDraftRequest
-        let mut request_body = json!({
+        let request_body = json!({
             "project": project,
             "title": title,
             "kind": kind,

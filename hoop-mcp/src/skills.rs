@@ -256,7 +256,7 @@ pub fn execute_skill(skill: &SkillEntry, args: &Value) -> Result<SkillResult> {
     use std::thread;
     use std::time::{Duration, Instant};
 
-    let start = Instant::now();
+    let _start = Instant::now();
 
     debug!(
         "Executing skill: {} with args: {}",
@@ -297,20 +297,16 @@ pub fn execute_skill(skill: &SkillEntry, args: &Value) -> Result<SkillResult> {
     // Spawn thread to collect stdout
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
-        for line in reader.lines() {
-            if let Ok(l) = line {
-                let _ = stdout_tx.send(l);
-            }
+        for l in reader.lines().flatten() {
+            let _ = stdout_tx.send(l);
         }
     });
 
     // Spawn thread to collect stderr
     thread::spawn(move || {
         let reader = BufReader::new(stderr);
-        for line in reader.lines() {
-            if let Ok(l) = line {
-                let _ = stderr_tx.send(l);
-            }
+        for l in reader.lines().flatten() {
+            let _ = stderr_tx.send(l);
         }
     });
 
@@ -377,7 +373,7 @@ pub fn execute_skill(skill: &SkillEntry, args: &Value) -> Result<SkillResult> {
                     stdout,
                     stderr,
                     exit_code,
-                    timed_out: false,
+                    timed_out,
                     status,
                     duration_ms,
                 });

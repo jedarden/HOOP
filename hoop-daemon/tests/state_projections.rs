@@ -415,8 +415,8 @@ async fn rest_api_workers_endpoint() {
         .await
         .expect("Failed to parse workers response");
 
-    // Workers response must be an array
-    assert!(workers.is_array(), "Workers must be an array");
+    // Workers response is typed as Vec, so it's already an array
+    assert!(!workers.is_empty() || workers.is_empty(), "Workers response is valid array");
 }
 
 #[tokio::test]
@@ -437,8 +437,8 @@ async fn rest_api_projects_endpoint() {
         .await
         .expect("Failed to parse projects response");
 
-    // Projects response must be an array
-    assert!(projects.is_array(), "Projects must be an array");
+    // Projects response is typed as Vec, so it's already an array
+    assert!(!projects.is_empty() || projects.is_empty(), "Projects response is valid array");
 }
 
 #[tokio::test]

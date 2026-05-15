@@ -325,7 +325,7 @@ fn generate_schema_fixtures() {
                 approved_by: None,
                 approved_at: None,
                 archived_at: None,
-                content_hash: "abc123".to_string(),
+                content_hash: Some("abc123".to_string()),
                 rejection_count: 0,
                 schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
             })
@@ -618,11 +618,12 @@ fn generate_schema_fixtures() {
             serde_json::to_string_pretty(&UiState {
                 active_project: None,
                 active_stitch: None,
-                sidebar_width: 300,
-                theme: UiStateTheme::Dark,
-                panel_layout: None,
+                feature_usage: None,
                 filters: None,
-                schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
+                last_seen_version: None,
+                panel_layout: None,
+                prompts_dismissed: None,
+                prompts_enabled: true,
             })
             .unwrap(),
         ),
@@ -687,7 +688,6 @@ fn generate_schema_fixtures() {
                 required: true,
                 placeholder: None,
                 default: None,
-                schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
             })
             .unwrap(),
         ),
@@ -699,11 +699,10 @@ fn generate_schema_fixtures() {
                 scope: "global".to_string(),
                 kind: None,
                 priority: None,
-                labels: None,
-                default_beads: None,
+                labels: vec![],
+                default_beads: vec![],
                 fields: vec![],
                 body: "Test body with {{test_field}}".to_string(),
-                schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
             })
             .unwrap(),
         ),
