@@ -48,7 +48,7 @@ struct BeadsSummary {
 pub fn run(project_filter: Option<String>, json: bool) -> Result<()> {
     let registry = load_projects()?;
 
-    let filtered_projects: Vec<_> = if let Some(filter) = project_filter {
+    let filtered_projects: Vec<_> = if let Some(ref filter) = project_filter {
         registry.projects.into_iter()
             .filter(|p| p.name() == filter)
             .collect()
