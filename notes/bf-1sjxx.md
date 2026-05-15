@@ -1,33 +1,37 @@
-# bf-1sjxx: Fix hoop-daemon compile errors - COMPLETED
+# Bead bf-1sjxx: Fix hoop-daemon compile errors
 
-## Verification Results
+## Status: Already Complete
 
-**Date:** 2026-05-15
+This bead was already completed in commit `b5576d1` on 2026-05-14:
+"fix(hoop-daemon): resolve 95 compilation errors to 0"
 
-### cargo check
+## Verification
+
+I verified the current state:
+- `cargo check --package hoop-daemon`: **0 errors**
+- `cargo clippy --package hoop-daemon`: **0 errors**
+
+## What was fixed
+
+The commit fixed two categories of errors:
+
+1. **ToSchema/PartialSchema trait bounds (~60 errors)**
+   - Added `#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]` to response types
+   - Fixed types: BeadSummary, CreateBeadRequest/Response, DedupCheckRequest/Response, VectorIndexStats, PatternListResponse, and many others
+
+2. **Misc code bugs (~20 errors)**
+   - Fixed `bool.unwrap_or()` calls
+   - Added `Debug` derive to `UnassignedEntry`
+   - Added `urlencoding = "2"` to Cargo.toml
+   - Fixed type mismatches and missing generics
+
+## Acceptance criteria met
+
+Both verification commands pass:
+```bash
+nix-shell -p pkg-config openssl --run "cargo check --package hoop-daemon 2>&1 | grep ^error | wc -l"
+# Output: 0
+
+nix-shell -p pkg-config openssl --run "cargo clippy --package hoop-daemon 2>&1 | grep ^error | wc -l"
+# Output: 0
 ```
-error count: 0
-Finished `dev` profile [unoptimized + debuginfo] target(s) in 21.24s
-```
-
-### cargo clippy
-```
-error count: 0
-```
-
-## Status
-✅ ACCEPTANCE CRITERIA MET
-
-The hoop-daemon package compiles successfully with:
-- 0 compile errors
-- 0 clippy errors
-- 141 warnings (non-blocking, style suggestions only)
-
-## What Was Fixed (from git history)
-Previous commits fixed all 95 compile errors:
-- Added `#[derive(utoipa::ToSchema)]` to response types
-- Fixed trait bound issues for OpenAPI schema generation
-- Fixed type mismatches and missing generics
-- Added missing dependencies (urlencoding)
-- Added Debug derives where needed
-- Fixed Result Future issues
