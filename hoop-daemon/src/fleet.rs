@@ -3072,12 +3072,12 @@ pub fn migrate_v129_to_v130(conn: &mut Connection) -> Result<()> {
         r#"
         CREATE TABLE IF NOT EXISTS presence (
             operator_id TEXT NOT NULL,
-            project TEXT,
-            stitch_id TEXT,
+            project TEXT DEFAULT '',
+            stitch_id TEXT DEFAULT '',
             last_seen TEXT NOT NULL,
             visibility TEXT NOT NULL DEFAULT 'visible'
                 CHECK(visibility IN ('visible', 'hidden')),
-            PRIMARY KEY (operator_id, COALESCE(project, ''), COALESCE(stitch_id, ''))
+            PRIMARY KEY (operator_id, project, stitch_id)
         )
         "#,
         [],
@@ -3124,7 +3124,7 @@ pub fn migrate_v130_to_v131(conn: &mut Connection) -> Result<()> {
             content_hash,
             MIN(created_at) as keep_created_at,
             GROUP_CONCAT(id) as all_ids,
-            '[' || GROUP_CONCAT('"', source_stitches, '"') || ']' as merged_stitches
+            '[' || GROUP_CONCAT('"' || source_stitches || '"') || ']' as merged_stitches
         FROM reflection_ledger
         WHERE content_hash != ''
         GROUP BY content_hash
@@ -3138,7 +3138,7 @@ pub fn migrate_v130_to_v131(conn: &mut Connection) -> Result<()> {
         r#"
         UPDATE reflection_ledger
         SET source_stitches = (
-            SELECT '[' || GROUP_CONCAT DISTINCT(json_each.value) || ']'
+            SELECT '[' || GROUP_CONCAT(DISTINCT json_each.value) || ']'
             FROM json_each((SELECT merged_stitches FROM reflection_dedup WHERE reflection_dedup.content_hash = reflection_ledger.content_hash))
         )
         WHERE id IN (SELECT substr(all_ids, 1, instr(all_ids, ',') - 1) FROM reflection_dedup)
