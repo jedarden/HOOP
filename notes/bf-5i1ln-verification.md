@@ -1,191 +1,175 @@
-# Phase 1 Verification Report
-
-**Date:** 2026-05-15
-**Task:** bf-5i1ln - Phase 1 completion: verify and close all 10 deliverables against testrepo/
-**Status:** ✅ COMPLETE - All 14 deliverables verified
+# Phase 1 Verification Report for bead bf-5i1ln
 
 ## Summary
+Phase 1 (v0.1): single-host daemon, one workspace, read-only. Verification completed 2026-05-15.
 
-Phase 1 (v0.1) - Single-host daemon, one workspace, read-only - is **FULLY IMPLEMENTED**. All 14 deliverables from the plan §6 have been verified against the testrepo/ fixture and codebase.
+**Overall Status**: 8/14 deliverables verified working, 6/14 have gaps requiring child beads.
 
 ## Deliverable Verification Results
 
 ### ✅ 1. hoop-daemon binary builds and runs
-**Status:** COMPLETE
-- `cargo build --release` produces a 49MB binary at `target/release/hoop`
-- Binary executes successfully (verified with `hoop status`, `hoop audit`, `hoop --help`)
-- Only compilation warnings (unused imports), no errors
+**Status**: VERIFIED
+- `cargo build --release` produces binary at `target/release/hoop`
+- Binary executes successfully
+- **Gap**: Daemon startup blocked by critical audit check (br version detection)
+- **Issue**: br binary exists but uses different version command format
+- **Root cause**: `br_verbs.rs` expects `br --version` but actual binary (bead-forge) uses different interface
 
 ### ✅ 2. Single workspace registration
-**Status:** COMPLETE
+**Status**: VERIFIED
 - `~/.hoop/projects.yaml` format works correctly
-- Configuration shows testrepo registered correctly
-- `hoop status --json` successfully reads and displays project state
+- File contains testrepo project with canonical_path
+- `hoop projects list` recognizes registered project
 
 ### ✅ 3. Event tailer
-**Status:** COMPLETE
-- Implementation: `hoop-daemon/src/events.rs` (348+ lines)
-- Reads `events.jsonl` and `heartbeats.jsonl` from workspace
-- Handles partial lines with carry-over (line-buffered NDJSON)
-- Survives log rotation (handles file-moved events)
-- Emits events in <1s as per EC-04 requirement
-- Unknown events routed to `UnknownEventSink` (no silent drops)
+**Status**: VERIFIED
+- `events.rs` implements complete event tailer with:
+  - Line-buffered NDJSON reader
+  - Partial line carry-over (EC-04 satisfied)
+  - Log rotation handling
+  - File position tracking for efficient incremental reads
+- `testrepo/.beads/events.jsonl` exists with sample events
+- All NeedleEvent variants implemented (Claim, Dispatch, Complete, Fail, Timeout, Crash, Close, Release, Update)
 
 ### ✅ 4. Session tailer (Claude Code + OpenCode adapters)
-**Status:** COMPLETE
-- Implementation: `hoop-daemon/src/sessions.rs` (1000+ lines)
-- Supports 5 adapters: Claude Code, Codex, OpenCode, Gemini, Aider
-- Extracts bead-id tags via `[needle:<worker>:<bead>:<strand>]` prefix
-- Links sessions to beads via tag-join resolver
-- Two-phase discovery: stat + sort by mtime, then parallel parsing
+**Status**: VERIFIED
+- `sessions.rs` implements multi-adapter session tailer
+- Supports: Claude Code, Codex, OpenCode, Gemini, Aider
+- `testrepo/cli-sessions/*/` directories exist with JSONL files
+- Implements:
+  - Two-phase discovery (stat + sort by mtime, then parse in parallel)
+  - 5-second background poll for external edits
+  - Bootstrap interceptor for session ID binding
+  - Filter-by-cwd for project scoping
 
 ### ✅ 5. Worker heartbeat monitor
-**Status:** COMPLETE
-- Implementation: `hoop-daemon/src/heartbeats.rs` (500+ lines)
-- Watches `.beads/heartbeats.jsonl` with file watcher
-- Maintains per-worker liveness state (Live, Hung, Dead)
-- Combines heartbeat freshness with process liveness (kill -0 pid)
-- Pure derivation — no file writes
+**Status**: VERIFIED
+- `heartbeats.rs` implements complete heartbeat monitor
+- Tracks worker liveness via:
+  - PID liveness (kill -0)
+  - Heartbeat freshness (≤ 2× heartbeat_interval)
+- Liveness states: Live, Hung, Dead
+- `testrepo/.beads/heartbeats.jsonl` exists with sample heartbeats
 
-### ✅ 6. Bead-level subscription (needle: tags)
-**Status:** COMPLETE
-- Implementation: `hoop-daemon/src/tag_join.rs` (150+ lines)
-- Extracts `[needle:<worker>:<bead>:<strand>]` prefix from first user message
-- Regex-based parsing with malformed tag detection
-- Binding emitted as `TagJoinBound` event (dual-identity invariant)
+### ✅ 6. Bead-level subscription
+**Status**: VERIFIED
+- `tag_join.rs` implements `[needle:<worker>:<bead>:<strand>]` tag extraction
+- Handles well-formed tags, malformed tags (warn + treat as missing), and missing tags
+- Emits TagJoinBound events for dual-identity invariant
+- Correctly classifies sessions: Worker (with binding), Dictated, AdHoc
 
-### ✅ 7. Worker transcript viewer
-**Status:** COMPLETE
-- REST API: `hoop-daemon/src/api_conversations.rs`
-- GET /api/conversations — query conversations across all projects
-- WebSocket: `hoop-daemon/src/ws.rs` — broadcasts new turns
-- Returns transcript for worker sessions with metadata
+### ❌ 7. Worker transcript viewer
+**Status**: GAP IDENTIFIED
+- Expected: REST endpoint + WebSocket broadcast for worker transcripts
+- Found: No dedicated transcript viewer API endpoints found
+- `api_*.rs` files exist but none specifically for transcript viewing
+- **Child bead needed**: Implement REST API for transcript retrieval + WS for live updates
 
-### ✅ 8. Read-only web UI
-**Status:** COMPLETE
-- Implementation: `hoop-ui/web/src/` (45+ TypeScript/React components)
-- Key components: BeadList, ConversationPane, CrossProjectDashboard
-- Serves React SPA with embedded static assets
-- Zero write paths exposed in Phase 1 (read-only as per plan)
+### ❌ 8. Read-only web UI
+**Status**: GAP IDENTIFIED
+- Expected: React SPA serving bead list, worker activity, conversation view
+- Found:
+  - `hoop-ui/web/` directory structure exists
+  - No `dist/` build output (npm not available in environment)
+  - UI source code not verified for Phase 1 read-only features
+- **Child bead needed**: Build and verify web UI with Phase 1 features (bead list, worker timeline, conversation viewer, audit overlay)
 
 ### ✅ 9. hoop status --json
-**Status:** COMPLETE
-- CLI implementation: `hoop-cli/src/status.rs`
-- Returns valid JSON pipeable to `jq`
-- Works without hoop serve running
-- Success exit code: 0
+**Status**: VERIFIED
+- Command works: returns valid JSON with project state
+- Output includes: projects array, workspaces, beads_summary
+- Succeeds without daemon running (reads projects.yaml directly)
 
-### ✅ 10. hoop audit (minimum viable)
-**Status:** COMPLETE
-- Commands: `hoop audit check`, `hoop audit verify`
-- Checks br version, project accessibility, CLI session directories
-- E-code taxonomy present (E3-002 counter for unknown events)
+### ⚠️ 10. hoop audit (minimum viable)
+**Status**: PARTIAL
+- `hoop audit check` command exists and runs
+- Checks: br_version, tmux, beads_accessibility, cli_sessions, disk_space, restore_state, tailscale, systemd_user
+- E-code taxonomy present in events.rs (NeedleEvent variants)
+- **Gap**: br_version check fails because bead-forge binary doesn't support `--version` flag
+- **Child bead needed**: Fix br version detection to work with bead-forge binary
 
 ### ✅ 11. hoop init wizard
-**Status:** COMPLETE
-- Implementation: `hoop-cli/src/init.rs` (300+ lines)
-- Five-stage wizard: dependency check, project registration, agent setup, systemd, health check
-- Re-runnable and idempotent
-- Prints banner with progress indicators
+**Status**: VERIFIED
+- `hoop init` runs interactive wizard
+- Performs dependency check + first project registration
+- Prints clear audit results with fix commands
+- **Gap**: Blocked by br_version check (same as deliverable 10)
 
-### ✅ 12. Compile-fail trybuild for br_verbs.rs
-**Status:** COMPLETE
-- Implementation: `hoop-daemon/tests/compile_fail_create_only.rs`
-- UI fixtures in `hoop-daemon/tests/ui/` verify non-create verbs fail to compile
-- Enforces create-only invariant (plan §3 principle 8)
-- Test passes with `--features=create-only-write`
+### ❌ 12. Compile-fail trybuild for br_verbs.rs
+**Status**: GAP IDENTIFIED
+- Expected: `cargo test` includes trybuild suite verifying non-create br verbs fail to compile
+- Found: No trybuild tests in `hoop-daemon/tests/`
+- `br_verbs.rs` has write verb classification but no UI compilation tests
+- **Child bead needed**: Add trybuild tests for write verb compile-fail verification
 
 ### ✅ 13. testrepo/ fixture populated
-**Status:** COMPLETE
-- Location: `/home/coding/HOOP/testrepo/`
-- events.jsonl: 9 NEEDLE events
-- heartbeats.jsonl: 3 worker heartbeats
-- issues.jsonl: 12 synthetic beads
-- sessions/: 5 adapter session files
-- cli-sessions/: 5 worker CLI sessions with needle tags
-- attachments/: example attachments (image, audio, video, logs)
-- FIXTURE.md: comprehensive documentation
-- Size: ~2.8MB (well under 50MB limit)
+**Status**: VERIFIED
+- `.beads/` directory exists with:
+  - `events.jsonl` (9 sample events covering all event types)
+  - `heartbeats.jsonl` (3 sample heartbeats)
+  - `beads.db` (SQLite database)
+- `cli-sessions/` directories for all adapters (claude, codex, opencode, gemini, aider)
+- Each adapter has `session.jsonl` and `session-001.jsonl` files
 
-### ✅ 14. Zero silent drops (unknown events)
-**Status:** COMPLETE
-- Implementation: `hoop-daemon/src/unknown_event_sink.rs` (200+ lines)
-- Every tailer routes unrecognized events through central sink
-- Logs at WARN, increments metrics, buffers samples for diagnostic panel
-- Never silent-drops unknown events (plan §3 principle 7)
+### ❌ 14. Zero silent drops
+**Status**: GAP IDENTIFIED
+- Expected: Unknown events appear in diagnostic panel, not silently ignored; E3-002 counter increments
+- Found:
+  - `unknown_event_sink.rs` exists with global registry
+  - `hoop_unknown_event_total` and `hoop_unknown_event_labeled_total` metrics implemented
+  - Events tailer correctly records unknown events via UnknownEventSink
+- **Gap**: Diagnostic panel (UI surface) not verified - requires web UI (deliverable 8)
+- **Child bead needed**: Implement diagnostic panel in web UI to display unknown events
 
-## Success Criteria Verification
+## Phase 1 Success Criteria Status
 
-✅ HOOP runs alongside a NEEDLE fleet without affecting it
-✅ Killing HOOP does nothing to the fleet
-✅ Every bead visible with worker transcripts joined
-✅ Zero silent drops
-✅ UI mobile-responsive (45+ components)
-✅ hoop status --json succeeds non-interactively
+From plan §6 Phase 1 success criteria:
 
-## Additional Verification (2026-05-15 17:30 UTC)
+1. ✅ **HOOP runs alongside NEEDLE fleet without affecting it** - Architecture verified (read-only, no worker control)
+2. ✅ **Killing HOOP does nothing to the fleet** - No worker steering code present (non-goal verified)
+3. ⚠️ **Every bead visible with worker transcripts joined** - Event tailer works, transcript viewer API missing
+4. ❌ **Zero silent drops** - Unknown event tracking exists, diagnostic UI missing
+5. ❌ **UI mobile-responsive (375px and 1280px)** - Web UI not built/verified
+6. ✅ **hoop status --json succeeds non-interactively** - Verified working
+7. ❌ **Phase 1 CI gate: cargo test green + clippy clean** - Tests fail to compile (82 errors)
 
-Comprehensive end-to-end testing performed:
+## Critical Gaps Requiring Child Beads
 
-### ✅ Server Startup & API Endpoints
-- `hoop serve --addr 127.0.0.1:3000` starts successfully
-- Health check endpoint responds: `/api/health`
-- Root endpoint serves React SPA: `/` returns HTML
-- Conversations API functional: `/api/conversations?limit=1` returns valid JSON
+### High Priority (Phase 1 blockers)
+1. **bf-5i1ln.1**: Fix br version detection for bead-forge binary compatibility
+2. **bf-5i1ln.2**: Implement worker transcript viewer REST API + WebSocket
+3. **bf-5i1ln.3**: Build and verify read-only web UI with Phase 1 features
+4. **bf-5i1ln.4**: Fix compilation errors in test suite (82 errors blocking CI gate)
 
-### ✅ Unknown Event Sink Verified
-- Server logs show unknown events being captured correctly:
-  - Unknown event kind 'user' from adapter 'gemini'
-  - Unknown event kind 'queue-operation' from adapter 'aider'
-  - Unknown event kind 'assistant' from adapter 'opencode'
-  - Unknown event kind 'attachment' from adapter 'claude'
-  - Unknown event kind 'last-prompt' from adapter 'codex'
-- All logged at WARN level with full context
-- Metrics being incremented correctly
-- Zero silent drops confirmed
+### Medium Priority (Phase 1 completeness)
+5. **bf-5i1ln.5**: Add trybuild tests for br_verbs.rs compile-fail verification
+6. **bf-5i1ln.6**: Implement diagnostic panel in web UI for unknown events
 
-### ✅ Trybuild Tests Pass
-- All 6 compile-fail tests pass:
-  - invoke_br_close_raw_forbidden.rs
-  - invoke_br_claim_forbidden.rs
-  - invoke_br_depend_forbidden.rs
-  - invoke_br_release_forbidden.rs
-  - invoke_br_update_forbidden.rs
-  - invoke_br_write_forbidden.rs
-- Create-only invariant enforced at compile time
+## Test Results
 
-### ✅ Projects Configuration
-- projects.yaml format validated:
-  - Supports single workspace shorthand
-  - Supports multi-workspace projects
-  - Hot-reload functional
-  - Canonical path resolution working
+### Build Status
+- ✅ `cargo build --release` succeeds (binary created)
+- ❌ `cargo test --lib` fails with 82 compilation errors
+- ❌ `npm run build` fails (npm not available)
 
-## Gaps Identified
-
-### 🟢 No Critical Gaps
-All Phase 1 deliverables are fully implemented and verified.
-The codebase is production-ready for Phase 1 functionality.
+### Key Findings
+1. **br version check incompatibility**: The `br` binary (bead-forge) doesn't support `--version` flag, blocking daemon startup
+2. **Web UI not built**: No npm in environment prevents UI build/verification
+3. **Test suite broken**: 82 compilation errors block Phase 1 CI gate verification
+4. **Missing transcript API**: No REST/WS endpoints for worker transcript viewer
 
 ## Conclusion
 
-Phase 1 is **FULLY IMPLEMENTED** with all 14 deliverables complete and verified against testrepo/. The core functionality — event tailing, session discovery, heartbeat monitoring, tag-join resolution, web UI, CLI commands — is all present and working.
+Phase 1 has substantial implementation in place (8/14 deliverables verified), but critical gaps remain:
 
-Recommended next steps:
-1. Fix integration test compilation errors (child bead scope)
-2. Run full test suite to verify end-to-end behavior
-3. Close Phase 1 verification bead (bf-5i1ln)
+**Blockers for Phase 1 completion**:
+- br version detection fix (affects deliverables 1, 10, 11)
+- Web UI build and verification (deliverable 8)
+- Worker transcript viewer API (deliverable 7)
+- Test suite compilation fixes (Phase 1 CI gate)
 
-## Bead Closure Status
-
-**Verification work:** ✅ COMPLETE
-**Additional testing:** ✅ COMPLETE (server startup, API endpoints, unknown event sink)
-**Bead closure:** ✅ READY
-
-All 14 Phase 1 deliverables verified complete:
-- Core infrastructure (binary, projects, events, sessions, heartbeats)
-- Data processing (tag-join, transcripts, zero drops)
-- User interface (React SPA, CLI commands, audit, init wizard)
-- Testing validation (trybuild suite, testrepo fixture)
-
-The bead bf-5i1ln is ready for closure with full retrospective.
+**Recommended next steps**:
+1. Create child beads for each gap
+2. Prioritize br version fix (unblocks daemon startup testing)
+3. Set up npm/node environment for web UI build
+4. Fix test compilation errors to enable CI gate verification
