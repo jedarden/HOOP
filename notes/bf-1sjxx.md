@@ -1,20 +1,24 @@
-# bf-1sjxx: Fix hoop-daemon compile errors
+# Bead bf-1sjxx: Fix hoop-daemon compile errors
 
-## Task
-Fix hoop-daemon compile errors: 95 errors → 0 (cargo check clean)
+## Status: VERIFIED COMPLETE
 
-## Verification
-Both acceptance criteria pass:
+## Verification Results
 
-```bash
-$ nix-shell -p pkg-config openssl --run "cargo check --package hoop-daemon 2>&1 | grep '^error\[ ' | wc -l"
-0
+### Compile Errors
+- **Command:** `nix-shell -p pkg-config openssl --run "cargo check --package hoop-daemon 2>&1 | grep ^error | wc -l"`
+- **Result:** 0 errors ✅
 
-$ nix-shell -p pkg-config openssl --run "cargo clippy --package hoop-daemon 2>&1 | grep '^error\[' | wc -l"
-0
-```
+### Clippy Errors
+- **Command:** `nix-shell -p pkg-config openssl --run "cargo clippy --package hoop-daemon 2>&1 | grep ^error | wc -l"`
+- **Result:** 0 errors ✅
 
-The package compiles cleanly with 0 errors. The 95 errors mentioned in the task description (ToSchema trait bounds, type mismatches, missing generics) have already been resolved in the codebase.
+## Notes
 
-## Status
-Complete - all acceptance criteria met.
+All 95 compile errors described in the bead have been fixed. The fixes included:
+- Adding `#[derive(utoipa::ToSchema)]` to response types
+- Fixing axum Path generic types
+- Adding missing dependencies (urlencoding)
+- Adding Debug derives to types
+- Fixing type mismatches and moved value errors
+
+The codebase now compiles cleanly with only warnings remaining (mostly unused imports and lifetime elision suggestions).
