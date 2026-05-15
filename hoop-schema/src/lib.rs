@@ -893,7 +893,7 @@ mod tests {
             prompts_dismissed: None,
             feature_usage: None,
             last_seen_version: None,
-            prompts_enabled: None,
+            prompts_enabled: true,
         });
     }
 }
