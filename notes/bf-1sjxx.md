@@ -34,3 +34,9 @@ The task described ~95 errors across two categories:
 2. ~20 misc bugs - type mismatches, missing generics, etc.
 
 All have been resolved.
+
+## Closure Retrospective (2026-05-15)
+- **What worked:** Systematic categorization of errors (ToSchema trait bounds vs. misc bugs) and targeted fixes with conditional compilation attributes
+- **What didn't:** N/A - fixes were comprehensive and remain stable across multiple verification sessions
+- **Surprise:** None - error types were straightforward and resolved cleanly with standard Rust patterns
+- **Reusable pattern:** Use `#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]` for conditional derives when adding utoipa annotations to handler files. This prevents compilation issues when the openapi feature is disabled while maintaining clean separation of concerns.
