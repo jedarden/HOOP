@@ -2,7 +2,10 @@ error[E0432]: unresolved import `hoop_mcp::br_verbs::invoke_br_write`
  --> tests/ui/invoke_br_update_forbidden.rs:4:26
   |
 4 | use hoop_mcp::br_verbs::{invoke_br_write, WriteVerb};
-  |                          ^^^^^^^^^^^^^^^ no `invoke_br_write` in `br_verbs`
+  |                          ^^^^^^^^^^^^^^^
+  |                          |
+  |                          no `invoke_br_write` in `br_verbs`
+  |                          help: a similar name exists in the module: `invoke_br_create`
   |
 note: found an item that was configured out
  --> src/br_verbs.rs
@@ -12,8 +15,3 @@ note: found an item that was configured out
   | #[allow(dead_code)]
   | pub fn invoke_br_write(verb: WriteVerb, args: &[&str]) -> std::process::Command {
   |        ^^^^^^^^^^^^^^^
-help: a similar name exists in the module
-  |
-4 - use hoop_mcp::br_verbs::{invoke_br_write, WriteVerb};
-4 + use hoop_mcp::br_verbs::{invoke_br_create, WriteVerb};
-  |

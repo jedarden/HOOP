@@ -2,7 +2,10 @@ error[E0432]: unresolved import `hoop_daemon::br_verbs::invoke_br_write`
  --> tests/ui/invoke_br_close_raw_forbidden.rs:4:5
   |
 4 | use hoop_daemon::br_verbs::invoke_br_write;
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `invoke_br_write` in `br_verbs`
+  |     ^^^^^^^^^^^^^^^^^^^^^^^---------------
+  |     |                      |
+  |     |                      help: a similar name exists in the module: `invoke_br_create`
+  |     no `invoke_br_write` in `br_verbs`
   |
 note: found an item that was configured out
  --> src/br_verbs.rs
@@ -11,8 +14,3 @@ note: found an item that was configured out
   |          ---------------------------------------------------------------- the item is gated here
   | pub fn invoke_br_write(verb: WriteVerb, args: &[&str]) -> std::process::Command {
   |        ^^^^^^^^^^^^^^^
-help: a similar name exists in the module
-  |
-4 - use hoop_daemon::br_verbs::invoke_br_write;
-4 + use hoop_daemon::br_verbs::invoke_br_create;
-  |
