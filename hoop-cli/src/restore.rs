@@ -586,6 +586,8 @@ mod tests {
             hoop_version: "99.0.0".into(),
             fleet_db_sha256: None,
             fleet_db_size: None,
+            final_audit_hash: None,
+            config_backup: None,
         };
         let current = hoop_daemon::fleet::SCHEMA_VERSION;
         let err = m.validate(current).unwrap_err();
@@ -719,6 +721,8 @@ mod tests {
             hoop_version: "99.0.0".into(),
             fleet_db_sha256: None,
             fleet_db_size: None,
+            final_audit_hash: None,
+            config_backup: None,
         };
         let current = hoop_daemon::fleet::SCHEMA_VERSION;
         let err = m.validate(current).unwrap_err();
@@ -771,6 +775,8 @@ mod tests {
             hoop_version: "99.0.0".into(),
             fleet_db_sha256: None,
             fleet_db_size: None,
+            final_audit_hash: None,
+            config_backup: None,
         };
 
         // Validation fails — this runs *before* any fs::rename
