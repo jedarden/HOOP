@@ -65,16 +65,16 @@ pub async fn handle_risk_patterns(cmd: RiskPatternsCommands) -> Result<()> {
             severity,
             category,
         } => {
-            add_pattern(
-                &id,
-                &name,
-                &description,
-                &keywords,
-                &label_keywords,
-                &fix_recommendation,
-                &severity,
-                &category,
-            )?;
+            add_pattern(PatternCreateInfo {
+                id: &id,
+                name: &name,
+                description: &description,
+                keywords: &keywords,
+                label_keywords: &label_keywords,
+                fix_recommendation: &fix_recommendation,
+                severity: &severity,
+                category: &category,
+            })?;
         }
         RiskPatternsCommands::List { json } => {
             list_patterns(json)?;
@@ -94,17 +94,20 @@ fn risk_patterns_path() -> Result<PathBuf> {
     Ok(home)
 }
 
+/// Pattern creation parameters
+struct PatternCreateInfo<'a> {
+    id: &'a str,
+    name: &'a str,
+    description: &'a str,
+    keywords: &'a str,
+    label_keywords: &'a str,
+    fix_recommendation: &'a str,
+    severity: &'a str,
+    category: &'a str,
+}
+
 /// Add a new risk pattern
-fn add_pattern(
-    id: &str,
-    name: &str,
-    description: &str,
-    keywords: &str,
-    label_keywords: &str,
-    fix_recommendation: &str,
-    severity: &str,
-    category: &str,
-) -> Result<()> {
+fn add_pattern(info: PatternCreateInfo<'_>) -> Result<()> {
     let path = risk_patterns_path()?;
 
     // Load existing patterns or create empty library
@@ -115,25 +118,25 @@ fn add_pattern(
     };
 
     // Check if pattern ID already exists
-    if library.patterns().iter().any(|p| p.id == id) {
-        eprintln!("Pattern with id '{}' already exists", id);
+    if library.patterns().iter().any(|p| p.id == info.id) {
+        eprintln!("Pattern with id '{}' already exists", info.id);
         std::process::exit(1);
     }
 
     // Parse severity
-    let severity_val = match severity.to_lowercase().as_str() {
+    let severity_val = match info.severity.to_lowercase().as_str() {
         "low" => hoop_daemon::risk_patterns::RiskSeverity::Low,
         "medium" => hoop_daemon::risk_patterns::RiskSeverity::Medium,
         "high" => hoop_daemon::risk_patterns::RiskSeverity::High,
         "critical" => hoop_daemon::risk_patterns::RiskSeverity::Critical,
         _ => {
-            eprintln!("Invalid severity '{}'. Must be: low, medium, high, critical", severity);
+            eprintln!("Invalid severity '{}'. Must be: low, medium, high, critical", info.severity);
             std::process::exit(1);
         }
     };
 
     // Parse category
-    let category_val = match category.to_lowercase().as_str() {
+    let category_val = match info.category.to_lowercase().as_str() {
         "performance" => hoop_daemon::risk_patterns::RiskCategory::Performance,
         "correctness" => hoop_daemon::risk_patterns::RiskCategory::Correctness,
         "security" => hoop_daemon::risk_patterns::RiskCategory::Security,
@@ -143,14 +146,14 @@ fn add_pattern(
         _ => {
             eprintln!(
                 "Invalid category '{}'. Must be: performance, correctness, security, integration, code_quality, infrastructure",
-                category
+                info.category
             );
             std::process::exit(1);
         }
     };
 
     // Parse keywords
-    let keywords_vec: Vec<String> = keywords
+    let keywords_vec: Vec<String> = info.keywords
         .split(',')
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
@@ -162,7 +165,7 @@ fn add_pattern(
     }
 
     // Parse label keywords
-    let label_keywords_vec: Vec<String> = label_keywords
+    let label_keywords_vec: Vec<String> = info.label_keywords
         .split(',')
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
@@ -170,12 +173,12 @@ fn add_pattern(
 
     // Create the pattern
     let pattern = RiskPattern {
-        id: id.to_string(),
-        name: name.to_string(),
-        description: description.to_string(),
+        id: info.id.to_string(),
+        name: info.name.to_string(),
+        description: info.description.to_string(),
         keywords: keywords_vec,
         label_keywords: label_keywords_vec,
-        fix_recommendation: fix_recommendation.to_string(),
+        fix_recommendation: info.fix_recommendation.to_string(),
         severity: severity_val,
         category: category_val,
     };
@@ -192,7 +195,7 @@ fn add_pattern(
     let patterns_json = serde_json::to_string_pretty(library.patterns())?;
     fs::write(&path, patterns_json)?;
 
-    println!("Added pattern '{}': {}", id, name);
+    println!("Added pattern '{}': {}", info.id, info.name);
     println!("Pattern saved to: {}", path.display());
 
     Ok(())

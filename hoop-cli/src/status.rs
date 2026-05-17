@@ -2,7 +2,7 @@
 use anyhow::Result;
 use hoop_schema::{ProjectsRegistry, ProjectsRegistryProjectsItem, WorkspaceView};
 use serde::Serialize;
-use std::{collections::HashMap, path::PathBuf};
+use std::path::{Path, PathBuf};
 
 /// Status output for JSON serialization
 #[derive(Debug, Serialize)]
@@ -178,7 +178,7 @@ fn gather_workspace_status(workspace_view: &WorkspaceView) -> Result<WorkspaceSt
 }
 
 /// Get beads summary by calling br list
-fn get_beads_summary(beads_path: &PathBuf) -> Result<BeadsSummary> {
+fn get_beads_summary(beads_path: &Path) -> Result<BeadsSummary> {
     // Try to call br list --json
     let output = std::process::Command::new("br")
         .arg("list")
