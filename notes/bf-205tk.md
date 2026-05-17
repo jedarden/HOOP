@@ -2,22 +2,23 @@
 
 **Date:** 2026-05-17
 **Bead:** bf-205tk
-**Task:** CI gate: cargo test -p hoop-schema
+**Status:** ✅ PASSED
 
-## Result
+## Task
+Verify CI gate: `cargo test -p hoop-schema`
 
-All tests passed successfully:
-- 148 unit tests passed (id validators, path security, effort levels, schema round-trips)
-- 1 schema drift test passed (1 ignored)
-- 0 failures
+## Results
+- All 148 unit tests passed
+- 1 schema drift test passed (1 ignored - fixture generation)
+- 0 doc tests (1 ignored)
+- Test execution time: < 1 second
 
-## Test Coverage Summary
+## Test Coverage
+- ID validators (bead_id, stitch_id, draft_id, job_id, pattern_id, upload_id, project_name, worker_name)
+- Effort validation for different LLM providers (Claude, Codex)
+- Path security tests (10 attack vectors rejected)
+- Schema round-trip tests (all durable records)
+- Capacity account, conversation data, worker data serialization
 
-The hoop-schema crate test suite validates:
-- ID format validators (bead_id, draft_id, job_id, pattern_id, project_name, stitch_id, upload_id, worker_name)
-- Path security checks (traversal attacks, symlink escapes, null bytes, URL encoding)
-- Effort level validation for Claude/Codex adapters
-- Schema round-trip serialization/deserialization for all durable records
-- Schema version format validation
-
-No code changes were required — this was a verification-only gate.
+## No Issues Found
+All tests in the hoop-schema package pass cleanly. The package is ready for use.
