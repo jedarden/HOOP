@@ -173,7 +173,7 @@ async fn append_scrape_time_metrics(out: &mut String, state: &DaemonState) {
     out.push_str("# TYPE hoop_heartbeat_freshness_seconds gauge\n");
     let now = chrono::Utc::now();
     for w in &workers {
-        let age_secs = (now - w.last_heartbeat).num_seconds().max(0);
+        let age_secs = (now - w.last_heartbeat).num_seconds();
         let escaped = w.worker.replace('\\', "\\\\").replace('"', "\\\"");
         out.push_str(&format!(
             "hoop_heartbeat_freshness_seconds{{worker=\"{escaped}\"}} {age_secs}\n"
@@ -635,14 +635,14 @@ async fn get_unknown_events() -> Json<UnknownEventsResponse> {
     let labeled = m.hoop_unknown_event_labeled_total.snapshot();
     let labeled_totals = labeled
         .into_iter()
-        .filter_map(|(labels, count)| {
+        .map(|(labels, count)| {
             let adapter = labels.first().map(|s| s.as_str()).unwrap_or("unknown");
             let event_kind = labels.get(1).map(|s| s.as_str()).unwrap_or("unknown");
-            Some(LabeledEntry {
+            LabeledEntry {
                 adapter: adapter.to_string(),
                 event_kind: event_kind.to_string(),
                 count,
-            })
+            }
         })
         .collect();
 

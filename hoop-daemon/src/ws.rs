@@ -3,7 +3,7 @@
 //! Broadcasts worker state changes, heartbeats, and liveness transitions
 //! to connected web UI clients.
 
-use crate::heartbeats::{LivenessTransition, MonitorEvent, WorkerHeartbeat, WorkerLiveness};
+use crate::heartbeats::{MonitorEvent, WorkerHeartbeat, WorkerLiveness};
 use crate::sessions::SessionEvent;
 use crate::{Bead, DaemonState, WorkerState};
 use axum::{
@@ -26,6 +26,9 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{broadcast, RwLock};
 use tracing::{debug, warn};
+
+/// Type alias for the complex client storage type
+type ClientsStore = Arc<std::sync::RwLock<Vec<(u64, DateTime<Utc>, String)>>>;
 
 // ---------------------------------------------------------------------------
 // Topic routing (§5.2 Multi-project fan-out, §16.3 WS metrics)
@@ -134,7 +137,7 @@ pub struct WsClientRecord {
 #[derive(Debug, Clone)]
 pub struct WsConnectionTracker {
     next_id: Arc<AtomicU64>,
-    clients: Arc<std::sync::RwLock<Vec<(u64, DateTime<Utc>, String)>>>,
+    clients: ClientsStore,
 }
 
 impl WsConnectionTracker {
@@ -188,7 +191,7 @@ impl Default for WsConnectionTracker {
 /// Removes the connection from the tracker on drop.
 pub struct WsConnectionGuard {
     conn_id: u64,
-    clients: Arc<std::sync::RwLock<Vec<(u64, DateTime<Utc>, String)>>>,
+    clients: ClientsStore,
 }
 
 impl Drop for WsConnectionGuard {
@@ -496,7 +499,7 @@ pub struct ProjectCardData {
 }
 
 /// Configuration error details
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ConfigErrorData {
     /// Human-readable error message
     pub message: String,
