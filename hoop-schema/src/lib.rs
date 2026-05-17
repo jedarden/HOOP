@@ -2,7 +2,7 @@
 //!
 //! This crate provides the shared data types and schemas used across HOOP.
 //! All types are generated from JSON Schema files in the `schemas/` directory
-//! using typify. Every record carries `schema_version: "1.0.0"` for compatibility tracking.
+//! using typify. Every record carries `schema_version: "1.33.0"` for compatibility tracking.
 //!
 //! ## Schema files
 //!
@@ -235,14 +235,14 @@ impl_durable_record!(
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct HealthResponse {
     pub status: String,
-    pub version: &'static str,
+    pub version: String,
 }
 
 impl HealthResponse {
     pub fn ok() -> Self {
         Self {
             status: "ok".to_string(),
-            version: version::SCHEMA_VERSION,
+            version: version::SCHEMA_VERSION.to_string(),
         }
     }
 }
@@ -252,7 +252,7 @@ impl HealthResponse {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ReadinessResponse {
     pub status: String,
-    pub version: &'static str,
+    pub version: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub degraded: Vec<DegradedProject>,
 }
@@ -270,7 +270,7 @@ impl ReadinessResponse {
     pub fn ok() -> Self {
         Self {
             status: "ok".to_string(),
-            version: version::SCHEMA_VERSION,
+            version: version::SCHEMA_VERSION.to_string(),
             degraded: Vec::new(),
         }
     }
@@ -278,7 +278,7 @@ impl ReadinessResponse {
     pub fn degraded(projects: Vec<DegradedProject>) -> Self {
         Self {
             status: "degraded".to_string(),
-            version: version::SCHEMA_VERSION,
+            version: version::SCHEMA_VERSION.to_string(),
             degraded: projects,
         }
     }
@@ -410,7 +410,7 @@ mod tests {
             error: None,
             hash_prev: AuditRowHashPrev("0".repeat(64)),
             hash_self: AuditRowHashSelf("0".repeat(64)),
-            schema_version: None,
+            schema_version: AuditRowSchemaVersion("1.33.0".to_string()),
         }
     );
 
@@ -435,7 +435,7 @@ mod tests {
             parent_stitch_id: None,
             pattern_id: None,
             classification: Some(StitchClassification::Operator),
-            schema_version: StitchSchemaVersion("1.0.0".to_string()),
+            schema_version: StitchSchemaVersion("1.33.0".to_string()),
         }
     );
 
@@ -457,7 +457,7 @@ mod tests {
             progress_percent: None,
             total_cost_usd: None,
             duration_seconds: None,
-            schema_version: PatternSchemaVersion("1.0.0".to_string()),
+            schema_version: PatternSchemaVersion("1.33.0".to_string()),
         }
     );
 
@@ -513,7 +513,7 @@ mod tests {
             window_start: None,
             window_end: None,
             updated_at: parse_utc("2024-01-01T00:00:00Z"),
-            schema_version: CapacityAccountSchemaVersion("1.0.0".to_string()),
+            schema_version: CapacityAccountSchemaVersion("1.33.0".to_string()),
         }
     );
 
@@ -531,7 +531,7 @@ mod tests {
     /// Fields with JSON Schema defaults are generated as non-Option by typify.
     #[test]
     fn hoop_config_round_trip() {
-        let sv = || HoopConfigSchemaVersion("1.0.0".to_string());
+        let sv = || HoopConfigSchemaVersion("1.33.0".to_string());
 
         let original = HoopConfig {
             // §17.3 §1: agent
@@ -623,7 +623,7 @@ mod tests {
         // Verify schema_version is present in the JSON output
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(
-            parsed["schema_version"], "1.0.0",
+            parsed["schema_version"], "1.33.0",
             "schema_version must appear in serialized JSON"
         );
     }
@@ -632,7 +632,7 @@ mod tests {
     #[test]
     fn hoop_config_minimal_round_trip() {
         let original = HoopConfig {
-            schema_version: HoopConfigSchemaVersion("1.0.0".to_string()),
+            schema_version: HoopConfigSchemaVersion("1.33.0".to_string()),
             agent: None,
             projects_file: None,
             backup: None,
@@ -678,7 +678,7 @@ mod tests {
             error: None,
             hash_prev: AuditRowHashPrev("0".repeat(64)),
             hash_self: AuditRowHashSelf("0".repeat(64)),
-            schema_version: None,
+            schema_version: AuditRowSchemaVersion("1.33.0".to_string()),
         });
 
         // Bead
@@ -693,7 +693,7 @@ mod tests {
             updated_at: ts,
             created_by: "user".to_string(),
             dependencies: vec![],
-            schema_version: BeadSchemaVersion("1.0.0".to_string()),
+            schema_version: BeadSchemaVersion("1.33.0".to_string()),
         });
 
         // CapacityAccount
@@ -722,7 +722,7 @@ mod tests {
             window_start: None,
             window_end: None,
             updated_at: ts,
-            schema_version: CapacityAccountSchemaVersion("1.0.0".to_string()),
+            schema_version: CapacityAccountSchemaVersion("1.33.0".to_string()),
         });
 
         // DictatedNote
@@ -738,12 +738,12 @@ mod tests {
             tags: vec![],
             redacted_words: vec![],
             transcription_status: None,
-            schema_version: DictatedNoteSchemaVersion("1.0.0".to_string()),
+            schema_version: DictatedNoteSchemaVersion("1.33.0".to_string()),
         });
 
         // HoopConfig (minimal)
         write_versioned(&HoopConfig {
-            schema_version: HoopConfigSchemaVersion("1.0.0".to_string()),
+            schema_version: HoopConfigSchemaVersion("1.33.0".to_string()),
             agent: None,
             projects_file: None,
             backup: None,
@@ -777,7 +777,7 @@ mod tests {
             progress_percent: None,
             total_cost_usd: None,
             duration_seconds: None,
-            schema_version: PatternSchemaVersion("1.0.0".to_string()),
+            schema_version: PatternSchemaVersion("1.33.0".to_string()),
         });
 
         // PatternMember
@@ -786,7 +786,7 @@ mod tests {
             stitch_id: Uuid::new_v4(),
             added_at: None,
             added_by: None,
-            schema_version: PatternMemberSchemaVersion("1.0.0".to_string()),
+            schema_version: PatternMemberSchemaVersion("1.33.0".to_string()),
         });
 
         // PatternQuery
@@ -794,7 +794,7 @@ mod tests {
             pattern_id: Uuid::new_v4(),
             query: "status:open".to_string(),
             created_at: None,
-            schema_version: PatternQuerySchemaVersion("1.0.0".to_string()),
+            schema_version: PatternQuerySchemaVersion("1.33.0".to_string()),
         });
 
         // ReflectionLedger
@@ -813,7 +813,7 @@ mod tests {
             archived_at: None,
             content_hash: None,
             rejection_count: 0,
-            schema_version: ReflectionLedgerSchemaVersion("1.1.0".to_string()),
+            schema_version: ReflectionLedgerSchemaVersion("1.33.0".to_string()),
         });
 
         // Stitch
@@ -834,7 +834,7 @@ mod tests {
             parent_stitch_id: None,
             pattern_id: None,
             classification: Some(StitchClassification::Operator),
-            schema_version: StitchSchemaVersion("1.0.0".to_string()),
+            schema_version: StitchSchemaVersion("1.33.0".to_string()),
         });
 
         // StitchBead
@@ -845,7 +845,7 @@ mod tests {
             canonical_workspace: None,
             relationship: StitchBeadRelationship::CreatedHere,
             linked_at: None,
-            schema_version: StitchBeadSchemaVersion("1.0.0".to_string()),
+            schema_version: StitchBeadSchemaVersion("1.33.0".to_string()),
         });
 
         // StitchLink
@@ -856,7 +856,7 @@ mod tests {
             workspace_from: "/home/user/project1".to_string(),
             workspace_to: "/home/user/project2".to_string(),
             created_at: None,
-            schema_version: StitchLinkSchemaVersion("1.0.0".to_string()),
+            schema_version: StitchLinkSchemaVersion("1.33.0".to_string()),
         });
 
         // StitchMessage
@@ -869,12 +869,12 @@ mod tests {
             attachments: vec![],
             tokens: None,
             tool_use: None,
-            schema_version: StitchMessageSchemaVersion("1.0.0".to_string()),
+            schema_version: StitchMessageSchemaVersion("1.33.0".to_string()),
         });
 
         // StitchPreview (minimal — only schema_version required)
         write_versioned(&StitchPreview {
-            schema_version: StitchPreviewSchemaVersion("1.0.0".to_string()),
+            schema_version: StitchPreviewSchemaVersion("1.33.0".to_string()),
             prediction: None,
             risk_patterns: vec![],
             file_conflicts: vec![],
@@ -883,7 +883,7 @@ mod tests {
 
         // UiState (minimal — only schema_version + defaults required)
         write_versioned(&UiState {
-            schema_version: UiStateSchemaVersion("1.0.0".to_string()),
+            schema_version: UiStateSchemaVersion("1.33.0".to_string()),
             active_project: None,
             active_stitch: None,
             sidebar_width: 300,
