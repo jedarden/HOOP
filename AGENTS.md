@@ -10,11 +10,31 @@ HOOP does **not** steer NEEDLE workers (no launch / stop / kill / signal / relea
 
 ## Current repository state
 
-**ACTUAL STATE (as of 2026-05-15): Phase 0 complete. Phase 1 in progress, unverified. Phases 2–7 code exists but has NOT been run or verified.**
+**ACTUAL STATE (as of 2026-05-20): Phase 0 complete. Phase 1 in progress. Compile currently broken (fix in progress: bead `bf-1sjxx`). Phases 2–7 code exists but has NOT been run or verified.**
 
-The Rust crate compiles (with correct build environment — see Build environment section below), but no phase has been tested end-to-end. The genesis bead (`hoop-ttb`) was closed prematurely; the bead tracker is the authoritative record of what is actually done.
+The Rust crate does NOT currently compile. The genesis bead (`hoop-ttb`) was closed prematurely; the bead tracker is the authoritative record of what is actually done.
 
 **Do not trust this file's component list as evidence of working software. Run `br list` and check `docs/plan/plan.md` to know the real state.**
+
+### CRITICAL: Phase sequence lock
+
+**DO NOT implement Phase 2+ features until Phase 1 CI gate (bead `bf-5mpcl`) passes.**
+
+Phases are strictly sequential. Per plan §10: "A phase may not begin until all of the following pass on the same commit for the preceding phase." Partial phase completion does not exist — deliverables move to the next phase intact, not half-finished.
+
+**Phase 1 exit gates:**
+- `cargo test` (all unit + integration tests) green
+- `cargo clippy -- -D warnings` clean
+- `hoop status --json | jq .` succeeds (non-interactive mode verified)
+- Phase 1 success criteria have passing automated tests
+
+### Bead workflow
+
+All Phase 1 work beads live in the HOOP workspace (`.beads/`). When working on Phase 1 tasks:
+1. `bf claim` the bead to assign it to yourself
+2. Complete the work as described
+3. `bf close` the bead with a structured retrospective when done
+4. Commit your changes before closing (every completed bead MUST produce at least one commit)
 
 HOOP code structure (files exist; correctness unverified):
 
@@ -179,8 +199,8 @@ If asked to make a change:
 
 1. Read `docs/plan/plan.md` end to end before proposing implementation work.
 2. Check `docs/notes/` for the problem or feature class — prior-art analysis usually applies.
-3. Check which phase the change belongs to. Do not jump ahead — a phase 4 feature should not be started before phase 3 is meaningfully complete.
-4. Match terminology (Stitch / Pattern / human-interface agent / Project / Workspace) exactly. Do not use `Mayor`, `polecat`, `swarm`, `convoy`, or Gas Town vocabulary; those were used in earlier drafts and have been deliberately removed.
+3. Check which phase the change belongs to. **Phase sequence lock per plan §10:** phases are strictly sequential; no partial completion. Do not start Phase N+1 features until Phase N exit gates pass (`cargo test`, `cargo clippy`, success criteria tests, non-interactive mode). A phase 4 feature should not be started before phases 1–3 are fully complete and verified.
+4. Match terminology (Stitch / Pattern / human-interface agent / Project / Workspace) exactly. Do not use `Mayor`, `polecat`, `swarm`, `convoy`, or Gas Town vocabulary; those were used in earlier drafts and have been deliberately removed. Do not use "worker steering" or "capacity enforcement" — these are explicitly non-goals (HOOP observes NEEDLE; it does not steer workers or enforce capacity).
 5. Never suggest features that steer workers, enforce capacity, or route by strand. Refer back to non-goals.
 
 ## Build environment (NixOS — read before running cargo)
