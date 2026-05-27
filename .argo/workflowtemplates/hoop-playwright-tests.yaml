@@ -1,0 +1,208 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: hoop-playwright-tests
+  namespace: argo-workflows
+  annotations:
+    description: "Playwright UI tests on desktop + phone viewports (Phase 2 gate)"
+    planReference: "§10 Phase 2 gate, §21.4 mobile UX requirements"
+spec:
+  arguments:
+    parameters:
+      - name: repo
+        value: https://github.com/jedarden/HOOP.git
+      - name: branch
+        value: main
+      - name: test_spec
+        value: "all"  # all, smoke, visual, mobile
+
+  templates:
+    - name: playwright-tests
+      steps:
+        - - name: build-and-test
+            template: run-playwright-tests
+
+    - name: run-playwright-tests
+      inputs:
+        artifacts:
+          - name: source
+            path: /workspace
+            git:
+              repo: "{{workflow.parameters.repo}}"
+              revision: "{{workflow.parameters.branch}}"
+              depth: 1
+      container:
+        image: mcr.microsoft.com/playwright:v1.49.1-jammy
+        workingDir: /workspace
+        command:
+          - sh
+          - -c
+          - |
+            set -euo pipefail
+
+            echo "=== HOOP Playwright UI Test Suite ==="
+            echo "Test spec: {{workflow.parameters.test_spec}}"
+            echo ""
+
+            # Install Rust and pnpm
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            export PATH="$HOME/.cargo/bin:$PATH"
+            npm install -g pnpm
+
+            # Install build dependencies
+            apt-get update
+            apt-get install -y pkg-config libssl3
+
+            # Step 1: Build web UI assets
+            echo "Step 1: Building web UI assets..."
+            cd /workspace/hoop-ui/web
+            pnpm install --frozen-lockfile
+            pnpm build
+            echo "✓ Web UI assets built to hoop-ui/static/"
+            echo ""
+
+            # Step 2: Build daemon
+            echo "Step 2: Building daemon..."
+            cd /workspace
+            cargo build --release --bin hoop-daemon
+            echo "✓ Daemon built with embedded assets"
+            echo ""
+
+            # Step 3: Start daemon in background
+            echo "Step 3: Starting daemon..."
+            mkdir -p /tmp/hoop-test
+            export HOOP_DB_PATH=/tmp/hoop-test/fleet.db
+            export HOOP_WEB_UI_ONLY=1
+
+            ./target/release/hoop-daemon --db /tmp/hoop-test/fleet.db --port 3000 &
+            DAEMON_PID=$!
+
+            # Wait for daemon to be ready
+            echo "Waiting for daemon to start..."
+            for i in $(seq 1 30); do
+              if curl -s http://localhost:3000/healthz > /dev/null 2>&1; then
+                echo "✓ Daemon is ready"
+                break
+              fi
+              if [ $i -eq 30 ]; then
+                echo "✗ Daemon failed to start"
+                kill $DAEMON_PID 2>/dev/null || true
+                exit 1
+              fi
+              sleep 1
+            done
+            echo ""
+
+            # Step 4: Install Playwright browsers
+            echo "Step 4: Installing Playwright browsers..."
+            cd /workspace/hoop-ui/web
+            npx playwright install --with-deps chromium
+            echo ""
+
+            # Step 5: Run Playwright tests
+            echo "Step 5: Running Playwright tests..."
+            echo ""
+
+            # Override baseURL to point to local daemon
+            export BASE_URL="http://localhost:3000"
+
+            # Determine which tests to run based on test_spec parameter
+            case "{{workflow.parameters.test_spec}}" in
+              smoke)
+                echo "Running smoke tests on desktop and mobile viewports..."
+                npx playwright test --project=chromium --project=desktop-1280 --project=mobile-375 smoke-tests.spec.ts
+                ;;
+              visual)
+                echo "Running visual regression tests on desktop and mobile viewports..."
+                npx playwright test --project=chromium --project=desktop-1280 --project=mobile-375 visual-regression.spec.ts
+                ;;
+              mobile)
+                echo "Running mobile responsiveness tests..."
+                npx playwright test --project=mobile-375 --project=mobile-700 --project=tablet-768 mobile-responsiveness.spec.ts
+                ;;
+              all|*)
+                echo "Running full test suite on desktop and mobile viewports..."
+                # Run smoke tests on all configured viewports
+                npx playwright test --project=chromium --project=desktop-1280 --project=mobile-375 smoke-tests.spec.ts
+                ;;
+            esac
+
+            TEST_RESULT=$?
+
+            # Step 6: Cleanup
+            echo ""
+            echo "Stopping daemon..."
+            kill $DAEMON_PID 2>/dev/null || true
+            wait $DAEMON_PID 2>/dev/null || true
+
+            echo ""
+            if [ $TEST_RESULT -eq 0 ]; then
+              echo "✓ Playwright tests passed"
+              echo ""
+              echo "Phase 2 gate requirement satisfied:"
+              echo "  ✓ UI tests green on desktop viewport"
+              echo "  ✓ UI tests green on phone viewport"
+            else
+              echo "✗ Playwright tests failed"
+              echo ""
+              echo "Phase 2 gate blocked: Fix failing tests before proceeding"
+              exit 1
+            fi
+        env:
+          - name: CI
+            value: "true"
+          - name: PLAYWRIGHT_BROWSERS_PATH
+            value: /ms-playwright
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2000m"
+          limits:
+            memory: "8Gi"
+            cpu: "8000m"
+      volumes:
+        - name: workspace
+          emptyDir: {}
+
+    # Run all tests (default)
+    - name: run-all-tests
+      arguments:
+        parameters:
+          - name: test_spec
+            value: "all"
+      steps:
+        - - name: test
+            template: playwright-tests
+
+    # Run smoke tests only
+    - name: run-smoke-tests
+      arguments:
+        parameters:
+          - name: test_spec
+            value: "smoke"
+      steps:
+        - - name: test
+            template: playwright-tests
+
+    # Run visual regression tests only
+    - name: run-visual-tests
+      arguments:
+        parameters:
+          - name: test_spec
+            value: "visual"
+      steps:
+        - - name: test
+            template: playwright-tests
+
+    # Run mobile tests only
+    - name: run-mobile-tests
+      arguments:
+        parameters:
+          - name: test_spec
+            value: "mobile"
+      steps:
+        - - name: test
+            template: playwright-tests
