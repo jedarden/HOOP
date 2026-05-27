@@ -999,7 +999,7 @@ Dates are planning fiction; ordering matters. **Do not build Stitch creation bef
 | `cargo test` (all unit + integration tests) green | Phase 1 exit |
 | `cargo clippy -- -D warnings` clean | Phase 1 exit |
 | Phase N success criteria all have passing automated tests in CI against `testrepo/` | Phase N exit |
-| Load test: 20 projects × 5 workers × 200 beads synthetic run completes within responsiveness budget | Phase 2 exit (and each subsequent phase) |
+| Load test: 20 projects × 5 workers × 300 beads synthetic run completes within responsiveness budget | Phase 2 exit (and each subsequent phase) |
 | `hoop status --json \| jq .` succeeds (non-interactive mode verified) | Phase 1 exit |
 | UI Playwright tests green on desktop + phone viewport | Phase 2 exit |
 | Phase 2 core deliverables (items 1–13) green before any marquee feature (14–17) is merged | Phase 2 → Phase 3 |
