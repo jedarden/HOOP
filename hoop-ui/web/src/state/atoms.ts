@@ -1,0 +1,1033 @@
+import { atom } from 'jotai';
+import { atomFamily } from 'jotai/utils';
+
+// Session classification types
+export type SessionKind =
+  | 'operator'    // Human ↔ agent chat (normal conversation)
+  | 'dictated'    // Voice note with Whisper transcript
+  | 'worker'      // NEEDLE worker's CLI session (tagged with [needle:...])
+  | 'ad-hoc';     // Direct CLI session without prefix tag
+
+// Worker data for worker sessions
+export interface WorkerMetadata {
+  worker: string;
+  bead: string;
+  strand: string | null;
+}
+
+// Token usage from a single message
+export interface MessageUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+}
+
+// Word-level timestamp for Whisper transcripts
+export interface TranscriptWord {
+  word: string;
+  start: number;  // seconds
+  end: number;    // seconds
+}
+
+// Transcript data structure
+export interface TranscriptData {
+  text: string;
+  words: TranscriptWord[];
+}
+
+// Dictated note metadata from backend (audio + Whisper transcript)
+export interface DictatedNote {
+  stitch_id: string;
+  audio_url: string;
+  transcript: string;
+  transcript_words: TranscriptWord[];
+  duration_secs?: number | null;
+  language?: string | null;
+  recorded_at: string;
+  transcription_status: 'Pending' | 'Completed' | 'Failed';
+}
+
+// A single message in a session
+export interface SessionMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string | { [key: string]: any } | null;
+  usage?: MessageUsage;
+  timestamp?: string;
+  attachments?: string[];
+  transcript?: TranscriptData;
+}
+
+// Conversation/session data
+export interface Conversation {
+  id: string;
+  session_id: string;
+  provider: string;
+  kind: SessionKind;
+  worker_metadata?: WorkerMetadata;
+  cwd: string;
+  title: string;
+  messages: SessionMessage[];
+  total_tokens: number;
+  created_at: string;
+  updated_at: string;
+  complete: boolean;
+  file_path: string;
+  dictated_note?: DictatedNote | null;
+}
+
+// atomFamily keyed by conversation_id — each conversation has its own isolated atom.
+// Token deltas on one conversation never trigger re-renders in other conversation views.
+// Buffers are cleared on conversation_update (authoritative broadcast) or WS disconnect.
+// (jotai/utils atomFamily is deprecated in v2 in favor of jotai-family; still correct for v2.x)
+// eslint-disable-next-line deprecation/deprecation
+export const streamingContentFamily = atomFamily(
+  (_conversationId: string) => atom<string>('')
+);
+
+// Tracks which conversation IDs currently have non-empty streaming buffers.
+// Allows clearAllStreamingAction to sweep only active entries.
+export const streamingActiveIdsAtom = atom<ReadonlySet<string>>(new Set<string>());
+
+// Write-only action: set streaming content for one conversation
+export const setStreamingContentAction = atom(
+  null,
+  (_get, set, { conversationId, content }: { conversationId: string; content: string }) => {
+    set(streamingContentFamily(conversationId), content);
+    set(streamingActiveIdsAtom, (prev) => {
+      if (prev.has(conversationId)) return prev;
+      const next = new Set(prev);
+      next.add(conversationId);
+      return next;
+    });
+  }
+);
+
+// Write-only action: clear one conversation's buffer when the authoritative broadcast arrives
+export const clearStreamingContentAction = atom(
+  null,
+  (_get, set, conversationId: string) => {
+    set(streamingContentFamily(conversationId), '');
+    set(streamingActiveIdsAtom, (prev) => {
+      if (!prev.has(conversationId)) return prev;
+      const next = new Set(prev);
+      next.delete(conversationId);
+      return next;
+    });
+  }
+);
+
+// Write-only action: clear all streaming buffers (WS disconnect or conversations_snapshot)
+export const clearAllStreamingAction = atom(
+  null,
+  (get, set) => {
+    const ids = get(streamingActiveIdsAtom);
+    if (ids.size === 0) return;
+    for (const id of ids) {
+      set(streamingContentFamily(id), '');
+    }
+    set(streamingActiveIdsAtom, new Set<string>());
+  }
+);
+
+// Legacy interfaces for compatibility
+export interface Project {
+  name: string;
+  path: string;
+  activeBeads: number;
+  workers: number;
+}
+
+// Project card data from backend with runtime state
+export interface ProjectCardData {
+  name: string;
+  label: string;
+  color: string;
+  path: string;
+  degraded: boolean;
+  runtime_state?: string;
+  runtime_error?: string;
+  bead_count: number;
+  worker_count: number;
+  active_stitch_count: number;
+  cost_today: number;
+  stuck_count: number;
+  last_activity?: string;
+}
+
+export interface Stitch {
+  id: string;
+  name: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+}
+
+// Worker state types from the backend
+export type WorkerLiveness = 'Live' | 'Hung' | 'Dead';
+
+export type WorkerDisplayState =
+  | { state: 'executing'; bead: string; adapter: string; model: string | null }
+  | { state: 'idle'; last_strand: string | null }
+  | { state: 'knot'; reason: string };
+
+export interface WorkerData {
+  worker: string;
+  state: WorkerDisplayState;
+  liveness: WorkerLiveness;
+  last_heartbeat: string;
+  heartbeat_age_secs: number;
+}
+
+// Bead types from the backend
+export type BeadStatus = 'open' | 'closed';
+export type BeadType = 'task' | 'bug' | 'epic' | 'unknown';
+
+export interface BeadData {
+  id: string;
+  title: string;
+  status: BeadStatus;
+  priority: number;
+  issue_type: BeadType;
+  created_at: string;
+  updated_at: string;
+  created_by: string;
+  dependencies: string[];
+  project: string;
+}
+
+// Cross-workspace blocker data from backend (§4.2)
+export interface CrossWorkspaceBlocker {
+  bead_id: string;
+  workspace: string;
+  title: string;
+  status: string;
+  priority: number;
+  issue_type: string;
+}
+
+export interface BeadBlockersResponse {
+  bead_id: string;
+  blockers: CrossWorkspaceBlocker[];
+}
+
+// Config error details (§17.5)
+export interface ConfigError {
+  message: string;
+  line: number;
+  col: number;
+  field?: string;
+  expected?: string;
+  got?: string;
+}
+
+// Config status from backend (§17.4)
+export interface ConfigStatus {
+  valid: boolean;
+  error?: ConfigError;
+  restart_required?: RestartRequiredData;
+}
+
+// Restart-required keys that changed (§17.4)
+export interface RestartRequiredData {
+  keys: string[];
+  message: string;
+}
+
+// Per-account capacity data from backend
+export interface AccountCapacity {
+  account_id: string;
+  adapter: string;
+  plan_type: string;
+  rate_limit_tier: string;
+  utilization_5h: number;
+  utilization_7d: number;
+  resets_at_5h?: string | null;
+  resets_at_7d?: string | null;
+  tokens_5h: number;
+  tokens_7d: number;
+  turns_5h: number;
+  turns_7d: number;
+  prompts_5h: number;
+  prompts_7d: number;
+  prompts_per_5h?: number | null;
+  prompts_per_7d?: number | null;
+  burn_rate_per_min: number;
+  forecast_full_5h_min?: number | null;
+  forecast_full_7d_min?: number | null;
+  stitch_close_rate_per_min: number;
+  mean_cost_per_stitch_tokens: number;
+  forecast_full_5h_stitch_min?: number | null;
+  forecast_full_7d_stitch_min?: number | null;
+  source: string;
+  computed_at: string;
+}
+
+// Agent session event (mirrors backend AgentSessionEvent enum, serde tag = "type")
+export type AgentSessionEventData =
+  | { type: 'session_spawned'; session_id: string; adapter: string; model: string }
+  | { type: 'session_reattached'; session_id: string; adapter: string; model: string }
+  | { type: 'text_delta'; session_id: string; text: string }
+  | { type: 'tool_use'; session_id: string; id: string; name: string; input: unknown }
+  | { type: 'tool_result'; session_id: string; id: string; output: unknown; is_error: boolean }
+  | { type: 'turn_complete'; session_id: string; cost_usd: number; input_tokens: number; output_tokens: number }
+  | { type: 'session_archived'; session_id: string; reason: string }
+  | { type: 'error'; session_id: string; message: string };
+
+// Agent session status snapshot from backend
+export interface AgentSessionStatus {
+  active: boolean;
+  enabled: boolean;
+  session_id: string | null;
+  adapter: string | null;
+  model: string | null;
+  stitch_id: string | null;
+  cost_usd: number;
+  input_tokens: number;
+  output_tokens: number;
+  turn_count: number;
+  created_at: string | null;
+  last_activity_at: string | null;
+  age_secs: number | null;
+}
+
+// Tool call state during a live turn
+export interface AgentToolCallInProgress {
+  id: string;
+  name: string;
+  input: unknown;
+  output?: unknown;
+  is_error?: boolean;
+  status: 'pending' | 'complete';
+}
+
+// In-flight agent response — separate reactive atom for isolation (acceptance: in-flight isolation)
+export interface AgentInflight {
+  session_id: string;
+  text: string;
+  tool_calls: AgentToolCallInProgress[];
+  started_at: number;
+}
+
+// A finalized message in the operator↔agent chat pane
+export interface AgentChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  tool_calls?: AgentToolCallInProgress[];
+  timestamp: number;
+  session_id: string;
+  attachments?: string[];
+  turn_id?: string;
+}
+
+// Agent chat scope — which project(s) are in context (empty = cross-project / all)
+export interface AgentChatScope {
+  projects: string[];
+}
+
+// Stuck detector alert (§C1, hoop-ttb.3.25)
+export type StuckReason =
+  | 'idle_timeout'
+  | 'max_runtime_exceeded'
+  | 'content_seen_grace_exceeded'
+  | 'heartbeat_transition_silence'
+  | 'repeated_retry';
+
+export interface StuckAlert {
+  worker: string;
+  bead: string;
+  started_at: string;
+  last_event_at: string;
+  elapsed_secs: number;
+  idle_secs: number;
+  saw_content: boolean;
+  reason: StuckReason;
+  message: string;
+  last_heartbeat_at: string | null;
+  last_transition_at: string | null;
+  retry_count: number;
+}
+
+// Collision detector alert (§6 Phase 2, deliverable 12)
+export interface CollisionAlert {
+  alert_id: string;
+  detected_at: string;
+  worker_a: string;
+  bead_a: string;
+  worker_b: string;
+  bead_b: string;
+  overlapping_files: string[];
+}
+
+// Cost anomaly alert (§6 Phase 2 marquee #4)
+export interface CostBand {
+  mean_usd: number;
+  std_dev_usd: number;
+  upper_2sigma_usd: number;
+  similar_count: number;
+  min_similarity: number;
+  window_days: number;
+}
+
+export interface ClosestPatternMatch {
+  pattern_id: string;
+  pattern_name: string;
+  similarity: number;
+  recommended_fix_template_md: string;
+}
+
+export interface CostAnomalyAlert {
+  alert_id: string;
+  stitch_id: string;
+  stitch_title: string;
+  project: string;
+  cost_usd: number;
+  band: CostBand;
+  closest_pattern: ClosestPatternMatch | null;
+  detected_at: string;
+}
+
+// Saturation alert (§6 P2 d10, §8.3, hoop-ttb.3.22)
+export interface SaturationAlert {
+  alert_id: string;
+  detected_at: string;
+  account: string;
+  model: string;
+  utilization_percent: number;
+  threshold_percent: number;
+  current_tpm: number;
+  quota_tpm: number;
+}
+
+// Search palette open/closed state (cmd-K)
+export const searchPaletteOpenAtom = atom<boolean>(false);
+
+// Settings menu open/closed state
+export const settingsMenuOpenAtom = atom<boolean>(false);
+
+// Welcome tour state
+const WELCOME_TOUR_STORAGE_KEY = 'hoop_welcome_tour_completed';
+
+function loadWelcomeTourCompleted(): boolean {
+  try {
+    const stored = localStorage.getItem(WELCOME_TOUR_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as boolean;
+      return parsed;
+    }
+  } catch {}
+  return false;
+}
+
+function saveWelcomeTourCompleted(completed: boolean) {
+  try {
+    localStorage.setItem(WELCOME_TOUR_STORAGE_KEY, JSON.stringify(completed));
+  } catch {}
+}
+
+export { WELCOME_TOUR_STORAGE_KEY };
+
+const baseWelcomeTourCompletedAtom = atom<boolean>(loadWelcomeTourCompleted());
+export const welcomeTourCompletedAtom = atom(
+  (get) => get(baseWelcomeTourCompletedAtom),
+  (get, set, newValue: boolean) => {
+    set(baseWelcomeTourCompletedAtom, newValue);
+    saveWelcomeTourCompleted(newValue);
+  }
+);
+
+// Welcome tour step (0 = not started, 1-N = active step, >N = completed)
+export const welcomeTourStepAtom = atom<number>(0);
+
+// Presence tracking atoms (§19.4 Multi-operator presence)
+export type PresenceVisibility = 'online' | 'away' | 'offline';
+export const presenceVisibilityAtom = atom<PresenceVisibility>('online');
+
+// Per-project presence: project name -> Set of operator IDs
+export const presenceForProjectAtom = atom<Map<string, Set<string>>>(new Map());
+
+// Per-stitch presence: stitch ID -> Set of operator IDs
+export const presenceForStitchAtom = atom<Map<string, Set<string>>>(new Map());
+
+// Onboarding prompt types
+export type OnboardingPromptType =
+  | { whats_new: { version: string } }
+  | { reflection_ledger_empty: null }
+  | { pattern_suggestion: { theme: string; stitch_count: number } }
+  | { agent_intro: null }
+  | { mic_intro: null };
+
+export interface OnboardingPrompt {
+  id: string;
+  prompt_type: OnboardingPromptType;
+  title: string;
+  message: string;
+  action_label: string | null;
+  action_url: string | null;
+  eligible_at: string;
+  dismissed_at: string | null;
+  priority: number;
+}
+
+export interface OnboardingPromptsResponse {
+  prompts: OnboardingPrompt[];
+  prompts_enabled: boolean;
+  hoop_version: string;
+  last_seen_version: string | null;
+}
+
+// Onboarding atoms - store the full response including dismissed list
+export const onboardingPromptsAtom = atom<OnboardingPromptsResponse | null>(null);
+export const onboardingPromptsLoadedAtom = atom<boolean>(false);
+export const onboardingPromptsErrorAtom = atom<string | null>(null);
+
+// Optimistic mutation stub — survives WS reconnect (§B2, epoch-sync)
+export interface OptimisticStub {
+  tempId: string;
+  type: 'bead' | 'stitch' | 'draft';
+  data: Record<string, unknown>;
+  createdAt: number;
+}
+
+// WebSocket event from backend
+export interface WsEvent {
+  type: 'init' | 'worker_update' | 'workers_snapshot' | 'beads_snapshot' | 'conversations_snapshot' | 'conversation_update' | 'streaming_content' | 'config_status' | 'projects_snapshot' | 'capacity_snapshot' | 'stitch_created' | 'agent_session' | 'draft_update' | 'stuck_alert' | 'collision_alert' | 'cost_anomaly_alert' | 'saturation_alert';
+  subscriptions?: string[];
+  worker?: WorkerData;
+  workers?: WorkerData[];
+  beads?: BeadData[];
+  conversations?: Conversation[];
+  conversation?: Conversation;
+  streaming?: { conversation_id: string; content: string; timestamp: number };
+  projects?: ProjectCardData[];
+  config_status?: ConfigStatus;
+  capacity?: AccountCapacity[];
+  stitch_created?: StitchCreatedData;
+  agent_session?: AgentSessionEventData;
+  draft_update?: { draft_id: string; updated_at: string };
+  stuck_alert?: StuckAlert;
+  collision_alert?: CollisionAlert;
+  cost_anomaly_alert?: CostAnomalyAlert;
+  saturation_alert?: SaturationAlert;
+}
+
+// Cost bucket from backend aggregation
+export interface CostBucket {
+  date: string;
+  project: string;
+  adapter: string;
+  model: string;
+  strand: string | null;
+  /** "fleet" (NEEDLE worker session) or "operator" (all others). Set at aggregation time. */
+  classification: string;
+  usage: MessageUsage;
+  request_count: number;
+  cost_usd: number;
+}
+
+/** Filter values for the conversation pane — persisted across renders in a Jotai atom. */
+export type ConversationFilter = 'all' | 'fleet' | 'operator' | 'ad-hoc' | 'dictated' | 'screen-capture';
+
+const CONVERSATION_FILTER_STORAGE_KEY = 'hoop_conversation_filter';
+
+function loadConversationFilter(): ConversationFilter {
+  try {
+    const stored = localStorage.getItem(CONVERSATION_FILTER_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as string;
+      // Validate it's a known filter value
+      if (['all', 'fleet', 'operator', 'ad-hoc', 'dictated', 'screen-capture'].includes(parsed)) {
+        return parsed as ConversationFilter;
+      }
+    }
+  } catch {}
+  return 'all';
+}
+
+function saveConversationFilter(filter: ConversationFilter) {
+  try {
+    localStorage.setItem(CONVERSATION_FILTER_STORAGE_KEY, JSON.stringify(filter));
+  } catch {}
+}
+
+export { CONVERSATION_FILTER_STORAGE_KEY };
+
+// Stitch created event from backend WS
+export interface StitchCreatedData {
+  bead_id: string;
+  title: string;
+  project: string;
+  stitch_id: string | null;
+  source: string;
+  actor: string;
+  created_at: string;
+}
+
+// Audit log row from fleet.db actions table (§4.5, §13)
+export interface AuditRow {
+  id: string;
+  ts: string;
+  actor: string;
+  type: string;
+  target: string;
+  project: string | null;
+  args: Record<string, unknown> | null;
+  result: string;
+  error: string | null;
+  schema_version: string;
+}
+
+// Response from GET /api/audit
+export interface AuditResponse {
+  audit_rows: AuditRow[];
+  total_count: number;
+}
+
+// Response from GET /api/audit/verify
+export interface HashChainVerifyResponse {
+  valid: boolean;
+  message: string;
+  row_count: number;
+}
+
+// Redaction audit log row from GET /api/redaction-audit
+export interface RedactionAuditRow {
+  id: string;
+  ts: string;
+  what_flagged: string;
+  pattern_name: string;
+  action: string;
+  operator: string;
+  source_ref: string | null;
+  project: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+// Response from GET /api/audit/redaction
+export interface RedactionAuditResponse {
+  audit_rows: RedactionAuditRow[];
+  total_count: number;
+}
+
+// Bead event from events.jsonl for debug panel
+export interface BeadEventFromEvents {
+  timestamp: string;
+  event_type: string;
+  bead_id: string;
+  worker: string;
+  line_number?: number;
+  raw: string;
+  /** Git stash SHA from fail events for Stitch Replay reconstruction (hoop-ttb.5.11) */
+  stash_sha?: string;
+}
+
+// Screen capture chapter marker (derived from frame-sample UI-change events)
+export interface FrameSample {
+  timestamp_secs: number;
+  label: string;
+}
+
+// Screen capture summary from project list endpoint
+export interface ScreenCaptureSummary {
+  stitch_id: string;
+  project: string;
+  title: string;
+  recorded_at: string;
+  duration_secs: number | null;
+  chapter_count: number;
+  has_transcript: boolean;
+}
+
+// Full screen capture data (metadata + chapters + transcript)
+export interface ScreenCaptureData {
+  stitch_id: string;
+  title: string;
+  project: string;
+  recorded_at: string;
+  video_url: string;
+  duration_secs: number | null;
+  chapters: FrameSample[];
+  transcript: { text: string; words: TranscriptWord[] } | null;
+}
+
+// Dictated note summary from REST API
+export interface NoteSummary {
+  stitch_id: string;
+  project: string;
+  title: string;
+  kind: string;
+  recorded_at: string;
+  transcribed_at: string;
+  duration_secs: number | null;
+  language: string | null;
+  tags: string[];
+  transcript_preview: string;
+  /** Full transcript text for search indexing */
+  transcript: string;
+  last_activity_at: string;
+  created_at: string;
+  audio_filename: string;
+  transcription_status: 'Pending' | 'Completed' | 'Failed';
+}
+
+// Cross-project dashboard types
+export interface ProjectSpend {
+  project: string;
+  cost_usd: number;
+}
+
+export interface AdapterSpend {
+  adapter: string;
+  cost_usd: number;
+}
+
+export interface ProjectWorkers {
+  project: string;
+  worker_count: number;
+}
+
+export interface LongestRunningStitch {
+  project: string;
+  bead_id: string;
+  title: string;
+  created_at: string;
+  duration_secs: number;
+}
+
+export interface CrossProjectDashboardData {
+  range: string;
+  range_label: string;
+  total_spend_usd: number;
+  spend_by_project: ProjectSpend[];
+  spend_by_adapter: AdapterSpend[];
+  total_workers: number;
+  workers_by_project: ProjectWorkers[];
+  longest_running_stitches: LongestRunningStitch[];
+}
+
+// File navigation request — set by StitchesTab when user clicks a touched file;
+// consumed by FilesTab on mount to open a diff view at the stitch's commit range.
+export interface FileNavigation {
+  projectName: string;
+  filePath: string;
+  /** "SHA1^..SHA2" — before/after range from bead_commits net-diff */
+  refRange: string;
+}
+export const fileNavigationAtom = atom<FileNavigation | null>(null);
+
+// Dictation hotkey config
+export interface DictationHotkey {
+  key: string;
+  meta: boolean;
+  ctrl: boolean;
+  shift: boolean;
+  alt: boolean;
+}
+
+const DICTATION_HOTKEY_STORAGE_KEY = 'hoop_dictation_hotkey';
+
+function loadDictationHotkey(): DictationHotkey {
+  try {
+    const stored = localStorage.getItem(DICTATION_HOTKEY_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as DictationHotkey;
+      if (parsed.key && typeof parsed.meta === 'boolean') return parsed;
+    }
+  } catch {}
+  return { key: 'd', meta: true, ctrl: false, shift: true, alt: false };
+}
+
+export { DICTATION_HOTKEY_STORAGE_KEY };
+export const dictationHotkeyAtom = atom<DictationHotkey>(loadDictationHotkey());
+
+// Active project name — updated by App.tsx when route changes; read by DictationWidget
+export const activeProjectNameAtom = atom<string>('');
+
+// UI config from /api/config — includes ui_archive_after_days
+export interface UiConfig {
+  ui_archive_after_days: number;
+}
+
+// Response from GET /api/config (subset of fields)
+export interface ConfigResponse {
+  schema_version: string;
+  config: {
+    ui_archive_after_days: number;
+  };
+}
+
+export const uiConfigAtom = atom<UiConfig>({ ui_archive_after_days: 30 });
+
+// Archive filter toggle — persists per-operator to localStorage
+const ARCHIVE_FILTER_STORAGE_KEY = 'hoop_archive_filter_show_archived';
+
+function loadArchiveFilter(): boolean {
+  try {
+    const stored = localStorage.getItem(ARCHIVE_FILTER_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as boolean;
+      return parsed;
+    }
+  } catch {}
+  return false; // Default: hide archived
+}
+
+function saveArchiveFilter(show: boolean) {
+  try {
+    localStorage.setItem(ARCHIVE_FILTER_STORAGE_KEY, JSON.stringify(show));
+  } catch {}
+}
+
+export { ARCHIVE_FILTER_STORAGE_KEY };
+
+const baseArchiveFilterShowArchivedAtom = atom<boolean>(loadArchiveFilter());
+export const archiveFilterShowArchivedAtom = atom(
+  (get) => get(baseArchiveFilterShowArchivedAtom),
+  (get, set, newValue: boolean) => {
+    set(baseArchiveFilterShowArchivedAtom, newValue);
+    saveArchiveFilter(newValue);
+  }
+);
+
+// ── Draft persistence types (§19.1 Draft concurrency) ───────────────────────
+
+export type DraftStatus = 'pending' | 'approved' | 'submitted' | 'rejected' | 'edited' | 'abandoned';
+
+export interface DraftRow {
+  id: string;
+  project: string;
+  title: string;
+  kind: string;
+  description: string | null;
+  has_acceptance_criteria: number;
+  priority: number | null;
+  labels: string[];
+  created_by: string;
+  created_at: string;
+  source: string;
+  agent_session_id: string | null;
+  turn_id: string | null;
+  status: DraftStatus;
+  version: number;
+  original_json: string | null;
+  resolved_by: string | null;
+  resolved_at: string | null;
+  rejection_reason: string | null;
+  stitch_id: string | null;
+  preview_json: string | null;
+  opened_by: string | null;
+  opened_at: string | null;
+  last_autosave_at: string | null;
+  abandoned_at: string | null;
+}
+
+// Draft autosave state for UI indicators
+export interface DraftAutosaveState {
+  draftId: string | null;
+  isSaving: boolean;
+  lastSavedAt: string | null;
+  saveError: string | null;
+}
+
+// Current draft form state — shared across stitch/bead forms
+export const draftAutosaveAtom = atom<DraftAutosaveState>({
+  draftId: null,
+  isSaving: false,
+  lastSavedAt: null,
+  saveError: null,
+});
+
+// Draft updates from WebSocket — when another operator edits the same draft
+export const draftUpdateAtom = atom<{ draftId: string; updatedAt: string } | null>(null);
+
+// Atoms for state management
+export const conversationsAtom = atom<Conversation[]>([]);
+export const selectedConversationIdAtom = atom<string | null>(null);
+/** Per-operator conversation filter — persists to localStorage across sessions. */
+const baseConversationFilterAtom = atom<ConversationFilter>(loadConversationFilter());
+export const conversationFilterAtom = atom(
+  (get) => get(baseConversationFilterAtom),
+  (get, set, newValue: ConversationFilter) => {
+    set(baseConversationFilterAtom, newValue);
+    saveConversationFilter(newValue);
+  }
+);
+export const projectsAtom = atom<Project[]>([]);
+export const projectCardsAtom = atom<ProjectCardData[]>([]);
+export const projectsReceivedAtom = atom<boolean>(false);
+export const stitchesAtom = atom<Stitch[]>([]);
+export const workersAtom = atom<WorkerData[]>([]);
+export const beadsAtom = atom<BeadData[]>([]);
+// atomFamily keyed by bead_id — stores cross-workspace blockers for each bead
+export const blockersAtomFamily = atomFamily((beadId: string) =>
+  atom<CrossWorkspaceBlocker[]>([])
+);
+export const beadEventsAtom = atom<Map<string, BeadEventFromEvents[]>>(new Map()); // bead_id -> events
+export const wsConnectedAtom = atom<boolean>(false);
+
+// WebSocket reconnection state
+export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
+export const connectionStatusAtom = atom<ConnectionStatus>('connecting');
+export const reconnectAttemptAtom = atom<number>(0);
+export const reconnectDelayAtom = atom<number>(1000); // Current backoff delay in ms
+
+// Derived atom: mutations are disabled when disconnected or connecting
+export const mutationsDisabledAtom = atom<boolean>((get) => {
+  const status = get(connectionStatusAtom);
+  return status === 'disconnected' || status === 'connecting';
+});
+
+export const configStatusAtom = atom<ConfigStatus>({ valid: true });
+export const capacityAtom = atom<AccountCapacity[]>([]);
+export const costBucketsAtom = atom<CostBucket[]>([]);
+export const dictatedNotesAtom = atom<Map<string, NoteSummary[]>>(new Map()); // project -> notes
+export const screenCapturesAtom = atom<Map<string, ScreenCaptureSummary[]>>(new Map()); // project -> captures
+export const stitchCreatedAtom = atom<StitchCreatedData[]>([]);
+// Stuck detector alerts (§C1, hoop-ttb.3.25) — keyed by worker name
+export const stuckAlertsAtom = atom<Map<string, StuckAlert>>(new Map());
+// Collision detector alerts (§6 Phase 2, deliverable 12) — keyed by alert_id
+export const collisionAlertsAtom = atom<Map<string, CollisionAlert>>(new Map());
+// Cost anomaly alerts (§6 Phase 2 marquee #4) — keyed by alert_id
+export const costAnomalyAlertsAtom = atom<Map<string, CostAnomalyAlert>>(new Map());
+// Saturation alerts (§6 P2 d10, §8.3, hoop-ttb.3.22) — keyed by alert_id
+export const saturationAlertsAtom = atom<Map<string, SaturationAlert>>(new Map());
+
+// File attach context — set by the file-tree context menu to pipe a file
+// into whichever draft form is currently open (or will open next).
+export interface FileAttachContext {
+  projectName: string;
+  path: string;
+  /** Monotonically-increasing sequence number so the same file can be added twice. */
+  seq: number;
+}
+export const fileAttachContextAtom = atom<FileAttachContext | null>(null);
+
+// Agent chat atoms
+export const agentSessionStatusAtom = atom<AgentSessionStatus | null>(null);
+export const agentInflightAtom = atom<AgentInflight | null>(null);
+export const agentChatMessagesAtom = atom<AgentChatMessage[]>([]);
+export const agentChatScopeAtom = atom<AgentChatScope>({ projects: [] });
+
+// Optimistic mutation stubs — survive WS reconnect (§B2, epoch-sync)
+// Cleared only when server confirms the mutation or client discards it
+export const optimisticStubsAtom = atom<OptimisticStub[]>([]);
+
+// Current time atom — updated every 30s by OverviewPage; used by RelativeTime
+// so that time-tick re-renders don't defeat memo on ProjectCard.
+export const currentTimeAtom = atom<number>(Date.now());
+
+// Stuck workers panel state — null = closed, string = project name (empty = fleet view)
+export const stuckWorkersPanelOpenAtom = atom<string | null>(null);
+
+// Format content for display (handles string and object content)
+export function formatContent(content: string | { [key: string]: any } | null): string {
+  if (content === null) return '';
+  if (typeof content === 'string') return content;
+  return JSON.stringify(content, null, 2);
+}
+
+// Get badge display for session kind
+export function getSessionKindBadge(kind: SessionKind, workerMetadata?: WorkerMetadata): { label: string; className: string } {
+  switch (kind) {
+    case 'worker':
+      return { label: `fleet · ${workerMetadata?.worker || 'unknown'}`, className: 'badge-fleet' };
+    case 'operator':
+      return { label: 'operator', className: 'badge-operator' };
+    case 'dictated':
+      return { label: 'dictated', className: 'badge-dictated' };
+    case 'ad-hoc':
+      return { label: 'ad-hoc', className: 'badge-ad-hoc' };
+  }
+}
+
+// Get adapter and model from worker state
+export function getAdapterAndModel(workers: WorkerData[], workerName: string): { adapter: string; model: string | null } {
+  const worker = workers.find(w => w.worker === workerName);
+  if (worker?.state.state === 'executing') {
+    return { adapter: worker.state.adapter, model: worker.state.model };
+  }
+  return { adapter: 'cli', model: null };
+}
+
+// ── Template library (§22 Extensibility) ───────────────────────────────────────
+
+// Template field values — keyed by field key
+export interface TemplateValues {
+  [key: string]: string;
+}
+
+// Re-export StitchTemplate from generated types for convenience
+export type StitchTemplate = import('./types.gen').StitchTemplate;
+
+// Template library cache — fetched from /api/p/{project}/templates
+export const templatesAtom = atom<StitchTemplate[]>([]);
+
+// ── Operator-invoked scripts (§22.3) ─────────────────────────────────────────────
+
+// Script manifest (from optional manifest.yml next to script)
+export interface ScriptManifest {
+  name: string;
+  description?: string;
+  scope?: 'global' | 'project';
+  projects?: string[];
+  timeout_secs?: number;
+  arguments?: ScriptArgument[];
+  schedule?: string;
+  overlap_policy?: 'skip' | 'queue' | 'parallel';
+  on?: EventSubscription[];
+}
+
+// Script argument definition
+export interface ScriptArgument {
+  name: string;
+  description?: string;
+  required?: boolean;
+  default?: string;
+}
+
+// Event subscription for triggering scripts automatically
+export interface EventSubscription {
+  event: string;
+  project?: string;
+  kind?: string;
+  adapter?: string;
+  result?: 'success' | 'failure';
+}
+
+// Discovered script entry (from GET /api/scripts)
+export interface ScriptEntry {
+  name: string;
+  path: string;
+  manifest?: ScriptManifest;
+  executable: boolean;
+  last_fire?: string;
+  next_fire?: string;
+  running?: boolean;
+}
+
+// Script execution response (from POST /api/scripts/:name/run)
+export interface ScriptRunResponse {
+  script: string;
+  exit_code?: number;
+  timed_out: boolean;
+  stdout: string;
+  stderr: string;
+  duration_ms: number;
+  status: string;
+}
+
+// Script execution state for UI
+export interface ScriptExecutionState {
+  running: boolean;
+  scriptName: string | null;
+  result: ScriptRunResponse | null;
+  error: string | null;
+}
+
+// Script execution atom — tracks current script execution state
+export const scriptExecutionAtom = atom<ScriptExecutionState>({
+  running: false,
+  scriptName: null,
+  result: null,
+  error: null,
+});

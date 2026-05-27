@@ -2,7 +2,7 @@
 
 ## Overview
 
-HOOP includes a synthetic load test driver that generates concurrent event streams (20 projects × 5 workers × 200 beads) and validates the daemon against performance budgets.
+HOOP includes a synthetic load test driver that generates concurrent event streams (20 projects × 5 workers × 300 beads at canonical load) and validates the daemon against performance budgets.
 
 ## Performance Budgets
 
@@ -12,7 +12,7 @@ The load test validates the following performance budgets:
 |--------|--------|-------------|
 | API Latency | < 500ms | HTTP API response time |
 | WS Fan-out Lag | < 100ms | WebSocket broadcast round-trip time |
-| Memory Ceiling | < 4GB | Process RSS memory |
+| Memory Ceiling | < 400MB | Process RSS memory under canonical load (per plan §16.8) |
 
 ## Configuration
 
@@ -22,8 +22,44 @@ Load tests are configured via environment variables:
 |----------|---------|-------------|
 | `HOOP_LOAD_PROJECTS` | 20 | Number of synthetic projects |
 | `HOOP_LOAD_WORKERS` | 5 | Workers per project |
-| `HOOP_LOAD_BEADS` | 200 | Beads per worker |
+| `HOOP_LOAD_BEADS` | 300 | Beads per worker |
 | `HOOP_LOAD_CADENCE_MS` | 10 | Delay between events (ms) |
+
+## Runtime & Resource Requirements
+
+### Expected Runtime
+
+| Scale | Configuration | Expected Runtime | Description |
+|-------|---------------|------------------|-------------|
+| Smoke | 1×1×2 | ~30 seconds | Quick validation during development |
+| Medium | 5×2×50 | ~2-3 minutes | PR validation, fast CI feedback |
+| Full | 20×5×300 | ~15-20 minutes | Release validation, Phase 2 exit gate |
+
+### Resource Requirements
+
+The load test requires the following resources:
+
+**Local Development:**
+- **CPU**: 2-4 cores recommended
+- **Memory**: 4-8 GB RAM (daemon uses ~200-400MB under load)
+- **Disk**: ~500 MB temporary space for synthetic event data
+
+**CI Environment (Argo Workflows):**
+- **CPU Request**: 1000m (1 core)
+- **CPU Limit**: 4000m (4 cores)
+- **Memory Request**: 2 Gi
+- **Memory Limit**: 8 Gi
+
+### Performance Budget Thresholds
+
+The load test will fail if any of these thresholds are exceeded:
+
+| Metric | Budget | Rationale |
+|--------|--------|-----------|
+| API Latency (max) | 500ms | UI responsiveness requirement (plan §16.8) |
+| API Latency (p95) | 400ms | 95th percentile should stay well under max |
+| Memory Ceiling | 400 MB RSS | Canonical load memory budget (plan §16.8) |
+| WS Fan-out Lag | 100ms | Real-time event broadcast requirement |
 
 ## Running Load Tests
 
@@ -33,7 +69,7 @@ Load tests are configured via environment variables:
 # Medium-scale test (5x2x50, ~2 minutes)
 make test-load
 
-# Full-scale test (20x5x200, ~10 minutes)
+# Full-scale test (20x5x300, ~15 minutes)
 make test-load-full
 
 # Custom configuration
@@ -64,23 +100,82 @@ cargo run --example load-test-runner -- --url http://localhost:8080 --verbose
 
 ## CI Integration
 
+### Phase 2 Exit Gate
+
+The load test is a **Phase 2 exit gate** (plan §10). A full-scale run (20×5×300) must complete within the performance budgets for Phase 2 to be declared complete.
+
+**Phase 2 Exit Criteria:**
+- Load test: 20 projects × 5 workers × 300 beads synthetic run completes within responsiveness budget
+
+### Argo Workflows (CI/CD)
+
+The `hoop-load-test` WorkflowTemplate (`.argo/workflowtemplates/hoop-load-test.yaml`) runs in the `iad-ci` cluster.
+
+**What it does:**
+1. Clones the HOOP repository
+2. Builds the daemon (`cargo build --release --bin hoop-daemon`)
+3. Populates testrepo with synthetic load data
+4. Runs Rust integration tests (`load_test_ci_performance_budgets`)
+5. Measures API latency, memory usage, and WS fan-out lag
+6. Asserts all performance budgets are satisfied
+7. Fails the workflow if any budget is exceeded
+
+### Workflow Scales
+
 Load tests run in CI with different scales based on context:
 
 | Context | Scale | Required |
 |---------|-------|----------|
 | Pull Request | Medium (5x2x50) | Optional (doesn't block) |
 | Main Branch Push | Medium (5x2x50) | Runs but doesn't block |
-| Release Tag | Full (20x5x200) | Required (blocks release) |
+| Release Tag | Full (20x5x300) | Required (blocks release) |
+| Phase 2 Exit Gate | Full (20x5x300) | Required (blocks phase completion) |
 | Manual Dispatch | User selected | Optional |
 
 ### Manual CI Trigger
 
-You can trigger load tests manually via the GitHub Actions UI:
+**Via Argo Workflows (iad-ci cluster):**
 
-1. Go to Actions → Load Tests
-2. Click "Run workflow"
-3. Select scale (medium/full)
-4. Click "Run workflow"
+```bash
+# Medium-scale (quick validation)
+kubectl --kubeconfig=/home/coding/.kube/iad-ci.kubeconfig create -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: hoop-load-test-medium-
+  namespace: argo-workflows
+spec:
+  workflowTemplateRef:
+    name: hoop-load-test
+  arguments:
+    parameters:
+      - name: scale
+        value: medium
+EOF
+
+# Full-scale (Phase 2 exit gate validation)
+kubectl --kubeconfig=/home/coding/.kube/iad-ci.kubeconfig create -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: hoop-load-test-full-
+  namespace: argo-workflows
+spec:
+  workflowTemplateRef:
+    name: hoop-load-test
+  arguments:
+    parameters:
+      - name: scale
+        value: full
+EOF
+```
+
+**Via Argo UI:**
+1. Navigate to `https://argo-ci.ardenone.com` (Tailscale VPN required)
+2. Go to Workflow Templates → hoop-load-test
+3. Click "Submit Workflow"
+4. Select scale (medium/full)
+5. Click "Submit"
 
 ## Test Output
 
@@ -186,8 +281,10 @@ The load test uses synthetic data that doesn't require external fixtures. For in
 
 ## References
 
-- Plan reference: §14.2 bullet 5
-- Feeds into: hoop-ttb.7.11 (Performance budget verification in CI)
-- Implementation: `hoop-daemon/src/load_test.rs`
-- Tests: `hoop-daemon/tests/load_test.rs`
-- Example: `hoop-daemon/examples/load-test-runner.rs`
+- **Plan references:** §10 (Phase 2 exit gate), §14.2 bullet 5 (load-test driver), §16.8 (memory budget)
+- **Feeds into:** hoop-ttb.7.11 (Performance budget verification in CI)
+- **Implementation:** `hoop-daemon/src/load_test.rs`
+- **Integration tests:** `hoop-daemon/tests/load_test_integration.rs`
+- **CI workflow:** `.argo/workflowtemplates/hoop-load-test.yaml`
+- **CI script:** `.github/scripts/run-performance-budget-test.sh`
+- **Example:** `hoop-daemon/examples/load-test-runner.rs`
