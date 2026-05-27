@@ -4,8 +4,8 @@ metadata:
   name: hoop-load-test
   namespace: argo-workflows
   annotations:
-    descriptions: "Load-test driver: synthetic 20×5×200 activity generator vs daemon"
-    planReference: "§14.2 bullet 5"
+    descriptions: "Load-test driver: synthetic 20×5×300 activity generator vs daemon"
+    planReference: "§10 Phase 2 exit gate | §14.2 bullet 5"
 spec:
   # Default workflow arguments - can be overridden when submitting
   arguments:

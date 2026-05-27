@@ -11,13 +11,13 @@ import path from 'path';
  * - Runs synthetic load (20 projects × 5 workers × 300 beads)
  * - Measures UI interaction latencies while under load
  * - Asserts <500ms response time budget
- * - Validates <4GB memory ceiling via RSS snapshots
+ * - Validates <400MB memory ceiling via RSS snapshots
  *
  * Environment variables:
  *   LOAD_TEST_SCALE=medium|full  - Test scale (default: medium)
  *   HOOP_DAEMON_PATH             - Path to hoop-daemon binary (default: ../../target/debug/hoop-daemon)
  *
- * Plan reference: §6 Phase 6 deliverable 9
+ * Plan reference: §10 Phase 2 exit gate | §6 Phase 6 deliverable 9
  * Feeds into hoop-ttb.7.11 performance budget verification
  */
 

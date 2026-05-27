@@ -3,11 +3,11 @@
 //! Acceptance criteria from hoop-ttb.7.11:
 //! - Daemon boots successfully with load test data (20 projects × 5 workers × 300 beads)
 //! - UI interactions stay within performance budget (<500ms API response)
-//! - Memory usage stays under ceiling (<4GB RSS)
+//! - Memory usage stays under ceiling (<400MB RSS per plan §16.8)
 //! - WS fan-out lag is within budget (<100ms broadcast to all clients)
 //! - Budget violations block merge (test fails if budgets exceeded)
 //!
-//! Plan reference: §6 Phase 6 deliverable 9
+//! Plan reference: §10 Phase 2 exit gate | §6 Phase 6 deliverable 9
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -27,19 +27,25 @@ use hoop_daemon::Config;
 /// Performance budgets for the load test
 const PERFORMANCE_BUDGETS: PerformanceBudgets = PerformanceBudgets {
     api_latency_ms: 500,
-    memory_gb: 4,
+    memory_gb: 0,
+    memory_mb: 400,
     ws_fanout_lag_ms: 100,
 };
 
 struct PerformanceBudgets {
     api_latency_ms: u64,
     memory_gb: u64,
+    memory_mb: u64,
     ws_fanout_lag_ms: u64,
 }
 
 impl PerformanceBudgets {
     fn memory_bytes(&self) -> u64 {
-        self.memory_gb * 1024 * 1024 * 1024
+        if self.memory_mb > 0 {
+            self.memory_mb * 1024 * 1024
+        } else {
+            self.memory_gb * 1024 * 1024 * 1024
+        }
     }
 }
 
@@ -420,7 +426,7 @@ fn setup_load_test_projects(config: &Config, load_config: LoadTestConfig) {
 ///   HOOP_LOAD_WORKERS=5          - Workers per project
 ///   HOOP_LOAD_BEADS=300          - Beads per worker
 ///
-/// Plan reference: §6 Phase 6 deliverable 9
+/// Plan reference: §10 Phase 2 exit gate | §6 Phase 6 deliverable 9
 /// Feeds into hoop-ttb.7.11 performance budget verification
 #[tokio::test]
 async fn load_test_ci_performance_budgets() {
@@ -487,7 +493,7 @@ async fn load_test_ci_performance_budgets() {
     println!();
     println!("=== Performance Budgets Satisfied ===");
     println!("✓ API Latency < {}ms", PERFORMANCE_BUDGETS.api_latency_ms);
-    println!("✓ Memory < {}GB", PERFORMANCE_BUDGETS.memory_gb);
+    println!("✓ Memory < {}MB", PERFORMANCE_BUDGETS.memory_bytes() / 1024 / 1024);
     println!("✓ WS Fan-out Lag < {}ms", PERFORMANCE_BUDGETS.ws_fanout_lag_ms);
     println!();
     println!("This test run confirms the system is within performance budgets.");

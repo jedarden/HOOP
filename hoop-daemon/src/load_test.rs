@@ -1,18 +1,18 @@
 //! Load-test driver: synthetic event stream generator vs daemon
 //!
-//! Generates concurrent synthetic event streams (20 projects × 5 workers × 200 beads)
+//! Generates concurrent synthetic event streams (20 projects × 5 workers × 300 beads)
 //! and drives the daemon. Asserts:
 //! - UI responsiveness budget (<500ms API response)
-//! - Memory ceiling (<4GB RSS)
+//! - Memory ceiling (<400MB RSS per plan §16.8)
 //! - WS fan-out lag (<100ms broadcast to all clients)
 //!
 //! Configurable via environment variables:
 //! - `HOOP_LOAD_PROJECTS`: number of projects (default: 20)
 //! - `HOOP_LOAD_WORKERS`: workers per project (default: 5)
-//! - `HOOP_LOAD_BEADS`: beads per worker (default: 200)
+//! - `HOOP_LOAD_BEADS`: beads per worker (default: 300)
 //! - `HOOP_LOAD_CADENCE_MS`: delay between events (default: 10ms)
 //!
-//! Plan reference: §14.2 bullet 5
+//! Plan reference: §10 Phase 2 exit gate | §14.2 bullet 5
 //! Feeds into hoop-ttb.7.11 performance budget verification
 
 use std::fs::File;
@@ -58,7 +58,7 @@ impl Default for LoadTestConfig {
             beads_per_worker: Self::env_or_default("HOOP_LOAD_BEADS", 300),
             event_cadence_ms: Self::env_or_default("HOOP_LOAD_CADENCE_MS", 10),
             api_latency_budget_ms: 500,
-            memory_ceiling_bytes: 4 * 1024 * 1024 * 1024, // 4GB
+            memory_ceiling_bytes: 400 * 1024 * 1024, // 400MB per plan §16.8
             ws_fanout_lag_budget_ms: 100,
         }
     }

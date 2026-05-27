@@ -13,7 +13,7 @@
 #   HOOP_LOAD_WORKERS            - Workers per project (default: 2 for medium, 5 for full)
 #   HOOP_LOAD_BEADS              - Beads per worker (default: 50 for medium, 300 for full)
 #
-# Plan reference: §6 Phase 6 deliverable 9
+# Plan reference: §10 Phase 2 exit gate | §6 Phase 6 deliverable 9
 # Feeds into hoop-ttb.7.11 performance budget verification
 
 set -euo pipefail
@@ -55,12 +55,12 @@ echo ""
 
 # Performance budgets
 BUDGET_API_LATENCY_MS=500
-BUDGET_MEMORY_GB=4
+BUDGET_MEMORY_MB=400
 BUDGET_WS_FANOUT_MS=100
 
 echo "Performance Budgets:"
 echo "  API Latency: < ${BUDGET_API_LATENCY_MS}ms"
-echo "  Memory: < ${BUDGET_MEMORY_GB}GB"
+echo "  Memory: < ${BUDGET_MEMORY_MB}MB"
 echo "  WS Fan-out Lag: < ${BUDGET_WS_FANOUT_MS}ms"
 echo ""
 
@@ -176,7 +176,7 @@ if [ $OVERALL_RESULT -eq 0 ]; then
   echo ""
   echo "All performance budgets satisfied:"
   echo "  ✓ API Latency < ${BUDGET_API_LATENCY_MS}ms"
-  echo "  ✓ Memory < ${BUDGET_MEMORY_GB}GB"
+  echo "  ✓ Memory < ${BUDGET_MEMORY_MB}MB"
   echo "  ✓ WS Fan-out Lag < ${BUDGET_WS_FANOUT_MS}ms"
   echo ""
   echo "This test run confirms the system is within performance budgets."
@@ -187,7 +187,7 @@ else
   echo ""
   echo "Performance budget violations detected:"
   echo "  ✗ API latency exceeded ${BUDGET_API_LATENCY_MS}ms"
-  echo "  ✗ Memory exceeded ${BUDGET_MEMORY_GB}GB"
+  echo "  ✗ Memory exceeded ${BUDGET_MEMORY_MB}MB"
   echo "  ✗ WS fan-out lag exceeded ${BUDGET_WS_FANOUT_MS}ms"
   echo ""
   echo "This failure blocks merge per performance budget policy."
