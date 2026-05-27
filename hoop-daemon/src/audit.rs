@@ -185,7 +185,9 @@ pub fn run_audit(config: &AuditConfig) -> AuditReport {
         checks.push(check_br_version());
     }
     checks.push(check_tmux());
+    checks.push(check_port_availability());
     checks.extend(check_beads_accessibility(&config.project_paths));
+    checks.push(check_cli_adapter_binaries());
     checks.push(check_cli_session_dirs());
     checks.push(check_disk_space());
     checks.push(check_restore_state());
@@ -283,6 +285,107 @@ fn check_tmux() -> AuditCheck {
             "tmux not found in PATH",
             "apt install tmux  # Debian/Ubuntu\n  brew install tmux  # macOS",
         ),
+    }
+}
+
+/// Check if the default HOOP port (3000) is available
+fn check_port_availability() -> AuditCheck {
+    use std::net::TcpListener;
+
+    match TcpListener::bind("127.0.0.1:3000") {
+        Ok(listener) => {
+            // Successfully bound - port is available
+            let local_addr = listener.local_addr().ok();
+            // Immediately drop the listener to release the port
+            drop(listener);
+
+            AuditCheck::passed(
+                "port_availability",
+                format!(
+                    "Port 3000 is available on {}",
+                    local_addr.map(|a| a.to_string()).unwrap_or_else(|| "127.0.0.1".to_string())
+                ),
+            )
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+            AuditCheck::critical(
+                "port_availability",
+                "Port 3000 is already in use",
+                "lsof -i :3000  # Find process using the port\n  kill <PID>  # Or change port in ~/.hoop/config.yml",
+            )
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+            AuditCheck::critical(
+                "port_availability",
+                "Permission denied to bind port 3000",
+                "sudo -v  # Check permissions, or use a port >1024",
+            )
+        }
+        Err(e) => {
+            AuditCheck::warning(
+                "port_availability",
+                format!("Cannot check port 3000 availability: {}", e),
+                "netstat -tuln | grep 3000  # Manual check",
+            )
+        }
+    }
+}
+
+/// Check if CLI adapter binaries are available
+fn check_cli_adapter_binaries() -> AuditCheck {
+    let cli_binaries = [
+        ("claude", "Claude Code CLI", "https://claude.ai/code"),
+        ("codex", "OpenAI Codex CLI", "https://openai.com"),
+        ("opencode", "OpenCode CLI", "https://openai.com"),
+        ("gemini", "Gemini CLI", "https://gemini.google.com"),
+        ("aider", "Aider CLI", "https://aider.chat"),
+    ];
+
+    let mut available = Vec::new();
+    let mut missing = Vec::new();
+
+    for (binary, name, _url) in cli_binaries {
+        // Check if binary exists in PATH
+        let result = Command::new(binary).arg("--version").output();
+
+        match result {
+            Ok(output) if output.status.success() => {
+                let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !version.is_empty() {
+                    available.push(format!("{} ({})", name, version));
+                } else {
+                    available.push(name.to_string());
+                }
+            }
+            Ok(_) => available.push(name.to_string()),
+            Err(_) => missing.push(binary.to_string()),
+        }
+    }
+
+    if available.is_empty() {
+        AuditCheck::warning(
+            "cli_adapters",
+            format!("No CLI adapter binaries found"),
+            "Install at least one CLI adapter:\n  - Claude Code: https://claude.ai/code\n  - Aider: https://aider.chat",
+        )
+    } else {
+        let available_list = available.join(", ");
+        if missing.is_empty() {
+            AuditCheck::passed(
+                "cli_adapters",
+                format!("CLI adapter binaries available: {}", available_list),
+            )
+        } else {
+            AuditCheck::warning(
+                "cli_adapters",
+                format!(
+                    "Some CLI adapters available: {} (missing: {})",
+                    available_list,
+                    missing.join(", ")
+                ),
+                "Optional: Install additional CLI adapters for multi-provider support",
+            )
+        }
     }
 }
 
