@@ -1,0 +1,112 @@
+apiVersion: argoproj.io/v1alpha1
+kind: WorkflowTemplate
+metadata:
+  name: hoop-phase2-gate
+  namespace: argo-workflows
+  annotations:
+    description: "Phase 2 core deliverables gate (plan §10) - verifies all 13 core items before marquee features"
+    planReference: "§6 Phase 2 deliverables 1-13, §10 Phase gate table"
+spec:
+  arguments:
+    parameters:
+      - name: repo
+        value: https://github.com/jedarden/HOOP.git
+      - name: branch
+        value: main
+
+  templates:
+    - name: phase2-gate
+      inputs:
+        artifacts:
+          - name: source
+            path: /workspace
+            git:
+              repo: "{{workflow.parameters.repo}}"
+              revision: "{{workflow.parameters.branch}}"
+              depth: 1
+      container:
+        image: alpine:3.19
+        workingDir: /workspace
+        command:
+          - sh
+          - -c
+          - |
+            set -euo pipefail
+
+            echo "========================================="
+            echo "PHASE 2 CORE DELIVERABLES GATE"
+            echo "========================================="
+            echo ""
+            echo "Per plan §10: Phase 2 core deliverables (items 1-13) must be green"
+            echo "before any marquee feature (14-17) is merged."
+            echo ""
+            echo "This gate verifies:"
+            echo "  - All 13 core deliverables have passing automated tests"
+            echo "  - Verification report is machine-readable JSON"
+            echo "  - CI fails if any criterion is unverified"
+            echo ""
+
+            # Install bash for running verification script
+            apk add --no-cache bash
+
+            # Run the verification script
+            bash verify_phase2_deliverables.sh
+
+            # Check the JSON report
+            if [ -f /tmp/phase2_verification_report.json ]; then
+              ALL_PASSED=$(jq -r '.all_passed' /tmp/phase2_verification_report.json)
+              PASSED=$(jq -r '.passed' /tmp/phase2_verification_report.json)
+              TOTAL=$(jq -r '.total_criteria' /tmp/phase2_verification_report.json)
+
+              echo ""
+              echo "========================================="
+              echo "GATE RESULT"
+              echo "========================================="
+              echo "Passed: $PASSED / $TOTAL"
+              echo "All passed: $ALL_PASSED"
+              echo ""
+
+              if [ "$ALL_PASSED" = "true" ]; then
+                echo "✓ PHASE 2 CORE DELIVERABLES GATE PASSED"
+                echo ""
+                echo "All 13 core deliverables verified."
+                echo "Marquee features (14-17) may proceed."
+                exit 0
+              else
+                echo "✗ PHASE 2 CORE DELIVERABLES GATE FAILED"
+                echo ""
+                echo "Action required: Ensure all 13 core deliverables have passing"
+                echo "tests before merging any marquee feature (items 14-17)."
+                echo ""
+                echo "Full report:"
+                cat /tmp/phase2_verification_report.json
+                exit 1
+              fi
+            else
+              echo "✗ Verification report not found"
+              exit 1
+            fi
+        volumeMounts:
+          - name: workspace
+            mountPath: /workspace
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      volumes:
+        - name: workspace
+          emptyDir: {}
+
+    - name: run-phase2-gate
+      steps:
+        - - name: verify-core-deliverables
+            template: phase2-gate
+
+    # Entry point for manual runs
+    - name: verify
+      steps:
+        - - name: gate
+            template: run-phase2-gate
