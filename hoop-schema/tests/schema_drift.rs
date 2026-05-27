@@ -404,7 +404,7 @@ fn generate_schema_fixtures() {
         (
             "pricing_config",
             serde_json::to_string_pretty(&PricingConfig {
-                adapters: serde_json::Map::new(),
+                adapters: std::collections::HashMap::new(),
             })
             .unwrap(),
         ),
@@ -437,11 +437,11 @@ fn generate_schema_fixtures() {
         (
             "stuck_detector_config",
             serde_json::to_string_pretty(&StuckDetectorConfig {
-                idle_timeout_secs: 180,
-                max_runtime_secs: 3600,
-                content_seen_grace_secs: 600,
-                heartbeat_transition_threshold_secs: 300,
-                retry_threshold: 3,
+                idle_timeout_secs: std::num::NonZero::new(180).unwrap(),
+                max_runtime_secs: std::num::NonZero::new(3600).unwrap(),
+                content_seen_grace_secs: std::num::NonZero::new(600).unwrap(),
+                heartbeat_transition_threshold_secs: std::num::NonZero::new(300).unwrap(),
+                retry_threshold: std::num::NonZero::new(3).unwrap(),
             })
             .unwrap(),
         ),
@@ -460,10 +460,11 @@ fn generate_schema_fixtures() {
             "project_entry",
             serde_json::to_string_pretty(&ProjectEntry::Variant0 {
                 name: "test-project".to_string(),
-                color: Some(ProjectEntryVariant0Color("#FF0000".to_string())),
+                color: None,
                 label: None,
                 path: "/home/coding/project".to_string(),
                 canonical_path: None,
+                redaction: None,
             })
             .unwrap(),
         ),
@@ -484,18 +485,21 @@ fn generate_schema_fixtures() {
                 requests_per_day: None,
                 spend_usd_per_day: None,
                 concurrent_requests: None,
+                prompts_per_5h: None,
+                prompts_per_7d: None,
             })
             .unwrap(),
         ),
         (
             "capacity_usage",
             serde_json::to_string_pretty(&CapacityUsage {
-                tokens_5h: None,
-                tokens_7d: None,
-                requests_day: None,
-                spend_usd_day: None,
-                concurrent_requests: None,
-                last_reset: None,
+                active_requests: None,
+                prompts_5h: 0,
+                prompts_7d: 0,
+                requests_today: 0,
+                spend_usd_today: 0.0,
+                tokens_5h: 0,
+                tokens_7d: 0,
             })
             .unwrap(),
         ),
@@ -503,10 +507,26 @@ fn generate_schema_fixtures() {
             "capacity_account",
             serde_json::to_string_pretty(&CapacityAccount {
                 id: "account-123".to_string(),
-                adapter: Some(CapacityAccountAdapter::Claude),
-                account_id: Some("account-456".to_string()),
-                limits: None,
-                usage: None,
+                adapter: CapacityAccountAdapter::Claude,
+                account_id: "account-456".to_string(),
+                limits: CapacityAccountLimits {
+                    concurrent_requests: None,
+                    tokens_per_5h: None,
+                    tokens_per_7d: None,
+                    requests_per_day: None,
+                    spend_usd_per_day: None,
+                    prompts_per_5h: None,
+                    prompts_per_7d: None,
+                },
+                usage: CapacityAccountUsage {
+                    active_requests: None,
+                    tokens_5h: 0,
+                    tokens_7d: 0,
+                    prompts_5h: 0,
+                    prompts_7d: 0,
+                    requests_today: 0,
+                    spend_usd_today: 0.0,
+                },
                 window_start: None,
                 window_end: None,
                 updated_at: ts,
@@ -547,8 +567,8 @@ fn generate_schema_fixtures() {
                 args: serde_json::Map::new(),
                 result: AuditRowResult::Success,
                 error: None,
-                hash_prev: AuditRowHashPrev("0".repeat(64)),
-                hash_self: AuditRowHashSelf("0".repeat(64)),
+                hash_prev: "0".repeat(64).parse().unwrap(),
+                hash_self: "0".repeat(64).parse().unwrap(),
                 schema_version: None,
             })
             .unwrap(),
@@ -624,6 +644,9 @@ fn generate_schema_fixtures() {
                 panel_layout: None,
                 prompts_dismissed: None,
                 prompts_enabled: true,
+                schema_version: hoop_schema::version::SCHEMA_VERSION.parse().unwrap(),
+                sidebar_width: 300,
+                theme: UiStateTheme::Auto,
             })
             .unwrap(),
         ),
@@ -806,8 +829,6 @@ fn validate_fixture_roundtrip() {
         "capacity_usage.json",
         "capacity_account.json",
         "cost_bucket.json",
-        "codex_account_daily_spend_row.json",
-        "codex_account_monthly_rollup_row.json",
         "audit_row.json",
         "debug_state.json",
         "ws_event.json",

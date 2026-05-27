@@ -1,0 +1,14 @@
+{
+  "name": "hoop-schema",
+  "version": "1.0.0",
+  "description": "Shared JSON Schema for HOOP project with Rust and TypeScript codegen",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "codegen": "node scripts/codegen-types.mjs"
+  },
+  "packageManager": "npm@10.9.2",
+  "devDependencies": {
+    "json-schema-to-typescript": "^15.0.3"
+  }
+}

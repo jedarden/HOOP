@@ -410,7 +410,7 @@ mod tests {
             error: None,
             hash_prev: AuditRowHashPrev("0".repeat(64)),
             hash_self: AuditRowHashSelf("0".repeat(64)),
-            schema_version: AuditRowSchemaVersion("1.33.0".to_string()),
+            schema_version: Some(AuditRowSchemaVersion("1.33.0".to_string())),
         }
     );
 
@@ -678,7 +678,7 @@ mod tests {
             error: None,
             hash_prev: AuditRowHashPrev("0".repeat(64)),
             hash_self: AuditRowHashSelf("0".repeat(64)),
-            schema_version: AuditRowSchemaVersion("1.33.0".to_string()),
+            schema_version: Some(AuditRowSchemaVersion("1.33.0".to_string())),
         });
 
         // Bead
