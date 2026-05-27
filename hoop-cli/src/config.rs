@@ -402,7 +402,7 @@ pub fn run_validate() -> Result<()> {
         if enabled {
             if let Some(port) = get_nested_yaml_value(&yaml, &["metrics", "port"]) {
                 match port.parse::<u16>() {
-                    Ok(p) if p > 0 && p <= 65535 => {
+                    Ok(p) if p > 0 => {
                         println!("✓ metrics.port: {} (valid, [RESTART REQUIRED])", p);
                     }
                     _ => {
