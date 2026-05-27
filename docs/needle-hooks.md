@@ -18,7 +18,24 @@ Every bead dispatch prepends the first user-message line with:
 HOOP's disk adapter extracts this tag from CLI session files to join transcripts
 back to beads without a second storage layer.
 
-**NEEDLE change:** one line in the prompt builder. Tag is opaque to the CLI.
+### Spawned-by Marker
+
+When a worker claims a bead with a `stitch:<stitch-id>` label (created by HOOP's
+bead creation interface), the prompt must also include a `spawned-by` marker on
+the same line or immediately following:
+
+```
+[needle:<worker-name>:<bead-id>:<strand>] spawned-by:<operator-stitch-id>
+```
+
+- `<operator-stitch-id>` — the HOOP Stitch ID that created this bead
+
+HOOP's session tailer reads this marker to establish the parent-child Stitch link:
+the worker Stitch (processing the bead) is automatically linked to the operator
+Stitch that drafted it. Without this marker, worker Stitches appear as orphans
+with no connection to the operator's intent.
+
+**NEEDLE change:** one line in the prompt builder. Tags are opaque to the CLI.
 
 ## Hook 2: Event Tap
 
