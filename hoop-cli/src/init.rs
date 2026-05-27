@@ -11,6 +11,7 @@
 
 use anyhow::{Context, Result};
 use hoop_daemon::audit;
+use serde::Deserialize;
 use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -20,6 +21,20 @@ use std::time::Duration;
 
 /// Default daemon bind address
 const DEFAULT_BIND_ADDR: &str = "127.0.0.1:3000";
+
+/// Tailscale status JSON structure
+#[derive(Debug, Deserialize)]
+struct TailscaleStatus {
+    #[serde(default)]
+    #[serde(rename = "Self")]
+    tail_self: TailscaleSelf,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct TailscaleSelf {
+    #[serde(default)]
+    DNSName: String,
+}
 
 /// Run the init wizard
 pub fn run_init_wizard() -> Result<()> {
@@ -314,8 +329,7 @@ fn stage_5_health_check() -> Result<()> {
     if check_url(&health_url) {
         println!("✓ HOOP daemon is already running and healthy!");
         println!();
-        println!("Open in your browser:");
-        println!("  http://{}", DEFAULT_BIND_ADDR);
+        print_access_urls();
         return Ok(());
     }
 
@@ -338,8 +352,7 @@ fn stage_5_health_check() -> Result<()> {
             println!();
             println!("✓ HOOP daemon is healthy and ready!");
             println!();
-            println!("Open in your browser:");
-            println!("  http://{}", DEFAULT_BIND_ADDR);
+            print_access_urls();
             println!();
             println!("To stop the daemon, press Ctrl+C or run:");
             println!("  pkill -f 'hoop serve'");
@@ -366,6 +379,57 @@ fn stage_5_health_check() -> Result<()> {
     let _ = child.kill();
 
     Ok(())
+}
+
+/// Print access URLs (localhost + Tailscale if available)
+fn print_access_urls() {
+    println!("Open in your browser:");
+
+    // Always print localhost
+    println!("  http://{}", DEFAULT_BIND_ADDR);
+
+    // Try to get Tailscale hostname
+    match get_tailscale_hostname() {
+        Some(hostname) => {
+            println!();
+            println!("  Also accessible via Tailscale:");
+            println!("  http://{}:3000", hostname);
+            println!();
+            println!("  (Make sure HOOP is bound to 0.0.0.0 for Tailscale access)");
+        }
+        None => {
+            println!();
+            println!("  Note: Tailscale not detected. To enable Tailscale access:");
+            println!("  1. Install Tailscale and join your network");
+            println!("  2. Edit ~/.hoop/config.yml and set server.bind_addr to 0.0.0.0:3000");
+            println!("  3. Restart HOOP");
+        }
+    }
+}
+
+/// Get the Tailscale hostname (if available)
+///
+/// Runs `tailscale status --json` and extracts the DNSName field.
+/// Returns None if Tailscale is not installed or not logged in.
+fn get_tailscale_hostname() -> Option<String> {
+    let output = Command::new("tailscale")
+        .args(&["status", "--json"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let json_str = String::from_utf8(output.stdout).ok()?;
+    let status: TailscaleStatus = serde_json::from_str(&json_str).ok()?;
+
+    let hostname = status.tail_self.DNSName;
+    if hostname.is_empty() {
+        None
+    } else {
+        Some(hostname)
+    }
 }
 
 // ---------------------------------------------------------------------------

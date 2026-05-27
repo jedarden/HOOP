@@ -69,7 +69,14 @@ hoop init
 2. **Project registration** — scan and register your workspaces
 3. **Agent setup** (optional) — configure LLM adapter
 4. **systemd install** — auto-start on boot
-5. **Health check** — confirms HOOP is running
+5. **Health check** — confirms HOOP is running and prints access URLs
+
+At the end of the wizard, HOOP prints:
+
+- **Local URL:** `http://localhost:3000` (always available)
+- **Tailscale URL:** `http://<tailscale-hostname>:3000` (if Tailscale is installed and logged in)
+
+If Tailscale is not detected, the wizard prints instructions for enabling Tailscale access.
 
 ## First five minutes
 

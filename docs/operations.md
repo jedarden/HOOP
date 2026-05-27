@@ -279,15 +279,21 @@ systemctl --user restart hoop
 Once bound to `0.0.0.0:3000`, HOOP is accessible at:
 
 - **From the host:** `http://localhost:3000` or `http://127.0.0.1:3000`
-- **From other Tailscale nodes:** `http://<host-tailscale-ip>:3000`
+- **From other Tailscale nodes:** `http://<tailscale-hostname>:3000` or `http://<host-tailscale-ip>:3000`
 
-Find your Tailscale IP:
+**Getting your Tailscale hostname:**
+
+The `hoop init` wizard automatically detects and prints your Tailscale hostname at the end of setup. You can also find it manually:
 
 ```bash
+# Show Tailscale hostname (magicDNS name)
+tailscale status --json | jq -r '.Self.DNSName'
+
 # Show Tailscale IP addresses
 tailscale ip -4
 
 # Example output:
+# hostname.ts.net
 # 100.x.y.z
 ```
 
