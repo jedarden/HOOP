@@ -17,5 +17,7 @@ pub use super::integration_harness;
 
 mod s1_morning_review;
 mod s2_transcript_archaeology;
+mod s3_bead_creation_from_chat;
 mod s4_daemon_restart;
 mod s5_workspace_deleted;
+mod s6_machine_mode;
