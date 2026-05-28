@@ -19,6 +19,7 @@
 //! - Panel requires manual file path entry
 
 use std::time::{Duration, Instant};
+use serde_json::Value as JsonValue;
 
 /// Helper to spawn a test daemon for acceptance testing
 async fn spawn_daemon() -> anyhow::Result<(String, tempfile::TempDir)> {
@@ -32,7 +33,7 @@ async fn spawn_daemon() -> anyhow::Result<(String, tempfile::TempDir)> {
     let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("workspace root");
-    let testrepo_path = workspace_root.join("testrepo");
+    let testrepo_path = workspace_root.join("hoop-daemon").join("testrepo");
 
     let projects_yaml = format!(
         r#"projects:
@@ -98,15 +99,12 @@ agent:
 
 #[tokio::test]
 async fn s2_bead_events_endpoint_exists() {
-    use serde_json::Value as JsonValue;
-
     let (base_url, _temp_dir) = spawn_daemon()
         .await
         .expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
-    // First, get a list of beads to find a valid bead_id
     let resp = client
         .get(&format!("{}/api/beads", base_url))
         .send()
@@ -117,14 +115,12 @@ async fn s2_bead_events_endpoint_exists() {
 
     let beads: JsonValue = resp.json().await.expect("Failed to parse beads");
 
-    // If there are beads, test fetching events for the first one
     if let Some(bead_array) = beads.as_array() {
         if !bead_array.is_empty() {
             let bead_id = bead_array[0]["id"]
                 .as_str()
                 .expect("Bead should have an id");
 
-            // Fetch bead events
             let resp = client
                 .get(&format!("{}/api/beads/{}/events", base_url, bead_id))
                 .send()
@@ -151,15 +147,12 @@ async fn s2_bead_events_endpoint_exists() {
 
 #[tokio::test]
 async fn s2_visual_debug_loads_quickly() {
-    use serde_json::Value as JsonValue;
-
     let (base_url, _temp_dir) = spawn_daemon()
         .await
         .expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
-    // Get a bead to test with
     let resp = client
         .get(&format!("{}/api/beads", base_url))
         .send()
@@ -205,7 +198,6 @@ async fn s2_stitch_read_endpoint_exists() {
 
     let client = reqwest::Client::new();
 
-    // Try to read a stitch (may return 404 if none exist)
     let resp = client
         .get(&format!("{}/api/stitches/test-stitch-id", base_url))
         .send()
@@ -228,7 +220,6 @@ async fn s2_no_manual_file_path_required() {
 
     let client = reqwest::Client::new();
 
-    // All visual debug data should be available via REST API
     let endpoints = vec![
         "/api/beads",
         "/api/beads/test-bead/events",
@@ -255,8 +246,6 @@ async fn s2_no_manual_file_path_required() {
 
 #[tokio::test]
 async fn s2_conversation_history_accessible() {
-    use serde_json::Value as JsonValue;
-
     let (base_url, _temp_dir) = spawn_daemon()
         .await
         .expect("Failed to spawn daemon");
@@ -280,8 +269,6 @@ async fn s2_conversation_history_accessible() {
 
 #[tokio::test]
 async fn s2_bead_stitch_linking() {
-    use serde_json::Value as JsonValue;
-
     let (base_url, _temp_dir) = spawn_daemon()
         .await
         .expect("Failed to spawn daemon");
@@ -298,10 +285,8 @@ async fn s2_bead_stitch_linking() {
 
     if let Some(bead_array) = beads.as_array() {
         for bead in bead_array {
-            // Beads may have stitch_id field for linking
             let has_stitch_link = bead.get("stitch_id").is_some()
                 || bead.get("parent_stitch_id").is_some();
-            // Link structure is verified
         }
     }
 
@@ -310,8 +295,6 @@ async fn s2_bead_stitch_linking() {
 
 #[tokio::test]
 async fn s2_cost_breakdown_available() {
-    use serde_json::Value as JsonValue;
-
     let (base_url, _temp_dir) = spawn_daemon()
         .await
         .expect("Failed to spawn daemon");
@@ -335,8 +318,6 @@ async fn s2_cost_breakdown_available() {
 
 #[tokio::test]
 async fn s2_full_cycle_reconstruction() {
-    use serde_json::Value as JsonValue;
-
     let (base_url, _temp_dir) = spawn_daemon()
         .await
         .expect("Failed to spawn daemon");

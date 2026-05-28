@@ -23,12 +23,13 @@ use std::sync::Mutex;
 use std::time::Duration;
 use tempfile::TempDir;
 
-static LOCK: Mutex<()> = Mutex::new();
+static LOCK: Mutex<()> = Mutex::new(());
 
 fn testrepo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("workspace root")
+        .join("hoop-daemon")
         .join("testrepo")
 }
 
@@ -82,6 +83,10 @@ impl SimulatedWorker {
         self.event_count += 1;
         Ok(())
     }
+
+    fn event_count(&self) -> u64 {
+        self.event_count
+    }
 }
 
 fn count_events_in_file() -> usize {
@@ -124,7 +129,6 @@ agent:
 
     fs::write(hoop_dir.join("config.yml"), config_yaml)
         .expect("write config.yml");
-
     fs::create_dir_all(hoop_dir.join("data")).expect("create data dir");
     std::env::set_var("HOME", temp_dir.path());
 
@@ -153,7 +157,6 @@ async fn spawn_daemon_with_home(temp_dir: &TempDir) -> anyhow::Result<String> {
         }
     });
 
-    // Wait for daemon to be ready
     let client = reqwest::Client::new();
     let start = std::time::Instant::now();
     while start.elapsed() < Duration::from_secs(10) {
@@ -184,20 +187,17 @@ async fn s4_daemon_restart_no_bead_loss() {
 
     let temp_dir = setup_test_hoop_home();
 
-    // Create some initial events
     let mut worker = SimulatedWorker::new("test-worker");
     worker.write_claim("bd-001").expect("write claim");
     worker.write_complete("bd-001").expect("write complete");
     worker.write_claim("bd-002").expect("write claim");
 
-    // Spawn first daemon
     let base_url1 = spawn_daemon_with_home(&temp_dir)
         .await
         .expect("Failed to spawn first daemon");
 
     let client = reqwest::Client::new();
 
-    // Fetch initial bead list
     let resp1 = client
         .get(&format!("{}/api/beads", base_url1))
         .send()
@@ -212,19 +212,16 @@ async fn s4_daemon_restart_no_bead_loss() {
         .map(|arr| arr.len())
         .unwrap_or(0);
 
-    // Simulate worker continuing while HOOP is down
     worker.write_complete("bd-002").expect("write complete");
     worker.write_claim("bd-003").expect("write claim");
 
     let mid_event_count = count_events_in_file();
     assert!(mid_event_count > 0, "Worker should have written events");
 
-    // Spawn second daemon (simulating restart)
     let base_url2 = spawn_daemon_with_home(&temp_dir)
         .await
         .expect("Failed to spawn second daemon");
 
-    // Fetch bead list after restart
     let resp2 = client
         .get(&format!("{}/api/beads", base_url2))
         .send()
@@ -239,7 +236,6 @@ async fn s4_daemon_restart_no_bead_loss() {
         .map(|arr| arr.len())
         .unwrap_or(0);
 
-    // Bead count should be stable
     assert!(
         final_bead_count >= initial_bead_count.saturating_sub(1)
             && final_bead_count <= initial_bead_count + 10,
@@ -261,7 +257,6 @@ async fn s4_daemon_quick_rebuild() {
 
     let temp_dir = setup_test_hoop_home();
 
-    // Create events to simulate real usage
     let mut worker = SimulatedWorker::new("test-worker");
     for i in 0..50 {
         let bead_id = format!("bd-{:03}", i);
@@ -271,12 +266,10 @@ async fn s4_daemon_quick_rebuild() {
         }
     }
 
-    // Spawn first daemon
     let _base_url1 = spawn_daemon_with_home(&temp_dir)
         .await
         .expect("Failed to spawn first daemon");
 
-    // Spawn second daemon and time the rebuild
     let rebuild_start = std::time::Instant::now();
 
     let base_url2 = spawn_daemon_with_home(&temp_dir)
@@ -304,14 +297,12 @@ async fn s4_fleet_unaffected_by_restart() {
 
     let temp_dir = setup_test_hoop_home();
 
-    // Spawn first daemon
     let _base_url1 = spawn_daemon_with_home(&temp_dir)
         .await
         .expect("Failed to spawn first daemon");
 
     let events_before = count_events_in_file();
 
-    // Simulate worker continuing during HOOP downtime
     let mut worker = SimulatedWorker::new("test-worker");
     worker.write_claim("bd-restart-1").expect("write claim");
     worker.write_complete("bd-restart-1").expect("write complete");
@@ -324,12 +315,10 @@ async fn s4_fleet_unaffected_by_restart() {
         "Worker should continue writing events during HOOP downtime"
     );
 
-    // Spawn second daemon
     let base_url2 = spawn_daemon_with_home(&temp_dir)
         .await
         .expect("Failed to spawn second daemon");
 
-    // Simulate more work after restart
     worker.write_complete("bd-restart-2").expect("write complete");
     worker.write_claim("bd-restart-3").expect("write claim");
 
@@ -350,4 +339,74 @@ async fn s4_fleet_unaffected_by_restart() {
     assert_eq!(resp.status(), 200, "Should see all beads");
 
     println!("S4 PASS: Fleet unaffected by HOOP restart");
+}
+
+#[tokio::test]
+async fn s4_state_consistency_across_restarts() {
+    let _guard = LOCK.lock().unwrap();
+
+    let testrepo = testrepo_root();
+    let beads_dir = testrepo.join(".beads");
+    fs::create_dir_all(&beads_dir).ok();
+
+    let temp_dir = setup_test_hoop_home();
+
+    let client = reqwest::Client::new();
+    let mut previous_bead_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    let mut worker = SimulatedWorker::new("test-worker");
+    worker.write_claim("bd-s4-1").expect("write claim");
+    worker.write_complete("bd-s4-1").expect("write complete");
+
+    for cycle in 0..3 {
+        let base_url = spawn_daemon_with_home(&temp_dir)
+            .await
+            .expect("Failed to spawn daemon");
+
+        let start = std::time::Instant::now();
+        while start.elapsed() < Duration::from_secs(10) {
+            if client
+                .get(&format!("{}/healthz", base_url))
+                .send()
+                .await
+                .ok()
+                .and_then(|r| r.status().is_success().then_some(()))
+                .is_some()
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
+
+        let resp = client
+            .get(&format!("{}/api/beads", base_url))
+            .send()
+            .await
+            .expect("Failed to fetch beads");
+
+        assert_eq!(resp.status(), 200, "Should fetch beads in cycle {}", cycle);
+
+        let beads: serde_json::Value = resp.json().await.expect("Failed to parse beads");
+
+        if let Some(bead_array) = beads.as_array() {
+            let current_ids: std::collections::HashSet<String> = bead_array
+                .iter()
+                .filter_map(|b| b.get("id").and_then(|id| id.as_str()).map(|s| s.to_string()))
+                .collect();
+
+            if !previous_bead_ids.is_empty() {
+                assert!(
+                    current_ids.is_superset(&previous_bead_ids),
+                    "Beads should not disappear across restarts in cycle {}",
+                    cycle
+                );
+            }
+
+            previous_bead_ids = current_ids;
+        }
+
+        worker.write_claim(&format!("bd-s4-{}", cycle * 10 + 2)).expect("write claim");
+    }
+
+    println!("S4 PASS: State consistent across multiple restarts");
 }
