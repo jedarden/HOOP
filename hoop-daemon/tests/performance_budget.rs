@@ -82,8 +82,11 @@ fn setup_load_test_projects(config: &Config, num_projects: usize, beads_per_proj
         existing_projects.projects.push(
             hoop_schema::ProjectsRegistryProjectsItem::Variant0 {
                 name: project_name,
-                path: project_path,
+                path: project_path.to_string_lossy().into_owned(),
                 canonical_path: None,
+                color: None,
+                label: None,
+                redaction: None,
             },
         );
     }
@@ -98,7 +101,9 @@ fn setup_load_test_projects(config: &Config, num_projects: usize, beads_per_proj
 #[tokio::test]
 async fn performance_budget_20_projects_5_workers_300_beads() {
     // ── Phase 1: Spawn daemon with load test data ─────────────────────────────
-    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg| {
+    let (base_url, _daemon) = spawn_test_daemon_with_config::<
+        fn(&mut hoop_daemon::Config),
+    >(Some(|cfg: &mut hoop_daemon::Config| {
         setup_load_test_projects(cfg, NUM_PROJECTS, BEADS_PER_PROJECT);
     }))
     .await
@@ -224,7 +229,7 @@ async fn performance_budget_graceful_degradation() {
     // Test that the daemon remains responsive even when some projects are degraded
 
     // Spawn daemon with config that creates some degraded projects
-    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg| {
+    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg: &mut hoop_daemon::Config| {
         use std::path::Path;
 
         let hoop_dir = cfg.control_socket_path.parent().unwrap();
@@ -258,8 +263,11 @@ async fn performance_budget_graceful_degradation() {
             existing_projects.projects.push(
                 hoop_schema::ProjectsRegistryProjectsItem::Variant0 {
                     name: project_name,
-                    path: project_path,
+                    path: project_path.to_string_lossy().into_owned(),
                     canonical_path: None,
+                    color: None,
+                    label: None,
+                    redaction: None,
                 },
             );
         }

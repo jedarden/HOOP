@@ -13,7 +13,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use hoop_daemon::metrics::metrics;
 use hoop_daemon::projects::ProjectsConfig;
 use hoop_daemon::shutdown::ShutdownCoordinator;
 use hoop_daemon::supervisor::{ProjectRuntimeState, ProjectRuntimeStatus, ProjectSupervisor};
@@ -27,8 +26,9 @@ fn create_test_project(name: &str, path: PathBuf) -> ProjectsRegistryProjectsIte
         name: name.to_string(),
         path: path.to_string_lossy().into_owned(),
         canonical_path: None,
+        color: None as Option<hoop_schema::ProjectsRegistryProjectsItemVariant0Color>,
         label: None,
-        color: None,
+        redaction: None as Option<hoop_schema::ProjectsRegistryProjectsItemVariant0Redaction>,
     }
 }
 
@@ -47,11 +47,14 @@ fn create_beads_dir(path: &std::path::Path) -> tempfile::TempDir {
 async fn create_test_supervisor() -> ProjectSupervisor {
     let (bead_tx, _) = tokio::sync::broadcast::channel(64);
     let (session_tx, _) = tokio::sync::broadcast::channel(64);
-    let worker_registry = Arc::new(WorkerRegistry::new());
+    let (monitor_tx, _) = tokio::sync::broadcast::channel(64);
+    let (sessions_tx, _) = tokio::sync::broadcast::channel(64);
+    let worker_registry = Arc::new(WorkerRegistry::new(monitor_tx, sessions_tx));
     let beads = Arc::new(std::sync::RwLock::new(Vec::<Bead>::new()));
     let shutdown = Arc::new(ShutdownCoordinator::new());
     let cost_aggregator = Arc::new(std::sync::RwLock::new(
-        hoop_daemon::cost::CostAggregator::new(),
+        hoop_daemon::cost::CostAggregator::new(PathBuf::from("/tmp/test-cost.toml"))
+            .expect("Failed to create CostAggregator"),
     ));
     let vector_index = Arc::new(std::sync::RwLock::new(
         hoop_daemon::vector_index::VectorIndex::new(),
@@ -81,10 +84,10 @@ fn create_test_config(projects: Vec<ProjectsRegistryProjectsItem>) -> ProjectsCo
     // Pre-populate canonical cache for test projects
     for project in &registry.projects {
         let name = project.name();
-        let path = project.workspace_views().first().map(|v| v.path.clone());
-        if let Some(path) = path {
-            if let Ok(canonical) = std::fs::canonicalize(&path) {
-                canonical_cache.insert(format!("{}:{}", name, path), canonical);
+        for ws in project.workspace_views() {
+            if let Ok(canonical) = std::fs::canonicalize(&ws.path) {
+                let cache_key = (name.to_string(), ws.path.clone());
+                canonical_cache.insert(cache_key, canonical);
             }
         }
     }
@@ -524,16 +527,20 @@ async fn test_workspace_count_in_status() {
     let multi_workspace_project = ProjectsRegistryProjectsItem::Variant1 {
         name: "multi-workspace-project".to_string(),
         workspaces: vec![
-            hoop_schema::WorkspaceView {
+            hoop_schema::ProjectsRegistryProjectsItemVariant1WorkspacesItem {
                 path: project_path1.to_string_lossy().into_owned(),
-                label: Some("workspace1".to_string()),
+                canonical_path: None,
+                role: hoop_schema::ProjectsRegistryProjectsItemVariant1WorkspacesItemRole::Primary,
             },
-            hoop_schema::WorkspaceView {
+            hoop_schema::ProjectsRegistryProjectsItemVariant1WorkspacesItem {
                 path: project_path2.to_string_lossy().into_owned(),
-                label: Some("workspace2".to_string()),
+                canonical_path: None,
+                role: hoop_schema::ProjectsRegistryProjectsItemVariant1WorkspacesItemRole::Source,
             },
         ],
-        color: None,
+        color: None as Option<hoop_schema::ProjectsRegistryProjectsItemVariant1Color>,
+        label: None,
+        redaction: None as Option<hoop_schema::ProjectsRegistryProjectsItemVariant1Redaction>,
     };
 
     let mut registry = ProjectsRegistry {
@@ -545,7 +552,8 @@ async fn test_workspace_count_in_status() {
         let name = project.name();
         for ws in project.workspace_views() {
             if let Ok(canonical) = std::fs::canonicalize(&ws.path) {
-                canonical_cache.insert(format!("{}:{}", name, ws.path), canonical);
+                let cache_key = (name.to_string(), ws.path.clone());
+                canonical_cache.insert(cache_key, canonical);
             }
         }
     }
