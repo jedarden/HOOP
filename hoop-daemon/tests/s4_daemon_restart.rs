@@ -16,17 +16,16 @@
 //! - Any NEEDLE worker process is disrupted
 //! - Any bead disappears or duplicates in the UI post-restart
 
-mod integration_harness;
-
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 use tempfile::TempDir;
+use crate::crate::crate::integration_harness::spawn_test_daemon_with_config;
 
 /// Serialize test setup
-static LOCK: Mutex<()> = Mutex::();
+static LOCK: Mutex<()> = Mutex::new(());
 
 fn testrepo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -164,7 +163,7 @@ async fn s4_daemon_restart_no_bead_loss() {
     let initial_event_count = count_events_in_file();
 
     // Spawn first daemon
-    let (base_url1, _daemon1) = integration_harness::spawn_test_daemon_with_config::<fn(&mut hoop_daemon::Config)>(Some(|config| {
+    let (base_url1, _daemon1) = crate::crate::integration_harness::spawn_test_daemon_with_config::<fn(&mut hoop_daemon::Config)>(Some(|config| {
         config.observer_mode = false;
     }))
     .await
@@ -220,7 +219,7 @@ async fn s4_daemon_restart_no_bead_loss() {
     );
 
     // Spawn second daemon (simulating restart)
-    let (base_url2, _daemon2) = integration_harness::spawn_test_daemon_with_config::<fn(&mut hoop_daemon::Config)>(Some(|config| {
+    let (base_url2, _daemon2) = crate::crate::integration_harness::spawn_test_daemon_with_config::<fn(&mut hoop_daemon::Config)>(Some(|config| {
         config.observer_mode = false;
     }))
     .await
@@ -301,7 +300,7 @@ async fn s4_daemon_quick_rebuild() {
     }
 
     // Spawn first daemon
-    let (base_url1, _daemon1) = integration_harness::spawn_test_daemon()
+    let (base_url1, _daemon1) = crate::integration_harness::spawn_test_daemon()
         .await
         .expect("Failed to spawn first daemon");
 
@@ -328,7 +327,7 @@ async fn s4_daemon_quick_rebuild() {
     // Spawn second daemon and time the rebuild
     let rebuild_start = std::time::Instant::now();
 
-    let (base_url2, _daemon2) = integration_harness::spawn_test_daemon()
+    let (base_url2, _daemon2) = crate::integration_harness::spawn_test_daemon()
         .await
         .expect("Failed to spawn second daemon");
 
@@ -388,7 +387,7 @@ async fn s4_fleet_unaffected_by_restart() {
     hoop_daemon::fleet::init_fleet_db().expect("init fleet.db");
 
     // Spawn first daemon
-    let (base_url1, _daemon1) = integration_harness::spawn_test_daemon()
+    let (base_url1, _daemon1) = crate::integration_harness::spawn_test_daemon()
         .await
         .expect("Failed to spawn first daemon");
 
@@ -428,7 +427,7 @@ async fn s4_fleet_unaffected_by_restart() {
     );
 
     // Spawn second daemon
-    let (base_url2, _daemon2) = integration_harness::spawn_test_daemon()
+    let (base_url2, _daemon2) = crate::integration_harness::spawn_test_daemon()
         .await
         .expect("Failed to spawn second daemon");
 
@@ -498,7 +497,7 @@ async fn s4_state_consistency_across_restarts() {
 
     // Multiple restart cycles
     for cycle in 0..3 {
-        let (base_url, _daemon) = integration_harness::spawn_test_daemon()
+        let (base_url, _daemon) = crate::integration_harness::spawn_test_daemon()
             .await
             .expect("Failed to spawn daemon");
 

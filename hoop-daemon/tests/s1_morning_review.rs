@@ -17,10 +17,8 @@
 //! - Any figure is stale by more than one event-cycle (5s)
 //! - Page requires a manual refresh to show current state
 
-mod integration_harness;
-
 use std::time::{Duration, Instant};
-use integration_harness::spawn_test_daemon;
+use crate::integration_harness::spawn_test_daemon;
 use serde_json::Value as JsonValue;
 
 #[tokio::test]

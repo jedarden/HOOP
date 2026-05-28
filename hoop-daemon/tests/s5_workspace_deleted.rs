@@ -18,14 +18,12 @@
 //! - Other projects' state is corrupted
 //! - Recovery requires a manual restart
 
-mod integration_harness;
-
 use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
-use integration_harness;
 use hoop_schema::ReadinessResponse;
 use serde_json::Value as JsonValue;
+use crate::integration_harness::setup_test_hoop_home;
 
 fn create_beads_dir(path: &std::path::Path) {
     let beads_dir = path.join(".beads");
