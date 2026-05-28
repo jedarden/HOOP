@@ -111,6 +111,9 @@ enum Commands {
         /// S3 URI: s3://<bucket>/<prefix>/<snapshot-id>
         #[arg(long)]
         from: String,
+        /// Validate and show what would be restored without making changes
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Manage schema migrations
     #[command(subcommand)]
@@ -323,8 +326,8 @@ async fn main() -> anyhow::Result<()> {
                 std::process::exit(1);
             }
         }
-        Commands::Restore { from } => {
-            if let Err(e) = restore::run_restore(&from).await {
+        Commands::Restore { from, dry_run } => {
+            if let Err(e) = restore::run_restore(&from, dry_run).await {
                 eprintln!("hoop restore: {}", e);
                 std::process::exit(1);
             }

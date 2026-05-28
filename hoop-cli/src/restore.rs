@@ -275,13 +275,8 @@ fn rollback(backup_dir: &Path) -> Result<()> {
 
 // ── Main restore logic ──────────────────────────────────────────────
 
-pub async fn run_restore(from_uri: &str) -> Result<()> {
-    // 1. Precondition: daemon must not be running
-    if is_daemon_running() {
-        bail!("HOOP daemon is running. Stop it before restoring:\n  systemctl --user stop hoop");
-    }
-
-    // 2. Parse S3 URI and load config
+pub async fn run_restore(from_uri: &str, dry_run: bool) -> Result<()> {
+    // 1. Parse S3 URI and load config
     let locator = parse_s3_uri(from_uri)?;
     let s3_config = load_s3_config()?;
 
@@ -290,7 +285,7 @@ pub async fn run_restore(from_uri: &str) -> Result<()> {
         locator.bucket, locator.key
     );
 
-    // 3. Download and parse manifest (uploaded last by backup pipeline)
+    // 2. Download and parse manifest (uploaded last by backup pipeline)
     let manifest_bytes = s3_get(
         &s3_config,
         &locator.bucket,
@@ -305,11 +300,56 @@ pub async fn run_restore(from_uri: &str) -> Result<()> {
         manifest.snapshot_id, manifest.schema_version, manifest.created_at
     );
 
-    // 4. Validate manifest before any destructive action (§20.1)
+    // 3. Validate manifest before any destructive action (§20.1)
     let current = hoop_daemon::fleet::SCHEMA_VERSION;
     manifest
         .validate(current)
         .context("Manifest validation failed")?;
+
+    // 4. Dry-run mode: show what would be restored and exit
+    if dry_run {
+        println!();
+        println!("Dry-run mode: no changes will be made");
+        println!();
+        println!("Snapshot summary:");
+        println!("  Snapshot ID: {}", manifest.snapshot_id);
+        println!("  Created at: {}", manifest.created_at);
+        println!("  Schema version: {}", manifest.schema_version);
+        println!("  HOOP version: {}", manifest.hoop_version);
+        println!("  Encryption: {}", manifest.encryption);
+        if let Some(ref sha) = manifest.fleet_db_sha256 {
+            println!("  fleet.db SHA-256: {}", sha);
+        }
+        if let Some(size) = manifest.fleet_db_size {
+            println!("  fleet.db size: {} bytes", size);
+        }
+        if let Some(ref hash) = manifest.final_audit_hash {
+            println!("  Final audit hash: {}", hash);
+        }
+        println!();
+        println!("Would restore:");
+        println!("  fleet.db -> {}", hoop_dir().join("fleet.db").display());
+        if manifest.attachments_manifest_key.is_some() {
+            println!("  attachments -> {}", hoop_dir().join("attachments").display());
+        }
+        println!("  config.yml (if present in snapshot)");
+        println!("  projects.yaml (if present in snapshot)");
+        println!();
+        println!("To perform the restore, run without --dry-run:");
+        println!("  hoop restore --from {}", from_uri);
+        return Ok(());
+    }
+
+    // 5. Precondition: daemon must not be running (only for actual restore)
+    if is_daemon_running() {
+        bail!("HOOP daemon is running. Stop it before restoring:\n  systemctl --user stop hoop");
+    }
+
+    // 6. Move existing ~/.hoop/ aside (destructive action follows)
+    let backup_dir =
+        move_aside_for_rollback().context("Failed to move existing ~/.hoop/ aside for rollback")?;
+
+    println!("Moved existing state to {}", backup_dir.display());
 
     // 5. Move existing ~/.hoop/ aside (destructive action follows)
     let backup_dir =
