@@ -310,8 +310,6 @@ fn verify_test_exists(test_file: &str, test_name: &str) -> bool {
     if test_file.ends_with(".rs") {
         if let Ok(content) = fs::read_to_string(&path) {
             // Check for #[test] or #[tokio::test] with the function name
-            let pattern = format!("#[test]\", );
-            let tokio_pattern = format!("#[tokio::test]\", );
             let fn_pattern = format!("fn {}(", test_name);
             let async_fn_pattern = format!("async fn {}(", test_name);
 
