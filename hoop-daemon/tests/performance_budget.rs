@@ -25,6 +25,7 @@ use std::time::{Duration, Instant};
 mod integration_harness;
 use integration_harness::spawn_test_daemon_with_config;
 
+#[cfg(feature = "testing")]
 use hoop_daemon::load_test::{LoadTestConfig, PerformanceReport};
 use hoop_daemon::Config;
 use reqwest::StatusCode;
@@ -42,6 +43,7 @@ const METRICS_MAX_MS: u64 = 200;
 const MAX_MEMORY_MB: u64 = 1024; // 1GB memory limit
 
 /// Set up load test projects in the test daemon's temporary directory
+#[cfg(feature = "testing")]
 fn setup_load_test_projects(config: &Config, num_projects: usize, beads_per_project: usize) {
     use std::path::Path;
 
@@ -99,11 +101,10 @@ fn setup_load_test_projects(config: &Config, num_projects: usize, beads_per_proj
 }
 
 #[tokio::test]
+#[cfg(feature = "testing")]
 async fn performance_budget_20_projects_5_workers_300_beads() {
     // ── Phase 1: Spawn daemon with load test data ─────────────────────────────
-    let (base_url, _daemon) = spawn_test_daemon_with_config::<
-        fn(&mut hoop_daemon::Config),
-    >(Some(|cfg: &mut hoop_daemon::Config| {
+    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg: &mut hoop_daemon::Config| {
         setup_load_test_projects(cfg, NUM_PROJECTS, BEADS_PER_PROJECT);
     }))
     .await
@@ -225,13 +226,12 @@ async fn get_daemon_memory_usage() -> u64 {
 }
 
 #[tokio::test]
+#[cfg(feature = "testing")]
 async fn performance_budget_graceful_degradation() {
     // Test that the daemon remains responsive even when some projects are degraded
 
     // Spawn daemon with config that creates some degraded projects
     let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg: &mut hoop_daemon::Config| {
-        use std::path::Path;
-
         let hoop_dir = cfg.control_socket_path.parent().unwrap();
         let temp_dir = hoop_dir.parent().unwrap();
 

@@ -26,9 +26,9 @@ fn create_test_project(name: &str, path: PathBuf) -> ProjectsRegistryProjectsIte
         name: name.to_string(),
         path: path.to_string_lossy().into_owned(),
         canonical_path: None,
-        color: None as Option<hoop_schema::ProjectsRegistryProjectsItemVariant0Color>,
+        color: None,
         label: None,
-        redaction: None as Option<hoop_schema::ProjectsRegistryProjectsItemVariant0Redaction>,
+        redaction: None,
     }
 }
 
@@ -538,9 +538,9 @@ async fn test_workspace_count_in_status() {
                 role: hoop_schema::ProjectsRegistryProjectsItemVariant1WorkspacesItemRole::Source,
             },
         ],
-        color: None as Option<hoop_schema::ProjectsRegistryProjectsItemVariant1Color>,
+        color: None,
         label: None,
-        redaction: None as Option<hoop_schema::ProjectsRegistryProjectsItemVariant1Redaction>,
+        redaction: None,
     };
 
     let mut registry = ProjectsRegistry {

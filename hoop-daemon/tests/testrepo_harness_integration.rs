@@ -257,7 +257,7 @@ async fn daemon_boots_successfully() {
         .await
         .expect("Failed to spawn daemon");
 
-    let client = TestClient::new(base_url).await.expect("Failed to create test client");
+    let client = TestClient::new(base_url.clone()).await.expect("Failed to create test client");
 
     // Health check should respond
     let health = client.healthz().await.expect("Health check failed");
@@ -299,7 +299,7 @@ async fn ws_init_event_is_first_message() {
 
         assert_eq!(event["type"], "init", "First message must be init");
         assert!(
-            event["subscriptions"].as_array().is_some(),
+            event["subscriptions"].is_array(),
             "init must contain subscriptions array"
         );
 
@@ -335,7 +335,7 @@ async fn ws_receives_all_snapshot_events() {
         .await
         .expect("Failed to spawn daemon");
 
-    let client = TestClient::new(base_url).await.expect("Failed to create test client");
+    let client = TestClient::new(base_url.clone()).await.expect("Failed to create test client");
 
     let snapshots = client.collect_ws_snapshots().await.expect("Failed to collect snapshots");
 
@@ -369,7 +369,7 @@ async fn rest_api_endpoints_return_valid_state() {
         .await
         .expect("Failed to spawn daemon");
 
-    let client = TestClient::new(base_url).await.expect("Failed to create test client");
+    let client = TestClient::new(base_url.clone()).await.expect("Failed to create test client");
 
     // Test beads endpoint
     let beads = client.get_beads().await.expect("Failed to fetch beads");
@@ -408,7 +408,7 @@ async fn metrics_endpoint_exposes_expected_metrics() {
         .await
         .expect("Failed to spawn daemon");
 
-    let client = TestClient::new(base_url).await.expect("Failed to create test client");
+    let client = TestClient::new(base_url.clone()).await.expect("Failed to create test client");
 
     let metrics = client.get_metrics().await.expect("Failed to fetch metrics");
 
@@ -612,7 +612,7 @@ async fn test_state_projections_contain_required_fields() {
         .await
         .expect("Failed to spawn daemon");
 
-    let client = TestClient::new(base_url).await.expect("Failed to create test client");
+    let client = TestClient::new(base_url.clone()).await.expect("Failed to create test client");
 
     // Verify beads projection
     let beads = client.get_beads().await.expect("Failed to fetch beads");

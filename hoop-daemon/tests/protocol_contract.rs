@@ -12,6 +12,8 @@
 //!
 //! §9.3 / §13 MCP socket protocol contract.
 
+mod integration_harness;
+
 use std::{fs, path::Path};
 
 /// Load a fixture JSON file relative to the workspace `tests/fixtures/protocol/` directory.
@@ -115,6 +117,8 @@ fn test_read_stitch_response_daemon_serializes_fixture_shape() {
                 .unwrap()
                 .to_string(),
             participants: fixture_stitch["participants"].clone(),
+            total_cost_usd: None,
+            total_tokens: None,
         },
         messages: vec![hoop_daemon::api_stitch_read::StitchMessage {
             id: fixture_msg["id"].as_str().unwrap().to_string(),
@@ -318,8 +322,7 @@ fn test_ws_event_init_serializes_fixture_shape() {
 #[test]
 fn test_ws_event_worker_update_serializes_fixture_shape() {
     use hoop_daemon::ws::{WorkerData, WorkerDisplayState, WsEvent};
-    use hoop_daemon::WorkerLiveness;
-    use chrono::{DateTime, Utc};
+    use hoop_daemon::heartbeats::WorkerLiveness;
 
     let fixture = load_fixture("ws_events/worker_update.json");
 
@@ -335,7 +338,32 @@ fn test_ws_event_worker_update_serializes_fixture_shape() {
         heartbeat_age_secs: 0,
     };
 
-    let event = WsEvent::worker_update(worker);
+    let event = WsEvent {
+        event_type: "worker_update".to_string(),
+        worker: Some(worker),
+        workers: None,
+        beads: None,
+        conversations: None,
+        conversation: None,
+        streaming: None,
+        projects: None,
+        config_status: None,
+        capacity: None,
+        bead_event: None,
+        bead_events: None,
+        bead_created_by_hoop: None,
+        stitch_created: None,
+        draft_update: None,
+        collision_alert: None,
+        morning_brief: None,
+        stuck_alert: None,
+        agent_session: None,
+        spawn_ack_alert: None,
+        pattern_saved_query_synced: None,
+        saturation_alert: None,
+        cost_anomaly_alert: None,
+        subscriptions: None,
+    };
     let serialized = serde_json::to_value(&event).unwrap();
 
     assert_eq!(serialized["type"], fixture["type"]);
@@ -353,7 +381,7 @@ fn test_ws_event_worker_update_serializes_fixture_shape() {
 #[test]
 fn test_ws_event_workers_snapshot_serializes_fixture_shape() {
     use hoop_daemon::ws::{WorkerData, WorkerDisplayState, WsEvent};
-    use hoop_daemon::WorkerLiveness;
+    use hoop_daemon::heartbeats::WorkerLiveness;
 
     let fixture = load_fixture("ws_events/workers_snapshot.json");
 
@@ -420,6 +448,7 @@ fn test_ws_event_config_status_serializes_fixture_shape() {
     let status = ConfigStatusData {
         valid: true,
         error: None,
+        restart_required: None,
     };
 
     let event = WsEvent::config_status(status);
