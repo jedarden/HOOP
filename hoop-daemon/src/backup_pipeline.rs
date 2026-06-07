@@ -33,10 +33,24 @@ const MAX_BACKOFF_SECS: u64 = 60;
 
 // ── Pipeline entry point ─────────────────────────────────────────────
 
+/// Error returned when a backup is already in progress.
+#[derive(Debug, Clone)]
+pub struct AlreadyRunning;
+
+impl std::fmt::Display for AlreadyRunning {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("backup already in progress")
+    }
+}
+
+impl std::error::Error for AlreadyRunning {}
+
 #[derive(Debug)]
 pub struct BackupPipeline {
     config: BackupFileConfig,
     credentials: BackupCredentials,
+    /// Guard to prevent concurrent backup runs.
+    running: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl BackupPipeline {
@@ -44,11 +58,22 @@ impl BackupPipeline {
         Self {
             config,
             credentials,
+            running: Arc::new(tokio::sync::Mutex::new(())),
         }
     }
 
+    /// Check if a backup is currently running.
+    pub async fn is_running(&self) -> bool {
+        // Try to acquire the lock without blocking; if we can't, a backup is running
+        self.running.try_lock().is_err()
+    }
+
     /// Manually trigger a backup run (called via API endpoint).
+    ///
+    /// Returns an error if a backup is already in progress.
     pub async fn trigger(&self) -> Result<()> {
+        // Try to acquire the lock immediately; fail fast if already running
+        let _guard = self.running.try_lock().map_err(|_| AlreadyRunning)?;
         self.run_snapshot().await.map(|_| ())
     }
 
@@ -76,6 +101,15 @@ impl BackupPipeline {
                         if last_run_date.as_ref() == Some(&today) {
                             continue;
                         }
+
+                        // Skip if a backup is already running
+                        let _guard = match self.running.try_lock() {
+                            Ok(g) => g,
+                            Err(_) => {
+                                info!("Backup scheduler: backup already in progress, skipping scheduled run");
+                                continue;
+                            }
+                        };
 
                         last_run_date = Some(today);
                         info!("Backup scheduler: triggering daily snapshot for {}", today);
