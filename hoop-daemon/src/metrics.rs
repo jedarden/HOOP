@@ -731,6 +731,8 @@ pub struct Metrics {
     pub hoop_br_subprocess_total: LabeledCounter,
     /// `br` subprocess wall-clock duration in milliseconds, by verb.
     pub hoop_br_subprocess_duration_ms: LabeledHistogram,
+    /// Current number of concurrent `br` subprocesses (gauge).
+    pub hoop_br_subprocess_concurrent: Gauge,
     /// Stitches created, labelled by project and kind.
     pub hoop_stitch_created_total: LabeledCounter,
     /// Beads created by HOOP automation, labelled by project.
@@ -775,6 +777,8 @@ pub struct Metrics {
     pub hoop_cost_per_stitch_usd: LabeledHistogramPercentiles,
     /// Cost anomaly alerts fired.
     pub hoop_cost_anomaly_alerts_total: Counter,
+    /// Unknown model pricing lookups — model names not found in the pricing table (labelled by model).
+    pub hoop_unknown_model_pricing_total: LabeledCounter,
     /// "Already started" deduplication hits (session reuse without new bead).
     pub hoop_already_started_dedup_hits_total: Counter,
     /// Capacity-meter exhaustion warnings, labelled by account.
@@ -857,6 +861,7 @@ impl Metrics {
 
             hoop_br_subprocess_total: LabeledCounter::new(&["verb", "result"]),
             hoop_br_subprocess_duration_ms: LabeledHistogram::new(&["verb"]),
+            hoop_br_subprocess_concurrent: Gauge::new(),
             hoop_stitch_created_total: LabeledCounter::new(&["project", "kind"]),
             hoop_bead_created_by_hoop_total: LabeledCounter::new(&["project"]),
             hoop_audit_append_rate_per_second: Gauge::new(),
@@ -880,6 +885,7 @@ impl Metrics {
             hoop_cost_per_stitch_usd: LabeledHistogramPercentiles::new(&["adapter"])
                 .with_max_observations(10000), // 30-day rolling window (approx)
             hoop_cost_anomaly_alerts_total: Counter::new(),
+            hoop_unknown_model_pricing_total: LabeledCounter::new(&["model"]),
             hoop_already_started_dedup_hits_total: Counter::new(),
             hoop_capacity_meter_exhaustion_warnings_total: LabeledCounter::new(&["account"]),
             hoop_stitches_created_per_day: Gauge::new(),
@@ -1046,6 +1052,12 @@ impl Metrics {
             self.hoop_br_subprocess_duration_ms.label_names,
             &self.hoop_br_subprocess_duration_ms.buckets,
             &self.hoop_br_subprocess_duration_ms.snapshot(),
+        );
+        write_gauge_i64(
+            &mut out,
+            "hoop_br_subprocess_concurrent",
+            "Current number of concurrent `br` subprocesses.",
+            self.hoop_br_subprocess_concurrent.get(),
         );
         write_labeled_counter(
             &mut out,

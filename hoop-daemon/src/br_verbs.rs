@@ -9,6 +9,7 @@
 //! - Under `create-only-write`, only `invoke_br_create()` compiles; other write
 //!   verbs fail to compile and are rejected at runtime
 //! - `validate_write_invariant()` is called at daemon startup to log the mode
+//! - Provides `spawn_br_command` for executing br subprocesses with semaphore control (§4.8)
 
 /// Whether any write restriction is active at compile time.
 pub const WRITE_RESTRICTED: bool =
@@ -319,6 +320,137 @@ pub fn propagate_stitch_labels(target_labels: &mut Vec<String>, parent_labels: &
             target_labels.push(label.clone());
         }
     }
+}
+
+/// Spawn a br subprocess with semaphore control and metrics (§4.8).
+///
+/// This function:
+/// 1. Acquires a permit from the global br subprocess semaphore
+/// 2. Increments the concurrent subprocess gauge metric
+/// 3. Spawns the br command in a blocking task
+/// 4. Decrements the concurrent metric and releases the permit on completion
+/// 5. Records the subprocess total and duration metrics
+///
+/// # Arguments
+///
+/// * `semaphore` - The global semaphore limiting concurrent br subprocesses
+/// * `cmd` - The br Command to execute (built by invoke_br_* functions)
+/// * `verb` - The br verb name for metrics (e.g., "create", "list")
+///
+/// # Returns
+///
+/// * `Ok(output)` - The subprocess stdout/stderr if successful
+/// * `Err(e)` - Any error from spawning or executing the subprocess
+pub async fn spawn_br_command(
+    semaphore: &tokio::sync::Semaphore,
+    mut cmd: std::process::Command,
+    verb: &str,
+) -> anyhow::Result<std::process::Output> {
+    use crate::metrics::metrics;
+    use std::time::Instant;
+
+    // Acquire permit from semaphore (blocks if limit reached)
+    let _permit = semaphore.acquire().await.map_err(|e| {
+        anyhow::anyhow!("Failed to acquire br subprocess semaphore: {}", e)
+    })?;
+
+    // Increment concurrent gauge metric
+    metrics().hoop_br_subprocess_concurrent.inc();
+
+    let start = Instant::now();
+
+    // Spawn the br command in a blocking task
+    let result = tokio::task::spawn_blocking(move || cmd.output())
+        .await
+        .map_err(|e| anyhow::anyhow!("Task join failed: {}", e))?
+        .map_err(|e| anyhow::anyhow!("Failed to run br {}: {}", verb, e));
+
+    let duration_ms = start.elapsed().as_millis() as f64;
+
+    // Always decrement concurrent gauge and record metrics
+    metrics().hoop_br_subprocess_concurrent.dec();
+
+    // Record total and duration metrics based on result
+    match &result {
+        Ok(output) if output.status.success() => {
+            metrics()
+                .hoop_br_subprocess_total
+                .inc(&[verb, "ok"]);
+        }
+        Ok(_) => {
+            metrics()
+                .hoop_br_subprocess_total
+                .inc(&[verb, "error"]);
+        }
+        Err(_) => {
+            metrics()
+                .hoop_br_subprocess_total
+                .inc(&[verb, "error"]);
+        }
+    }
+    metrics()
+        .hoop_br_subprocess_duration_ms
+        .observe(&[verb], duration_ms);
+
+    result
+}
+
+/// Synchronous wrapper for `spawn_br_command` for use in blocking contexts.
+///
+/// This blocks the current thread until the br subprocess completes.
+/// Prefer `spawn_br_command` in async contexts.
+///
+/// # Arguments
+///
+/// * `semaphore` - The global semaphore limiting concurrent br subprocesses
+/// * `cmd` - The br Command to execute (built by invoke_br_* functions)
+/// * `verb` - The br verb name for metrics (e.g., "create", "list")
+///
+/// # Returns
+///
+/// * `Ok(output)` - The subprocess stdout/stderr if successful
+/// * `Err(e)` - Any error from spawning or executing the subprocess
+pub fn spawn_br_command_blocking(
+    semaphore: &tokio::sync::Semaphore,
+    mut cmd: std::process::Command,
+    verb: &str,
+) -> anyhow::Result<std::process::Output> {
+    let handle = semaphore.try_acquire().map_err(|e| {
+        anyhow::anyhow!("Failed to acquire br subprocess semaphore: {}", e)
+    })?;
+
+    use crate::metrics::metrics;
+    metrics().hoop_br_subprocess_concurrent.inc();
+
+    let start = std::time::Instant::now();
+    let result = cmd.output();
+    let duration_ms = start.elapsed().as_millis() as f64;
+
+    metrics().hoop_br_subprocess_concurrent.dec();
+
+    match &result {
+        Ok(output) if output.status.success() => {
+            metrics()
+                .hoop_br_subprocess_total
+                .inc(&[verb, "ok"]);
+        }
+        Ok(_) => {
+            metrics()
+                .hoop_br_subprocess_total
+                .inc(&[verb, "error"]);
+        }
+        Err(_) => {
+            metrics()
+                .hoop_br_subprocess_total
+                .inc(&[verb, "error"]);
+        }
+    }
+    metrics()
+        .hoop_br_subprocess_duration_ms
+        .observe(&[verb], duration_ms);
+
+    drop(handle);
+    result.map_err(|e| anyhow::anyhow!("Failed to run br {}: {}", verb, e))
 }
 
 #[cfg(test)]

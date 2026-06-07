@@ -174,6 +174,8 @@ pub struct ProjectRuntimeStatus {
     pub workspace_count: usize,
     /// Number of active beads
     pub bead_count: usize,
+    /// Number of workers running (total across all projects)
+    pub worker_count: usize,
 }
 
 /// Per-project runtime
@@ -408,17 +410,41 @@ impl ProjectSupervisor {
     /// Get current status of all runtimes
     pub async fn snapshot(&self) -> Vec<ProjectRuntimeStatus> {
         let runtimes = self.runtimes.read().await;
-        let beads = self.beads.read().unwrap();
+        // Clone beads before await to avoid holding RwLockReadGuard across await
+        let beads_clone: Vec<Bead> = self.beads.read().unwrap().clone();
+        let workers = self.worker_registry.snapshot().await;
+
+        // Build a map of bead_id -> project name from the beads store
+        let bead_to_project: std::collections::HashMap<String, String> = beads_clone
+            .iter()
+            .filter(|b| !b.project.is_empty())
+            .map(|b| (b.id.clone(), b.project.clone()))
+            .collect();
+
         runtimes
             .values()
             .map(|r| {
-                let bead_count = count_open_beads_for_workspaces(&beads, &r.workspaces);
+                let bead_count = count_open_beads_for_workspaces(&beads_clone, &r.workspaces);
+
+                // Count workers for this project: workers executing beads belonging to this project
+                let worker_count = workers
+                    .iter()
+                    .filter(|w| {
+                        if let crate::ws::WorkerDisplayState::Executing { bead, .. } = &w.state {
+                            bead_to_project.get(bead).map_or(false, |p| p == &r.name)
+                        } else {
+                            false
+                        }
+                    })
+                    .count();
+
                 ProjectRuntimeStatus {
                     project_name: r.name.clone(),
                     project_path: r.workspaces.first().cloned().unwrap_or_default(),
                     state: r.state.clone(),
                     workspace_count: r.workspaces.len(),
                     bead_count,
+                    worker_count,
                 }
             })
             .collect()
@@ -661,6 +687,7 @@ impl ProjectSupervisor {
                     state: runtime.state.clone(),
                     workspace_count: runtime.workspaces.len(),
                     bead_count: 0,
+                    worker_count: 0,
                 });
             }
             return;
@@ -690,6 +717,7 @@ impl ProjectSupervisor {
                         state: runtime.state.clone(),
                         workspace_count: runtime.workspaces.len(),
                         bead_count: 0,
+                        worker_count: 0,
                     });
 
                     return;
@@ -723,6 +751,7 @@ impl ProjectSupervisor {
                     state: runtime.state.clone(),
                     workspace_count: runtime.workspaces.len(),
                     bead_count: 0,
+                    worker_count: 0,
                 });
 
                 (true, delay_secs)
@@ -819,11 +848,12 @@ impl ProjectSupervisor {
                 while let Ok(event) = rx.recv().await {
                     match event {
                         BeadEvent::BeadsUpdated { beads: new_beads } => {
-                            // Tag each bead with the project name before merging
+                            // Tag each bead with the project name and workspace path before merging
                             let new_beads: Vec<Bead> = new_beads
                                 .into_iter()
                                 .map(|mut b| {
                                     b.project = project_name_clone.clone();
+                                    b.workspace = workspace_clone.display().to_string();
                                     b
                                 })
                                 .collect();
@@ -1243,13 +1273,23 @@ fn panic_payload_to_string(payload: &dyn std::any::Any) -> String {
     }
 }
 
-/// Count open beads for a given set of workspace paths
-/// Note: Currently beads don't have workspace association, so we count all open beads
-/// TODO: Add workspace/path association to beads for proper filtering
-fn count_open_beads_for_workspaces(beads: &[Bead], _workspaces: &[PathBuf]) -> usize {
+/// Count open beads for a given set of workspace paths.
+///
+/// Beads are tagged with their workspace path at load time (in run_project_runtime),
+/// so we can properly filter beads per-workspace for multi-workspace projects.
+fn count_open_beads_for_workspaces(beads: &[Bead], workspaces: &[PathBuf]) -> usize {
+    use std::path::Path;
     beads
         .iter()
-        .filter(|b| matches!(b.status, crate::BeadStatus::Open))
+        .filter(|b| {
+            matches!(b.status, crate::BeadStatus::Open)
+                && (b.workspace.is_empty()
+                    || workspaces.iter().any(|ws| {
+                        // Match by display string (handles both canonical and non-canonical paths)
+                        ws.display().to_string() == b.workspace
+                            || Path::new(&b.workspace) == ws
+                    }))
+        })
         .count()
 }
 

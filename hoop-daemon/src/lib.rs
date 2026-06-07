@@ -183,6 +183,9 @@ pub struct Bead {
     /// Project name assigned by HOOP at load time — not stored in issues.jsonl
     #[serde(skip_deserializing, default)]
     pub project: String,
+    /// Workspace path assigned by HOOP at load time — not stored in issues.jsonl
+    #[serde(skip_deserializing, default)]
+    pub workspace: String,
 }
 
 /// Bead status
@@ -375,6 +378,92 @@ pub struct DaemonState {
     pub unassigned_tracker: Option<Arc<api_unassigned::UnassignedTracker>>,
     /// Reflection detection state — coordinates pattern detection runs (Marquee #12, Phase 5)
     pub reflection_detection_state: Option<Arc<tokio::sync::Mutex<api_reflection_detection::DetectionState>>>,
+    /// Global br subprocess semaphore — limits concurrent br subprocesses to min(projects, 10) (§4.8)
+    pub br_semaphore: Arc<tokio::sync::Semaphore>,
+    /// Target permit count for the br subprocess semaphore — tracked separately for hot-reload (§4.8)
+    pub br_semaphore_target_permits: Arc<tokio::sync::RwLock<usize>>,
+}
+
+/// Update the br subprocess semaphore capacity based on the current project count (§4.8).
+///
+/// This function should be called after any project configuration change (hot-reload)
+/// to ensure the semaphore capacity is `min(registered_projects, 10)`.
+///
+/// # Arguments
+///
+/// * `semaphore` - The global semaphore to update
+/// * `target_permits` - The RwLock tracking the current target permit count
+/// * `project_count` - The new number of registered projects
+///
+/// # Behavior
+///
+/// - Calculates the new target as `min(project_count, 10)`
+/// - If the new target is higher, adds permits via `Semaphore::add_permits()`
+/// - If the new target is lower, attempts to acquire and drop excess permits
+/// - Updates the `target_permits` RwLock to the new value
+/// - Logs any capacity changes
+pub async fn update_br_semaphore_capacity(
+    semaphore: &Arc<tokio::sync::Semaphore>,
+    target_permits: &Arc<tokio::sync::RwLock<usize>>,
+    project_count: usize,
+) {
+    let old_target = *target_permits.read().await;
+    let new_target = project_count.min(10);
+
+    if new_target == old_target {
+        return; // No change needed
+    }
+
+    let diff = new_target as i64 - old_target as i64;
+
+    if diff > 0 {
+        // Increase capacity - add permits
+        semaphore.add_permits(diff as usize);
+        *target_permits.write().await = new_target;
+        info!(
+            "br subprocess semaphore capacity increased: {} → {} (+{} permits, {} projects)",
+            old_target, new_target, diff, project_count
+        );
+    } else {
+        // Decrease capacity - try to acquire and drop excess permits
+        let to_remove = diff.abs() as usize;
+        let mut removed = 0;
+
+        // Try to acquire permits without blocking
+        while removed < to_remove {
+            match semaphore.try_acquire() {
+                Ok(_permit) => {
+                    // Immediately drop the permit to reduce capacity
+                    drop(_permit);
+                    removed += 1;
+                }
+                Err(_) => {
+                    // No permits available (all are in use)
+                    // Cannot reduce capacity further at this time
+                    break;
+                }
+            }
+        }
+
+        let actual_target = old_target.saturating_sub(removed);
+        *target_permits.write().await = actual_target;
+
+        if removed > 0 {
+            info!(
+                "br subprocess semaphore capacity decreased: {} → {} (-{} permits, {} projects, {} in use)",
+                old_target, actual_target, removed, project_count, to_remove - removed
+            );
+        }
+
+        if removed < to_remove {
+            // Some permits are still in use, warn but don't fail
+            let in_use = to_remove - removed;
+            warn!(
+                "br subprocess semaphore: {} permits could not be removed (still in use by active br subprocesses)",
+                in_use
+            );
+        }
+    }
 }
 
 /// Health check endpoint handler — returns 200 if the process is responsive.
@@ -1329,7 +1418,7 @@ async fn handle_control_socket(
                             name: r.project_name,
                             path: r.project_path.display().to_string(),
                             active_beads: r.bead_count,
-                            workers: 0, // TODO: track workers per project
+                            workers: r.worker_count,
                             runtime_state: Some(r.state.to_display_string().to_string()),
                             runtime_error: r.state.error().map(|e| e.to_string()),
                         })
@@ -1341,7 +1430,7 @@ async fn handle_control_socket(
                             name: r.project_name,
                             path: r.project_path.display().to_string(),
                             active_beads: r.bead_count,
-                            workers: 0,
+                            workers: r.worker_count,
                             runtime_state: Some(r.state.to_display_string().to_string()),
                             runtime_error: r.state.error().map(|e| e.to_string()),
                         })
@@ -1885,6 +1974,15 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
             initial_config.secrets_patterns.value.len(),
             initial_config.secrets_patterns.attribution
         );
+
+        // Initialize per-project PII patterns from redaction config (§18.5)
+        if let Some(ref redaction_policy) = initial_config.redaction.value {
+            secrets_scanner::update_per_project_patterns(redaction_policy);
+            info!(
+                "Per-project PII patterns initialized for {} projects",
+                redaction_policy.per_project.len()
+            );
+        }
     }
 
     // Spawn task to handle config.yml changes
@@ -1920,6 +2018,15 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         config.secrets_patterns.value.len(),
                         config.secrets_patterns.attribution
                     );
+
+                    // Update per-project PII patterns from redaction config (§18.5)
+                    if let Some(ref redaction_policy) = config.redaction.value {
+                        secrets_scanner::update_per_project_patterns(redaction_policy);
+                        info!(
+                            "Per-project PII patterns reloaded for {} projects",
+                            redaction_policy.per_project.len()
+                        );
+                    }
 
                     // Reload stuck detector configuration (§C1, hoop-ttb.3.25)
                     let new_sd_config = stuck_detector::StuckDetector::load_config();
@@ -2765,6 +2872,16 @@ Note: This is an automated synthesis from voice dictation."#,
         }
     };
 
+    // Initialize global br subprocess semaphore with min(projects, 10) permits (§4.8)
+    let project_count = initial_config.registry.projects.len();
+    let br_semaphore_permits = project_count.min(10);
+    let br_semaphore = Arc::new(tokio::sync::Semaphore::new(br_semaphore_permits));
+    let br_semaphore_target_permits = Arc::new(tokio::sync::RwLock::new(br_semaphore_permits));
+    info!(
+        "br subprocess semaphore initialized with {} permits ({} projects)",
+        br_semaphore_permits, project_count
+    );
+
     let state = DaemonState {
         config: config.clone(),
         started_at: Instant::now(),
@@ -2814,7 +2931,47 @@ Note: This is an automated synthesis from voice dictation."#,
         ),
         unassigned_tracker,
         reflection_detection_state: Some(api_reflection_detection::new_detection_state()),
+        br_semaphore,
+        br_semaphore_target_permits,
     };
+
+    // Update br subprocess semaphore capacity on project config changes (§4.8)
+    {
+        let br_semaphore_for_update = state.br_semaphore.clone();
+        let br_target_permits_for_update = state.br_semaphore_target_permits.clone();
+        tokio::spawn(async move {
+            // Subscribe to projects config changes
+            let mut projects_watcher_for_semaphore = match projects::ProjectsWatcher::new() {
+                Ok(watcher) => watcher,
+                Err(e) => {
+                    warn!("Failed to create projects watcher for semaphore updates: {}", e);
+                    return;
+                }
+            };
+            if let Err(e) = projects_watcher_for_semaphore.start() {
+                warn!("Failed to start projects watcher for semaphore updates: {}", e);
+                return;
+            }
+            let mut rx = projects_watcher_for_semaphore.subscribe();
+
+            while let Ok(event) = rx.recv().await {
+                match event {
+                    projects::ProjectsEvent::ConfigReloaded { config, .. } => {
+                        let new_project_count = config.registry.projects.len();
+                        update_br_semaphore_capacity(
+                            &br_semaphore_for_update,
+                            &br_target_permits_for_update,
+                            new_project_count,
+                        ).await;
+                    }
+                    projects::ProjectsEvent::ConfigError { .. } => {
+                        // Config error - semaphore capacity unchanged
+                    }
+                }
+            }
+        });
+        info!("br subprocess semaphore capacity updater started (listens to project config changes)");
+    }
 
     // Forward project runtime status updates to shared store and broadcast
     let projects_for_update = state.projects.clone();
@@ -2929,6 +3086,7 @@ Note: This is an automated synthesis from voice dictation."#,
     // Orphan bead count updater: update metrics on stitch/bead events
     {
         let projects_ref = state.projects.clone();
+        let semaphore_ref = state.br_semaphore.clone();
         let mut stitch_rx = state.stitch_tx.subscribe();
         let mut bead_rx = state.bead_tx.subscribe();
 
@@ -2939,18 +3097,16 @@ Note: This is an automated synthesis from voice dictation."#,
                     result = stitch_rx.recv() => {
                         if result.is_ok() {
                             let projects = projects_ref.read().unwrap().clone();
-                            tokio::task::spawn_blocking(move || {
-                                crate::orphan_beads::update_all_orphan_metrics(&projects);
-                            }).await.ok();
+                            let semaphore = semaphore_ref.clone();
+                            crate::orphan_beads::update_all_orphan_metrics(&projects, &semaphore).await;
                         }
                     }
                     // Update orphan metrics on bead events (external bead changes)
                     result = bead_rx.recv() => {
                         if result.is_ok() {
                             let projects = projects_ref.read().unwrap().clone();
-                            tokio::task::spawn_blocking(move || {
-                                crate::orphan_beads::update_all_orphan_metrics(&projects);
-                            }).await.ok();
+                            let semaphore = semaphore_ref.clone();
+                            crate::orphan_beads::update_all_orphan_metrics(&projects, &semaphore).await;
                         }
                     }
                 }
@@ -3479,6 +3635,7 @@ mod dashboard_tests {
             created_by: "test".to_string(),
             dependencies: vec![],
             project: project.to_string(),
+            workspace: project.to_string(),
         }
     }
 
