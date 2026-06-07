@@ -17,6 +17,7 @@
 
 /// Minimum number of samples required to return a prediction from the percentile index.
 /// Predictions with fewer samples are considered too unreliable.
+#[allow(dead_code)]
 const MIN_SAMPLES_FOR_PREDICTION: usize = 3;
 
 use crate::predictor::{predict_stitch, HistoricalStitch};
@@ -42,6 +43,8 @@ pub struct PreviewRequest {
     pub description: Option<String>,
     /// Comma-separated labels
     pub labels: Option<String>,
+    /// Number of attachments in the draft
+    pub attachments_count: Option<usize>,
 }
 
 /// Stitch preview response (matches hoop-schema/schemas/stitch_preview.json)
@@ -175,6 +178,7 @@ pub fn router() -> Router<crate::DaemonState> {
         ("title" = String, Query, description = "Bead title to preview"),
         ("description" = Option<String>, Query, description = "Bead description/body"),
         ("labels" = Option<String>, Query, description = "Comma-separated labels"),
+        ("attachments_count" = Option<usize>, Query, description = "Number of attachments in the draft"),
     ),
     responses(
         (status = 200, description = "Stitch preview data", body = StitchPreview),
@@ -207,6 +211,7 @@ async fn preview_bead(
         body_length,
         &labels,
         params.description.as_deref(),
+        params.attachments_count.unwrap_or(0),
     );
 
     // Fall back to historical stitch prediction if index has insufficient data
@@ -421,6 +426,7 @@ fn query_percentile_index(
     body_length: usize,
     labels: &[String],
     _body: Option<&str>,
+    attachments_count: usize,
 ) -> Option<crate::predictor::StitchPrediction> {
     use rusqlite::Connection;
 
@@ -430,15 +436,10 @@ fn query_percentile_index(
     }
 
     let conn = Connection::open(&db_path).ok()?;
-    let attachments_count = 0; // TODO: derive from draft attachments
 
-    let Some(query_result) =
-        query_percentiles(&conn, title, body_length, labels, attachments_count)
+    let query_result = query_percentiles(&conn, title, body_length, labels, attachments_count)
             .ok()
-            .flatten()
-    else {
-        return None;
-    };
+            .flatten()?;
 
     // Only return prediction if we have a meaningful sample size
     if query_result.sample_count < 3 {
@@ -614,9 +615,6 @@ fn resolve_project_path(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
 
     #[test]
     fn test_preview_request_parse() {
