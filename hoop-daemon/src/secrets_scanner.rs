@@ -127,21 +127,6 @@ fn email_regex() -> &'static Regex {
     &EMAIL_REGEX
 }
 
-/// Check if email detection is enabled for a project.
-///
-/// Returns true if the project has email scanning enabled in its config.
-fn is_email_detection_enabled(project_name: Option<&str>) -> bool {
-    // TODO: Load from project config when PII patterns are configurable
-    // For now, email detection is opt-in via project config
-    if let Some(proj) = project_name {
-        // Check if project has pii_patterns.email_detection = true
-        if let Ok(enabled) = std::env::var(format!("HOOP_{}_PII_EMAIL_DETECTION", proj.to_uppercase().replace('-', "_"))) {
-            return enabled.eq_ignore_ascii_case("true");
-        }
-    }
-    false
-}
-
 // ── Scanner state ───────────────────────────────────────────────────────────────
 
 /// Global scanner state, updated by config hot-reload.
