@@ -1975,14 +1975,8 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
             initial_config.secrets_patterns.attribution
         );
 
-        // Initialize per-project PII patterns from redaction config (§18.5)
-        if let Some(ref redaction_policy) = initial_config.redaction.value {
-            secrets_scanner::update_per_project_patterns(redaction_policy);
-            info!(
-                "Per-project PII patterns initialized for {} projects",
-                redaction_policy.per_project.len()
-            );
-        }
+        // Note: Per-project PII patterns are handled by redaction_policy module (§18.5)
+        // via RedactionPolicyState, not via secrets_scanner
     }
 
     // Spawn task to handle config.yml changes
@@ -2019,14 +2013,8 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         config.secrets_patterns.attribution
                     );
 
-                    // Update per-project PII patterns from redaction config (§18.5)
-                    if let Some(ref redaction_policy) = config.redaction.value {
-                        secrets_scanner::update_per_project_patterns(redaction_policy);
-                        info!(
-                            "Per-project PII patterns reloaded for {} projects",
-                            redaction_policy.per_project.len()
-                        );
-                    }
+                    // Note: Per-project PII patterns are handled by redaction_policy module (§18.5)
+                    // via RedactionPolicyState, not via secrets_scanner
 
                     // Reload stuck detector configuration (§C1, hoop-ttb.3.25)
                     let new_sd_config = stuck_detector::StuckDetector::load_config();
@@ -3097,16 +3085,14 @@ Note: This is an automated synthesis from voice dictation."#,
                     result = stitch_rx.recv() => {
                         if result.is_ok() {
                             let projects = projects_ref.read().unwrap().clone();
-                            let semaphore = semaphore_ref.clone();
-                            crate::orphan_beads::update_all_orphan_metrics(&projects, &semaphore).await;
+                            crate::orphan_beads::update_all_orphan_metrics(&projects);
                         }
                     }
                     // Update orphan metrics on bead events (external bead changes)
                     result = bead_rx.recv() => {
                         if result.is_ok() {
                             let projects = projects_ref.read().unwrap().clone();
-                            let semaphore = semaphore_ref.clone();
-                            crate::orphan_beads::update_all_orphan_metrics(&projects, &semaphore).await;
+                            crate::orphan_beads::update_all_orphan_metrics(&projects);
                         }
                     }
                 }
