@@ -10,13 +10,12 @@
 //!
 //! Plan reference: §6 Phase 5 marquee #11, hoop-ttb.6.10.1
 
-use crate::embedding::{Embedder, Embedding, NgramEmbedder};
+use crate::embedding::{Embedder, NgramEmbedder};
 use crate::metrics::metrics;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use tokio::sync::Semaphore;
@@ -131,7 +130,7 @@ impl EmbeddingService {
     /// Create from the global config resolver.
     pub fn from_config() -> Result<Self> {
         let config = crate::config_resolver::resolve(crate::config_resolver::CliOverrides::default());
-        let adapter_kind = AdapterKind::from_str(&config.embedding_adapter.value)
+        let _adapter_kind = AdapterKind::from_str(&config.embedding_adapter.value)
             .unwrap_or(AdapterKind::Local);
 
         let embedding_config = EmbeddingConfig {
@@ -453,17 +452,6 @@ pub struct CacheStats {
     pub total_entries: usize,
     pub expired_entries: usize,
     pub valid_entries: usize,
-}
-
-// Extend Embedder trait with as_any for downcasting
-trait EmbedderExt: Embedder {
-    fn as_any(&self) -> &dyn std::any::Any;
-}
-
-impl<T: Embedder + std::any::Any> EmbedderExt for T {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
 }
 
 #[cfg(test)]
