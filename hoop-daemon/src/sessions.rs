@@ -226,6 +226,7 @@ struct AiderMetadata {
     /// End time
     end_time: Option<String>,
     /// Git commit hash (Aider uses git for continuity)
+    #[allow(dead_code)]
     git_commit: Option<String>,
 }
 
@@ -233,6 +234,7 @@ struct AiderMetadata {
 #[derive(Debug, Deserialize)]
 struct AiderCommand {
     /// The full command line
+    #[allow(dead_code)]
     command: String,
     /// The message/prompt (from --message or -m flag)
     message: Option<String>,
@@ -551,8 +553,6 @@ pub struct GeminiAdapter;
 /// Session path registry entry for Gemini.
 #[derive(Debug, Clone)]
 pub struct GeminiSessionPath {
-    /// Root directory (e.g., ~/.gemini or $GEMINI_CLI_HOME)
-    root: PathBuf,
     /// Subpath to sessions (e.g., "tmp" or "sessions")
     subpath: String,
     /// Full path to sessions directory
@@ -631,7 +631,6 @@ impl GeminiAdapter {
                     );
 
                     found_paths.push(GeminiSessionPath {
-                        root,
                         subpath,
                         full_path,
                     });
@@ -781,10 +780,6 @@ struct SessionTailerState {
     bead_to_provider_session: HashMap<String, String>,
     /// Reverse index: provider_session_id → bead_id
     provider_session_to_bead: HashMap<String, String>,
-    /// Unassigned sessions (sessions not matching any registered project) — capped at MAX_UNASSIGNED_SESSIONS
-    unassigned_sessions: Vec<ParsedSession>,
-    /// Ignored session IDs (persisted to disk) — sessions user chose to permanently ignore
-    ignored_session_ids: HashSet<String>,
 }
 
 impl Default for SessionTailerState {
@@ -804,8 +799,6 @@ impl Default for SessionTailerState {
             session_bound_seen: HashSet::new(),
             bead_to_provider_session: HashMap::new(),
             provider_session_to_bead: HashMap::new(),
-            unassigned_sessions: Vec::new(),
-            ignored_session_ids: HashSet::new(),
         }
     }
 }

@@ -36,9 +36,7 @@ pub struct RawBytes(pub Vec<u8>);
 #[derive(Debug, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 struct CreateScreenCaptureRequest {
-    project: String,
     video_data: String,
-    video_filename: String,
     video_content_type: String,
     duration_secs: f64,
     frame_samples: Vec<FrameSample>,
@@ -357,7 +355,6 @@ async fn get_video(
 #[derive(Debug, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 struct StartStreamingUploadRequest {
-    project: String,
     video_content_type: String,
 }
 

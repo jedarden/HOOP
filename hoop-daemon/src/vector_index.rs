@@ -50,8 +50,6 @@ impl Default for DedupConfig {
 struct IndexEntry {
     item: IndexedItem,
     embedding: Embedding,
-    /// Original text for combined similarity computation
-    text: String,
     /// Canonical tokens for Jaccard similarity
     tokens: Vec<String>,
 }
@@ -148,7 +146,6 @@ impl VectorIndex {
                 IndexEntry {
                     item,
                     embedding,
-                    text,
                     tokens,
                 }
             })
@@ -171,7 +168,6 @@ impl VectorIndex {
         self.entries.push(IndexEntry {
             item,
             embedding,
-            text,
             tokens,
         });
     }
@@ -418,14 +414,9 @@ impl VectorIndex {
         for result in entries_iter {
             let (item, embedding, tokens) =
                 result.map_err(|e| format!("Failed to read row: {}", e))?;
-            let text = match &item.description {
-                Some(desc) if !desc.is_empty() => format!("{} {}", item.title, desc),
-                _ => item.title.clone(),
-            };
             loaded_entries.push(IndexEntry {
                 item,
                 embedding,
-                text,
                 tokens,
             });
         }
@@ -529,7 +520,6 @@ impl VectorIndex {
         self.entries.push(IndexEntry {
             item: item.clone(),
             embedding,
-            text: text.clone(),
             tokens: tokens.clone(),
         });
 
