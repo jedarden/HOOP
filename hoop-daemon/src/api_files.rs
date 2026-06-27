@@ -3,19 +3,16 @@
 //! Provides directory listing, file content with syntax highlighting, and file search.
 //! These endpoints power the FilesTab UI component.
 
-use crate::files::{self, parse_ext_patterns, FileEntry, FileSearchResult, GrepMatch};
+use crate::files::{self, parse_ext_patterns, FileEntry, FileSearchResult};
 use crate::id_validators;
 use axum::{
     extract::{Path, Query, State},
-    http::{header, StatusCode},
-    response::IntoResponse,
+    http::StatusCode,
     routing::get,
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
 
 // Syntax highlighting support
 use syntect::highlighting::{Theme, ThemeSet};
@@ -274,7 +271,6 @@ fn highlight_file(
     theme_name: &str,
 ) -> Result<HighlightResult, (StatusCode, String)> {
     use syntect::highlighting::{Theme, ThemeSet};
-    use syntect::html::{css_for_theme_with_class_style, ClassStyle};
     use syntect::parsing::{SyntaxReference, SyntaxSet};
     use syntect::util::LinesWithEndings;
 
@@ -533,15 +529,6 @@ fn format_color(c: syntect::highlighting::Color) -> String {
     format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b)
 }
 
-/// Escape HTML entities - basic sanitization for server-rendered content
-fn escape_html_entities(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#x27;")
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -555,13 +542,6 @@ mod tests {
         assert_eq!(format_color(syntect::highlighting::Color { r: 255, g: 0, b: 0 }), "#ff0000");
         assert_eq!(format_color(syntect::highlighting::Color { r: 0, g: 255, b: 0 }), "#00ff00");
         assert_eq!(format_color(syntect::highlighting::Color { r: 0, g: 0, b: 255 }), "#0000ff");
-    }
-
-    #[test]
-    fn test_escape_html_entities() {
-        assert_eq!(escape_html_entities("<div>"), "&lt;div&gt;");
-        assert_eq!(escape_html_entities("a & b"), "a &amp; b");
-        assert_eq!(escape_html_entities("\"quote\""), "&quot;quote&quot;");
     }
 
     #[test]
