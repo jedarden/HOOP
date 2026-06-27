@@ -1,0 +1,420 @@
+# HOOP Clippy Warning Inventory
+Generated: 2025-06-27
+Total warnings: 176
+
+## DEAD CODE (dead_code, unused_*)
+Count: 22
+
+1. hoop-daemon/src/auth.rs:318 - unused variable: `required_role`
+   - Suggestion: prefix with underscore `_required_role`
+
+2. hoop-daemon/src/config_resolver.rs:985 - function `yaml_validate_str` is never used
+
+3. hoop-daemon/src/config_resolver.rs:1022 - function `yaml_validate_u64_range` is never used
+
+4. hoop-daemon/src/config_resolver.rs:1059 - function `yaml_validate_f64_range` is never used
+
+5. hoop-daemon/src/embedding_service.rs:458 - trait `EmbedderExt` is never used
+
+6. hoop-daemon/src/sessions.rs:229 - field `git_commit` is never read (AiderMetadata)
+
+7. hoop-daemon/src/sessions.rs:236 - field `command` is never read (AiderCommand)
+
+8. hoop-daemon/src/sessions.rs:555 - fields `root` and `subpath` are never read (GeminiSessionPath)
+
+9. hoop-daemon/src/sessions.rs:764 - constant `MAX_UNASSIGNED_SESSIONS` is never used
+
+10. hoop-daemon/src/sessions.rs:785 - fields `unassigned_sessions` and `ignored_session_ids` are never read (SessionTailerState)
+
+11. hoop-daemon/src/vector_index.rs:54 - field `text` is never read (IndexEntry)
+
+12. hoop-daemon/src/api_files.rs:533 - function `escape_html_entities` is never used
+
+13. hoop-daemon/src/api_screen_capture.rs:37 - fields `project` and `video_filename` are never read (CreateScreenCaptureRequest)
+
+14. hoop-daemon/src/api_screen_capture.rs:358 - field `project` is never read (StartStreamingUploadRequest)
+
+15. hoop-daemon/src/secrets_scanner.rs:133 - function `is_email_detection_enabled` is never used
+
+16. hoop-daemon/src/stitch_percentile_index.rs:68 - constant `MIN_SAMPLES_FOR_PREDICTION` is never used
+
+17. hoop-daemon/src/stitch_percentile_index.rs:72 - constant `STITCH_CLOSED_THRESHOLD_SECONDS` is never used
+
+## STYLE/IDIOMATIC (needless_*, redundant_*, etc.)
+Count: 95
+
+### needless_borrow (9 instances)
+18. hoop-daemon/src/api_beads.rs:545 - needless borrow of `state`
+
+19. hoop-daemon/src/api_beads.rs:559 - needless borrow of `state`
+
+20. hoop-daemon/src/api_dictated_notes.rs:469 - needless borrow of `project`
+
+21. hoop-daemon/src/api_dictated_notes.rs:470 - needless borrow of `kind`
+
+22. hoop-daemon/src/api_dictated_notes.rs:497 - needless borrow of `valid_id.as_str()`
+
+23. hoop-daemon/src/beads.rs:259 - needless borrow of `issues_path`
+
+24. hoop-daemon/src/migrations.rs:213 - needless borrow of `migration.version`
+
+25. hoop-daemon/src/stitch_percentile_index.rs:793 - needless borrow of `conn`
+
+### redundant_closure (8 instances)
+26. hoop-daemon/src/api_conversations.rs:315 - redundant closure `|w| WorkerMetadata::from(w)`
+
+27. hoop-daemon/src/config_resolver.rs:1559 - redundant closure `|y| yaml_get_secret_patterns(y)`
+
+28. hoop-daemon/src/config_resolver.rs:1601 - redundant closure `|y| yaml_get_role_config(y)`
+
+29. hoop-daemon/src/config_resolver.rs:2263 - redundant closure `|y| yaml_get_secret_patterns(y)`
+
+30. hoop-daemon/src/config_resolver.rs:2456 - redundant closure `|y| yaml_get_role_config(y)`
+
+31. hoop-daemon/src/files.rs:275 - redundant closure `|p| strip(p)`
+
+32. hoop-daemon/src/files.rs:282 - redundant closure `|p| strip(p)`
+
+33. hoop-daemon/src/redaction_policy.rs:343 - redundant closure `|p| std::path::PathBuf::from(p)`
+
+### unnecessary_sort_by (7 instances)
+34. hoop-daemon/src/api_conversations.rs:327 - should use `sort_by_key`
+
+35. hoop-daemon/src/api_conversations.rs:330 - should use `sort_by_key`
+
+36. hoop-daemon/src/api_onboarding.rs:228 - should use `sort_by_key`
+
+37. hoop-daemon/src/api_stitch_read.rs:470 - should use `sort_by_key`
+
+38. hoop-daemon/src/api_unassigned.rs:326 - should use `sort_by_key`
+
+39. hoop-daemon/src/lib.rs:1189 - should use `sort_by_key`
+
+### unnecessary_lazy_evaluations (2 instances)
+40. hoop-daemon/src/api_dictated_notes.rs:780 - `unwrap_or_else(|| ...)` should be `unwrap_or(...)`
+
+41. hoop-daemon/src/api_dictated_notes.rs:784 - `unwrap_or_else(|| ...)` should be `unwrap_or(...)`
+
+### manual_flatten (5 instances)
+42. hoop-daemon/src/api_scripts.rs:342 - use `.flatten()` instead of `if let Ok(line)`
+
+43. hoop-daemon/src/api_scripts.rs:352 - use `.flatten()` instead of `if let Ok(line)`
+
+44. hoop-daemon/src/api_skills.rs:327 - use `.flatten()` instead of `if let Ok(line)`
+
+45. hoop-daemon/src/api_skills.rs:337 - use `.flatten()` instead of `if let Ok(line)`
+
+46. hoop-daemon/src/lib.rs:4028 - use `.flatten()` instead of `if let Ok(line)`
+
+### bind_instead_of_map (1 instance)
+47. hoop-daemon/src/api_scripts.rs:510 - `.and_then(|x| Some(y))` should be `.map(|x| y)`
+
+### useless_format (2 instances)
+48. hoop-daemon/src/api_stitch_links.rs:300 - `format!("{}", p)` should use `.to_string()`
+
+49. hoop-daemon/src/audit.rs:368 - `format!("...")` should use `.to_string()`
+
+### unnecessary_cast (12 instances)
+50. hoop-daemon/src/backup_pipeline.rs:752 - `u32` -> `u32` cast
+
+51. hoop-daemon/src/backup_pipeline.rs:753 - `u32` -> `u32` cast
+
+52. hoop-daemon/src/backup_pipeline.rs:754 - `u32` -> `u32` cast
+
+53. hoop-daemon/src/backup_pipeline.rs:755 - `u32` -> `u32` cast
+
+54. hoop-daemon/src/config_resolver.rs:1643 - `u64` -> `u64` cast
+
+55. hoop-daemon/src/config_resolver.rs:2495 - `u64` -> `u64` cast
+
+56. hoop-daemon/src/script_scheduler.rs:334 - `u32` -> `u32` cast
+
+57. hoop-daemon/src/script_scheduler.rs:335 - `u32` -> `u32` cast
+
+58. hoop-daemon/src/script_scheduler.rs:336 - `u32` -> `u32` cast
+
+59. hoop-daemon/src/script_scheduler.rs:337 - `u32` -> `u32` cast
+
+60. hoop-daemon/src/stitch_percentile_index.rs:823 - `usize` -> `usize` cast
+
+61. hoop-daemon/src/api_files.rs:434 - `usize` -> `usize` cast
+
+### unnecessary_map_or (6 instances)
+62. hoop-daemon/src/attachment_sync.rs:174 - `.map_or(false, |ft| ft.is_file())` should use `is_some_and()`
+
+63. hoop-daemon/src/capacity.rs:1026 - `.map_or(false, |f| ...)` should use `is_some_and()`
+
+64. hoop-daemon/src/capacity.rs:1029 - `.map_or(false, |f| ...)` should use `is_some_and()`
+
+65. hoop-daemon/src/supervisor.rs:434 - `.map_or(false, |p| ...)` should use `== Some(&r.name)`
+
+66. hoop-daemon/src/secrets_scanner.rs:260 - `.map_or(false, |p| ...)` should use `is_some_and()`
+
+### unnecessary_unwrap (2 instances)
+67. hoop-daemon/src/capacity.rs:606 - `.unwrap()` after `is_some()` check
+
+68. hoop-daemon/src/capacity.rs:607 - `.unwrap()` after `is_some()` check
+
+### map_flatten (2 instances)
+69. hoop-daemon/src/content_blocks.rs:113 - `.map(...).flatten()` should be `.and_then(...)`
+
+70. hoop-daemon/src/content_blocks.rs:145 - `.map(...).flatten()` should be `.and_then(...)`
+
+### needless_return (1 instance)
+71. hoop-daemon/src/api_tour_project.rs:366 - unnecessary `return` statement
+
+### useless_conversion (14 instances)
+72. hoop-daemon/src/supervisor.rs:1244 - useless `PathBuf::from()` conversion
+
+73. hoop-daemon/src/api_content_blocks.rs:40 - useless `into()` conversion
+
+74. hoop-daemon/src/api_content_blocks.rs:87 - useless `into()` conversion
+
+75. hoop-daemon/src/api_content_blocks.rs:122 - useless `into()` conversion
+
+76. hoop-daemon/src/api_content_blocks.rs:155 - useless `into()` conversion
+
+77. hoop-daemon/src/api_content_blocks.rs:188 - useless `into()` conversion
+
+78. hoop-daemon/src/observer.rs:277 - useless `.into()` conversion
+
+79. hoop-daemon/src/observer.rs:278 - useless `.into()` conversion
+
+80. hoop-daemon/src/observer.rs:279 - useless `.into()` conversion
+
+81. hoop-daemon/src/observer.rs:280 - useless `.into()` conversion
+
+82. hoop-daemon/src/observer.rs:293 - useless `.into()` conversion
+
+83. hoop-daemon/src/cost_anomaly.rs:252 - useless `PathBuf::from()` conversion
+
+84. hoop-daemon/src/stitch_percentile_index.rs:712 - useless `PathBuf::from()` conversion
+
+85. hoop-daemon/src/lib.rs:3872 - useless `PathBuf::from()` conversion
+
+86. hoop-daemon/src/lib.rs:3907 - useless `PathBuf::from()` conversion
+
+87. hoop-daemon/src/lib.rs:3984 - useless `PathBuf::from()` conversion
+
+88. hoop-daemon/src/lib.rs:4012 - useless `PathBuf::from()` conversion
+
+89. hoop-daemon/src/lib.rs:4094 - useless `PathBuf::from()` conversion
+
+### explicit_auto_deref (2 instances)
+90. hoop-daemon/src/syntax_highlight_stream.rs:178 - explicit deref `&*syntax`
+
+91. hoop-daemon/src/syntax_highlight_stream.rs:178 - explicit deref `&*theme`
+
+### needless_borrows_for_generic_args (1 instance)
+92. hoop-daemon/src/fleet.rs:4695 - needless borrow for generic args
+
+### manual_strip (5 instances)
+93. hoop-daemon/src/api_blame.rs:228 - manual strip with index `line[12..]`
+
+94. hoop-daemon/src/api_blame.rs:237 - manual strip with index `line[8..]`
+
+95. hoop-daemon/src/api_diff.rs:169 - manual strip with index `line[4..]`
+
+96. hoop-daemon/src/api_diff.rs:178 - manual strip with index `line[4..]`
+
+### single_match (1 instance)
+97. hoop-daemon/src/lib.rs:2300 - single pattern match should use `if let`
+
+### match_result_ok (1 instance)
+98. hoop-daemon/src/orphan_beads.rs:85 - matching on `Some(ok())` is redundant
+
+### manual_range_contains (1 instance)
+99. hoop-daemon/src/ansi_strip.rs:52 - manual `RangeInclusive::contains` implementation
+
+### manual_clamp (2 instances)
+100. hoop-daemon/src/api_cost_per_stitch.rs:109 - should use `.clamp()`
+
+101. hoop-daemon/src/api_timeline.rs:76 - should use `.clamp()`
+
+### double_ended_iterator_last (1 instance)
+102. hoop-daemon/src/api_conversations.rs:144 - `.last()` on `DoubleEndedIterator` should use `.next_back()`
+
+### for_kv_map (1 instance)
+103. hoop-daemon/src/api_timeline.rs:85 - iterating on map's keys only, should use `.values()`
+
+### get_first (1 instance)
+104. hoop-daemon/src/migrations.rs:144 - `.get(0)` should use `.first()`
+
+### collapsible_if (3 instances)
+105. hoop-daemon/src/pattern_query_evaluator.rs:469 - nested `if` can be collapsed
+
+106. hoop-daemon/src/prompt_substitute.rs:329 - nested `if` can be collapsed
+
+107. hoop-daemon/src/secrets_scanner.rs:82 - nested `if` can be collapsed
+
+### manual_pattern_char_comparison (3 instances)
+108. hoop-daemon/src/config_resolver.rs:383 - manual char comparison should use array
+
+109. hoop-daemon/src/api_diff.rs:321 - manual char comparison should use array
+
+110. hoop-daemon/src/lib.rs:692 - manual char comparison should use array
+
+### new_without_default (1 instance)
+111. hoop-daemon/src/attachment_sync.rs:50 - `BackupManifest::new()` should implement `Default`
+
+### derivable_impls (2 instances)
+112. hoop-daemon/src/stuck_detector.rs:228 - `Default` impl can be derived
+
+113. hoop-daemon/src/saturation_detector.rs:39 - `Default` impl can be derived
+
+### should_implement_trait (2 instances)
+114. hoop-daemon/src/embedding_service.rs:68 - `from_str` should implement `FromStr` trait
+
+115. hoop-daemon/src/stuck_detector.rs:66 - `from_str` should implement `FromStr` trait
+
+### len_without_is_empty (1 instance)
+116. hoop-daemon/src/identity.rs:123 - `len()` method without `is_empty()` method
+
+### clone_on_copy (3 instances)
+117. hoop-daemon/src/embedding_service.rs:349 - cloning `Copy` type `[f32; 256]`
+
+118. hoop-daemon/src/projects.rs:497 - cloning `Copy` type `WorkspaceViewRole`
+
+119. hoop-daemon/src/projects.rs:498 - cloning `Copy` type `WorkspaceViewRole`
+
+### doc_overindented_list_items (1 instance)
+120. hoop-daemon/src/supervisor.rs:1091 - doc list item overindented
+
+### mismatched_lifetime_syntaxes (1 instance)
+121. hoop-daemon/src/api_pattern_mutations.rs:566 - lifetime elided in return but named elsewhere
+
+### cast_abs_to_unsigned (1 instance)
+122. hoop-daemon/src/lib.rs:429 - `abs() as usize` should use `.unsigned_abs()`
+
+## PERFORMANCE
+Count: 1
+
+123. hoop-daemon/src/embedding_service.rs:405 - `MutexGuard` held across await point
+
+## COMPLEXITY (too_many_arguments, cognitive_complexity, type_complexity, etc.)
+Count: 11
+
+### too_many_arguments (5 instances)
+124. hoop-daemon/src/config_resolver.rs:679 - function has 9 arguments (max 7)
+
+125. hoop-daemon/src/config_resolver.rs:1776 - function has 9 arguments (max 7)
+
+126. hoop-daemon/src/fleet.rs:645 - function has 12 arguments (max 7)
+
+127. hoop-daemon/src/fleet.rs:5217 - function has 8 arguments (max 7)
+
+128. hoop-daemon/src/fleet.rs:5322 - function has 8 arguments (max 7)
+
+129. hoop-daemon/src/supervisor.rs:243 - function has 9 arguments (max 7)
+
+### type_complexity (5 instances)
+130. hoop-daemon/src/cost.rs:499 - very complex type used
+
+131. hoop-daemon/src/metrics.rs:397 - very complex type used
+
+132. hoop-daemon/src/metrics.rs:449 - very complex type used
+
+133. hoop-daemon/src/metrics.rs:516 - very complex type used
+
+134. hoop-daemon/src/metrics.rs:658 - very complex type used
+
+135. hoop-daemon/src/stitch_percentile_index.rs:582 - very complex type used
+
+### large_enum_variant (1 instance)
+136. hoop-daemon/src/config_watcher.rs:40 - large size difference between enum variants (2160 bytes vs 136 bytes)
+
+### explicit_counter_loop (3 instances)
+137. hoop-daemon/src/capacity.rs:1616 - using variable as loop counter, should use `.enumerate()`
+
+138. hoop-daemon/src/capacity.rs:1775 - using variable as loop counter, should use `.enumerate()`
+
+139. hoop-daemon/src/sessions.rs:1162 - using variable as loop counter, should use `.enumerate()`
+
+### if_same_then_else (1 instance)
+140. hoop-daemon/src/config_resolver.rs:371 - identical blocks in `if` statement
+
+## OTHER (disallowed_methods, ptr_arg, etc.)
+Count: 48
+
+### disallowed_methods - std::fs::write (25 instances)
+141. hoop-daemon/src/agent_session.rs:887 - disallowed `std::fs::write`
+
+142. hoop-daemon/src/attachment_sync.rs:80 - disallowed `std::fs::write`
+
+143. hoop-daemon/src/attachments.rs:188 - disallowed `std::fs::write`
+
+144. hoop-daemon/src/attachments.rs:612 - disallowed `std::fs::write`
+
+145. hoop-daemon/src/backup_pipeline.rs:554 - disallowed `std::fs::write`
+
+146. hoop-daemon/src/dictated_notes.rs:200 - disallowed `std::fs::write`
+
+147. hoop-daemon/src/metrics.rs:1336 - disallowed `std::fs::write`
+
+148. hoop-daemon/src/parse_jsonl_safe.rs:236 - disallowed `std::fs::write`
+
+149. hoop-daemon/src/projects.rs:113 - disallowed `std::fs::write`
+
+150. hoop-daemon/src/template_library.rs:424 - disallowed `std::fs::write`
+
+151. hoop-daemon/src/uploads.rs:132 - disallowed `std::fs::write`
+
+152. hoop-daemon/src/uploads.rs:446 - disallowed `std::fs::write`
+
+153. hoop-daemon/src/uploads.rs:470 - disallowed `std::fs::write`
+
+154. hoop-daemon/src/uploads.rs:516 - disallowed `std::fs::write`
+
+155. hoop-daemon/src/uploads.rs:540 - disallowed `std::fs::write`
+
+156. hoop-daemon/src/api_screen_capture.rs:152 - disallowed `std::fs::write`
+
+157. hoop-daemon/src/api_screen_capture.rs:167 - disallowed `std::fs::write`
+
+158. hoop-daemon/src/api_screen_capture.rs:217 - disallowed `std::fs::write`
+
+159. hoop-daemon/src/screen_capture.rs:346 - disallowed `std::fs::write`
+
+160. hoop-daemon/src/screen_capture.rs:411 - disallowed `std::fs::write`
+
+161. hoop-daemon/src/screen_capture.rs:445 - disallowed `std::fs::write`
+
+162. hoop-daemon/src/screen_capture.rs:487 - disallowed `std::fs::write`
+
+### disallowed_methods - std::fs::File::create (7 instances)
+163. hoop-daemon/src/api_unassigned.rs:177 - disallowed `File::create`
+
+164. hoop-daemon/src/atomic_write.rs:97 - disallowed `File::create`
+
+165. hoop-daemon/src/atomic_write.rs:186 - disallowed `File::create`
+
+166. hoop-daemon/src/log_rotation.rs:110 - disallowed `File::create`
+
+167. hoop-daemon/src/log_rotation.rs:117 - disallowed `File::create`
+
+168. hoop-daemon/src/log_rotation.rs:145 - disallowed `File::create`
+
+169. hoop-daemon/src/uploads.rs:190 - disallowed `File::create`
+
+170. hoop-daemon/src/screen_capture.rs:351 - disallowed `File::create`
+
+### ptr_arg (5 instances)
+171. hoop-daemon/src/pdf_sanitize.rs:184 - `&mut Vec<u8>` should be `&mut [u8]`
+
+172. hoop-daemon/src/pdf_sanitize.rs:222 - `&mut Vec<u8>` should be `&mut [u8]`
+
+173. hoop-daemon/src/pdf_sanitize.rs:259 - `&mut Vec<u8>` should be `&mut [u8]`
+
+174. hoop-daemon/src/pdf_sanitize.rs:279 - `&mut Vec<u8>` should be `&mut [u8]`
+
+175. hoop-daemon/src/pdf_sanitize.rs:311 - `&mut Vec<u8>` should be `&mut [u8]`
+
+176. hoop-daemon/src/pdf_sanitize.rs:311 - `&mut Vec<u8>` should be `&mut [u8]`
+
+---
+Summary by category:
+- Dead code: 22 warnings
+- Style/idiomatic: 95 warnings
+- Performance: 1 warning
+- Complexity: 16 warnings
+- Other: 48 warnings
