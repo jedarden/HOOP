@@ -1,0 +1,36 @@
+{
+  "summary": {
+    "total_warnings": 99,
+    "total_errors": 8,
+    "total_files": 30
+  },
+  "by_category": {
+    "unused_imports": 66,
+    "unused_variables": 22,
+    "unused_mut": 7,
+    "unused_assignments": 3,
+    "dead_code": 4,
+    "iterator_safety": 2,
+    "unknown_lints": 3
+  },
+  "by_crate": {
+    "hoop-daemon": 89,
+    "hoop-mcp": 10,
+    "hoop-schema": 3,
+    "hoop-ui": 3
+  },
+  "top_files": [
+    {"file": "hoop-daemon/src/cross_project_propagation.rs", "count": 6},
+    {"file": "hoop-daemon/src/lib.rs", "count": 3, "errors": 4},
+    {"file": "hoop-daemon/src/capacity.rs", "count": 4},
+    {"file": "hoop-daemon/src/auth.rs", "count": 3},
+    {"file": "hoop-daemon/src/api_scripts.rs", "count": 4},
+    {"file": "hoop-daemon/src/api_skills.rs", "count": 4},
+    {"file": "hoop-mcp/src/skills.rs", "count": 6}
+  ],
+  "by_severity": {
+    "errors": 8,
+    "safety_warnings": 2,
+    "cleanup_warnings": 89
+  }
+}
