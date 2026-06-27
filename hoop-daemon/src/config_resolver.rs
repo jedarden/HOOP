@@ -675,6 +675,7 @@ fn resolve_opt_none<T: Clone + Serialize>(
 ///
 /// Like `resolve_opt` but validates that config.yml values have the correct type.
 /// Returns `ConfigError` if a value exists but has the wrong type.
+#[allow(dead_code)]
 fn resolve_opt_strict<T: Clone + Serialize>(
     cli: Option<T>,
     env_val: Option<T>,
@@ -867,6 +868,7 @@ fn yaml_get_role_config(root: &serde_yaml::Value) -> Option<crate::auth::RoleCon
 ///   action: warn
 ///   patterns: []
 /// ```
+#[allow(dead_code)]
 fn yaml_get_redaction_policy(root: &serde_yaml::Value) -> Option<crate::redaction_policy::GlobalRedactionPolicy> {
     root.get("redaction").and_then(|v| {
         // Parse action
@@ -909,6 +911,7 @@ fn env_parse<T: std::str::FromStr>(var: &str) -> Option<T> {
 // ---------------------------------------------------------------------------
 
 /// Navigate to a nested YAML value by dotted path.
+#[allow(dead_code)]
 fn yaml_navigate<'a>(root: &'a serde_yaml::Value, path: &str) -> Option<&'a serde_yaml::Value> {
     let parts: Vec<&str> = path.split('.').collect();
     let mut node = root;
@@ -922,6 +925,7 @@ fn yaml_navigate<'a>(root: &'a serde_yaml::Value, path: &str) -> Option<&'a serd
 }
 
 /// Strictly validate a boolean field — returns error if value exists but is not boolean.
+#[allow(dead_code)]
 fn yaml_validate_bool(root: &serde_yaml::Value, path: &str) -> Result<Option<bool>, ConfigError> {
     match yaml_navigate(root, path) {
         None => Ok(None),
@@ -941,6 +945,7 @@ fn yaml_validate_bool(root: &serde_yaml::Value, path: &str) -> Result<Option<boo
 }
 
 /// Strictly validate an integer field — returns error if value exists but is not an integer.
+#[allow(dead_code)]
 fn yaml_validate_u64(root: &serde_yaml::Value, path: &str) -> Result<Option<u64>, ConfigError> {
     match yaml_navigate(root, path) {
         None => Ok(None),
@@ -960,6 +965,7 @@ fn yaml_validate_u64(root: &serde_yaml::Value, path: &str) -> Result<Option<u64>
 }
 
 /// Strictly validate a float field — returns error if value exists but is not a number.
+#[allow(dead_code)]
 fn yaml_validate_f64(root: &serde_yaml::Value, path: &str) -> Result<Option<f64>, ConfigError> {
     match yaml_navigate(root, path) {
         None => Ok(None),
@@ -969,25 +975,6 @@ fn yaml_validate_f64(root: &serde_yaml::Value, path: &str) -> Result<Option<f64>
                 format!("invalid type: expected number, found {}", yaml_type_name(v)),
                 Some(path.to_string()),
                 Some("number".to_string()),
-                Some(yaml_type_name(v).to_string()),
-            )),
-        },
-    }
-}
-
-/// Strictly validate a string field — returns error if value exists but is not a string.
-fn yaml_validate_str<'a>(
-    root: &'a serde_yaml::Value,
-    path: &str,
-) -> Result<Option<&'a str>, ConfigError> {
-    match yaml_navigate(root, path) {
-        None => Ok(None),
-        Some(v) => match v.as_str() {
-            Some(s) => Ok(Some(s)),
-            None => Err(ConfigError::validation(
-                format!("invalid type: expected string, found {}", yaml_type_name(v)),
-                Some(path.to_string()),
-                Some("string".to_string()),
                 Some(yaml_type_name(v).to_string()),
             )),
         },
@@ -1004,85 +991,6 @@ fn yaml_type_name(v: &serde_yaml::Value) -> &str {
         serde_yaml::Value::Sequence(_) => "array",
         serde_yaml::Value::Mapping(_) => "object",
         serde_yaml::Value::Tagged(_) => "tagged",
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Range validation helpers for config hot-reload (§17.5)
-// These helpers check that numeric values are within valid ranges.
-// ---------------------------------------------------------------------------
-
-/// Validate a u64 value is within a specified range.
-fn yaml_validate_u64_range(
-    root: &serde_yaml::Value,
-    path: &str,
-    min: u64,
-    max: u64,
-) -> Result<Option<u64>, ConfigError> {
-    let value = match yaml_navigate(root, path) {
-        None => return Ok(None),
-        Some(v) => match v.as_u64() {
-            Some(n) => n,
-            None => {
-                return Err(ConfigError::validation(
-                    format!(
-                        "invalid type: expected integer, found {}",
-                        yaml_type_name(v)
-                    ),
-                    Some(path.to_string()),
-                    Some("integer".to_string()),
-                    Some(yaml_type_name(v).to_string()),
-                ))
-            }
-        },
-    };
-
-    if value < min || value > max {
-        Err(ConfigError::validation(
-            format!("value {} is out of valid range [{}-{}]", value, min, max),
-            Some(path.to_string()),
-            Some(format!("integer in range [{}-{}]", min, max)),
-            Some(value.to_string()),
-        ))
-    } else {
-        Ok(Some(value))
-    }
-}
-
-/// Validate an f64 value is within a specified range.
-fn yaml_validate_f64_range(
-    root: &serde_yaml::Value,
-    path: &str,
-    min: f64,
-    max: f64,
-) -> Result<Option<f64>, ConfigError> {
-    let value = match yaml_navigate(root, path) {
-        None => return Ok(None),
-        Some(v) => match v.as_f64() {
-            Some(n) => n,
-            None => {
-                return Err(ConfigError::validation(
-                    format!(
-                        "invalid type: expected number, found {}",
-                        yaml_type_name(v)
-                    ),
-                    Some(path.to_string()),
-                    Some("number".to_string()),
-                    Some(yaml_type_name(v).to_string()),
-                ))
-            }
-        },
-    };
-
-    if value < min || value > max {
-        Err(ConfigError::validation(
-            format!("value {} is out of valid range [{}-{}]", value, min, max),
-            Some(path.to_string()),
-            Some(format!("number in range [{}-{}]", min, max)),
-            Some(value.to_string()),
-        ))
-    } else {
-        Ok(Some(value))
     }
 }
 
