@@ -52,11 +52,25 @@ pub struct InitUploadRequest {
 ```
 **Status:** ✓ No ToSchema derive (correct - request-only struct)
 
+## Conflict with Later Work
+
+**Bead `bf-67cw3` is superseded by `bf-3msks`.**
+
+Timeline:
+1. **2026-06-27 22:58** - Commit `16086f9` removed ToSchema derives (considering them "unused")
+2. **2026-06-28 02:58** - This documentation (`31fa16e`) verified removal for `bf-67cw3`
+3. **2026-06-28 13:50** - Commit `1760f80` **re-added** ToSchema derives as part of `bf-3msks`
+
+The later bead `bf-3msks` intentionally added back these derives for complete OpenAPI schema coverage.
+
 ## Conclusion
 
-The acceptance criteria are met:
-- ✓ All 2 unused imports removed from the listed files
-- ✓ Each file compiles (no syntax errors)  
-- ✓ Only utoipa::ToSchema removed (no utoipa::ToResponse present in these files)
+**Bead `bf-67cw3` should be closed as SUPERSEDED.**
 
-The work was completed before this bead was claimed. No further action required.
+The ToSchema derives are now present and intentional:
+- ✓ `api_unassigned.rs`: AssignRequest has ToSchema derive
+- ✓ `api_uploads.rs`: InitUploadRequest has ToSchema derive
+- ✓ Both files compile correctly
+- ✓ These derives are needed for OpenAPI schema generation (per `bf-3msks`)
+
+The work of `bf-67cw3` (removal) was undone by the more recent and intentional work of `bf-3msks` (addition for OpenAPI coverage).
