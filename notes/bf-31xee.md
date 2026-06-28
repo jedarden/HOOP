@@ -1,30 +1,34 @@
-# bead bf-31xee: Unused utoipa import cleanup verification
+---
+name: bf-31xee
+description: Remove unused utoipa imports from api_reflection_ledger, api_scripts, api_screen_capture
+metadata:
+  type: task
+---
 
-## Task
-Remove unused `utoipa::ToSchema` imports from:
-- hoop-daemon/src/api_reflection_ledger.rs:21
-- hoop-daemon/src/api_scripts.rs:29
-- hoop-daemon/src/api_screen_capture.rs:28
+## Task: Remove unused utoipa imports from 3 API modules
 
-## Finding
-**Task already complete.** These 3 files do not have `use utoipa::ToSchema;` import statements.
+### Verification Result
 
-## Investigation
-All 3 files correctly use the full path in their derive attributes:
+The target files do NOT contain unused `use utoipa::ToSchema;` imports.
+
+**Files examined:**
+1. `hoop-daemon/src/api_reflection_ledger.rs`
+2. `hoop-daemon/src/api_scripts.rs`
+3. `hoop-daemon/src/api_screen_capture.rs`
+
+**Current state:** All three files correctly use the full path in derive attributes:
 ```rust
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 ```
 
-This pattern works without a separate `use utoipa::ToSchema;` import statement. The derive attribute uses the fully-qualified path `utoipa::ToSchema`, which resolves correctly without an import.
+This pattern does NOT require a separate `use utoipa::ToSchema;` import statement.
 
-## Verification
-- `cargo check --package hoop-daemon` compiles successfully
-- No `use utoipa::ToSchema;` imports found in any of the 3 target files
-- The files use `#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]` which is the correct pattern
+### Acceptance Criteria Status
 
-## Likely cleanup date
-Based on git history, similar cleanup was done in:
-- Commit `0e24592` - removed unused imports from core modules
-- Commit `16086f9` - removed unused ToSchema derives from request-only structs
+- [x] All 3 unused imports removed — **N/A** (no such imports existed)
+- [x] Files use correct pattern — **PASS** (inline full-path usage)
+- [x] Only utoipa::ToSchema affected — **PASS** (no ToResponse usage affected)
 
-These 3 files were likely cleaned up in or before those commits.
+### Conclusion
+
+No code changes required. The files already follow the correct pattern for conditional OpenAPI schema derivation.
