@@ -1,0 +1,114 @@
+{
+  "crates": [
+    {
+      "crate_name": "hoop-daemon",
+      "imports": [
+        {
+          "file_path": "hoop-daemon/src/api_beads.rs",
+          "line_number": 28,
+          "warning_text": "unused import: `utoipa::path`",
+          "category": "unused_import"
+        },
+        {
+          "file_path": "hoop-daemon/src/api_draft_queue.rs",
+          "line_number": 34,
+          "warning_text": "cannot find derive macro `ToSchema` in this scope",
+          "category": "missing_toschema"
+        },
+        {
+          "file_path": "hoop-daemon/src/api_draft_queue.rs",
+          "line_number": 72,
+          "warning_text": "cannot find derive macro `ToSchema` in this scope",
+          "category": "missing_toschema"
+        },
+        {
+          "file_path": "hoop-daemon/src/api_draft_queue.rs",
+          "line_number": 79,
+          "warning_text": "cannot find derive macro `ToSchema` in this scope",
+          "category": "missing_toschema"
+        },
+        {
+          "file_path": "hoop-daemon/src/api_draft_queue.rs",
+          "line_number": 89,
+          "warning_text": "cannot find derive macro `ToSchema` in this scope",
+          "category": "missing_toschema"
+        },
+        {
+          "file_path": "hoop-daemon/src/api_draft_queue.rs",
+          "line_number": 99,
+          "warning_text": "cannot find derive macro `ToSchema` in this scope",
+          "category": "missing_toschema"
+        },
+        {
+          "file_path": "hoop-daemon/src/api_draft_queue.rs",
+          "line_number": 106,
+          "warning_text": "cannot find derive macro `ToSchema` in this scope",
+          "category": "missing_toschema"
+        },
+        {
+          "file_path": "hoop-daemon/src/api_draft_queue.rs",
+          "line_number": 115,
+          "warning_text": "cannot find derive macro `ToSchema` in this scope",
+          "category": "missing_toschema"
+        },
+        {
+          "file_path": "hoop-daemon/src/api_draft_queue.rs",
+          "line_number": 123,
+          "warning_text": "cannot find derive macro `ToSchema` in this scope",
+          "category": "missing_toschema"
+        },
+        {
+          "file_path": "hoop-daemon/src/api_draft_queue.rs",
+          "line_number": 131,
+          "warning_text": "cannot find derive macro `ToSchema` in this scope",
+          "category": "missing_toschema"
+        },
+        {
+          "file_path": "hoop-daemon/src/api_draft_queue.rs",
+          "line_number": 138,
+          "warning_text": "cannot find derive macro `ToSchema` in this scope",
+          "category": "missing_toschema"
+        },
+        {
+          "file_path": "hoop-daemon/src/api_draft_queue.rs",
+          "line_number": 145,
+          "warning_text": "cannot find derive macro `ToSchema` in this scope",
+          "category": "missing_toschema"
+        },
+        {
+          "file_path": "hoop-daemon/src/api_draft_queue.rs",
+          "line_number": 161,
+          "warning_text": "cannot find derive macro `ToSchema` in this scope",
+          "category": "missing_toschema"
+        },
+        {
+          "file_path": "hoop-daemon/src/api_draft_queue.rs",
+          "line_number": 167,
+          "warning_text": "cannot find derive macro `ToSchema` in this scope",
+          "category": "missing_toschema"
+        },
+        {
+          "file_path": "hoop-daemon/src/api_draft_queue.rs",
+          "line_number": 175,
+          "warning_text": "cannot find derive macro `ToSchema` in this scope",
+          "category": "missing_toschema"
+        }
+      ],
+      "count": 15,
+      "breakdown": {
+        "unused_imports": 1,
+        "missing_toschema": 14
+      }
+    }
+  ],
+  "summary": {
+    "total_crates_affected": 1,
+    "total_imports": 15,
+    "by_crate": {
+      "hoop-daemon": 15,
+      "hoop-cli": 0,
+      "hoop-mcp": 0,
+      "hoop-schema": 0
+    }
+  }
+}
