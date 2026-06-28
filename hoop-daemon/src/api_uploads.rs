@@ -12,7 +12,6 @@ use serde::Deserialize;
 
 /// Request body for upload initiation
 #[derive(Debug, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct InitUploadRequest {
     pub filename: String,
     pub total_size: u64,

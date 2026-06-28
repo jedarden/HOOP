@@ -120,7 +120,6 @@ pub struct SkillEntry {
 
 /// Skill execution request
 #[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SkillRunRequest {
     /// Arguments to pass to the skill (validated against args_schema)
     pub args: Value,

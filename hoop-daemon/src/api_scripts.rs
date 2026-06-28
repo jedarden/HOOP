@@ -159,7 +159,6 @@ pub struct ScriptEntry {
 
 /// Script execution request
 #[derive(Debug, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ScriptRunRequest {
     /// Arguments to pass to the script
     #[serde(default)]

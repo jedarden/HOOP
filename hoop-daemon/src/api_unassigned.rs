@@ -77,7 +77,6 @@ pub struct UnassignedSession {
 
 /// Request to assign a session to a project
 #[derive(Debug, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct AssignRequest {
     /// Project name to assign the session to
     pub project: String,
