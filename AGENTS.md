@@ -10,7 +10,7 @@ HOOP does **not** steer NEEDLE workers (no launch / stop / kill / signal / relea
 
 ## Current repository state
 
-**ACTUAL STATE (as of 2026-05-20): Phase 0 complete. Phase 1 in progress. Compile currently broken (fix in progress: bead `bf-1sjxx`). Phases 2–7 code exists but has NOT been run or verified.**
+**ACTUAL STATE (as of 2026-06-28): Phase 0 complete. Phase 1 in progress. `cargo build` passes (verified in bead `bf-56zox`). `cargo clippy -- -D warnings` fails (54 errors — see bead `bf-xibss`). Phase 1 CI gate (`bf-5mpcl`) is open. Phases 2–7 code exists but has NOT been run or verified.**
 
 The Rust crate does NOT currently compile. The genesis bead (`hoop-ttb`) was closed prematurely; the bead tracker is the authoritative record of what is actually done.
 
