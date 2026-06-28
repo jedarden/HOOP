@@ -57,9 +57,6 @@ use axum::{
     Json, Router,
 };
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
 /// Skill manifest metadata (from manifest.yml)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillManifest {

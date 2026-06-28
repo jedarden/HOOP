@@ -16,9 +16,6 @@ use serde::Serialize;
 use crate::fleet;
 use crate::{Bead, BeadStatus};
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
 // ---------------------------------------------------------------------------
 // Response types — list
 // ---------------------------------------------------------------------------

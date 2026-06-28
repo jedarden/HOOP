@@ -24,9 +24,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use tower::ServiceExt;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
 /// Wrapper for raw bytes that implements ToSchema
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]

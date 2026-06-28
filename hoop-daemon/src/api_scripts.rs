@@ -25,9 +25,6 @@ use std::{
 use sha2::{Digest, Sha256};
 use tracing::{debug, info, warn};
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
 use crate::DaemonState;
 use crate::fleet::{self, ActionKind, ActionResult};
 

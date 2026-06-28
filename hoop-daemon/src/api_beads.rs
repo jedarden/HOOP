@@ -24,10 +24,6 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tracing::warn;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-#[cfg(feature = "openapi")]
-use utoipa::path;
 
 /// Valid issue types for bead creation
 const VALID_ISSUE_TYPES: &[&str] = &["task", "bug", "epic", "genesis", "review", "fix"];

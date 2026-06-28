@@ -9,9 +9,6 @@ use serde::{Deserialize, Serialize};
 use crate::config_resolver::SecretPattern;
 use crate::DaemonState;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
 /// Response for GET /api/config
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]

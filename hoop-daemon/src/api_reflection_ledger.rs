@@ -17,9 +17,6 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tracing::info;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
 // ---------------------------------------------------------------------------
 // Request / response types
 // ---------------------------------------------------------------------------

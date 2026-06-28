@@ -15,8 +15,6 @@ use axum::{
 };
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
 
 use crate::{bead_commit_index, id_validators};
 

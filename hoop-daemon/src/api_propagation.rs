@@ -13,9 +13,6 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
 /// Build the propagation API router
 pub fn router() -> Router<DaemonState> {
     Router::new()

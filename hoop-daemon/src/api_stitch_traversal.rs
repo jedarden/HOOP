@@ -15,9 +15,6 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::time::Instant;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
 use crate::fleet;
 use crate::stitch_traversal;
 

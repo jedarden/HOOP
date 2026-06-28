@@ -18,9 +18,6 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
 use crate::fleet;
 
 // Needed for URL decoding in remove_query

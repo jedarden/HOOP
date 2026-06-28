@@ -19,8 +19,6 @@ use axum::{
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
 
 use crate::{files, fleet, id_validators, DaemonState};
 

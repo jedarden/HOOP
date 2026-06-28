@@ -13,8 +13,6 @@ use axum::{
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
 
 use crate::DaemonState;
 

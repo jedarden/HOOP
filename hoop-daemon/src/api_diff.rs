@@ -6,9 +6,6 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::process::Command;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
 use crate::files::is_safe_rel_path;
 use crate::DaemonState;
 

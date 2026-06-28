@@ -19,9 +19,6 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use tracing::{error, info, warn};
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
 use crate::DaemonState;
 use crate::fleet;
 

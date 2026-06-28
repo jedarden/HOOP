@@ -15,9 +15,6 @@ use axum::{
 };
 use serde::Serialize;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
 /// Build the morning brief API router.
 pub fn router() -> Router<DaemonState> {
     Router::new()

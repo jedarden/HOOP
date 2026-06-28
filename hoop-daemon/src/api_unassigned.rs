@@ -33,9 +33,6 @@ use tracing::{debug, info, warn};
 
 use crate::DaemonState;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
 /// Maximum number of unassigned sessions to keep in memory
 const MAX_UNASSIGNED_SESSIONS: usize = 100;
 
