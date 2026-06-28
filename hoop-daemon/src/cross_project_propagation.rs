@@ -18,9 +18,6 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
 /// Sibling project detected for propagation
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]

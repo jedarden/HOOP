@@ -19,8 +19,6 @@ use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
 
 /// Transcription status for a dictated note
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
