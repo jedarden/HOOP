@@ -1,34 +1,22 @@
----
-name: bf-31xee
-description: Remove unused utoipa imports from api_reflection_ledger, api_scripts, api_screen_capture
-metadata:
-  type: task
----
+# Bead bf-31xee: Unused utoipa imports already removed
 
-## Task: Remove unused utoipa imports from 3 API modules
+## Task
+Remove unused `utoipa::ToSchema` imports from:
+- `hoop-daemon/src/api_reflection_ledger.rs:21`
+- `hoop-daemon/src/api_scripts.rs:29`
+- `hoop-daemon/src/api_screen_capture.rs:28`
 
-### Verification Result
+## Status: Already Complete
 
-The target files do NOT contain unused `use utoipa::ToSchema;` imports.
+The unused imports were already removed in commit `0e24592 refactor: remove unused utoipa::ToSchema imports from core modules` (2026-06-28).
 
-**Files examined:**
-1. `hoop-daemon/src/api_reflection_ledger.rs`
-2. `hoop-daemon/src/api_scripts.rs`
-3. `hoop-daemon/src/api_screen_capture.rs`
+## Verification
 
-**Current state:** All three files correctly use the full path in derive attributes:
-```rust
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-```
+All three files were examined:
+1. `api_reflection_ledger.rs` - No direct `use utoipa::ToSchema` import present
+2. `api_scripts.rs` - No direct `use utoipa::ToSchema` import present  
+3. `api_screen_capture.rs` - No direct `use utoipa::ToSchema` import present
 
-This pattern does NOT require a separate `use utoipa::ToSchema;` import statement.
+All files compile successfully (verified with `cargo check --package hoop-daemon`).
 
-### Acceptance Criteria Status
-
-- [x] All 3 unused imports removed — **N/A** (no such imports existed)
-- [x] Files use correct pattern — **PASS** (inline full-path usage)
-- [x] Only utoipa::ToSchema affected — **PASS** (no ToResponse usage affected)
-
-### Conclusion
-
-No code changes required. The files already follow the correct pattern for conditional OpenAPI schema derivation.
+The structs in these files still use `#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]` where appropriate for OpenAPI schema generation, but no standalone unused imports exist.
