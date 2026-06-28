@@ -143,6 +143,20 @@ HOOP remains fully functional without the agent. Enabling/disabling:
 - API: `POST /api/agent/spawn` / `POST /api/agent/disable`
 - Config: Remove `agent` section from `config.yml` to disable at startup
 
+## Vocabulary guard (anti-patterns to avoid)
+
+**Do NOT use these deprecated terms or concepts.** They are from earlier drafts and have been deliberately removed from the HOOP design:
+
+- `Mayor` — removed; HOOP has no mayor role
+- `polecat` — removed; old internal name
+- `convoy` — removed; not the HOOP pattern
+- `Gas Town` — removed; legacy reference
+- `swarm` — removed; not the HOOP architecture
+- `worker steering` — explicit non-goal; HOOP observes NEEDLE, does not steer workers
+- `capacity enforcement` — explicit non-goal; HOOP shows utilization, does not enforce limits
+
+Always use the canonical terminology: **Stitch**, **Pattern**, **Project**, **Workspace**, **human-interface agent**.
+
 ## Non-goals (do not violate these)
 
 Do not plan or build features that do any of these:
