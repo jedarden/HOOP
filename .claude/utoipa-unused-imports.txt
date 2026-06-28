@@ -1,0 +1,120 @@
+================================================================================
+HOOP - Unused utoipa Imports Manifest
+================================================================================
+Generated: 2026-06-27
+Source: cargo clippy analysis
+Total Issues: 15
+Crates Affected: 1
+
+================================================================================
+CRATE: hoop-daemon (15 issues)
+================================================================================
+
+FILE: hoop-daemon/src/api_beads.rs
+--------------------------------------------------------------------------------
+Line 28: unused import: `utoipa::path`
+  Category: unused_import
+  Warning: unused import: `utoipa::path`
+  Note: This import is conditionally compiled (#[cfg(feature = "openapi")])
+        but may be a false positive since the macro is used in attributes.
+
+FILE: hoop-daemon/src/api_draft_queue.rs
+--------------------------------------------------------------------------------
+Line 34: cannot find derive macro `ToSchema` in this scope
+  Category: missing_toschema
+  Warning: cannot find derive macro `ToSchema` in this scope
+  Fix: Add `use utoipa::ToSchema;` to imports
+
+Line 72: cannot find derive macro `ToSchema` in this scope
+  Category: missing_toschema
+  Warning: cannot find derive macro `ToSchema` in this scope
+  Fix: Add `use utoipa::ToSchema;` to imports
+
+Line 79: cannot find derive macro `ToSchema` in this scope
+  Category: missing_toschema
+  Warning: cannot find derive macro `ToSchema` in this scope
+  Fix: Add `use utoipa::ToSchema;` to imports
+
+Line 89: cannot find derive macro `ToSchema` in this scope
+  Category: missing_toschema
+  Warning: cannot find derive macro `ToSchema` in this scope
+  Fix: Add `use utoipa::ToSchema;` to imports
+
+Line 99: cannot find derive macro `ToSchema` in this scope
+  Category: missing_toschema
+  Warning: cannot find derive macro `ToSchema` in this scope
+  Fix: Add `use utoipa::ToSchema;` to imports
+
+Line 106: cannot find derive macro `ToSchema` in this scope
+  Category: missing_toschema
+  Warning: cannot find derive macro `ToSchema` in this scope
+  Fix: Add `use utoipa::ToSchema;` to imports
+
+Line 115: cannot find derive macro `ToSchema` in this scope
+  Category: missing_toschema
+  Warning: cannot find derive macro `ToSchema` in this scope
+  Fix: Add `use utoipa::ToSchema;` to imports
+
+Line 123: cannot find derive macro `ToSchema` in this scope
+  Category: missing_toschema
+  Warning: cannot find derive macro `ToSchema` in this scope
+  Fix: Add `use utoipa::ToSchema;` to imports
+
+Line 131: cannot find derive macro `ToSchema` in this scope
+  Category: missing_toschema
+  Warning: cannot find derive macro `ToSchema` in this scope
+  Fix: Add `use utoipa::ToSchema;` to imports
+
+Line 138: cannot find derive macro `ToSchema` in this scope
+  Category: missing_toschema
+  Warning: cannot find derive macro `ToSchema` in this scope
+  Fix: Add `use utoipa::ToSchema;` to imports
+
+Line 145: cannot find derive macro `ToSchema` in this scope
+  Category: missing_toschema
+  Warning: cannot find derive macro `ToSchema` in this scope
+  Fix: Add `use utoipa::ToSchema;` to imports
+
+Line 161: cannot find derive macro `ToSchema` in this scope
+  Category: missing_toschema
+  Warning: cannot find derive macro `ToSchema` in this scope
+  Fix: Add `use utoipa::ToSchema;` to imports
+
+Line 167: cannot find derive macro `ToSchema` in this scope
+  Category: missing_toschema
+  Warning: cannot find derive macro `ToSchema` in this scope
+  Fix: Add `use utoipa::ToSchema;` to imports
+
+Line 175: cannot find derive macro `ToSchema` in this scope
+  Category: missing_toschema
+  Warning: cannot find derive macro `ToSchema` in this scope
+  Fix: Add `use utoipa::ToSchema;` to imports
+
+================================================================================
+SUMMARY BY CRATE
+================================================================================
+
+hoop-daemon: 15 issues
+  - unused_imports: 1
+  - missing_toschema: 14
+
+hoop-cli: 0 issues
+hoop-mcp: 0 issues
+hoop-schema: 0 issues
+
+================================================================================
+REQUIRED FIXES
+================================================================================
+
+1. hoop-daemon/src/api_beads.rs (line 28)
+   - Evaluate whether `use utoipa::path;` is actually needed
+   - If unused, remove the import
+   - If needed (potential false positive), keep with explanatory comment
+
+2. hoop-daemon/src/api_draft_queue.rs (14 locations)
+   - Add `use utoipa::ToSchema;` to the file's imports
+   - This will fix all 14 derive macro errors in this file
+
+================================================================================
+END OF MANIFEST
+================================================================================
