@@ -25,9 +25,8 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Wrapper for raw bytes that implements ToSchema
+/// Wrapper for raw bytes
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct RawBytes(pub Vec<u8>);
 
 /// Build the router for ADB dictation and active-project tracking endpoints
