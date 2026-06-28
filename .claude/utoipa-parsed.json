@@ -1,72 +1,75 @@
-[
-  {
-    "file_path": "hoop-daemon/src/api_draft_queue.rs",
-    "line_number": 34,
-    "warning_text": "error: cannot find derive macro `ToSchema` in this scope"
-  },
-  {
-    "file_path": "hoop-daemon/src/api_draft_queue.rs",
-    "line_number": 72,
-    "warning_text": "error: cannot find derive macro `ToSchema` in this scope"
-  },
-  {
-    "file_path": "hoop-daemon/src/api_draft_queue.rs",
-    "line_number": 79,
-    "warning_text": "error: cannot find derive macro `ToSchema` in this scope"
-  },
-  {
-    "file_path": "hoop-daemon/src/api_draft_queue.rs",
-    "line_number": 89,
-    "warning_text": "error: cannot find derive macro `ToSchema` in this scope"
-  },
-  {
-    "file_path": "hoop-daemon/src/api_draft_queue.rs",
-    "line_number": 99,
-    "warning_text": "error: cannot find derive macro `ToSchema` in this scope"
-  },
-  {
-    "file_path": "hoop-daemon/src/api_draft_queue.rs",
-    "line_number": 106,
-    "warning_text": "error: cannot find derive macro `ToSchema` in this scope"
-  },
-  {
-    "file_path": "hoop-daemon/src/api_draft_queue.rs",
-    "line_number": 115,
-    "warning_text": "error: cannot find derive macro `ToSchema` in this scope"
-  },
-  {
-    "file_path": "hoop-daemon/src/api_draft_queue.rs",
-    "line_number": 123,
-    "warning_text": "error: cannot find derive macro `ToSchema` in this scope"
-  },
-  {
-    "file_path": "hoop-daemon/src/api_draft_queue.rs",
-    "line_number": 131,
-    "warning_text": "error: cannot find derive macro `ToSchema` in this scope"
-  },
-  {
-    "file_path": "hoop-daemon/src/api_draft_queue.rs",
-    "line_number": 138,
-    "warning_text": "error: cannot find derive macro `ToSchema` in this scope"
-  },
-  {
-    "file_path": "hoop-daemon/src/api_draft_queue.rs",
-    "line_number": 145,
-    "warning_text": "error: cannot find derive macro `ToSchema` in this scope"
-  },
-  {
-    "file_path": "hoop-daemon/src/api_draft_queue.rs",
-    "line_number": 161,
-    "warning_text": "error: cannot find derive macro `ToSchema` in this scope"
-  },
-  {
-    "file_path": "hoop-daemon/src/api_draft_queue.rs",
-    "line_number": 167,
-    "warning_text": "error: cannot find derive macro `ToSchema` in this scope"
-  },
-  {
-    "file_path": "hoop-daemon/src/api_draft_queue.rs",
-    "line_number": 175,
-    "warning_text": "error: cannot find derive macro `ToSchema` in this scope"
-  }
-]
+{
+  "total_count": 14,
+  "errors": [
+    {
+      "file_path": "hoop-daemon/src/api_draft_queue.rs",
+      "line_number": 34,
+      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:34"
+    },
+    {
+      "file_path": "hoop-daemon/src/api_draft_queue.rs",
+      "line_number": 72,
+      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:72"
+    },
+    {
+      "file_path": "hoop-daemon/src/api_draft_queue.rs",
+      "line_number": 79,
+      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:79"
+    },
+    {
+      "file_path": "hoop-daemon/src/api_draft_queue.rs",
+      "line_number": 89,
+      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:89"
+    },
+    {
+      "file_path": "hoop-daemon/src/api_draft_queue.rs",
+      "line_number": 99,
+      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:99"
+    },
+    {
+      "file_path": "hoop-daemon/src/api_draft_queue.rs",
+      "line_number": 106,
+      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:106"
+    },
+    {
+      "file_path": "hoop-daemon/src/api_draft_queue.rs",
+      "line_number": 115,
+      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:115"
+    },
+    {
+      "file_path": "hoop-daemon/src/api_draft_queue.rs",
+      "line_number": 123,
+      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:123"
+    },
+    {
+      "file_path": "hoop-daemon/src/api_draft_queue.rs",
+      "line_number": 131,
+      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:131"
+    },
+    {
+      "file_path": "hoop-daemon/src/api_draft_queue.rs",
+      "line_number": 138,
+      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:138"
+    },
+    {
+      "file_path": "hoop-daemon/src/api_draft_queue.rs",
+      "line_number": 145,
+      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:145"
+    },
+    {
+      "file_path": "hoop-daemon/src/api_draft_queue.rs",
+      "line_number": 161,
+      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:161"
+    },
+    {
+      "file_path": "hoop-daemon/src/api_draft_queue.rs",
+      "line_number": 167,
+      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:167"
+    },
+    {
+      "file_path": "hoop-daemon/src/api_draft_queue.rs",
+      "line_number": 175,
+      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:175"
+    }
+  ]
+}
