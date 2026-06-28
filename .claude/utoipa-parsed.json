@@ -1,75 +1,87 @@
 {
-  "total_count": 14,
-  "errors": [
+  "unused_imports": [
+    {
+      "file_path": "hoop-daemon/src/api_beads.rs",
+      "line_number": 28,
+      "warning_text": "unused import: `utoipa::path`"
+    }
+  ],
+  "missing_toschema_imports": [
     {
       "file_path": "hoop-daemon/src/api_draft_queue.rs",
       "line_number": 34,
-      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:34"
+      "warning_text": "cannot find derive macro `ToSchema` in this scope"
     },
     {
       "file_path": "hoop-daemon/src/api_draft_queue.rs",
       "line_number": 72,
-      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:72"
+      "warning_text": "cannot find derive macro `ToSchema` in this scope"
     },
     {
       "file_path": "hoop-daemon/src/api_draft_queue.rs",
       "line_number": 79,
-      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:79"
+      "warning_text": "cannot find derive macro `ToSchema` in this scope"
     },
     {
       "file_path": "hoop-daemon/src/api_draft_queue.rs",
       "line_number": 89,
-      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:89"
+      "warning_text": "cannot find derive macro `ToSchema` in this scope"
     },
     {
       "file_path": "hoop-daemon/src/api_draft_queue.rs",
       "line_number": 99,
-      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:99"
+      "warning_text": "cannot find derive macro `ToSchema` in this scope"
     },
     {
       "file_path": "hoop-daemon/src/api_draft_queue.rs",
       "line_number": 106,
-      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:106"
+      "warning_text": "cannot find derive macro `ToSchema` in this scope"
     },
     {
       "file_path": "hoop-daemon/src/api_draft_queue.rs",
       "line_number": 115,
-      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:115"
+      "warning_text": "cannot find derive macro `ToSchema` in this scope"
     },
     {
       "file_path": "hoop-daemon/src/api_draft_queue.rs",
       "line_number": 123,
-      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:123"
+      "warning_text": "cannot find derive macro `ToSchema` in this scope"
     },
     {
       "file_path": "hoop-daemon/src/api_draft_queue.rs",
       "line_number": 131,
-      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:131"
+      "warning_text": "cannot find derive macro `ToSchema` in this scope"
     },
     {
       "file_path": "hoop-daemon/src/api_draft_queue.rs",
       "line_number": 138,
-      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:138"
+      "warning_text": "cannot find derive macro `ToSchema` in this scope"
     },
     {
       "file_path": "hoop-daemon/src/api_draft_queue.rs",
       "line_number": 145,
-      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:145"
+      "warning_text": "cannot find derive macro `ToSchema` in this scope"
     },
     {
       "file_path": "hoop-daemon/src/api_draft_queue.rs",
       "line_number": 161,
-      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:161"
+      "warning_text": "cannot find derive macro `ToSchema` in this scope"
     },
     {
       "file_path": "hoop-daemon/src/api_draft_queue.rs",
       "line_number": 167,
-      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:167"
+      "warning_text": "cannot find derive macro `ToSchema` in this scope"
     },
     {
       "file_path": "hoop-daemon/src/api_draft_queue.rs",
       "line_number": 175,
-      "warning_text": "cannot find derive macro `ToSchema` in this scope at hoop-daemon/src/api_draft_queue.rs:175"
+      "warning_text": "cannot find derive macro `ToSchema` in this scope"
     }
-  ]
+  ],
+  "summary": {
+    "total_unused_imports": 1,
+    "total_missing_toschema_imports": 14,
+    "total_issues": 15,
+    "files_affected": 2
+  }
 }
