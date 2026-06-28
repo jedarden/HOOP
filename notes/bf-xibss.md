@@ -1,123 +1,125 @@
-# Clippy Warnings for hoop-daemon (bead bf-xibss)
+# Clippy Warnings for hoop-daemon (bf-xibss)
+
+**Date:** 2025-01-16
+**Command:** `cargo clippy -p hoop-daemon`
 
 ## Summary
 
-**Run Date:** 2025-01-21
+- **Total Warnings:** 74
+- **Total Errors:** 54 (all compilation errors, not clippy-specific warnings)
 
-**Command:** `cargo clippy -p hoop-daemon`
+## utoipa::ToSchema Errors (54 compilation errors)
 
-**Total Warnings:** 251 warnings
+All errors are related to missing `utoipa::ToSchema` derives on structs used in OpenAPI handlers. The following types need the derive:
 
-**Fixable:** 164 suggestions can be applied with `cargo clippy --fix`
+### API Agent (3 types)
+- `api_agent::SwitchRequest` (api_agent.rs:127)
+- `api_agent::TurnRequest` (api_agent.rs:194)
+- `api_agent::TurnAttachment` (api_agent.rs:186)
 
-## utoipa::ToSchema Findings
+### Cross Project Propagation (1 type)
+- `cross_project_propagation::SiblingProject` (cross_project_propagation.rs:23)
 
-**No utoipa::ToSchema unused import warnings found.**
+### API Reflection Ledger (2 types)
+- `api_reflection_ledger::ApproveProposalRequest` (api_reflection_ledger.rs:42)
+- `api_reflection_ledger::RejectProposalRequest` (api_reflection_ledger.rs:59)
 
-The clippy output contains no warnings related to:
-- `utoipa::ToSchema` unused imports
-- Any other utoipa-related warnings
+### API Scripts (1 type)
+- `api_scripts::ScriptRunRequest` (api_scripts.rs:162)
 
-This suggests that either:
-1. The crate does not use utoipa in hoop-daemon
-2. All utoipa::ToSchema imports are currently in use
+### API Tour Project (1 type)
+- `api_tour_project::EnableTourRequest` (api_tour_project.rs:34)
 
-## Warning Breakdown
+### API Transcription (1 type)
+- `api_transcription::ListJobsQuery` (api_transcription.rs:19)
 
-### Top Warning Categories
+### API Screen Capture (3 types)
+- `api_screen_capture::CreateScreenCaptureRequest` (api_screen_capture.rs:34)
+- `api_screen_capture::StartStreamingUploadRequest` (api_screen_capture.rs:352)
+- `api_screen_capture::CompleteStreamingUploadRequest` (api_screen_capture.rs:469)
 
-1. **Unused Imports (~40 warnings):**
-   - `PathBuf` in multiple files
-   - `warn` from tracing
-   - `State` from axum extract
-   - `Connection`, `params` from rusqlite
-   - `Deserialize`, `Serialize` from serde
-   - `get`, `delete`, `put` from axum routing
-   - And many more
+## Other Warnings (74 total)
 
-2. **Unused Variables (~30 warnings):**
-   - Variables prefixed with underscore suggestions
-   - Timing variables (`start`, `elapsed_ms`)
-   - Loop variables (`link_kind`, `sim`, `schedule`)
+### Unused Imports (37 warnings)
 
-3. **Disallowed Methods (~35 warnings):**
-   - `std::fs::write` — should use `atomic_write::atomic_write_file_str`
-   - `std::fs::File::create` — should use `atomic_write::atomic_write_file`
-   - These are crash-safety violations
+- `PathBuf` - accounts_config.rs:27, atomic_write.rs:42
+- `warn` - accounts_config.rs:28, config_backup.rs:14
+- `State` - api_bead_files.rs:11
+- `Connection`, `params` - api_bead_files.rs:16
+- `Deserialize` - api_bead_files.rs:17
+- `get` - api_pattern_mutations.rs:14, api_tour_project.rs:12
+- `std::sync::Arc` - api_stitch_decompose.rs:30
+- `ReplayOptions` - api_stitch_replay.rs:8
+- `ParsedSessionKind` - api_unassigned.rs:23
+- `RecommendedWatcher` - api_skills.rs:39
+- `std::time::Duration as StdDuration` - capacity.rs:25
+- `OpenCodeLimits as AccountsOpenCodeLimits` - capacity.rs:28
+- `chrono::Utc` - content_blocks.rs:7
+- `std::collections::HashMap` - api_presence.rs:20, stitch_reconstruction.rs:22
+- `serde::Serialize` - migrations.rs:51
+- `anyhow` - stitch_reconstruction.rs:19
+- `anyhow::Result` - stuck_detector.rs:20
+- `anyhow`, `bail` - prompt_substitute.rs:13
+- `json` - prompt_substitute.rs:15
+- `SubstitutionContext` - api_prompts.rs:45
+- `SimilarStitch` - cross_project_propagation.rs:15
+- `DateTime` - cross_project_propagation.rs:17
+- `delete`, `put` - api_fix_patterns.rs:16
+- `self` - api_screen_capture.rs:12
+- `Path` - screen_capture.rs:23
+- `Deserialize`, `Serialize` - saturation_detector.rs:17
+- `crate::log_rotation` - observer.rs:8
+- `TcpStream` - observer.rs:16
+- `config_watcher::AgentConfigChanged` - lib.rs:3151
 
-4. **Code Style Suggestions (~50 warnings):**
-   - `manual_clamp` → use `.clamp()` method
-   - `unnecessary_sort_by` → use `sort_by_key`
-   - `derivable_impls` → add `#[derive(Default)]`
-   - `needless_borrow` → remove `&`
-   - `redundant_closure` → use function directly
-   - `collapsible_if` → merge conditions
-   - `manual_flatten` → use `.flatten()`
-   - `map_flatten` → use `and_then()`
-   - `unnecessary_map_or` → use `is_some_and()`
+### Unused Variables (30 warnings)
 
-5. **Type/Function Issues (~25 warnings):**
-   - `too_many_arguments` (9+ arguments)
-   - `type_complexity` — complex type signatures
-   - `large_enum_variant` — ConfigEvent variants
-   - `await_holding_lock` — MutexGuard across await
-   - `private_interfaces` — visibility mismatch
+Timing variables (typically used for debugging but not currently used):
+- `start` - backup_pipeline.rs:133, api_scripts.rs:311, api_skills.rs:284, fleet.rs:1704
 
-6. **Dead Code (~15 warnings):**
-   - Unused functions (`openapi_router`, `load_hoop_config`)
-   - Unused struct fields
-   - Unused constants
+Auth/role variables:
+- `remote_addr` - auth.rs:338
+- `required_role` - auth.rs:329, auth.rs:358
 
-7. **Cast/Conversion Issues (~20 warnings):**
-   - `unnecessary_cast` — casting to same type
-   - `useless_conversion` — PathBuf::from on PathBuf
-   - `cast_abs_to_unsigned` → use `.unsigned_abs()`
-   - `explicit_auto_deref` — redundant `*`
+Other unused variables:
+- `elapsed_ms` - api_stitch_links.rs:208
+- `config` - capacity.rs:213
+- `event_type` - capacity.rs:1796
+- `initial_hash` - config_watcher.rs:111
+- `cfg` - config_watcher.rs:139
+- `link_kind` - stitch_traversal.rs:210
+- `schedule` - script_scheduler.rs:139
+- `overlap_policy` - script_scheduler.rs:109
+- `workspace` - stitch_reconstruction.rs:297
+- `transition_secs` - stuck_detector.rs:463
+- `created_by` - cross_project_propagation.rs:224
+- `conn` - cross_project_propagation.rs:455
+- `sim` - cross_project_propagation.rs:473
+- `source_labels` - cross_project_propagation.rs:479
+- `create_req` - api_fix_patterns.rs:444
+- `attachments_dir` - screen_capture.rs:327
+- `dashboard` - observer.rs:210
+- `abs_path` - lib.rs:975
+- `project` - lib.rs:2415
+- `synthesis_callback` - lib.rs:2413
+- `semaphore_ref` - lib.rs:3077
 
-8. **Other (~36 warnings):**
-   - `manual_strip` → use `strip_prefix()`
-   - `manual_pattern_char_comparison` → use arrays
-   - `explicit_counter_loop` → use `enumerate()`
-   - `single_match` → use `if let`
-   - `doc_overindented_list_items`
-   - `should_implement_trait` — `from_str` naming
-   - `len_without_is_empty` — add `is_empty()` method
+### Unused `mut` Keywords (6 warnings)
 
-## Files with Most Warnings
+Variables declared as `mut` but never mutated:
+- `conn` - api_tour_project.rs:239, api_fix_patterns.rs:454, fix_patterns.rs:83, fix_patterns.rs:277
+- `shutdown_rx` - lib.rs:3446
+- `gemini_dirs` - capacity.rs:593
+- `opencode_dirs` - capacity.rs:596
+- `shared_files` - cross_project_propagation.rs:472
+- `shared_labels` - cross_project_propagation.rs:480
 
-Based on the output:
-- `lib.rs` — highest number of warnings (~25+)
-- `capacity.rs` — many warnings (~20+)
-- `config_resolver.rs` — many warnings (~15+)
-- `observer.rs` — several warnings
-- Various API files (`api_*.rs`) — 2-5 warnings each
+### Unused Assignments (1 warning)
 
-## Notable Issues Requiring Attention
+- `timed_out` - api_scripts.rs:360, api_skills.rs:344 (assigned but never read)
 
-### Crash-Safety Violations (High Priority)
-Multiple uses of `std::fs::write` and `std::fs::File::create` instead of the project's `atomic_write` module:
-- `agent_session.rs:887`
-- `api_unassigned.rs:177`
-- `atomic_write.rs:97, 192` (ironically in the atomic_write module itself!)
-- `attachment_sync.rs:80`
-- `attachments.rs:188, 612`
-- `backup_pipeline.rs:554`
-- `dictated_notes.rs:200`
-- And many more files
+## Notes
 
-### Large Enum Variant
-`ConfigEvent` in `config_watcher.rs:40` has large variants (2160 bytes vs 136 bytes)
-
-### Functions with Too Many Arguments
-- `config_resolver.rs:679` — `resolve_opt_strict` (9 arguments)
-- `config_resolver.rs:1678` — `resolve_validated_str` (9 arguments)
-- `fleet.rs:645` — `create_stitch_with_audit` (12 arguments)
-- `supervisor.rs:243` — `Supervisor::new` (9 arguments)
-
-## Recommendation
-
-Run `cargo clippy --fix --lib -p hoop-daemon -- -D warnings` to auto-fix 164 of the 251 warnings. The remaining warnings will require manual intervention, particularly:
-- Crash-safety violations (atomic_write usage)
-- Large enum variants (boxing)
-- Functions with too many arguments (refactoring)
-- Dead code removal decisions
+- No actual clippy-specific warnings (like `clippy::all` or `clippy::pedantic` warnings) were found
+- All errors are compilation errors due to missing utoipa derives
+- The warnings are mostly about unused code, which could be cleaned up for better maintainability
