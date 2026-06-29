@@ -1,14 +1,10 @@
-# Bead bf-4ibg8: ApproveProposalRequest ToSchema Derive
+# Task bf-4ibg8: ToSchema derive for ApproveProposalRequest
 
-## Task
-Add #[derive(ToSchema)] to the ApproveProposalRequest struct in api_reflection_ledger.rs.
+## Verification Result
 
-## Status: ALREADY COMPLETE
-
-The `ApproveProposalRequest` struct already has the ToSchema derive:
+The `ApproveProposalRequest` struct in `api_reflection_ledger.rs` already has the `ToSchema` derive in place:
 
 ```rust
-/// Request to approve a proposal
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct ApproveProposalRequest {
     /// Optional comment on the approval
@@ -16,22 +12,12 @@ pub struct ApproveProposalRequest {
 }
 ```
 
-## Git History
-This work was completed in:
-- `a0aa3e7` - "feat(api): Add unconditional ToSchema derives to SiblingProject, ApproveProposalRequest, RejectProposalRequest"
-- `4591e4a` - "feat(api): Add ToSchema derives to SiblingProject, ApproveProposalRequest, RejectProposalRequest"
+## Acceptance Criteria Check
 
-## Field Type Compatibility
-The struct has a single field `comment: Option<String>`, which is fully compatible with utoipa's ToSchema.
-
-## Compilation Status
-Current cargo check failures (22 errors) are unrelated to `ApproveProposalRequest`. The errors are about OTHER structs missing ToSchema derives:
-- `ScriptRunRequest`
-- `EnableTourRequest`
-- `ListJobsQuery`
-- `CreateScreenCaptureRequest`
-- `StartStreamingUploadRequest`
-- `CompleteStreamingUploadRequest`
+- ✅ `ApproveProposalRequest` has `#[derive(ToSchema)]` (as `utoipa::ToSchema`)
+- ✅ All field types are compatible with ToSchema (`Option<String>` is supported)
+- ✅ No compilation errors related to this struct
 
 ## Conclusion
-The bead's requirements are already satisfied. No code changes needed.
+
+The derive was already added in a prior change. No modifications were needed.
