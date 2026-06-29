@@ -19,8 +19,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 /// Sibling project detected for propagation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct SiblingProject {
     /// Project name
     pub project: String,
@@ -33,8 +32,7 @@ pub struct SiblingProject {
 }
 
 /// A matching Stitch in a sibling project
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct SiblingStitch {
     /// Stitch ID
     pub id: String,
@@ -51,8 +49,7 @@ pub struct SiblingStitch {
 }
 
 /// Evidence for why projects are siblings
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct SiblingEvidence {
     /// Shared file paths (config files, dependencies, etc.)
     pub shared_files: Vec<String>,
@@ -65,8 +62,7 @@ pub struct SiblingEvidence {
 }
 
 /// Result of a sibling project search
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct PropagationResult {
     /// Source Stitch that was just closed
     pub source_stitch: SourceStitchInfo,
@@ -77,8 +73,7 @@ pub struct PropagationResult {
 }
 
 /// Information about the source Stitch (the one just closed)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct SourceStitchInfo {
     /// Stitch ID
     pub id: String,
