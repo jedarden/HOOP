@@ -123,7 +123,7 @@ async fn disable_agent(
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct SwitchRequest {
     adapter: String,
     model: Option<String>,
@@ -182,7 +182,7 @@ async fn switch_adapter(
 }
 
 /// Inline attachment sent with a turn (base64-encoded file content).
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct TurnAttachment {
     name: String,
     /// Base64-encoded file content.
@@ -190,7 +190,7 @@ pub struct TurnAttachment {
     mime: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct TurnRequest {
     prompt: String,
     #[serde(default)]
