@@ -1,18 +1,26 @@
-# Task bf-hw421: Add ToSchema derive to ApproveProposalRequest
+# bf-hw421: ToSchema derive already present on ApproveProposalRequest
+
+## Task
+Add `#[derive(ToSchema)]` to the `ApproveProposalRequest` struct in `api_reflection_ledger.rs`.
 
 ## Finding
-The `ToSchema` derive macro was **already present** on `ApproveProposalRequest` at the time this task was claimed.
+The `ToSchema` derive is **already present** on `ApproveProposalRequest`.
 
-## Verification
-```bash
-$ grep -B1 "pub struct ApproveProposalRequest" hoop-daemon/src/api_reflection_ledger.rs
+At line 41-45 of `hoop-daemon/src/api_reflection_ledger.rs`:
+
+```rust
+/// Request to approve a proposal
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct ApproveProposalRequest {
+    /// Optional comment on the approval
+    pub comment: Option<String>,
+}
 ```
 
-## Acceptance Criteria Status
-- ✅ ApproveProposalRequest has `#[derive(ToSchema)]` present (as `utoipa::ToSchema`)
-- ✅ The derive macro is properly formatted
+The struct already has `utoipa::ToSchema` in its derive attribute.
 
-## Conclusion
-Task is complete. No file changes were needed.
+## Note
+This is the sixth attempt to document this finding (see git commits `1155149`, `aa1c625`, `9280783`, `c894344`, `34a9b39`). The derive was already present when the bead was created.
+
+## Recommendation
+The bead should be closed with no code changes needed. The `ToSchema` derive has been present since the initial implementation.
