@@ -20,6 +20,7 @@ use std::collections::{HashMap, HashSet};
 
 /// Sibling project detected for propagation
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SiblingProject {
     /// Project name
     pub project: String,
