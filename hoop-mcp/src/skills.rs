@@ -297,7 +297,7 @@ pub fn execute_skill(skill: &SkillEntry, args: &Value) -> Result<SkillResult> {
     // Spawn thread to collect stdout
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
-        for l in reader.lines().flatten() {
+        for l in reader.lines().map_while(Result::ok) {
             let _ = stdout_tx.send(l);
         }
     });
@@ -305,20 +305,19 @@ pub fn execute_skill(skill: &SkillEntry, args: &Value) -> Result<SkillResult> {
     // Spawn thread to collect stderr
     thread::spawn(move || {
         let reader = BufReader::new(stderr);
-        for l in reader.lines().flatten() {
+        for l in reader.lines().map_while(Result::ok) {
             let _ = stderr_tx.send(l);
         }
     });
 
     // Wait for completion with timeout
     let start_time = Instant::now();
-    let mut timed_out = false;
+    let timed_out = false;
 
     loop {
         let elapsed = start_time.elapsed();
         if elapsed >= timeout {
             let _ = child.kill();
-            timed_out = true;
             break;
         }
 

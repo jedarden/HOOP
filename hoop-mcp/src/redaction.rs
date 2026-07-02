@@ -22,15 +22,6 @@ pub fn redact_text(text: &str) -> String {
     }
 }
 
-/// Redact a JSON string value returned by a tool. Non-string input is returned as-is.
-pub fn redact_json_string(value: &serde_json::Value) -> String {
-    if let Some(s) = value.as_str() {
-        redact_text(s)
-    } else {
-        value.to_string()
-    }
-}
-
 struct Redactor {
     patterns: Vec<Regex>,
     cache: HashMap<u64, String>,
