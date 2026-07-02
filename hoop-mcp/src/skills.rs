@@ -402,6 +402,7 @@ pub fn execute_skill(skill: &SkillEntry, args: &Value) -> Result<SkillResult> {
 }
 
 /// Convert skill entries to MCP tool definitions
+#[cfg(test)]
 pub fn skills_to_mcp_tools(skills: &[SkillEntry]) -> Vec<Value> {
     skills
         .iter()
@@ -417,6 +418,7 @@ pub fn skills_to_mcp_tools(skills: &[SkillEntry]) -> Vec<Value> {
 }
 
 /// Find a skill by tool name (e.g., "skill_fetch" -> "fetch")
+#[cfg(test)]
 pub fn find_skill_by_tool_name<'a>(skills: &'a [SkillEntry], tool_name: &str) -> Option<&'a SkillEntry> {
     let skill_name = tool_name.strip_prefix("skill_")?;
     skills.iter().find(|s| s.name == skill_name)
