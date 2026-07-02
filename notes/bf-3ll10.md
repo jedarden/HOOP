@@ -1,7 +1,8 @@
 # hoop-mcp Dependency Verification (Bead bf-3ll10)
 
-## Date
-2026-06-29
+## Dates
+- 2026-06-29: Initial verification
+- 2026-07-02: Re-verification
 
 ## Task
 Verify the hoop-mcp crate's Cargo.toml is correctly configured and all dependencies are available.
@@ -57,3 +58,34 @@ Verify the hoop-mcp crate's Cargo.toml is correctly configured and all dependenc
 
 ## Conclusion
 All hoop-mcp dependencies are correctly configured and resolve successfully. No issues found.
+
+---
+
+## Re-verification (2026-07-02)
+
+### Environment Check
+- **OS**: Debian 6.12.63+deb13-amd64 (not NixOS - AGENTS.md references nix-shell but this system runs Debian)
+- **Cargo**: 1.95.0 (f2d3ce0bd 2026-03-21)
+- **Build**: Direct cargo (no nix-shell required on this system)
+
+### Verification Results
+- ✅ `cargo check -p hoop-mcp` completed successfully (no output = no errors)
+- ✅ Workspace configuration verified: `hoop-mcp` correctly listed as member
+- ✅ `cargo tree -p hoop-mcp` shows complete dependency tree with no conflicts
+- ✅ All 18 direct dependencies resolving correctly
+- ✅ hoop-schema (local path dependency) builds successfully
+
+### Dependency Tree Analysis
+The dependency tree shows:
+- All transitive dependencies resolved without version conflicts
+- Workspace inheritance working properly for shared dependencies
+- No duplicate or conflicting dependency versions
+- Dev dependencies (tempfile, trybuild) available for testing
+
+### Updated Acceptance Criteria
+✅ `cargo check -p hoop-mcp` completes without dependency errors (verified 2026-07-02)
+
+### Re-verification Conclusion
+**STATUS**: ✅ COMPLETE
+
+All hoop-mcp dependencies are correctly configured and resolve successfully. No issues found during re-verification. The crate is ready for compilation and testing.
