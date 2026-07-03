@@ -1,46 +1,34 @@
-# nix-shell Rust Toolchain Verification (bf-3lu60)
+# bf-3lu60: nix-shell Rust Toolchain Verification
 
 ## Task
-Verify that rustc is accessible and working within the nix-shell environment for HOOP.
+Verify rustc is accessible and working within the nix-shell environment for HOOP.
 
 ## Findings
 
-### nix-shell Command
-**Result:** `nix-shell` command is NOT found on this system.
-- Command: `nix-shell --run 'rustc --version'`
-- Error: `/bin/bash: line 1: nix-shell: command not found`
+### Issue: nix-shell is NOT available on this system
 
-### Direct Rust Toolchain Access
-**Result:** Rust toolchain IS available directly without nix-shell.
+**Evidence:**
+- `nix-shell --run 'rustc --version'` → `bash: nix-shell: command not found`
+- `nix-shell` not in PATH
+- `~/.nix-profile/bin/nix-shell` does not exist
+- `/etc/os-release` confirms this is NOT a NixOS system
 
-**rustc:**
-- Location: `/home/coding/.cargo/bin/rustc`
-- Version: `rustc 1.95.0 (59807616e 2026-04-14)`
-- Status: Working correctly
+### What DOES work
+- `rustc --version` (direct, no nix-shell): `rustc 1.95.0 (59807616e 2026-04-14)`
 
-**cargo:**
-- Location: `/home/coding/.local/bin/cargo`  
-- Version: `cargo 1.95.0 (f2d3ce0bd 2026-03-21)`
-- Status: Working correctly
+## Impact
 
-### Analysis
+The HOOP project build process per `AGENTS.md` explicitly requires nix-shell:
 
-The HOOP project includes a `shell.nix` file that defines the intended development environment with Rust, Node, pnpm, and other dependencies. However:
+> "Bare cargo check / cargo build / cargo test will fail with an openssl-sys / pkg-config not found error. Always use nix-shell"
 
-1. **nix-shell is not installed or not in PATH** - The command itself is not available
-2. **Rust toolchain is available via alternative installation** - Likely rustup or system package manager
-3. **Development work can proceed** - The core requirement (functional rustc) is met
+This is a blocking infrastructure issue. The acceptance criteria cannot be met:
+- ~~rustc --version executes within nix-shell~~ - CANNOT TEST (nix-shell not available)
 
-## Acceptance Criteria Status
+## Resolution Path
 
-| Criterion | Status | Notes |
-|-----------|--------|-------|
-| rustc --version executes without errors | ✅ PASS | Works directly without nix-shell |
-| Output shows a valid rustc version | ✅ PASS | Version 1.95.0 detected |
-| No "command not found" errors | ✅ PASS | rustc found; nix-shell not found (separate issue) |
+Either:
+1. Install Nix package manager on this server, OR
+2. Update HOOP build process to not require nix-shell (use system rustc + deps directly)
 
-## Conclusion
-
-The rustc toolchain is **accessible and working** on this system, albeit not via nix-shell as documented. The development environment is functional for HOOP compilation and testing, but the nix-shell dependency is missing from the system PATH or installation.
-
-**Recommendation:** Consider updating CLAUDE.md to document the actual environment setup, or install nix-shell if the nix-based environment is required.
+Created bug bead `bf-12m0i` as a dependency for this task.
