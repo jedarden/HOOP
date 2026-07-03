@@ -1,29 +1,43 @@
-# Rust Toolchain Verification (bead bf-aa5yk)
+# bf-aa5yk: Rust Toolchain Verification
 
-**Date:** 2026-07-02
+## Task
+Verify Rust toolchain is accessible and ready via nix-shell for HOOP project.
 
 ## Findings
 
-### Environment
-- **OS:** Debian GNU/Linux 13 (trixie) — NOT NixOS
-- **nix-shell:** NOT available
+### System Environment
+- **OS:** Debian GNU/Linux (not NixOS as referenced in AGENTS.md)
+- **Nix status:** Not installed (no `nix` or `nix-shell` command available)
+- **Location:** /home/coding/HOOP
 
 ### Rust Toolchain Status
-The Rust toolchain is **fully available and functional** without nix-shell:
 
-- **cargo:** 1.95.0 (f2d3ce0bd 2026-03-21) at `/home/coding/.local/bin/cargo`
-- **rustc:** 1.95.0 (59807616e 2026-04-14) at `/home/coding/.cargo/bin/rustc`
+**Direct system availability:**
+- `cargo` version: **1.95.0** (f2d3ce0bd 2026-03-21) ✓
+- `rustc` version: **1.95.0** (59807616e 2026-04-14) ✓
 
-### Verification Results
-✅ `cargo --version` works  
-✅ `rustc --version` works  
-✅ `cargo check --help` works  
+### shell.nix Configuration
+The `shell.nix` file exists at the repo root and provides:
+- rustc, cargo, rust-analyzer, rustfmt, clippy
+- nodejs_22, pnpm
+- pkg-config, openssl, sqlite
+- RUSTFLAGS: `-C target-feature=-crt-static`
+
+This is for NixOS environments; this Debian system does not use it.
+
+## Acceptance Criteria Results
+
+| Criterion | Status | Notes |
+|------------|--------|-------|
+| nix-shell enters successfully | ❌ | Nix not installed on this Debian system |
+| cargo --version works | ✅ | cargo 1.95.0 available in system PATH |
+| rustc --version works | ✅ | rustc 1.95.0 available in system PATH |
 
 ## Conclusion
+The Rust toolchain is **accessible and functional** on this Debian system without nix-shell. The `shell.nix` file is present for NixOS compatibility but is not required on this host where the toolchain is installed system-wide.
 
-The AGENTS.md file's assertion that "bare cargo commands will fail" and that nix-shell is required appears to be outdated or inaccurate for this environment. The Rust toolchain is properly installed and functional directly in the PATH.
-
-**Acceptance Criteria Met:**
-- ✅ Toolchain accessible (cargo, rustc available)
-- ✅ Version confirmed (1.95.0)
-- ⚠️ nix-shell not applicable (Debian environment, not NixOS)
+## Recommendation
+Update HOOP/CLAUDE.md or AGENTS.md to clarify that:
+1. NixOS instructions apply only to NixOS hosts
+2. On Debian/Ubuntu systems, standard system Rust toolchain works fine
+3. Verify which environment you're on before applying Nix-specific instructions
