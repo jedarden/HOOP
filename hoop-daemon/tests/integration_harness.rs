@@ -859,7 +859,7 @@ async fn test_websocket_connection() {
 
     ws_sender
         .send(tokio_tungstenite::tungstenite::Message::Text(
-            subscribe_msg.to_string(),
+            subscribe_msg.to_string().into(),
         ))
         .await
         .expect("Failed to send subscribe message");
@@ -1102,7 +1102,7 @@ async fn test_websocket_subscribe_to_project() {
 
     ws_sender
         .send(tokio_tungstenite::tungstenite::Message::Text(
-            subscribe_msg.to_string(),
+            subscribe_msg.to_string().into(),
         ))
         .await
         .expect("Failed to send subscribe message");
@@ -1199,7 +1199,7 @@ async fn test_daemon_handles_malformed_websocket_messages() {
     // Send malformed JSON message
     ws_sender
         .send(tokio_tungstenite::tungstenite::Message::Text(
-            "{invalid json}".to_string(),
+            "{invalid json}".to_string().into(),
         ))
         .await
         .expect("Failed to send malformed message");
@@ -1211,7 +1211,7 @@ async fn test_daemon_handles_malformed_websocket_messages() {
     });
     ws_sender
         .send(tokio_tungstenite::tungstenite::Message::Text(
-            unknown_msg.to_string(),
+            unknown_msg.to_string().into(),
         ))
         .await
         .expect("Failed to send unknown event type");
@@ -1219,7 +1219,7 @@ async fn test_daemon_handles_malformed_websocket_messages() {
     // Send empty message
     ws_sender
         .send(tokio_tungstenite::tungstenite::Message::Text(
-            "".to_string(),
+            "".to_string().into(),
         ))
         .await
         .expect("Failed to send empty message");

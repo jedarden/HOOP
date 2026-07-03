@@ -1,759 +1,31 @@
-   Compiling libsqlite3-sys v0.27.0
-   Compiling reqwest v0.12.28
-   Compiling rusqlite v0.30.0
-   Compiling jsonschema v0.18.3
-   Compiling zstd v0.13.3
-   Compiling hoop-daemon v0.1.0 (/home/coding/HOOP/hoop-daemon)
-warning: unused import: `PathBuf`
-  --> hoop-daemon/src/accounts_config.rs:27:23
-   |
-27 | use std::path::{Path, PathBuf};
-   |                       ^^^^^^^
-   |
-   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
-
-warning: unused import: `warn`
-  --> hoop-daemon/src/accounts_config.rs:28:28
-   |
-28 | use tracing::{debug, info, warn};
-   |                            ^^^^
-
-warning: unused import: `State`
-  --> hoop-daemon/src/api_bead_files.rs:11:21
-   |
-11 |     extract::{Path, State},
-   |                     ^^^^^
-
-warning: unused imports: `Connection` and `params`
-  --> hoop-daemon/src/api_bead_files.rs:16:16
-   |
-16 | use rusqlite::{params, Connection};
-   |                ^^^^^^  ^^^^^^^^^^
-
-warning: unused import: `Deserialize`
-  --> hoop-daemon/src/api_bead_files.rs:17:13
-   |
-17 | use serde::{Deserialize, Serialize};
-   |             ^^^^^^^^^^^
-
-warning: unused import: `get`
-  --> hoop-daemon/src/api_pattern_mutations.rs:14:23
-   |
-14 |     routing::{delete, get, post, put},
-   |                       ^^^
-
-warning: unused import: `std::sync::Arc`
-  --> hoop-daemon/src/api_stitch_decompose.rs:30:5
-   |
-30 | use std::sync::Arc;
-   |     ^^^^^^^^^^^^^^
-
-warning: unused import: `ReplayOptions`
- --> hoop-daemon/src/api_stitch_replay.rs:8:42
-  |
-8 | use crate::stitch_reconstruction::{self, ReplayOptions};
-  |                                          ^^^^^^^^^^^^^
-
-warning: unused import: `ParsedSessionKind`
-  --> hoop-daemon/src/api_unassigned.rs:23:34
-   |
-23 | use hoop_schema::{ParsedSession, ParsedSessionKind};
-   |                                  ^^^^^^^^^^^^^^^^^
-
-warning: unused import: `RecommendedWatcher`
-  --> hoop-daemon/src/api_skills.rs:39:14
-   |
-39 | use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-   |              ^^^^^^^^^^^^^^^^^^
-
-warning: unused import: `PathBuf`
-  --> hoop-daemon/src/atomic_write.rs:42:23
-   |
-42 | use std::path::{Path, PathBuf};
-   |                       ^^^^^^^
-
-warning: unused import: `std::time::Duration as StdDuration`
-  --> hoop-daemon/src/capacity.rs:25:5
-   |
-25 | use std::time::Duration as StdDuration;
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-warning: unused import: `OpenCodeLimits as AccountsOpenCodeLimits`
-  --> hoop-daemon/src/capacity.rs:28:46
-   |
-28 | use crate::accounts_config::{AccountsConfig, OpenCodeLimits as AccountsOpenCodeLimits};
-   |                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-warning: unused import: `chrono::Utc`
- --> hoop-daemon/src/content_blocks.rs:7:5
-  |
-7 | use chrono::Utc;
-  |     ^^^^^^^^^^^
-
-warning: unused import: `std::collections::HashMap`
-  --> hoop-daemon/src/api_presence.rs:20:5
-   |
-20 | use std::collections::HashMap;
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
-
-warning: unused import: `get`
-  --> hoop-daemon/src/api_tour_project.rs:12:23
-   |
-12 |     routing::{delete, get, post},
-   |                       ^^^
-
-warning: unused import: `serde::Serialize`
-  --> hoop-daemon/src/migrations.rs:51:5
-   |
-51 | use serde::Serialize;
-   |     ^^^^^^^^^^^^^^^^
-
-warning: unused import: `anyhow`
-  --> hoop-daemon/src/stitch_reconstruction.rs:19:14
-   |
-19 | use anyhow::{anyhow, bail, Context, Result};
-   |              ^^^^^^
-
-warning: unused import: `std::collections::HashMap`
-  --> hoop-daemon/src/stitch_reconstruction.rs:22:5
-   |
-22 | use std::collections::HashMap;
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
-
-warning: unused import: `anyhow::Result`
-  --> hoop-daemon/src/stuck_detector.rs:20:5
-   |
-20 | use anyhow::Result;
-   |     ^^^^^^^^^^^^^^
-
-warning: unused import: `std::pin::pin`
- --> hoop-daemon/src/syntax_highlight_stream.rs:8:5
-  |
-8 | use std::pin::pin;
-  |     ^^^^^^^^^^^^^
-
-warning: unused imports: `anyhow` and `bail`
-  --> hoop-daemon/src/prompt_substitute.rs:13:14
-   |
-13 | use anyhow::{anyhow, bail, Result};
-   |              ^^^^^^  ^^^^
-
-warning: unused import: `json`
-  --> hoop-daemon/src/prompt_substitute.rs:15:18
-   |
-15 | use serde_json::{json, Value};
-   |                  ^^^^
-
-warning: unused import: `SubstitutionContext`
-  --> hoop-daemon/src/api_prompts.rs:45:54
-   |
-45 | use crate::prompt_substitute::{substitute_with_args, SubstitutionContext};
-   |                                                      ^^^^^^^^^^^^^^^^^^^
-
-warning: unused import: `warn`
-  --> hoop-daemon/src/config_backup.rs:14:21
-   |
-14 | use tracing::{info, warn};
-   |                     ^^^^
-
-warning: unused import: `SimilarStitch`
-  --> hoop-daemon/src/cross_project_propagation.rs:15:51
-   |
-15 | use crate::similarity::{self, CombinedSimilarity, SimilarStitch};
-   |                                                   ^^^^^^^^^^^^^
-
-warning: unused import: `DateTime`
-  --> hoop-daemon/src/cross_project_propagation.rs:17:14
-   |
-17 | use chrono::{DateTime, Utc};
-   |              ^^^^^^^^
-
-warning: unused imports: `delete` and `put`
-  --> hoop-daemon/src/api_fix_patterns.rs:16:15
-   |
-16 |     routing::{delete, get, post, put},
-   |               ^^^^^^             ^^^
-
-warning: unused import: `self`
-  --> hoop-daemon/src/api_screen_capture.rs:12:28
-   |
-12 | use crate::id_validators::{self, ValidStitchId};
-   |                            ^^^^
-
-warning: unused import: `Path`
-  --> hoop-daemon/src/screen_capture.rs:23:17
-   |
-23 | use std::path::{Path, PathBuf};
-   |                 ^^^^
-
-warning: unused imports: `Deserialize` and `Serialize`
-  --> hoop-daemon/src/saturation_detector.rs:17:13
-   |
-17 | use serde::{Deserialize, Serialize};
-   |             ^^^^^^^^^^^  ^^^^^^^^^
-
-warning: unused import: `crate::log_rotation`
- --> hoop-daemon/src/observer.rs:8:5
-  |
-8 | use crate::log_rotation;
-  |     ^^^^^^^^^^^^^^^^^^^
-
-warning: unused import: `TcpStream`
-  --> hoop-daemon/src/observer.rs:16:31
-   |
-16 | use tokio::net::{TcpListener, TcpStream};
-   |                               ^^^^^^^^^
-
-warning: unused import: `config_watcher::AgentConfigChanged`
-    --> hoop-daemon/src/lib.rs:3151:25
-     |
-3151 |                     use config_watcher::AgentConfigChanged;
-     |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-warning: variable does not need to be mutable
-   --> hoop-daemon/src/api_tour_project.rs:240:9
-    |
-240 |     let mut conn = rusqlite::Connection::open_with_flags(
-    |         ----^^^^
-    |         |
-    |         help: remove this `mut`
-    |
-    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
-
-warning: variable does not need to be mutable
-   --> hoop-daemon/src/api_fix_patterns.rs:454:13
-    |
-454 |         let mut conn = match rusqlite::Connection::open(&db_path) {
-    |             ----^^^^
-    |             |
-    |             help: remove this `mut`
-
-warning: variable does not need to be mutable
-    --> hoop-daemon/src/lib.rs:3446:13
-     |
-3446 |         let mut shutdown_rx = state.shutdown.subscribe();
-     |             ----^^^^^^^^^^^
-     |             |
-     |             help: remove this `mut`
-
-warning: unused variable: `start`
-   --> hoop-daemon/src/backup_pipeline.rs:133:13
-    |
-133 |         let start = std::time::Instant::now();
-    |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
-    |
-    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
-
-warning: unused variable: `remote_addr`
-   --> hoop-daemon/src/auth.rs:338:17
-    |
-338 |             let remote_addr = connect_info.map(|ci| ci.0);
-    |                 ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_remote_addr`
-
-warning: unused variable: `required_role`
-   --> hoop-daemon/src/auth.rs:329:13
-    |
-329 |         let required_role = required_role.clone();
-    |             ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_required_role`
-
-warning: unused variable: `required_role`
-   --> hoop-daemon/src/auth.rs:358:31
-    |
-358 |     if !matches!(actual_role, required_role) {
-    |                               ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_required_role`
-
-warning: unused variable: `start`
-   --> hoop-daemon/src/api_scripts.rs:312:9
-    |
-312 |     let start = Instant::now();
-    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
-
-warning: variable `timed_out` is assigned to, but never used
-   --> hoop-daemon/src/api_scripts.rs:361:9
-    |
-361 |     let mut timed_out = false;
-    |         ^^^^^^^^^^^^^
-    |
-    = note: consider using `_timed_out` instead
-
-warning: value assigned to `timed_out` is never read
-   --> hoop-daemon/src/api_scripts.rs:368:13
-    |
-368 |             timed_out = true;
-    |             ^^^^^^^^^^^^^^^^
-    |
-    = help: maybe it is overwritten before being read?
-    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
-
-warning: unused variable: `elapsed_ms`
-   --> hoop-daemon/src/api_stitch_links.rs:208:9
-    |
-208 |     let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
-    |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_elapsed_ms`
-
-warning: unused variable: `start`
-   --> hoop-daemon/src/api_skills.rs:284:9
-    |
-284 |     let start = Instant::now();
-    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
-
-warning: variable `timed_out` is assigned to, but never used
-   --> hoop-daemon/src/api_skills.rs:344:9
-    |
-344 |     let mut timed_out = false;
-    |         ^^^^^^^^^^^^^
-    |
-    = note: consider using `_timed_out` instead
-
-warning: value assigned to `timed_out` is never read
-   --> hoop-daemon/src/api_skills.rs:350:13
-    |
-350 |             timed_out = true;
-    |             ^^^^^^^^^^^^^^^^
-    |
-    = help: maybe it is overwritten before being read?
-
-warning: unused variable: `config`
-   --> hoop-daemon/src/capacity.rs:213:29
-    |
-213 |     fn fetch_quota_via_http(config: &GcpQuotaConfig) -> Option<GeminiQuotaLimits> {
-    |                             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
-
-warning: variable does not need to be mutable
-   --> hoop-daemon/src/capacity.rs:593:13
-    |
-593 |         let mut gemini_dirs = Self::discover_gemini_dirs(&home);
-    |             ----^^^^^^^^^^^
-    |             |
-    |             help: remove this `mut`
-
-warning: variable does not need to be mutable
-   --> hoop-daemon/src/capacity.rs:596:13
-    |
-596 |         let mut opencode_dirs = Self::discover_opencode_dirs(&home);
-    |             ----^^^^^^^^^^^^^
-    |             |
-    |             help: remove this `mut`
-
-warning: unused variable: `event_type`
-    --> hoop-daemon/src/capacity.rs:1796:17
-     |
-1796 |             let event_type = entry.get("type").and_then(|v| v.as_str());
-     |                 ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_event_type`
-
-warning: unused variable: `initial_hash`
-   --> hoop-daemon/src/config_watcher.rs:111:13
-    |
-111 |         let initial_hash = hex::encode(Sha256::digest(initial_raw.as_bytes()));
-    |             ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_initial_hash`
-
-warning: unused variable: `cfg`
-   --> hoop-daemon/src/config_watcher.rs:139:13
-    |
-139 |         let cfg = self.config.lock().await;
-    |             ^^^ help: if this is intentional, prefix it with an underscore: `_cfg`
-
-warning: unused variable: `start`
-    --> hoop-daemon/src/fleet.rs:1704:9
-     |
-1704 |     let start = std::time::Instant::now();
-     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
-
-warning: unused variable: `link_kind`
-   --> hoop-daemon/src/stitch_traversal.rs:210:28
-    |
-210 |             let (child_id, link_kind) = child_row?;
-    |                            ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_link_kind`
-
-warning: unused variable: `schedule`
-   --> hoop-daemon/src/script_scheduler.rs:139:38
-    |
-139 |                 .filter_map(|(name, (schedule, overlap_policy))| {
-    |                                      ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_schedule`
-
-warning: unused variable: `overlap_policy`
-   --> hoop-daemon/src/script_scheduler.rs:109:31
-    |
-109 |         for (name, (schedule, overlap_policy)) in &scheduled {
-    |                               ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_overlap_policy`
-
-warning: unused variable: `workspace`
-   --> hoop-daemon/src/stitch_reconstruction.rs:297:47
-    |
-297 | fn load_conversation_history(stitch_id: &str, workspace: &Path) -> Result<Vec<ConversationMessage>> {
-    |                                               ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_workspace`
-
-warning: unused variable: `transition_secs`
-   --> hoop-daemon/src/stuck_detector.rs:463:21
-    |
-463 |                 let transition_secs = if let Some(ts) = state.last_transition_at {
-    |                     ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_transition_secs`
-
-warning: unused variable: `created_by`
-   --> hoop-daemon/src/cross_project_propagation.rs:220:36
-    |
-220 |     let (id, project, kind, title, created_by, created_at) = conn.query_row(
-    |                                    ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_created_by`
-
-warning: unused variable: `conn`
-   --> hoop-daemon/src/cross_project_propagation.rs:451:19
-    |
-451 | fn is_stitch_open(conn: &rusqlite::Connection, last_activity_at: &str) -> bool {
-    |                   ^^^^ help: if this is intentional, prefix it with an underscore: `_conn`
-
-warning: variable does not need to be mutable
-   --> hoop-daemon/src/cross_project_propagation.rs:468:9
-    |
-468 |     let mut shared_files = Vec::new();
-    |         ----^^^^^^^^^^^^
-    |         |
-    |         help: remove this `mut`
-
-warning: variable does not need to be mutable
-   --> hoop-daemon/src/cross_project_propagation.rs:476:9
-    |
-476 |     let mut shared_labels = Vec::new();
-    |         ----^^^^^^^^^^^^^
-    |         |
-    |         help: remove this `mut`
-
-warning: unused variable: `sim`
-   --> hoop-daemon/src/cross_project_propagation.rs:469:13
-    |
-469 |     for (_, sim) in matches {
-    |             ^^^ help: if this is intentional, prefix it with an underscore: `_sim`
-
-warning: unused variable: `source_labels`
-   --> hoop-daemon/src/cross_project_propagation.rs:475:9
-    |
-475 |     let source_labels: HashSet<_> = source.labels.iter().map(|l| l.to_lowercase()).collect();
-    |         ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_source_labels`
-
-warning: unused variable: `create_req`
-   --> hoop-daemon/src/api_fix_patterns.rs:444:13
-    |
-444 |         let create_req = CreatePatternRequest {
-    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_create_req`
-
-warning: unused variable: `attachments_dir`
-   --> hoop-daemon/src/screen_capture.rs:334:13
-    |
-334 |         let attachments_dir = attachments_dir(&valid_stitch_id)?;
-    |             ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_attachments_dir`
-
-warning: unused variable: `dashboard`
-   --> hoop-daemon/src/observer.rs:210:13
-    |
-210 |         let dashboard: Value = resp.json().await?;
-    |             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_dashboard`
-
-warning: variable does not need to be mutable
-  --> hoop-daemon/src/fix_patterns.rs:83:13
-   |
-83 |         let mut conn = Connection::open(&db_path)?;
-   |             ----^^^^
-   |             |
-   |             help: remove this `mut`
-
-warning: variable does not need to be mutable
-   --> hoop-daemon/src/fix_patterns.rs:277:13
-    |
-277 |         let mut conn = Connection::open(&db_path)?;
-    |             ----^^^^
-    |             |
-    |             help: remove this `mut`
-
-warning: unused variable: `abs_path`
-   --> hoop-daemon/src/lib.rs:975:10
-    |
-975 |     let (abs_path, filename, content) = tokio::task::spawn_blocking(move || -> anyhow::Result<(std::path::PathBuf, String, String)> {
-    |          ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_abs_path`
-
-warning: unused variable: `project`
-    --> hoop-daemon/src/lib.rs:2415:43
-     |
-2415 |         Arc::new(move |stitch_id: String, project: String| {
-     |                                           ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_project`
-
-warning: unused variable: `synthesis_callback`
-    --> hoop-daemon/src/lib.rs:2413:9
-     |
-2413 |     let synthesis_callback: transcription::TranscriptionCompleteCallback = {
-     |         ^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_synthesis_callback`
-
-warning: unused variable: `semaphore_ref`
-    --> hoop-daemon/src/lib.rs:3077:13
-     |
-3077 |         let semaphore_ref = state.br_semaphore.clone();
-     |             ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_semaphore_ref`
-
-warning: type `PatternCategory` is more private than the item `DetectedPattern::category`
-  --> hoop-daemon/src/reflection_detector.rs:88:5
-   |
-88 |     pub category: PatternCategory,
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ field `DetectedPattern::category` is reachable at visibility `pub`
-   |
-note: but type `PatternCategory` is only usable at visibility `pub(self)`
-  --> hoop-daemon/src/reflection_detector.rs:60:1
-   |
-60 | enum PatternCategory {
-   | ^^^^^^^^^^^^^^^^^^^^
-   = note: `#[warn(private_interfaces)]` on by default
-
-warning: function `openapi_router` is never used
-    --> hoop-daemon/src/lib.rs:1277:4
-     |
-1277 | fn openapi_router() -> Router<DaemonState> {
-     |    ^^^^^^^^^^^^^^
-     |
-     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: function `load_hoop_config` is never used
-    --> hoop-daemon/src/lib.rs:3799:10
-     |
-3799 | async fn load_hoop_config() -> Option<hoop_schema::HoopConfig> {
-     |          ^^^^^^^^^^^^^^^^
-
-warning: function `check_and_emit_capacity_alert` is never used
-    --> hoop-daemon/src/lib.rs:4076:4
-     |
-4076 | fn check_and_emit_capacity_alert() -> anyhow::Result<()> {
-     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-warning: field `session_id` is never read
-   --> hoop-daemon/src/capacity.rs:359:5
-    |
-356 | struct ParsedPrompt {
-    |        ------------ field in this struct
-...
-359 |     session_id: String,
-    |     ^^^^^^^^^^
-    |
-    = note: `ParsedPrompt` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
-
-warning: function `get_opencode_limits` is never used
-   --> hoop-daemon/src/capacity.rs:473:4
-    |
-473 | fn get_opencode_limits() -> OpenCodePromptLimits {
-    |    ^^^^^^^^^^^^^^^^^^^
-
-warning: field `session_subpath` is never read
-   --> hoop-daemon/src/capacity.rs:527:5
-    |
-523 | struct GeminiAccountPaths {
-    |        ------------------ field in this struct
-...
-527 |     session_subpath: String,
-    |     ^^^^^^^^^^^^^^^
-    |
-    = note: `GeminiAccountPaths` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
-
-warning: field `rpm_limit` is never read
-  --> hoop-daemon/src/capacity.rs:56:13
-   |
-52 |     pub struct GeminiQuotaLimits {
-   |                ----------------- field in this struct
-...
-56 |         pub rpm_limit: Option<u64>,
-   |             ^^^^^^^^^
-   |
-   = note: `GeminiQuotaLimits` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
-
-warning: struct `QuotaLimit` is never constructed
-  --> hoop-daemon/src/capacity.rs:61:12
-   |
-61 |     struct QuotaLimit {
-   |            ^^^^^^^^^^
-
-warning: field `subpath` is never read
-   --> hoop-daemon/src/sessions.rs:557:5
-    |
-555 | pub struct GeminiSessionPath {
-    |            ----------------- field in this struct
-556 |     /// Subpath to sessions (e.g., "tmp" or "sessions")
-557 |     subpath: String,
-    |     ^^^^^^^
-    |
-    = note: `GeminiSessionPath` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
-
-warning: constant `MAX_UNASSIGNED_SESSIONS` is never used
-   --> hoop-daemon/src/sessions.rs:763:7
-    |
-763 | const MAX_UNASSIGNED_SESSIONS: usize = 100;
-    |       ^^^^^^^^^^^^^^^^^^^^^^^
-
-warning: constant `MIN_SAMPLES_FOR_PREDICTION` is never used
-  --> hoop-daemon/src/stitch_percentile_index.rs:68:7
-   |
-68 | const MIN_SAMPLES_FOR_PREDICTION: usize = 3;
-   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-warning: constant `STITCH_CLOSED_THRESHOLD_SECONDS` is never used
-  --> hoop-daemon/src/stitch_percentile_index.rs:72:7
-   |
-72 | const STITCH_CLOSED_THRESHOLD_SECONDS: i64 = 300;
-   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-warning: eliding a lifetime that's named elsewhere is confusing
-   --> hoop-daemon/src/api_pattern_mutations.rs:566:68
-    |
-566 | fn params_from_slice<'a>(values: &'a [&'a dyn rusqlite::ToSql]) -> &[&'a dyn rusqlite::ToSql] {
-    |                                   --   --                          ^^^--^^^^^^^^^^^^^^^^^^^^^
-    |                                   |    |                           |  |
-    |                                   |    |                           |  the same lifetime is named here
-    |                                   |    |                           the same lifetime is elided here
-    |                                   |    the lifetime is named here
-    |                                   the lifetime is named here
-    |
-    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
-    = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
-help: consistently use `'a`
-    |
-566 | fn params_from_slice<'a>(values: &'a [&'a dyn rusqlite::ToSql]) -> &'a [&'a dyn rusqlite::ToSql] {
-    |                                                                     ++
-
-   Compiling hoop v0.1.0 (/home/coding/HOOP/hoop-cli)
-warning: `hoop-daemon` (lib) generated 89 warnings (run `cargo fix --lib -p hoop-daemon` to apply 72 suggestions)
-warning: unused import: `std::env`
-  --> hoop-cli/src/config.rs:11:5
-   |
-11 | use std::env;
-   |     ^^^^^^^^
-   |
-   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
-
-warning: unused imports: `Deserialize` and `Serialize`
-  --> hoop-cli/src/patterns.rs:17:13
-   |
-17 | use serde::{Deserialize, Serialize};
-   |             ^^^^^^^^^^^  ^^^^^^^^^
-
-warning: unused import: `super::*`
-   --> hoop-cli/src/risk_patterns.rs:280:9
-    |
-280 |     use super::*;
-    |         ^^^^^^^^
-
-warning: unused imports: `ArgGroup`, `Args`, `Parser`, and `Subcommand`
- --> hoop-cli/src/skills.rs:8:12
-  |
-8 | use clap::{ArgGroup, Args, Parser, Subcommand};
-  |            ^^^^^^^^  ^^^^  ^^^^^^  ^^^^^^^^^^
-
-warning: unused import: `std::io::Write`
-  --> hoop-cli/src/skills.rs:12:5
-   |
-12 | use std::io::Write;
-   |     ^^^^^^^^^^^^^^
-
-warning: unused import: `serde::Serialize`
-  --> hoop-cli/src/main.rs:21:5
-   |
-21 | use serde::Serialize;
-   |     ^^^^^^^^^^^^^^^^
-
-warning: unused variable: `bucket`
-  --> hoop-cli/src/restore.rs:72:5
-   |
-72 |     bucket: &str,
-   |     ^^^^^^ help: if this is intentional, prefix it with an underscore: `_bucket`
-   |
-   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
-
-warning: unused variable: `object_key`
-  --> hoop-cli/src/restore.rs:73:5
-   |
-73 |     object_key: &str,
-   |     ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_object_key`
-
-warning: unused variable: `socket_path`
-  --> hoop-cli/src/script.rs:78:13
-   |
-78 |         let socket_path = format!("{}/.hoop/control.sock", home);
-   |             ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_socket_path`
-
-warning: unused variable: `name`
-   --> hoop-cli/src/skills.rs:626:24
-    |
-626 | fn get_previous_sha256(name: &str) -> Result<Option<String>> {
-    |                        ^^^^ help: if this is intentional, prefix it with an underscore: `_name`
-
-warning: field `schema_version` is never read
-  --> hoop-cli/src/config.rs:34:5
-   |
-33 | struct ConfigResponse {
-   |        -------------- field in this struct
-34 |     schema_version: String,
-   |     ^^^^^^^^^^^^^^
-   |
-   = note: `ConfigResponse` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
-   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
-
-warning: function `validate_workspace` is never used
-   --> hoop-cli/src/projects.rs:391:8
-    |
-391 | pub fn validate_workspace(path: &Path) -> Result<PathBuf> {
-    |        ^^^^^^^^^^^^^^^^^^
-
-warning: field `script` is never read
-  --> hoop-cli/src/script.rs:42:5
-   |
-41 | struct ScriptRunResponse {
-   |        ----------------- field in this struct
-42 |     script: String,
-   |     ^^^^^^
-   |
-   = note: `ScriptRunResponse` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
-
-warning: field `name` is never read
-  --> hoop-cli/src/script.rs:63:5
-   |
-62 | struct ScriptManifest {
-   |        -------------- field in this struct
-63 |     name: String,
-   |     ^^^^
-   |
-   = note: `ScriptManifest` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
-
-warning: structure field `DNSName` should have a snake case name
-  --> hoop-cli/src/init.rs:36:5
-   |
-36 |     DNSName: String,
-   |     ^^^^^^^ help: convert the identifier to snake case: `dnsname`
-   |
-   = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
-
-warning: `hoop` (bin "hoop" test) generated 15 warnings (run `cargo fix --bin "hoop" -p hoop --tests` to apply 10 suggestions)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 2m 13s
-     Running unittests src/lib.rs (target/debug/deps/hoop-592626afff68cb2c)
 
 running 32 tests
 test projects::tests::add_direct_path_stores_both_equal ... ok
 test projects::tests::add_rejects_duplicate_name ... ok
 test projects::tests::add_rejects_duplicate_path ... ok
 test projects::tests::add_rejects_missing_beads ... ok
-test projects::tests::add_via_symlink_preserves_raw_and_canonical ... ok
 test projects::tests::add_via_symlink_rejects_duplicate_canonical ... ok
 test projects::tests::add_with_custom_name ... ok
-test projects::tests::both_path_and_workspaces_rejected ... ok
 test projects::tests::add_with_default_name ... ok
+test projects::tests::both_path_and_workspaces_rejected ... ok
 test projects::tests::discover_deduplicates_canonical_paths ... ok
+test projects::tests::add_via_symlink_preserves_raw_and_canonical ... ok
 test projects::tests::discover_finds_beads_workspaces ... ok
 test projects::tests::discover_finds_nested_workspaces ... ok
 test projects::tests::discover_returns_empty_for_no_beads ... ok
-test projects::tests::empty_workspaces_rejected_at_deserialize ... ok
 test projects::tests::discover_symlink_dedup_across_dirs ... ok
-test projects::tests::label_color_forces_multi_form ... ok
-test projects::tests::neither_path_nor_workspaces_rejected ... ok
+test projects::tests::empty_workspaces_rejected_at_deserialize ... ok
 test projects::tests::multi_workspace_round_trip ... ok
+test projects::tests::neither_path_nor_workspaces_rejected ... ok
 test projects::tests::primary_path_falls_back_to_first ... ok
-test projects::tests::primary_path_returns_primary_workspace ... ok
+test projects::tests::label_color_forces_multi_form ... ok
 test projects::tests::registered_paths_covers_all_workspaces ... ok
+test projects::tests::primary_path_returns_primary_workspace ... ok
 test projects::tests::registry_load_empty ... ok
 test projects::tests::remove_existing_project ... ok
 test projects::tests::remove_nonexistent_project ... ok
-test projects::tests::scan_skips_already_registered ... ok
 test projects::tests::scan_auto_yes_registers_all ... ok
+test projects::tests::scan_skips_already_registered ... ok
 test projects::tests::shorthand_round_trip_preserves_canonical_path ... ok
 test projects::tests::shorthand_without_canonical_round_trips_cleanly ... ok
 test projects::tests::validate_workspaces_duplicate_roles_warns ... ok
@@ -761,36 +33,35 @@ test projects::tests::validate_workspaces_empty_hard_error ... ok
 test projects::tests::validate_workspaces_no_duplicates_ok ... ok
 test projects::tests::shorthand_round_trip ... ok
 
-test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
 
-     Running unittests src/main.rs (target/debug/deps/hoop-80c5ef785b1ce7c1)
 
 running 56 tests
 test backup::tests::print_backup_metrics_handles_zero_timestamp ... ok
-test backup::tests::print_backup_metrics_parses_prometheus ... ok
-test new::tests::parse_missing_closing_fence_errors ... ok
-test new::tests::parse_missing_opening_fence_errors ... ok
 test new::tests::parse_minimal_frontmatter ... ok
+test backup::tests::print_backup_metrics_parses_prometheus ... ok
+test new::tests::parse_missing_opening_fence_errors ... ok
 test new::tests::parse_valid_frontmatter ... ok
+test new::tests::parse_missing_closing_fence_errors ... ok
 test new::tests::template_contains_project ... ok
 test projects::tests::add_direct_path_stores_both_equal ... ok
 test projects::tests::add_rejects_duplicate_name ... ok
 test projects::tests::add_rejects_duplicate_path ... ok
 test projects::tests::add_rejects_missing_beads ... ok
-test projects::tests::add_via_symlink_preserves_raw_and_canonical ... ok
 test projects::tests::add_via_symlink_rejects_duplicate_canonical ... ok
-test projects::tests::add_with_custom_name ... ok
+test projects::tests::add_via_symlink_preserves_raw_and_canonical ... ok
 test projects::tests::add_with_default_name ... ok
 test projects::tests::both_path_and_workspaces_rejected ... ok
 test projects::tests::discover_deduplicates_canonical_paths ... ok
 test projects::tests::discover_finds_beads_workspaces ... ok
+test projects::tests::add_with_custom_name ... ok
 test projects::tests::discover_finds_nested_workspaces ... ok
 test projects::tests::discover_returns_empty_for_no_beads ... ok
 test projects::tests::discover_symlink_dedup_across_dirs ... ok
 test projects::tests::empty_workspaces_rejected_at_deserialize ... ok
 test projects::tests::label_color_forces_multi_form ... ok
-test projects::tests::multi_workspace_round_trip ... ok
 test projects::tests::neither_path_nor_workspaces_rejected ... ok
+test projects::tests::multi_workspace_round_trip ... ok
 test projects::tests::primary_path_falls_back_to_first ... ok
 test projects::tests::primary_path_returns_primary_workspace ... ok
 test projects::tests::registered_paths_covers_all_workspaces ... ok
@@ -800,32 +71,31 @@ test projects::tests::remove_nonexistent_project ... ok
 test projects::tests::scan_auto_yes_registers_all ... ok
 test projects::tests::scan_skips_already_registered ... ok
 test projects::tests::shorthand_round_trip ... ok
-test projects::tests::shorthand_round_trip_preserves_canonical_path ... ok
 test projects::tests::shorthand_without_canonical_round_trips_cleanly ... ok
-test projects::tests::validate_workspaces_duplicate_roles_warns ... ok
+test projects::tests::shorthand_round_trip_preserves_canonical_path ... ok
 test projects::tests::validate_workspaces_empty_hard_error ... ok
 test projects::tests::validate_workspaces_no_duplicates_ok ... ok
+test projects::tests::validate_workspaces_duplicate_roles_warns ... ok
 test restore::tests::test_cleanup_rollback_dirs_noop_when_clean ... ok
-test restore::tests::test_cleanup_rollback_dirs_removes_leftovers ... ok
 test restore::tests::test_manifest_parsing ... ok
+test restore::tests::test_cleanup_rollback_dirs_removes_leftovers ... ok
 test restore::tests::test_mid_failure_rollback_full_cycle ... ok
-test restore::tests::test_newer_version_rejection_clear_diagnostic ... ok
 test restore::tests::test_newer_version_rejection_diagnostic ... ok
-test restore::tests::test_newer_version_rejection_happens_before_move_aside ... ok
+test restore::tests::test_newer_version_rejection_clear_diagnostic ... ok
 test restore::tests::test_parse_s3_uri ... ok
+test restore::tests::test_newer_version_rejection_happens_before_move_aside ... ok
 test restore::tests::test_parse_s3_uri_no_key ... ok
-test restore::tests::test_parse_s3_uri_no_scheme ... ok
 test restore::tests::test_rollback_no_partial_dir ... ok
 test restore::tests::test_rollback_restores_original ... ok
-test restore::tests::test_verify_sha256 ... ok
 test restore::tests::test_successful_restore_then_cleanup_allows_daemon_start ... ok
+test restore::tests::test_verify_sha256 ... ok
 test risk_patterns::tests::test_parse_empty_keywords ... ok
 test risk_patterns::tests::test_parse_keywords ... ok
+test restore::tests::test_parse_s3_uri_no_scheme ... ok
 test risk_patterns::tests::test_parse_keywords_with_spaces ... ok
 
-test result: ok. 56 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 56 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
 
-   Doc-tests hoop
 
 running 0 tests
 
