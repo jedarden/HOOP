@@ -10,7 +10,25 @@ Search the entire codebase for all references to `EmbedderExt` to understand its
 
 ## Results
 
-**No references to `EmbedderExt` found in the codebase.**
+**No references to `EmbedderExt` found in the actual Rust source code.**
+
+### Historical References (documentation only)
+
+The following files reference `EmbedderExt` but are documentation, not active code:
+
+1. **`clippy-inventory.txt:5`** - Clippy warning: `hoop-daemon/src/embedding_service.rs:458 - trait 'EmbedderExt' is never used`
+   - This is a clippy inventory noting the trait was flagged as unused before it was removed
+
+2. **`notes/bf-37psy.md`** - Documents commit `de4f668` "Remove unused EmbedderExt trait"
+   - References the removal at line 458 of embedding_service.rs
+
+3. **`notes/bf-42f9p.md`** - Current bead documenting that EmbedderExt was already removed
+   - Cites commit `a452c70`: "fix(bf-2eulg): Remove unused EmbedderExt trait"
+
+4. **`notes/bf-1e9la.md`** - Verification that EmbedderExt trait was removed
+   - Confirms grep shows no EmbedderExt in embedding_service.rs
+
+### Current Codebase Status
 
 ### What Exists Instead
 
