@@ -1,57 +1,56 @@
-# bf-526pf: Clippy Verification - 75 Errors Remaining
+# bf-526pf: Verify zero clippy warnings remain
 
-## Summary
+## Current State (2026-07-03)
 
-Ran `cargo clippy --workspace -- -D warnings` and found **75 errors** (80 compilation errors total, including 5 trait bound errors for `EnableTourRequest`).
+**STATUS:** Cannot complete verification - dependent bead `bf-iwgtf` is still open.
 
-## Verification Command
-```bash
-nix-shell -p pkg-config openssl --run "cargo clippy --workspace -- -D warnings 2>&1 | grep '^error:' | wc -l"
-# Current output: 75
-# Target: 0
+### Clippy Error Count
+```
+cargo clippy --workspace -- -D warnings 2>&1 | grep '^error:' | wc -l
+# Output: 75
 ```
 
-## Error Categories
+### Error Breakdown
 
-### 1. Missing `utoipa::ToSchema` derive (5 compilation errors - BLOCKS BUILD)
-- **File:** `hoop-daemon/src/api_tour_project.rs:34`
-- **Type:** `EnableTourRequest`
-- **Issue:** Missing `#[derive(utoipa::ToSchema)]` on the struct
-- **Impact:** This is a compilation error, not just a warning - it blocks the build
+The 75 errors consist of:
 
-### 2. Unused Imports (~34 errors)
-Multiple files have unused imports including:
-- `PathBuf` in `accounts_config.rs`, `atomic_write.rs`
-- `warn` in `accounts_config.rs`, `config_backup.rs`
-- `State`, `Connection`, `params`, `Deserialize` in `api_bead_files.rs`
-- `get`, `delete`, `put` in various API modules
-- `RecommendedWatcher` in `api_skills.rs`
-- `anyhow`, `bail`, `json` in various modules
-- And many more...
+- **Unused imports** (~60 errors)
+  - Multiple instances across `hoop-daemon/src/` files
+  - Common unused imports: `PathBuf`, `warn`, `get`, `HashMap`, `State`, `Deserialize`, `Connection`, `params`, `ReplayOptions`, `ParsedSessionKind`, `RecommendedWatcher`, `Arc`, `Utc`
 
-### 3. Unused Variables (~30 errors)
-Variables assigned but never used:
-- Timing variables: `start`, `elapsed_ms` (should be `_start`, `_elapsed_ms`)
-- `remote_addr`, `required_role` in `auth.rs`
-- `timed_out` in `api_scripts.rs`, `api_skills.rs`
-- `schedule`, `overlap_policy` in `script_scheduler.rs`
-- `config`, `conn`, `workspace` parameters
-- And many more...
+- **Variables that don't need to be mutable** (9 errors)
+  - Variables marked `mut` but never mutated
 
-### 4. Unnecessary `mut` (~6 errors)
-Variables marked `mut` but never mutated:
-- `conn` in `api_tour_project.rs:239`, `api_fix_patterns.rs:454`
-- `shutdown_rx` in `lib.rs:3446`
-- `gemini_dirs`, `opencode_dirs` in `capacity.rs`
-- `shared_files`, `shared_labels` in `cross_project_propagation.rs`
+- **Unused variables** (~6 errors)
+  - Variables: `start` (4 instances), `timed_out` (2 instances), `required_role` (2 instances)
+  - Others: `workspace`, `transition_secs`, `synthesis_callback`, `source_labels`, `sim`, `semaphore_ref`, `schedule`, `remote_addr`, `project`, `overlap_policy`, `link_kind`
 
-## Action Required
+### Affected Files
 
-1. **Fix the compilation error first:** Add `#[derive(utoipa::ToSchema)]` to `EnableTourRequest` in `hoop-daemon/src/api_tour_project.rs`
-2. **Run auto-fix:** `cargo clippy --workspace --fix --allow-dirty --allow-staged`
-3. **Manual fixes may be needed** for cases where clippy's auto-fix isn't appropriate
+Sample of files with errors:
+- `hoop-daemon/src/accounts_config.rs`
+- `hoop-daemon/src/api_bead_files.rs`
+- `hoop-daemon/src/api_pattern_mutations.rs`
+- `hoop-daemon/src/api_stitch_decompose.rs`
+- `hoop-daemon/src/api_stitch_replay.rs`
+- `hoop-daemon/src/api_unassigned.rs`
+- `hoop-daemon/src/api_skills.rs`
+- `hoop-daemon/src/atomic_write.rs`
+- `hoop-daemon/src/capacity.rs`
+- `hoop-daemon/src/content_blocks.rs`
+- `hoop-daemon/src/api_presence.rs`
+- `hoop-daemon/src/api_tour_project.rs`
 
-## Next Steps
+### Next Steps
 
-This bead (`bf-526pf`) was to **verify** zero warnings remain. The verification failed - 75 errors remain.
-A follow-up bead should be created to fix these errors systematically, starting with the compilation-blocking `utoipa::ToSchema` issue.
+1. Complete dependent bead `bf-iwgtf` to fix the clippy warnings
+2. Re-run verification: `nix-shell -p pkg-config openssl --run "cargo clippy --workspace -- -D warnings 2>&1 | grep '^error:' | wc -l"`
+3. Confirm output is `0`
+4. Close this verification bead
+
+### Acceptance Criteria
+```
+nix-shell -p pkg-config openssl --run "cargo clippy --workspace -- -D warnings 2>&1 | grep '^error:' | wc -l"
+# Expected Output: 0
+# Current Output: 75
+```
