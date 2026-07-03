@@ -1,6 +1,9 @@
-# Clippy Verification - bead bf-526pf
+# Clippy Verification Status — bf-526pf
 
-**Status**: FAILED - 176 clippy errors remain (acceptance criteria: 0)
+**Date:** 2026-07-03
+**Status:** FAILED — 176 clippy errors remain
+**Acceptance:** 0 required
+**Dependency:** bf-iwgtf (should have fixed all warnings)
 
 ## Command Run
 ```bash
@@ -8,43 +11,68 @@ cargo clippy --workspace -- -D warnings 2>&1 | grep '^error:' | wc -l
 # Output: 176
 ```
 
-## Remaining Issues by Category
+## Error Categories (Detailed)
 
-### 1. Dead Code (~175+ errors)
-Multiple unused items that trigger `-D dead-code` (implied by `-D warnings`):
+### 1. Dead Code (unused functions, structs, constants, fields)
+**Functions:**
+- `openapi_router` - unused function (hoop-daemon/src/lib.rs:1277)
+- `load_hoop_config` - unused async function (hoop-daemon/src/lib.rs:3797)
+- `check_and_emit_capacity_alert` - unused function (hoop-daemon/src/lib.rs:4074)
+- `get_opencode_limits` - unused function (hoop-daemon/src/capacity.rs:472)
 
-**hoop-daemon/src/lib.rs:**
-- Line 1277: `openapi_router()` - unused function
-- Line 3797: `load_hoop_config()` - unused async function
-- Line 4074: `check_and_emit_capacity_alert()` - unused function
+**Fields:**
+- `session_id` - unread field (hoop-daemon/src/capacity.rs:358)
+- `session_subpath` - unread field (hoop-daemon/src/capacity.rs:526)
+- `rpm_limit` - unread field (hoop-daemon/src/capacity.rs:55)
+- `subpath` - unread field (hoop-daemon/src/sessions.rs:557)
 
-**hoop-daemon/src/capacity.rs:**
-- Line 358: `ParsedPrompt.session_id` - unread field
-- Line 472: `get_opencode_limits()` - unused function
-- Line 526: `GeminiAccountPaths.session_subpath` - unread field
-- Line 55: `GeminiQuotaLimits.rpm_limit` - unread field
-- Line 60: `QuotaLimit` struct - never constructed
+**Constants:**
+- `MAX_UNASSIGNED_SESSIONS` - unused constant (hoop-daemon/src/sessions.rs:763)
+- `MIN_SAMPLES_FOR_PREDICTION` - unused constant (hoop-daemon/src/stitch_percentile_index.rs:68)
+- `STITCH_CLOSED_THRESHOLD_SECONDS` - unused constant (hoop-daemon/src/stitch_percentile_index.rs:72)
 
-**hoop-daemon/src/sessions.rs:**
-- Line 557: `GeminiSessionPath.subpath` - unread field
-- Line 763: `MAX_UNASSIGNED_SESSIONS` - unused constant
+**Structs:**
+- `QuotaLimit` - never constructed (hoop-daemon/src/capacity.rs:60)
 
-**hoop-daemon/src/stitch_percentile_index.rs:**
-- Line 68: `MIN_SAMPLES_FOR_PREDICTION` - unused constant
-- Line 72: `STITCH_CLOSED_THRESHOLD_SECONDS` - unused constant
+### 2. Disallowed Methods (project lint rules)
+**Multiple violations of custom lint rules:**
+- `std::fs::write` - multiple instances blocked by project lint
+- `std::fs::File::create` - multiple instances blocked by project lint
 
-### 2. Custom Lint Rule Violation
-**hoop-daemon/src/agent_session.rs:887**: Use of disallowed method `std::fs::write`
-- Likely violates a custom lint rule in the workspace
+### 3. Simplification Opportunities
+- **Manual `RangeInclusive::contains`** → use built-in method
+- **`Iterator::last` on `DoubleEndedIterator`** → inefficient iteration, use `rev().next()`
+- **Redundant closures** → remove unnecessary closures
+- **`sort_by` → `sort_by_key`** → where applicable
+- **`Option::and_then(|x| Some(y))` → `map(|x| y)`** → simplify
+- **Clamp-like patterns** → use `clamp()` function
+- **Useless `format!`** → use `to_string()` or literal
+- **`map_or` simplifications** → can be simplified
 
-## Recommendation
+### 4. Derivable Implementations
+- Manual `impl` that can use `#[derive]` instead
+- Missing `Default` implementation suggestion for `BackupManifest`
 
-Before retrying this bead, address the remaining warnings in order:
+### 5. Reference Lifetime Issues
+- Expressions creating references immediately dereferenced by compiler
 
-1. **Fix the custom lint violation** in `agent_session.rs` - replace `std::fs::write` with the project's atomic write pattern (see `atomic_write.rs`)
-2. **Remove or document dead code** - either remove unused items or add `#[allow(dead_code)]` with a comment explaining why they're kept
-3. **Re-run clippy** to verify 0 errors
+### 6. Unnecessary Pattern Matching
+- Unnecessary `if let` for `Ok` variants only
+
+## Next Steps for Follow-up Bead
+
+1. **Verify dependency status:** Check if `bf-iwgtf` completed — it should have fixed all these warnings
+2. **Fix dead code:** Remove unused items or add `#[allow(dead_code)]` with documentation
+3. **Replace disallowed methods:** Use project's atomic write pattern (see `atomic_write.rs`) instead of `std::fs::write` / `File::create`
+4. **Apply clippy suggestions:** Simplify code patterns as recommended
+5. **Add derives:** Use `#[derive]` where applicable instead of manual impls
+6. **Re-verify:** Run same command until count reaches 0
 
 ## Context
 
-This verification was run on the main branch at commit `b18f82f` (2026-07-03). The workspace has uncommitted changes visible in `git status`.
+This bead depends on `bf-iwgtf` which was supposed to fix all clippy warnings. The presence of 176 remaining errors suggests either:
+- `bf-iwgtf` has not been completed yet
+- The fixes applied were incomplete
+- New code was added after the fixes
+
+**Do not close this bead until acceptance criteria is met (0 errors).**
