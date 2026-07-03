@@ -69,6 +69,8 @@ pub struct FixLineageLibrary {
     patterns: Vec<RiskPattern>,
     /// Keyword to pattern index for fast lookup
     keyword_index: HashMap<String, Vec<usize>>,
+    /// Label keyword to pattern index for label matching
+    label_keyword_index: HashMap<String, Vec<usize>>,
 }
 
 impl FixLineageLibrary {
@@ -77,6 +79,7 @@ impl FixLineageLibrary {
         Self {
             patterns: vec![],
             keyword_index: HashMap::new(),
+            label_keyword_index: HashMap::new(),
         }
     }
 
@@ -92,6 +95,7 @@ impl FixLineageLibrary {
     /// Create library from a list of patterns
     pub fn from_patterns(patterns: Vec<RiskPattern>) -> Self {
         let mut keyword_index: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut label_keyword_index: HashMap<String, Vec<usize>> = HashMap::new();
 
         for (idx, pattern) in patterns.iter().enumerate() {
             for keyword in &pattern.keywords {
@@ -100,11 +104,18 @@ impl FixLineageLibrary {
                     .or_default()
                     .push(idx);
             }
+            for label_keyword in &pattern.label_keywords {
+                label_keyword_index
+                    .entry(label_keyword.to_lowercase())
+                    .or_default()
+                    .push(idx);
+            }
         }
 
         Self {
             patterns,
             keyword_index,
+            label_keyword_index,
         }
     }
 
@@ -132,9 +143,9 @@ impl FixLineageLibrary {
             }
         }
 
-        // Match against labels
+        // Match against labels using label_keyword_index
         for label in &labels_lower {
-            if let Some(pattern_indices) = self.keyword_index.get(label) {
+            if let Some(pattern_indices) = self.label_keyword_index.get(label) {
                 for &idx in pattern_indices {
                     let builder = pattern_scores
                         .entry(idx)
@@ -171,6 +182,12 @@ impl FixLineageLibrary {
         for keyword in &pattern.keywords {
             self.keyword_index
                 .entry(keyword.to_lowercase())
+                .or_default()
+                .push(idx);
+        }
+        for label_keyword in &pattern.label_keywords {
+            self.label_keyword_index
+                .entry(label_keyword.to_lowercase())
                 .or_default()
                 .push(idx);
         }
