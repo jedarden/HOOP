@@ -177,8 +177,15 @@ impl BackupPipeline {
             match self.age_encrypt(&compressed_path).await {
                 Ok(p) => (p, true),
                 Err(e) => {
-                    warn!("Age encryption failed, uploading unencrypted: {}", e);
-                    (compressed_path.clone(), false)
+                    // Encryption is enabled but failed - fail the entire backup run
+                    // rather than silently uploading unencrypted data (security bug)
+                    error!("Age encryption failed (backup.enabled=true): {}", e);
+                    metrics::metrics().hoop_errors_total.inc(&["backup", "encryption_failure"]);
+                    bail!(
+                        "backup encryption enabled but age encryption failed: {}. \
+                         Set HOOP_BACKUP_AGE_KEY or disable encryption in config.",
+                        e
+                    );
                 }
             }
         } else {
