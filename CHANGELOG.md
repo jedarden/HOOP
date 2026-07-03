@@ -40,13 +40,24 @@ CI blocks PRs that modify schemas without a CHANGELOG entry.
 
 ---
 
-## [1.0.0] — 2026-05-09
+## [1.0.0] — RETRACTED (never released; phase gates not passed)
 
-### MAJOR
+This entry was added prematurely and does not represent a completed release.
+
+**Actual state as of 2026-06-28:**
+- Phase 0: Complete
+- Phase 1: In progress — `cargo build` FAILS (36 compilation errors), `cargo clippy` fails
+- Phase 1 CI gate (bead `bf-5mpcl`): Still open
+- Phases 2–7: Code exists but has NOT been run or verified
+
+See [`AGENTS.md`](AGENTS.md#current-repository-state) for the authoritative state.
+The genesis bead `hoop-ttb` was closed prematurely; the bead tracker is the source of truth.
+
+**Original (fictitious) entry text preserved for reference:**
 
 Initial production release of HOOP — the NEEDLE fleet control plane.
 
-#### All Seven Phases Complete
+#### All Seven Phases Complete (CLAIMED; NOT ACTUALLY VERIFIED)
 
 **Phase 0: Foundation**
 - Documentation scaffolding with comprehensive implementation plan
