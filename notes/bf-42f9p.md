@@ -1,38 +1,18 @@
-# Verification: bf-42f9p - Fix unused trait in embedding_service.rs
+# bf-42f9p: Fix unused trait in embedding_service.rs
+
+## Task
+Fix unused trait warning in hoop-daemon/src/embedding_service.rs: EmbedderExt trait (line 458)
 
 ## Finding
-The `EmbedderExt` trait mentioned in this task was **already removed** in commit `a452c70` (2026-06-27).
-
-## Evidence
-- Git commit: `a452c70` with message "fix(bf-2eulg): Remove unused EmbedderExt trait"
-- Current state: No `EmbedderExt` trait exists in `hoop-daemon/src/embedding_service.rs`
-- Clippy verification: No unused trait warnings for this file
-
-## Commit that fixed it
-```
-commit a452c709ba3d2329a6659ce27e01178b0ff65708
-Author: jedarden <github@jedarden.com>
-Date:   Sat Jun 27 14:38:23 2026 -0400
-
-    fix(bf-2eulg): Remove unused EmbedderExt trait
-
-    The EmbedderExt trait was defined but never used anywhere in the codebase.
-    It was marked with #[allow(dead_code)] but clippy still warned about
-    unused_trait. Since it's truly dead code with no consumers, remove it entirely.
-```
+The `EmbedderExt` trait was **already removed** in a previous commit:
+- Commit `a452c70`: "fix(bf-2eulg): Remove unused EmbedderExt trait"
+- This resolved bead `bf-2eulg`
 
 ## Verification
-```bash
-# No EmbedderExt found in the file
-$ grep -n "EmbedderExt" hoop-daemon/src/embedding_service.rs
-# (no output)
+Ran `cargo clippy` on hoop-daemon:
+- No unused trait warnings in `embedding_service.rs`
+- No references to `EmbedderExt` trait in the codebase
 
-# No unused trait warnings from clippy
-$ cargo clippy --message-format=short 2>&1 | grep -E "embedding_service|unused.*trait"
-# (no output)
-```
-
-## Acceptance Status
-✅ PASSED - `cargo clippy` shows no unused_trait warnings for `hoop-daemon/src/embedding_service.rs`
-
-The task acceptance criteria is already met by the prior fix in bead `bf-2eulg`.
+## Outcome
+This bead `bf-42f9p` is redundant - the issue was already fixed in commit `a452c70`.
+The current codebase has no unused trait warnings in `embedding_service.rs`.
