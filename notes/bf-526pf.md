@@ -1,78 +1,57 @@
-# Clippy Verification Status — bf-526pf
+# bf-526pf: Clippy Verification - 75 Errors Remaining
 
-**Date:** 2026-07-03
-**Status:** FAILED — 176 clippy errors remain
-**Acceptance:** 0 required
-**Dependency:** bf-iwgtf (should have fixed all warnings)
+## Summary
 
-## Command Run
+Ran `cargo clippy --workspace -- -D warnings` and found **75 errors** (80 compilation errors total, including 5 trait bound errors for `EnableTourRequest`).
+
+## Verification Command
 ```bash
-cargo clippy --workspace -- -D warnings 2>&1 | grep '^error:' | wc -l
-# Output: 176
+nix-shell -p pkg-config openssl --run "cargo clippy --workspace -- -D warnings 2>&1 | grep '^error:' | wc -l"
+# Current output: 75
+# Target: 0
 ```
 
-## Error Categories (Detailed)
+## Error Categories
 
-### 1. Dead Code (unused functions, structs, constants, fields)
-**Functions:**
-- `openapi_router` - unused function (hoop-daemon/src/lib.rs:1277)
-- `load_hoop_config` - unused async function (hoop-daemon/src/lib.rs:3797)
-- `check_and_emit_capacity_alert` - unused function (hoop-daemon/src/lib.rs:4074)
-- `get_opencode_limits` - unused function (hoop-daemon/src/capacity.rs:472)
+### 1. Missing `utoipa::ToSchema` derive (5 compilation errors - BLOCKS BUILD)
+- **File:** `hoop-daemon/src/api_tour_project.rs:34`
+- **Type:** `EnableTourRequest`
+- **Issue:** Missing `#[derive(utoipa::ToSchema)]` on the struct
+- **Impact:** This is a compilation error, not just a warning - it blocks the build
 
-**Fields:**
-- `session_id` - unread field (hoop-daemon/src/capacity.rs:358)
-- `session_subpath` - unread field (hoop-daemon/src/capacity.rs:526)
-- `rpm_limit` - unread field (hoop-daemon/src/capacity.rs:55)
-- `subpath` - unread field (hoop-daemon/src/sessions.rs:557)
+### 2. Unused Imports (~34 errors)
+Multiple files have unused imports including:
+- `PathBuf` in `accounts_config.rs`, `atomic_write.rs`
+- `warn` in `accounts_config.rs`, `config_backup.rs`
+- `State`, `Connection`, `params`, `Deserialize` in `api_bead_files.rs`
+- `get`, `delete`, `put` in various API modules
+- `RecommendedWatcher` in `api_skills.rs`
+- `anyhow`, `bail`, `json` in various modules
+- And many more...
 
-**Constants:**
-- `MAX_UNASSIGNED_SESSIONS` - unused constant (hoop-daemon/src/sessions.rs:763)
-- `MIN_SAMPLES_FOR_PREDICTION` - unused constant (hoop-daemon/src/stitch_percentile_index.rs:68)
-- `STITCH_CLOSED_THRESHOLD_SECONDS` - unused constant (hoop-daemon/src/stitch_percentile_index.rs:72)
+### 3. Unused Variables (~30 errors)
+Variables assigned but never used:
+- Timing variables: `start`, `elapsed_ms` (should be `_start`, `_elapsed_ms`)
+- `remote_addr`, `required_role` in `auth.rs`
+- `timed_out` in `api_scripts.rs`, `api_skills.rs`
+- `schedule`, `overlap_policy` in `script_scheduler.rs`
+- `config`, `conn`, `workspace` parameters
+- And many more...
 
-**Structs:**
-- `QuotaLimit` - never constructed (hoop-daemon/src/capacity.rs:60)
+### 4. Unnecessary `mut` (~6 errors)
+Variables marked `mut` but never mutated:
+- `conn` in `api_tour_project.rs:239`, `api_fix_patterns.rs:454`
+- `shutdown_rx` in `lib.rs:3446`
+- `gemini_dirs`, `opencode_dirs` in `capacity.rs`
+- `shared_files`, `shared_labels` in `cross_project_propagation.rs`
 
-### 2. Disallowed Methods (project lint rules)
-**Multiple violations of custom lint rules:**
-- `std::fs::write` - multiple instances blocked by project lint
-- `std::fs::File::create` - multiple instances blocked by project lint
+## Action Required
 
-### 3. Simplification Opportunities
-- **Manual `RangeInclusive::contains`** → use built-in method
-- **`Iterator::last` on `DoubleEndedIterator`** → inefficient iteration, use `rev().next()`
-- **Redundant closures** → remove unnecessary closures
-- **`sort_by` → `sort_by_key`** → where applicable
-- **`Option::and_then(|x| Some(y))` → `map(|x| y)`** → simplify
-- **Clamp-like patterns** → use `clamp()` function
-- **Useless `format!`** → use `to_string()` or literal
-- **`map_or` simplifications** → can be simplified
+1. **Fix the compilation error first:** Add `#[derive(utoipa::ToSchema)]` to `EnableTourRequest` in `hoop-daemon/src/api_tour_project.rs`
+2. **Run auto-fix:** `cargo clippy --workspace --fix --allow-dirty --allow-staged`
+3. **Manual fixes may be needed** for cases where clippy's auto-fix isn't appropriate
 
-### 4. Derivable Implementations
-- Manual `impl` that can use `#[derive]` instead
-- Missing `Default` implementation suggestion for `BackupManifest`
+## Next Steps
 
-### 5. Reference Lifetime Issues
-- Expressions creating references immediately dereferenced by compiler
-
-### 6. Unnecessary Pattern Matching
-- Unnecessary `if let` for `Ok` variants only
-
-## Next Steps for Follow-up Bead
-
-1. **Verify dependency status:** Check if `bf-iwgtf` completed — it should have fixed all these warnings
-2. **Fix dead code:** Remove unused items or add `#[allow(dead_code)]` with documentation
-3. **Replace disallowed methods:** Use project's atomic write pattern (see `atomic_write.rs`) instead of `std::fs::write` / `File::create`
-4. **Apply clippy suggestions:** Simplify code patterns as recommended
-5. **Add derives:** Use `#[derive]` where applicable instead of manual impls
-6. **Re-verify:** Run same command until count reaches 0
-
-## Context
-
-This bead depends on `bf-iwgtf` which was supposed to fix all clippy warnings. The presence of 176 remaining errors suggests either:
-- `bf-iwgtf` has not been completed yet
-- The fixes applied were incomplete
-- New code was added after the fixes
-
-**Do not close this bead until acceptance criteria is met (0 errors).**
+This bead (`bf-526pf`) was to **verify** zero warnings remain. The verification failed - 75 errors remain.
+A follow-up bead should be created to fix these errors systematically, starting with the compilation-blocking `utoipa::ToSchema` issue.
