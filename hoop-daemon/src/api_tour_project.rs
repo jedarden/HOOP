@@ -31,6 +31,7 @@ pub const TOUR_PATH_KEY: &str = "tour_path";
 
 /// Request to enable the tour project
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct EnableTourRequest {
     /// Optional custom path (defaults to ~/.hoop/tour/)
     pub path: Option<String>,
