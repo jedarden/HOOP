@@ -34,6 +34,7 @@ pub struct FrameSample {
 
 /// Word-level transcript entry (from Whisper)
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct TranscriptWord {
     pub word: String,
     pub start: f64,
@@ -42,6 +43,7 @@ pub struct TranscriptWord {
 
 /// Transcript with word-level timestamps
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ScreenCaptureTranscript {
     pub text: String,
     pub words: Vec<TranscriptWord>,
@@ -49,6 +51,7 @@ pub struct ScreenCaptureTranscript {
 
 /// Sidecar metadata written alongside the video file
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ScreenCaptureMeta {
     pub stitch_id: String,
     pub project: String,
@@ -60,6 +63,7 @@ pub struct ScreenCaptureMeta {
 
 /// Screen capture API response payload
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ScreenCaptureData {
     pub stitch_id: String,
     pub title: String,
@@ -73,6 +77,7 @@ pub struct ScreenCaptureData {
 
 /// Summary used for the project list endpoint
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ScreenCaptureSummary {
     pub stitch_id: String,
     pub project: String,
@@ -236,6 +241,7 @@ pub fn list_for_project(project: &str) -> Vec<ScreenCaptureSummary> {
 /// Used for real-time chunked upload during recording when the total
 /// size is not known upfront.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct StreamingUploadSession {
     pub stream_id: String,
     pub stitch_id: String,
@@ -249,6 +255,7 @@ pub struct StreamingUploadSession {
 
 /// Response when starting a streaming upload
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct StartStreamingUploadResponse {
     pub stream_id: String,
     pub stitch_id: String,
