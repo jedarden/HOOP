@@ -13,9 +13,10 @@ use axum::{
     Json, Router,
 };
 use serde::Deserialize;
+use utoipa::ToSchema;
 
 /// Query parameters for listing transcription jobs
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct ListJobsQuery {
     /// Filter by stitch_id
     pub stitch_id: Option<String>,
