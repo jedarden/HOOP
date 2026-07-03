@@ -70,6 +70,7 @@ trybuild = "1.0"
 serial_test = "3"
 proptest = "1.0"
 proptest-derive = "0.4"
+walkdir = "2"
 
 [[bin]]
 name = "generate_openapi"

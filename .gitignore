@@ -50,3 +50,8 @@ hoop-daemon/.fastembed_cache/
 # Beads runtime artifacts (traces, recovery — not tracked data)
 .beads/traces/
 .beads/.br_recovery/
+# Bead-forge runtime backups (auto-generated on heavy operations)
+.beads/beads.db.backup.*
+
+# Per-bead worker scratch at repo root (not part of plan layout)
+notes/

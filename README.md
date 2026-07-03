@@ -1,5 +1,7 @@
 # HOOP
 
+**Status: Pre-release — Phase 1 in progress. The daemon does not currently compile ([`cargo build` fails](AGENTS.md#current-repository-state)). Track Phase 1 progress at bead [`bf-5mpcl`](.beads/issues.jsonl).**
+
 Operator observability and control plane for NEEDLE worker fleets. HOOP reads everything — bead state, CLI session transcripts, worker heartbeats, cost data — and surfaces it in a web UI and REST/WebSocket API. It writes exactly one thing: creating new beads via `br create`.
 
 ---
