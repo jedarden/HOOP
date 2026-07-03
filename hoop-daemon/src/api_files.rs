@@ -539,9 +539,9 @@ mod tests {
 
     #[test]
     fn test_format_color() {
-        assert_eq!(format_color(syntect::highlighting::Color { r: 255, g: 0, b: 0 }), "#ff0000");
-        assert_eq!(format_color(syntect::highlighting::Color { r: 0, g: 255, b: 0 }), "#00ff00");
-        assert_eq!(format_color(syntect::highlighting::Color { r: 0, g: 0, b: 255 }), "#0000ff");
+        assert_eq!(format_color(syntect::highlighting::Color { r: 255, g: 0, b: 0, a: 255 }), "#ff0000");
+        assert_eq!(format_color(syntect::highlighting::Color { r: 0, g: 255, b: 0, a: 255 }), "#00ff00");
+        assert_eq!(format_color(syntect::highlighting::Color { r: 0, g: 0, b: 255, a: 255 }), "#0000ff");
     }
 
     #[test]
