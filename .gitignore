@@ -52,3 +52,6 @@ hoop-daemon/.fastembed_cache/
 .beads/.br_recovery/
 # Bead-forge runtime backups (auto-generated on heavy operations)
 .beads/beads.db.backup.*
+
+# Per-bead worker scratch at repo root (not part of plan layout)
+notes/
