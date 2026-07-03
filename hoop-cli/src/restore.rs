@@ -8,6 +8,7 @@ use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 type HmacSha256 = Hmac<Sha256>;
@@ -275,7 +276,7 @@ fn rollback(backup_dir: &Path) -> Result<()> {
 
 // ── Main restore logic ──────────────────────────────────────────────
 
-pub async fn run_restore(from_uri: &str, dry_run: bool) -> Result<()> {
+pub async fn run_restore(from_uri: &str, dry_run: bool, no_interactive: bool, confirm: bool) -> Result<()> {
     // 1. Parse S3 URI and load config
     let locator = parse_s3_uri(from_uri)?;
     let s3_config = load_s3_config()?;
@@ -336,22 +337,49 @@ pub async fn run_restore(from_uri: &str, dry_run: bool) -> Result<()> {
         println!("  projects.yaml (if present in snapshot)");
         println!();
         println!("To perform the restore, run without --dry-run:");
-        println!("  hoop restore --from {}", from_uri);
+        if no_interactive {
+            println!("  hoop restore --from {} --no-interactive --confirm", from_uri);
+        } else {
+            println!("  hoop restore --from {}", from_uri);
+        }
         return Ok(());
     }
 
-    // 5. Precondition: daemon must not be running (only for actual restore)
+    // 4.5. Check for --confirm requirement in non-interactive mode
+    if no_interactive && !confirm {
+        bail!(
+            "hoop restore: --confirm is required in non-interactive mode.\n\
+             This is a DESTRUCTIVE operation that will replace ~/.hoop/ with the snapshot.\n\
+             Re-run with: hoop restore --from {} --no-interactive --confirm",
+            from_uri
+        );
+    }
+
+    // 5. Interactive confirmation if not in no-interactive mode
+    if !no_interactive {
+        eprintln!();
+        eprintln!("⚠️  WARNING: This will replace your current HOOP state with the snapshot.");
+        eprintln!("  Snapshot ID: {}", manifest.snapshot_id);
+        eprintln!("  Created at: {}", manifest.created_at);
+        eprint!("Continue? [y/N] ");
+        std::io::stderr().flush()?;
+
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        let answer = input.trim().to_lowercase();
+
+        if answer != "y" && answer != "yes" {
+            eprintln!("Restore cancelled");
+            return Ok(());
+        }
+    }
+
+    // 6. Precondition: daemon must not be running (only for actual restore)
     if is_daemon_running() {
         bail!("HOOP daemon is running. Stop it before restoring:\n  systemctl --user stop hoop");
     }
 
-    // 6. Move existing ~/.hoop/ aside (destructive action follows)
-    let backup_dir =
-        move_aside_for_rollback().context("Failed to move existing ~/.hoop/ aside for rollback")?;
-
-    println!("Moved existing state to {}", backup_dir.display());
-
-    // 5. Move existing ~/.hoop/ aside (destructive action follows)
+    // 7. Move existing ~/.hoop/ aside (destructive action follows)
     let backup_dir =
         move_aside_for_rollback().context("Failed to move existing ~/.hoop/ aside for rollback")?;
 

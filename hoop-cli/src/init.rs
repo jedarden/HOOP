@@ -37,7 +37,16 @@ struct TailscaleSelf {
 }
 
 /// Run the init wizard
-pub fn run_init_wizard() -> Result<()> {
+pub fn run_init_wizard(no_interactive: bool) -> Result<()> {
+    if no_interactive {
+        // In non-interactive mode, init wizard cannot proceed safely
+        // since it requires user input for several steps
+        eprintln!("hoop init: cannot run in non-interactive mode.");
+        eprintln!("  The init wizard requires interactive input for configuration.");
+        eprintln!("  For automated setup, manually create ~/.hoop/config.yml and ~/.hoop/projects.yaml");
+        std::process::exit(2);
+    }
+
     print_wizard_banner();
 
     // Stage 1: Dependency check
@@ -47,7 +56,7 @@ pub fn run_init_wizard() -> Result<()> {
         println!("\n⚠️  Critical dependencies are missing.");
         println!("    Please fix the issues above and run `hoop init` again.");
         println!("    You can re-run the audit anytime with: hoop audit check");
-        std::process::exit(1);
+        std::process::exit(2);
     }
 
     // Stage 2: First project registration
@@ -128,26 +137,26 @@ fn stage_2_project_registration() -> Result<()> {
 
     // Offer to scan home directory
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    println!("I can scan your home directory ({}) for projects with .beads/ directories.", home.display());
-    print!("Scan home directory? [Y/n]: ");
-    io::stdout().flush()?;
+    eprintln!("I can scan your home directory ({}) for projects with .beads/ directories.", home.display());
+    eprint!("Scan home directory? [Y/n]: ");
+    io::stderr().flush()?;
 
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
     let answer = input.trim().to_lowercase();
 
     if answer == "n" || answer == "no" {
-        println!("Skipping project registration.");
-        println!("You can add projects later with:");
-        println!("  hoop projects add <path>");
-        println!("  hoop projects scan <root>");
+        eprintln!("Skipping project registration.");
+        eprintln!("You can add projects later with:");
+        eprintln!("  hoop projects add <path>");
+        eprintln!("  hoop projects scan <root>");
         return Ok(());
     }
 
-    println!();
-    println!("Scanning {} for projects...", home.display());
-    println!("(This may take a moment for large directories)");
-    println!();
+    eprintln!();
+    eprintln!("Scanning {} for projects...", home.display());
+    eprintln!("(This may take a moment for large directories)");
+    eprintln!();
 
     // Do a preview scan
     let discovered = crate::projects::discover_bead_workspaces(&home)?;
@@ -160,7 +169,7 @@ fn stage_2_project_registration() -> Result<()> {
         return Ok(());
     }
 
-    println!("Found {} director{} with .beads/:",
+    eprintln!("Found {} director{} with .beads/:",
         discovered.len(),
         if discovered.len() == 1 { "y" } else { "ies" }
     );
@@ -169,25 +178,25 @@ fn stage_2_project_registration() -> Result<()> {
         let name = path.file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("?");
-        println!("  {}. {} → {}", i + 1, name, path.display());
+        eprintln!("  {}. {} → {}", i + 1, name, path.display());
     }
-    println!();
+    eprintln!();
 
-    print!("Register all of these projects? [Y/n]: ");
-    io::stdout().flush()?;
+    eprint!("Register all of these projects? [Y/n]: ");
+    io::stderr().flush()?;
 
     input.clear();
     io::stdin().read_line(&mut input)?;
     let answer = input.trim().to_lowercase();
 
     if answer == "n" || answer == "no" {
-        println!("Skipping batch registration.");
-        println!("You can add projects individually with:");
-        println!("  hoop projects add <path>");
+        eprintln!("Skipping batch registration.");
+        eprintln!("You can add projects individually with:");
+        eprintln!("  hoop projects add <path>");
         return Ok(());
     }
 
-    println!();
+    eprintln!();
     // Use scan_projects with auto_yes=true
     crate::projects::scan_projects(home.to_str().unwrap(), true)?;
 

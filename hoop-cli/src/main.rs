@@ -25,6 +25,10 @@ use std::{fs, net::SocketAddr, path::PathBuf};
 #[command(name = "hoop")]
 #[command(about = "HOOP - The operator's pane of glass", long_about = None)]
 struct Cli {
+    /// Global flag to suppress all interactive prompts (alias: -y)
+    #[arg(long, short = 'y', global = true)]
+    no_interactive: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -60,8 +64,8 @@ enum Commands {
     Scan {
         /// Root path to scan
         root: String,
-        /// Auto-register all discoveries without prompting
-        #[arg(short, long)]
+        /// Auto-confirm all prompts (non-interactive mode)
+        #[arg(long, short = 'y')]
         yes: bool,
     },
     /// List registered projects
@@ -71,6 +75,9 @@ enum Commands {
     Remove {
         /// Project name to remove
         name: String,
+        /// Required safety confirmation when in non-interactive mode
+        #[arg(long)]
+        confirm: bool,
     },
     /// CLI overview of fleets / beads / cost
     Status {
@@ -114,6 +121,9 @@ enum Commands {
         /// Validate and show what would be restored without making changes
         #[arg(long)]
         dry_run: bool,
+        /// Required safety confirmation when in non-interactive mode
+        #[arg(long)]
+        confirm: bool,
     },
     /// Manage schema migrations
     #[command(subcommand)]
@@ -148,8 +158,8 @@ enum ProjectsCommands {
     Scan {
         /// Root path to scan
         root: String,
-        /// Auto-register all discoveries without prompting
-        #[arg(short, long)]
+        /// Auto-confirm all prompts (non-interactive mode)
+        #[arg(long, short = 'y')]
         yes: bool,
     },
     /// List registered projects
@@ -162,6 +172,9 @@ enum ProjectsCommands {
     Remove {
         /// Project name to remove
         name: String,
+        /// Required safety confirmation when in non-interactive mode
+        #[arg(long)]
+        confirm: bool,
     },
     /// Show details for a single project
     Show {
@@ -237,6 +250,7 @@ enum ConfigCommands {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+    let no_interactive = cli.no_interactive;
 
     match cli.command {
         Commands::Serve {
@@ -265,9 +279,9 @@ async fn main() -> anyhow::Result<()> {
             serve(config).await?
         }
         Commands::Projects(cmd) => {
-            if let Err(e) = handle_projects(cmd) {
+            if let Err(e) = handle_projects(cmd, no_interactive) {
                 eprintln!("hoop projects: {}", e);
-                std::process::exit(1);
+                std::process::exit(exit_code_for_error(&e));
             }
         }
         Commands::Add { path: _ } => {
@@ -275,29 +289,35 @@ async fn main() -> anyhow::Result<()> {
             std::process::exit(1);
         }
         Commands::Scan { root, yes } => {
-            if let Err(e) = projects::scan_projects(&root, yes) {
+            if let Err(e) = projects::scan_projects(&root, no_interactive || yes) {
                 eprintln!("hoop scan: {}", e);
-                std::process::exit(1);
+                std::process::exit(exit_code_for_error(&e));
             }
         }
         Commands::List => {
             eprintln!("hoop list: not yet implemented");
             std::process::exit(1);
         }
-        Commands::Remove { name: _ } => {
-            eprintln!("hoop remove: not yet implemented");
-            std::process::exit(1);
+        Commands::Remove { name, confirm } => {
+            let removed = projects::remove_project(&name, no_interactive, confirm)?;
+            if removed {
+                println!("Removed project '{}'", name);
+                println!("Workspace data remains intact at its original location");
+            } else {
+                eprintln!("Project '{}' not found", name);
+                std::process::exit(2);
+            }
         }
         Commands::Status { project, json } => {
             if let Err(e) = status::run(project, json) {
                 eprintln!("hoop status: {}", e);
-                std::process::exit(1);
+                std::process::exit(exit_code_for_error(&e));
             }
         }
         Commands::Audit(cmd) => {
             if let Err(e) = handle_audit(cmd) {
                 eprintln!("hoop audit: {}", e);
-                std::process::exit(1);
+                std::process::exit(exit_code_for_error(&e));
             }
         }
         Commands::Agent => {
@@ -307,7 +327,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::New { project, dry_run } => {
             if let Err(e) = new::run(&project, dry_run).await {
                 eprintln!("hoop new: {}", e);
-                std::process::exit(1);
+                std::process::exit(exit_code_for_error(&e));
             }
         }
         Commands::Stitch { project: _ } => {
@@ -317,61 +337,61 @@ async fn main() -> anyhow::Result<()> {
         Commands::InstallSystemd => {
             if let Err(e) = install_systemd() {
                 eprintln!("hoop install-systemd: {}", e);
-                std::process::exit(1);
+                std::process::exit(exit_code_for_error(&e));
             }
         }
         Commands::Backup(cmd) => {
             if let Err(e) = backup::handle_backup(cmd).await {
                 eprintln!("hoop backup: {}", e);
-                std::process::exit(1);
+                std::process::exit(exit_code_for_error(&e));
             }
         }
-        Commands::Restore { from, dry_run } => {
-            if let Err(e) = restore::run_restore(&from, dry_run).await {
+        Commands::Restore { from, dry_run, confirm } => {
+            if let Err(e) = restore::run_restore(&from, dry_run, no_interactive, confirm).await {
                 eprintln!("hoop restore: {}", e);
-                std::process::exit(1);
+                std::process::exit(exit_code_for_error(&e));
             }
         }
         Commands::Migrate(cmd) => {
             if let Err(e) = handle_migrate(cmd) {
                 eprintln!("hoop migrate: {}", e);
-                std::process::exit(1);
+                std::process::exit(exit_code_for_error(&e));
             }
         }
         Commands::Script(cmd) => {
             if let Err(e) = script::handle_script(cmd).await {
                 eprintln!("hoop script: {}", e);
-                std::process::exit(1);
+                std::process::exit(exit_code_for_error(&e));
             }
         }
         Commands::Config(cmd) => {
             if let Err(e) = config::handle_config(cmd).await {
                 eprintln!("hoop config: {}", e);
-                std::process::exit(1);
+                std::process::exit(exit_code_for_error(&e));
             }
         }
         Commands::RiskPatterns(cmd) => {
             if let Err(e) = risk_patterns::handle_risk_patterns(cmd).await {
                 eprintln!("hoop risk-patterns: {}", e);
-                std::process::exit(1);
+                std::process::exit(exit_code_for_error(&e));
             }
         }
         Commands::Skills(cmd) => {
             if let Err(e) = skills::handle_skills(cmd).await {
                 eprintln!("hoop skills: {}", e);
-                std::process::exit(1);
+                std::process::exit(exit_code_for_error(&e));
             }
         }
         Commands::Pattern(cmd) => {
             if let Err(e) = patterns::handle_patterns(cmd).await {
                 eprintln!("hoop pattern: {}", e);
-                std::process::exit(1);
+                std::process::exit(exit_code_for_error(&e));
             }
         }
         Commands::Init => {
-            if let Err(e) = init::run_init_wizard() {
+            if let Err(e) = init::run_init_wizard(no_interactive) {
                 eprintln!("hoop init: {}", e);
-                std::process::exit(1);
+                std::process::exit(exit_code_for_error(&e));
             }
         }
     }
@@ -379,8 +399,24 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Determine appropriate exit code for an error
+/// Returns 0 for success (should not be called on success), 1 for partial failure, 2 for fatal
+fn exit_code_for_error(e: &anyhow::Error) -> i32 {
+    // Check for specific fatal/precondition errors
+    let msg = e.to_string().to_lowercase();
+    if msg.contains("not found")
+        || msg.contains("does not exist")
+        || msg.contains("required")
+        || msg.contains("--confirm is required")
+        || msg.contains("precondition")
+    {
+        return 2; // Fatal / precondition not met
+    }
+    1 // Partial failure
+}
+
 /// Handle the `hoop projects` subcommands
-fn handle_projects(cmd: ProjectsCommands) -> anyhow::Result<()> {
+fn handle_projects(cmd: ProjectsCommands, no_interactive: bool) -> anyhow::Result<()> {
     match cmd {
         ProjectsCommands::Add { path } => {
             let entry = projects::add_project(&path)?;
@@ -390,7 +426,7 @@ fn handle_projects(cmd: ProjectsCommands) -> anyhow::Result<()> {
             println!("Added project '{}': {}", entry.name, ws_path.display());
         }
         ProjectsCommands::Scan { root, yes } => {
-            projects::scan_projects(&root, yes)?;
+            projects::scan_projects(&root, no_interactive || yes)?;
         }
         ProjectsCommands::List { json } => {
             let projects = projects::list_projects()?;
@@ -413,14 +449,14 @@ fn handle_projects(cmd: ProjectsCommands) -> anyhow::Result<()> {
                 }
             }
         }
-        ProjectsCommands::Remove { name } => {
-            let removed = projects::remove_project(&name)?;
+        ProjectsCommands::Remove { name, confirm } => {
+            let removed = projects::remove_project(&name, no_interactive, confirm)?;
             if removed {
                 println!("Removed project '{}'", name);
                 println!("Workspace data remains intact at its original location");
             } else {
                 eprintln!("Project '{}' not found", name);
-                std::process::exit(1);
+                std::process::exit(2);
             }
         }
         ProjectsCommands::Show { name } => {
@@ -447,7 +483,7 @@ fn handle_projects(cmd: ProjectsCommands) -> anyhow::Result<()> {
                 }
             } else {
                 eprintln!("Project '{}' not found", name);
-                std::process::exit(1);
+                std::process::exit(2);
             }
         }
     }
@@ -525,7 +561,7 @@ fn handle_migrate(cmd: MigrateCommands) -> anyhow::Result<()> {
                 eprintln!("hoop migrate run: --confirm is required.");
                 eprintln!("  This will apply pending minor version migrations.");
                 eprintln!("  Re-run with --confirm once you have verified you have a current backup.");
-                std::process::exit(1);
+                std::process::exit(2);
             }
 
             // Open the database
@@ -539,7 +575,7 @@ fn handle_migrate(cmd: MigrateCommands) -> anyhow::Result<()> {
             if let Err(e) = fleet::check_schema_major_gate(&current_version, fleet::SCHEMA_VERSION) {
                 eprintln!("Major upgrade required: {}", e);
                 eprintln!("  Run: hoop migrate major-upgrade --confirm");
-                std::process::exit(1);
+                std::process::exit(2);
             }
 
             // Run pending migrations
@@ -581,7 +617,7 @@ fn handle_migrate(cmd: MigrateCommands) -> anyhow::Result<()> {
                 eprintln!("hoop migrate major-upgrade: --confirm is required.");
                 eprintln!("  This will perform a major version upgrade (e.g., 1.x → 2.x).");
                 eprintln!("  Re-run with --confirm once you have verified you have a current backup.");
-                std::process::exit(1);
+                std::process::exit(2);
             }
 
             // If --from is provided, verify the current schema major version matches
@@ -599,7 +635,7 @@ fn handle_migrate(cmd: MigrateCommands) -> anyhow::Result<()> {
                         expected_major, current_version);
                     eprintln!("  This safety check prevents accidental upgrades on the wrong database.");
                     eprintln!("  Omit --from to skip this check, or verify you're targeting the correct database.");
-                    std::process::exit(1);
+                    std::process::exit(2);
                 }
             }
 
@@ -616,7 +652,7 @@ fn handle_migrate(cmd: MigrateCommands) -> anyhow::Result<()> {
                 eprintln!("hoop migrate rollback: --confirm is required.");
                 eprintln!("  This will rollback schema to version {}.", version);
                 eprintln!("  Re-run with --confirm once you have verified you have a current backup.");
-                std::process::exit(1);
+                std::process::exit(2);
             }
 
             let db_path = fleet::db_path();
@@ -628,7 +664,7 @@ fn handle_migrate(cmd: MigrateCommands) -> anyhow::Result<()> {
                 eprintln!("Cannot rollback to version {}.", version);
                 eprintln!("  Either the migration does not exist or does not support rollback.");
                 eprintln!("  Major version upgrades cannot be rolled back.");
-                std::process::exit(1);
+                std::process::exit(2);
             }
 
             migrations::rollback_migration(conn, &registry, &version, &current_version)?;

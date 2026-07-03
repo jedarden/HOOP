@@ -446,11 +446,41 @@ pub fn list_projects() -> Result<Vec<ProjectEntry>> {
 }
 
 /// Remove a project from the registry
-pub fn remove_project(name: &str) -> Result<bool> {
+pub fn remove_project(name: &str, no_interactive: bool, confirm: bool) -> Result<bool> {
     let mut registry = ProjectsRegistry::load()?;
+
+    // Check for --confirm requirement in non-interactive mode
+    if no_interactive && !confirm {
+        anyhow::bail!(
+            "--confirm is required in non-interactive mode.\n\
+             Re-run with: hoop projects remove {} --no-interactive --confirm",
+            name
+        );
+    }
 
     // Capture project details for audit before removal
     let project = registry.get(name).cloned();
+
+    // In interactive mode, prompt for confirmation
+    if !no_interactive {
+        if let Some(proj) = &project {
+            eprintln!("Removing project '{}'", name);
+            for ws in &proj.workspaces {
+                eprintln!("  Workspace: {} ({})", ws.path.display(), ws.role);
+            }
+        }
+        eprint!("Confirm removal? [y/N] ");
+        std::io::stderr().flush()?;
+
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        let answer = input.trim().to_lowercase();
+
+        if answer != "y" && answer != "yes" {
+            eprintln!("Removal cancelled");
+            return Ok(false);
+        }
+    }
 
     let removed = registry.remove(name)?;
     if !removed {
@@ -544,13 +574,13 @@ pub fn discover_bead_workspaces(root: &Path) -> Result<Vec<PathBuf>> {
 
 /// Scan a root directory for workspaces containing .beads/ and register them.
 ///
-/// In interactive mode (auto_yes=false), the user is prompted y/n per discovery
+/// In interactive mode (no_interactive=false), the user is prompted y/n per discovery
 /// and can optionally rename the project from the default (directory basename).
-/// With auto_yes=true, all discoveries are registered without prompting.
+/// With no_interactive=true, all discoveries are registered without prompting.
 /// Already-registered paths are skipped with a note.
 ///
 /// Multi-workspace projects require manual merging via a separate command.
-pub fn scan_projects(root: &str, auto_yes: bool) -> Result<()> {
+pub fn scan_projects(root: &str, no_interactive: bool) -> Result<()> {
     let root_path = PathBuf::from(root);
     if !root_path.exists() {
         anyhow::bail!("Root path does not exist: {}", root_path.display());
@@ -593,7 +623,7 @@ pub fn scan_projects(root: &str, auto_yes: bool) -> Result<()> {
             continue;
         }
 
-        if auto_yes {
+        if no_interactive {
             println!("  {} — registering", default_name);
             match registry.add(path.clone(), None) {
                 Ok(entry) => {
@@ -629,8 +659,9 @@ pub fn scan_projects(root: &str, auto_yes: bool) -> Result<()> {
                 }
             }
         } else {
-            print!("  {} — register? [y/N] ", default_name);
-            std::io::stdout().flush()?;
+            // Prompts go to stderr
+            eprint!("  {} — register? [y/N] ", default_name);
+            std::io::stderr().flush()?;
 
             let mut input = String::new();
             std::io::stdin().read_line(&mut input)?;
@@ -641,8 +672,8 @@ pub fn scan_projects(root: &str, auto_yes: bool) -> Result<()> {
             }
 
             // Offer rename
-            print!("    name [{}]: ", default_name);
-            std::io::stdout().flush()?;
+            eprint!("    name [{}]: ", default_name);
+            std::io::stderr().flush()?;
 
             let mut name_input = String::new();
             std::io::stdin().read_line(&mut name_input)?;
