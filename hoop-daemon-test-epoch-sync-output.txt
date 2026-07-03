@@ -1,0 +1,1 @@
+/tmp/nix-shell-1633471-0/rc: line 3: 1633517 Killed                  cargo test -p hoop-daemon --test epoch_sync_invariant -- --nocapture --test-threads=1

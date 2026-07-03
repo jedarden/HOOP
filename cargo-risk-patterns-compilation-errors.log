@@ -1,0 +1,3827 @@
+warning: unused import: `PathBuf`
+  --> hoop-daemon/src/accounts_config.rs:27:23
+   |
+27 | use std::path::{Path, PathBuf};
+   |                       ^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `warn`
+  --> hoop-daemon/src/accounts_config.rs:28:28
+   |
+28 | use tracing::{debug, info, warn};
+   |                            ^^^^
+
+warning: unused import: `State`
+  --> hoop-daemon/src/api_bead_files.rs:11:21
+   |
+11 |     extract::{Path, State},
+   |                     ^^^^^
+
+warning: unused imports: `Connection` and `params`
+  --> hoop-daemon/src/api_bead_files.rs:16:16
+   |
+16 | use rusqlite::{params, Connection};
+   |                ^^^^^^  ^^^^^^^^^^
+
+warning: unused import: `Deserialize`
+  --> hoop-daemon/src/api_bead_files.rs:17:13
+   |
+17 | use serde::{Deserialize, Serialize};
+   |             ^^^^^^^^^^^
+
+warning: unused import: `get`
+  --> hoop-daemon/src/api_pattern_mutations.rs:14:23
+   |
+14 |     routing::{delete, get, post, put},
+   |                       ^^^
+
+warning: unused import: `std::sync::Arc`
+  --> hoop-daemon/src/api_stitch_decompose.rs:30:5
+   |
+30 | use std::sync::Arc;
+   |     ^^^^^^^^^^^^^^
+
+warning: unused import: `ReplayOptions`
+ --> hoop-daemon/src/api_stitch_replay.rs:8:42
+  |
+8 | use crate::stitch_reconstruction::{self, ReplayOptions};
+  |                                          ^^^^^^^^^^^^^
+
+warning: unused import: `ParsedSessionKind`
+  --> hoop-daemon/src/api_unassigned.rs:23:34
+   |
+23 | use hoop_schema::{ParsedSession, ParsedSessionKind};
+   |                                  ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `RecommendedWatcher`
+  --> hoop-daemon/src/api_skills.rs:39:14
+   |
+39 | use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+   |              ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `PathBuf`
+  --> hoop-daemon/src/atomic_write.rs:42:23
+   |
+42 | use std::path::{Path, PathBuf};
+   |                       ^^^^^^^
+
+warning: unused import: `std::time::Duration as StdDuration`
+  --> hoop-daemon/src/capacity.rs:25:5
+   |
+25 | use std::time::Duration as StdDuration;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `OpenCodeLimits as AccountsOpenCodeLimits`
+  --> hoop-daemon/src/capacity.rs:28:46
+   |
+28 | use crate::accounts_config::{AccountsConfig, OpenCodeLimits as AccountsOpenCodeLimits};
+   |                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `chrono::Utc`
+ --> hoop-daemon/src/content_blocks.rs:7:5
+  |
+7 | use chrono::Utc;
+  |     ^^^^^^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+  --> hoop-daemon/src/api_presence.rs:20:5
+   |
+20 | use std::collections::HashMap;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `get`
+  --> hoop-daemon/src/api_tour_project.rs:12:23
+   |
+12 |     routing::{delete, get, post},
+   |                       ^^^
+
+warning: unused import: `serde::Serialize`
+  --> hoop-daemon/src/migrations.rs:51:5
+   |
+51 | use serde::Serialize;
+   |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `anyhow`
+  --> hoop-daemon/src/stitch_reconstruction.rs:19:14
+   |
+19 | use anyhow::{anyhow, bail, Context, Result};
+   |              ^^^^^^
+
+warning: unused import: `std::collections::HashMap`
+  --> hoop-daemon/src/stitch_reconstruction.rs:22:5
+   |
+22 | use std::collections::HashMap;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `anyhow::Result`
+  --> hoop-daemon/src/stuck_detector.rs:20:5
+   |
+20 | use anyhow::Result;
+   |     ^^^^^^^^^^^^^^
+
+warning: unused imports: `anyhow` and `bail`
+  --> hoop-daemon/src/prompt_substitute.rs:13:14
+   |
+13 | use anyhow::{anyhow, bail, Result};
+   |              ^^^^^^  ^^^^
+
+warning: unused import: `json`
+  --> hoop-daemon/src/prompt_substitute.rs:15:18
+   |
+15 | use serde_json::{json, Value};
+   |                  ^^^^
+
+warning: unused import: `SubstitutionContext`
+  --> hoop-daemon/src/api_prompts.rs:45:54
+   |
+45 | use crate::prompt_substitute::{substitute_with_args, SubstitutionContext};
+   |                                                      ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `warn`
+  --> hoop-daemon/src/config_backup.rs:14:21
+   |
+14 | use tracing::{info, warn};
+   |                     ^^^^
+
+warning: unused import: `SimilarStitch`
+  --> hoop-daemon/src/cross_project_propagation.rs:15:51
+   |
+15 | use crate::similarity::{self, CombinedSimilarity, SimilarStitch};
+   |                                                   ^^^^^^^^^^^^^
+
+warning: unused import: `DateTime`
+  --> hoop-daemon/src/cross_project_propagation.rs:17:14
+   |
+17 | use chrono::{DateTime, Utc};
+   |              ^^^^^^^^
+
+warning: unused imports: `delete` and `put`
+  --> hoop-daemon/src/api_fix_patterns.rs:16:15
+   |
+16 |     routing::{delete, get, post, put},
+   |               ^^^^^^             ^^^
+
+warning: unused import: `self`
+  --> hoop-daemon/src/api_screen_capture.rs:12:28
+   |
+12 | use crate::id_validators::{self, ValidStitchId};
+   |                            ^^^^
+
+warning: unused import: `Path`
+  --> hoop-daemon/src/screen_capture.rs:23:17
+   |
+23 | use std::path::{Path, PathBuf};
+   |                 ^^^^
+
+warning: unused imports: `Deserialize` and `Serialize`
+  --> hoop-daemon/src/saturation_detector.rs:17:13
+   |
+17 | use serde::{Deserialize, Serialize};
+   |             ^^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `crate::log_rotation`
+ --> hoop-daemon/src/observer.rs:8:5
+  |
+8 | use crate::log_rotation;
+  |     ^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `TcpStream`
+  --> hoop-daemon/src/observer.rs:16:31
+   |
+16 | use tokio::net::{TcpListener, TcpStream};
+   |                               ^^^^^^^^^
+
+warning: unused import: `config_watcher::AgentConfigChanged`
+    --> hoop-daemon/src/lib.rs:3151:25
+     |
+3151 |                     use config_watcher::AgentConfigChanged;
+     |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> hoop-daemon/src/api_tour_project.rs:240:9
+    |
+240 |     let mut conn = rusqlite::Connection::open_with_flags(
+    |         ----^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> hoop-daemon/src/api_fix_patterns.rs:454:13
+    |
+454 |         let mut conn = match rusqlite::Connection::open(&db_path) {
+    |             ----^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+    --> hoop-daemon/src/lib.rs:3446:13
+     |
+3446 |         let mut shutdown_rx = state.shutdown.subscribe();
+     |             ----^^^^^^^^^^^
+     |             |
+     |             help: remove this `mut`
+
+warning: unused variable: `start`
+   --> hoop-daemon/src/backup_pipeline.rs:133:13
+    |
+133 |         let start = std::time::Instant::now();
+    |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `remote_addr`
+   --> hoop-daemon/src/auth.rs:338:17
+    |
+338 |             let remote_addr = connect_info.map(|ci| ci.0);
+    |                 ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_remote_addr`
+
+warning: unused variable: `required_role`
+   --> hoop-daemon/src/auth.rs:329:13
+    |
+329 |         let required_role = required_role.clone();
+    |             ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_required_role`
+
+warning: unused variable: `required_role`
+   --> hoop-daemon/src/auth.rs:358:31
+    |
+358 |     if !matches!(actual_role, required_role) {
+    |                               ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_required_role`
+
+warning: unused variable: `start`
+   --> hoop-daemon/src/api_scripts.rs:312:9
+    |
+312 |     let start = Instant::now();
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: variable `timed_out` is assigned to, but never used
+   --> hoop-daemon/src/api_scripts.rs:361:9
+    |
+361 |     let mut timed_out = false;
+    |         ^^^^^^^^^^^^^
+    |
+    = note: consider using `_timed_out` instead
+
+warning: value assigned to `timed_out` is never read
+   --> hoop-daemon/src/api_scripts.rs:368:13
+    |
+368 |             timed_out = true;
+    |             ^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+    = note: `#[warn(unused_assignments)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `elapsed_ms`
+   --> hoop-daemon/src/api_stitch_links.rs:208:9
+    |
+208 |     let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
+    |         ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_elapsed_ms`
+
+warning: unused variable: `start`
+   --> hoop-daemon/src/api_skills.rs:284:9
+    |
+284 |     let start = Instant::now();
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: variable `timed_out` is assigned to, but never used
+   --> hoop-daemon/src/api_skills.rs:344:9
+    |
+344 |     let mut timed_out = false;
+    |         ^^^^^^^^^^^^^
+    |
+    = note: consider using `_timed_out` instead
+
+warning: value assigned to `timed_out` is never read
+   --> hoop-daemon/src/api_skills.rs:350:13
+    |
+350 |             timed_out = true;
+    |             ^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it is overwritten before being read?
+
+warning: unused variable: `config`
+   --> hoop-daemon/src/capacity.rs:213:29
+    |
+213 |     fn fetch_quota_via_http(config: &GcpQuotaConfig) -> Option<GeminiQuotaLimits> {
+    |                             ^^^^^^ help: if this is intentional, prefix it with an underscore: `_config`
+
+warning: variable does not need to be mutable
+   --> hoop-daemon/src/capacity.rs:593:13
+    |
+593 |         let mut gemini_dirs = Self::discover_gemini_dirs(&home);
+    |             ----^^^^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> hoop-daemon/src/capacity.rs:596:13
+    |
+596 |         let mut opencode_dirs = Self::discover_opencode_dirs(&home);
+    |             ----^^^^^^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `event_type`
+    --> hoop-daemon/src/capacity.rs:1796:17
+     |
+1796 |             let event_type = entry.get("type").and_then(|v| v.as_str());
+     |                 ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_event_type`
+
+warning: unused variable: `initial_hash`
+   --> hoop-daemon/src/config_watcher.rs:111:13
+    |
+111 |         let initial_hash = hex::encode(Sha256::digest(initial_raw.as_bytes()));
+    |             ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_initial_hash`
+
+warning: unused variable: `cfg`
+   --> hoop-daemon/src/config_watcher.rs:139:13
+    |
+139 |         let cfg = self.config.lock().await;
+    |             ^^^ help: if this is intentional, prefix it with an underscore: `_cfg`
+
+warning: unused variable: `start`
+    --> hoop-daemon/src/fleet.rs:1704:9
+     |
+1704 |     let start = std::time::Instant::now();
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: unused variable: `link_kind`
+   --> hoop-daemon/src/stitch_traversal.rs:210:28
+    |
+210 |             let (child_id, link_kind) = child_row?;
+    |                            ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_link_kind`
+
+warning: unused variable: `schedule`
+   --> hoop-daemon/src/script_scheduler.rs:139:38
+    |
+139 |                 .filter_map(|(name, (schedule, overlap_policy))| {
+    |                                      ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_schedule`
+
+warning: unused variable: `overlap_policy`
+   --> hoop-daemon/src/script_scheduler.rs:109:31
+    |
+109 |         for (name, (schedule, overlap_policy)) in &scheduled {
+    |                               ^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_overlap_policy`
+
+warning: unused variable: `workspace`
+   --> hoop-daemon/src/stitch_reconstruction.rs:297:47
+    |
+297 | fn load_conversation_history(stitch_id: &str, workspace: &Path) -> Result<Vec<ConversationMessage>> {
+    |                                               ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_workspace`
+
+warning: unused variable: `transition_secs`
+   --> hoop-daemon/src/stuck_detector.rs:463:21
+    |
+463 |                 let transition_secs = if let Some(ts) = state.last_transition_at {
+    |                     ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_transition_secs`
+
+warning: unused variable: `created_by`
+   --> hoop-daemon/src/cross_project_propagation.rs:220:36
+    |
+220 |     let (id, project, kind, title, created_by, created_at) = conn.query_row(
+    |                                    ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_created_by`
+
+warning: unused variable: `conn`
+   --> hoop-daemon/src/cross_project_propagation.rs:451:19
+    |
+451 | fn is_stitch_open(conn: &rusqlite::Connection, last_activity_at: &str) -> bool {
+    |                   ^^^^ help: if this is intentional, prefix it with an underscore: `_conn`
+
+warning: variable does not need to be mutable
+   --> hoop-daemon/src/cross_project_propagation.rs:468:9
+    |
+468 |     let mut shared_files = Vec::new();
+    |         ----^^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> hoop-daemon/src/cross_project_propagation.rs:476:9
+    |
+476 |     let mut shared_labels = Vec::new();
+    |         ----^^^^^^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: unused variable: `sim`
+   --> hoop-daemon/src/cross_project_propagation.rs:469:13
+    |
+469 |     for (_, sim) in matches {
+    |             ^^^ help: if this is intentional, prefix it with an underscore: `_sim`
+
+warning: unused variable: `source_labels`
+   --> hoop-daemon/src/cross_project_propagation.rs:475:9
+    |
+475 |     let source_labels: HashSet<_> = source.labels.iter().map(|l| l.to_lowercase()).collect();
+    |         ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_source_labels`
+
+warning: unused variable: `create_req`
+   --> hoop-daemon/src/api_fix_patterns.rs:444:13
+    |
+444 |         let create_req = CreatePatternRequest {
+    |             ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_create_req`
+
+warning: unused variable: `attachments_dir`
+   --> hoop-daemon/src/screen_capture.rs:334:13
+    |
+334 |         let attachments_dir = attachments_dir(&valid_stitch_id)?;
+    |             ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_attachments_dir`
+
+warning: unused variable: `dashboard`
+   --> hoop-daemon/src/observer.rs:210:13
+    |
+210 |         let dashboard: Value = resp.json().await?;
+    |             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_dashboard`
+
+warning: variable does not need to be mutable
+  --> hoop-daemon/src/fix_patterns.rs:83:13
+   |
+83 |         let mut conn = Connection::open(&db_path)?;
+   |             ----^^^^
+   |             |
+   |             help: remove this `mut`
+
+warning: variable does not need to be mutable
+   --> hoop-daemon/src/fix_patterns.rs:277:13
+    |
+277 |         let mut conn = Connection::open(&db_path)?;
+    |             ----^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `abs_path`
+   --> hoop-daemon/src/lib.rs:975:10
+    |
+975 |     let (abs_path, filename, content) = tokio::task::spawn_blocking(move || -> anyhow::Result<(std::path::PathBuf, String, String)> {
+    |          ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_abs_path`
+
+warning: unused variable: `project`
+    --> hoop-daemon/src/lib.rs:2415:43
+     |
+2415 |         Arc::new(move |stitch_id: String, project: String| {
+     |                                           ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_project`
+
+warning: unused variable: `synthesis_callback`
+    --> hoop-daemon/src/lib.rs:2413:9
+     |
+2413 |     let synthesis_callback: transcription::TranscriptionCompleteCallback = {
+     |         ^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_synthesis_callback`
+
+warning: unused variable: `semaphore_ref`
+    --> hoop-daemon/src/lib.rs:3077:13
+     |
+3077 |         let semaphore_ref = state.br_semaphore.clone();
+     |             ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_semaphore_ref`
+
+warning: type `PatternCategory` is more private than the item `DetectedPattern::category`
+  --> hoop-daemon/src/reflection_detector.rs:88:5
+   |
+88 |     pub category: PatternCategory,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ field `DetectedPattern::category` is reachable at visibility `pub`
+   |
+note: but type `PatternCategory` is only usable at visibility `pub(self)`
+  --> hoop-daemon/src/reflection_detector.rs:60:1
+   |
+60 | enum PatternCategory {
+   | ^^^^^^^^^^^^^^^^^^^^
+   = note: `#[warn(private_interfaces)]` on by default
+
+warning: function `openapi_router` is never used
+    --> hoop-daemon/src/lib.rs:1277:4
+     |
+1277 | fn openapi_router() -> Router<DaemonState> {
+     |    ^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `load_hoop_config` is never used
+    --> hoop-daemon/src/lib.rs:3799:10
+     |
+3799 | async fn load_hoop_config() -> Option<hoop_schema::HoopConfig> {
+     |          ^^^^^^^^^^^^^^^^
+
+warning: function `check_and_emit_capacity_alert` is never used
+    --> hoop-daemon/src/lib.rs:4076:4
+     |
+4076 | fn check_and_emit_capacity_alert() -> anyhow::Result<()> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: field `session_id` is never read
+   --> hoop-daemon/src/capacity.rs:359:5
+    |
+356 | struct ParsedPrompt {
+    |        ------------ field in this struct
+...
+359 |     session_id: String,
+    |     ^^^^^^^^^^
+    |
+    = note: `ParsedPrompt` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: function `get_opencode_limits` is never used
+   --> hoop-daemon/src/capacity.rs:473:4
+    |
+473 | fn get_opencode_limits() -> OpenCodePromptLimits {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: field `session_subpath` is never read
+   --> hoop-daemon/src/capacity.rs:527:5
+    |
+523 | struct GeminiAccountPaths {
+    |        ------------------ field in this struct
+...
+527 |     session_subpath: String,
+    |     ^^^^^^^^^^^^^^^
+    |
+    = note: `GeminiAccountPaths` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: field `rpm_limit` is never read
+  --> hoop-daemon/src/capacity.rs:56:13
+   |
+52 |     pub struct GeminiQuotaLimits {
+   |                ----------------- field in this struct
+...
+56 |         pub rpm_limit: Option<u64>,
+   |             ^^^^^^^^^
+   |
+   = note: `GeminiQuotaLimits` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: struct `QuotaLimit` is never constructed
+  --> hoop-daemon/src/capacity.rs:61:12
+   |
+61 |     struct QuotaLimit {
+   |            ^^^^^^^^^^
+
+warning: field `subpath` is never read
+   --> hoop-daemon/src/sessions.rs:557:5
+    |
+555 | pub struct GeminiSessionPath {
+    |            ----------------- field in this struct
+556 |     /// Subpath to sessions (e.g., "tmp" or "sessions")
+557 |     subpath: String,
+    |     ^^^^^^^
+    |
+    = note: `GeminiSessionPath` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: constant `MAX_UNASSIGNED_SESSIONS` is never used
+   --> hoop-daemon/src/sessions.rs:763:7
+    |
+763 | const MAX_UNASSIGNED_SESSIONS: usize = 100;
+    |       ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MIN_SAMPLES_FOR_PREDICTION` is never used
+  --> hoop-daemon/src/stitch_percentile_index.rs:68:7
+   |
+68 | const MIN_SAMPLES_FOR_PREDICTION: usize = 3;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `STITCH_CLOSED_THRESHOLD_SECONDS` is never used
+  --> hoop-daemon/src/stitch_percentile_index.rs:72:7
+   |
+72 | const STITCH_CLOSED_THRESHOLD_SECONDS: i64 = 300;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: eliding a lifetime that's named elsewhere is confusing
+   --> hoop-daemon/src/api_pattern_mutations.rs:566:68
+    |
+566 | fn params_from_slice<'a>(values: &'a [&'a dyn rusqlite::ToSql]) -> &[&'a dyn rusqlite::ToSql] {
+    |                                   --   --                          ^^^--^^^^^^^^^^^^^^^^^^^^^
+    |                                   |    |                           |  |
+    |                                   |    |                           |  the same lifetime is named here
+    |                                   |    |                           the same lifetime is elided here
+    |                                   |    the lifetime is named here
+    |                                   the lifetime is named here
+    |
+    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing
+    = note: `#[warn(mismatched_lifetime_syntaxes)]` on by default
+help: consistently use `'a`
+    |
+566 | fn params_from_slice<'a>(values: &'a [&'a dyn rusqlite::ToSql]) -> &'a [&'a dyn rusqlite::ToSql] {
+    |                                                                     ++
+
+   Compiling hoop-daemon v0.1.0 (/home/coding/HOOP/hoop-daemon)
+warning: `hoop-daemon` (lib) generated 88 warnings (run `cargo fix --lib -p hoop-daemon` to apply 71 suggestions)
+warning: unused import: `futures_util::SinkExt`
+  --> hoop-daemon/tests/epoch_sync_invariant.rs:14:5
+   |
+14 | use futures_util::SinkExt;
+   |     ^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0609]: no field `_temp_dir` on type `DaemonHandle`
+   --> hoop-daemon/tests/integration_harness.rs:602:50
+    |
+602 |     Ok((base_url, handle.shutdown_notify, handle._temp_dir))
+    |                                                  ^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+602 -     Ok((base_url, handle.shutdown_notify, handle._temp_dir))
+602 +     Ok((base_url, handle.shutdown_notify, handle.temp_dir))
+    |
+
+error[E0063]: missing field `workspace` in initializer of `Bead`
+   --> hoop-daemon/tests/integration_harness.rs:269:5
+    |
+269 |     Bead {
+    |     ^^^^ missing `workspace`
+
+error[E0308]: mismatched types
+   --> hoop-daemon/tests/integration_harness.rs:862:13
+    |
+861 |         .send(tokio_tungstenite::tungstenite::Message::Text(
+    |               --------------------------------------------- arguments to this enum variant are incorrect
+862 |             subscribe_msg.to_string(),
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Utf8Bytes`, found `String`
+    |
+note: tuple variant defined here
+   --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tungstenite-0.26.2/src/protocol/message.rs:160:5
+    |
+160 |     Text(Utf8Bytes),
+    |     ^^^^
+help: call `Into::into` on this expression to convert `std::string::String` into `Utf8Bytes`
+    |
+862 |             subscribe_msg.to_string().into(),
+    |                                      +++++++
+
+error[E0308]: mismatched types
+    --> hoop-daemon/tests/integration_harness.rs:1105:13
+     |
+1104 |         .send(tokio_tungstenite::tungstenite::Message::Text(
+     |               --------------------------------------------- arguments to this enum variant are incorrect
+1105 |             subscribe_msg.to_string(),
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Utf8Bytes`, found `String`
+     |
+note: tuple variant defined here
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tungstenite-0.26.2/src/protocol/message.rs:160:5
+     |
+ 160 |     Text(Utf8Bytes),
+     |     ^^^^
+help: call `Into::into` on this expression to convert `std::string::String` into `Utf8Bytes`
+     |
+1105 |             subscribe_msg.to_string().into(),
+     |                                      +++++++
+
+error[E0308]: mismatched types
+    --> hoop-daemon/tests/integration_harness.rs:1202:13
+     |
+1201 |         .send(tokio_tungstenite::tungstenite::Message::Text(
+     |               --------------------------------------------- arguments to this enum variant are incorrect
+1202 |             "{invalid json}".to_string(),
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Utf8Bytes`, found `String`
+     |
+note: tuple variant defined here
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tungstenite-0.26.2/src/protocol/message.rs:160:5
+     |
+ 160 |     Text(Utf8Bytes),
+     |     ^^^^
+help: call `Into::into` on this expression to convert `std::string::String` into `Utf8Bytes`
+     |
+1202 |             "{invalid json}".to_string().into(),
+     |                                         +++++++
+
+error[E0308]: mismatched types
+    --> hoop-daemon/tests/integration_harness.rs:1214:13
+     |
+1213 |         .send(tokio_tungstenite::tungstenite::Message::Text(
+     |               --------------------------------------------- arguments to this enum variant are incorrect
+1214 |             unknown_msg.to_string(),
+     |             ^^^^^^^^^^^^^^^^^^^^^^^ expected `Utf8Bytes`, found `String`
+     |
+note: tuple variant defined here
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tungstenite-0.26.2/src/protocol/message.rs:160:5
+     |
+ 160 |     Text(Utf8Bytes),
+     |     ^^^^
+help: call `Into::into` on this expression to convert `std::string::String` into `Utf8Bytes`
+     |
+1214 |             unknown_msg.to_string().into(),
+     |                                    +++++++
+
+error[E0308]: mismatched types
+    --> hoop-daemon/tests/integration_harness.rs:1222:13
+     |
+1221 |         .send(tokio_tungstenite::tungstenite::Message::Text(
+     |               --------------------------------------------- arguments to this enum variant are incorrect
+1222 |             "".to_string(),
+     |             ^^^^^^^^^^^^^^ expected `Utf8Bytes`, found `String`
+     |
+note: tuple variant defined here
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tungstenite-0.26.2/src/protocol/message.rs:160:5
+     |
+ 160 |     Text(Utf8Bytes),
+     |     ^^^^
+help: call `Into::into` on this expression to convert `std::string::String` into `Utf8Bytes`
+     |
+1222 |             "".to_string().into(),
+     |                           +++++++
+
+warning: unused variable: `beads`
+   --> hoop-daemon/tests/integration_harness.rs:754:9
+    |
+754 |     let beads: Vec<hoop_daemon::Bead> = resp.json().await.expect("Failed to parse beads response");
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_beads`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `bead_id`
+    --> hoop-daemon/tests/integration_harness.rs:1310:9
+     |
+1310 |     let bead_id = bead["id"].as_str().expect("Bead should have an ID");
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_bead_id`
+
+warning: unused variable: `i`
+    --> hoop-daemon/tests/integration_harness.rs:1344:9
+     |
+1344 |     for i in 0..5 {
+     |         ^ help: if this is intentional, prefix it with an underscore: `_i`
+
+Some errors have detailed explanations: E0063, E0308, E0609.
+For more information about an error, try `rustc --explain E0063`.
+warning: `hoop-daemon` (test "epoch_sync_invariant") generated 4 warnings
+error: could not compile `hoop-daemon` (test "epoch_sync_invariant") due to 7 previous errors; 4 warnings emitted
+warning: build failed, waiting for other jobs to finish...
+warning: unused imports: `AtomicBool` and `Ordering`
+    --> hoop-daemon/src/agent_session.rs:2260:33
+     |
+2260 |         use std::sync::atomic::{AtomicBool, Ordering};
+     |                                 ^^^^^^^^^^  ^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `utoipa::ToSchema`
+    --> hoop-daemon/src/agent_session.rs:2263:5
+     |
+2263 | use utoipa::ToSchema;
+     |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `PathBuf`
+  --> hoop-daemon/src/accounts_config.rs:27:23
+   |
+27 | use std::path::{Path, PathBuf};
+   |                       ^^^^^^^
+
+warning: unused import: `utoipa::ToSchema`
+    --> hoop-daemon/src/api_stitch_decompose.rs:1052:5
+     |
+1052 | use utoipa::ToSchema;
+     |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `utoipa::ToSchema`
+   --> hoop-daemon/src/api_stitch_replay.rs:361:5
+    |
+361 | use utoipa::ToSchema;
+    |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `utoipa::ToSchema`
+    --> hoop-daemon/src/config_resolver.rs:2416:5
+     |
+2416 | use utoipa::ToSchema;
+     |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `utoipa::ToSchema`
+    --> hoop-daemon/src/fleet.rs:7334:5
+     |
+7334 | use utoipa::ToSchema;
+     |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `utoipa::ToSchema`
+   --> hoop-daemon/src/content_blocks.rs:219:5
+    |
+219 | use utoipa::ToSchema;
+    |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `utoipa::ToSchema`
+   --> hoop-daemon/src/predictor.rs:210:5
+    |
+210 | use utoipa::ToSchema;
+    |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::tag_join`
+    --> hoop-daemon/src/sessions.rs:3562:13
+     |
+3562 |         use crate::tag_join;
+     |             ^^^^^^^^^^^^^^^
+
+warning: unused import: `utoipa::ToSchema`
+   --> hoop-daemon/src/uploads.rs:569:5
+    |
+569 | use utoipa::ToSchema;
+    |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `utoipa::ToSchema`
+    --> hoop-daemon/src/ws.rs:2214:5
+     |
+2214 | use utoipa::ToSchema;
+     |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `utoipa::ToSchema`
+   --> hoop-daemon/src/api_ui_state.rs:292:5
+    |
+292 | use utoipa::ToSchema;
+    |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::path::PathBuf`
+   --> hoop-daemon/src/net_diff.rs:419:9
+    |
+419 |     use std::path::PathBuf;
+    |         ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `utoipa::ToSchema`
+   --> hoop-daemon/src/screen_capture.rs:574:5
+    |
+574 | use utoipa::ToSchema;
+    |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `utoipa::ToSchema`
+   --> hoop-daemon/src/fix_patterns.rs:367:5
+    |
+367 | use utoipa::ToSchema;
+    |     ^^^^^^^^^^^^^^^^
+
+warning: variable does not need to be mutable
+   --> hoop-daemon/src/load_test.rs:485:22
+    |
+485 |                 let (mut ws_sender, mut ws_receiver) = ws_stream.split();
+    |                      ----^^^^^^^^^
+    |                      |
+    |                      help: remove this `mut`
+
+error[E0063]: missing field `attachments_count` in initializer of `api_preview::PreviewRequest`
+   --> hoop-daemon/src/api_preview.rs:621:22
+    |
+621 |         let params = PreviewRequest {
+    |                      ^^^^^^^^^^^^^^ missing `attachments_count`
+
+error[E0308]: mismatched types
+    --> hoop-daemon/src/api_stitch_decompose.rs:1205:25
+     |
+1205 |             started_at: std::time::Instant::now(),
+     |                         ^^^^^^^^^^^^^^^^^^^^^^^^^ expected `tokio::time::Instant`, found `std::time::Instant`
+     |
+     = note: `std::time::Instant` and `tokio::time::Instant` have similar names, but are actually distinct types
+note: `std::time::Instant` is defined in crate `std`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/time.rs:157:1
+     |
+ 157 | pub struct Instant(time::Instant);
+     | ^^^^^^^^^^^^^^^^^^
+note: `tokio::time::Instant` is defined in crate `tokio`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.52.3/src/time/instant.rs:34:1
+     |
+  34 | pub struct Instant {
+     | ^^^^^^^^^^^^^^^^^^
+help: call `Into::into` on this expression to convert `std::time::Instant` into `tokio::time::Instant`
+     |
+1205 |             started_at: std::time::Instant::now().into(),
+     |                                                  +++++++
+
+error[E0061]: this function takes 9 arguments but 0 arguments were supplied
+    --> hoop-daemon/src/api_stitch_decompose.rs:1214:34
+     |
+1214 |             supervisor: Arc::new(crate::supervisor::ProjectSupervisor::new()),
+     |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-- multiple arguments are missing
+     |
+note: associated function defined here
+    --> hoop-daemon/src/supervisor.rs:243:12
+     |
+ 243 |     pub fn new(
+     |            ^^^
+ 244 |         bead_tx: broadcast::Sender<BeadEvent>,
+     |         -------------------------------------
+ 245 |         session_tx: broadcast::Sender<SessionEvent>,
+     |         -------------------------------------------
+ 246 |         worker_registry: Arc<crate::ws::WorkerRegistry>,
+     |         -----------------------------------------------
+ 247 |         beads: Arc<std::sync::RwLock<Vec<Bead>>>,
+     |         ----------------------------------------
+ 248 |         shutdown: Arc<crate::shutdown::ShutdownCoordinator>,
+     |         ---------------------------------------------------
+ 249 |         cost_aggregator: Arc<std::sync::RwLock<CostAggregator>>,
+     |         -------------------------------------------------------
+ 250 |         vector_index: Arc<std::sync::RwLock<crate::vector_index::VectorIndex>>,
+     |         ----------------------------------------------------------------------
+ 251 |         scripts_dir: PathBuf,
+     |         --------------------
+ 252 |         stuck_detector: Arc<std::sync::Mutex<crate::stuck_detector::StuckDetector>>,
+     |         ---------------------------------------------------------------------------
+help: provide the arguments
+     |
+1214 |             supervisor: Arc::new(crate::supervisor::ProjectSupervisor::new(/* tokio::sync::broadcast::Sender<BeadEvent> */, /* tokio::sync::broadcast::Sender<sessions::SessionEvent> */, /* std::sync::Arc<WorkerRegistry> */, /* std::sync::Arc<std::sync::RwLock<Vec<Bead>>> */, /* std::sync::Arc<shutdown::ShutdownCoordinator> */, /* std::sync::Arc<std::sync::RwLock<cost::CostAggregator>> */, /* std::sync::Arc<std::sync::RwLock<vector_index::VectorIndex>> */, /* std::path::PathBuf */, /* std::sync::Arc<std::sync::Mutex<stuck_detector::StuckDetector>> */)),
+     |                                                                            ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+error[E0061]: this function takes 1 argument but 0 arguments were supplied
+    --> hoop-daemon/src/api_stitch_decompose.rs:1220:62
+     |
+1220 |             cost_aggregator: Arc::new(std::sync::RwLock::new(crate::cost::CostAggregator::new())),
+     |                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-- argument #1 of type `std::path::PathBuf` is missing
+     |
+note: associated function defined here
+    --> hoop-daemon/src/cost.rs:140:12
+     |
+ 140 |     pub fn new(config_path: PathBuf) -> Result<Self> {
+     |            ^^^ --------------------
+help: provide the argument
+     |
+1220 |             cost_aggregator: Arc::new(std::sync::RwLock::new(crate::cost::CostAggregator::new(/* std::path::PathBuf */))),
+     |                                                                                               ++++++++++++++++++++++++
+
+error[E0308]: mismatched types
+    --> hoop-daemon/src/api_stitch_decompose.rs:1220:62
+     |
+1220 |             cost_aggregator: Arc::new(std::sync::RwLock::new(crate::cost::CostAggregator::new())),
+     |                                       ---------------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `CostAggregator`, found `Result<CostAggregator, Error>`
+     |                                       |
+     |                                       arguments to this function are incorrect
+     |
+     = note: expected struct `cost::CostAggregator`
+                  found enum `std::result::Result<cost::CostAggregator, anyhow::Error>`
+note: associated function defined here
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/std/src/sync/poison/rwlock.rs:258:18
+     |
+ 258 |     pub const fn new(t: T) -> RwLock<T> {
+     |                  ^^^
+help: consider using `Result::expect` to unwrap the `std::result::Result<cost::CostAggregator, anyhow::Error>` value, panicking if the value is a `Result::Err`
+     |
+1220 |             cost_aggregator: Arc::new(std::sync::RwLock::new(crate::cost::CostAggregator::new().expect("REASON"))),
+     |                                                                                                +++++++++++++++++
+
+error[E0061]: this function takes 1 argument but 0 arguments were supplied
+    --> hoop-daemon/src/api_stitch_decompose.rs:1222:39
+     |
+1222 |             upload_registry: Arc::new(crate::uploads::UploadRegistry::new()),
+     |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-- argument #1 of type `uploads::UploadConfig` is missing
+     |
+note: associated function defined here
+    --> hoop-daemon/src/uploads.rs:87:12
+     |
+  87 |     pub fn new(config: UploadConfig) -> Result<Self> {
+     |            ^^^ --------------------
+help: provide the argument
+     |
+1222 |             upload_registry: Arc::new(crate::uploads::UploadRegistry::new(/* uploads::UploadConfig */)),
+     |                                                                           +++++++++++++++++++++++++++
+
+error[E0308]: mismatched types
+    --> hoop-daemon/src/api_stitch_decompose.rs:1222:39
+     |
+1222 |             upload_registry: Arc::new(crate::uploads::UploadRegistry::new()),
+     |                              -------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `UploadRegistry`, found `Result<UploadRegistry, Error>`
+     |                              |
+     |                              arguments to this function are incorrect
+     |
+     = note: expected struct `uploads::UploadRegistry`
+                  found enum `std::result::Result<uploads::UploadRegistry, anyhow::Error>`
+note: associated function defined here
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:424:12
+     |
+ 424 |     pub fn new(data: T) -> Arc<T> {
+     |            ^^^
+help: consider using `Result::expect` to unwrap the `std::result::Result<uploads::UploadRegistry, anyhow::Error>` value, panicking if the value is a `Result::Err`
+     |
+1222 |             upload_registry: Arc::new(crate::uploads::UploadRegistry::new().expect("REASON")),
+     |                                                                            +++++++++++++++++
+
+error[E0599]: no associated function or constant named `default` found for struct `ResolvedConfig` in the current scope
+    --> hoop-daemon/src/api_stitch_decompose.rs:1230:79
+     |
+1230 |             resolved_config: Arc::new(crate::config_resolver::ResolvedConfig::default()),
+     |                                                                               ^^^^^^^ associated function or constant not found in `ResolvedConfig`
+     |
+    ::: hoop-daemon/src/config_resolver.rs:535:1
+     |
+ 535 | pub struct ResolvedConfig {
+     | ------------------------- associated function or constant `default` not found for this struct
+     |
+     = help: items from traits can only be used if the trait is implemented and in scope
+     = note: the following trait defines an item `default`, perhaps you need to implement it:
+             candidate #1: `std::default::Default`
+
+error[E0308]: mismatched types
+    --> hoop-daemon/src/api_stitch_decompose.rs:1232:42
+     |
+1232 |             worker_ack_monitor: Arc::new(crate::worker_ack::WorkerAckMonitor::new()),
+     |                                 -------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `WorkerAckMonitor`, found `Result<WorkerAckMonitor, Error>`
+     |                                 |
+     |                                 arguments to this function are incorrect
+     |
+     = note: expected struct `worker_ack::WorkerAckMonitor`
+                  found enum `std::result::Result<worker_ack::WorkerAckMonitor, anyhow::Error>`
+note: associated function defined here
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/alloc/src/sync.rs:424:12
+     |
+ 424 |     pub fn new(data: T) -> Arc<T> {
+     |            ^^^
+help: consider using `Result::expect` to unwrap the `std::result::Result<worker_ack::WorkerAckMonitor, anyhow::Error>` value, panicking if the value is a `Result::Err`
+     |
+1232 |             worker_ack_monitor: Arc::new(crate::worker_ack::WorkerAckMonitor::new().expect("REASON")),
+     |                                                                                    +++++++++++++++++
+
+error[E0599]: no associated function or constant named `default` found for struct `redaction_policy::RedactionPolicyState` in the current scope
+    --> hoop-daemon/src/api_stitch_decompose.rs:1237:64
+     |
+1237 |                 crate::redaction_policy::RedactionPolicyState::default(),
+     |                                                                ^^^^^^^ associated function or constant not found in `redaction_policy::RedactionPolicyState`
+     |
+    ::: hoop-daemon/src/redaction_policy.rs:26:1
+     |
+  26 | pub struct RedactionPolicyState {
+     | ------------------------------- associated function or constant `default` not found for this struct
+     |
+note: if you're trying to build a new `redaction_policy::RedactionPolicyState`, consider using `redaction_policy::RedactionPolicyState::new` which returns `redaction_policy::RedactionPolicyState`
+    --> hoop-daemon/src/redaction_policy.rs:257:5
+     |
+ 257 |     pub fn new(global_config: &HoopConfig, projects_registry: ProjectsRegistry) -> Self {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = help: items from traits can only be used if the trait is implemented and in scope
+     = note: the following trait defines an item `default`, perhaps you need to implement it:
+             candidate #1: `std::default::Default`
+
+error[E0063]: missing fields `br_semaphore` and `br_semaphore_target_permits` in initializer of `DaemonState`
+    --> hoop-daemon/src/api_stitch_decompose.rs:1203:21
+     |
+1203 |         let state = crate::DaemonState {
+     |                     ^^^^^^^^^^^^^^^^^^ missing `br_semaphore` and `br_semaphore_target_permits`
+
+error[E0063]: missing fields `accounts_file`, `gcp_quota_config`, `gemini_dirs` and 1 other field in initializer of `capacity::CapacityMeterConfig`
+    --> hoop-daemon/src/capacity.rs:2457:22
+     |
+2457 |         let config = CapacityMeterConfig {
+     |                      ^^^^^^^^^^^^^^^^^^^ missing `accounts_file`, `gcp_quota_config`, `gemini_dirs` and 1 other field
+
+error[E0063]: missing fields `accounts_file`, `gcp_quota_config`, `gemini_dirs` and 1 other field in initializer of `capacity::CapacityMeterConfig`
+    --> hoop-daemon/src/capacity.rs:2503:22
+     |
+2503 |         let config = CapacityMeterConfig {
+     |                      ^^^^^^^^^^^^^^^^^^^ missing `accounts_file`, `gcp_quota_config`, `gemini_dirs` and 1 other field
+
+error[E0063]: missing fields `accounts_file`, `gcp_quota_config`, `gemini_dirs` and 1 other field in initializer of `capacity::CapacityMeterConfig`
+    --> hoop-daemon/src/capacity.rs:2573:22
+     |
+2573 |         let config = CapacityMeterConfig {
+     |                      ^^^^^^^^^^^^^^^^^^^ missing `accounts_file`, `gcp_quota_config`, `gemini_dirs` and 1 other field
+
+error[E0063]: missing fields `accounts_file`, `gcp_quota_config`, `gemini_dirs` and 1 other field in initializer of `capacity::CapacityMeterConfig`
+    --> hoop-daemon/src/capacity.rs:2774:22
+     |
+2774 |         let config = CapacityMeterConfig {
+     |                      ^^^^^^^^^^^^^^^^^^^ missing `accounts_file`, `gcp_quota_config`, `gemini_dirs` and 1 other field
+
+error[E0063]: missing fields `accounts_file`, `gcp_quota_config`, `gemini_dirs` and 1 other field in initializer of `capacity::CapacityMeterConfig`
+    --> hoop-daemon/src/capacity.rs:2851:22
+     |
+2851 |         let config = CapacityMeterConfig {
+     |                      ^^^^^^^^^^^^^^^^^^^ missing `accounts_file`, `gcp_quota_config`, `gemini_dirs` and 1 other field
+
+error[E0063]: missing fields `accounts_file`, `gcp_quota_config`, `gemini_dirs` and 1 other field in initializer of `capacity::CapacityMeterConfig`
+    --> hoop-daemon/src/capacity.rs:2913:22
+     |
+2913 |         let config = CapacityMeterConfig {
+     |                      ^^^^^^^^^^^^^^^^^^^ missing `accounts_file`, `gcp_quota_config`, `gemini_dirs` and 1 other field
+
+error[E0063]: missing fields `accounts_file`, `gcp_quota_config` and `opencode_dirs` in initializer of `capacity::CapacityMeterConfig`
+    --> hoop-daemon/src/capacity.rs:3058:22
+     |
+3058 |         let config = CapacityMeterConfig {
+     |                      ^^^^^^^^^^^^^^^^^^^ missing `accounts_file`, `gcp_quota_config` and `opencode_dirs`
+
+error[E0063]: missing fields `accounts_file`, `gcp_quota_config` and `opencode_dirs` in initializer of `capacity::CapacityMeterConfig`
+    --> hoop-daemon/src/capacity.rs:3111:22
+     |
+3111 |         let config = CapacityMeterConfig {
+     |                      ^^^^^^^^^^^^^^^^^^^ missing `accounts_file`, `gcp_quota_config` and `opencode_dirs`
+
+error[E0063]: missing fields `accounts_file` and `opencode_dirs` in initializer of `capacity::CapacityMeterConfig`
+    --> hoop-daemon/src/capacity.rs:3203:22
+     |
+3203 |         let config = CapacityMeterConfig {
+     |                      ^^^^^^^^^^^^^^^^^^^ missing `accounts_file` and `opencode_dirs`
+
+error[E0063]: missing fields `accounts_file` and `opencode_dirs` in initializer of `capacity::CapacityMeterConfig`
+    --> hoop-daemon/src/capacity.rs:3227:22
+     |
+3227 |         let config = CapacityMeterConfig {
+     |                      ^^^^^^^^^^^^^^^^^^^ missing `accounts_file` and `opencode_dirs`
+
+error[E0063]: missing fields `accounts_file` and `opencode_dirs` in initializer of `capacity::CapacityMeterConfig`
+    --> hoop-daemon/src/capacity.rs:3267:22
+     |
+3267 |         let config = CapacityMeterConfig {
+     |                      ^^^^^^^^^^^^^^^^^^^ missing `accounts_file` and `opencode_dirs`
+
+error[E0061]: this function takes 5 arguments but 4 arguments were supplied
+   --> hoop-daemon/src/config_watcher.rs:591:9
+    |
+591 |           ConfigWatcher::reload_config(
+    |  _________^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+592 | |             &config_path,
+593 | |             event_tx.clone(),
+594 | |             shared_config.clone(),
+595 | |             cli_overrides.clone(),
+596 | |         )
+    | |_________- argument #5 of type `std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>` is missing
+    |
+note: associated function defined here
+   --> hoop-daemon/src/config_watcher.rs:304:14
+    |
+304 |     async fn reload_config(
+    |              ^^^^^^^^^^^^^
+...
+309 |         agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
+    |         -----------------------------------------------------------------------------------------------
+help: provide the argument
+    |
+591 |         ConfigWatcher::reload_config(
+...
+595 |             cli_overrides.clone(),
+596 ~             /* std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>> */,
+597 ~         )
+    |
+
+error[E0061]: this function takes 5 arguments but 4 arguments were supplied
+   --> hoop-daemon/src/config_watcher.rs:617:9
+    |
+617 |           ConfigWatcher::reload_config(
+    |  _________^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+618 | |             &config_path,
+619 | |             event_tx.clone(),
+620 | |             shared_config.clone(),
+621 | |             cli_overrides.clone(),
+622 | |         )
+    | |_________- argument #5 of type `std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>` is missing
+    |
+note: associated function defined here
+   --> hoop-daemon/src/config_watcher.rs:304:14
+    |
+304 |     async fn reload_config(
+    |              ^^^^^^^^^^^^^
+...
+309 |         agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
+    |         -----------------------------------------------------------------------------------------------
+help: provide the argument
+    |
+617 |         ConfigWatcher::reload_config(
+...
+621 |             cli_overrides.clone(),
+622 ~             /* std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>> */,
+623 ~         )
+    |
+
+error[E0061]: this function takes 5 arguments but 4 arguments were supplied
+   --> hoop-daemon/src/config_watcher.rs:642:9
+    |
+642 |           ConfigWatcher::reload_config(
+    |  _________^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+643 | |             &config_path,
+644 | |             event_tx.clone(),
+645 | |             shared_config.clone(),
+646 | |             cli_overrides.clone(),
+647 | |         )
+    | |_________- argument #5 of type `std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>` is missing
+    |
+note: associated function defined here
+   --> hoop-daemon/src/config_watcher.rs:304:14
+    |
+304 |     async fn reload_config(
+    |              ^^^^^^^^^^^^^
+...
+309 |         agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
+    |         -----------------------------------------------------------------------------------------------
+help: provide the argument
+    |
+642 |         ConfigWatcher::reload_config(
+...
+646 |             cli_overrides.clone(),
+647 ~             /* std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>> */,
+648 ~         )
+    |
+
+error[E0061]: this function takes 5 arguments but 4 arguments were supplied
+   --> hoop-daemon/src/config_watcher.rs:679:9
+    |
+679 |           ConfigWatcher::reload_config(
+    |  _________^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+680 | |             &config_path,
+681 | |             event_tx.clone(),
+682 | |             shared_config.clone(),
+683 | |             cli_overrides.clone(),
+684 | |         )
+    | |_________- argument #5 of type `std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>` is missing
+    |
+note: associated function defined here
+   --> hoop-daemon/src/config_watcher.rs:304:14
+    |
+304 |     async fn reload_config(
+    |              ^^^^^^^^^^^^^
+...
+309 |         agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
+    |         -----------------------------------------------------------------------------------------------
+help: provide the argument
+    |
+679 |         ConfigWatcher::reload_config(
+...
+683 |             cli_overrides.clone(),
+684 ~             /* std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>> */,
+685 ~         )
+    |
+
+error[E0061]: this function takes 5 arguments but 4 arguments were supplied
+   --> hoop-daemon/src/config_watcher.rs:715:9
+    |
+715 |           ConfigWatcher::reload_config(
+    |  _________^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+716 | |             &config_path,
+717 | |             event_tx.clone(),
+718 | |             shared_config.clone(),
+719 | |             cli_overrides.clone(),
+720 | |         )
+    | |_________- argument #5 of type `std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>` is missing
+    |
+note: associated function defined here
+   --> hoop-daemon/src/config_watcher.rs:304:14
+    |
+304 |     async fn reload_config(
+    |              ^^^^^^^^^^^^^
+...
+309 |         agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
+    |         -----------------------------------------------------------------------------------------------
+help: provide the argument
+    |
+715 |         ConfigWatcher::reload_config(
+...
+719 |             cli_overrides.clone(),
+720 ~             /* std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>> */,
+721 ~         )
+    |
+
+error[E0061]: this function takes 5 arguments but 4 arguments were supplied
+   --> hoop-daemon/src/config_watcher.rs:751:9
+    |
+751 |           ConfigWatcher::reload_config(
+    |  _________^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+752 | |             &config_path,
+753 | |             event_tx.clone(),
+754 | |             shared_config.clone(),
+755 | |             cli_overrides.clone(),
+756 | |         )
+    | |_________- argument #5 of type `std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>` is missing
+    |
+note: associated function defined here
+   --> hoop-daemon/src/config_watcher.rs:304:14
+    |
+304 |     async fn reload_config(
+    |              ^^^^^^^^^^^^^
+...
+309 |         agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
+    |         -----------------------------------------------------------------------------------------------
+help: provide the argument
+    |
+751 |         ConfigWatcher::reload_config(
+...
+755 |             cli_overrides.clone(),
+756 ~             /* std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>> */,
+757 ~         )
+    |
+
+error[E0061]: this function takes 5 arguments but 4 arguments were supplied
+   --> hoop-daemon/src/config_watcher.rs:787:9
+    |
+787 |           ConfigWatcher::reload_config(
+    |  _________^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+788 | |             &config_path,
+789 | |             event_tx.clone(),
+790 | |             shared_config.clone(),
+791 | |             cli_overrides.clone(),
+792 | |         )
+    | |_________- argument #5 of type `std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>` is missing
+    |
+note: associated function defined here
+   --> hoop-daemon/src/config_watcher.rs:304:14
+    |
+304 |     async fn reload_config(
+    |              ^^^^^^^^^^^^^
+...
+309 |         agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
+    |         -----------------------------------------------------------------------------------------------
+help: provide the argument
+    |
+787 |         ConfigWatcher::reload_config(
+...
+791 |             cli_overrides.clone(),
+792 ~             /* std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>> */,
+793 ~         )
+    |
+
+error[E0061]: this function takes 5 arguments but 4 arguments were supplied
+   --> hoop-daemon/src/config_watcher.rs:832:9
+    |
+832 |           ConfigWatcher::reload_config(
+    |  _________^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+833 | |             &config_path,
+834 | |             event_tx.clone(),
+835 | |             shared_config.clone(),
+836 | |             cli_overrides.clone(),
+837 | |         )
+    | |_________- argument #5 of type `std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>` is missing
+    |
+note: associated function defined here
+   --> hoop-daemon/src/config_watcher.rs:304:14
+    |
+304 |     async fn reload_config(
+    |              ^^^^^^^^^^^^^
+...
+309 |         agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
+    |         -----------------------------------------------------------------------------------------------
+help: provide the argument
+    |
+832 |         ConfigWatcher::reload_config(
+...
+836 |             cli_overrides.clone(),
+837 ~             /* std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>> */,
+838 ~         )
+    |
+
+error[E0061]: this function takes 5 arguments but 4 arguments were supplied
+   --> hoop-daemon/src/config_watcher.rs:873:9
+    |
+873 |           ConfigWatcher::reload_config(
+    |  _________^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+874 | |             &config_path,
+875 | |             event_tx.clone(),
+876 | |             shared_config.clone(),
+877 | |             cli_overrides.clone(),
+878 | |         )
+    | |_________- argument #5 of type `std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>` is missing
+    |
+note: associated function defined here
+   --> hoop-daemon/src/config_watcher.rs:304:14
+    |
+304 |     async fn reload_config(
+    |              ^^^^^^^^^^^^^
+...
+309 |         agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
+    |         -----------------------------------------------------------------------------------------------
+help: provide the argument
+    |
+873 |         ConfigWatcher::reload_config(
+...
+877 |             cli_overrides.clone(),
+878 ~             /* std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>> */,
+879 ~         )
+    |
+
+error[E0061]: this function takes 5 arguments but 4 arguments were supplied
+   --> hoop-daemon/src/config_watcher.rs:915:9
+    |
+915 |           ConfigWatcher::reload_config(
+    |  _________^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+916 | |             &config_path,
+917 | |             event_tx.clone(),
+918 | |             shared_config.clone(),
+919 | |             cli_overrides.clone(),
+920 | |         )
+    | |_________- argument #5 of type `std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>` is missing
+    |
+note: associated function defined here
+   --> hoop-daemon/src/config_watcher.rs:304:14
+    |
+304 |     async fn reload_config(
+    |              ^^^^^^^^^^^^^
+...
+309 |         agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
+    |         -----------------------------------------------------------------------------------------------
+help: provide the argument
+    |
+915 |         ConfigWatcher::reload_config(
+...
+919 |             cli_overrides.clone(),
+920 ~             /* std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>> */,
+921 ~         )
+    |
+
+error[E0061]: this function takes 5 arguments but 4 arguments were supplied
+   --> hoop-daemon/src/config_watcher.rs:956:9
+    |
+956 |           ConfigWatcher::reload_config(
+    |  _________^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+957 | |             &config_path,
+958 | |             event_tx.clone(),
+959 | |             shared_config.clone(),
+960 | |             cli_overrides.clone(),
+961 | |         )
+    | |_________- argument #5 of type `std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>` is missing
+    |
+note: associated function defined here
+   --> hoop-daemon/src/config_watcher.rs:304:14
+    |
+304 |     async fn reload_config(
+    |              ^^^^^^^^^^^^^
+...
+309 |         agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
+    |         -----------------------------------------------------------------------------------------------
+help: provide the argument
+    |
+956 |         ConfigWatcher::reload_config(
+...
+960 |             cli_overrides.clone(),
+961 ~             /* std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>> */,
+962 ~         )
+    |
+
+error[E0061]: this function takes 5 arguments but 4 arguments were supplied
+    --> hoop-daemon/src/config_watcher.rs:997:9
+     |
+ 997 |           ConfigWatcher::reload_config(
+     |  _________^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+ 998 | |             &config_path,
+ 999 | |             event_tx.clone(),
+1000 | |             shared_config.clone(),
+1001 | |             cli_overrides.clone(),
+1002 | |         )
+     | |_________- argument #5 of type `std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>` is missing
+     |
+note: associated function defined here
+    --> hoop-daemon/src/config_watcher.rs:304:14
+     |
+ 304 |     async fn reload_config(
+     |              ^^^^^^^^^^^^^
+...
+ 309 |         agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
+     |         -----------------------------------------------------------------------------------------------
+help: provide the argument
+     |
+ 997 |         ConfigWatcher::reload_config(
+ ...
+1001 |             cli_overrides.clone(),
+1002 ~             /* std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>> */,
+1003 ~         )
+     |
+
+error[E0061]: this function takes 5 arguments but 4 arguments were supplied
+    --> hoop-daemon/src/config_watcher.rs:1038:9
+     |
+1038 |           ConfigWatcher::reload_config(
+     |  _________^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+1039 | |             &config_path,
+1040 | |             event_tx.clone(),
+1041 | |             shared_config.clone(),
+1042 | |             cli_overrides.clone(),
+1043 | |         )
+     | |_________- argument #5 of type `std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>` is missing
+     |
+note: associated function defined here
+    --> hoop-daemon/src/config_watcher.rs:304:14
+     |
+ 304 |     async fn reload_config(
+     |              ^^^^^^^^^^^^^
+...
+ 309 |         agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
+     |         -----------------------------------------------------------------------------------------------
+help: provide the argument
+     |
+1038 |         ConfigWatcher::reload_config(
+ ...
+1042 |             cli_overrides.clone(),
+1043 ~             /* std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>> */,
+1044 ~         )
+     |
+
+error[E0061]: this function takes 5 arguments but 4 arguments were supplied
+    --> hoop-daemon/src/config_watcher.rs:1079:9
+     |
+1079 |           ConfigWatcher::reload_config(
+     |  _________^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+1080 | |             &config_path,
+1081 | |             event_tx.clone(),
+1082 | |             shared_config.clone(),
+1083 | |             cli_overrides.clone(),
+1084 | |         )
+     | |_________- argument #5 of type `std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>` is missing
+     |
+note: associated function defined here
+    --> hoop-daemon/src/config_watcher.rs:304:14
+     |
+ 304 |     async fn reload_config(
+     |              ^^^^^^^^^^^^^
+...
+ 309 |         agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
+     |         -----------------------------------------------------------------------------------------------
+help: provide the argument
+     |
+1079 |         ConfigWatcher::reload_config(
+ ...
+1083 |             cli_overrides.clone(),
+1084 ~             /* std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>> */,
+1085 ~         )
+     |
+
+error[E0061]: this function takes 5 arguments but 4 arguments were supplied
+    --> hoop-daemon/src/config_watcher.rs:1122:9
+     |
+1122 |           ConfigWatcher::reload_config(
+     |  _________^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+1123 | |             &config_path,
+1124 | |             event_tx.clone(),
+1125 | |             shared_config.clone(),
+1126 | |             cli_overrides.clone(),
+1127 | |         )
+     | |_________- argument #5 of type `std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>` is missing
+     |
+note: associated function defined here
+    --> hoop-daemon/src/config_watcher.rs:304:14
+     |
+ 304 |     async fn reload_config(
+     |              ^^^^^^^^^^^^^
+...
+ 309 |         agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
+     |         -----------------------------------------------------------------------------------------------
+help: provide the argument
+     |
+1122 |         ConfigWatcher::reload_config(
+ ...
+1126 |             cli_overrides.clone(),
+1127 ~             /* std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>> */,
+1128 ~         )
+     |
+
+error[E0061]: this function takes 5 arguments but 4 arguments were supplied
+    --> hoop-daemon/src/config_watcher.rs:1165:9
+     |
+1165 |           ConfigWatcher::reload_config(
+     |  _________^^^^^^^^^^^^^^^^^^^^^^^^^^^^-
+1166 | |             &config_path,
+1167 | |             event_tx.clone(),
+1168 | |             shared_config.clone(),
+1169 | |             cli_overrides.clone(),
+1170 | |         )
+     | |_________- argument #5 of type `std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>` is missing
+     |
+note: associated function defined here
+    --> hoop-daemon/src/config_watcher.rs:304:14
+     |
+ 304 |     async fn reload_config(
+     |              ^^^^^^^^^^^^^
+...
+ 309 |         agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
+     |         -----------------------------------------------------------------------------------------------
+help: provide the argument
+     |
+1165 |         ConfigWatcher::reload_config(
+ ...
+1169 |             cli_overrides.clone(),
+1170 ~             /* std::sync::Arc<tokio::sync::Mutex<std::option::Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>> */,
+1171 ~         )
+     |
+
+error[E0063]: missing fields `draft_id` and `synthesis_result` in initializer of `dictated_notes::DictatedNote`
+   --> hoop-daemon/src/dictated_notes.rs:776:18
+    |
+776 |                 &DictatedNote {
+    |                  ^^^^^^^^^^^^ missing `draft_id` and `synthesis_result`
+
+error[E0308]: mismatched types
+   --> hoop-daemon/src/heartbeats.rs:935:13
+    |
+935 |             Ok(())
+    |             ^^^^^^ expected `()`, found `Result<(), _>`
+    |
+    = note: expected unit type `()`
+                    found enum `std::result::Result<(), _>`
+note: return type inferred to be `()` here
+   --> hoop-daemon/src/heartbeats.rs:911:13
+    |
+911 |             prop_assert_eq!(computed_liveness, expected_liveness);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = note: this error originates in the macro `$crate::prop_assert` which comes from the expansion of the macro `prop_assert_eq` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0308]: mismatched types
+    --> hoop-daemon/src/heartbeats.rs:1089:13
+     |
+1089 |             Ok(())
+     |             ^^^^^^ expected `()`, found `Result<(), _>`
+     |
+     = note: expected unit type `()`
+                     found enum `std::result::Result<(), _>`
+note: return type inferred to be `()` here
+    --> hoop-daemon/src/heartbeats.rs:1066:13
+     |
+1066 |             prop_assert_eq!(actual, expected);
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = note: this error originates in the macro `$crate::prop_assert` which comes from the expansion of the macro `prop_assert_eq` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0433]: cannot find module or crate `rand` in this scope
+   --> hoop-daemon/src/integration_harness.rs:192:29
+    |
+192 |         let port = 50000 + (rand::random::<u16>() % 10000);
+    |                             ^^^^ use of unresolved module or unlinked crate `rand`
+    |
+    = help: if you wanted to use a crate named `rand`, use `cargo add rand` to add it to your `Cargo.toml`
+
+error[E0063]: missing field `stash_sha` in initializer of `events::NeedleEvent`
+   --> hoop-daemon/src/load_test.rs:182:29
+    |
+182 |                 events.push(NeedleEvent::Fail {
+    |                             ^^^^^^^^^^^^^^^^^ missing `stash_sha`
+
+error[E0599]: no associated function or constant named `default_secret_patterns` found for struct `config_resolver::SecretPattern` in the current scope
+   --> hoop-daemon/src/redaction.rs:498:47
+    |
+498 |         let default_patterns = SecretPattern::default_secret_patterns();
+    |                                               ^^^^^^^^^^^^^^^^^^^^^^^ associated function or constant not found in `config_resolver::SecretPattern`
+    |
+   ::: hoop-daemon/src/config_resolver.rs:30:1
+    |
+ 30 | pub struct SecretPattern {
+    | ------------------------ associated function or constant `default_secret_patterns` not found for this struct
+
+error[E0063]: missing fields `embedding` and `redaction` in initializer of `hoop_schema::HoopConfig`
+   --> hoop-daemon/src/redaction_policy.rs:546:22
+    |
+546 |         let config = HoopConfig {
+    |                      ^^^^^^^^^^ missing `embedding` and `redaction`
+
+error[E0369]: binary operation `==` cannot be applied to type `risk_patterns::RiskSeverity`
+   --> hoop-daemon/src/risk_patterns.rs:662:9
+    |
+662 |         assert_eq!(secrets_pattern.unwrap().severity, RiskSeverity::Critical);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |         |
+    |         risk_patterns::RiskSeverity
+    |         risk_patterns::RiskSeverity
+    |
+note: an implementation of `PartialEq` might be missing for `risk_patterns::RiskSeverity`
+   --> hoop-daemon/src/risk_patterns.rs:35:1
+    |
+ 35 | pub enum RiskSeverity {
+    | ^^^^^^^^^^^^^^^^^^^^^ must implement `PartialEq`
+help: consider annotating `risk_patterns::RiskSeverity` with `#[derive(PartialEq)]`
+    |
+ 35 + #[derive(PartialEq)]
+ 36 | pub enum RiskSeverity {
+    |
+
+error[E0369]: binary operation `==` cannot be applied to type `risk_patterns::RiskSeverity`
+   --> hoop-daemon/src/risk_patterns.rs:666:9
+    |
+666 |         assert_eq!(tool_loop_pattern.unwrap().severity, RiskSeverity::Critical);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |         |
+    |         risk_patterns::RiskSeverity
+    |         risk_patterns::RiskSeverity
+    |
+note: an implementation of `PartialEq` might be missing for `risk_patterns::RiskSeverity`
+   --> hoop-daemon/src/risk_patterns.rs:35:1
+    |
+ 35 | pub enum RiskSeverity {
+    | ^^^^^^^^^^^^^^^^^^^^^ must implement `PartialEq`
+help: consider annotating `risk_patterns::RiskSeverity` with `#[derive(PartialEq)]`
+    |
+ 35 + #[derive(PartialEq)]
+ 36 | pub enum RiskSeverity {
+    |
+
+error[E0369]: binary operation `==` cannot be applied to type `risk_patterns::RiskSeverity`
+   --> hoop-daemon/src/risk_patterns.rs:670:9
+    |
+670 |         assert_eq!(cross_ws_pattern.unwrap().severity, RiskSeverity::High);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |         |
+    |         risk_patterns::RiskSeverity
+    |         risk_patterns::RiskSeverity
+    |
+note: an implementation of `PartialEq` might be missing for `risk_patterns::RiskSeverity`
+   --> hoop-daemon/src/risk_patterns.rs:35:1
+    |
+ 35 | pub enum RiskSeverity {
+    | ^^^^^^^^^^^^^^^^^^^^^ must implement `PartialEq`
+help: consider annotating `risk_patterns::RiskSeverity` with `#[derive(PartialEq)]`
+    |
+ 35 + #[derive(PartialEq)]
+ 36 | pub enum RiskSeverity {
+    |
+
+error[E0369]: binary operation `==` cannot be applied to type `risk_patterns::RiskSeverity`
+   --> hoop-daemon/src/risk_patterns.rs:674:9
+    |
+674 |         assert_eq!(review_loop_pattern.unwrap().severity, RiskSeverity::High);
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |         |
+    |         risk_patterns::RiskSeverity
+    |         risk_patterns::RiskSeverity
+    |
+note: an implementation of `PartialEq` might be missing for `risk_patterns::RiskSeverity`
+   --> hoop-daemon/src/risk_patterns.rs:35:1
+    |
+ 35 | pub enum RiskSeverity {
+    | ^^^^^^^^^^^^^^^^^^^^^ must implement `PartialEq`
+help: consider annotating `risk_patterns::RiskSeverity` with `#[derive(PartialEq)]`
+    |
+ 35 + #[derive(PartialEq)]
+ 36 | pub enum RiskSeverity {
+    |
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:269:28
+     |
+ 269 |         let first = stream.next().await.unwrap();
+     |                            ^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `std::option::Option<{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/once.rs:24:1
+     |
+  24 | / pin_project! {
+  25 | |     /// A stream which emits single element and then EOF.
+  26 | |     #[derive(Debug)]
+  27 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  32 | | }
+     | |_- in this macro invocation
+     = note: required for `Once<...>` to implement `Unpin`
+note: required because it appears within the type `Option<Once<...>>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `futures_util::StreamExt::next`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/mod.rs:275:15
+     |
+ 273 |     fn next(&mut self) -> Next<'_, Self>
+     |        ---- required by a bound in this associated function
+ 274 |     where
+ 275 |         Self: Unpin,
+     |               ^^^^^ required by this bound in `StreamExt::next`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-11251439320556782643.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:269:28
+     |
+ 269 |         let first = stream.next().await.unwrap();
+     |                            ^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/unfold_state.rs:5:1
+     |
+   5 | / pin_project! {
+   6 | |     /// UnfoldState used for stream and sink unfolds
+   7 | |     #[project = UnfoldStateProj]
+   8 | |     #[project_replace = UnfoldStateProjReplace]
+...    |
+  20 | | }
+     | |_- in this macro invocation
+     = note: required for `UnfoldState<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/unfold.rs:58:1
+     |
+  58 | / pin_project! {
+  59 | |     /// Stream for the [`unfold`] function.
+  60 | |     #[must_use = "streams do nothing unless polled"]
+  61 | |     pub struct Unfold<T, F, Fut> {
+...    |
+  66 | | }
+     | |_- in this macro invocation
+     = note: required for `Unfold<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `futures_util::StreamExt::next`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/mod.rs:275:15
+     |
+ 273 |     fn next(&mut self) -> Next<'_, Self>
+     |        ---- required by a bound in this associated function
+ 274 |     where
+ 275 |         Self: Unpin,
+     |               ^^^^^ required by this bound in `StreamExt::next`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-11647852321399255958.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:269:35
+     |
+ 269 |         let first = stream.next().await.unwrap();
+     |                                   ^^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `std::option::Option<{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/once.rs:24:1
+     |
+  24 | / pin_project! {
+  25 | |     /// A stream which emits single element and then EOF.
+  26 | |     #[derive(Debug)]
+  27 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  32 | | }
+     | |_- in this macro invocation
+     = note: required for `Once<...>` to implement `Unpin`
+note: required because it appears within the type `Option<Once<...>>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `futures_util::Future`
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `std::future::IntoFuture`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-6623928730509368515.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: remove the `.await`
+     |
+ 269 -         let first = stream.next().await.unwrap();
+ 269 +         let first = stream.next().unwrap();
+     |
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:269:35
+     |
+ 269 |         let first = stream.next().await.unwrap();
+     |                                   ^^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/unfold_state.rs:5:1
+     |
+   5 | / pin_project! {
+   6 | |     /// UnfoldState used for stream and sink unfolds
+   7 | |     #[project = UnfoldStateProj]
+   8 | |     #[project_replace = UnfoldStateProjReplace]
+...    |
+  20 | | }
+     | |_- in this macro invocation
+     = note: required for `UnfoldState<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/unfold.rs:58:1
+     |
+  58 | / pin_project! {
+  59 | |     /// Stream for the [`unfold`] function.
+  60 | |     #[must_use = "streams do nothing unless polled"]
+  61 | |     pub struct Unfold<T, F, Fut> {
+...    |
+  66 | | }
+     | |_- in this macro invocation
+     = note: required for `Unfold<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `futures_util::Future`
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `std::future::IntoFuture`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-3654766970712731152.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: remove the `.await`
+     |
+ 269 -         let first = stream.next().await.unwrap();
+ 269 +         let first = stream.next().unwrap();
+     |
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:278:29
+     |
+ 278 |         let second = stream.next().await.unwrap();
+     |                             ^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `std::option::Option<{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/once.rs:24:1
+     |
+  24 | / pin_project! {
+  25 | |     /// A stream which emits single element and then EOF.
+  26 | |     #[derive(Debug)]
+  27 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  32 | | }
+     | |_- in this macro invocation
+     = note: required for `Once<...>` to implement `Unpin`
+note: required because it appears within the type `Option<Once<...>>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `futures_util::StreamExt::next`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/mod.rs:275:15
+     |
+ 273 |     fn next(&mut self) -> Next<'_, Self>
+     |        ---- required by a bound in this associated function
+ 274 |     where
+ 275 |         Self: Unpin,
+     |               ^^^^^ required by this bound in `StreamExt::next`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-14460788239157144604.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:278:29
+     |
+ 278 |         let second = stream.next().await.unwrap();
+     |                             ^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/unfold_state.rs:5:1
+     |
+   5 | / pin_project! {
+   6 | |     /// UnfoldState used for stream and sink unfolds
+   7 | |     #[project = UnfoldStateProj]
+   8 | |     #[project_replace = UnfoldStateProjReplace]
+...    |
+  20 | | }
+     | |_- in this macro invocation
+     = note: required for `UnfoldState<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/unfold.rs:58:1
+     |
+  58 | / pin_project! {
+  59 | |     /// Stream for the [`unfold`] function.
+  60 | |     #[must_use = "streams do nothing unless polled"]
+  61 | |     pub struct Unfold<T, F, Fut> {
+...    |
+  66 | | }
+     | |_- in this macro invocation
+     = note: required for `Unfold<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `futures_util::StreamExt::next`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/mod.rs:275:15
+     |
+ 273 |     fn next(&mut self) -> Next<'_, Self>
+     |        ---- required by a bound in this associated function
+ 274 |     where
+ 275 |         Self: Unpin,
+     |               ^^^^^ required by this bound in `StreamExt::next`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-320136951960803328.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:278:36
+     |
+ 278 |         let second = stream.next().await.unwrap();
+     |                                    ^^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `std::option::Option<{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/once.rs:24:1
+     |
+  24 | / pin_project! {
+  25 | |     /// A stream which emits single element and then EOF.
+  26 | |     #[derive(Debug)]
+  27 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  32 | | }
+     | |_- in this macro invocation
+     = note: required for `Once<...>` to implement `Unpin`
+note: required because it appears within the type `Option<Once<...>>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `futures_util::Future`
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `std::future::IntoFuture`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-7498542351076148728.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: remove the `.await`
+     |
+ 278 -         let second = stream.next().await.unwrap();
+ 278 +         let second = stream.next().unwrap();
+     |
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:278:36
+     |
+ 278 |         let second = stream.next().await.unwrap();
+     |                                    ^^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/unfold_state.rs:5:1
+     |
+   5 | / pin_project! {
+   6 | |     /// UnfoldState used for stream and sink unfolds
+   7 | |     #[project = UnfoldStateProj]
+   8 | |     #[project_replace = UnfoldStateProjReplace]
+...    |
+  20 | | }
+     | |_- in this macro invocation
+     = note: required for `UnfoldState<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/unfold.rs:58:1
+     |
+  58 | / pin_project! {
+  59 | |     /// Stream for the [`unfold`] function.
+  60 | |     #[must_use = "streams do nothing unless polled"]
+  61 | |     pub struct Unfold<T, F, Fut> {
+...    |
+  66 | | }
+     | |_- in this macro invocation
+     = note: required for `Unfold<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `futures_util::Future`
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `std::future::IntoFuture`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-11416287864661276283.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: remove the `.await`
+     |
+ 278 -         let second = stream.next().await.unwrap();
+ 278 +         let second = stream.next().unwrap();
+     |
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:286:28
+     |
+ 286 |         let third = stream.next().await.unwrap();
+     |                            ^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `std::option::Option<{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/once.rs:24:1
+     |
+  24 | / pin_project! {
+  25 | |     /// A stream which emits single element and then EOF.
+  26 | |     #[derive(Debug)]
+  27 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  32 | | }
+     | |_- in this macro invocation
+     = note: required for `Once<...>` to implement `Unpin`
+note: required because it appears within the type `Option<Once<...>>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `futures_util::StreamExt::next`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/mod.rs:275:15
+     |
+ 273 |     fn next(&mut self) -> Next<'_, Self>
+     |        ---- required by a bound in this associated function
+ 274 |     where
+ 275 |         Self: Unpin,
+     |               ^^^^^ required by this bound in `StreamExt::next`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-11274348871006020723.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:286:28
+     |
+ 286 |         let third = stream.next().await.unwrap();
+     |                            ^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/unfold_state.rs:5:1
+     |
+   5 | / pin_project! {
+   6 | |     /// UnfoldState used for stream and sink unfolds
+   7 | |     #[project = UnfoldStateProj]
+   8 | |     #[project_replace = UnfoldStateProjReplace]
+...    |
+  20 | | }
+     | |_- in this macro invocation
+     = note: required for `UnfoldState<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/unfold.rs:58:1
+     |
+  58 | / pin_project! {
+  59 | |     /// Stream for the [`unfold`] function.
+  60 | |     #[must_use = "streams do nothing unless polled"]
+  61 | |     pub struct Unfold<T, F, Fut> {
+...    |
+  66 | | }
+     | |_- in this macro invocation
+     = note: required for `Unfold<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `futures_util::StreamExt::next`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/mod.rs:275:15
+     |
+ 273 |     fn next(&mut self) -> Next<'_, Self>
+     |        ---- required by a bound in this associated function
+ 274 |     where
+ 275 |         Self: Unpin,
+     |               ^^^^^ required by this bound in `StreamExt::next`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-15775020946386319396.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:286:35
+     |
+ 286 |         let third = stream.next().await.unwrap();
+     |                                   ^^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `std::option::Option<{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/once.rs:24:1
+     |
+  24 | / pin_project! {
+  25 | |     /// A stream which emits single element and then EOF.
+  26 | |     #[derive(Debug)]
+  27 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  32 | | }
+     | |_- in this macro invocation
+     = note: required for `Once<...>` to implement `Unpin`
+note: required because it appears within the type `Option<Once<...>>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `futures_util::Future`
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `std::future::IntoFuture`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-9579130676676290279.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: remove the `.await`
+     |
+ 286 -         let third = stream.next().await.unwrap();
+ 286 +         let third = stream.next().unwrap();
+     |
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:286:35
+     |
+ 286 |         let third = stream.next().await.unwrap();
+     |                                   ^^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/unfold_state.rs:5:1
+     |
+   5 | / pin_project! {
+   6 | |     /// UnfoldState used for stream and sink unfolds
+   7 | |     #[project = UnfoldStateProj]
+   8 | |     #[project_replace = UnfoldStateProjReplace]
+...    |
+  20 | | }
+     | |_- in this macro invocation
+     = note: required for `UnfoldState<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/unfold.rs:58:1
+     |
+  58 | / pin_project! {
+  59 | |     /// Stream for the [`unfold`] function.
+  60 | |     #[must_use = "streams do nothing unless polled"]
+  61 | |     pub struct Unfold<T, F, Fut> {
+...    |
+  66 | | }
+     | |_- in this macro invocation
+     = note: required for `Unfold<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `futures_util::Future`
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `std::future::IntoFuture`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-6137938099526444361.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: remove the `.await`
+     |
+ 286 -         let third = stream.next().await.unwrap();
+ 286 +         let third = stream.next().unwrap();
+     |
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:301:22
+     |
+ 301 |         match stream.next().await.unwrap() {
+     |                      ^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `std::option::Option<{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/once.rs:24:1
+     |
+  24 | / pin_project! {
+  25 | |     /// A stream which emits single element and then EOF.
+  26 | |     #[derive(Debug)]
+  27 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  32 | | }
+     | |_- in this macro invocation
+     = note: required for `Once<...>` to implement `Unpin`
+note: required because it appears within the type `Option<Once<...>>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `futures_util::StreamExt::next`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/mod.rs:275:15
+     |
+ 273 |     fn next(&mut self) -> Next<'_, Self>
+     |        ---- required by a bound in this associated function
+ 274 |     where
+ 275 |         Self: Unpin,
+     |               ^^^^^ required by this bound in `StreamExt::next`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-5092532196976357452.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:301:22
+     |
+ 301 |         match stream.next().await.unwrap() {
+     |                      ^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/unfold_state.rs:5:1
+     |
+   5 | / pin_project! {
+   6 | |     /// UnfoldState used for stream and sink unfolds
+   7 | |     #[project = UnfoldStateProj]
+   8 | |     #[project_replace = UnfoldStateProjReplace]
+...    |
+  20 | | }
+     | |_- in this macro invocation
+     = note: required for `UnfoldState<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/unfold.rs:58:1
+     |
+  58 | / pin_project! {
+  59 | |     /// Stream for the [`unfold`] function.
+  60 | |     #[must_use = "streams do nothing unless polled"]
+  61 | |     pub struct Unfold<T, F, Fut> {
+...    |
+  66 | | }
+     | |_- in this macro invocation
+     = note: required for `Unfold<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `futures_util::StreamExt::next`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/mod.rs:275:15
+     |
+ 273 |     fn next(&mut self) -> Next<'_, Self>
+     |        ---- required by a bound in this associated function
+ 274 |     where
+ 275 |         Self: Unpin,
+     |               ^^^^^ required by this bound in `StreamExt::next`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-17900690263670407410.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:301:29
+     |
+ 301 |         match stream.next().await.unwrap() {
+     |                             ^^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `std::option::Option<{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/once.rs:24:1
+     |
+  24 | / pin_project! {
+  25 | |     /// A stream which emits single element and then EOF.
+  26 | |     #[derive(Debug)]
+  27 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  32 | | }
+     | |_- in this macro invocation
+     = note: required for `Once<...>` to implement `Unpin`
+note: required because it appears within the type `Option<Once<...>>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `futures_util::Future`
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `std::future::IntoFuture`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-1009334688789668327.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: remove the `.await`
+     |
+ 301 -         match stream.next().await.unwrap() {
+ 301 +         match stream.next().unwrap() {
+     |
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:301:29
+     |
+ 301 |         match stream.next().await.unwrap() {
+     |                             ^^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/unfold_state.rs:5:1
+     |
+   5 | / pin_project! {
+   6 | |     /// UnfoldState used for stream and sink unfolds
+   7 | |     #[project = UnfoldStateProj]
+   8 | |     #[project_replace = UnfoldStateProjReplace]
+...    |
+  20 | | }
+     | |_- in this macro invocation
+     = note: required for `UnfoldState<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/unfold.rs:58:1
+     |
+  58 | / pin_project! {
+  59 | |     /// Stream for the [`unfold`] function.
+  60 | |     #[must_use = "streams do nothing unless polled"]
+  61 | |     pub struct Unfold<T, F, Fut> {
+...    |
+  66 | | }
+     | |_- in this macro invocation
+     = note: required for `Unfold<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `futures_util::Future`
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `std::future::IntoFuture`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-4054619156108590282.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: remove the `.await`
+     |
+ 301 -         match stream.next().await.unwrap() {
+ 301 +         match stream.next().unwrap() {
+     |
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:308:22
+     |
+ 308 |         match stream.next().await.unwrap() {
+     |                      ^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `std::option::Option<{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/once.rs:24:1
+     |
+  24 | / pin_project! {
+  25 | |     /// A stream which emits single element and then EOF.
+  26 | |     #[derive(Debug)]
+  27 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  32 | | }
+     | |_- in this macro invocation
+     = note: required for `Once<...>` to implement `Unpin`
+note: required because it appears within the type `Option<Once<...>>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `futures_util::StreamExt::next`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/mod.rs:275:15
+     |
+ 273 |     fn next(&mut self) -> Next<'_, Self>
+     |        ---- required by a bound in this associated function
+ 274 |     where
+ 275 |         Self: Unpin,
+     |               ^^^^^ required by this bound in `StreamExt::next`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-16072457339974349033.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:308:22
+     |
+ 308 |         match stream.next().await.unwrap() {
+     |                      ^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/unfold_state.rs:5:1
+     |
+   5 | / pin_project! {
+   6 | |     /// UnfoldState used for stream and sink unfolds
+   7 | |     #[project = UnfoldStateProj]
+   8 | |     #[project_replace = UnfoldStateProjReplace]
+...    |
+  20 | | }
+     | |_- in this macro invocation
+     = note: required for `UnfoldState<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/unfold.rs:58:1
+     |
+  58 | / pin_project! {
+  59 | |     /// Stream for the [`unfold`] function.
+  60 | |     #[must_use = "streams do nothing unless polled"]
+  61 | |     pub struct Unfold<T, F, Fut> {
+...    |
+  66 | | }
+     | |_- in this macro invocation
+     = note: required for `Unfold<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `futures_util::StreamExt::next`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/mod.rs:275:15
+     |
+ 273 |     fn next(&mut self) -> Next<'_, Self>
+     |        ---- required by a bound in this associated function
+ 274 |     where
+ 275 |         Self: Unpin,
+     |               ^^^^^ required by this bound in `StreamExt::next`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-11344295052176319290.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:308:29
+     |
+ 308 |         match stream.next().await.unwrap() {
+     |                             ^^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `std::option::Option<{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/once.rs:24:1
+     |
+  24 | / pin_project! {
+  25 | |     /// A stream which emits single element and then EOF.
+  26 | |     #[derive(Debug)]
+  27 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  32 | | }
+     | |_- in this macro invocation
+     = note: required for `Once<...>` to implement `Unpin`
+note: required because it appears within the type `Option<Once<...>>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `futures_util::Future`
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `std::future::IntoFuture`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-18199453263591498787.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: remove the `.await`
+     |
+ 308 -         match stream.next().await.unwrap() {
+ 308 +         match stream.next().unwrap() {
+     |
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:308:29
+     |
+ 308 |         match stream.next().await.unwrap() {
+     |                             ^^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/unfold_state.rs:5:1
+     |
+   5 | / pin_project! {
+   6 | |     /// UnfoldState used for stream and sink unfolds
+   7 | |     #[project = UnfoldStateProj]
+   8 | |     #[project_replace = UnfoldStateProjReplace]
+...    |
+  20 | | }
+     | |_- in this macro invocation
+     = note: required for `UnfoldState<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/unfold.rs:58:1
+     |
+  58 | / pin_project! {
+  59 | |     /// Stream for the [`unfold`] function.
+  60 | |     #[must_use = "streams do nothing unless polled"]
+  61 | |     pub struct Unfold<T, F, Fut> {
+...    |
+  66 | | }
+     | |_- in this macro invocation
+     = note: required for `Unfold<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `futures_util::Future`
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `std::future::IntoFuture`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-8547135900459867758.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: remove the `.await`
+     |
+ 308 -         match stream.next().await.unwrap() {
+ 308 +         match stream.next().unwrap() {
+     |
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:315:22
+     |
+ 315 |         match stream.next().await.unwrap() {
+     |                      ^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `std::option::Option<{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/once.rs:24:1
+     |
+  24 | / pin_project! {
+  25 | |     /// A stream which emits single element and then EOF.
+  26 | |     #[derive(Debug)]
+  27 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  32 | | }
+     | |_- in this macro invocation
+     = note: required for `Once<...>` to implement `Unpin`
+note: required because it appears within the type `Option<Once<...>>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `futures_util::StreamExt::next`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/mod.rs:275:15
+     |
+ 273 |     fn next(&mut self) -> Next<'_, Self>
+     |        ---- required by a bound in this associated function
+ 274 |     where
+ 275 |         Self: Unpin,
+     |               ^^^^^ required by this bound in `StreamExt::next`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-10376392803074720687.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:315:22
+     |
+ 315 |         match stream.next().await.unwrap() {
+     |                      ^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/unfold_state.rs:5:1
+     |
+   5 | / pin_project! {
+   6 | |     /// UnfoldState used for stream and sink unfolds
+   7 | |     #[project = UnfoldStateProj]
+   8 | |     #[project_replace = UnfoldStateProjReplace]
+...    |
+  20 | | }
+     | |_- in this macro invocation
+     = note: required for `UnfoldState<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/unfold.rs:58:1
+     |
+  58 | / pin_project! {
+  59 | |     /// Stream for the [`unfold`] function.
+  60 | |     #[must_use = "streams do nothing unless polled"]
+  61 | |     pub struct Unfold<T, F, Fut> {
+...    |
+  66 | | }
+     | |_- in this macro invocation
+     = note: required for `Unfold<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `futures_util::StreamExt::next`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/mod.rs:275:15
+     |
+ 273 |     fn next(&mut self) -> Next<'_, Self>
+     |        ---- required by a bound in this associated function
+ 274 |     where
+ 275 |         Self: Unpin,
+     |               ^^^^^ required by this bound in `StreamExt::next`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-15624818946758060088.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:315:29
+     |
+ 315 |         match stream.next().await.unwrap() {
+     |                             ^^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `std::option::Option<{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/once.rs:24:1
+     |
+  24 | / pin_project! {
+  25 | |     /// A stream which emits single element and then EOF.
+  26 | |     #[derive(Debug)]
+  27 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  32 | | }
+     | |_- in this macro invocation
+     = note: required for `Once<...>` to implement `Unpin`
+note: required because it appears within the type `Option<Once<...>>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `futures_util::Future`
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `std::future::IntoFuture`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-11271999674411511913.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: remove the `.await`
+     |
+ 315 -         match stream.next().await.unwrap() {
+ 315 +         match stream.next().unwrap() {
+     |
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:315:29
+     |
+ 315 |         match stream.next().await.unwrap() {
+     |                             ^^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/unfold_state.rs:5:1
+     |
+   5 | / pin_project! {
+   6 | |     /// UnfoldState used for stream and sink unfolds
+   7 | |     #[project = UnfoldStateProj]
+   8 | |     #[project_replace = UnfoldStateProjReplace]
+...    |
+  20 | | }
+     | |_- in this macro invocation
+     = note: required for `UnfoldState<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/unfold.rs:58:1
+     |
+  58 | / pin_project! {
+  59 | |     /// Stream for the [`unfold`] function.
+  60 | |     #[must_use = "streams do nothing unless polled"]
+  61 | |     pub struct Unfold<T, F, Fut> {
+...    |
+  66 | | }
+     | |_- in this macro invocation
+     = note: required for `Unfold<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `futures_util::Future`
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `std::future::IntoFuture`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-6418715390421894276.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: remove the `.await`
+     |
+ 315 -         match stream.next().await.unwrap() {
+ 315 +         match stream.next().unwrap() {
+     |
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:322:22
+     |
+ 322 |         match stream.next().await.unwrap() {
+     |                      ^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `std::option::Option<{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/once.rs:24:1
+     |
+  24 | / pin_project! {
+  25 | |     /// A stream which emits single element and then EOF.
+  26 | |     #[derive(Debug)]
+  27 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  32 | | }
+     | |_- in this macro invocation
+     = note: required for `Once<...>` to implement `Unpin`
+note: required because it appears within the type `Option<Once<...>>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `futures_util::StreamExt::next`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/mod.rs:275:15
+     |
+ 273 |     fn next(&mut self) -> Next<'_, Self>
+     |        ---- required by a bound in this associated function
+ 274 |     where
+ 275 |         Self: Unpin,
+     |               ^^^^^ required by this bound in `StreamExt::next`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-17095817720906372713.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:322:22
+     |
+ 322 |         match stream.next().await.unwrap() {
+     |                      ^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/unfold_state.rs:5:1
+     |
+   5 | / pin_project! {
+   6 | |     /// UnfoldState used for stream and sink unfolds
+   7 | |     #[project = UnfoldStateProj]
+   8 | |     #[project_replace = UnfoldStateProjReplace]
+...    |
+  20 | | }
+     | |_- in this macro invocation
+     = note: required for `UnfoldState<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/unfold.rs:58:1
+     |
+  58 | / pin_project! {
+  59 | |     /// Stream for the [`unfold`] function.
+  60 | |     #[must_use = "streams do nothing unless polled"]
+  61 | |     pub struct Unfold<T, F, Fut> {
+...    |
+  66 | | }
+     | |_- in this macro invocation
+     = note: required for `Unfold<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: required by a bound in `futures_util::StreamExt::next`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/mod.rs:275:15
+     |
+ 273 |     fn next(&mut self) -> Next<'_, Self>
+     |        ---- required by a bound in this associated function
+ 274 |     where
+ 275 |         Self: Unpin,
+     |               ^^^^^ required by this bound in `StreamExt::next`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-4472217496556259845.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:322:29
+     |
+ 322 |         match stream.next().await.unwrap() {
+     |                             ^^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `std::option::Option<{async block@hoop-daemon/src/syntax_highlight_stream.rs:163:18: 163:28}>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/once.rs:24:1
+     |
+  24 | / pin_project! {
+  25 | |     /// A stream which emits single element and then EOF.
+  26 | |     #[derive(Debug)]
+  27 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  32 | | }
+     | |_- in this macro invocation
+     = note: required for `Once<...>` to implement `Unpin`
+note: required because it appears within the type `Option<Once<...>>`
+    --> /home/coding/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/library/core/src/option.rs:600:10
+     |
+ 600 | pub enum Option<T> {
+     |          ^^^^^^
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `futures_util::Future`
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `std::future::IntoFuture`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-1304439942321225496.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: remove the `.await`
+     |
+ 322 -         match stream.next().await.unwrap() {
+ 322 +         match stream.next().unwrap() {
+     |
+
+error[E0277]: `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}` cannot be unpinned
+    --> hoop-daemon/src/syntax_highlight_stream.rs:322:29
+     |
+ 322 |         match stream.next().await.unwrap() {
+     |                             ^^^^^ unsatisfied trait bound
+     |
+     = help: within `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`, the trait `Unpin` is not implemented for `{async block@hoop-daemon/src/syntax_highlight_stream.rs:174:65: 174:75}`
+     = note: consider using the `pin!` macro
+             consider using `Box::pin` if you need to access the pinned value outside of the current scope
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/unfold_state.rs:5:1
+     |
+   5 | / pin_project! {
+   6 | |     /// UnfoldState used for stream and sink unfolds
+   7 | |     #[project = UnfoldStateProj]
+   8 | |     #[project_replace = UnfoldStateProjReplace]
+...    |
+  20 | | }
+     | |_- in this macro invocation
+     = note: required for `UnfoldState<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, (usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/unfold.rs:58:1
+     |
+  58 | / pin_project! {
+  59 | |     /// Stream for the [`unfold`] function.
+  60 | |     #[must_use = "streams do nothing unless polled"]
+  61 | |     pub struct Unfold<T, F, Fut> {
+...    |
+  66 | | }
+     | |_- in this macro invocation
+     = note: required for `Unfold<(usize, String, Arc<SyntaxSet>, Arc<...>, ...), ..., ...>` to implement `Unpin`
+note: required because it appears within the type `__Origin<'_, Once<...>, ...>`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/pin-project-lite-0.2.17/src/lib.rs:1251:21
+     |
+1251 |           $vis struct __Origin<'__pin, $($impl_generics)*>
+     |                       ^^^^^^^^
+     |
+    ::: /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-util-0.3.32/src/stream/stream/chain.rs:7:1
+     |
+   7 | / pin_project! {
+   8 | |     /// Stream for the [`chain`](super::StreamExt::chain) method.
+   9 | |     #[derive(Debug)]
+  10 | |     #[must_use = "streams do nothing unless polled"]
+...    |
+  17 | | }
+     | |_- in this macro invocation
+     = note: required for `Chain<Once<...>, ...>` to implement `Unpin`
+note: required because it appears within the type `impl Stream<Item = syntax_highlight_stream::StreamItem> + std::marker::Send + 'static`
+    --> hoop-daemon/src/syntax_highlight_stream.rs:129:6
+     |
+ 129 | ) -> impl Stream<Item = StreamItem> + Send + 'static {
+     |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `futures_util::Future`
+     = note: required for `Next<'_, impl Stream<Item = StreamItem> + Send>` to implement `std::future::IntoFuture`
+     = note: the full name for the type has been written to '/home/coding/HOOP/target/debug/deps/hoop_daemon-4b005937e331ee2a.long-type-561768366952256335.txt'
+     = note: consider using `--verbose` to print the full type name to the console
+     = note: this error originates in the macro `$crate::__pin_project_make_unpin_impl` which comes from the expansion of the macro `pin_project` (in Nightly builds, run with -Z macro-backtrace for more info)
+help: remove the `.await`
+     |
+ 322 -         match stream.next().await.unwrap() {
+ 322 +         match stream.next().unwrap() {
+     |
+
+error[E0063]: missing field `a` in initializer of `Color`
+   --> hoop-daemon/src/api_files.rs:542:33
+    |
+542 |         assert_eq!(format_color(syntect::highlighting::Color { r: 255, g: 0, b: 0 }), "#ff0000");
+    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `a`
+
+error[E0063]: missing field `a` in initializer of `Color`
+   --> hoop-daemon/src/api_files.rs:543:33
+    |
+543 |         assert_eq!(format_color(syntect::highlighting::Color { r: 0, g: 255, b: 0 }), "#00ff00");
+    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `a`
+
+error[E0063]: missing field `a` in initializer of `Color`
+   --> hoop-daemon/src/api_files.rs:544:33
+    |
+544 |         assert_eq!(format_color(syntect::highlighting::Color { r: 0, g: 0, b: 255 }), "#0000ff");
+    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ missing `a`
+
+error[E0063]: missing field `bead_id` in initializer of `net_diff::CommitEntry`
+   --> hoop-daemon/src/net_diff.rs:547:13
+    |
+547 |             CommitEntry {
+    |             ^^^^^^^^^^^ missing `bead_id`
+
+error[E0063]: missing field `bead_id` in initializer of `net_diff::CommitEntry`
+   --> hoop-daemon/src/net_diff.rs:552:13
+    |
+552 |             CommitEntry {
+    |             ^^^^^^^^^^^ missing `bead_id`
+
+warning: unused import: `utoipa::ToSchema`
+   --> hoop-daemon/src/files.rs:524:5
+    |
+524 | use utoipa::ToSchema;
+    |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `utoipa::ToSchema`
+   --> hoop-daemon/src/stitch_decompose.rs:440:5
+    |
+440 | use utoipa::ToSchema;
+    |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `utoipa::ToSchema`
+   --> hoop-daemon/src/syntax_highlight.rs:166:5
+    |
+166 | use utoipa::ToSchema;
+    |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `utoipa::ToSchema`
+   --> hoop-daemon/src/api_prompts.rs:400:5
+    |
+400 | use utoipa::ToSchema;
+    |     ^^^^^^^^^^^^^^^^
+
+warning: unused variable: `tmp`
+   --> hoop-daemon/src/atomic_write.rs:465:21
+    |
+465 |                 let tmp = Arc::clone(&tmp);
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_tmp`
+
+warning: unused variable: `words`
+   --> hoop-daemon/src/audio_redaction.rs:456:13
+    |
+456 |         let words = vec![
+    |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_words`
+
+warning: unused variable: `start`
+   --> hoop-daemon/src/load_test.rs:471:9
+    |
+471 |     let start = Instant::now();
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: unused variable: `client_id`
+   --> hoop-daemon/src/load_test.rs:610:34
+    |
+610 |                         Ok(Some((client_id, recv_time))) => {
+    |                                  ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_client_id`
+
+warning: unused variable: `http_elapsed`
+   --> hoop-daemon/src/load_test.rs:678:9
+    |
+678 |     let http_elapsed = http_start.elapsed();
+    |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_http_elapsed`
+
+warning: unused variable: `out`
+   --> hoop-daemon/src/pdf_sanitize.rs:503:14
+    |
+503 |         let (out, rec) = sanitize_bytes(&pdf);
+    |              ^^^ help: if this is intentional, prefix it with an underscore: `_out`
+
+warning: unused variable: `out`
+   --> hoop-daemon/src/pdf_sanitize.rs:512:14
+    |
+512 |         let (out, rec) = sanitize_bytes(&pdf);
+    |              ^^^ help: if this is intentional, prefix it with an underscore: `_out`
+
+warning: unused variable: `out`
+   --> hoop-daemon/src/pdf_sanitize.rs:519:14
+    |
+519 |         let (out, rec) = sanitize_bytes(&pdf);
+    |              ^^^ help: if this is intentional, prefix it with an underscore: `_out`
+
+warning: unused variable: `out`
+   --> hoop-daemon/src/pdf_sanitize.rs:539:14
+    |
+539 |         let (out, rec) = sanitize_bytes(&pdf);
+    |              ^^^ help: if this is intentional, prefix it with an underscore: `_out`
+
+warning: unused variable: `paths`
+    --> hoop-daemon/src/sessions.rs:3701:13
+     |
+3701 |         let paths = GeminiAdapter::discover_session_paths();
+     |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_paths`
+
+warning: unused variable: `home`
+   --> hoop-daemon/src/config_backup.rs:147:13
+    |
+147 |         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    |             ^^^^ help: if this is intentional, prefix it with an underscore: `_home`
+
+warning: unused variable: `has_high_entropy`
+   --> hoop-daemon/src/secrets_scanner.rs:529:13
+    |
+529 |         let has_high_entropy = findings.iter().any(|f| f.pattern_id == "high_entropy");
+    |             ^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_has_high_entropy`
+
+Some errors have detailed explanations: E0061, E0063, E0277, E0308, E0369, E0433, E0599.
+For more information about an error, try `rustc --explain E0061`.
+warning: `hoop-daemon` (lib test) generated 103 warnings (70 duplicates)
+error: could not compile `hoop-daemon` (lib test) due to 82 previous errors; 103 warnings emitted

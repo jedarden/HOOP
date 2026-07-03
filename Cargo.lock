@@ -82,7 +82,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -93,7 +93,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -617,7 +617,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users 0.5.2",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -665,7 +665,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -786,6 +786,12 @@ dependencies = [
  "lazy_static",
  "num",
 ]
+
+[[package]]
+name = "fs_extra"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 
 [[package]]
 name = "fsevent-sys"
@@ -1005,7 +1011,7 @@ dependencies = [
 
 [[package]]
 name = "hoop"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -1033,7 +1039,7 @@ dependencies = [
 
 [[package]]
 name = "hoop-daemon"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -1045,6 +1051,7 @@ dependencies = [
  "dirs 5.0.1",
  "flate2",
  "fnv",
+ "fs_extra",
  "futures-util",
  "glob",
  "hex",
@@ -1060,6 +1067,7 @@ dependencies = [
  "proptest",
  "proptest-derive",
  "quick-xml",
+ "rand 0.8.6",
  "rayon",
  "regex",
  "reqwest",
@@ -1088,12 +1096,13 @@ dependencies = [
  "utoipa-redoc",
  "utoipa-swagger-ui",
  "uuid",
+ "walkdir",
  "zstd",
 ]
 
 [[package]]
 name = "hoop-mcp"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1121,7 +1130,7 @@ dependencies = [
 
 [[package]]
 name = "hoop-schema"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "chrono",
  "dirs 5.0.1",
@@ -1139,7 +1148,7 @@ dependencies = [
 
 [[package]]
 name = "hoop-ui"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "axum 0.7.9",
  "mime_guess",
@@ -1763,7 +1772,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2425,7 +2434,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2778,7 +2787,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a766e1110788c36f4fa1c2b71b387a7815aa65f88ce0229841826633d93723e"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2886,7 +2895,7 @@ dependencies = [
  "getrandom 0.4.2",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3813,7 +3822,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
