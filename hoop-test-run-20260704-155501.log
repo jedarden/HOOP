@@ -1,0 +1,327 @@
+HOOP development environment loaded
+Rust version: rustc 1.95.0 (59807616e 2026-04-14) (built from a source tarball)
+Node version: v20.20.2
+pnpm version: 11.9.0
+warning: unused import: `json`
+  --> hoop-daemon/src/prompt_substitute.rs:15:18
+   |
+15 | use serde_json::{json, Value};
+   |                  ^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: type `PatternCategory` is more private than the item `DetectedPattern::category`
+  --> hoop-daemon/src/reflection_detector.rs:88:5
+   |
+88 |     pub category: PatternCategory,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ field `DetectedPattern::category` is reachable at visibility `pub`
+   |
+note: but type `PatternCategory` is only usable at visibility `pub(self)`
+  --> hoop-daemon/src/reflection_detector.rs:60:1
+   |
+60 | enum PatternCategory {
+   | ^^^^^^^^^^^^^^^^^^^^
+   = note: `#[warn(private_interfaces)]` on by default
+
+warning: function `openapi_router` is never used
+    --> hoop-daemon/src/lib.rs:1277:4
+     |
+1277 | fn openapi_router() -> Router<DaemonState> {
+     |    ^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `load_hoop_config` is never used
+    --> hoop-daemon/src/lib.rs:3796:10
+     |
+3796 | async fn load_hoop_config() -> Option<hoop_schema::HoopConfig> {
+     |          ^^^^^^^^^^^^^^^^
+
+warning: function `check_and_emit_capacity_alert` is never used
+    --> hoop-daemon/src/lib.rs:4063:4
+     |
+4063 | fn check_and_emit_capacity_alert() -> anyhow::Result<()> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: field `session_id` is never read
+   --> hoop-daemon/src/capacity.rs:358:5
+    |
+355 | struct ParsedPrompt {
+    |        ------------ field in this struct
+...
+358 |     session_id: String,
+    |     ^^^^^^^^^^
+    |
+    = note: `ParsedPrompt` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: function `get_opencode_limits` is never used
+   --> hoop-daemon/src/capacity.rs:472:4
+    |
+472 | fn get_opencode_limits() -> OpenCodePromptLimits {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: field `session_subpath` is never read
+   --> hoop-daemon/src/capacity.rs:526:5
+    |
+522 | struct GeminiAccountPaths {
+    |        ------------------ field in this struct
+...
+526 |     session_subpath: String,
+    |     ^^^^^^^^^^^^^^^
+    |
+    = note: `GeminiAccountPaths` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: field `rpm_limit` is never read
+  --> hoop-daemon/src/capacity.rs:55:13
+   |
+51 |     pub struct GeminiQuotaLimits {
+   |                ----------------- field in this struct
+...
+55 |         pub rpm_limit: Option<u64>,
+   |             ^^^^^^^^^
+   |
+   = note: `GeminiQuotaLimits` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: struct `QuotaLimit` is never constructed
+  --> hoop-daemon/src/capacity.rs:60:12
+   |
+60 |     struct QuotaLimit {
+   |            ^^^^^^^^^^
+
+warning: field `subpath` is never read
+   --> hoop-daemon/src/sessions.rs:557:5
+    |
+555 | pub struct GeminiSessionPath {
+    |            ----------------- field in this struct
+556 |     /// Subpath to sessions (e.g., "tmp" or "sessions")
+557 |     subpath: String,
+    |     ^^^^^^^
+    |
+    = note: `GeminiSessionPath` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: constant `MAX_UNASSIGNED_SESSIONS` is never used
+   --> hoop-daemon/src/sessions.rs:763:7
+    |
+763 | const MAX_UNASSIGNED_SESSIONS: usize = 100;
+    |       ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MIN_SAMPLES_FOR_PREDICTION` is never used
+  --> hoop-daemon/src/stitch_percentile_index.rs:68:7
+   |
+68 | const MIN_SAMPLES_FOR_PREDICTION: usize = 3;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `STITCH_CLOSED_THRESHOLD_SECONDS` is never used
+  --> hoop-daemon/src/stitch_percentile_index.rs:72:7
+   |
+72 | const STITCH_CLOSED_THRESHOLD_SECONDS: i64 = 300;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `hoop-daemon` (lib) generated 14 warnings (run `cargo fix --lib -p hoop-daemon` to apply 1 suggestion)
+   Compiling hoop v0.1.0 (/home/coding/HOOP/hoop-cli)
+warning: variable does not need to be mutable
+   --> hoop-mcp/tests/forbidden_worker_steering.rs:115:9
+    |
+115 |     let mut state = McpServerState::new("test-actor".to_string())
+    |         ----^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> hoop-mcp/tests/forbidden_worker_steering.rs:148:9
+    |
+148 |     let mut state = McpServerState::new("test-actor".to_string())
+    |         ----^^^^^
+    |         |
+    |         help: remove this `mut`
+
+warning: `hoop-mcp` (test "forbidden_worker_steering") generated 2 warnings (run `cargo fix --test "forbidden_worker_steering" -p hoop-mcp` to apply 2 suggestions)
+warning: unused import: `std::fs::File`
+   --> hoop-mcp/src/skills.rs:529:9
+    |
+529 |     use std::fs::File;
+    |         ^^^^^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `tempfile::TempDir`
+   --> hoop-mcp/src/skills.rs:530:9
+    |
+530 |     use tempfile::TempDir;
+    |         ^^^^^^^^^^^^^^^^^
+
+warning: `hoop-mcp` (bin "hoop-mcp" test) generated 2 warnings (run `cargo fix --bin "hoop-mcp" -p hoop-mcp --tests` to apply 2 suggestions)
+warning: `hoop-mcp` (lib test) generated 2 warnings (2 duplicates)
+   Compiling hoop-daemon v0.1.0 (/home/coding/HOOP/hoop-daemon)
+warning: function `walk_dir` is never used
+  --> hoop-daemon/tests/golden_transcripts_regression.rs:19:4
+   |
+19 | fn walk_dir(path: &std::path::Path) -> Vec<std::path::PathBuf> {
+   |    ^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `std::env`
+  --> hoop-cli/src/config.rs:11:5
+   |
+11 | use std::env;
+   |     ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `Deserialize` and `Serialize`
+  --> hoop-cli/src/patterns.rs:17:13
+   |
+17 | use serde::{Deserialize, Serialize};
+   |             ^^^^^^^^^^^  ^^^^^^^^^
+
+warning: unused import: `super::*`
+   --> hoop-cli/src/risk_patterns.rs:280:9
+    |
+280 |     use super::*;
+    |         ^^^^^^^^
+
+warning: unused imports: `ArgGroup`, `Args`, `Parser`, and `Subcommand`
+ --> hoop-cli/src/skills.rs:8:12
+  |
+8 | use clap::{ArgGroup, Args, Parser, Subcommand};
+  |            ^^^^^^^^  ^^^^  ^^^^^^  ^^^^^^^^^^
+
+warning: unused import: `std::io::Write`
+  --> hoop-cli/src/skills.rs:12:5
+   |
+12 | use std::io::Write;
+   |     ^^^^^^^^^^^^^^
+
+warning: unused import: `serde::Serialize`
+  --> hoop-cli/src/main.rs:21:5
+   |
+21 | use serde::Serialize;
+   |     ^^^^^^^^^^^^^^^^
+
+warning: unused variable: `bucket`
+  --> hoop-cli/src/restore.rs:73:5
+   |
+73 |     bucket: &str,
+   |     ^^^^^^ help: if this is intentional, prefix it with an underscore: `_bucket`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `object_key`
+  --> hoop-cli/src/restore.rs:74:5
+   |
+74 |     object_key: &str,
+   |     ^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_object_key`
+
+warning: unused variable: `socket_path`
+  --> hoop-cli/src/script.rs:78:13
+   |
+78 |         let socket_path = format!("{}/.hoop/control.sock", home);
+   |             ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_socket_path`
+
+warning: unused variable: `name`
+   --> hoop-cli/src/skills.rs:626:24
+    |
+626 | fn get_previous_sha256(name: &str) -> Result<Option<String>> {
+    |                        ^^^^ help: if this is intentional, prefix it with an underscore: `_name`
+
+warning: field `schema_version` is never read
+  --> hoop-cli/src/config.rs:34:5
+   |
+33 | struct ConfigResponse {
+   |        -------------- field in this struct
+34 |     schema_version: String,
+   |     ^^^^^^^^^^^^^^
+   |
+   = note: `ConfigResponse` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `validate_workspace` is never used
+   --> hoop-cli/src/projects.rs:391:8
+    |
+391 | pub fn validate_workspace(path: &Path) -> Result<PathBuf> {
+    |        ^^^^^^^^^^^^^^^^^^
+
+warning: field `script` is never read
+  --> hoop-cli/src/script.rs:42:5
+   |
+41 | struct ScriptRunResponse {
+   |        ----------------- field in this struct
+42 |     script: String,
+   |     ^^^^^^
+   |
+   = note: `ScriptRunResponse` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: field `name` is never read
+  --> hoop-cli/src/script.rs:63:5
+   |
+62 | struct ScriptManifest {
+   |        -------------- field in this struct
+63 |     name: String,
+   |     ^^^^
+   |
+   = note: `ScriptManifest` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: structure field `DNSName` should have a snake case name
+  --> hoop-cli/src/init.rs:36:5
+   |
+36 |     DNSName: String,
+   |     ^^^^^^^ help: convert the identifier to snake case: `dnsname`
+   |
+   = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: `hoop-daemon` (test "golden_transcripts_regression") generated 1 warning
+warning: unused import: `futures_util::SinkExt`
+  --> hoop-daemon/tests/epoch_sync_invariant.rs:14:5
+   |
+14 | use futures_util::SinkExt;
+   |     ^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0609]: no field `_temp_dir` on type `DaemonHandle`
+   --> hoop-daemon/tests/integration_harness.rs:602:50
+    |
+602 |     Ok((base_url, handle.shutdown_notify, handle._temp_dir))
+    |                                                  ^^^^^^^^^ unknown field
+    |
+help: a field with a similar name exists
+    |
+602 -     Ok((base_url, handle.shutdown_notify, handle._temp_dir))
+602 +     Ok((base_url, handle.shutdown_notify, handle.temp_dir))
+    |
+
+error[E0063]: missing field `workspace` in initializer of `Bead`
+   --> hoop-daemon/tests/integration_harness.rs:269:5
+    |
+269 |     Bead {
+    |     ^^^^ missing `workspace`
+
+warning: unused variable: `beads`
+   --> hoop-daemon/tests/integration_harness.rs:754:9
+    |
+754 |     let beads: Vec<hoop_daemon::Bead> = resp.json().await.expect("Failed to parse beads response");
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_beads`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `bead_id`
+    --> hoop-daemon/tests/integration_harness.rs:1310:9
+     |
+1310 |     let bead_id = bead["id"].as_str().expect("Bead should have an ID");
+     |         ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_bead_id`
+
+warning: unused variable: `i`
+    --> hoop-daemon/tests/integration_harness.rs:1344:9
+     |
+1344 |     for i in 0..5 {
+     |         ^ help: if this is intentional, prefix it with an underscore: `_i`
+
+Some errors have detailed explanations: E0063, E0609.
+For more information about an error, try `rustc --explain E0063`.
+warning: `hoop-daemon` (test "epoch_sync_invariant") generated 4 warnings
+error: could not compile `hoop-daemon` (test "epoch_sync_invariant") due to 2 previous errors; 4 warnings emitted
+warning: build failed, waiting for other jobs to finish...
+warning: `hoop` (bin "hoop" test) generated 15 warnings (run `cargo fix --bin "hoop" -p hoop --tests` to apply 10 suggestions)
