@@ -30,7 +30,7 @@ The workspace test run failed at the **compilation phase**, not at the **test ex
 
 ### Compilation Error Breakdown
 
-**Total compilation errors: 96** (97 per final error summary)
+**Total compilation errors: 100**
 
 #### By Error Code
 ```
@@ -44,39 +44,74 @@ The workspace test run failed at the **compilation phase**, not at the **test ex
 ```
 
 #### By Crate
-- **hoop-daemon:** 96 errors (100%)
-- **hoop-cli:** 0 errors (did not compile due to hoop-daemon dependency failure)
-- **hoop-mcp:** 0 errors (did not compile due to hoop-daemon dependency failure)
+- **hoop-daemon:** 100 errors (100%)
+- **hoop-cli:** Did not compile (hoop-daemon dependency failure)
+- **hoop-mcp:** Did not compile (hoop-daemon dependency failure)
 - **hoop-ui:** N/A (not part of cargo test workspace)
 
-#### By File (Top 5)
+#### By File (All affected files)
 ```
-28 hoop-daemon/src/syntax_highlight_stream.rs  (Unpin trait issues)
-18 hoop-daemon/src/capacity.rs                   (missing struct fields)
- 3 hoop-daemon/src/api_stitch_decompose.rs       (missing struct fields)
- 1 hoop-daemon/examples/load-test-runner.rs     (unresolved import)
+56 hoop-daemon/src/syntax_highlight_stream.rs  (Unpin trait issues)
+32 hoop-daemon/src/config_watcher.rs           (reload_config signature change)
+30 hoop-daemon/src/api_stitch_decompose.rs     (missing Arc import, struct fields)
+16 hoop-daemon/src/capacity.rs                 (missing struct fields)
+ 5 hoop-daemon/src/load_test.rs                (missing fields, imports)
+ 4 hoop-daemon/src/sessions.rs                 (unused code)
+ 4 hoop-daemon/src/pdf_sanitize.rs             (property test return types)
+ 4 hoop-daemon/src/lib.rs                      (unused code)
+ 4 hoop-daemon/src/heartbeats.rs               (property test return types)
+ 3 hoop-daemon/src/net_diff.rs                 (unused imports)
+ 2 hoop-daemon/src/uploads.rs                  (unused imports)
+ 2 hoop-daemon/src/stitch_percentile_index.rs  (unused constants)
+ 2 hoop-daemon/src/reflection_detector.rs      (visibility warnings)
+ 2 hoop-daemon/src/redaction_policy.rs         (missing struct fields)
+ 2 hoop-daemon/src/prompt_substitute.rs        (missing json! macro)
+ 2 hoop-daemon/src/atomic_write.rs             (missing PathBuf)
+ 2 hoop-daemon/src/api_beads.rs                (wrong argument count)
+ 2 hoop-daemon/src/agent_session.rs            (unused imports)
+ 1 hoop-daemon/examples/load-test-runner.rs   (unresolved import)
++ 27 additional files with 1 error each
 ```
 
 ### Key Error Patterns
 
-1. **Stream Unpin Issues (28 errors)**
-   - Location: `hoop-daemon/src/syntax_highlight_stream.rs:269`
-   - Issue: Async blocks cannot be unpinned
-   - Fix needed: Use `Box::pin()` or `Pin::pin()` for async blocks
+1. **Stream Unpin Issues (56 errors in syntax_highlight_stream.rs)**
+   - Location: Lines 163, 174, 269
+   - Issue: Async blocks in streams cannot be unpinned
+   - Fix pattern:
+     ```rust
+     // Instead of: let first = stream.next().await.unwrap();
+     let mut stream = Box::pin(stream);
+     let first = stream.next().await.unwrap();
+     ```
 
-2. **Missing Imports (23 errors)**
-   - `Arc` type not in scope (multiple files)
-   - `PathBuf` not in scope (atomic_write.rs:300)
-   - Fix needed: Add `use std::sync::Arc;` and other missing imports
+2. **Missing Arc Import (23 errors in api_stitch_decompose.rs)**
+   - Issue: Test uses `Arc::new()` extensively without importing `Arc`
+   - Fix: Add `use std::sync::Arc;` to test module
 
-3. **Struct Initializers Missing Fields (18 errors)**
-   - `CapacityMeterConfig` missing: `accounts_file`, `gcp_quota_config`, `gemini_dirs`, `opencode_dirs`
+3. **config_watcher.reload_config() Signature Change (32 errors)**
+   - Issue: Function now requires 5 arguments but test calls provide 4
+   - Missing argument: `agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>`
+   - Affected lines: 591, 617, 642, 679, 715, 751, 787, 832, 873, 915, 956, 997, 1038, 1079, 1122, 1165
+
+4. **Struct Initializers Missing Fields (18 errors)**
+   - `PreviewRequest` missing: `attachments_count`
    - `DaemonState` missing: `br_semaphore`, `br_semaphore_target_permits`
-   - Fix needed: Update test fixtures to include new struct fields
+   - `CapacityMeterConfig` missing: `accounts_file`, `gcp_quota_config`, `gemini_dirs`, `opencode_dirs`
+   - `DictatedNote` missing: `draft_id`, `synthesis_result`
+   - `NeedleEvent::Fail` missing: `stash_sha`
+   - `HoopConfig` missing: `embedding`, `redaction`
 
-4. **Function Argument Mismatches (20 errors)**
-   - Functions called with wrong number of arguments
-   - Fix needed: Update function call signatures
+5. **Function Argument Mismatches (20 errors)**
+   - `resolve_actor()`: needs 2 args, called with 1
+   - `ProjectSupervisor::new()`: needs 9 args, called with 0
+   - `CostAggregator::new()`: needs 1 arg, called with 0
+   - `UploadRegistry::new()`: needs 1 arg, called with 0
+
+6. **Property Test Return Type Issues (4 errors)**
+   - Files: heartbeats.rs (lines 935, 1089), pdf_sanitize.rs
+   - Issue: `prop_assert_eq!` returns `Result<(), _>` but block expects `()`
+   - Fix pattern: `Ok::<(), proptest::test_runner::TestCaseError>(())`
 
 ### Warnings (non-blocking)
 **32 warnings** in hoop-daemon (lib test):
@@ -90,7 +125,7 @@ The workspace test run failed at the **compilation phase**, not at the **test ex
 This analysis confirms the documented state in AGENTS.md:
 > **ACTUAL STATE (as of 2026-06-28): Phase 0 complete. Phase 1 in progress. `cargo build` FAILS (36 compilation errors).
 
-The error count has increased from 36 to 96/97 since that documentation was written.
+The error count has increased from 36 to 100 since that documentation was written, indicating additional work has been added without fixing existing compilation issues.
 
 ## Dependency Chain
 
@@ -109,4 +144,12 @@ This bead (bf-2oews) depends on bead `bf-t1v6y` (Run full workspace test suite).
 
 ## Recommendation
 
-The compilation errors must be resolved before any test failures can be analyzed. The next bead in the chain should focus on fixing the 96 compilation errors, beginning with the 28 Unpin issues in `syntax_highlight_stream.rs`.
+These are **not test failures** — they are compilation errors that prevent the code from building. The tests cannot run until the compilation errors are fixed. Priority should be fixing the build before attempting to run tests again.
+
+**Fix priority order:**
+1. Fix Arc import in api_stitch_decompose.rs test (quick win, unblocks 23 errors)
+2. Add missing struct fields to all initializers (18 errors)
+3. Fix Unpin violations in syntax_highlight_stream.rs using Box::pin() (56 errors)
+4. Update reload_config() calls with missing 5th argument (32 errors)
+5. Fix property test return types in heartbeats.rs and pdf_sanitize.rs (4 errors)
+6. Update function calls with correct argument counts (20 errors)

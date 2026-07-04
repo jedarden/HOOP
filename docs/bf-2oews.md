@@ -11,8 +11,8 @@ The workspace test run did **not** execute any tests. The build failed during co
 ## Compilation Error Summary
 
 ### Total Errors by Category
-- **96 total compilation errors** (no tests executed)
-- **45 warnings** (unused imports, dead code, etc.)
+- **100 total compilation errors** (no tests executed)
+- **~50 warnings** (unused imports, dead code, etc.)
 
 ### Error Breakdown by Error Code
 | Error Code | Count | Description |
@@ -25,6 +25,20 @@ The workspace test run did **not** execute any tests. The build failed during co
 | E0308 | 3 | Type mismatch |
 | E0432 | 1 | Unresolved import (load_test feature gate issue) |
 
+### Error Breakdown by File (Top 10)
+| File | Error Count | Primary Issue |
+|------|-------------|---------------|
+| `hoop-daemon/src/syntax_highlight_stream.rs` | 56 | Unpin trait violations in async streams |
+| `hoop-daemon/src/config_watcher.rs` | 32 | Missing 5th argument in `reload_config()` calls |
+| `hoop-daemon/src/api_stitch_decompose.rs` | 30 | Missing `Arc` import, struct field mismatches |
+| `hoop-daemon/src/capacity.rs` | 16 | Missing fields in `CapacityMeterConfig` |
+| `hoop-daemon/src/load_test.rs` | 5 | Missing `stash_sha` field, import issues |
+| `hoop-daemon/src/sessions.rs` | 4 | Unused code warnings |
+| `hoop-daemon/src/pdf_sanitize.rs` | 4 | Property test return type issues |
+| `hoop-daemon/src/lib.rs` | 4 | Unused code warnings |
+| `hoop-daemon/src/heartbeats.rs` | 4 | Property test return type issues |
+| `hoop-daemon/src/net_diff.rs` | 3 | Unused imports |
+
 ### Primary Error Patterns
 
 #### 1. Missing `Arc` Import (23 errors - E0433)
@@ -33,11 +47,13 @@ The workspace test run did **not** execute any tests. The build failed during co
 **Impact:** Blocks compilation of test state construction
 
 #### 2. Function Signature Mismatches (20 errors - E0061)
-**Locations:** 
-- `config_watcher.rs` - `ConfigWatcher::reload_config()` (13 instances)
-- `api_stitch_decompose.rs` - `ProjectSupervisor::new()` and other constructors
+**Locations:**
+- `config_watcher.rs` - `ConfigWatcher::reload_config()` (16 instances, lines 591, 617, 642, 679, 715, 751, 787, 832, 873, 915, 956, 997, 1038, 1079, 1122, 1165)
+- `api_stitch_decompose.rs` - `ProjectSupervisor::new()` (needs 9 args, called with 0)
+- `api_beads.rs` - `resolve_actor()` (needs 2 args, called with 1)
+- `capacity.rs` - `CostAggregator::new()` and `UploadRegistry::new()` (need args, called with 0)
 
-**Issue:** Tests calling functions with old signatures (missing new parameters)  
+**Issue:** Tests calling functions with old signatures (missing new parameters)
 **Impact:** Test code not updated after API changes
 
 #### 3. Struct Field Mismatches (18 errors - E0063)
@@ -50,9 +66,10 @@ The workspace test run did **not** execute any tests. The build failed during co
 **Issue:** Structs gained new required fields; test fixtures not updated  
 **Impact:** Test construction code incomplete
 
-#### 4. Pin/Unpin Trait Issues (28 errors - E0277)
-**Location:** `hoop-daemon/src/syntax_highlight_stream.rs`  
-**Issue:** Stream type not `Unpin`, causing `stream.next().await` to fail  
+#### 4. Pin/Unpin Trait Issues (56 errors - E0277)
+**Location:** `hoop-daemon/src/syntax_highlight_stream.rs` (lines 163, 174, 269)
+**Issue:** Stream type not `Unpin`, causing `stream.next().await` to fail
+**Fix:** Use `Box::pin(stream)` or `pin!(stream)` macro before calling `.next().await`
 **Impact:** Async stream handling in tests broken
 
 #### 5. Missing Default Implementations (3 errors - E0599)
