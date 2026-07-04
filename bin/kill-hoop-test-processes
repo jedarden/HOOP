@@ -50,14 +50,6 @@ echo -e "${GREEN}✓ Cleanup complete${NC}"
 # Optional verification if --verify flag is passed
 if [[ "${1:-}" == "--verify" ]]; then
     echo ""
-    echo "Verification:"
-    remaining=$(ps aux | grep -E 'HOOP/target|testrepo' | grep -v grep || true)
-
-    if [[ -z "$remaining" ]]; then
-        echo -e "${GREEN}✓ No HOOP test processes remaining${NC}"
-    else
-        echo -e "${RED}⚠ Warning: Some HOOP test processes remain:${NC}"
-        echo "$remaining"
-        exit 1
-    fi
+    echo "Running verification..."
+    ./bin/verify-hoop-test-processes.sh
 fi

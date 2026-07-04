@@ -117,18 +117,11 @@ else
     echo -e "${GREEN}✓ No HOOP test processes found - already clean${NC}"
 fi
 
-# Verification - only check for HOOP-specific patterns
+# Verification - use the dedicated verification script
 echo ""
-echo "Verification:"
-remaining=$(ps aux | grep -E 'HOOP/target|testrepo/(bin|scripts)' | grep -v grep || true)
-
-if [[ -z "$remaining" ]]; then
-    echo -e "${GREEN}✓ No HOOP test processes remaining${NC}"
+echo "Running verification..."
+if ./bin/verify-hoop-test-processes.sh; then
     exit 0
 else
-    echo -e "${RED}⚠ Warning: Some HOOP test processes remain:${NC}"
-    echo "$remaining"
-    echo ""
-    echo "These may need manual intervention. Try running the script again."
     exit 1
 fi

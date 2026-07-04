@@ -279,7 +279,37 @@ alias hoop-test='cleanup_hoop_test_processes; nix-shell --run "cargo test"'
 
 ## Verification
 
-After cleanup, verify no processes remain:
+After cleanup, verify no processes remain using the dedicated verification script:
+
+```bash
+./bin/verify-hoop-test-processes.sh
+```
+
+The verification script checks all process patterns comprehensively:
+
+- **HOOP test binaries**: `hoop-*`, `hoop_daemon-*`, `HOOP/target/debug/deps`
+- **Testrepo processes**: `testrepo/bin/br`, `testrepo/scripts/`
+- **Build scripts**: `build-script-build`
+- **Subprocesses**: `br`, `git`, `rg`, `tailscale`, `age`, `ffmpeg`, `aider`, `claude`, `codex`, `gemini`, `opencode`, `gcloud`, `systemctl`, `df`
+- **Edge cases**: Zombie processes, uninterruptible (D state), orphaned processes (PPID=1)
+
+### Exit Codes
+
+- `0` - No HOOP test processes found (clean)
+- `1` - HOOP test processes found (unclean)
+- `2` - Zombie/uninterruptible processes found (warning)
+
+### Verbose Mode
+
+For detailed output showing each process found:
+
+```bash
+./bin/verify-hoop-test-processes.sh --verbose
+```
+
+### Manual verification (one-liner)
+
+For quick checks without the script:
 
 ```bash
 ps aux | grep -E 'HOOP/target|testrepo|br\s|git\s|rg\s|tailscale\s|age\s|ffmpeg\s|aider\s|claude\s|codex\s|gemini\s|opencode\s' | grep -v grep

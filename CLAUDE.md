@@ -35,6 +35,12 @@ nix-shell --run 'cargo test'
 After tests complete (pass or fail), verify no processes remain:
 
 ```bash
+./bin/verify-hoop-test-processes.sh
+```
+
+For a quick check without the script:
+
+```bash
 ps aux | grep 'HOOP/target' | grep -v grep
 ```
 
