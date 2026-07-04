@@ -8,17 +8,22 @@ HOOP integration tests spawn long-lived subprocesses that do **not** self-termin
 
 Always kill any lingering test processes before starting a new test run.
 
-**Option 1: Use the cleanup script (recommended)**
+**Option 1: Quick pkill one-liner (recommended)**
+
+```bash
+pkill -f 'hoop-[a-f0-9]{16,}$' && pkill -f 'hoop_daemon-[a-f0-9]{16,}$' && pkill -f 'testrepo/(bin|scripts)/' && pkill -9 -f 'build-script-build$' || true
+```
+
+**Option 2: Use the comprehensive cleanup script**
 
 ```bash
 bin/cleanup-hoop-test-processes.sh
 ```
 
-**Option 2: Quick one-liner**
+**Option 3: Use the simple cleanup script**
 
 ```bash
-pkill -f 'HOOP/target/debug/deps/hoop' 2>/dev/null || true
-pkill -f 'testrepo/bin/' 2>/dev/null || true
+bin/kill-hoop-test-processes
 ```
 
 Then run tests via nix-shell (bare cargo fails on NixOS — see AGENTS.md):

@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# Reliable pkill cleanup command for HOOP test processes
+# This script kills all HOOP-related test processes safely and comprehensively.
+#
+# Usage:
+#   ./bin/kill-hoop-test-processes          # Run cleanup
+#   ./bin/kill-hoop-test-processes --verify # Run cleanup + verify
+#
+# One-liner version:
+#   pkill -f 'hoop-[a-f0-9]{16,}$' && pkill -f 'testrepo/(bin|scripts)/' && pkill -9 -f 'build-script-build$' || true
+
+set -euo pipefail
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo -e "${YELLOW}Killing HOOP test processes...${NC}"
+
+# Primary: Kill HOOP test binaries by hash pattern (most specific)
+# Pattern: hoop-{16+ hex chars} (e.g., hoop-0964aabb985f3f32)
+if pkill -f 'hoop-[a-f0-9]\{16,\}$' 2>/dev/null; then
+    echo -e "${GREEN}✓ Killed HOOP test binaries${NC}"
+else
+    echo -e "${GREEN}✓ No HOOP test binaries found${NC}"
+fi
+
+# Also catch hoop_daemon-* test binaries
+if pkill -f 'hoop_daemon-[a-f0-9]\{16,\}$' 2>/dev/null; then
+    echo -e "${GREEN}✓ Killed HOOP daemon test binaries${NC}"
+fi
+
+# Kill testrepo stub binaries
+if pkill -f 'testrepo/(bin|scripts)/' 2>/dev/null; then
+    echo -e "${GREEN}✓ Killed testrepo processes${NC}"
+else
+    echo -e "${GREEN}✓ No testrepo processes found${NC}"
+fi
+
+# Kill build scripts (can leak from interrupted builds)
+# Pattern: build-script-build (end of command line to avoid partial matches)
+if pkill -9 -f 'build-script-build$' 2>/dev/null; then
+    echo -e "${GREEN}✓ Killed HOOP build scripts${NC}"
+fi
+
+echo -e "${GREEN}✓ Cleanup complete${NC}"
+
+# Optional verification if --verify flag is passed
+if [[ "${1:-}" == "--verify" ]]; then
+    echo ""
+    echo "Verification:"
+    remaining=$(ps aux | grep -E 'HOOP/target|testrepo' | grep -v grep || true)
+
+    if [[ -z "$remaining" ]]; then
+        echo -e "${GREEN}✓ No HOOP test processes remaining${NC}"
+    else
+        echo -e "${RED}⚠ Warning: Some HOOP test processes remain:${NC}"
+        echo "$remaining"
+        exit 1
+    fi
+fi
