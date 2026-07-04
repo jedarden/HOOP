@@ -116,7 +116,7 @@ struct Cli {
     ///
     /// ## Flag Extraction
     ///
-    /// The flag value is extracted once at parse time (line 258) and passed down
+    /// The flag value is extracted once at parse time (line 363) and passed down
     /// to command handlers:
     ///
     /// ```rust
