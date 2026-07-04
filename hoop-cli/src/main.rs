@@ -26,7 +26,7 @@ use std::{fs, net::SocketAddr, path::PathBuf};
 #[command(about = "HOOP - The operator's pane of glass", long_about = None)]
 struct Cli {
     /// Global flag to suppress all interactive prompts (alias: -y)
-    #[arg(long, short = 'y', global = true)]
+    #[arg(short = 'y', long = 'no-interactive', global = true)]
     no_interactive: bool,
 
     #[command(subcommand)]
