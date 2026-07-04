@@ -287,6 +287,9 @@ hoop config diff
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | Common failures mapped to `hoop audit` output with recovery steps |
 | [`docs/plan/plan.md`](docs/plan/plan.md) | Full implementation plan: vision, principles, architecture, phased roadmap |
 | [`docs/notes/`](docs/notes/) | Prior-art research, architecture patterns, NEEDLE interop notes |
+| [`docs/cleanup-workflow-guide.md`](docs/cleanup-workflow-guide.md) | Comprehensive guide for HOOP test process cleanup |
+| [`docs/cleanup-examples.md`](docs/cleanup-examples.md) | Practical examples and test scenarios for cleanup workflow |
+| [`docs/test-process-cleanup-patterns.md`](docs/test-process-cleanup-patterns.md) | Detailed analysis of 27 process cleanup patterns |
 
 ---
 
