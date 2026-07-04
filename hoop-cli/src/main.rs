@@ -27,10 +27,115 @@ use std::{fs, net::SocketAddr, path::PathBuf};
 struct Cli {
     /// Global flag to suppress all interactive prompts (alias: -y)
     ///
-    /// The `global = true` attribute ensures this flag is available to all subcommands.
-    /// It can be specified at any level: `hoop --no-interactive <subcommand>` or
-    /// `hoop <subcommand> --no-interactive`. The flag value is extracted once at
-    /// parse time (line 253) and passed to command handlers that need it.
+    /// ## Purpose
+    ///
+    /// The `no_interactive` flag controls whether the CLI prompts for user confirmation.
+    /// When set to `true`, all interactive prompts are suppressed. This is essential for:
+    /// - CI/CD pipelines and automation scripts
+    /// - Non-interactive environments (e.g., cron jobs)
+    /// - Batch operations requiring automatic confirmation
+    ///
+    /// ## Attributes
+    ///
+    /// - **Short form:** `-y` (yes to all prompts)
+    /// - **Long form:** `--no-interactive`
+    /// - **`global = true`:** This clap attribute makes the flag available to all
+    ///   subcommands automatically, without redefining it in each subcommand enum.
+    ///   Clap propagates the flag value through the entire command tree.
+    ///
+    /// ## Usage with Subcommands
+    ///
+    /// Because of `global = true`, the flag can be specified at any position:
+    ///
+    /// ```bash
+    /// # Before the subcommand
+    /// hoop --no-interactive projects remove my-project --confirm
+    ///
+    /// # After the subcommand
+    /// hoop projects remove my-project --no-interactive --confirm
+    ///
+    /// # With the short alias
+    /// hoop -y projects remove my-project --confirm
+    ///
+    /// # For scan operations (auto-confirms without --confirm)
+    /// hoop --no-interactive scan /path/to/projects
+    /// ```
+    ///
+    /// ## Implementation Pattern for Commands
+    ///
+    /// Commands that have interactive prompts should:
+    ///
+    /// 1. **Accept `no_interactive` as a parameter** in their handler function
+    /// 2. **Check `no_interactive` before prompting:** When `false`, prompt normally.
+    ///    When `true`, either auto-proceed safely OR require an explicit `--confirm` flag.
+    /// 3. **Require `--confirm` for destructive operations** when `no_interactive=true`.
+    ///    This prevents accidental data loss in scripts.
+    ///
+    /// ### Example Pattern (Safe Operation)
+    ///
+    /// ```rust
+    /// pub fn scan_projects(root: &str, no_interactive: bool) -> Result<()> {
+    ///     for discovery in discoveries {
+    ///         if no_interactive {
+    ///             // Auto-register without prompting
+    ///             register(discovery)?;
+    ///         } else {
+    ///             // Prompt the user
+    ///             if prompt_yes_no("Register?") {
+    ///                 register(discovery)?;
+    ///             }
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// ### Example Pattern (Destructive Operation)
+    ///
+    /// ```rust
+    /// pub fn remove_project(name: &str, no_interactive: bool, confirm: bool) -> Result<bool> {
+    ///     // Require --confirm in non-interactive mode
+    ///     if no_interactive && !confirm {
+    ///         anyhow::bail!(
+    ///             "--confirm is required in non-interactive mode.\n\
+    ///              Re-run with: hoop projects remove {} --no-interactive --confirm",
+    ///             name
+    ///         );
+    ///     }
+    ///
+    ///     // Prompt only in interactive mode
+    ///     if !no_interactive {
+    ///         if !prompt_yes_no("Confirm removal?") {
+    ///             return Ok(false);
+    ///         }
+    ///     }
+    ///
+    ///     // Proceed with removal
+    ///     // ...
+    /// }
+    /// ```
+    ///
+    /// ## Flag Extraction
+    ///
+    /// The flag value is extracted once at parse time (line 258) and passed down
+    /// to command handlers:
+    ///
+    /// ```rust
+    /// let no_interactive = cli.no_interactive;
+    /// // Later passed to handlers:
+    /// projects::remove_project(&name, no_interactive, confirm)?;
+    /// ```
+    ///
+    /// ## Commands That Use This Flag
+    ///
+    /// - **`scan` / `projects scan`:** Auto-registers all discovered workspaces
+    /// - **`remove` / `projects remove`:** Requires `--confirm` when non-interactive
+    /// - **`restore`:** Requires `--confirm` when non-interactive (destructive DB op)
+    /// - **`projects add`:** Passed for consistency (currently unused, no prompts)
+    ///
+    /// ## Commands That Explicitly Reject This Flag
+    ///
+    /// - **`init`:** The init wizard requires interaction and explicitly errors
+    ///   when `no_interactive=true`, directing the user to run without the flag.
     #[arg(short = 'y', long = "no-interactive", global = true)]
     no_interactive: bool,
 
