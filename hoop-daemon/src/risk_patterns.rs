@@ -457,43 +457,18 @@ pub fn default_risk_patterns() -> Vec<RiskPattern> {
 mod tests {
     use super::*;
 
-    // TEST FAILURE DOCUMENTATION (bf-o7iwf):
-    // This test CANNOT RUN because the codebase does not compile.
-    //
-    // Root Cause: Compilation errors elsewhere in hoop-daemon prevent test execution
-    //
-    // Blocking Compilation Errors:
-    // 1. net_diff.rs:547,552 - CommitEntry missing 'bead_id' field
-    //    The CommitEntry struct requires 4 fields (bead_id, workspace, sha, ts) but
-    //    test code only provides 3 fields (workspace, sha, ts)
-    //
-    // 2. syntax_highlight_stream.rs:315,322 - Unpin trait not implemented
-    //    Async blocks used in stream creation don't implement Unpin, which is
-    //    required for stream.next().await calls
-    //
-    // Expected Behavior: Test would create an empty library and verify patterns().is_empty()
-    // Actual Behavior: Compilation fails before test can execute
-    //
-    // Fix Required: Fix compilation errors in net_diff.rs and syntax_highlight_stream.rs
+    /// Test that FixLineageLibrary::new() creates an empty library.
+    ///
+    /// Verifies that a newly created library has no patterns.
     #[test]
     fn test_library_empty() {
         let lib = FixLineageLibrary::new();
         assert!(lib.patterns().is_empty());
     }
 
-    // TEST FAILURE DOCUMENTATION (bf-o7iwf):
-    // This test CANNOT RUN because the codebase does not compile.
-    //
-    // Root Cause: Same compilation errors blocking test_library_empty
-    //
-    // Blocking Compilation Errors:
-    // 1. net_diff.rs:547,552 - CommitEntry missing 'bead_id' field
-    // 2. syntax_highlight_stream.rs:315,322 - Unpin trait not implemented
-    //
-    // Expected Behavior: Test would create library from default patterns and verify non-empty
-    // Actual Behavior: Compilation fails before test can execute
-    //
-    // Fix Required: Fix compilation errors in net_diff.rs and syntax_highlight_stream.rs
+    /// Test that FixLineageLibrary::from_patterns() creates a library with patterns.
+    ///
+    /// Verifies that a library created from a list of patterns contains those patterns.
     #[test]
     fn test_library_from_patterns() {
         let patterns = default_risk_patterns();
@@ -541,19 +516,9 @@ mod tests {
         assert!(codegen_match.confidence > 0.5);
     }
 
-    // TEST FAILURE DOCUMENTATION (bf-o7iwf):
-    // This test CANNOT RUN because the codebase does not compile.
-    //
-    // Root Cause: Same compilation errors blocking test_library_empty and test_library_from_patterns
-    //
-    // Blocking Compilation Errors:
-    // 1. net_diff.rs:547,552 - CommitEntry missing 'bead_id' field
-    // 2. syntax_highlight_stream.rs:315,322 - Unpin trait not implemented
-    //
-    // Expected Behavior: Test would create empty library, add a pattern, then verify match_draft finds it
-    // Actual Behavior: Compilation fails before test can execute
-    //
-    // Fix Required: Fix compilation errors in net_diff.rs and syntax_highlight_stream.rs
+    /// Test that add_pattern() adds a pattern to the library.
+    ///
+    /// Creates an empty library, adds a pattern, then verifies match_draft finds it.
     #[test]
     fn test_add_pattern() {
         let mut lib = FixLineageLibrary::new();
