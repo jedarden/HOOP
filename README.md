@@ -142,6 +142,28 @@ HOOP exposes an MCP server for use by external LLM clients and tool integrations
 
 ---
 
+## CI/CD
+
+HOOP uses automated CI/CD via Argo Workflows on the `iad-ci` cluster. The pipeline runs automatically on push to the `main` branch.
+
+**Trigger:** GitHub webhook → Argo Events → Sensor → Workflow submission
+
+**Pipeline includes:**
+- Rust build, test, and lint (clippy, rustfmt)
+- Web UI build and test (pnpm, Playwright E2E)
+- Security audit (cargo audit, pnpm audit, trivy)
+- OpenAPI spec validation
+- Schema drift detection
+- Code coverage (80% threshold)
+- Load tests (conditional)
+- Docker image build and push
+- GitHub release creation
+- Image security scanning
+
+**Manual trigger:** See [`docs/webhook-setup.md`](docs/webhook-setup.md) for manual workflow execution instructions.
+
+**Setup:** The webhook infrastructure is deployed in the cluster. To enable automatic triggers, configure the GitHub repository webhook as documented in [`docs/webhook-setup.md`](docs/webhook-setup.md).
+
 ## Building
 
 HOOP is a Rust workspace with five crates:
@@ -260,6 +282,7 @@ hoop config diff
 | `README.md` (this file) | Overview, concepts, CLI reference, building, running, configuration |
 | [`AGENTS.md`](AGENTS.md) | Repository guide for LLM contributors: terminology, non-goals, conventions |
 | [`CHANGELOG.md`](CHANGELOG.md) | Version history (Keep-a-Changelog / SemVer) |
+| [`docs/webhook-setup.md`](docs/webhook-setup.md) | GitHub webhook configuration for automatic CI/CD execution |
 | [`docs/operations.md`](docs/operations.md) | Systemd service, logs, upgrades, backups, migrations |
 | [`docs/troubleshooting.md`](docs/troubleshooting.md) | Common failures mapped to `hoop audit` output with recovery steps |
 | [`docs/plan/plan.md`](docs/plan/plan.md) | Full implementation plan: vision, principles, architecture, phased roadmap |
