@@ -93,10 +93,24 @@ impl FixLineageLibrary {
     }
 
     /// Create library from a list of patterns
+    ///
+    /// # Algorithm
+    /// 1. Iterate over patterns via `.iter().enumerate()` to get both index and reference
+    /// 2. Build two HashMap indexes mapping keywords/label_keywords to pattern indices
+    /// 3. Move the original patterns Vec into the struct (ownership transfer)
+    ///
+    /// # Verification
+    /// The test_library_from_patterns() test verifies:
+    /// - All patterns passed in are stored in the library
+    /// - Patterns are accessible via the patterns() getter
+    /// - Expected pattern IDs exist in the stored collection
     pub fn from_patterns(patterns: Vec<RiskPattern>) -> Self {
         let mut keyword_index: HashMap<String, Vec<usize>> = HashMap::new();
         let mut label_keyword_index: HashMap<String, Vec<usize>> = HashMap::new();
 
+        // Build keyword indexes while iterating over borrowed patterns
+        // This allows us to use patterns.iter() for reading while still
+        // moving patterns into the struct at the end
         for (idx, pattern) in patterns.iter().enumerate() {
             for keyword in &pattern.keywords {
                 keyword_index
@@ -112,6 +126,8 @@ impl FixLineageLibrary {
             }
         }
 
+        // Move patterns into the struct (ownership transfer)
+        // All patterns are preserved exactly as passed in
         Self {
             patterns,
             keyword_index,
@@ -468,7 +484,20 @@ mod tests {
 
     /// Test that FixLineageLibrary::from_patterns() creates a library with patterns.
     ///
-    /// Verifies that a library created from a list of patterns contains those patterns.
+    /// # Test Purpose
+    /// Verifies that a library created from a list of patterns:
+    /// 1. Contains ALL patterns that were passed to from_patterns()
+    /// 2. Preserves pattern data including IDs
+    /// 3. Properly transfers ownership without losing patterns
+    ///
+    /// # Implementation Notes
+    /// This test validates the core initialization behavior of FixLineageLibrary.
+    /// The from_patterns() method:
+    /// - Takes ownership of the patterns Vec
+    /// - Builds keyword indexes from the borrowed iterator
+    /// - Moves the patterns into the struct unchanged
+    ///
+    /// See from_patterns() documentation for algorithm details.
     #[test]
     fn test_library_from_patterns() {
         let patterns = default_risk_patterns();
