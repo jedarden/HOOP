@@ -217,11 +217,8 @@ pub fn load_backup_config() -> BackupState {
     }
 
     // Validate endpoint looks like a URL
-    if !config.endpoint.starts_with("http://") && !config.endpoint.starts_with("https://") {
-        let reason = format!(
-            "endpoint must start with http:// or https:// (got '{}')",
-            config.endpoint
-        );
+    if let Err(e) = validate_endpoint(&config.endpoint) {
+        let reason = format!("invalid endpoint: {}", e);
         warn!("Backup disabled: {}", reason);
         return BackupState::Disabled { config, reason };
     }
@@ -265,6 +262,17 @@ fn validate_cron(expr: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// Basic endpoint URL validation (http:// or https:// prefix).
+fn validate_endpoint(endpoint: &str) -> Result<(), String> {
+    if !endpoint.starts_with("http://") && !endpoint.starts_with("https://") {
+        return Err(format!(
+            "endpoint must start with http:// or https:// (got '{}')",
+            endpoint
+        ));
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -292,16 +300,8 @@ mod tests {
     fn endpoint_validation_rejects_non_url() {
         assert!(validate_endpoint("s3.amazonaws.com").is_err());
         assert!(validate_endpoint("ftp://bad").is_err());
-    }
-
-    fn validate_endpoint(endpoint: &str) -> Result<(), String> {
-        if !endpoint.starts_with("http://") && !endpoint.starts_with("https://") {
-            return Err(format!(
-                "endpoint must start with http:// or https:// (got '{}')",
-                endpoint
-            ));
-        }
-        Ok(())
+        assert!(validate_endpoint("https://s3.amazonaws.com").is_ok());
+        assert!(validate_endpoint("http://localhost:9000").is_ok());
     }
 
     #[test]
