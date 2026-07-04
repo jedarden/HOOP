@@ -31,7 +31,7 @@ struct Cli {
     /// It can be specified at any level: `hoop --no-interactive <subcommand>` or
     /// `hoop <subcommand> --no-interactive`. The flag value is extracted once at
     /// parse time (line 253) and passed to command handlers that need it.
-    #[arg(short = 'y', long = 'no-interactive', global = true)]
+    #[arg(short = 'y', long = "no-interactive", global = true)]
     no_interactive: bool,
 
     #[command(subcommand)]
