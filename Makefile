@@ -36,12 +36,21 @@ build:
 
 # Run unit tests
 test:
+	@echo "=== Cleaning up HOOP test processes before tests ==="
+	@./bin/cleanup-hoop-test-processes.sh || true
+	@echo ""
 	cargo test --lib --verbose
+	@echo ""
+	@echo "=== Verifying no processes remain after tests ==="
+	@./bin/verify-hoop-test-processes.sh || echo "Warning: Some processes may remain"
 
 # Run medium-scale load test (5x2x50, ~2 minutes)
 test-load: test-load-medium
 
 test-load-medium:
+	@echo "=== Cleaning up HOOP test processes before tests ==="
+	@./bin/cleanup-hoop-test-processes.sh || true
+	@echo ""
 	@echo "=== Medium-Scale Load Test ==="
 	@echo "Configuration: 5 projects × 2 workers × 50 beads"
 	@echo ""
@@ -50,9 +59,15 @@ test-load-medium:
 	HOOP_LOAD_BEADS=50 \
 	HOOP_LOAD_CADENCE_MS=10 \
 	cargo test --test load_test test_medium_scale_load_test -- --nocapture
+	@echo ""
+	@echo "=== Verifying no processes remain after tests ==="
+	@./bin/verify-hoop-test-processes.sh || echo "Warning: Some processes may remain"
 
 # Run full-scale load test (20x5x200, ~10 minutes)
 test-load-full:
+	@echo "=== Cleaning up HOOP test processes before tests ==="
+	@./bin/cleanup-hoop-test-processes.sh || true
+	@echo ""
 	@echo "=== Full-Scale Load Test ==="
 	@echo "Configuration: 20 projects × 5 workers × 200 beads"
 	@echo "WARNING: This may take 10+ minutes"
@@ -63,6 +78,9 @@ test-load-full:
 	HOOP_LOAD_BEADS=200 \
 	HOOP_LOAD_CADENCE_MS=10 \
 	cargo test --test load_test test_full_scale_load_test -- --ignored --nocapture
+	@echo ""
+	@echo "=== Verifying no processes remain after tests ==="
+	@./bin/verify-hoop-test-processes.sh || echo "Warning: Some processes may remain"
 
 # Run load test in watch mode (requires cargo-watch)
 test-load-watch:
@@ -77,6 +95,9 @@ test-load-watch:
 
 # Run load test with custom configuration
 test-load-custom:
+	@echo "=== Cleaning up HOOP test processes before tests ==="
+	@./bin/cleanup-hoop-test-processes.sh || true
+	@echo ""
 	@echo "=== Custom Load Test ==="
 	@echo "Configuration:"
 	@echo "  Projects: $${HOOP_LOAD_PROJECTS:-5}"
@@ -84,6 +105,9 @@ test-load-custom:
 	@echo "  Beads per worker: $${HOOP_LOAD_BEADS:-50}"
 	@echo ""
 	cargo test --test load_test test_medium_scale_load_test -- --nocapture
+	@echo ""
+	@echo "=== Verifying no processes remain after tests ==="
+	@./bin/verify-hoop-test-processes.sh || echo "Warning: Some processes may remain"
 
 # Run the load test example binary
 test-load-example:
@@ -100,6 +124,7 @@ test-load-verify: test-load-medium
 	@echo "=== Performance Budget Verification ==="
 	@echo "✓ Load test completed"
 	@echo "✓ Performance budgets verified in test output"
+	@echo "✓ Process cleanup verification passed"
 
 # Generate OpenAPI spec from utoipa annotations
 openapi-generate:

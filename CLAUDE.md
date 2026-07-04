@@ -6,7 +6,20 @@ See [AGENTS.md](AGENTS.md) for the full repository guide.
 
 HOOP integration tests spawn long-lived subprocesses that do **not** self-terminate on failure. Leaked processes accumulate across sessions and cause OOM kills on the lab server.
 
-Always kill any lingering test processes before starting a new test run.
+**Using the Makefile (recommended):**
+
+The Makefile test targets automatically handle cleanup before and after tests:
+
+```bash
+make test              # Unit tests with auto cleanup
+make test-load         # Load tests with auto cleanup
+make test-load-medium  # Medium-scale load test with auto cleanup
+make test-load-full    # Full-scale load test with auto cleanup
+```
+
+**Manual cleanup before running tests directly via cargo:**
+
+If running `cargo test` directly (not via Makefile), always kill lingering processes first:
 
 **Option 1: Quick pkill one-liner (recommended)**
 
@@ -32,7 +45,10 @@ Then run tests via nix-shell (bare cargo fails on NixOS — see AGENTS.md):
 nix-shell --run 'cargo test'
 ```
 
-After tests complete (pass or fail), verify no processes remain:
+**After tests complete:**
+
+- **Via Makefile:** Verification runs automatically after `make test` / `make test-load*`
+- **Via cargo:** Verify manually after tests complete (pass or fail):
 
 ```bash
 ./bin/verify-hoop-test-processes.sh
