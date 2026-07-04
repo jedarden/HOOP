@@ -150,7 +150,33 @@ pkill -f '^opencode\b'
 
 **Cleanup:** `pkill -f '^df\b'`
 
-### 14. Build Script Processes
+### 14. cURL Subprocesses
+
+**Pattern:** Process named `curl`
+
+**Source:** HTTP requests in various modules
+
+**Cleanup:** `pkill -f '^curl\b'`
+
+### 15. Interactive Editor Processes
+
+**Pattern:** Process named after editor (vim, nano, code, etc.)
+
+**Source:** `hoop-cli/src/new.rs` - Editor invoked via `$EDITOR` for bead editing
+
+**Cleanup Challenge:** Cannot reliably kill - user may be actively editing. Only kill if clearly associated with test processes (use path-based filtering).
+
+**Detection:** Path-based filtering to limit to HOOP test directories only.
+
+### 16. Whisper CLI Processes
+
+**Pattern:** Variable path to whisper CLI binary
+
+**Source:** `hoop-daemon/src/transcription.rs` - Audio transcription
+
+**Cleanup Challenge:** Dynamic path - depends on configuration. Use path-based filtering to identify HOOP-related instances.
+
+### 17. Build Script Processes
 
 **Pattern:** `target/debug/build/*/build-script-build` and `*_build_script_*`
 
@@ -243,10 +269,11 @@ pkill -f '^opencode\b'
 # Before running tests
 pkill -f 'HOOP/target/debug/deps/hoop' 2>/dev/null || true
 pkill -f 'testrepo/(bin|scripts)/' 2>/dev/null || true
-pkill -9 -f '^(br|git|rg|tailscale|age|ffmpeg|aider|claude|codex|gemini|opencode|gcloud|systemctl|tmux|df)\s' 2>/dev/null || true
+pkill -9 -f '^(br|git|rg|tailscale|age|ffmpeg|aider|claude|codex|gemini|opencode|gcloud|systemctl|tmux|df|curl)\s' 2>/dev/null || true
+pkill -9 -f 'target/debug/build.*build-script' 2>/dev/null || true
 
 # After tests complete (verification)
-ps aux | grep -E 'HOOP/target|testrepo|br\s|git\s|rg\s|tailscale\s|age\s|ffmpeg\s' | grep -v grep || echo "No HOOP test processes found"
+ps aux | grep -E 'HOOP/target|testrepo|br\s|git\s|rg\s|tailscale\s|age\s|ffmpeg\s|curl\s' | grep -v grep || echo "No HOOP test processes found"
 ```
 
 ## Automation
@@ -258,7 +285,7 @@ cleanup_hoop_test_processes() {
     echo "Cleaning up HOOP test processes..."
     pkill -f 'HOOP/target/debug/deps/hoop' 2>/dev/null && echo "Killed test binaries"
     pkill -f 'testrepo/(bin|scripts)/' 2>/dev/null && echo "Killed testrepo processes"
-    pkill -9 -f '^(br|git|rg|tailscale|age|ffmpeg)\s' 2>/dev/null && echo "Killed subprocesses"
+    pkill -9 -f '^(br|git|rg|tailscale|age|ffmpeg|curl)\s' 2>/dev/null && echo "Killed subprocesses"
     pkill -9 -f 'target/debug/build.*build-script' 2>/dev/null && echo "Killed build scripts"
 }
 
@@ -276,6 +303,9 @@ alias hoop-test='cleanup_hoop_test_processes; nix-shell --run "cargo test"'
 | Orphaned groups | PPID = 1 | `ps ao pid,ppid,comm` | Direct PID kill |
 | Network hangs | Process in `D` state | `ps aux \| grep D` | `kill -9` required |
 | Build scripts | `build-script-build` | `ps aux \| grep build-script` | `pkill -f 'build-script'` |
+| Editor processes | vim/nano/code from tests | Path-based filtering | Use path-based filtering only |
+| Whisper CLI | Dynamic binary path | Path-based filtering | Use path-based filtering only |
+| cURL processes | HTTP request hangs | `ps aux \| grep curl` | `pkill -f '^curl\b'` |
 
 ## Verification
 
@@ -290,8 +320,11 @@ The verification script checks all process patterns comprehensively:
 - **HOOP test binaries**: `hoop-*`, `hoop_daemon-*`, `HOOP/target/debug/deps`
 - **Testrepo processes**: `testrepo/bin/br`, `testrepo/scripts/`
 - **Build scripts**: `build-script-build`
-- **Subprocesses**: `br`, `git`, `rg`, `tailscale`, `age`, `ffmpeg`, `aider`, `claude`, `codex`, `gemini`, `opencode`, `gcloud`, `systemctl`, `df`
+- **Subprocesses**: `br`, `git`, `rg`, `tailscale`, `age`, `ffmpeg`, `aider`, `claude`, `codex`, `gemini`, `opencode`, `gcloud`, `systemctl`, `df`, `curl`
+- **Dynamic paths**: Editor processes (via $EDITOR), Whisper CLI (configuration-dependent)
 - **Edge cases**: Zombie processes, uninterruptible (D state), orphaned processes (PPID=1)
+
+**Total Pattern Count:** 17 primary patterns + 6 edge cases = 23 distinct process patterns tracked
 
 ### Exit Codes
 
@@ -312,7 +345,7 @@ For detailed output showing each process found:
 For quick checks without the script:
 
 ```bash
-ps aux | grep -E 'HOOP/target|testrepo|br\s|git\s|rg\s|tailscale\s|age\s|ffmpeg\s|aider\s|claude\s|codex\s|gemini\s|opencode\s' | grep -v grep
+ps aux | grep -E 'HOOP/target|testrepo|br\s|git\s|rg\s|tailscale\s|age\s|ffmpeg\s|aider\s|claude\s|codex\s|gemini\s|opencode\s|curl\s' | grep -v grep
 ```
 
 Expected output: (empty - no processes found)
