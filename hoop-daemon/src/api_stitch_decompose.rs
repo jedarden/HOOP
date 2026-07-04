@@ -1046,6 +1046,7 @@ pub fn resolve_actor_no_state(_remote_addr: Option<SocketAddr>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
 #[cfg(feature = "openapi")]
 use utoipa::ToSchema;
