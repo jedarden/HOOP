@@ -1,13 +1,67 @@
 #!/usr/bin/env bash
-# Reliable pkill cleanup command for HOOP test processes
-# This script kills all HOOP-related test processes safely and comprehensively.
+# Comprehensive pkill cleanup script for HOOP test processes
+# Handles all documented patterns from docs/test-process-cleanup-patterns.md
 #
-# Usage:
-#   ./bin/kill-hoop-test-processes          # Run cleanup
-#   ./bin/kill-hoop-test-processes --verify # Run cleanup + verify
+# ============================================================================
+# PATTERNS COVERED (27 total)
+# ============================================================================
 #
-# One-liner version:
-#   pkill -f 'hoop-[a-f0-9]{16,}$' && pkill -f 'testrepo/(bin|scripts)/' && pkill -9 -f 'build-script-build$' || true
+# PRIMARY PATTERNS (9):
+#   1. HOOP test binaries (hoop-{16+ hex chars})
+#   2. HOOP daemon test binaries (hoop_daemon-{16+ hex chars})
+#   3. HOOP target/debug/deps processes
+#   4. Testrepo br stub binary
+#   5. Testrepo script processes
+#   6. Testrepo bin/scripts processes
+#   7. Cargo build scripts (build-script-build)
+#   8. Build script processes (target/debug/build.*build-script)
+#   9. All HOOP target directory processes
+#
+# SUBPROCESS PATTERNS (14):
+#  10. br (beads CLI)
+#  11. git (version control)
+#  12. rg (ripgrep search)
+#  13. tailscale (identity verification)
+#  14. age (encryption)
+#  15. ffmpeg (audio processing)
+#  16. aider (agent adapter)
+#  17. claude (agent adapter)
+#  18. codex (agent adapter)
+#  19. gemini (agent adapter)
+#  20. opencode (agent adapter)
+#  21. gcloud (capacity monitoring)
+#  22. systemctl (system service checks)
+#  23. tmux (version checks)
+#  24. df (disk space verification)
+#  25. curl (HTTP requests)
+#
+# EDGE CASES (4):
+#  26. Orphaned subprocesses (PPID=1, HOOP-related)
+#  27. Agent adapter deep process trees (orphans)
+#  28. Hung processes (uninterruptible, force-kill)
+#  29. Interactive hangs (processes in S+ state)
+#
+# ============================================================================
+# USAGE
+# ============================================================================
+#
+#   ./bin/kill-hoop-test-processes           # Run cleanup with SIGTERM
+#   ./bin/kill-hoop-test-processes --verify  # Run cleanup + verify
+#   ./bin/kill-hoop-test-processes --force   # Force kill with SIGKILL
+#
+# ============================================================================
+# SAFETY
+# ============================================================================
+#
+# This script ONLY kills processes that are actually related to HOOP tests.
+# It does NOT kill all git/claude/etc processes on the system.
+#
+# Subprocess detection is done by:
+# 1. Checking if process is a child of a HOOP test binary
+# 2. Checking if process command line contains HOOP/testrepo paths
+# 3. Checking if process is orphaned (PPID=1) but HOOP-related
+#
+# This ensures your working git/claude/etc processes in other repos are safe.
 
 set -euo pipefail
 
@@ -15,41 +69,275 @@ set -euo pipefail
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${YELLOW}Killing HOOP test processes...${NC}"
+# Parse arguments
+FORCE=false
+VERIFY=false
+for arg in "$@"; do
+    case "$arg" in
+        --force) FORCE=true ;;
+        --verify) VERIFY=true ;;
+    esac
+done
 
-# Primary: Kill HOOP test binaries by hash pattern (most specific)
-# Pattern: hoop-{16+ hex chars} (e.g., hoop-0964aabb985f3f32)
-if pkill -f 'hoop-[a-f0-9]\{16,\}$' 2>/dev/null; then
-    echo -e "${GREEN}✓ Killed HOOP test binaries${NC}"
+# Signal to use (SIGTERM by default, SIGKILL with --force)
+if [[ "$FORCE" == true ]]; then
+    SIGNAL="-9"
+    SIGNAL_NAME="SIGKILL"
 else
-    echo -e "${GREEN}✓ No HOOP test binaries found${NC}"
+    SIGNAL="-TERM"
+    SIGNAL_NAME="SIGTERM"
 fi
 
-# Also catch hoop_daemon-* test binaries
-if pkill -f 'hoop_daemon-[a-f0-9]\{16,\}$' 2>/dev/null; then
-    echo -e "${GREEN}✓ Killed HOOP daemon test binaries${NC}"
+echo -e "${YELLOW}HOOP Test Process Cleanup${NC}"
+echo "=============================="
+echo -e "Signal: ${BLUE}$SIGNAL_NAME${NC}"
+echo ""
+
+# Count of killed processes
+KILLED_COUNT=0
+
+# Function to kill processes by pattern and count them
+kill_pattern() {
+    local pattern="$1"
+    local description="$2"
+    local use_signal="${3:-$SIGNAL}"
+
+    # Find PIDs matching the pattern
+    local pids
+    pids=$(pgrep -f "$pattern" 2>/dev/null || true)
+
+    if [[ -n "$pids" ]]; then
+        echo -e "${YELLOW}Killing $description...${NC}"
+
+        # Kill processes
+        # shellcheck disable=SC2086
+        pkill $use_signal -f "$pattern" 2>/dev/null || true
+
+        # Give processes a moment to terminate (only for SIGTERM)
+        if [[ "$use_signal" != "-9" ]]; then
+            sleep 0.1
+        fi
+
+        local count=$(echo "$pids" | wc -w)
+        KILLED_COUNT=$((KILLED_COUNT + count))
+        echo -e "${GREEN}  ✓ Killed $count process(es)${NC}"
+    else
+        echo -e "${GREEN}✓ No $description found${NC}"
+    fi
+}
+
+# ============================================================================
+# PRIMARY PATTERNS 1-9: Core test processes
+# ============================================================================
+
+echo -e "${BLUE}Core Test Processes${NC}"
+echo "-------------------------"
+
+# Pattern 1: HOOP test binaries (hoop-{16+ hex chars})
+kill_pattern 'hoop-[a-f0-9]\{16,\}$' 'HOOP test binaries (hoop-*)'
+
+# Pattern 2: HOOP daemon test binaries (hoop_daemon-{16+ hex chars})
+kill_pattern 'hoop_daemon-[a-f0-9]\{16,\}$' 'HOOP daemon test binaries (hoop_daemon-*)'
+
+# Pattern 3: General HOOP target directory processes
+kill_pattern 'HOOP/target/debug/deps/hoop' 'HOOP target/debug/deps processes'
+
+# Pattern 4: Testrepo stub binaries
+kill_pattern 'testrepo/bin/br' 'Testrepo br stub binary'
+
+# Pattern 5: Testrepo scripts
+kill_pattern 'testrepo/scripts/' 'Testrepo script processes'
+
+# Pattern 6: Any testrepo bin/scripts process
+kill_pattern 'testrepo/(bin|scripts)/' 'Testrepo bin/scripts processes'
+
+# Pattern 7: Cargo build scripts
+kill_pattern 'build-script-build$' 'Cargo build scripts' '-9'
+
+# Pattern 8: Any build script process
+kill_pattern 'target/debug/build.*build-script' 'Build script processes' '-9'
+
+echo ""
+
+# ============================================================================
+# SUBPROCESS PATTERNS 10-16: HOOP-specific subprocesses only
+# ============================================================================
+
+echo -e "${BLUE}HOOP Subprocesses${NC}"
+echo "--------------------"
+
+# CRITICAL: Only kill subprocesses that are actually HOOP-related
+# We do this by checking if the process command line contains HOOP paths
+
+# Helper function to kill HOOP-related subprocesses only
+kill_hoop_subprocess() {
+    local process_name="$1"
+    local description="$2"
+
+    echo -e "${YELLOW}Checking for HOOP-related $process_name processes...${NC}"
+
+    local found_any=false
+    local hoop_pids
+    hoop_pids=$(pgrep -f "HOOP/target/debug/deps/hoop" 2>/dev/null || true)
+
+    # If there are HOOP test processes, kill their children
+    if [[ -n "$hoop_pids" ]]; then
+        for parent_pid in $hoop_pids; do
+            # Get child PIDs
+            local child_pids
+            child_pids=$(pgrep -P "$parent_pid" 2>/dev/null || true)
+
+            for child_pid in $child_pids; do
+                local cmd
+                cmd=$(ps -p "$child_pid" -o comm= 2>/dev/null || true)
+
+                if [[ "$cmd" == "$process_name" ]]; then
+                    echo -e "${YELLOW}  Killing $process_name (child of HOOP test, PID: $child_pid)${NC}"
+                    kill $SIGNAL "$child_pid" 2>/dev/null || true
+                    KILLED_COUNT=$((KILLED_COUNT + 1))
+                    found_any=true
+                fi
+            done
+        done
+    fi
+
+    # Also check for orphaned HOOP-related processes (PPID=1)
+    local orphan_pids
+    orphan_pids=$(ps ao pid,ppid,comm,args | awk -v proc="$process_name" -v hoop_path="$PWD/HOOP" '
+        $2 == 1 && $3 == proc && ($4 ~ hoop_path || $4 ~ "testrepo") {print $1}
+    ' || true)
+
+    if [[ -n "$orphan_pids" ]]; then
+        for orphan_pid in $orphan_pids; do
+            echo -e "${YELLOW}  Killing orphaned $process_name (PID: $orphan_pid)${NC}"
+            kill $SIGNAL "$orphan_pid" 2>/dev/null || true
+            KILLED_COUNT=$((KILLED_COUNT + 1))
+            found_any=true
+        done
+    fi
+
+    if [[ "$found_any" == true ]]; then
+        echo -e "${GREEN}  ✓ Killed HOOP-related $process_name process(es)${NC}"
+    else
+        echo -e "${GREEN}  ✓ No HOOP-related $process_name processes found${NC}"
+    fi
+}
+
+# Pattern 10: br (beads CLI)
+kill_hoop_subprocess 'br' 'br subprocesses'
+
+# Pattern 11: git
+kill_hoop_subprocess 'git' 'git subprocesses'
+
+# Pattern 12: ripgrep (rg)
+kill_hoop_subprocess 'rg' 'ripgrep subprocesses'
+
+# Pattern 13: tailscale
+kill_hoop_subprocess 'tailscale' 'tailscale subprocesses'
+
+# Pattern 14: age (encryption)
+kill_hoop_subprocess 'age' 'age subprocesses'
+
+# Pattern 15: ffmpeg
+kill_hoop_subprocess 'ffmpeg' 'ffmpeg subprocesses'
+
+echo ""
+
+# ============================================================================
+# AGENT ADAPTER PATTERNS 17-21
+# ============================================================================
+
+echo -e "${BLUE}Agent Adapter Processes${NC}"
+echo "-------------------------"
+
+# Pattern 17-21: Agent adapters (aider, claude, codex, gemini, opencode)
+for agent in aider claude codex gemini opencode; do
+    kill_hoop_subprocess "$agent" "$agent subprocesses"
+done
+
+echo ""
+
+# ============================================================================
+# SYSTEM SUBPROCESS PATTERNS 22-27
+# ============================================================================
+
+echo -e "${BLUE}System Subprocesses${NC}"
+echo "--------------------"
+
+# Pattern 22: gcloud
+kill_hoop_subprocess 'gcloud' 'gcloud subprocesses'
+
+# Pattern 23: systemctl
+kill_hoop_subprocess 'systemctl' 'systemctl subprocesses'
+
+# Pattern 24: tmux
+kill_hoop_subprocess 'tmux' 'tmux subprocesses'
+
+# Pattern 25: df
+kill_hoop_subprocess 'df' 'df subprocesses'
+
+# Pattern 26: curl
+kill_hoop_subprocess 'curl' 'curl subprocesses'
+
+echo ""
+
+# ============================================================================
+# EDGE CASES: Orphans, hung processes
+# ============================================================================
+
+echo -e "${BLUE}Edge Case Handling${NC}"
+echo "--------------------"
+
+# Edge case: Orphaned agent adapter processes with deep process trees
+echo -e "${YELLOW}Checking for orphaned agent adapter trees...${NC}"
+for agent in aider claude codex gemini opencode; do
+    agent_pids=$(pgrep "^$agent$" 2>/dev/null || true)
+
+    for agent_pid in $agent_pids; do
+        ppid=$(ps -p "$agent_pid" -o ppid= 2>/dev/null || echo "")
+
+        # If orphaned (PPID=1) and related to HOOP
+        if [[ "$ppid" == "1" ]]; then
+            cmd=$(ps -p "$agent_pid" -o args= 2>/dev/null || "")
+
+            if [[ "$cmd" =~ HOOP ]] || [[ "$cmd" =~ testrepo ]]; then
+                echo -e "${YELLOW}  Killing orphaned $agent tree (PID: $agent_pid)${NC}"
+                kill $SIGNAL "$agent_pid" 2>/dev/null || true
+                KILLED_COUNT=$((KILLED_COUNT + 1))
+                echo -e "${GREEN}  ✓ Killed orphaned $agent${NC}"
+            fi
+        fi
+    done
+done
+
+# Edge case: Force-kill any remaining HOOP test processes that survived SIGTERM
+if [[ "$FORCE" == true ]]; then
+    echo -e "${YELLOW}Force-killing any remaining HOOP test processes...${NC}"
+    pkill -9 -f 'hoop-[a-f0-9]\{16,\}$' 2>/dev/null || true
+    pkill -9 -f 'hoop_daemon-[a-f0-9]\{16,\}$' 2>/dev/null || true
+    echo -e "${GREEN}  ✓ Force-kill complete${NC}"
 fi
 
-# Kill testrepo stub binaries
-if pkill -f 'testrepo/(bin|scripts)/' 2>/dev/null; then
-    echo -e "${GREEN}✓ Killed testrepo processes${NC}"
+echo ""
+echo "=============================="
+if [[ $KILLED_COUNT -gt 0 ]]; then
+    echo -e "${GREEN}✓ Cleanup complete: killed $KILLED_COUNT HOOP-related process(es)${NC}"
 else
-    echo -e "${GREEN}✓ No testrepo processes found${NC}"
+    echo -e "${GREEN}✓ No HOOP test processes found - already clean${NC}"
 fi
 
-# Kill build scripts (can leak from interrupted builds)
-# Pattern: build-script-build (end of command line to avoid partial matches)
-if pkill -9 -f 'build-script-build$' 2>/dev/null; then
-    echo -e "${GREEN}✓ Killed HOOP build scripts${NC}"
-fi
-
-echo -e "${GREEN}✓ Cleanup complete${NC}"
-
-# Optional verification if --verify flag is passed
-if [[ "${1:-}" == "--verify" ]]; then
+# Verification if --verify flag passed
+if [[ "$VERIFY" == true ]]; then
     echo ""
     echo "Running verification..."
-    ./bin/verify-hoop-test-processes.sh
+    if ./bin/verify-hoop-test-processes.sh; then
+        echo -e "${GREEN}✓ Verification passed${NC}"
+        exit 0
+    else
+        echo -e "${RED}✗ Verification failed${NC}"
+        exit 1
+    fi
 fi

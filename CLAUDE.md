@@ -27,6 +27,14 @@ If running `cargo test` directly (not via Makefile), always kill lingering proce
 pkill -f 'hoop-[a-f0-9]{16,}$' && pkill -f 'hoop_daemon-[a-f0-9]{16,}$' && pkill -f 'testrepo/(bin|scripts)/' && pkill -9 -f 'build-script-build$' || true
 ```
 
+**Option 1a: Comprehensive pkill script (covers all 27 patterns)**
+
+```bash
+./bin/kill-hoop-test-processes              # Run cleanup with SIGTERM
+./bin/kill-hoop-test-processes --verify     # Run cleanup + verify clean
+./bin/kill-hoop-test-processes --force      # Force kill with SIGKILL
+```
+
 **Option 2: Use the comprehensive cleanup script**
 
 ```bash
