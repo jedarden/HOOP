@@ -472,8 +472,16 @@ mod tests {
     #[test]
     fn test_library_from_patterns() {
         let patterns = default_risk_patterns();
+        let expected_count = patterns.len();
         let lib = FixLineageLibrary::from_patterns(patterns);
-        assert!(!lib.patterns().is_empty());
+
+        // Verify the library contains all the patterns that were passed in
+        assert_eq!(lib.patterns().len(), expected_count,
+                   "Library should contain all patterns passed to from_patterns()");
+
+        // Verify that at least one expected pattern ID exists in the library
+        assert!(lib.patterns().iter().any(|p| p.id == "large_codegen_stack_overflow"),
+                "Library should contain expected pattern IDs");
     }
 
     #[test]
