@@ -445,7 +445,13 @@ pub fn list_projects() -> Result<Vec<ProjectEntry>> {
     Ok(registry.projects)
 }
 
-/// Remove a project from the registry
+/// Remove a project from the registry.
+///
+/// In interactive mode (no_interactive=false), prompts for confirmation and
+/// displays workspace information before removal. All prompts go to stderr.
+///
+/// With no_interactive=true, requires --confirm flag for safety. This prevents
+/// accidental deletion in scripts or CI environments.
 pub fn remove_project(name: &str, no_interactive: bool, confirm: bool) -> Result<bool> {
     let mut registry = ProjectsRegistry::load()?;
 
