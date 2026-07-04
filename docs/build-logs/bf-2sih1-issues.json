@@ -1,0 +1,124 @@
+{
+  "build_status": "passes",
+  "total_errors": 0,
+  "total_warnings": 102,
+  "blocking_issues": [],
+  "non_blocking": {
+    "critical": [],
+    "high": [],
+    "medium": {
+      "unused_imports": {
+        "count": 30,
+        "auto_fixable": true,
+        "files": [
+          "hoop-daemon/src/accounts_config.rs",
+          "hoop-daemon/src/api_bead_files.rs",
+          "hoop-daemon/src/api_pattern_mutations.rs",
+          "hoop-daemon/src/api_stitch_decompose.rs",
+          "hoop-daemon/src/api_stitch_replay.rs",
+          "hoop-daemon/src/api_unassigned.rs",
+          "hoop-daemon/src/api_skills.rs",
+          "hoop-daemon/src/atomic_write.rs",
+          "hoop-daemon/src/capacity.rs",
+          "hoop-daemon/src/content_blocks.rs",
+          "hoop-daemon/src/api_presence.rs",
+          "hoop-daemon/src/api_tour_project.rs",
+          "hoop-daemon/src/migrations.rs",
+          "hoop-daemon/src/stitch_reconstruction.rs",
+          "hoop-daemon/src/stuck_detector.rs",
+          "hoop-daemon/src/prompt_substitute.rs",
+          "hoop-daemon/src/api_prompts.rs",
+          "hoop-daemon/src/config_backup.rs",
+          "hoop-daemon/src/cross_project_propagation.rs",
+          "hoop-daemon/src/api_fix_patterns.rs",
+          "hoop-daemon/src/api_screen_capture.rs",
+          "hoop-daemon/src/screen_capture.rs",
+          "hoop-daemon/src/saturation_detector.rs",
+          "hoop-daemon/src/observer.rs",
+          "hoop-cli/src/config.rs",
+          "hoop-cli/src/patterns.rs",
+          "hoop-cli/src/skills.rs",
+          "hoop-cli/src/main.rs"
+        ],
+        "fix_command": "cargo fix --lib -p hoop-daemon --bin hoop"
+      },
+      "dead_code": {
+        "count": 9,
+        "auto_fixable": false,
+        "items": [
+          "openapi_router (lib.rs:1277)",
+          "load_hoop_config (lib.rs:3799)",
+          "check_and_emit_capacity_alert (lib.rs:4076)",
+          "get_opencode_limits (capacity.rs:473)",
+          "validate_workspace (projects.rs:391)",
+          "QuotaLimit struct (capacity.rs:61)",
+          "MAX_UNASSIGNED_SESSIONS constant",
+          "MIN_SAMPLES_FOR_PREDICTION constant",
+          "STITCH_CLOSED_THRESHOLD_SECONDS constant"
+        ]
+      },
+      "type_visibility": {
+        "count": 1,
+        "auto_fixable": false,
+        "items": [
+          "PatternCategory more private than DetectedPattern::category (reflection_detector.rs:88)"
+        ]
+      }
+    },
+    "low": {
+      "unused_variables": {
+        "count": 25,
+        "auto_fixable": true,
+        "categories": {
+          "timing_variables": ["start", "elapsed_ms"],
+          "connections": ["conn"],
+          "flags": ["timed_out"],
+          "parameters": ["remote_addr", "required_role", "link_kind", "schedule", "overlap_policy", "event_type", "initial_hash", "cfg", "workspace", "transition_secs", "created_by", "attachments_dir", "dashboard", "abs_path", "project", "synthesis_callback", "semaphore_ref"]
+        }
+      },
+      "unnecessary_mut": {
+        "count": 8,
+        "locations": [
+          "api_tour_project.rs:240",
+          "api_fix_patterns.rs:454",
+          "lib.rs:3446",
+          "capacity.rs:593",
+          "capacity.rs:596",
+          "cross_project_propagation.rs:468",
+          "cross_project_propagation.rs:476",
+          "fix_patterns.rs:83",
+          "fix_patterns.rs:277"
+        ]
+      },
+      "naming_conventions": {
+        "count": 1,
+        "items": [
+          "DNSName field should be snake_case (init.rs:36)"
+        ]
+      },
+      "lifetime_syntax": {
+        "count": 1,
+        "items": [
+          "Elided lifetime confusing (api_pattern_mutations.rs:566)"
+        ]
+      }
+    }
+  },
+  "priority_order": [
+    "medium.type_visibility",
+    "medium.dead_code",
+    "medium.unused_imports",
+    "low.unused_variables",
+    "low.unnecessary_mut",
+    "low.naming_conventions",
+    "low.lifetime_syntax"
+  ],
+  "phase_1_blocking": false,
+  "notes": [
+    "Build compiles successfully with 0 errors",
+    "All issues are warnings only",
+    "cargo fix can auto-resolve ~80 warnings",
+    "Does not block cargo test execution",
+    "Does not block Phase 1 CI gate"
+  ]
+}
