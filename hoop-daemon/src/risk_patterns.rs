@@ -553,9 +553,43 @@ mod tests {
         assert!(codegen_match.confidence > 0.5);
     }
 
-    /// Test that add_pattern() adds a pattern to the library.
+    /// Test that add_pattern() correctly adds a pattern to the library.
     ///
-    /// Creates an empty library, adds a pattern, then verifies match_draft finds it.
+    /// # What This Test Verifies
+    ///
+    /// This test validates the core functionality of `add_pattern()` method:
+    /// 1. Pattern storage: The pattern is added to the patterns Vec
+    /// 2. Keyword indexing: Keywords are indexed for fast lookup via keyword_index HashMap
+    /// 3. Pattern retrieval: The added pattern can be found via match_draft()
+    ///
+    /// # How add_pattern() Works
+    ///
+    /// The `add_pattern()` implementation performs these steps:
+    /// 1. Gets the next available index: `let idx = self.patterns.len()`
+    /// 2. Iterates through pattern.keywords, adding each to keyword_index with the pattern index
+    /// 3. Iterates through pattern.label_keywords, adding each to label_keyword_index
+    /// 4. Pushes the pattern onto the patterns Vec
+    ///
+    /// # Why This Test Matters
+    ///
+    /// This test catches regressions in:
+    /// - Pattern addition logic (if patterns aren't stored correctly)
+    /// - Keyword indexing (if index updates are broken)
+    /// - Pattern matching (if stored patterns can't be retrieved)
+    ///
+    /// # Test Approach
+    ///
+    /// 1. Start with an empty library (no patterns, no indexes)
+    /// 2. Add a pattern with keyword "test" (should be assigned index 0)
+    /// 3. Query with "Test this" which contains "test" (case-insensitive match)
+    /// 4. Verify exactly 1 match is found with the correct pattern ID
+    ///
+    /// # Expected Behavior
+    ///
+    /// - Pattern "test_pattern" is stored at index 0
+    /// - Keyword "test" maps to index 0 in keyword_index
+    /// - Query "Test this" contains "test" → triggers match
+    /// - Returns 1 match with pattern.id == "test_pattern"
     #[test]
     fn test_add_pattern() {
         let mut lib = FixLineageLibrary::new();
