@@ -60,12 +60,31 @@ $HOME/.cargo/bin/cargo build
 ✅ Full output captured in `/tmp/hoop-debug-build-final.log`  
 ✅ Build ran to completion (exit code 0, finished successfully)
 
+## Verification Run (2026-07-04)
+
+A second build run was executed to verify the initial results:
+
+**Command:**
+```bash
+$HOME/.cargo/bin/cargo build 2>&1 | tee /tmp/hoop-debug-build-verify.log
+```
+
+**Verification Results:**
+- **Status:** ✅ **CONFIRMED** - Identical warning pattern
+- **Build Time:** 0.13 seconds (incremental build from cache)
+- **Warning Count:** 88 warnings (hoop-daemon) + 14 warnings (hoop-cli) = **102 total**
+- **Exit Code:** 0 (success)
+- **Final Status:** `Finished 'dev' profile [unoptimized + debuginfo] target(s) in 0.13s`
+
+The verification run confirms the initial build results. The debug build is reproducible and stable.
+
 ## Notes
 
 - No compilation errors
 - All warnings are non-blocking (not treated as errors)
 - The debug build completed successfully
 - Output file preserved at `/tmp/hoop-debug-build-final.log` (12.6 KB)
+- Verification output at `/tmp/hoop-debug-build-verify.log`
 
 ## Environment Context
 
