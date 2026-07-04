@@ -82,7 +82,7 @@ pub fn detect_orphans(project_name: &str, project_path: &Path) -> Result<Orphans
 
         if !has_stitch_label {
             // This is an orphan
-            if let Some(b) = serde_json::from_value::<Bead>(bead_json).ok() {
+            if let Ok(b) = serde_json::from_value::<Bead>(bead_json) {
                 orphans.push(OrphanBead {
                     id: b.id,
                     title: b.title,

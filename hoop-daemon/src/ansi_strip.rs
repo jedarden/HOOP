@@ -49,7 +49,7 @@ pub fn strip_ansi(input: &str) -> String {
                 while j < bytes.len() {
                     let b = bytes[j];
                     // CSI sequences end with a byte in range 0x40-0x7E
-                    if b >= 0x40 && b <= 0x7E {
+                    if (0x40..=0x7E).contains(&b) {
                         i = j + 1; // Skip the entire sequence
                         break;
                     }

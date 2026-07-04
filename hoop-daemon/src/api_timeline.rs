@@ -82,7 +82,7 @@ pub async fn get_worker_timeline(
 
     // Build a reverse index: worker -> sorted events
     let mut worker_events: HashMap<String, Vec<&BeadEventData>> = HashMap::new();
-    for (_bead_id, events) in &all_events {
+    for events in all_events.values() {
         for event in events {
             // Parse timestamp and filter to window
             if let Ok(ts) = event.timestamp.parse::<chrono::DateTime<chrono::Utc>>() {

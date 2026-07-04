@@ -22,10 +22,9 @@ use std::env;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::time::Duration as StdDuration;
 use tracing::{debug, info, warn};
 
-use crate::accounts_config::{AccountsConfig, OpenCodeLimits as AccountsOpenCodeLimits};
+use crate::accounts_config::AccountsConfig;
 
 /// GCP Consumer Quotas API client for fetching Gemini quota limits.
 ///
@@ -210,7 +209,7 @@ mod gcp_quota_client {
     ///
     /// This requires proper OAuth2 credentials and may not work in all environments.
     #[allow(dead_code)]
-    fn fetch_quota_via_http(config: &GcpQuotaConfig) -> Option<GeminiQuotaLimits> {
+    fn fetch_quota_via_http(_config: &GcpQuotaConfig) -> Option<GeminiQuotaLimits> {
         // HTTP-based quota API is complex due to OAuth2 requirements.
         // The gcloud CLI approach is preferred as it handles authentication.
         // This stub is reserved for future implementation if needed.
@@ -590,10 +589,10 @@ impl Default for CapacityMeterConfig {
         }
 
         // Discover Gemini directories
-        let mut gemini_dirs = Self::discover_gemini_dirs(&home);
+        let gemini_dirs = Self::discover_gemini_dirs(&home);
 
         // Discover OpenCode directories
-        let mut opencode_dirs = Self::discover_opencode_dirs(&home);
+        let opencode_dirs = Self::discover_opencode_dirs(&home);
 
         // Load optional GCP quota configuration from environment
         let gcp_quota_config = gcp_quota_client::load_gcp_quota_config();
@@ -1023,10 +1022,10 @@ impl CapacityMeter {
         for account in &accounts {
             let needs_warning = account
                 .forecast_full_5h_min
-                .map_or(false, |f| f < WARNING_THRESHOLD_MINUTES && f > 0.0)
+                .is_some_and(|f| f < WARNING_THRESHOLD_MINUTES && f > 0.0)
                 || account
                     .forecast_full_7d_min
-                    .map_or(false, |f| f < WARNING_THRESHOLD_MINUTES && f > 0.0);
+                    .is_some_and(|f| f < WARNING_THRESHOLD_MINUTES && f > 0.0);
 
             if needs_warning {
                 crate::metrics::metrics()
@@ -1793,7 +1792,7 @@ impl CapacityMeter {
                 };
 
             // Check if this is a message/turn event with a model role (assistant response)
-            let event_type = entry.get("type").and_then(|v| v.as_str());
+            let _event_type = entry.get("type").and_then(|v| v.as_str());
             let role = entry.get("role").and_then(|v| v.as_str());
 
             // Only count assistant/model responses (not user prompts)

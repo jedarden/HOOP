@@ -9,7 +9,7 @@ use axum::{
     extract::{ConnectInfo, State},
     http::StatusCode,
     response::Json,
-    routing::{delete, get, post},
+    routing::{delete, post},
     Router,
 };
 use rusqlite::OpenFlags;
@@ -237,7 +237,7 @@ async fn disable_tour_project(
     let operator_id = state.identity_cache.resolve(connect_info.map(|ci| ci.0));
 
     let db_path = fleet::db_path();
-    let mut conn = rusqlite::Connection::open_with_flags(
+    let conn = rusqlite::Connection::open_with_flags(
         &db_path,
         OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )
@@ -363,11 +363,11 @@ fn list_tour_stitches(conn: &rusqlite::Connection, project: &str) -> Vec<TourSti
         .prepare("SELECT id, kind, title FROM stitches WHERE project = ?1 ORDER BY created_at")
         .unwrap_or_else(|_| {
             // Table might not exist yet
-            return conn
+            conn
                 .prepare(
                     "SELECT id, kind, title FROM stitches WHERE project = ?1 ORDER BY created_at",
                 )
-                .unwrap();
+                .unwrap()
         });
 
     let mut stitches = Vec::new();

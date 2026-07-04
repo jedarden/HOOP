@@ -201,7 +201,7 @@ The SQLite database is out of sync with the JSONL (known issue). Run `br doctor 
 3. Stop and let the operator know — do not loop writing docs or fake verification
 
 **Never write a commit claiming "Phase N complete" or "all deliverables verified" unless:**
-- `cargo test` passed (use `nix-shell --run 'cargo test'`)
+- `cargo test` passed (run directly or via `nix-shell --run 'cargo test'` on NixOS hosts)
 - You ran the actual binary and observed the claimed behavior
 - `br close` succeeded and `br list` confirms the bead is closed
 
@@ -217,9 +217,31 @@ If asked to make a change:
 4. Match terminology (Stitch / Pattern / human-interface agent / Project / Workspace) exactly. Do not use `Mayor`, `polecat`, `swarm`, `convoy`, or Gas Town vocabulary; those were used in earlier drafts and have been deliberately removed. Do not use "worker steering" or "capacity enforcement" — these are explicitly non-goals (HOOP observes NEEDLE; it does not steer workers or enforce capacity).
 5. Never suggest features that steer workers, enforce capacity, or route by strand. Refer back to non-goals.
 
-## Build environment (NixOS — read before running cargo)
+## Build environment (Debian/NixOS — read before running cargo)
 
-This server runs NixOS. Bare `cargo check` / `cargo build` / `cargo test` will fail with an `openssl-sys` / `pkg-config not found` error. Always use `nix-shell`:
+The HOOP repository supports two build environments:
+
+### Debian (primary build server)
+The primary build server runs Debian 13 (trixie) with all dependencies installed via system packages and local toolchain installations. On this system, `cargo check` / `cargo build` / `cargo test` work directly without any wrapper:
+
+```bash
+# All cargo commands work directly
+cargo check
+cargo test
+cargo build --release
+```
+
+Required dependencies (already installed):
+- rustc 1.95.0 (via ~/.cargo/bin/rustc)
+- cargo 1.95.0 (via ~/.local/bin/cargo)
+- pkg-config (system package)
+- libssl-dev (system package, for openssl-sys)
+- node v20.19.2 (system package)
+- pnpm 10.33.1 (via ~/.local/bin/pnpm)
+- sqlite3 (system package)
+
+### NixOS (development environments)
+Some development environments may run NixOS. On NixOS, bare `cargo` commands will fail with an `openssl-sys` / `pkg-config not found` error. Use `nix-shell`:
 
 ```bash
 # One-shot
@@ -233,8 +255,17 @@ nix-shell   # then run cargo commands normally
 
 `shell.nix` at the repo root provides all required deps (pkg-config, openssl, rustc, node, pnpm).
 
+### Detecting which environment you're on
+```bash
+# Check OS type
+cat /etc/os-release
+
+# If nix-shell is available and you're on NixOS, use it
+which nix-shell && cat /etc/os-release | grep -q nixos && echo "Use nix-shell"
+```
+
 If asked to write code:
-1. Run `nix-shell --run 'cargo check'` first to confirm the baseline compiles before touching anything
+1. Run `cargo check` (or `nix-shell --run 'cargo check'` on NixOS) first to confirm the baseline compiles
 2. Check existing implementations — but treat them as unverified until `cargo test` passes
 3. Add tests for new functionality (see existing test files for patterns)
 4. Commit with a clear message referencing the plan section it implements

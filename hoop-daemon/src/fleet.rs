@@ -1701,7 +1701,7 @@ pub fn migrate_v01_to_v11(conn: &mut Connection) -> Result<()> {
 /// Includes a recursive-CTE trigger to prevent parent_pattern cycles
 /// and indexes for efficient member lookups.
 pub fn migrate_v11_to_v12(conn: &mut Connection) -> Result<()> {
-    let start = std::time::Instant::now();
+    let _start = std::time::Instant::now();
     info!("Running migration 1.1.0 → 1.2.0: Adding Pattern service tables");
 
     // Create patterns table
@@ -4692,7 +4692,7 @@ pub fn load_stitch_by_id(stitch_id: &str) -> Result<Option<StitchRow>> {
         .query_row(
             "SELECT id, project, kind, title, created_by, created_at, last_activity_at
              FROM stitches WHERE id = ?1",
-            &[stitch_id],
+            [stitch_id],
             |row| {
                 Ok(StitchRow {
                     id: row.get(0)?,

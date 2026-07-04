@@ -309,7 +309,7 @@ pub fn execute_script(
     args: &[String],
     timeout_secs: u64,
 ) -> Result<ScriptRunResponse, String> {
-    let start = Instant::now();
+    let _start = Instant::now();
 
     info!(
         "Executing script: {} with args: {:?}",
@@ -339,33 +339,27 @@ pub fn execute_script(
     // Spawn thread to collect stdout
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
-        for line in reader.lines() {
-            if let Ok(l) = line {
-                let _ = stdout_tx.send(l);
-            }
+        for l in reader.lines().flatten() {
+            let _ = stdout_tx.send(l);
         }
     });
 
     // Spawn thread to collect stderr
     thread::spawn(move || {
         let reader = BufReader::new(stderr);
-        for line in reader.lines() {
-            if let Ok(l) = line {
-                let _ = stderr_tx.send(l);
-            }
+        for l in reader.lines().flatten() {
+            let _ = stderr_tx.send(l);
         }
     });
 
     // Wait for completion with timeout
     let start_time = Instant::now();
-    let mut timed_out = false;
 
     loop {
         let elapsed = start_time.elapsed();
         if elapsed >= timeout {
             // Kill the child process
             let _ = child.kill();
-            timed_out = true;
             break;
         }
 
@@ -507,8 +501,7 @@ async fn list_scripts(
                 let manifest = s.manifest.as_ref();
                 match manifest.map(|m| &m.scope) {
                     None | Some(ScriptScope::Global) => true,
-                    Some(ScriptScope::Project) => manifest
-                        .and_then(|m| Some(m.projects.contains(&project_name)))
+                    Some(ScriptScope::Project) => manifest.map(|m| m.projects.contains(&project_name))
                         .unwrap_or(false),
                 }
             })

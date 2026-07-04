@@ -426,7 +426,7 @@ pub async fn update_br_semaphore_capacity(
         );
     } else {
         // Decrease capacity - try to acquire and drop excess permits
-        let to_remove = diff.abs() as usize;
+        let to_remove = diff.unsigned_abs() as usize;
         let mut removed = 0;
 
         // Try to acquire permits without blocking
@@ -689,7 +689,7 @@ async fn search_project_files(
 
     // Validate modified_since ref (no shell metacharacters).
     if let Some(ref r) = modified_since {
-        if r.contains(|c: char| matches!(c, ';' | '|' | '&' | '$' | '`' | '\n')) {
+        if r.contains([';', '|', '&', '$', '`', '\n']) {
             return Err(axum::http::StatusCode::BAD_REQUEST);
         }
     }
@@ -972,7 +972,7 @@ async fn get_file_content_stream(
     let theme = params.theme.unwrap_or_else(|| "dark".to_owned());
 
     // Resolve path and read content in blocking task
-    let (abs_path, filename, content) = tokio::task::spawn_blocking(move || -> anyhow::Result<(std::path::PathBuf, String, String)> {
+    let (_abs_path, filename, content) = tokio::task::spawn_blocking(move || -> anyhow::Result<(std::path::PathBuf, String, String)> {
         use crate::path_security::{canonicalize_and_check, PathAllowlist};
         let allowlist = PathAllowlist::for_workspace(&project_root)
             .map_err(|e| anyhow::anyhow!("workspace allowlist: {e}"))?;
@@ -2281,15 +2281,12 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         use heartbeats::MonitorEvent;
         let mut rx = heartbeat_monitor.subscribe();
         while let Ok(event) = rx.recv().await {
-            match event {
-                MonitorEvent::Heartbeat(hb) => {
-                    // Track heartbeats for stuck detection
-                    stuck_detector_for_hb_monitor
-                        .lock()
-                        .unwrap()
-                        .on_heartbeat(&hb.worker, hb.ts);
-                }
-                _ => {}
+            if let MonitorEvent::Heartbeat(hb) = event {
+                // Track heartbeats for stuck detection
+                stuck_detector_for_hb_monitor
+                    .lock()
+                    .unwrap()
+                    .on_heartbeat(&hb.worker, hb.ts);
             }
         }
     });
@@ -2410,9 +2407,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     let whisper_model_path = transcription_config.whisper_model_path.clone();
 
     // Create synthesis callback for transcription completion
-    let synthesis_callback: transcription::TranscriptionCompleteCallback = {
+    let _synthesis_callback: transcription::TranscriptionCompleteCallback = {
         let agent_mgr = agent_session_manager.clone();
-        Arc::new(move |stitch_id: String, project: String| {
+        Arc::new(move |stitch_id: String, _project: String| {
             let mgr = agent_mgr.clone();
             Box::pin(async move {
                 if let Some(ref mgr) = mgr {
@@ -3074,7 +3071,7 @@ Note: This is an automated synthesis from voice dictation."#,
     // Orphan bead count updater: update metrics on stitch/bead events
     {
         let projects_ref = state.projects.clone();
-        let semaphore_ref = state.br_semaphore.clone();
+        let _semaphore_ref = state.br_semaphore.clone();
         let mut stitch_rx = state.stitch_tx.subscribe();
         let mut bead_rx = state.bead_tx.subscribe();
 
@@ -3148,7 +3145,7 @@ Note: This is an automated synthesis from voice dictation."#,
 
             while let Ok(agent_config_changed) = rx.recv().await {
                 if let Some(ref mgr) = agent_mgr_for_agent {
-                    use config_watcher::AgentConfigChanged;
+                    
 
                     info!(
                         "Agent config changed: adapter {} → {}, model {} → {}, calling switch_adapter",
@@ -3443,7 +3440,7 @@ Note: This is an automated synthesis from voice dictation."#,
             state.worker_registry.clone(),
             state.collision_alert_tx.clone(),
         ));
-        let mut shutdown_rx = state.shutdown.subscribe();
+        let shutdown_rx = state.shutdown.subscribe();
         detector.clone().spawn(15, shutdown_rx);
         info!("Collision detector started (15s interval)");
     }
@@ -3855,9 +3852,7 @@ async fn find_stitch_for_bead(bead_id: &str) -> Option<String> {
     tokio::task::spawn_blocking(move || {
         use rusqlite::Connection;
 
-        let db_path = std::path::PathBuf::from(
-            dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")),
-        )
+        let db_path = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
         .join(".hoop")
         .join("fleet.db");
 
@@ -3890,9 +3885,7 @@ fn check_and_emit_stitch_beads_closed(
 ) -> anyhow::Result<()> {
     use rusqlite::Connection;
 
-    let db_path = std::path::PathBuf::from(
-        dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")),
-    )
+    let db_path = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
     .join(".hoop")
     .join("fleet.db");
 
@@ -3967,9 +3960,7 @@ fn check_and_emit_convoy_complete(
 ) -> anyhow::Result<()> {
     use rusqlite::Connection;
 
-    let db_path = std::path::PathBuf::from(
-        dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")),
-    )
+    let db_path = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
     .join(".hoop")
     .join("fleet.db");
 
@@ -3995,9 +3986,7 @@ fn check_and_emit_convoy_complete(
 
     // Check if all linked beads have terminal events in events.jsonl
     // Terminal events: Complete, Close, Fail, Timeout, Crash, Release
-    let events_path = std::path::PathBuf::from(
-        dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
-    )
+    let events_path = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
     .join(".hoop")
     .join("events.jsonl");
 
@@ -4011,22 +4000,20 @@ fn check_and_emit_convoy_complete(
     if let Ok(file) = std::fs::File::open(&events_path) {
         use std::io::BufRead;
         let reader = std::io::BufReader::new(file);
-        for line in reader.lines() {
-            if let Ok(line) = line {
-                if let Ok(event) = serde_json::from_str::<crate::events::NeedleEvent>(&line) {
-                    let (bead_id, is_terminal) = match &event {
-                        crate::events::NeedleEvent::Complete { bead, .. }
-                        | crate::events::NeedleEvent::Close { bead, .. }
-                        | crate::events::NeedleEvent::Fail { bead, .. }
-                        | crate::events::NeedleEvent::Timeout { bead, .. }
-                        | crate::events::NeedleEvent::Crash { bead, .. }
-                        | crate::events::NeedleEvent::Release { bead, .. } => (bead.clone(), true),
-                        _ => continue,
-                    };
+        for line in reader.lines().flatten() {
+            if let Ok(event) = serde_json::from_str::<crate::events::NeedleEvent>(&line) {
+                let (bead_id, is_terminal) = match &event {
+                    crate::events::NeedleEvent::Complete { bead, .. }
+                    | crate::events::NeedleEvent::Close { bead, .. }
+                    | crate::events::NeedleEvent::Fail { bead, .. }
+                    | crate::events::NeedleEvent::Timeout { bead, .. }
+                    | crate::events::NeedleEvent::Crash { bead, .. }
+                    | crate::events::NeedleEvent::Release { bead, .. } => (bead.clone(), true),
+                    _ => continue,
+                };
 
-                    if linked_bead_ids.contains(&bead_id) && is_terminal {
-                        beads_with_terminal.insert(bead_id);
-                    }
+                if linked_bead_ids.contains(&bead_id) && is_terminal {
+                    beads_with_terminal.insert(bead_id);
                 }
             }
         }
@@ -4076,9 +4063,7 @@ fn check_and_emit_convoy_complete(
 fn check_and_emit_capacity_alert() -> anyhow::Result<()> {
     use rusqlite::Connection;
 
-    let db_path = std::path::PathBuf::from(
-        dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")),
-    )
+    let db_path = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
     .join(".hoop")
     .join("fleet.db");
 

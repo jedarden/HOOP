@@ -10,9 +10,9 @@
 //! Unknown variables are rejected (not left raw) to catch typos early.
 //! Handles escaped braces: \{{ → literal '{{', \}} → literal '}}'
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::Result;
 use chrono::{DateTime, Utc};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::collections::HashMap;
 
 /// Fixed built-in variables that are always available
@@ -326,14 +326,13 @@ pub fn validate_template(template: &str, known_vars: &[String]) -> Result<(), Su
                 if chars.peek().map(|&(_, nc)| nc) == Some('}') {
                     chars.next(); // consume second '}'
                     let start = var_start.take();
-                    if start.is_some() && !current_var.is_empty() {
-                        if !known_vars.contains(&current_var) && !BUILTIN_VARS.contains(&current_var.as_str()) {
+                    if start.is_some() && !current_var.is_empty()
+                        && !known_vars.contains(&current_var) && !BUILTIN_VARS.contains(&current_var.as_str()) {
                             return Err(SubstitutionError::UnknownVariable {
                                 name: current_var.clone(),
                                 position: start.unwrap_or(i),
                             });
                         }
-                    }
                     current_var.clear();
                 }
             }

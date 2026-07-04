@@ -207,7 +207,7 @@ pub fn closure(
         })?;
 
         for child_row in child_rows {
-            let (child_id, link_kind) = child_row?;
+            let (child_id, _link_kind) = child_row?;
 
             // Skip self-links (shouldn't exist due to API validation, but be safe)
             if child_id == current_id {

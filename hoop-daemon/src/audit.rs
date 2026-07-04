@@ -365,7 +365,7 @@ fn check_cli_adapter_binaries() -> AuditCheck {
     if available.is_empty() {
         AuditCheck::warning(
             "cli_adapters",
-            format!("No CLI adapter binaries found"),
+            "No CLI adapter binaries found".to_string(),
             "Install at least one CLI adapter:\n  - Claude Code: https://claude.ai/code\n  - Aider: https://aider.chat",
         )
     } else {

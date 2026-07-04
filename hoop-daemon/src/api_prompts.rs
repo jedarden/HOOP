@@ -42,7 +42,7 @@ use std::path::{Path as StdPath, PathBuf};
 use std::sync::Arc;
 use tracing::{debug, info, warn};
 
-use crate::prompt_substitute::{substitute_with_args, SubstitutionContext};
+use crate::prompt_substitute::substitute_with_args;
 
 /// A parsed prompt ready for API responses.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

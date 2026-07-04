@@ -5,7 +5,7 @@
 //! - POST /api/p/:project/replay/:bead_id/resume-as-new — create new bead with reconstructed state
 //! - POST /api/p/:project/replay/:bead_id/restore-state — restore workspace from stash
 
-use crate::stitch_reconstruction::{self, ReplayOptions};
+use crate::stitch_reconstruction;
 use axum::{
     extract::{ConnectInfo, Path, State},
     http::StatusCode,

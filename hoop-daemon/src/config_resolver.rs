@@ -380,7 +380,7 @@ fn parse_serde_yaml_details(msg: &str) -> (Option<String>, Option<String>, Optio
             Some("string".to_string())
         } else if let Some(idx) = msg.find("expected ") {
             let rest = &msg[idx + 9..];
-            let end_idx = rest.find(|c| c == ',' || c == ' ').unwrap_or(rest.len());
+            let end_idx = rest.find([',', ' ']).unwrap_or(rest.len());
             Some(rest[..end_idx].to_string())
         } else {
             None
@@ -1458,7 +1458,7 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     );
 
     // Secrets scanner patterns (§18)
-    let secrets_patterns = if let Some(patterns) = yml_ref.and_then(|y| yaml_get_secret_patterns(y)) {
+    let secrets_patterns = if let Some(patterns) = yml_ref.and_then(yaml_get_secret_patterns) {
         // Validate all patterns
         let mut valid_patterns = Vec::new();
         for pat in patterns {
@@ -1500,7 +1500,7 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     );
 
     // Load role configuration (RBAC)
-    let roles = if let Some(role_config) = yml_ref.and_then(|y| yaml_get_role_config(y)) {
+    let roles = if let Some(role_config) = yml_ref.and_then(yaml_get_role_config) {
         Resolved::new(
             role_config,
             ConfigSource::ConfigYml,
@@ -1542,7 +1542,7 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
         env_parse("HOOP_EMBEDDING_CACHE_TTL_SECONDS"),
         yml_ref
             .and_then(|y| yaml_get_u64(y, "embedding.cache_ttl_seconds"))
-            .map(|v| v as u64),
+            .map(|v| v),
         86400, // 24 hours default
         "N/A",
         "HOOP_EMBEDDING_CACHE_TTL_SECONDS",
@@ -2162,7 +2162,7 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
     );
 
     // Secrets scanner patterns (§18)
-    let secrets_patterns = if let Some(patterns) = yml_ref.and_then(|y| yaml_get_secret_patterns(y)) {
+    let secrets_patterns = if let Some(patterns) = yml_ref.and_then(yaml_get_secret_patterns) {
         // Validate all patterns
         let mut valid_patterns = Vec::new();
         for pat in patterns {
@@ -2355,7 +2355,7 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
             ConfigSource::ConfigYml,
             "config.yml: stuck_detector".to_string(),
         ),
-        roles: if let Some(role_config) = yml_ref.and_then(|y| yaml_get_role_config(y)) {
+        roles: if let Some(role_config) = yml_ref.and_then(yaml_get_role_config) {
             Resolved::new(
                 role_config,
                 ConfigSource::ConfigYml,
@@ -2394,7 +2394,7 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
             env_parse("HOOP_EMBEDDING_CACHE_TTL_SECONDS"),
             yml_ref
                 .and_then(|y| yaml_get_u64(y, "embedding.cache_ttl_seconds"))
-                .map(|v| v as u64),
+                .map(|v| v),
             86400,
             "N/A",
             "HOOP_EMBEDDING_CACHE_TTL_SECONDS",

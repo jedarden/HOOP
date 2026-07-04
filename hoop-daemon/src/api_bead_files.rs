@@ -8,13 +8,12 @@
 //! and file blame APIs, this provides complete traceability from bead → file → revision.
 
 use axum::{
-    extract::{Path, State},
+    extract::Path,
     http::StatusCode,
     routing::get,
     Json, Router,
 };
-use rusqlite::{params, Connection};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::{bead_commit_index, id_validators};
 

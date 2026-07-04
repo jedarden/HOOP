@@ -9,7 +9,7 @@
 //! GET   /api/screen-capture/:stitch_id/video          — range-aware video stream
 
 use crate::fleet;
-use crate::id_validators::{self, ValidStitchId};
+use crate::id_validators::ValidStitchId;
 use crate::screen_capture::{self, FrameSample};
 use axum::{
     extract::{Path, State},

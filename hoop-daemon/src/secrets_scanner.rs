@@ -79,8 +79,8 @@ fn is_high_entropy_exclusion(match_str: &str, context: &str) -> bool {
     }
 
     // Hex-encoded colors (6 or 8 hex chars, often preceded by #)
-    if match_str.len() == 6 || match_str.len() == 8 {
-        if match_str.chars().all(|c| c.is_ascii_hexdigit()) {
+    if (match_str.len() == 6 || match_str.len() == 8)
+        && match_str.chars().all(|c| c.is_ascii_hexdigit()) {
             // Check if preceded by # or color-related keywords
             let context_lower = context.to_lowercase();
             if context_lower.contains('#')
@@ -91,7 +91,6 @@ fn is_high_entropy_exclusion(match_str: &str, context: &str) -> bool {
                 return true;
             }
         }
-    }
 
     // Base64-encoded data that's actually a known format (e.g., PEM headers)
     if match_str.contains("BEGIN") || match_str.contains("END") {
@@ -242,7 +241,7 @@ pub fn scan_text(text: &str, project_name: Option<&str>) -> Vec<Finding> {
     findings.extend(scan_high_entropy(text));
 
     // 3. PII patterns (email) if enabled
-    if project_name.map_or(false, |p| state.is_email_enabled(p)) {
+    if project_name.is_some_and(|p| state.is_email_enabled(p)) {
         findings.extend(scan_email(text));
     }
 

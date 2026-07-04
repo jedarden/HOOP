@@ -106,7 +106,7 @@ impl ScriptScheduler {
 
         // Update state with current schedule info
         let mut state = this.state.write().await;
-        for (name, (schedule, overlap_policy)) in &scheduled {
+        for (name, (schedule, _overlap_policy)) in &scheduled {
             let entry = state
                 .entry(name.clone())
                 .or_insert_with(|| ScriptScheduleState {
@@ -136,7 +136,7 @@ impl ScriptScheduler {
             let state = this.state.read().await;
             scheduled
                 .into_iter()
-                .filter_map(|(name, (schedule, overlap_policy))| {
+                .filter_map(|(name, (_schedule, overlap_policy))| {
                     let entry = state.get(&name)?;
                     let next_fire = entry.next_fire?;
 
@@ -331,10 +331,10 @@ impl CronSchedule {
     }
 
     fn matches(&self, t: &DateTime<Utc>) -> bool {
-        self.minutes.contains(&(t.time().minute() as u32))
-            && self.hours.contains(&(t.time().hour() as u32))
-            && self.doms.contains(&(t.date_naive().day() as u32))
-            && self.months.contains(&(t.date_naive().month() as u32))
+        self.minutes.contains(&{ t.time().minute() })
+            && self.hours.contains(&{ t.time().hour() })
+            && self.doms.contains(&{ t.date_naive().day() })
+            && self.months.contains(&{ t.date_naive().month() })
             && self.dows.contains(&t.weekday().num_days_from_sunday())
     }
 }

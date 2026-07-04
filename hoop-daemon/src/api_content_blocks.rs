@@ -32,12 +32,12 @@ pub async fn list_content_blocks(
     Path(stitch_id): Path<String>,
 ) -> Result<Json<Vec<ContentBlock>>, (StatusCode, String)> {
     let db_path = crate::fleet::db_path();
-    let conn = Connection::open(&db_path).map_err(|e| {
+    let mut conn = Connection::open(&db_path).map_err(|e| {
         error!("Failed to open database: {}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
     })?;
 
-    let blocks = get_content_blocks(&mut conn.into(), &stitch_id).map_err(|e| {
+    let blocks = get_content_blocks(&mut conn, &stitch_id).map_err(|e| {
         error!("Failed to get content blocks for stitch {}: {}", stitch_id, e);
         (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
     })?;
@@ -79,12 +79,12 @@ pub async fn create_content_block(
     };
 
     let db_path = crate::fleet::db_path();
-    let conn = Connection::open(&db_path).map_err(|e| {
+    let mut conn = Connection::open(&db_path).map_err(|e| {
         error!("Failed to open database: {}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
     })?;
 
-    db_create_content_block(&mut conn.into(), &block).map_err(|e| {
+    db_create_content_block(&mut conn, &block).map_err(|e| {
         error!("Failed to create content block for stitch {}: {}", stitch_id, e);
         (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
     })?;
@@ -114,12 +114,12 @@ pub async fn update_content_block_endpoint(
     Json(req): Json<ContentBlockUpdate>,
 ) -> Result<Json<ContentBlock>, (StatusCode, String)> {
     let db_path = crate::fleet::db_path();
-    let conn = Connection::open(&db_path).map_err(|e| {
+    let mut conn = Connection::open(&db_path).map_err(|e| {
         error!("Failed to open database: {}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
     })?;
 
-    let updated = update_content_block(&mut conn.into(), &block_id, req).map_err(|e| {
+    let updated = update_content_block(&mut conn, &block_id, req).map_err(|e| {
         error!("Failed to update content block {}: {}", block_id, e);
         (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
     })?;
@@ -147,12 +147,12 @@ pub async fn delete_content_block_endpoint(
     Path((_stitch_id, block_id)): Path<(String, String)>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     let db_path = crate::fleet::db_path();
-    let conn = Connection::open(&db_path).map_err(|e| {
+    let mut conn = Connection::open(&db_path).map_err(|e| {
         error!("Failed to open database: {}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
     })?;
 
-    delete_content_block(&mut conn.into(), &block_id).map_err(|e| {
+    delete_content_block(&mut conn, &block_id).map_err(|e| {
         error!("Failed to delete content block {}: {}", block_id, e);
         (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
     })?;
@@ -180,12 +180,12 @@ pub async fn reorder_content_blocks_endpoint(
     Json(ordering): Json<Vec<String>>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     let db_path = crate::fleet::db_path();
-    let conn = Connection::open(&db_path).map_err(|e| {
+    let mut conn = Connection::open(&db_path).map_err(|e| {
         error!("Failed to open database: {}", e);
         (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
     })?;
 
-    reorder_content_blocks(&mut conn.into(), &stitch_id, &ordering).map_err(|e| {
+    reorder_content_blocks(&mut conn, &stitch_id, &ordering).map_err(|e| {
         error!("Failed to reorder content blocks for stitch {}: {}", stitch_id, e);
         (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
     })?;

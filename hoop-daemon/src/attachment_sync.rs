@@ -46,6 +46,12 @@ pub struct BackupManifest {
     pub tombstones: BTreeMap<String, TombstoneEntry>,
 }
 
+impl Default for BackupManifest {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BackupManifest {
     pub fn new() -> Self {
         Self {
@@ -171,7 +177,7 @@ fn scan_attachments(root: &Path) -> Result<BTreeMap<String, FileEntry>> {
             }
         };
 
-        if !entry.file_type().map_or(false, |ft| ft.is_file()) {
+        if !entry.file_type().is_some_and(|ft| ft.is_file()) {
             continue;
         }
 

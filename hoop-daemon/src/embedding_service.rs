@@ -346,7 +346,7 @@ impl EmbeddingService {
             cache.insert(
                 hash,
                 CacheEntry {
-                    embedding: embedding.clone(),
+                    embedding,
                     created_at: Instant::now(),
                 },
             );
@@ -397,13 +397,9 @@ impl EmbeddingService {
     /// Acquire rate limit permit.
     async fn acquire_rate_limit(&self) -> Result<()> {
         if let Some(ref semaphore) = self.rate_limiter {
-            let _permit = semaphore.acquire().await.map_err(|e| {
-                anyhow::anyhow!("Failed to acquire rate limit permit: {}", e)
-            })?;
-
-            // First, acquire the lock only to compute the wait time (if any)
-            // This ensures we don't hold the lock across an await point
+            // First pass: compute wait time WITHOUT holding the semaphore permit
             let wait_time = {
+                // Lock only to check rate limit status
                 let mut timestamps = self.request_timestamps.write().unwrap();
                 let now = Instant::now();
                 let window = Duration::from_secs(60);
@@ -423,19 +419,26 @@ impl EmbeddingService {
                 } else {
                     None
                 }
+                // Lock is released here
             };
 
-            // Sleep WITHOUT holding the lock
+            // Sleep WITHOUT holding any locks
             if let Some(duration) = wait_time {
                 if duration > Duration::ZERO {
                     tokio::time::sleep(duration).await;
                 }
             }
 
-            // Re-acquire the lock to add our timestamp
+            // Acquire semaphore permit (await without holding the write lock)
+            let _permit = semaphore.acquire().await.map_err(|e| {
+                anyhow::anyhow!("Failed to acquire rate limit permit: {}", e)
+            })?;
+
+            // Now acquire the write lock and record the timestamp
             let mut timestamps = self.request_timestamps.write().unwrap();
             let now = Instant::now();
             timestamps.push(now);
+            // Both permit and lock are dropped here
         }
         Ok(())
     }

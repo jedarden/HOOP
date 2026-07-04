@@ -36,7 +36,7 @@
 use anyhow::{anyhow, Result};
 use fnv::FnvBuildHasher;
 use jsonschema::JSONSchema;
-use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -281,7 +281,7 @@ pub fn execute_skill(
     use std::thread;
     use std::time::{Duration, Instant};
 
-    let start = Instant::now();
+    let _start = Instant::now();
 
     debug!(
         "Executing skill: {} with args: {}",
@@ -322,32 +322,26 @@ pub fn execute_skill(
     // Spawn thread to collect stdout
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
-        for line in reader.lines() {
-            if let Ok(l) = line {
-                let _ = stdout_tx.send(l);
-            }
+        for l in reader.lines().flatten() {
+            let _ = stdout_tx.send(l);
         }
     });
 
     // Spawn thread to collect stderr
     thread::spawn(move || {
         let reader = BufReader::new(stderr);
-        for line in reader.lines() {
-            if let Ok(l) = line {
-                let _ = stderr_tx.send(l);
-            }
+        for l in reader.lines().flatten() {
+            let _ = stderr_tx.send(l);
         }
     });
 
     // Wait for completion with timeout
     let start_time = Instant::now();
-    let mut timed_out = false;
 
     loop {
         let elapsed = start_time.elapsed();
         if elapsed >= timeout {
             let _ = child.kill();
-            timed_out = true;
             break;
         }
 

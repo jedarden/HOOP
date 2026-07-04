@@ -205,7 +205,7 @@ async fn create_link(
         )
     })?;
 
-    let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
+    let _elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
 
     Ok(Json(CreateLinkResponse {
         from_stitch_id,
@@ -297,7 +297,7 @@ async fn search_stitches(
     })?;
 
     let search_pattern = format!("%{}%", params.q);
-    let project_filter = params.project.as_ref().map(|p| format!("{}", p));
+    let project_filter = params.project.as_ref().map(|p| p.to_string());
 
     let results = if let Some(project) = &project_filter {
         let mut stmt = conn

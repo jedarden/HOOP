@@ -740,7 +740,7 @@ impl NdjsonParser {
             if let Ok(event_ts) = chrono::DateTime::parse_from_rfc3339(ts_str) {
                 let now = chrono::Utc::now();
                 let lag = now.signed_duration_since(event_ts.with_timezone(&chrono::Utc));
-                let lag_seconds = lag.num_seconds().max(0) as i64;
+                let lag_seconds = lag.num_seconds().max(0);
 
                 metrics::metrics().hoop_event_tailer_lag_seconds.set(
                     &[project],

@@ -11,7 +11,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
-use tracing::{info, warn};
+use tracing::info;
 
 /// Config file backup metadata.
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -709,7 +709,7 @@ pub fn update_on_stitch_close(stitch_id: &str) -> Result<bool> {
     use rusqlite::Connection;
 
     let db_path =
-        std::path::PathBuf::from(dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")))
+        dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
             .join(".hoop")
             .join("fleet.db");
 
@@ -790,7 +790,7 @@ fn load_stitch_features(conn: &Connection, stitch_id: &str) -> Result<StitchFeat
     let body_length = body.as_ref().map(|b| b.len()).unwrap_or(0);
 
     // Load labels from audit log
-    let labels = load_labels_for_stitch(stitch_id, &conn);
+    let labels = load_labels_for_stitch(stitch_id, conn);
 
     // Load attachments count (attachments_path is a column on stitches table)
     let attachments_path: Option<String> = conn
@@ -820,7 +820,7 @@ fn load_stitch_features(conn: &Connection, stitch_id: &str) -> Result<StitchFeat
         title,
         body_length,
         labels,
-        attachments_count: attachments_count as usize,
+        attachments_count,
         cost_usd,
         duration_seconds,
     })

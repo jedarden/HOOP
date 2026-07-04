@@ -141,7 +141,7 @@ fn derive_project_name(cwd: &str, project_paths: &HashMap<String, String>) -> St
     }
 
     // Fallback: try to extract project name from path
-    if let Some(last_seg) = cwd.split('/').filter(|s| !s.is_empty()).last() {
+    if let Some(last_seg) = cwd.split('/').filter(|s| !s.is_empty()).next_back() {
         last_seg.to_string()
     } else {
         "unknown".to_string()
@@ -312,7 +312,7 @@ async fn list_conversations(
             created_at: conv.created_at.clone(),
             updated_at: conv.updated_at.clone(),
             complete: conv.complete,
-            worker_metadata: conv.worker_metadata.map(|w| WorkerMetadata::from(w)),
+            worker_metadata: conv.worker_metadata.map(WorkerMetadata::from),
         };
 
         all_conversations.push(ConversationWithProject {
@@ -328,7 +328,7 @@ async fn list_conversations(
             .sort_by(|a, b| b.get_sort_key(sort_field).cmp(&a.get_sort_key(sort_field)));
     } else {
         all_conversations
-            .sort_by(|a, b| a.get_sort_key(sort_field).cmp(&b.get_sort_key(sort_field)));
+            .sort_by_key(|a| a.get_sort_key(sort_field));
     }
 
     // Apply limit

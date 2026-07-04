@@ -77,6 +77,14 @@ HOOP keeps the work queue *taut* by surfacing what is stale, stuck, or missing â
 | `pattern list/create/add/remove` | Pattern (goal grouping) management |
 | `init` | First-time setup wizard |
 
+**Global flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--no-interactive`, `-y` | Suppress all interactive prompts (for CI/CD and automation) |
+
+Destructive operations (e.g., `remove`, `restore`) require `--confirm` when using `--no-interactive` to prevent accidental data loss. Run `hoop --help` for full documentation.
+
 ---
 
 ## NEEDLE integration

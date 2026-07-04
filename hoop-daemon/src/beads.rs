@@ -256,7 +256,7 @@ impl BeadReader {
         })?;
 
         let reader = BufReader::new(file);
-        let beads = Self::parse_all(reader, &issues_path)?;
+        let beads = Self::parse_all(reader, issues_path)?;
 
         if !beads.is_empty() {
             let _ = event_tx.send(BeadEvent::BeadsUpdated { beads });

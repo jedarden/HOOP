@@ -11,7 +11,7 @@
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    routing::{delete, get, post, put},
+    routing::{delete, post, put},
     Json, Router,
 };
 use rusqlite::{params, Connection};
@@ -563,6 +563,6 @@ fn valid_transitions_from(from: &str) -> Vec<&'static str> {
 }
 
 /// Helper to convert Vec<&dyn ToSql> to &[&dyn ToSql] for rusqlite
-fn params_from_slice<'a>(values: &'a [&'a dyn rusqlite::ToSql]) -> &[&'a dyn rusqlite::ToSql] {
+fn params_from_slice<'a>(values: &'a [&'a dyn rusqlite::ToSql]) -> &'a [&'a dyn rusqlite::ToSql] {
     values
 }

@@ -249,7 +249,7 @@ pub fn check_on_stitch_close(
     stitch_id: &str,
     sender: Option<&tokio::sync::broadcast::Sender<crate::ws::CostAnomalyAlertData>>,
 ) -> anyhow::Result<bool> {
-    let db_path = std::path::PathBuf::from(dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")))
+    let db_path = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
         .join(".hoop")
         .join("fleet.db");
 

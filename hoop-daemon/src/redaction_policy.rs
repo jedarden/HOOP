@@ -52,8 +52,10 @@ pub struct GlobalRedactionPolicy {
 /// Action to take when secrets are detected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum RedactionAction {
     /// Log findings but allow the operation
+    #[default]
     Warn,
     /// Replace secrets with [REDACTED]
     Redact,
@@ -63,11 +65,6 @@ pub enum RedactionAction {
     FlaggedOnly,
 }
 
-impl Default for RedactionAction {
-    fn default() -> Self {
-        Self::Warn
-    }
-}
 
 /// Resolved redaction policy for a specific project.
 ///
@@ -345,7 +342,7 @@ impl RedactionPolicyState {
             for ws_view in project.workspace_views() {
                 // Try canonical path first if available
                 let canon_ws: Option<std::path::PathBuf> = ws_view.canonical_path.as_ref()
-                    .map(|p| std::path::PathBuf::from(p))
+                    .map(std::path::PathBuf::from)
                     .or_else(|| std::fs::canonicalize(&ws_view.path).ok());
 
                 if let Some(ref canon_ws_path) = canon_ws {

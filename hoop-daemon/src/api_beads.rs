@@ -543,7 +543,7 @@ pub async fn create_bead_internal(
         }
     }
 
-    let project_path = resolve_project_path(&project, &state)?;
+    let project_path = resolve_project_path(&project, state)?;
 
     let beads_dir = project_path.join(".beads");
     if !beads_dir.exists() {
@@ -557,7 +557,7 @@ pub async fn create_bead_internal(
     }
 
     // Resolve actor identity (cached per connection via IdentityCache)
-    let actor = resolve_actor(connect_info.map(|ci| ci.0), &state);
+    let actor = resolve_actor(connect_info.map(|ci| ci.0), state);
 
     let title = req.title.clone();
     let description = req.description.clone();

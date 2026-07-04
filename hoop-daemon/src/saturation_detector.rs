@@ -14,7 +14,6 @@
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
@@ -28,6 +27,7 @@ const CLEAR_THRESHOLD: f64 = 75.0;
 
 /// Per-account+window saturation state
 #[derive(Debug, Clone)]
+#[derive(Default)]
 struct SaturationState {
     /// Alert has been fired for this account+window
     alert_fired: bool,
@@ -37,15 +37,6 @@ struct SaturationState {
     alert_id: Option<String>,
 }
 
-impl Default for SaturationState {
-    fn default() -> Self {
-        Self {
-            alert_fired: false,
-            fired_at: None,
-            alert_id: None,
-        }
-    }
-}
 
 /// Saturation detector
 ///

@@ -48,7 +48,6 @@ use crate::fleet::{
 };
 use anyhow::{bail, Result};
 use rusqlite::Connection;
-use serde::Serialize;
 use std::collections::HashMap;
 use tracing::info;
 
@@ -142,7 +141,7 @@ fn semver_compare(version: &str) -> u64 {
         .filter_map(|p| p.parse().ok())
         .collect();
 
-    let major = *parts.get(0).unwrap_or(&0);
+    let major = *parts.first().unwrap_or(&0);
     let minor = *parts.get(1).unwrap_or(&0);
     let patch = *parts.get(2).unwrap_or(&0);
 
@@ -211,7 +210,7 @@ pub fn run_pending_migrations(
         // Record migration duration metric (§16.6)
         metrics::metrics()
             .hoop_schema_migration_duration_ms
-            .observe(&[&from_version, &migration.version], elapsed_ms);
+            .observe(&[&from_version, migration.version], elapsed_ms);
 
         from_version = migration.version.to_string();
     }

@@ -5,7 +5,6 @@
 //! to its own WebSocket clients.
 
 use axum::extract::{State, ws::{WebSocket, Message as AxumMessage}};
-use crate::log_rotation;
 use crate::ws::WsEvent;
 use anyhow::Result;
 use futures_util::{stream::StreamExt, SinkExt};
@@ -13,7 +12,7 @@ use serde_json::Value;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 use tokio::sync::{broadcast, RwLock};
 use tokio_tungstenite::tungstenite::Message as TungsteniteMessage;
 use tracing::{debug, error, info, warn};
@@ -207,7 +206,7 @@ impl ObserverHttpClient {
         let resp = self.client.get(&url).send().await?;
 
         // Parse the dashboard response to extract project data
-        let dashboard: Value = resp.json().await?;
+        let _dashboard: Value = resp.json().await?;
 
         // For now, return empty vector - projects come through WebSocket
         Ok(vec![])
@@ -275,10 +274,10 @@ pub async fn observer_ws_handler(
     // Convert beads to BeadData
     let bead_data: Vec<crate::ws::BeadData> = beads.iter().map(crate::ws::bead_to_data).collect();
 
-    let _ = ws_sender.send(AxumMessage::Text(serde_json::to_string(&WsEvent::init(init_subs)).unwrap().into())).await;
-    let _ = ws_sender.send(AxumMessage::Text(serde_json::to_string(&WsEvent::workers_snapshot(workers)).unwrap().into())).await;
-    let _ = ws_sender.send(AxumMessage::Text(serde_json::to_string(&WsEvent::beads_snapshot(bead_data)).unwrap().into())).await;
-    let _ = ws_sender.send(AxumMessage::Text(serde_json::to_string(&WsEvent::projects_snapshot(projects)).unwrap().into())).await;
+    let _ = ws_sender.send(AxumMessage::Text(serde_json::to_string(&WsEvent::init(init_subs)).unwrap())).await;
+    let _ = ws_sender.send(AxumMessage::Text(serde_json::to_string(&WsEvent::workers_snapshot(workers)).unwrap())).await;
+    let _ = ws_sender.send(AxumMessage::Text(serde_json::to_string(&WsEvent::beads_snapshot(bead_data)).unwrap())).await;
+    let _ = ws_sender.send(AxumMessage::Text(serde_json::to_string(&WsEvent::projects_snapshot(projects)).unwrap())).await;
 
     // Subscribe to events
     let mut event_rx = state.event_tx.subscribe();
@@ -291,7 +290,7 @@ pub async fn observer_ws_handler(
                 match result {
                     Ok(event) => {
                         if let Ok(json) = serde_json::to_string(&event) {
-                            if ws_sender.send(AxumMessage::Text(json.into())).await.is_err() {
+                            if ws_sender.send(AxumMessage::Text(json)).await.is_err() {
                                 break;
                             }
                         }

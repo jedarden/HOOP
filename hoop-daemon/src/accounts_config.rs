@@ -24,8 +24,8 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, PathBuf};
-use tracing::{debug, info, warn};
+use std::path::Path;
+use tracing::{debug, info};
 
 /// OpenCode prompt limits for a single account.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,19 +56,13 @@ pub struct AccountLimits {
 
 /// Top-level accounts.yaml structure.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Default)]
 pub struct AccountsConfig {
     /// Per-account configurations keyed by account ID
     #[serde(default)]
     pub accounts: HashMap<String, AccountConfig>,
 }
 
-impl Default for AccountsConfig {
-    fn default() -> Self {
-        Self {
-            accounts: HashMap::new(),
-        }
-    }
-}
 
 impl AccountsConfig {
     /// Load accounts configuration from a YAML file.

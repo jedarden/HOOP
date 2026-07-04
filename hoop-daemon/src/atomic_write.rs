@@ -39,7 +39,7 @@
 use anyhow::{Context, Result};
 use std::fs::File;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// Atomically write data to a file using the tmp + rename pattern.
 ///
@@ -140,15 +140,11 @@ pub fn atomic_write_file_str(dest: &Path, content: &str) -> Result<()> {
 /// Allows customizing the temporary file name prefix instead of using the
 /// destination filename + UUID.
 #[derive(Debug, Clone)]
+#[derive(Default)]
 pub struct AtomicWriteBuilder {
     tmp_prefix: Option<String>,
 }
 
-impl Default for AtomicWriteBuilder {
-    fn default() -> Self {
-        Self { tmp_prefix: None }
-    }
-}
 
 impl AtomicWriteBuilder {
     /// Create a new builder with default settings.

@@ -20,7 +20,7 @@ use axum::{
     Json, Router,
 };
 use chrono::{DateTime, Utc};
-use hoop_schema::{ParsedSession, ParsedSessionKind};
+use hoop_schema::ParsedSession;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;

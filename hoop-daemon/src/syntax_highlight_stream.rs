@@ -175,7 +175,7 @@ pub fn highlight_stream(
             let mut line_idx = line_idx;
 
             // Recreate highlighter on each iteration (cheap operation)
-            let mut highlighter = HighlightLines::new(&*syntax, &*theme);
+            let mut highlighter = HighlightLines::new(&syntax, &theme);
 
             if line_idx >= MAX_LINES {
                 return Some((

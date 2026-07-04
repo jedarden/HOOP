@@ -108,7 +108,7 @@ impl ConfigWatcher {
                 crate::config_resolver::resolve(cli_overrides.clone())
             });
 
-        let initial_hash = hex::encode(Sha256::digest(initial_raw.as_bytes()));
+        let _initial_hash = hex::encode(Sha256::digest(initial_raw.as_bytes()));
 
         // Store initial hash in the config
         let config_with_hash = initial_config;
@@ -136,7 +136,7 @@ impl ConfigWatcher {
 
     /// Get the current config hash
     pub async fn config_hash(&self) -> String {
-        let cfg = self.config.lock().await;
+        let _cfg = self.config.lock().await;
         // Re-compute hash from the raw file to ensure consistency
         if let Ok(raw) = Self::read_config_file() {
             hex::encode(Sha256::digest(raw.as_bytes()))

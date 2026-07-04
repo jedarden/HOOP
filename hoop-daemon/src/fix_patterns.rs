@@ -80,7 +80,7 @@ impl FixPatternService {
     /// Create a new fix pattern
     pub fn create(req: &CreatePatternRequest) -> Result<String> {
         let db_path = fleet::db_path();
-        let mut conn = Connection::open(&db_path)?;
+        let conn = Connection::open(&db_path)?;
 
         let id = uuid::Uuid::new_v4().to_string();
 
@@ -274,7 +274,7 @@ impl FixPatternService {
     /// Increment the applied_count for a pattern
     pub fn record_application(id: &str) -> Result<()> {
         let db_path = fleet::db_path();
-        let mut conn = Connection::open(&db_path)?;
+        let conn = Connection::open(&db_path)?;
 
         conn.execute(
             "UPDATE fix_patterns SET applied_count = applied_count + 1 WHERE id = ?1",

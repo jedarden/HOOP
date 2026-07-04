@@ -12,9 +12,9 @@
 //! Plan reference: §6 Phase 5 marquee #11
 
 use crate::fleet;
-use crate::similarity::{self, CombinedSimilarity, SimilarStitch};
+use crate::similarity::{self, CombinedSimilarity};
 use anyhow::Result;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -217,7 +217,7 @@ pub fn detect_sibling_projects(
 /// Load the source Stitch information
 fn load_source_stitch(conn: &rusqlite::Connection, stitch_id: &str) -> Result<SourceStitchInfo> {
     // Get basic Stitch info
-    let (id, project, kind, title, created_by, created_at) = conn.query_row(
+    let (id, project, kind, title, _created_by, created_at) = conn.query_row(
         "SELECT id, project, kind, title, created_by, created_at FROM stitches WHERE id = ?1",
         rusqlite::params![stitch_id],
         |row| {
@@ -448,7 +448,7 @@ fn get_first_user_message(
 }
 
 /// Check if a Stitch is open (recent activity)
-fn is_stitch_open(conn: &rusqlite::Connection, last_activity_at: &str) -> bool {
+fn is_stitch_open(_conn: &rusqlite::Connection, last_activity_at: &str) -> bool {
     match chrono::DateTime::parse_from_rfc3339(last_activity_at) {
         Ok(dt) => {
             let now = Utc::now();
@@ -465,15 +465,15 @@ fn build_evidence(
     matches: &[&(SiblingStitch, CombinedSimilarity)],
 ) -> SiblingEvidence {
     // Collect shared files
-    let mut shared_files = Vec::new();
-    for (_, sim) in matches {
+    let shared_files = Vec::new();
+    for (_, _sim) in matches {
         // In a real implementation, we'd check file overlaps
         // For now, use the similarity as a proxy
     }
 
     // Collect shared labels
-    let source_labels: HashSet<_> = source.labels.iter().map(|l| l.to_lowercase()).collect();
-    let mut shared_labels = Vec::new();
+    let _source_labels: HashSet<_> = source.labels.iter().map(|l| l.to_lowercase()).collect();
+    let shared_labels = Vec::new();
     for (stitch, _) in matches {
         // In a real implementation, we'd get labels from the candidate
         // For now, skip

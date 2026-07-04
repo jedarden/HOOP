@@ -130,7 +130,7 @@ impl BackupPipeline {
     // ── Core pipeline ────────────────────────────────────────────────
 
     async fn run_snapshot(&self) -> Result<u64> {
-        let start = std::time::Instant::now();
+        let _start = std::time::Instant::now();
         let snapshot_id = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
 
         // Write BackupStarted audit row
@@ -756,10 +756,10 @@ impl CronSchedule {
     }
 
     fn matches(&self, t: &chrono::DateTime<Utc>) -> bool {
-        self.minutes.contains(&(t.time().minute() as u32))
-            && self.hours.contains(&(t.time().hour() as u32))
-            && self.doms.contains(&(t.date_naive().day() as u32))
-            && self.months.contains(&(t.date_naive().month() as u32))
+        self.minutes.contains(&{ t.time().minute() })
+            && self.hours.contains(&{ t.time().hour() })
+            && self.doms.contains(&{ t.date_naive().day() })
+            && self.months.contains(&{ t.date_naive().month() })
             && self.dows.contains(&t.weekday().num_days_from_sunday())
     }
 }

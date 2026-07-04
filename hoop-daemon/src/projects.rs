@@ -494,8 +494,8 @@ pub fn compute_delta(
                 deltas.push(format!("~project:{}.paths", name));
             }
 
-            let old_roles: Vec<_> = old_views.iter().map(|v| v.role.clone()).collect();
-            let new_roles: Vec<_> = new_views.iter().map(|v| v.role.clone()).collect();
+            let old_roles: Vec<_> = old_views.iter().map(|v| v.role).collect();
+            let new_roles: Vec<_> = new_views.iter().map(|v| v.role).collect();
             if old_roles != new_roles {
                 deltas.push(format!("~project:{}.roles", name));
             }

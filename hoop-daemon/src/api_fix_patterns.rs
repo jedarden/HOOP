@@ -13,7 +13,7 @@
 use axum::{
     extract::{Path, Query},
     http::StatusCode,
-    routing::{delete, get, post, put},
+    routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -441,7 +441,7 @@ async fn import_patterns(
         }
 
         // Create new pattern with preserved ID
-        let create_req = CreatePatternRequest {
+        let _create_req = CreatePatternRequest {
             name: pattern.name.clone(),
             signature_vector: pattern.signature_vector.clone(),
             keywords: pattern.keywords.clone(),
@@ -451,7 +451,7 @@ async fn import_patterns(
 
         // Note: create() generates a new ID, so we need to insert directly
         let db_path = crate::fleet::db_path();
-        let mut conn = match rusqlite::Connection::open(&db_path) {
+        let conn = match rusqlite::Connection::open(&db_path) {
             Ok(c) => c,
             Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("db open failed: {e}"))),
         };

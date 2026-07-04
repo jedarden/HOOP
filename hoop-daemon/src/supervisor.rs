@@ -431,7 +431,7 @@ impl ProjectSupervisor {
                     .iter()
                     .filter(|w| {
                         if let crate::ws::WorkerDisplayState::Executing { bead, .. } = &w.state {
-                            bead_to_project.get(bead).map_or(false, |p| p == &r.name)
+                            bead_to_project.get(bead) == Some(&r.name)
                         } else {
                             false
                         }
@@ -1241,9 +1241,7 @@ fn check_and_emit_notifications(
 fn lookup_stitch_for_bead(bead_id: &str) -> Option<String> {
     use rusqlite::Connection;
 
-    let db_path = std::path::PathBuf::from(
-        dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(".")),
-    )
+    let db_path = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
     .join(".hoop")
     .join("fleet.db");
 

@@ -17,7 +17,6 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use tracing::info;
 
 // ---------------------------------------------------------------------------

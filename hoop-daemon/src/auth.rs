@@ -63,6 +63,7 @@ impl Role {
 
 /// Role configuration from config.yml
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Default)]
 pub struct RoleConfig {
     /// Identities with viewer role (read-only)
     #[serde(default)]
@@ -72,14 +73,6 @@ pub struct RoleConfig {
     pub drafters: Vec<String>,
 }
 
-impl Default for RoleConfig {
-    fn default() -> Self {
-        Self {
-            viewers: Vec::new(),
-            drafters: Vec::new(),
-        }
-    }
-}
 
 /// Role resolver that maps Tailscale identities to roles
 #[derive(Debug, Clone)]
@@ -326,7 +319,7 @@ pub struct DaemonStateLike {
 /// Returns 403 Forbidden if the client doesn't have the required role.
 pub fn require_role(required_role: Role) -> impl Fn(Request, Next) -> Pin<Box<dyn Future<Output = Response> + Send>> + Clone {
     move |request: Request, next: Next| {
-        let required_role = required_role.clone();
+        let _required_role = required_role;
         Box::pin(async move {
             // Extract ConnectInfo from request extensions
             let connect_info = request
@@ -335,7 +328,7 @@ pub fn require_role(required_role: Role) -> impl Fn(Request, Next) -> Pin<Box<dy
                 .cloned();
 
             // Extract State from request - we'll get the role_resolver there
-            let remote_addr = connect_info.map(|ci| ci.0);
+            let _remote_addr = connect_info.map(|ci| ci.0);
 
             // We need to get the role_resolver from the State
             // This will be done via a custom extractor in the endpoint handler
@@ -355,7 +348,7 @@ pub fn check_role_for_addr(
 ) -> Result<(), (StatusCode, Json<serde_json::Value>)> {
     let actual_role = role_resolver.resolve_from_addr(remote_addr);
 
-    if !matches!(actual_role, required_role) {
+    if !matches!(actual_role, _required_role) {
         let identity = resolve_identity(remote_addr);
         warn!(
             role = %actual_role.as_str(),

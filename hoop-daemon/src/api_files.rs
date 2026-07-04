@@ -431,7 +431,7 @@ fn hex_dump_preview(content: &[u8]) -> Result<BinaryPreviewResult, (StatusCode, 
 
     // Process in chunks of 16 bytes per line
     for chunk in content[..bytes_to_preview].chunks(16) {
-        let offset = (lines.len() * 16) as usize;
+        let offset = lines.len() * 16;
         let offset_hex = format!("{:08x}", offset);
 
         // Hex bytes

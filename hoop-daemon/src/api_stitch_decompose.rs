@@ -27,7 +27,6 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::time::Instant;
 use tracing::warn;
 

@@ -16,10 +16,9 @@
 //! - Continue-in-agent: agent sees reconstructed state via MCP context (phase 5)
 //! - NEEDLE hook: `git stash create` on bead failure, stash SHA recorded in events
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
@@ -294,7 +293,7 @@ fn parse_fail_event(
 }
 
 /// Load conversation history from stitch_messages table
-fn load_conversation_history(stitch_id: &str, workspace: &Path) -> Result<Vec<ConversationMessage>> {
+fn load_conversation_history(stitch_id: &str, _workspace: &Path) -> Result<Vec<ConversationMessage>> {
     use rusqlite::Connection;
 
     let fleet_db = crate::fleet::db_path();

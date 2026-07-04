@@ -17,7 +17,6 @@
 //! 2. Extending grace period once we know the worker has produced real content
 //! 3. Preserving the content-seen signal in telemetry
 
-use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -209,6 +208,7 @@ pub enum StuckDetectorEvent {
 
 /// Per-worker stuck detector state
 #[derive(Debug, Clone)]
+#[derive(Default)]
 struct WorkerStuckState {
     bead: Option<String>,
     adapter: Option<String>,
@@ -226,22 +226,6 @@ struct WorkerStuckState {
     previous_bead: Option<String>,
 }
 
-impl Default for WorkerStuckState {
-    fn default() -> Self {
-        Self {
-            bead: None,
-            adapter: None,
-            started_at: None,
-            last_event_at: None,
-            saw_content: false,
-            alert_fired: false,
-            last_heartbeat_at: None,
-            last_transition_at: None,
-            retry_count: 0,
-            previous_bead: None,
-        }
-    }
-}
 
 /// Three-timer stuck detector
 ///
@@ -460,7 +444,7 @@ impl StuckDetector {
             // Check for stuck conditions
             // 1. Check retry threshold first (most specific)
             let alert = if state.retry_count > config.retry_threshold {
-                let transition_secs = if let Some(ts) = state.last_transition_at {
+                let _transition_secs = if let Some(ts) = state.last_transition_at {
                     (now - ts).num_seconds().max(0)
                 } else {
                     0

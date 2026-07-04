@@ -20,7 +20,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Seek, SeekFrom, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use uuid::Uuid;
 
 /// A frame sample representing a UI change captured during screen recording.
@@ -331,7 +331,7 @@ impl StreamingUploadRegistry {
             .context("failed to create stream directory")?;
 
         // Create the attachments directory for the final stitch
-        let attachments_dir = attachments_dir(&valid_stitch_id)?;
+        let _attachments_dir = attachments_dir(&valid_stitch_id)?;
 
         // Create session metadata
         let now = chrono::Utc::now();

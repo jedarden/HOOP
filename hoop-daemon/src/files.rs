@@ -272,14 +272,14 @@ pub fn parse_ext_patterns(ext: &str) -> Vec<String> {
         let inside = &ext[open + 1..close];
         return inside
             .split(',')
-            .map(|p| strip(p))
+            .map(&strip)
             .filter(|p| !p.is_empty())
             .collect();
     }
 
     // Plain comma-separated list.
     ext.split(',')
-        .map(|p| strip(p))
+        .map(strip)
         .filter(|p| !p.is_empty())
         .collect()
 }

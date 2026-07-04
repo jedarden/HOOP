@@ -4,7 +4,6 @@
 //! multimodal content (text, image, audio, video, file) associated with stitches.
 
 use anyhow::Result;
-use chrono::Utc;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use tracing::info;
@@ -111,8 +110,7 @@ pub fn create_content_block(conn: &mut Connection, block: &ContentBlock) -> Resu
     let metadata_json = block
         .metadata
         .as_ref()
-        .map(|m| serde_json::to_string(m).ok())
-        .flatten();
+        .and_then(|m| serde_json::to_string(m).ok());
 
     conn.execute(
         "INSERT INTO content_blocks (id, stitch_id, block_type, content, metadata, block_order, created_at)
@@ -143,7 +141,7 @@ pub fn update_content_block(
     let metadata_json = if let Some(metadata) = update.metadata {
         Some(serde_json::to_string(&metadata)?)
     } else {
-        current.metadata.map(|m| serde_json::to_string(&m).ok()).flatten()
+        current.metadata.and_then(|m| serde_json::to_string(&m).ok())
     };
 
     conn.execute(

@@ -466,8 +466,8 @@ async fn update_note(
         if let Some((ref project, ref kind)) = stitch_info {
             if let Err(e) = crate::pattern_query_evaluator::sync_and_emit_pattern_queries(
                 valid_id.as_str(),
-                &project,
-                &kind,
+                project,
+                kind,
                 &title,
                 &state.pattern_tx,
             ) {
@@ -494,7 +494,7 @@ async fn update_note(
                 "transcript",
                 &findings,
                 crate::redaction_policy::RedactionAction::FlaggedOnly,  // Just flag, no automatic action
-                &valid_id.as_str(),
+                valid_id.as_str(),
                 project,
                 "system",  // Voice transcription is automatic
             );
@@ -779,11 +779,11 @@ Be concise and actionable. Focus on what needs to be done."#,
         .unwrap_or_else(|| dictated_notes::derive_title(&note.transcript));
     let body = parsed["body"]
         .as_str()
-        .unwrap_or_else(|| note.transcript.as_str())
+        .unwrap_or(note.transcript.as_str())
         .to_string();
     let kind = parsed["kind"]
         .as_str()
-        .unwrap_or_else(|| default_kind)
+        .unwrap_or(default_kind)
         .to_string();
     let confidence = parsed["confidence"]
         .as_str()
