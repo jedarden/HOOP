@@ -401,26 +401,40 @@ impl EmbeddingService {
                 anyhow::anyhow!("Failed to acquire rate limit permit: {}", e)
             })?;
 
-            // Clean up old timestamps and check rate limit
-            let mut timestamps = self.request_timestamps.write().unwrap();
-            let now = Instant::now();
-            let window = Duration::from_secs(60);
+            // First, acquire the lock only to compute the wait time (if any)
+            // This ensures we don't hold the lock across an await point
+            let wait_time = {
+                let mut timestamps = self.request_timestamps.write().unwrap();
+                let now = Instant::now();
+                let window = Duration::from_secs(60);
 
-            // Remove timestamps older than 1 minute
-            timestamps.retain(|ts| now.duration_since(*ts) < window);
+                // Remove timestamps older than 1 minute
+                timestamps.retain(|ts| now.duration_since(*ts) < window);
 
-            // Check if we're within rate limit
-            if let Some(rpm) = self.config.rate_limit_rpm {
-                let requests_per_minute = timestamps.len() as u32;
-                if requests_per_minute >= rpm {
-                    let oldest = timestamps.first().copied().unwrap_or(now);
-                    let wait_time = window.saturating_sub(now.duration_since(oldest));
-                    if wait_time > Duration::ZERO {
-                        tokio::time::sleep(wait_time).await;
+                // Check if we're within rate limit
+                if let Some(rpm) = self.config.rate_limit_rpm {
+                    let requests_per_minute = timestamps.len() as u32;
+                    if requests_per_minute >= rpm {
+                        let oldest = timestamps.first().copied().unwrap_or(now);
+                        Some(window.saturating_sub(now.duration_since(oldest)))
+                    } else {
+                        None
                     }
+                } else {
+                    None
+                }
+            };
+
+            // Sleep WITHOUT holding the lock
+            if let Some(duration) = wait_time {
+                if duration > Duration::ZERO {
+                    tokio::time::sleep(duration).await;
                 }
             }
 
+            // Re-acquire the lock to add our timestamp
+            let mut timestamps = self.request_timestamps.write().unwrap();
+            let now = Instant::now();
             timestamps.push(now);
         }
         Ok(())
