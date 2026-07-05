@@ -2908,6 +2908,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "test_backup_deser"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "serde_yaml",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
