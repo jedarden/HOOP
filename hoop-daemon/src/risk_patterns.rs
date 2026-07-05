@@ -601,21 +601,33 @@ mod tests {
     /// - Returns 1 match with pattern.id == "test_pattern"
     #[test]
     fn test_add_pattern() {
+        // Start with an empty library (no patterns, empty indexes)
         let mut lib = FixLineageLibrary::new();
+
+        // Add a test pattern with keyword "test"
+        // - Pattern will be stored at index 0 (first pattern in empty library)
+        // - Keyword "test" will be indexed in keyword_index mapping to index 0
         lib.add_pattern(RiskPattern {
             id: "test_pattern".to_string(),
             name: "Test".to_string(),
             description: "Test".to_string(),
-            keywords: vec!["test".to_string()],
+            keywords: vec!["test".to_string()],  // This keyword should trigger matches
             label_keywords: vec![],
             fix_recommendation: "Test fix".to_string(),
             severity: RiskSeverity::Low,
             category: RiskCategory::CodeQuality,
         });
 
+        // Query with a draft title containing "test" (case-insensitive match)
+        // This tests the full add_pattern() → keyword_index → match_draft() flow
         let matches = lib.match_draft("Test this", None, &[]);
-        assert_eq!(matches.len(), 1);
-        assert_eq!(matches[0].pattern.id, "test_pattern");
+
+        // Verify exactly one match is found (the pattern we just added)
+        assert_eq!(matches.len(), 1, "Should find exactly one match for 'test' keyword");
+
+        // Verify the match has the correct pattern ID
+        // This confirms the pattern was stored correctly and retrieved via keyword index
+        assert_eq!(matches[0].pattern.id, "test_pattern", "Matched pattern should have the expected ID");
     }
 
     #[test]
