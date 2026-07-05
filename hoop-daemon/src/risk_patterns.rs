@@ -193,21 +193,30 @@ impl FixLineageLibrary {
     }
 
     /// Add a pattern to the library
+    ///
+    /// # Implementation Order
+    /// 1. Store pattern first: `self.patterns.push(pattern)` ensures `self.patterns[idx]` exists
+    /// 2. Then build indexes: reference `self.patterns[idx]` for keyword/label_keyword indexing
+    ///
+    /// This order ensures that during index construction, the pattern at `idx` is always valid.
+    /// Matches the pattern established by `from_patterns()` which indexes borrowed patterns
+    /// before moving them into the struct.
     pub fn add_pattern(&mut self, pattern: RiskPattern) {
         let idx = self.patterns.len();
-        for keyword in &pattern.keywords {
+        self.patterns.push(pattern);  // Store pattern FIRST
+        // Then build indexes pointing to existing pattern
+        for keyword in &self.patterns[idx].keywords {
             self.keyword_index
                 .entry(keyword.to_lowercase())
                 .or_default()
                 .push(idx);
         }
-        for label_keyword in &pattern.label_keywords {
+        for label_keyword in &self.patterns[idx].label_keywords {
             self.label_keyword_index
                 .entry(label_keyword.to_lowercase())
                 .or_default()
                 .push(idx);
         }
-        self.patterns.push(pattern);
     }
 }
 
