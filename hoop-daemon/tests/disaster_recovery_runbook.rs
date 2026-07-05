@@ -121,6 +121,7 @@ fn create_snapshot_manifest(
         fleet_db_sha256: Some("abc123".to_string()),
         fleet_db_size: Some(4096),
         final_audit_hash: None,
+        config_backup: None,
     }
 }
 
@@ -445,7 +446,7 @@ fn test_cleanup_rollback_dirs_after_success() {
     // Cleanup (as done in restore step 11)
     for entry in fs::read_dir(temp_dir.path()).unwrap() {
         let entry = entry.unwrap();
-        let name = entry.file_name().to_string_lossy();
+        let name = entry.file_name().to_string_lossy().into_owned();
         if name.starts_with(".hoop.rollback.") {
             fs::remove_dir_all(entry.path()).unwrap();
         }
