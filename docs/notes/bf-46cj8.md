@@ -54,9 +54,28 @@ error[E0432]: unresolved import `crate::integration_harness`
   - `s1_morning_review.rs` (1 error)
   - Potentially more errors in other test files not yet reached by compiler
 
-## Full Output Log
+## Fresh Test Run (2026-07-04)
 
-Complete compilation output saved to `/tmp/hoop_daemon_test_output.txt`
+Re-ran `cargo test -p hoop-daemon` to capture current state. The same compilation errors persist:
+
+**Primary failure patterns:**
+1. **Missing `tempfile` dependency** - Multiple test files use `tempfile::TempDir` but the crate is not in `Cargo.toml`
+   - `config_reload_cycle.rs`
+   - `s3_bead_creation_from_chat.rs`
+   - `stitch_percentile_index_integration.rs`
+   - `supervisor_isolation.rs`
+   - `quarantine_integration.rs`
+
+2. **Private constant access** - Tests try to use private constants from `stitch_percentile_index.rs`:
+   - `MIN_SAMPLES_FOR_PREDICTION` (line 68)
+   - `TITLE_TOKEN_BUCKET_SIZE` (line 64)
+
+3. **Type mismatches** - API signature changes:
+   - `query_audit_rows()` now takes 6 arguments (was 4)
+   - `ConfigErrorData` no longer has `kind` field
+   - PathBuf vs String type mismatches
+
+**Full output saved to:** `/tmp/hoop_test_output.txt`
 
 ## Acceptance Criteria
 
