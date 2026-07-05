@@ -7,6 +7,15 @@ metadata:
     description: "Docker image build: ronaldraygun/hoop:latest"
     planReference: "hoop-ttb.9.9"
 spec:
+  # Pod garbage collection: clean up pods after step completion
+  podGC: OnPodCompletion
+
+  # Archive failed workflows for 2-hour retention
+  archiveOnFailure: true
+
+  # 30-minute retention for successful workflows (1800 seconds)
+  ttlSecondsAfterFinished: 1800
+
   arguments:
     parameters:
       - name: repo

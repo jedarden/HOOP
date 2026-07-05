@@ -7,6 +7,15 @@ metadata:
     description: "Playwright UI tests on desktop + phone viewports (Phase 2 gate)"
     planReference: "§10 Phase 2 gate, §21.4 mobile UX requirements"
 spec:
+  # Pod garbage collection: clean up pods after step completion
+  podGC: OnPodCompletion
+
+  # Archive failed workflows for 2-hour retention
+  archiveOnFailure: true
+
+  # 30-minute retention for successful workflows (1800 seconds)
+  ttlSecondsAfterFinished: 1800
+
   arguments:
     parameters:
       - name: repo

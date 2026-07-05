@@ -10,6 +10,15 @@ spec:
   schedules:
     - "0 0 * * 0"  # Every Sunday at 00:00 UTC
   workflowSpec:
+    # Pod garbage collection: clean up pods after step completion
+    podGC: OnPodCompletion
+
+    # Archive failed workflows for 2-hour retention
+    archiveOnFailure: true
+
+    # 30-minute retention for successful workflows (1800 seconds)
+    ttlSecondsAfterFinished: 1800
+
     entrypoint: hoop-security-scan-weekly
     arguments:
       parameters:

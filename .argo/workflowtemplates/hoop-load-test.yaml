@@ -7,6 +7,15 @@ metadata:
     descriptions: "Load-test driver: synthetic 20×5×300 activity generator vs daemon"
     planReference: "§10 Phase 2 exit gate | §14.2 bullet 5"
 spec:
+  # Pod garbage collection: clean up pods after step completion
+  podGC: OnPodCompletion
+
+  # Archive failed workflows for 2-hour retention
+  archiveOnFailure: true
+
+  # 30-minute retention for successful workflows (1800 seconds)
+  ttlSecondsAfterFinished: 1800
+
   # Default workflow arguments - can be overridden when submitting
   arguments:
     parameters:
