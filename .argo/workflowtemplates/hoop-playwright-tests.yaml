@@ -10,11 +10,9 @@ spec:
   # Pod garbage collection: clean up pods after step completion
   podGC: OnPodCompletion
 
-  # Archive failed workflows for 2-hour retention
-  archiveOnFailure: true
-
-  # 30-minute retention for successful workflows (1800 seconds)
-  ttlSecondsAfterFinished: 1800
+  # Retention policies: 2-hour retention for all workflow runs
+  # Both successful and failed runs are retained for 2 hours for debugging
+  ttlSecondsAfterFinished: 7200
 
   arguments:
     parameters:
