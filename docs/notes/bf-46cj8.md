@@ -77,14 +77,85 @@ Re-ran `cargo test -p hoop-daemon` to capture current state. The same compilatio
 
 **Full output saved to:** `/tmp/hoop_test_output.txt`
 
+## Comprehensive Error Analysis (2026-07-04 22:30)
+
+Full `cargo test -p hoop-daemon` run captured with 36+ compilation errors. Full output: `/home/coding/.claude/projects/-home-coding-HOOP/56d43eb2-2b82-42ec-87a5-fdb36143595c/tool-results/bdmxf7jt4.txt`
+
+### Error Categories
+
+#### 1. Missing `tempfile` Dependency (15+ errors)
+The `tempfile` crate is not available in test context. Affected test locations:
+- `api_notes.rs:495` - `use tempfile::TempDir`
+- `api_skills.rs:537` - `use tempfile::TempDir`
+- `atomic_write.rs:211` - `use tempfile::TempDir`
+- `attachments.rs:626` - `use tempfile::TempDir`
+- `capacity.rs:2229` - `use tempfile::TempDir`
+- `fleet.rs:6281` - `use tempfile::NamedTempFile`
+- `stitch_traversal.rs:22` - `use tempfile::TempDir`
+- `integration_harness.rs:28,108` - `use tempfile::TempDir`, `tempfile::TempDir::new()`
+- `parse_jsonl_safe.rs:250` - `use tempfile::TempDir`
+- `path_security.rs:26` - `use tempfile::TempDir`
+- `stitch_reconstruction.rs:615` - `use tempfile::TempDir`
+- `api_prompts.rs:397` - `use tempfile::TempDir`
+- `uploads.rs:566` - `use tempfile::TempDir`
+- `net_diff.rs:420` - `use tempfile::TempDir`
+- `attachment_sync.rs:380,403,655,662,681,700,702,730,771,782` - `tempfile::tempdir()`
+- `backup_pipeline.rs:857,901` - `tempfile::tempdir()`
+- `config_watcher.rs:572,667,703,739,813,855,897,938,979,1020,1061,1104,1147` - `tempfile::tempdir()`
+- `dictated_notes.rs:776` - missing fields in DictatedNote
+- `fleet.rs:7450,7478,7498,7525,8462` - `tempfile::tempdir()`
+- `load_test.rs:459,768` - `tempfile::TempDir::new()`
+- `projects.rs:830,891,926,1012,1115,1227` - `tempfile::tempdir()`
+- `sessions.rs:2909,2939,2988,3086,3114,3129,3152,3173,3186,3207,3228,3299,3368,3418,3467,3516,3565,3630,3670,3690,3735,3769` - `tempfile::tempdir()`
+- `shutdown.rs:540,563` - `tempfile::tempdir()`
+
+**Resolution:** Add `tempfile` to `[dev-dependencies]` in `hoop-daemon/Cargo.toml`
+
+#### 2. API Signature Drift (5+ functions)
+Functions changed signatures but call sites not updated:
+
+- `resolve_actor()` - Missing 2nd argument `&DaemonState` (`api_beads.rs:1097`)
+- `ConfigWatcher::reload_config()` - Missing 5th arg `agent_config_changed_tx` (16 occurrences in `config_watcher.rs:591-1165`)
+- `ProjectSupervisor::new()` - Missing 9 arguments (`api_stitch_decompose.rs:1214`)
+- `CostAggregator::new()` - Missing `config_path: PathBuf` and returns Result (`api_stitch_decompose.rs:1220`)
+- `UploadRegistry::new()` - Missing `config: UploadConfig` and returns Result (`api_stitch_decompose.rs:1222`)
+- `WorkerAckMonitor::new()` - Returns Result not unwrapped (`api_stitch_decompose.rs:1232`)
+
+#### 3. Missing Struct Fields (10+ structs)
+Structs have new required fields:
+
+- `PreviewRequest` - missing `attachments_count` (`api_preview.rs:621`)
+- `DaemonState` - missing `br_semaphore`, `br_semaphore_target_permits` (`api_stitch_decompose.rs:1203`)
+- `CapacityMeterConfig` - missing `accounts_file`, `gcp_quota_config`, `gemini_dirs`, `opencode_dirs` (7 occurrences in `capacity.rs`)
+- `DictatedNote` - missing `draft_id`, `synthesis_result` (`dictated_notes.rs:776`)
+- `NeedleEvent::Fail` - missing `stash_sha` (`load_test.rs:182`)
+- `HoopConfig` - missing `embedding`, `redaction` (`redaction_policy.rs:543`)
+
+#### 4. Type Mismatches (3+ errors)
+
+- `std::time::Instant` vs `tokio::time::Instant` in `api_stitch_decompose.rs:1205`
+- Property test return type: `Ok(())` where `()` expected in `heartbeats.rs:935,1089`
+
+#### 5. Missing Trait Implementations (2 errors)
+
+- `ResolvedConfig::default()` not found (`api_stitch_decompose.rs:1230`)
+- `RedactionPolicyState::default()` not found (`api_stitch_decompose.rs:1237`)
+
+#### 6. Missing Methods (1 error)
+
+- `SecretPattern::default_secret_patterns()` not found (`redaction.rs:498`)
+
+#### 7. Async Stream Unpin Issues (24 errors)
+Complex async stream pinning issues in `syntax_highlight_stream.rs` at lines 269, 278, 286, 301, 308, 315
+
+**Total Error Count:** 36+ compilation errors preventing test execution
+
 ## Acceptance Criteria
 
-- ✅ Test runs (fails as expected) - Compiles with errors as expected
-- ✅ Full error output captured - All errors documented above
-- ✅ Stack trace or assertion failure recorded - Compilation errors captured
+- ✅ Test runs (fails as expected) - Compilation fails with documented errors
+- ✅ Full error output captured - Comprehensive error list with file locations
+- ✅ Stack trace or assertion failure recorded - Compilation errors fully captured
 
 ## Next Steps
 
-The test suite has significant bit-rot. The tests were written against earlier APIs that have since evolved. Requires separate work to fix all API signature mismatches and missing struct fields.
-
-This matches the findings from bead `bf-3qngw` which documented the hoop-daemon test suite regression.
+This bead focused on data collection only. Analysis and remediation should be tracked in separate beads per error category.
