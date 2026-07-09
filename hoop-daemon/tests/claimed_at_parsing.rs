@@ -38,6 +38,16 @@ const INVALID_TIMESTAMP_WRONG_FORMAT: &str = "April 21, 2026";
 /// Invalid timestamp (garbage)
 const INVALID_TIMESTAMP_GARBAGE: &str = "not-a-timestamp";
 
+/// Valid RFC3339 with different timezone offsets
+const VALID_TIMESTAMP_POSITIVE_OFFSET: &str = "2026-04-21T18:42:10+05:30";
+const VALID_TIMESTAMP_NEGATIVE_OFFSET: &str = "2026-04-21T18:42:10-08:00";
+const VALID_TIMESTAMP_WITH_MICROSECONDS: &str = "2026-04-21T18:42:10.123456Z";
+const VALID_TIMESTAMP_WITH_NANOSECONDS: &str = "2026-04-21T18:42:10.123456789Z";
+
+/// Additional edge case timestamps
+const VALID_TIMESTAMP_MIDNIGHT: &str = "2026-04-21T00:00:00Z";
+const VALID_TIMESTAMP_MIDNIGHT_WITH_OFFSET: &str = "2026-04-21T00:00:00+00:00";
+
 // ---------------------------------------------------------------------------
 // Helper functions
 // ---------------------------------------------------------------------------
@@ -212,6 +222,151 @@ fn edge_case_timestamps() {
             ts,
             should_parse,
             result
+        );
+    }
+}
+
+/// Test comprehensive set of valid RFC3339 timestamp formats
+#[test]
+fn comprehensive_valid_timestamp_formats() {
+    let valid_timestamps = vec![
+        VALID_TIMESTAMP_RFC3339,
+        VALID_TIMESTAMP_WITH_MS,
+        VALID_TIMESTAMP_WITH_OFFSET,
+        VALID_TIMESTAMP_POSITIVE_OFFSET,
+        VALID_TIMESTAMP_NEGATIVE_OFFSET,
+        VALID_TIMESTAMP_WITH_MICROSECONDS,
+        VALID_TIMESTAMP_WITH_NANOSECONDS,
+        VALID_TIMESTAMP_MIDNIGHT,
+        VALID_TIMESTAMP_MIDNIGHT_WITH_OFFSET,
+        "2026-12-31T23:59:59Z",                  // End of year
+        "2026-02-28T23:59:59Z",                  // End of February (non-leap year)
+        "2024-02-29T23:59:59Z",                  // Leap year
+        "2026-04-21T18:42:10.1Z",                // One decimal place
+        "2026-04-21T18:42:10.12Z",               // Two decimal places
+        "2026-04-21T18:42:10.123456789Z",        // Nine decimal places (nanoseconds)
+        "2026-04-21T18:42:10+23:59",             // Max positive offset
+        "2026-04-21T18:42:10-23:59",             // Max negative offset
+    ];
+
+    for ts in valid_timestamps {
+        assert!(
+            is_valid_rfc3339(ts),
+            "Valid timestamp '{}' should parse successfully",
+            ts
+        );
+    }
+}
+
+/// Test that parsing preserves the exact timestamp string
+#[test]
+fn timestamp_string_preservation_in_collision_entry() {
+    let test_timestamps = vec![
+        VALID_TIMESTAMP_RFC3339,
+        VALID_TIMESTAMP_WITH_MS,
+        VALID_TIMESTAMP_WITH_OFFSET,
+        VALID_TIMESTAMP_POSITIVE_OFFSET,
+        VALID_TIMESTAMP_NEGATIVE_OFFSET,
+        VALID_TIMESTAMP_WITH_MICROSECONDS,
+    ];
+
+    for ts in test_timestamps {
+        let entry = create_test_entry(ts);
+        assert_eq!(
+            entry.claimed_at, ts,
+            "Timestamp string should be preserved exactly in CollisionIndexEntry"
+        );
+    }
+}
+
+/// Test parsing behavior with various fractional second precisions
+#[test]
+fn fractional_second_precisions() {
+    let fractional_tests = vec![
+        ("2026-04-21T18:42:10Z", 0),              // No fractional seconds
+        ("2026-04-21T18:42:10.1Z", 1),            // 1 decimal place (100ms)
+        ("2026-04-21T18:42:10.12Z", 2),           // 2 decimal places (10ms)
+        ("2026-04-21T18:42:10.123Z", 3),          // 3 decimal places (1ms - milliseconds)
+        ("2026-04-21T18:42:10.1234Z", 4),         // 4 decimal places (100μs)
+        ("2026-04-21T18:42:10.12345Z", 5),        // 5 decimal places (10μs)
+        ("2026-04-21T18:42:10.123456Z", 6),       // 6 decimal places (1μs - microseconds)
+        ("2026-04-21T18:42:10.1234567Z", 7),      // 7 decimal places (100ns)
+        ("2026-04-21T18:42:10.12345678Z", 8),     // 8 decimal places (10ns)
+        ("2026-04-21T18:42:10.123456789Z", 9),    // 9 decimal places (1ns - nanoseconds)
+    ];
+
+    for (ts, expected_decimals) in &fractional_tests {
+        let result = chrono::DateTime::parse_from_rfc3339(ts);
+        assert!(
+            result.is_ok(),
+            "Timestamp with {} decimal places should parse: '{}'",
+            expected_decimals,
+            ts
+        );
+
+        // Verify the timestamp can be used in a CollisionIndexEntry
+        let entry = create_test_entry(ts);
+        assert_eq!(entry.claimed_at, *ts);
+    }
+}
+
+/// Test timezone offset variations comprehensively
+#[test]
+fn timezone_offset_variations() {
+    let offset_tests = vec![
+        "2026-04-21T18:42:10Z",                  // UTC (Z)
+        "2026-04-21T18:42:10+00:00",             // UTC (+00:00)
+        "2026-04-21T18:42:10-00:00",             // UTC (-00:00)
+        "2026-04-21T18:42:10+01:00",             // CET/CEST
+        "2026-04-21T18:42:10-05:00",             // EST
+        "2026-04-21T18:42:10+08:00",             // AWST
+        "2026-04-21T18:42:10+05:30",             // IST
+        "2026-04-21T18:42:10-03:30",             // NST
+    ];
+
+    for ts in offset_tests {
+        assert!(
+            is_valid_rfc3339(ts),
+            "Timestamp with timezone offset should parse: '{}'",
+            ts
+        );
+
+        // Verify it can be stored in CollisionIndexEntry
+        let entry = create_test_entry(ts);
+        assert_eq!(entry.claimed_at, ts);
+    }
+}
+
+/// Test that all valid timestamps can round-trip through CollisionIndexEntry
+#[test]
+fn valid_timestamps_round_trip_through_collision_entry() {
+    let valid_timestamps = vec![
+        VALID_TIMESTAMP_RFC3339,
+        VALID_TIMESTAMP_WITH_MS,
+        VALID_TIMESTAMP_WITH_OFFSET,
+        VALID_TIMESTAMP_POSITIVE_OFFSET,
+        VALID_TIMESTAMP_NEGATIVE_OFFSET,
+        VALID_TIMESTAMP_WITH_MICROSECONDS,
+        VALID_TIMESTAMP_MIDNIGHT,
+    ];
+
+    for original_ts in valid_timestamps {
+        // Create entry with the timestamp
+        let entry = create_test_entry(original_ts);
+
+        // Retrieve the timestamp
+        let retrieved_ts = &entry.claimed_at;
+
+        // Verify it's preserved exactly
+        assert_eq!(
+            retrieved_ts, original_ts,
+            "Timestamp should round-trip through CollisionIndexEntry unchanged"
+        );
+
+        // Verify the retrieved timestamp is still parseable
+        assert!(
+            is_valid_rfc3339(retrieved_ts),
+            "Round-tripped timestamp should still be parseable"
         );
     }
 }
