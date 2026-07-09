@@ -73,3 +73,23 @@ nix-shell --run 'cargo build -p hoop-daemon'        # exit 0
 
 The compiler is the authority: `unused_import` is a rustc lint surfaced by both `build` and `clippy`,
 so zero `utoipa` mentions across a full `--workspace` clippy proves no unused utoipa imports remain.
+
+## Independent re-verification (re-dispatch run)
+
+Re-dispatched after the original run committed this file but did not push/close. Re-ran every check
+from scratch; conclusions are identical — no source changes required.
+
+- `grep -rn "use utoipa::ToSchema" --include="*.rs"` → **11**, all in `hoop-daemon`, each consumed by
+  a bare `#[derive(... ToSchema ...)]`. No grouped `use utoipa::{ToSchema, ...}` forms exist anywhere.
+- `utoipa` appears only in `hoop-daemon/Cargo.toml`; `hoop-{cli,mcp,schema,ui}` carry zero utoipa imports.
+- `cargo clippy --workspace` (nix-shell, default features) → exit 0, `grep -ic "utoipa\|ToSchema"` on the
+  full log → **0**. The only `unused import` lints are non-utoipa (`json`, `std::env`,
+  `serde::{Deserialize,Serialize}`, `clap::{ArgGroup,Args,Parser,Subcommand}`, `std::io::Write`,
+  `serde::Serialize`) — out of scope.
+- `cargo build -p hoop-daemon` → `BUILD_EXIT=0`, `Finished dev profile … in 0.19s` (14 warnings, none utoipa).
+- `cargo clippy -p hoop-daemon --no-default-features` reconfirmed **pre-existing broken** (E0432
+  cannot-find-`ToSchema`-derive cascades + E0277 trait-bound errors on `AgentSessionStatus`,
+  `AgentSessionRow`, `api_beads::*` …) — structural drift from `default = ["openapi"]`, not an
+  unused-import issue, out of scope.
+
+All four acceptance criteria pass.
