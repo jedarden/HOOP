@@ -526,8 +526,6 @@ pub fn write_skill_audit(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::File;
-    use tempfile::TempDir;
 
     #[test]
     fn test_skill_scope_default() {
