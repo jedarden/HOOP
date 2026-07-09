@@ -63,3 +63,22 @@ nix-shell --run 'cargo clippy --workspace --all-targets'  # lib clean; test-targ
 grep -niE 'utoipa' /tmp/hoop-build.log                    # NONE
 grep -niE 'warning.*utoipa|error.*utoipa' /tmp/hoop-clippy.log   # NONE
 ```
+
+## Re-verification (independent re-run, 2026-07-09)
+
+Re-dispatched this bead; re-ran every check fresh rather than trusting commit `d8cc7f5`'s message.
+
+- **Static audit (bare vs fully-qualified).** For each of the 11 remaining `use utoipa::ToSchema;`
+  files, counted `derive(... ToSchema ...)` lines that are **NOT** the fully-qualified
+  `derive(utoipa::ToSchema)` form — i.e. the ones that actually consume the imported bare name.
+  Every file has ≥1 such bare derive: `api_reflection_detection` (3), `api_fix_patterns` (10),
+  `api_audit` (7), `api_backup` (2), `api_risk_patterns` (9), `api_bulk_create` (6),
+  `api_draft_queue` (14 bare + 4 fully-qualified), `api_bead_blockers` (2), `api_transcription` (1),
+  `api_stitch_links` (4), `api_embedding` (6). All 11 imports genuinely used. ✅
+- **`cargo build --workspace`** (nix-shell): **exit 0**; `grep -niE utoipa` on the log → NONE.
+  (12 lib + 14 bin warnings are all pre-existing `non_snake_case`/style lints, none utoipa.)
+- **`cargo clippy --workspace`** (nix-shell, lib+bins): **exit 0**; `Finished dev profile ... in
+  42.39s`; `grep -niE 'warning.*utoipa|error.*utoipa|unused.*utoipa'` → NONE FOUND.
+
+Compiler is the authority: `unused import` is a rustc lint emitted by both `build` and `clippy`,
+so zero utoipa mentions across both proves no unused utoipa imports remain anywhere in the workspace.
