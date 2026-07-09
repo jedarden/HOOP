@@ -2412,9 +2412,6 @@ mod tests {
     use super::*;
     use std::net::SocketAddr;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
     fn parse_addr(s: &str) -> SocketAddr {
         s.parse().unwrap()
     }

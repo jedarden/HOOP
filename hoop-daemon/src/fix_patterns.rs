@@ -363,9 +363,6 @@ fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
 mod tests {
     use super::*;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
     #[test]
     fn test_cosine_similarity() {
         // Identical vectors

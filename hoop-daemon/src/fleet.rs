@@ -7330,9 +7330,6 @@ mod tests {
 
         use uuid::Uuid;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
         let id = Uuid::new_v4().to_string();
         let now = Utc::now().to_rfc3339();
 

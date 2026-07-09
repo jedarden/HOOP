@@ -206,9 +206,6 @@ fn most_common_adapter_model(similarities: &[(&HistoricalStitch, f64)]) -> Optio
 mod tests {
     use super::*;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
     fn make_stitch(
         id: &str,
         title: &str,

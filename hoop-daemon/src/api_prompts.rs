@@ -396,9 +396,6 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
     #[test]
     fn test_split_frontmatter_with_yaml() {
         let content = "---\nname: test\ndescription: hello\n---\nBody text here";

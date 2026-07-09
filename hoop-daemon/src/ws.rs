@@ -2210,9 +2210,6 @@ mod tests {
     use super::{should_deliver, ClientMessage, WsEvent, WsTopic};
     use std::collections::HashSet;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
     // ── WsTopic::parse ───────────────────────────────────────────────────────
 
     #[test]

@@ -1048,9 +1048,6 @@ mod tests {
     use super::*;
     use std::sync::Arc;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
     #[test]
     fn test_validate_stitch_draft_valid() {
         let req = StitchSubmitRequest {

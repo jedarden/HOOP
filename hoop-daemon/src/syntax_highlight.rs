@@ -162,9 +162,6 @@ pub fn highlight_content(
 mod tests {
     use super::*;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
     fn detect_lang(filename: &str) -> String {
         let ss = &*SYNTAX_SET;
         let ext = std::path::Path::new(filename)

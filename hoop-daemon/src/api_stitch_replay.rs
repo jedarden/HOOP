@@ -357,9 +357,6 @@ async fn restore_workspace_state(
 mod tests {
     use super::*;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
     #[test]
     fn test_replay_options_response_serialization() {
         let response = ReplayOptionsResponse {

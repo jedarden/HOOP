@@ -213,9 +213,6 @@ fn get_content_block(conn: &mut Connection, block_id: &str) -> Result<ContentBlo
 mod tests {
     use super::*;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
-
     #[test]
     fn test_content_block_type_conversion() {
         assert_eq!(ContentBlockType::from("text".to_string()), ContentBlockType::Text);
