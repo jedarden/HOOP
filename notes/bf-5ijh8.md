@@ -58,3 +58,14 @@ No source changes — this is a verification bead. This note is the sole artifac
 The remaining 91 warnings are pre-existing, non-utoipa, and largely gated by
 `clippy.toml` thresholds for unverified Phase 2–7 code; they are out of scope for
 this bead and tracked separately (see AGENTS.md Phase 1 exit gate `bf-5mpcl`).
+
+## Re-verification (2026-07-09)
+Re-ran `nix-shell --run 'cargo clippy -p hoop-daemon'` from a clean incremental
+build — **identical result**: exit 0, `hoop-daemon` (lib) generated **91 warnings**.
+- `grep -in 'utoipa'`  → NONE FOUND
+- `grep -in 'toschema'` → NONE FOUND
+- Sole `unused import` remains `serde_json::json` (`hoop-daemon/src/prompt_substitute.rs:15`) — not utoipa.
+
+Clippy version: rust-1.96.0 (per `rust-clippy/rust-1.96.0/index.html` help links).
+Conclusion unchanged: the utoipa::ToSchema warnings remain resolved; acceptance
+criteria met. No source changes this run either.
