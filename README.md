@@ -83,7 +83,63 @@ HOOP keeps the work queue *taut* by surfacing what is stale, stuck, or missing �
 |------|-------------|
 | `--no-interactive`, `-y` | Suppress all interactive prompts (for CI/CD and automation) |
 
-Destructive operations (e.g., `remove`, `restore`) require `--confirm` when using `--no-interactive` to prevent accidental data loss. Run `hoop --help` for full documentation.
+### `--no-interactive` flag details
+
+The `--no-interactive` flag (short form: `-y`) controls whether the CLI prompts for user confirmation. When set to `true`, all interactive prompts are suppressed. This is essential for:
+
+- CI/CD pipelines and automation scripts
+- Non-interactive environments (e.g., cron jobs)
+- Batch operations requiring automatic confirmation
+
+**How `global = true` works:**
+
+The clap `global = true` attribute makes the flag available to all subcommands automatically, without redefining it in each subcommand. Clap propagates the flag value through the entire command tree.
+
+**Usage with subcommands:**
+
+Because of `global = true`, the flag can be specified at any position:
+
+```bash
+# Before the subcommand
+hoop --no-interactive projects remove my-project --confirm
+
+# After the subcommand
+hoop projects remove my-project --no-interactive --confirm
+
+# With the short alias
+hoop -y projects remove my-project --confirm
+
+# For scan operations (auto-confirms without --confirm)
+hoop --no-interactive scan /path/to/projects
+```
+
+**Safety pattern for destructive operations:**
+
+Commands that have interactive prompts follow this pattern:
+
+1. **Safe operations** (e.g., `scan`): Auto-proceed when `--no-interactive` is set
+2. **Destructive operations** (e.g., `remove`, `restore`): Require explicit `--confirm` flag when `--no-interactive` is set to prevent accidental data loss
+
+Example destructive operation:
+```bash
+# This will error with a helpful message
+hoop --no-interactive projects remove my-project
+
+# This is the correct usage
+hoop --no-interactive projects remove my-project --confirm
+```
+
+**Commands that respect `--no-interactive`:**
+
+- `scan` / `projects scan` — Auto-registers all discovered workspaces
+- `remove` / `projects remove` — Requires `--confirm` when non-interactive
+- `restore` — Requires `--confirm` when non-interactive (destructive DB op)
+
+**Commands that explicitly reject `--no-interactive`:**
+
+- `init` — The init wizard requires interaction and explicitly errors when `--no-interactive` is set, directing the user to run without the flag
+
+Run `hoop --help` for full documentation.
 
 ---
 
