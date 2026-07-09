@@ -12,6 +12,8 @@ use axum::{
 };
 use notify::{RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
 use std::{
     fs,
     io::{BufRead, BufReader},
@@ -30,7 +32,7 @@ use crate::fleet::{self, ActionKind, ActionResult};
 
 /// Script manifest metadata (from optional manifest.yml next to script)
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct ScriptManifest {
     /// Script name (must match executable filename)
     pub name: String,
@@ -63,7 +65,7 @@ pub struct ScriptManifest {
 /// Overlap policy for scheduled script executions
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub enum OverlapPolicy {
     /// Skip if previous run is still active (default)
     Skip,
@@ -88,7 +90,7 @@ fn default_timeout_secs() -> u64 {
 /// Script visibility scope
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub enum ScriptScope {
     /// Script appears globally
     Global,
@@ -98,7 +100,7 @@ pub enum ScriptScope {
 
 /// Script argument definition
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct ScriptArgument {
     /// Argument name
     pub name: String,
@@ -115,7 +117,7 @@ pub struct ScriptArgument {
 
 /// Event subscription for triggering scripts automatically
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct EventSubscription {
     /// Event pattern to match (glob pattern, e.g., "stitch.*", "bead.closed")
     pub event: String,
@@ -135,7 +137,7 @@ pub struct EventSubscription {
 
 /// Discovered script entry
 #[derive(Debug, Clone, Serialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct ScriptEntry {
     /// Script name
     pub name: String,
@@ -159,7 +161,7 @@ pub struct ScriptEntry {
 
 /// Script execution request
 #[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct ScriptRunRequest {
     /// Arguments to pass to the script
     #[serde(default)]
@@ -170,7 +172,7 @@ pub struct ScriptRunRequest {
 
 /// Script execution response
 #[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "openapi", derive(ToSchema))]
 pub struct ScriptRunResponse {
     /// Script name
     pub script: String,
