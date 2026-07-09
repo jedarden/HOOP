@@ -277,8 +277,6 @@ fn seed_patterns(force: bool) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_parse_keywords() {
         let keywords = "codegen,generate,implement";

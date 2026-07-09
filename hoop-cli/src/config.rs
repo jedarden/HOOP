@@ -8,7 +8,6 @@ use reqwest::Client;
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::fs;
-use std::env;
 
 /// Config subcommands
 #[derive(Subcommand, Debug)]

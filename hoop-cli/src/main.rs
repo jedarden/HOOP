@@ -18,7 +18,6 @@ mod status;
 
 use clap::Parser;
 use hoop_daemon::{audit, fleet, serve, Config as DaemonConfig};
-use serde::Serialize;
 use std::{fs, net::SocketAddr, path::PathBuf};
 
 #[derive(Parser, Debug)]

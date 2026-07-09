@@ -5,11 +5,9 @@
 
 use anyhow::{anyhow, Result};
 use chrono::Utc;
-use clap::{ArgGroup, Args, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs;
-use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;

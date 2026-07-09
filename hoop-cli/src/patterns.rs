@@ -14,7 +14,6 @@
 use anyhow::Result;
 use clap::Subcommand;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 
 const DEFAULT_DAEMON_ADDR: &str = "http://127.0.0.1:3000";
 
