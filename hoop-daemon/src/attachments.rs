@@ -7,6 +7,7 @@
 //! after creation and prefix-checked against the expected root to prevent
 //! path-traversal attacks (§13 Security).
 
+use crate::atomic_write;
 use crate::id_validators::{ValidBeadId, ValidStitchId};
 use crate::path_security::{canonicalize_and_check, PathAllowlist};
 use anyhow::{Context, Result};
@@ -185,7 +186,7 @@ pub fn write_attachment_meta(dest: &Path, meta: &AttachmentMetadata) -> Result<(
         .ok_or_else(|| anyhow::anyhow!("attachment path has no parent"))?
         .join(meta_name);
     let json = serde_json::to_string_pretty(meta)?;
-    std::fs::write(&meta_path, json).with_context(|| {
+    atomic_write::atomic_write_file_str(&meta_path, &json).with_context(|| {
         format!(
             "failed to write attachment metadata: {}",
             meta_path.display()

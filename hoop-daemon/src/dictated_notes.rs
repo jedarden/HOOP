@@ -12,6 +12,7 @@
 //! 5. On failure: partial transcript saved with error, status → Failed (UI shows warning card)
 //! 6. Appears in project stitch list by `last_activity_at`
 
+use crate::atomic_write;
 use crate::id_validators::ValidStitchId;
 use crate::path_security::{canonicalize_and_check, PathAllowlist};
 use anyhow::{Context, Result};
@@ -195,12 +196,9 @@ pub fn store_audio(
         .with_context(|| format!("Failed to create attachment dir: {}", dir.display()))?;
 
     let path = dir.join(audio_filename);
-    // Atomic write via .tmp + rename
-    let tmp_path = path.with_extension("tmp");
-    std::fs::write(&tmp_path, audio_data)
-        .with_context(|| format!("Failed to write audio tmp: {}", tmp_path.display()))?;
-    std::fs::rename(&tmp_path, &path)
-        .with_context(|| format!("Failed to rename audio: {}", path.display()))?;
+    // Atomic write via .tmp + fsync + rename
+    atomic_write::atomic_write_file(&path, audio_data)
+        .with_context(|| format!("Failed to write audio: {}", path.display()))?;
 
     Ok(path)
 }

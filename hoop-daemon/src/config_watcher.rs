@@ -593,6 +593,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
+            Arc::new(Mutex::new(None)),
         )
         .await;
 
@@ -619,6 +620,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
+            Arc::new(Mutex::new(None)),
         )
         .await;
 
@@ -644,6 +646,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
+            Arc::new(Mutex::new(None)),
         )
         .await;
 
@@ -681,6 +684,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
+            Arc::new(Mutex::new(None)),
         )
         .await;
 
@@ -717,6 +721,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
+            Arc::new(Mutex::new(None)),
         )
         .await;
 
@@ -753,6 +758,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
+            Arc::new(Mutex::new(None)),
         )
         .await;
 
@@ -789,6 +795,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
+            Arc::new(Mutex::new(None)),
         )
         .await;
 
@@ -834,6 +841,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
+            Arc::new(Mutex::new(None)),
         )
         .await;
 
@@ -875,6 +883,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
+            Arc::new(Mutex::new(None)),
         )
         .await;
 
@@ -917,6 +926,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
+            Arc::new(Mutex::new(None)),
         )
         .await;
 
@@ -958,6 +968,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
+            Arc::new(Mutex::new(None)),
         )
         .await;
 
@@ -999,6 +1010,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
+            Arc::new(Mutex::new(None)),
         )
         .await;
 
@@ -1040,6 +1052,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
+            Arc::new(Mutex::new(None)),
         )
         .await;
 
@@ -1081,6 +1094,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
+            Arc::new(Mutex::new(None)),
         )
         .await;
 
@@ -1124,6 +1138,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
+            Arc::new(Mutex::new(None)),
         )
         .await;
 
@@ -1167,6 +1182,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
+            Arc::new(Mutex::new(None)),
         )
         .await;
 

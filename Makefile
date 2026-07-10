@@ -39,7 +39,7 @@ test:
 	@echo "=== Cleaning up HOOP test processes before tests ==="
 	@./bin/cleanup-hoop-test-processes.sh || true
 	@echo ""
-	cargo test --lib --verbose
+	cargo test --lib --features testing --verbose
 	@echo ""
 	@echo "=== Verifying no processes remain after tests ==="
 	@./bin/verify-hoop-test-processes.sh || echo "Warning: Some processes may remain"

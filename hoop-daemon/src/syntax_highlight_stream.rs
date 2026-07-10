@@ -264,7 +264,8 @@ mod tests {
     #[tokio::test]
     async fn test_stream_small_file() {
         let content = "fn main() {\n    println!(\"hello\");\n}\n";
-        let mut stream = highlight_stream(content.to_string(), "main.rs", "dark");
+        let stream = highlight_stream(content.to_string(), "main.rs", "dark");
+        tokio::pin!(stream);
 
         let first = stream.next().await.unwrap();
         match first {
@@ -296,7 +297,8 @@ mod tests {
     async fn test_stream_large_file_chunks() {
         let line = "x = 1\n";
         let content: String = line.repeat(CHUNK_SIZE + 50);
-        let mut stream = highlight_stream(content.clone(), "test.py", "dark");
+        let stream = highlight_stream(content.clone(), "test.py", "dark");
+        tokio::pin!(stream);
 
         match stream.next().await.unwrap() {
             StreamItem::Header(h) => {

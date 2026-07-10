@@ -8,7 +8,7 @@ default = ["openapi"]
 zero-write-v01 = []
 create-only-write = []
 # Internal feature for integration tests and load testing
-testing = ["tempfile"]
+testing = []
 # OpenAPI spec generation (optional feature for API documentation)
 openapi = []
 
@@ -63,8 +63,6 @@ utoipa-redoc = { version = "5", features = ["axum"] }
 utoipa-rapidoc = { version = "5", features = ["axum"] }
 fnv = "1"
 jsonschema = "0.18"
-# tempfile is needed for the testing feature (integration harness)
-tempfile = { version = "3", optional = true }
 
 [dev-dependencies]
 trybuild = "1.0"
