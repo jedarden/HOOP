@@ -513,6 +513,11 @@ fn detect_agent_config_changes(
 mod tests {
     use super::*;
 
+    /// Helper: create an empty agent config changed tx for testing
+    fn create_test_agent_tx() -> Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>> {
+        Arc::new(Mutex::new(None::<tokio::sync::broadcast::Sender<AgentConfigChanged>>))
+    }
+
     /// Helper: create a temp directory with a valid config.yml
     fn setup_valid_config(tmp: &tempfile::TempDir) -> PathBuf {
         let config_path = tmp.path().join("config.yml");
@@ -593,7 +598,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
-            Arc::new(Mutex::new(None)),
+            create_test_agent_tx(),
         )
         .await;
 
@@ -620,7 +625,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
-            Arc::new(Mutex::new(None)),
+            create_test_agent_tx(),
         )
         .await;
 
@@ -646,7 +651,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
-            Arc::new(Mutex::new(None)),
+            create_test_agent_tx(),
         )
         .await;
 
@@ -684,7 +689,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
-            Arc::new(Mutex::new(None)),
+            create_test_agent_tx(),
         )
         .await;
 
@@ -721,7 +726,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
-            Arc::new(Mutex::new(None)),
+            create_test_agent_tx(),
         )
         .await;
 
@@ -758,7 +763,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
-            Arc::new(Mutex::new(None)),
+            create_test_agent_tx(),
         )
         .await;
 
@@ -795,7 +800,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
-            Arc::new(Mutex::new(None)),
+            create_test_agent_tx(),
         )
         .await;
 
@@ -841,7 +846,7 @@ agent:
             event_tx.clone(),
             shared_config.clone(),
             cli_overrides.clone(),
-            Arc::new(Mutex::new(None)),
+            create_test_agent_tx(),
         )
         .await;
 
