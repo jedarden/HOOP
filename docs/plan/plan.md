@@ -1676,6 +1676,42 @@ Contentious decisions locked before implementation. Re-opening an ADR requires a
 
 ---
 
+### ADR-6: 2026-07-20 — Out-of-band fleet notification delivery via the existing phone bridge, amending non-goal #13
+
+**Context**
+
+HOOP already has a complete, correctly-wired alerting pipeline: `supervisor.rs` and `lib.rs` push `FleetNotification`s (`CapacityAlert`, `ConvoyComplete`, `StitchBeadsClosed`, `BeadCreatedByHoop`) into `FleetNotificationRing` (`hoop-daemon/src/fleet_notifications.rs`) the instant they fire. But the ring has exactly two consumers today: `agent_context.rs` (folds recent notifications into the human-interface agent's system prompt — useless unless an agent session is active) and the `escalate_to_operator` tool, which posts a WebSocket banner — useless unless a browser tab is open on the dashboard.
+
+Separately, §22.3's event-triggered script runner (`hoop-daemon/src/script_trigger.rs`) already lets operator scripts subscribe to *raw* `NeedleEvent`s (claim/dispatch/complete/fail/timeout/crash/close/release/update) via a manifest `on:` block, and ships a working example (`hoop-daemon/examples/scripts/notify-pushover`) that demonstrates exactly the escape hatch non-goal #13 intends. But `trigger_matching_scripts` is only called from `supervisor.rs` against `NeedleEvent`s — never against `FleetNotification`s. The higher-level fleet events (the ones actually worth waking someone up for) cannot reach a script at all today, wired or not.
+
+On this host, `scripts/hoop-adb` and `scripts/termux-hoop-listener.sh` already implement one half of a phone bridge over the Tailscale-connected Pixel 6 (ADB → Termux, for push-to-talk dictation *into* HOOP). No return path exists. Meanwhile `hoop.service` is installed but disabled (`bf-4el` tracks turning it on) — the daemon's designed steady state is headless, unattended, with no browser tab and no active agent chat. In that state — which is the norm, not the exception, for this operator — 100% of fleet notifications currently evaporate into a ring buffer nobody reads.
+
+Plan §8 non-goal #13 explicitly rejects built-in Slack/email/webhook integrations, citing auth/lifecycle/maintenance cost, and directs operators to the `scripts/` escape hatch instead. That reasoning holds for coupling to *outside* SaaS. It does not obviously apply to infrastructure this operator already built specifically for HOOP (the ADB/Termux bridge) and already ships an example script for (`notify-pushover`) — the problem is not "no escape hatch exists," it's that the escape hatch is disconnected from the events worth escaping with.
+
+**Decision**
+
+1. Extend `script_trigger`'s event matching so `FleetNotification`s (not just raw `NeedleEvent`s) can trigger operator scripts — construct an `EventContext` from `FleetNotification.kind` (rendered as its snake_case serde tag: `capacity_alert`, `convoy_complete`, `stitch_beads_closed`, `bead_created_by_hoop`) at each `FleetNotificationRing::push()` call site, alongside the existing ring push. This is additive: it does not change ring semantics, WebSocket delivery, or the agent-context path.
+2. Ship a second example script, `hoop-daemon/examples/scripts/notify-phone`, that reuses the already-built `hoop-adb`/Termux channel to fire an Android notification (`termux-notification` over the same ADB link `termux-hoop-listener.sh` already holds open) for `capacity_alert` and `convoy_complete` — the two kinds that represent "something needs attention and the operator may not be looking." Off by default, like `notify-pushover`; the operator opts in by dropping it in `~/.hoop/scripts/` same as any other script.
+3. Non-goal #13 is amended, not repealed: HOOP still ships no built-in Slack/email/webhook client and takes on no new auth surface. What changes is that the *escape hatch itself* can now see fleet-level events, and one more worked example targets infrastructure the operator already runs for HOOP rather than a third-party SaaS account nobody has configured (no `PUSHOVER_*` env vars exist anywhere on this host today).
+
+**Alternatives Considered**
+
+- **Leave it as-is (WebSocket + agent-context only).** Rejected: measured against how this daemon is actually run (service installed but disabled, per `bf-4el`), this delivers zero real-world alerts. A correctly-implemented feature with an unreachable audience produces no value.
+- **Hardcode a Telegram/Slack/Pushover client into `hoop-daemon`.** Rejected: this is precisely what non-goal #13 already correctly forbids — it adds auth/credential lifecycle and a maintenance burden inside the trusted daemon for a feature the `scripts/` mechanism can serve without any of that.
+- **Do nothing beyond documenting `notify-pushover` better.** Rejected: the script mechanism is already documented; the actual defect is that `FleetNotification`s never reach `trigger_matching_scripts` at all, so no amount of documentation on the script side fixes it. Also, `notify-pushover` requires a third-party account this operator has never set up, whereas the ADB/phone channel is already live infrastructure.
+- **Build a generic outbound-webhook config field on `FleetNotificationRing` instead of going through scripts.** Rejected: duplicates the script-trigger mechanism that already exists for the raw-event case; two parallel delivery configuration systems is worse than extending the one that's already there.
+
+**Consequences**
+
+- Positive: closes the loop between two features that already ship independently (script triggers, fleet notification ring) with a small, additive integration — no new subsystem.
+- Positive: makes HOOP's flagship alerting (saturation, convoy completion) deliver value in the daemon's actual steady state (headless systemd service), which is the deployment mode `bf-4el` is working toward.
+- Positive: reuses infrastructure this exact host already has running (Tailscale ADB link to the Pixel 6), rather than introducing a new external dependency.
+- Negative: notification delivery now has a soft runtime dependency on `adb`/Termux reachability for anyone who opts into `notify-phone`; must fail silently to a log line (never block the triggering code path) — consistent with "if HOOP dies, nothing else notices."
+- Negative: `FleetNotification.details` payloads reaching a script now cross the same trust boundary `notify-pushover` already crosses (arbitrary local script execution with fleet data on stdin) — no new privilege, but the surface grows from 9 raw event kinds to 13 kinds; must be checked against §18 privacy/redaction before the two new hooks in `lib.rs`/`supervisor.rs` are wired.
+- Follow-up work is filed as beads (below) rather than done in this ADR: the `script_trigger` bridge itself, and the `notify-phone` example script.
+
+---
+
 ## 25. Edge case catalog
 
 Numbered, dedicated catalog. Each entry: name, scenario, resolution. Discovered during planning; updated during implementation.
