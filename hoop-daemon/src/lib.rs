@@ -178,7 +178,11 @@ pub struct Bead {
     pub issue_type: BeadType,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
+    /// `br`/bead-forge may omit this key on older beads; default to empty.
+    #[serde(default)]
     pub created_by: String,
+    /// `br`/bead-forge may omit this key when a bead has no blockers; default to empty.
+    #[serde(default)]
     pub dependencies: Vec<String>,
     /// Project name assigned by HOOP at load time — not stored in issues.jsonl
     #[serde(skip_deserializing, default)]
