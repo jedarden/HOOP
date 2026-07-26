@@ -193,10 +193,22 @@ pub struct Bead {
 }
 
 /// Bead status
+///
+/// br/bead-forge always writes `status` as a lowercase snake_case string
+/// (open, closed, blocked, completed, done). `rename_all = "snake_case"` maps
+/// those wire values onto these variants, and the `#[serde(other)] Unknown`
+/// catch-all ensures any unrecognized status deserializes instead of failing
+/// (which would quarantine the entire bead line).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum BeadStatus {
     Open,
     Closed,
+    Blocked,
+    Completed,
+    Done,
+    #[serde(other)]
+    Unknown,
 }
 
 /// Bead type/issue type

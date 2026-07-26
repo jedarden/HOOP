@@ -533,6 +533,10 @@ fn query_stitch_beads(
                 status: live.map(|b| match b.status {
                     BeadStatus::Open => "open".to_string(),
                     BeadStatus::Closed => "closed".to_string(),
+                    BeadStatus::Blocked => "blocked".to_string(),
+                    BeadStatus::Completed => "completed".to_string(),
+                    BeadStatus::Done => "done".to_string(),
+                    BeadStatus::Unknown => "unknown".to_string(),
                 }),
                 bead_id,
                 relationship,
