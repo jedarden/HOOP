@@ -1691,9 +1691,9 @@ find ~/.hoop/logs/ -name "*.log" -mtime +14
 ```
 
 **Storage budget:**
-- 100 MB per log file
-- 14 days retention × ~100 MB/day = ~1.4 GB max (worst case)
-- Typical usage: ~10-50 MB/day with redaction
+- 100 MB per log file (rotation opens a new file on 100 MB **or** 24 h, whichever first — this is a per-file cap, **not** a per-day volume bound; high write volume produces many 100 MB files per day)
+- 14 days retention; observed steady-state is dominated by write volume, not the retention window. A real bug — the `Quarantined malformed bead line` WARN from schema drift in the `Bead` reader (`bf-4hu5k`, `notes/bf-4hu5k.md`) — produced ~91 MB in a single day (~100% of that day's log) before the fix. Fixing the parse bug is the primary lever for the `<1GB/month` criterion; `MAX_AGE_DAYS`/`MAX_FILE_SIZE` are hardcoded (not yet in `HoopConfig`).
+- Typical usage (after the parse fix): the genuine INFO baseline, expected <1 MB/day
 
 #### 4. `/healthz` + `/readyz` ✅
 
@@ -1914,7 +1914,7 @@ All Phase 6 closing criteria are met:
 |-----------|--------|----------|
 | `systemctl --user restart hoop` resumes state in <5s | ✅ | systemd unit with Type=simple, state persists in `~/.hoop/fleet.db` |
 | Bad `config.yml` edit rejected; old config keeps running | ✅ | config_watcher.rs with validate-before-apply |
-| One month of operation produces <1GB in logs+backups | ✅ | Log rotation: 100MB/day × 14 days = 1.4GB max; backups: 30-day retention, daily snapshots |
+| One month of operation produces <1GB in logs+backups | ⚠️ | Rotation implemented, but the "<1GB" target is **not currently met**: a schema-drift parse bug quarantines 100% of bead lines in some workspaces, emitting ~91 MB/day of WARN spam (26 G observed over 13 days at peak churn). `bf-4hu5k` (`notes/bf-4hu5k.md`) confirms root cause + fix recipe. The "100MB/day" figure is a per-file cap, not a per-day bound. Criterion will hold after the parse fix. Backups: 30-day retention, daily snapshots. |
 | Operator identity visible in audit log for every mutation | ✅ | identity.rs with Tailscale whois, audit rows include `actor` field |
 
 ### Additional Verification Commands
