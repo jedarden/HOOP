@@ -1,0 +1,17 @@
+name: notify-phone
+description: >-
+  Deliver capacity_alert and convoy_complete fleet notifications to the Pixel 6
+  over the existing ADB/Termux bridge (ADR-6 §24 out-of-band delivery). Off by
+  default — copy to ~/.hoop/scripts/ to enable.
+scope: global
+timeout_secs: 15
+# Fails soft: a missing adb or an unreachable phone degrades to a log line and
+# exit 0, never blocking the code path that fired the event.
+overlap_policy: skip
+# Subscribe to the two FleetNotification kinds that mean "something needs
+# attention and the operator may not be looking" — NOT the bead-level firehose.
+# `event` is glob-matched against the notification kind's snake_case serde tag
+# (capacity_alert / convoy_complete / stitch_beads_closed / bead_created_by_hoop).
+on:
+  - event: "capacity_alert"
+  - event: "convoy_complete"

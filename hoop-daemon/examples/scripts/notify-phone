@@ -1,0 +1,212 @@
+#!/usr/bin/env python3
+"""
+notify-phone — Example HOOP script: deliver fleet notifications to the Pixel 6
+
+This is the second half of ADR-6 (docs/plan/plan.md §24, "Out-of-band fleet
+notification delivery"). scripts/hoop-adb and scripts/termux-hoop-listener.sh
+already hold an ADB link open to the Pixel 6 over Tailscale for push-to-talk
+dictation INTO HOOP. This script is the return path: when a fleet event the
+operator cares about fires, it shells out over that same ADB connection to wake
+the phone.
+
+It mirrors the connection pattern already implemented in scripts/hoop-adb: an
+`am broadcast -a HOOP_NOTIFY` (with the title/content as intent extras) sent
+through the shared ADB server. scripts/termux-hoop-listener.sh picks that
+broadcast up and posts a real Android notification via `termux-notification`.
+
+This is the operator-script escape hatch (§22.3), the same one notify-pushover
+demonstrates — but it targets infrastructure this operator already runs for
+HOOP rather than a third-party account nobody has configured. Off by default,
+just like notify-pushover: copy it to ~/.hoop/scripts/ to enable it.
+
+FAIL-SOFT (plan.md §3, Principles — "if HOOP dies, nothing else notices"):
+adb missing, no device, or the phone unreachable all degrade to a single log
+line on stderr and an exit code of 0. Delivery failure NEVER blocks the code
+path that fired the event (script_trigger runs scripts fire-and-forget, and
+this script additionally refuses to surface delivery problems as a non-zero
+exit so the accounting never looks blocked).
+
+Setup: see docs/notes/notify-phone-setup.md.
+
+Usage (event-triggered, the normal path):
+    # The daemon pipes the FleetNotification JSON on stdin automatically.
+    # Manifest subscribes to capacity_alert + convoy_complete.
+
+Manual smoke test:
+    hoop script run notify-phone                      # bare → test notification
+    hoop script run notify-phone "hello from HOOP"    # arg → custom content
+    echo '{"kind":"capacity_alert","summary":"85% util"}' | hoop script run notify-phone
+"""
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+# ── configuration ───────────────────────────────────────────────────────────
+# Broadcast action the Termux listener registers for. Mirrors HOOP_DICTATE_*
+# from scripts/hoop-adb. Override only if you renamed the listener's filter.
+HOOP_NOTIFY_ACTION = os.environ.get("HOOP_NOTIFY_ACTION", "HOOP_NOTIFY")
+
+# ADB device serial, same env var scripts/hoop-adb honors. Auto-detected by adb
+# if unset and only one device is attached.
+ADB_SERIAL = (os.environ.get("ADB_SERIAL") or "").strip() or None
+
+# Hard wall-clock cap on the adb call so an unreachable phone can't stall the
+# script. The daemon's own per-script timeout_secs (manifest) is the outer bound.
+NOTIFY_TIMEOUT = int(os.environ.get("HOOP_NOTIFY_TIMEOUT", "10"))
+
+# kind → (title, glyph). capacity_alert and convoy_complete are the only two
+# the default manifest subscribes to; anything else gets a generic title.
+TITLES = {
+    "capacity_alert": ("HOOP: Capacity Alert", "🔴"),
+    "convoy_complete": ("HOOP: Convoy Complete", "✅"),
+}
+
+
+def log(msg: str) -> None:
+    """Log to stderr only — stdout is captured by the daemon for the result."""
+    print(f"[notify-phone] {msg}", file=sys.stderr)
+
+
+def sanitize(text: str, limit: int = 240) -> str:
+    """Collapse to a single line and cap length for the notification shade.
+
+    Summary comes from HOOP (already §18-redacted before it reaches this
+    script, per EventContext::from_fleet_notification) but we still strip
+    control chars so a stray newline can't split the broadcast extra.
+    """
+    text = (text or "").replace("\r", " ").replace("\n", " ")
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:limit]
+
+
+def build_message(event: dict) -> tuple[str, str]:
+    """Turn a FleetNotification dict into a (title, content) pair.
+
+    The notification `summary` field is purpose-built and human-readable
+    (≤120 chars), so we lean on it for content and only reach into `details`
+    as a fallback for unknown/unexpected shapes.
+    """
+    kind = str(event.get("kind") or "unknown")
+    title, glyph = TITLES.get(kind, ("HOOP: " + kind.replace("_", " ").title(), "📣"))
+
+    summary = sanitize(event.get("summary"))
+    if summary:
+        content = summary
+    else:
+        details = event.get("details")
+        if isinstance(details, dict) and details:
+            content = sanitize(json.dumps(details, separators=(",", ":")))
+        else:
+            content = "(no detail)"
+
+    project = event.get("project")
+    if project:
+        content = f"[{project}] {content}"
+
+    return f"{glyph} {title}", content
+
+
+def shell_escape(value: str) -> str:
+    """Single-quote-escape a value for the device-side `am broadcast` shell.
+
+    `adb shell <cmd>` runs <cmd> through the device's /bin/sh, so an unquoted
+    value containing spaces or metacharacters would be misparsed. We pass the
+    whole device command as a single argv element (adb forwards it verbatim)
+    and single-quote each value so content can't escape into another command.
+    """
+    return "'" + value.replace("'", "'\"'\"'") + "'"
+
+
+def deliver(title: str, content: str) -> bool:
+    """Fire the HOOP_NOTIFY broadcast over ADB. Returns True on best-effort
+    success (adb reached the device and ran the command). Never raises."""
+    if not shutil.which("adb"):
+        log("adb not found in PATH — skipping (fail-soft). "
+            "Run `adb-check` / install platform-tools.")
+        return False
+
+    device_cmd = (
+        f"am broadcast -a {HOOP_NOTIFY_ACTION} "
+        f"--es title {shell_escape(title)} "
+        f"--es content {shell_escape(content)} "
+        f">/dev/null"  # suppress the noisy "Broadcasting: …" result line on device
+    )
+    cmd = ["adb"]
+    if ADB_SERIAL:
+        cmd += ["-s", ADB_SERIAL]
+    cmd += ["shell", device_cmd]
+
+    try:
+        result = subprocess.run(
+            cmd,
+            timeout=NOTIFY_TIMEOUT,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+    except FileNotFoundError:
+        log("adb vanished mid-call — skipping (fail-soft).")
+        return False
+    except subprocess.TimeoutExpired:
+        log(f"adb broadcast timed out after {NOTIFY_TIMEOUT}s — "
+            "phone unreachable? run `adb-check` (fail-soft).")
+        return False
+    except Exception as exc:  # noqa: BLE001 — fail-soft must catch everything
+        log(f"unexpected error during adb call: {exc!r} (fail-soft).")
+        return False
+
+    if result.returncode != 0:
+        stderr = result.stderr.decode("utf-8", errors="replace").strip()
+        log(f"adb broadcast exited {result.returncode}: {stderr} (fail-soft).")
+        return False
+
+    return True
+
+
+def read_event() -> dict:
+    """Resolve the event to notify on.
+
+    Priority: explicit positional arg (manual mode) → event JSON on stdin
+    (the daemon-triggered path) → bare smoke test. Always returns a dict.
+    """
+    if len(sys.argv) > 1:
+        return {
+            "kind": "manual",
+            "summary": sanitize(" ".join(sys.argv[1:])),
+        }
+
+    if not sys.stdin.isatty():
+        raw = sys.stdin.read().strip()
+        if raw:
+            try:
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    return parsed
+            except json.JSONDecodeError:
+                # Treat unparseable stdin as a plain manual message.
+                return {"kind": "manual", "summary": sanitize(raw)}
+
+    return {"kind": "test", "summary": "notify-phone smoke test — no event supplied"}
+
+
+def main() -> int:
+    event = read_event()
+    title, content = build_message(event)
+    delivered = deliver(title, content)
+    if delivered:
+        log(f"sent ({event.get('kind')}): {title} — {content}")
+    # Exit 0 unconditionally: a delivery failure is a phone-side problem, not a
+    # signal that HOOP should treat this trigger as failed. The log line above
+    # is the only feedback channel.
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as exc:  # noqa: BLE001 — never let a bug block the trigger
+        log(f"unhandled error, swallowing to keep fail-soft: {exc!r}")
+        sys.exit(0)
