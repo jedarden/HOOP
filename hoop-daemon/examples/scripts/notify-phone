@@ -56,7 +56,16 @@ ADB_SERIAL = (os.environ.get("ADB_SERIAL") or "").strip() or None
 
 # Hard wall-clock cap on the adb call so an unreachable phone can't stall the
 # script. The daemon's own per-script timeout_secs (manifest) is the outer bound.
-NOTIFY_TIMEOUT = int(os.environ.get("HOOP_NOTIFY_TIMEOUT", "10"))
+# Parsed defensively: this runs at import time, OUTSIDE the __main__ fail-soft
+# guard, so a malformed value must degrade to the default rather than crashing
+# with a non-zero exit (fail-soft — never non-zero, even on a bad env var).
+_timeout_raw = (os.environ.get("HOOP_NOTIFY_TIMEOUT") or "").strip()
+try:
+    NOTIFY_TIMEOUT = int(_timeout_raw) if _timeout_raw else 10
+except ValueError:
+    print(f"[notify-phone] HOOP_NOTIFY_TIMEOUT={_timeout_raw!r} not an int; "
+          "using default 10s (fail-soft).", file=sys.stderr)
+    NOTIFY_TIMEOUT = 10
 
 # kind → (title, glyph). capacity_alert and convoy_complete are the only two
 # the default manifest subscribes to; anything else gets a generic title.
