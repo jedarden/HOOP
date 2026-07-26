@@ -2,3 +2,13 @@
 # issue_prefix: hoop
 # default_priority: 2
 # default_type: task
+
+secret_protection:
+  allowlist:
+    # Repo-relative source/doc paths false-positive against the Azure Key /
+    # generic base64 heuristics because of long slash-separated segments.
+    # See CLAUDE.md "bf/bead-forge gotchas".
+    - "hoop-(daemon|cli|mcp|schema|ui)/[A-Za-z0-9_./-]+"
+    - "docs/[A-Za-z0-9_./-]+"
+    - "scripts/[A-Za-z0-9_./-]+"
+    - "\\.beads/[A-Za-z0-9_./-]+"
