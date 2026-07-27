@@ -6,6 +6,9 @@
 ## TL;DR — bead left OPEN; the host-side artifact passes every verifiable path,
 ## but the phone-side delivery prerequisite is not provisioned, so a notification
 ## does **not** appear on the Pixel 6 and acceptance criterion #1 is unmet.
+## **Retry #2 (2026-07-26) re-confirmed this unchanged; payload fidelity proven
+## on-device via `dumpsys`; tracking bead `bf-5odqb` filed as the blocker — see
+## [Retry #2](#retry-2-2026-07-26-same-day) below.**
 
 The task's stated precondition — *"With notify-phone installed in ~/.hoop/scripts/
 and **the Termux listener running notify_loop()** …"* — is **false on this
@@ -19,6 +22,46 @@ The bead was therefore **not closed.** The host-side half is proven end-to-end;
 once the operator runs the one-time phone provisioning (`scripts/hoop-adb setup`),
 this bead can be retried and is expected to pass without code change.
 
+## Retry #2 (2026-07-26, same day)
+
+Re-ran the full host-side verification on a second dispatch (`failure-count:2`).
+Every host-side result is **identical** to run #1 (criteria 3 + 4 PASS; host halves
+of 1 + 2 PASS). The phone-side blocker is **unchanged and stable, not transient**:
+`pm list packages | grep termux` is still empty, `pm query-receivers --components
+-a HOOP_NOTIFY` still returns `No receivers found`, and `/data/data/com.termux`
+still does not exist. F-Droid (`org.fdroid.fdroid`) is installed, so the install
+path is available but the install has not been performed.
+
+**New evidence this run — payload fidelity proven on-device.** Beyond the host
+`sent (…)` log line (which only proves `adb` reached the device), `dumpsys
+activity broadcasts` on the Pixel 6 shows the queued `HOOP_NOTIFY` intents carry
+the **exact** extras `notify-phone` constructs:
+
+```
+extras: Bundle[{title=🔴 HOOP: Capacity Alert, content=[spaxel] E2EPROBE-7Q9X marker}]
+```
+
+fired via `echo '{"kind":"capacity_alert","summary":"E2EPROBE-7Q9X marker","project":"spaxel"}' | ~/.hoop/scripts/notify-phone`. The device-side `am broadcast` echo
+confirms `Intent { act=HOOP_NOTIFY flg=0x400000 (has extras) } … result=0`. So
+`build_message()` → `shell_escape()` → `am broadcast --es title/content` produces a
+correct payload that arrives intact on the device — the glyph + kind title +
+`[project]` prefix + sanitized summary all round-trip. The **only** thing between
+this correct on-device broadcast and a shade notification is the missing Termux
+receiver. Undelivered `HOOP_NOTIFY` records now number ~58 (was 54 — grew by the
+probes fired across both runs; the no-receiver condition itself is unchanged).
+
+`hoop script run notify-phone` still **hangs** past 15 s (killed by `timeout`,
+rc=143 = SIGTERM) — the same daemon-keeps-stdin-open finding as run #1; orthogonal
+to the artifact.
+
+**Action taken this run.** Per the recommendation at the foot of this note, filed
+tracking bead **`bf-5odqb`** (*Provision Termux + Termux:API on Pixel 6 — one-time
+HOOP ADB bridge setup*) and wired it as a **blocker of this bead** (`bf-5odqb`
+blocks `bf-357bc`). This models the missing prerequisite as tracked work instead of
+an invisible wall, so this verification stops being re-dispatched into the same
+Termux-missing condition. Close `bf-5odqb`, then retry here — no code change is
+expected. A status comment (#10) was also added to the bead itself.
+
 ## Environment
 
 | Check | Result |
@@ -28,7 +71,7 @@ this bead can be retried and is expected to pass without code change.
 | ADB → Pixel 6 | ✅ `adb-check` → `connected: 100.88.10.113:5555 (authorized)`, state `device` |
 | Termux installed on phone | ❌ `pm list packages \| grep termux` → empty; `/data/data/com.termux` does not exist. Only `org.fdroid.fdroid` is installed. |
 | `HOOP_NOTIFY` receiver registered | ❌ `pm query-receivers --components -a HOOP_NOTIFY` → **`No receivers found`** |
-| Undelivered `HOOP_NOTIFY` broadcasts queued on device | **54** (piling up because no receiver catches them — direct evidence the broadcast reaches the device but goes undelivered) |
+| Undelivered `HOOP_NOTIFY` broadcasts queued on device | **~58** (was 54 in run #1; grew only by the probes fired across both runs — the no-receiver condition is unchanged). `dumpsys` shows they carry the correct title/content extras; they pile up because no receiver catches them — direct evidence the broadcast reaches the device but goes undelivered). |
 
 ## Acceptance-criteria results
 
@@ -92,8 +135,10 @@ Termux is not installed here:
 - `pm list packages | grep termux` → (empty)
 - `/data/data/com.termux` → `No such file or directory`
 - `pm query-receivers --components -a HOOP_NOTIFY` → **`No receivers found`**
-- `dumpsys activity broadcasts` → **54** `act=HOOP_NOTIFY` intents queued
-  undelivered (the broadcast reaches the device but has no sink).
+- `dumpsys activity broadcasts` → **~58** `act=HOOP_NOTIFY` intents queued
+  undelivered (the broadcast reaches the device but has no sink); run #2
+  confirmed via the matching `extras` Bundle that the title/content payload
+  is correct — only the receiver is missing.
 
 Notably the **inbound** dictation half of the same bridge is also un-provisioned —
 there is no `HOOP_DICTATE_*` receiver registered either. So this Pixel 6 has never
@@ -141,3 +186,10 @@ acceptance verdict.
 If provisioning the phone is to be tracked rather than ad-hoc, file it as a new
 bead blocking `bf-357bc` (the current open bridge `bf-62eb8` is the *automatic*
 daemon→script hook and is a separate concern).
+
+**Update (run #2):** done — tracking bead **`bf-5odqb`** (*Provision Termux +
+Termux:API on Pixel 6 — one-time HOOP ADB bridge setup*) now blocks `bf-357bc`.
+Provision the phone per steps 1 above, close `bf-5odqb`, then retry this bead.
+(`bf-62eb8` governs whether a real fleet event reaches this script with no human
+in the loop — the synthetic event above exercises every artifact except that
+not-yet-wired daemon hook, so it is not what blocks criterion #1 here.)
