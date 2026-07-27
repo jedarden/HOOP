@@ -10,6 +10,7 @@ mod init;
 mod new;
 mod patterns;
 mod projects;
+mod reflection;
 mod restore;
 mod risk_patterns;
 mod script;
@@ -252,6 +253,9 @@ enum Commands {
     /// Manage patterns (operator-curated groups of Stitches)
     #[command(subcommand)]
     Pattern(patterns::PatternCommands),
+    /// Export approved Reflection Ledger entries to the operator's memory index
+    #[command(subcommand)]
+    Reflection(reflection::ReflectionCommands),
     /// First-time setup wizard
     Init,
 }
@@ -500,6 +504,12 @@ async fn main() -> anyhow::Result<()> {
         Commands::Init => {
             if let Err(e) = init::run_init_wizard(no_interactive) {
                 eprintln!("hoop init: {}", e);
+                std::process::exit(exit_code_for_error(&e));
+            }
+        }
+        Commands::Reflection(cmd) => {
+            if let Err(e) = reflection::handle_reflection(cmd).await {
+                eprintln!("hoop reflection: {}", e);
                 std::process::exit(exit_code_for_error(&e));
             }
         }
