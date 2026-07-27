@@ -1,7 +1,8 @@
 # bf-9q17d — clippy --workspace -D warnings recon
 
 Split from bf-2dpkl (child 2 of 4). Measures the second of the three bf-5mpcl
-acceptance checks. Run from HEAD `3fbcc28` on 2026-07-26.
+acceptance checks. **Re-run from HEAD `e8b8ba4` on 2026-07-26** (fresh invocation,
+not assumed from the prior `3fbcc28` attempt — results identical: still 89).
 
 ## Command run
 
@@ -14,7 +15,7 @@ nix-shell -p pkg-config openssl --run 'cargo clippy --workspace -- -D warnings'
 > nixpkgs-unstable (`error: Node.js 20 support was removed`). The
 > `-p pkg-config openssl` ad-hoc invocation sidesteps nodejs entirely and is
 > what CI/agents must use until `shell.nix` is bumped to `nodejs_22`+.
-> Raw output saved at `/tmp/clippy-9q17d.out`.
+> Raw output saved at `/tmp/hoop-clippy.log` (this run).
 
 ## Result
 
