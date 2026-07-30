@@ -10,9 +10,9 @@ HOOP does **not** steer NEEDLE workers (no launch / stop / kill / signal / relea
 
 ## Current repository state
 
-**ACTUAL STATE (as of 2026-06-28): Phase 0 complete. Phase 1 in progress. `cargo build` FAILS (36 compilation errors). `cargo clippy -- -D warnings` FAILS (multiple errors — see bead `bf-xibss`). Phase 1 CI gate (`bf-5mpcl`) is open. Phases 2–7 code exists but has NOT been run or verified.**
+**ACTUAL STATE (as of 2026-07-26): Phase 0 complete. Phase 1 in progress. The daemon compiles cleanly — `cargo check --workspace` and `cargo build --workspace` both exit 0 with zero errors/warnings. `cargo test --workspace` does NOT compile: 31 errors in the `hoop-daemon` `lib test` target (stale test fixtures — production structs such as `CapacityMeterConfig`, `DaemonState`, `HoopConfig` gained fields that the test initializers were never updated for), so the unit/integration tests never run. `cargo clippy --workspace -- -D warnings` FAILS with 90 errors across 39 files (28 disallowed `std::fs::write`/`File::create` calls, 13 dead-code, 49 style/complexity lints). `hoop status --json | jq .` PASSES (exit 0, valid JSON). Phase 1 CI gate (`bf-5mpcl`) is OPEN on the test-compile and clippy failures — its comment has the current breakdown. Phases 2–7 code exists but has NOT been run or verified.**
 
-The Rust crate does NOT currently compile. The genesis bead (`hoop-ttb`) was closed prematurely; the bead tracker is the authoritative record of what is actually done.
+The crate now compiles, but the Phase 1 exit gate is not met (tests do not compile; clippy not clean). The genesis bead (`hoop-ttb`) was closed prematurely; the bead tracker is the authoritative record of what is actually done.
 
 **Do not trust this file's component list as evidence of working software. Run `br list` and check `docs/plan/plan.md` to know the real state.**
 
