@@ -281,15 +281,38 @@ timestamps.push(now);
 
 ## Verification
 
-### Check for Remaining Violations
-```bash
-nix-shell --run 'cargo clippy --message-format=short 2>&1 | grep await_holding_lock'
-```
-Result: No output (no violations found)
+### Clippy Check Results (2026-08-01)
 
-### Manual Code Review
-- All `.await` points in `embedding_service.rs` occur when no `RwLock` guards are active
-- Locks are always dropped before any `.await` by using block scopes `{}` to control guard lifetime
+**Check for Remaining Violations:**
+```bash
+cargo clippy --workspace 2>&1 | grep -i "await_holding"
+```
+**Result:** No `await_holding_lock` warnings found ✅
+
+**Full Clippy Run:**
+```bash
+cargo clippy --workspace -- -D warnings
+```
+**Status:** The specific `await_holding_lock` warning in `embedding_service.rs` is completely resolved. The clippy lint passes cleanly for this violation type.
+
+### Code Review Verification
+
+**Current State (2026-08-01):**
+- All `.await` points in `embedding_service.rs` occur when NO `RwLock` guards are active ✅
+- Locks are properly scoped using block scopes `{}` to control guard lifetime ✅
+- The `tokio::time::sleep().await` at line 428 occurs AFTER the lock is released at line 423 ✅
+- Second lock acquisition at line 438 is brief (only timestamp push) ✅
+
+### No New Warnings Introduced
+
+**Check for Regression:**
+```bash
+cargo clippy --workspace -- -D warnings 2>&1 | grep -A5 -B5 "await_holding"
+```
+**Result:** No `await_holding_lock` warnings anywhere in the workspace ✅
+
+**Other Clippy Findings:**
+The workspace has other clippy warnings (89 errors total), but none are related to `await_holding_lock` violations. The fix is clean and targeted.
 
 ## Related Beads
 
