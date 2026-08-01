@@ -468,6 +468,7 @@ pub fn remove_project(name: &str, no_interactive: bool, confirm: bool) -> Result
     let project = registry.get(name).cloned();
 
     // In interactive mode, prompt for confirmation
+    // All prompts go to stderr (not stdout) to avoid interfering with data output
     if !no_interactive {
         if let Some(proj) = &project {
             eprintln!("Removing project '{}'", name);
@@ -582,6 +583,8 @@ pub fn discover_bead_workspaces(root: &Path) -> Result<Vec<PathBuf>> {
 ///
 /// In interactive mode (no_interactive=false), the user is prompted y/n per discovery
 /// and can optionally rename the project from the default (directory basename).
+/// All interactive prompts go to stderr; registration results and errors go to stdout.
+///
 /// With no_interactive=true, all discoveries are registered without prompting.
 /// Already-registered paths are skipped with a note.
 ///
@@ -665,7 +668,7 @@ pub fn scan_projects(root: &str, no_interactive: bool) -> Result<()> {
                 }
             }
         } else {
-            // Prompts go to stderr
+            // All interactive prompts go to stderr (not stdout) to avoid interfering with data output
             eprint!("  {} — register? [y/N] ", default_name);
             std::io::stderr().flush()?;
 
@@ -677,7 +680,7 @@ pub fn scan_projects(root: &str, no_interactive: bool) -> Result<()> {
                 continue;
             }
 
-            // Offer rename
+            // Offer rename (prompt also goes to stderr)
             eprint!("    name [{}]: ", default_name);
             std::io::stderr().flush()?;
 
