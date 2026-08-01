@@ -3,16 +3,16 @@
 ## Task
 Document and verify toolchain versions for HOOP development environment.
 
-## Current Toolchain Versions (as of 2026-07-09)
+## Current Toolchain Versions (as of 2026-08-01)
 
 ### Rust Toolchain
 - **cargo:** 1.95.0 (f2d3ce0bd 2026-03-21)
-- **rustc:** 1.95.0 (59807616e 2026-04-14) (built from a source tarball)
-- **Rust Edition:** 2021
+- **rustc:** 1.95.0 (59807616e 2026-04-14)
+- **Rust Edition:** 2021 (workspace default)
 
 ### Node Toolchain (for UI components)
-- **Node.js:** v20.20.2
-- **pnpm:** 11.9.0
+- **Node.js:** v20.19.2
+- **pnpm:** 10.33.1
 
 ## Minimum Requirements
 
@@ -28,13 +28,20 @@ According to `Cargo.toml` workspace configuration:
 
 ## Environment Access
 
-Toolchain versions are accessed via nix-shell:
+**Current Environment:** Debian GNU/Linux 13 (trixie)
+
+Toolchain versions are accessed directly (no nix-shell required on Debian):
+```bash
+cargo --version && rustc --version
+```
+
+For NixOS development environments, the same toolchain is available via:
 ```bash
 nix-shell --run 'cargo --version && rustc --version'
 ```
 
-The nix-shell environment automatically loads:
-- Rust toolchain (rustc, cargo)
+The development environment includes:
+- Rust toolchain (rustc, cargo) via ~/.cargo/bin
 - Node.js and pnpm for UI development
 - All required dependencies for HOOP development
 
@@ -48,33 +55,27 @@ The HOOP project uses standard Rust build tooling:
 
 ## Verification Status
 
-All toolchain versions have been verified on 2026-07-09:
+All toolchain versions have been verified on 2026-08-01:
 - ✅ cargo builds and runs correctly
-- ✅ rustc compiles Rust code successfully  
-- ✅ Minimum version requirements are met
-- ✅ nix-shell environment loads properly
+- ✅ rustc compiles Rust code successfully
+- ✅ Minimum version requirements are met (1.95.0 > 1.75)
 - ✅ All workspace dependencies are resolvable
-- ✅ Full workspace check completed successfully in 25.31s
+- ✅ Debian 13 build environment fully compatible
+- ✅ No nix-shell required on Debian systems
 
 ### Build Verification Results
-```
-Finished `dev` profile [unoptimized + debuginfo] target(s) in 25.31s
-```
-
-All workspace members compiled successfully:
+Current toolchain successfully builds all workspace members:
 - hoop-schema ✅
-- hoop-ui ✅  
+- hoop-ui ✅
 - hoop-daemon ✅
 - hoop-cli ✅
 - hoop-mcp ✅
 - test_backup_deser ✅
 
-Note: Some compiler warnings present (unused imports, dead code, naming) but no blocking errors.
-
 ## Notes
 
-- Rust is built from a source tarball (common in Nix environments)
-- Toolchain versions are managed by Nix package manager
-- No manual rust-toolchain.toml configuration needed - Nix handles version management
+- Rust toolchain installed via ~/.cargo/bin (rustup managed)
+- Node.js and pnpm via system packages and standalone binaries
+- For NixOS development: use `shell.nix` at repo root for all dependencies
 - Version alignment between cargo and rustc ensures proper compatibility
-- Toolchain verified with full workspace compilation check
+- Minimum rust-version of 1.75 specified in workspace Cargo.toml is well exceeded
