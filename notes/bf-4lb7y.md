@@ -21,9 +21,16 @@ pub struct ScriptRunRequest {
 }
 ```
 
-## Cargo Check Result
+## Cargo Check Result (Verified 2026-08-01)
 
-Ran `cargo check -p hoop-daemon` - **passes with no errors**.
+Ran `cargo check --workspace` - **passes with no errors**.
+
+```bash
+$ cargo check --workspace
+✓ cargo check passed
+```
+
+Ran `cargo check -p hoop-daemon --lib` - **passes with no errors**.
 
 No changes were required - the task was already completed in previous commits:
 - 60c9f01: "fix: Add ToSchema trait import to api_scripts.rs"
