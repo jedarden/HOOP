@@ -38,8 +38,7 @@ pub struct ReflectionsResponse {
 }
 
 /// Request to approve a proposal
-#[derive(Debug, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct ApproveProposalRequest {
     /// Optional comment on the approval
     pub comment: Option<String>,
@@ -56,8 +55,7 @@ pub struct ApproveProposalResponse {
 }
 
 /// Request to reject a proposal
-#[derive(Debug, Deserialize)]
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct RejectProposalRequest {
     /// Optional reason for rejection
     pub reason: Option<String>,
