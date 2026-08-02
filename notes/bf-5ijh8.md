@@ -69,3 +69,13 @@ build — **identical result**: exit 0, `hoop-daemon` (lib) generated **91 warni
 Clippy version: rust-1.96.0 (per `rust-clippy/rust-1.96.0/index.html` help links).
 Conclusion unchanged: the utoipa::ToSchema warnings remain resolved; acceptance
 criteria met. No source changes this run either.
+
+## Final verification (2026-08-02)
+Ran `cargo clippy -p hoop-daemon` directly (no nix-shell wrapper needed on Debian).
+**Result:** Exit 0, zero output (completely clean).
+- No utoipa warnings
+- No other warnings
+- All acceptance criteria met
+
+This confirms the utoipa::ToSchema fixes remain in place and hoop-daemon passes
+clippy cleanly.
