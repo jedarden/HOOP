@@ -58,7 +58,7 @@ hoop-daemon/.fastembed_cache/
 .beads/beads.db.backup.*
 
 # Per-bead worker scratch at repo root (not part of plan layout)
-notes/
+/notes/
 
 # Test output logs
 logs/tests/
