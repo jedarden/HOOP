@@ -123,3 +123,29 @@ fn test_output_flush_behavior() {
 
     println!("=== Flush behavior test completed ===");
 }
+
+#[test]
+fn test_substantial_stdout_generation() {
+    println!("=== Testing substantial stdout generation (>10KB) ===");
+
+    // Generate >10KB of stdout output with verifiable content
+    let lines_to_generate = 200; // Each line ~70 bytes => ~14KB total
+    let mut generated_content = String::new();
+
+    for i in 0..lines_to_generate {
+        let line = format!("STDOUT_LINE_{:04} - This is line {} of the substantial stdout generation test - verifying no truncation occurs", i, i);
+        generated_content.push_str(&line);
+        generated_content.push('\n');
+        println!("{}", line);
+    }
+
+    // Flush to ensure all output is written
+    io::stdout().flush().unwrap();
+
+    // Log verification information for the wrapper script
+    eprintln!("VERIFICATION_METADATA: Generated {} lines (~{} bytes)", lines_to_generate, generated_content.len());
+    eprintln!("VERIFICATION_METADATA: First line: {}", generated_content.lines().next().unwrap_or("N/A"));
+    eprintln!("VERIFICATION_METADATA: Last line: {}", generated_content.lines().last().unwrap_or("N/A"));
+
+    println!("=== Substantial stdout generation test completed - Generated {} bytes ===", generated_content.len());
+}
