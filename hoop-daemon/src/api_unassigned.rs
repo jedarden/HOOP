@@ -12,6 +12,7 @@
 //! §5.4 Session tailer filtering
 
 use crate::sessions::{create_all_adapters, SessionAdapter};
+use crate::atomic_write;
 use anyhow::{Context, Result};
 use axum::{
     extract::{Path as AxumPath, State},
@@ -24,7 +25,6 @@ use hoop_schema::ParsedSession;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -168,16 +168,10 @@ impl UnassignedTracker {
         let path = self.hoop_home.join(IGNORE_LIST_PATH);
         let ids: Vec<String> = self.ignored.lock().unwrap().iter().cloned().collect();
 
-        // Ensure directory exists
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create directory {}", parent.display()))?;
-        }
+        let json = serde_json::to_vec_pretty(&ids)
+            .with_context(|| format!("Failed to serialize ignore list: {}", path.display()))?;
 
-        let file = fs::File::create(&path)
-            .with_context(|| format!("Failed to create ignore list at {}", path.display()))?;
-        let writer = BufWriter::new(file);
-        serde_json::to_writer_pretty(writer, &ids)
+        atomic_write::atomic_write_file(&path, &json)
             .with_context(|| format!("Failed to write ignore list to {}", path.display()))?;
         Ok(())
     }

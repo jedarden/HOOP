@@ -10,11 +10,11 @@ use crate::agent_adapter::{
     SpawnConfig,
 };
 use crate::agent_context;
+use crate::atomic_write;
 use crate::fleet;
 use crate::metrics;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
@@ -871,11 +871,6 @@ fn turn_context_path() -> Result<PathBuf> {
 fn write_turn_context(session_id: &str, turn_id: &str) -> Result<()> {
     let path = turn_context_path()?;
 
-    // Ensure .hoop directory exists
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
     let ctx = TurnContext {
         session_id: session_id.to_string(),
         turn_id: turn_id.to_string(),
@@ -884,7 +879,7 @@ fn write_turn_context(session_id: &str, turn_id: &str) -> Result<()> {
     let json = serde_json::to_string_pretty(&ctx)
         .map_err(|e| anyhow::anyhow!("Failed to serialize turn context: {}", e))?;
 
-    fs::write(&path, json)
+    atomic_write::atomic_write_file_str(&path, &json)
         .map_err(|e| anyhow::anyhow!("Failed to write turn context: {}", e))?;
 
     info!(
