@@ -64,6 +64,7 @@ fn test_insert_draft_creates_no_beads() {
         created_at: chrono::Utc::now().to_rfc3339(),
         source: "agent".to_string(),
         agent_session_id: Some("sess-abc123".to_string()),
+        turn_id: None,
         status: "pending".to_string(),
         version: 1,
         original_json: None,
@@ -72,6 +73,10 @@ fn test_insert_draft_creates_no_beads() {
         rejection_reason: None,
         stitch_id: None,
         preview_json: None,
+        opened_by: None,
+        opened_at: None,
+        last_autosave_at: None,
+        abandoned_at: None,
     };
 
     hoop_daemon::fleet::insert_draft(&draft).expect("insert draft");
@@ -106,6 +111,7 @@ fn test_agent_source_preserved_in_draft() {
         created_at: chrono::Utc::now().to_rfc3339(),
         source: "agent".to_string(),
         agent_session_id: Some("sess-worker3".to_string()),
+        turn_id: None,
         status: "pending".to_string(),
         version: 1,
         original_json: None,
@@ -114,6 +120,10 @@ fn test_agent_source_preserved_in_draft() {
         rejection_reason: None,
         stitch_id: None,
         preview_json: None,
+        opened_by: None,
+        opened_at: None,
+        last_autosave_at: None,
+        abandoned_at: None,
     };
 
     hoop_daemon::fleet::insert_draft(&draft).expect("insert draft");
@@ -150,6 +160,7 @@ fn test_drafts_persist_across_simulated_restart() {
         created_at: chrono::Utc::now().to_rfc3339(),
         source: "agent".to_string(),
         agent_session_id: None,
+        turn_id: None,
         status: "pending".to_string(),
         version: 1,
         original_json: None,
@@ -158,6 +169,10 @@ fn test_drafts_persist_across_simulated_restart() {
         rejection_reason: None,
         stitch_id: None,
         preview_json: None,
+        opened_by: None,
+        opened_at: None,
+        last_autosave_at: None,
+        abandoned_at: None,
     };
 
     let draft2 = hoop_daemon::fleet::DraftRow {
@@ -173,6 +188,7 @@ fn test_drafts_persist_across_simulated_restart() {
         created_at: chrono::Utc::now().to_rfc3339(),
         source: "agent".to_string(),
         agent_session_id: None,
+        turn_id: None,
         status: "edited".to_string(),
         version: 2,
         original_json: None,
@@ -181,6 +197,10 @@ fn test_drafts_persist_across_simulated_restart() {
         rejection_reason: None,
         stitch_id: None,
         preview_json: None,
+        opened_by: None,
+        opened_at: None,
+        last_autosave_at: None,
+        abandoned_at: None,
     };
 
     hoop_daemon::fleet::insert_draft(&draft1).expect("insert draft1");
@@ -229,6 +249,7 @@ fn test_list_drafts_filters_by_status() {
             created_at: chrono::Utc::now().to_rfc3339(),
             source: "agent".to_string(),
             agent_session_id: None,
+            turn_id: None,
             status: status.to_string(),
             version: 1,
             original_json: None,
@@ -237,6 +258,10 @@ fn test_list_drafts_filters_by_status() {
             rejection_reason: None,
             stitch_id: None,
             preview_json: None,
+            opened_by: None,
+            opened_at: None,
+            last_autosave_at: None,
+            abandoned_at: None,
         };
         hoop_daemon::fleet::insert_draft(&draft).expect("insert draft");
     }
@@ -283,6 +308,7 @@ fn test_audit_row_written_on_draft_created() {
         created_at: chrono::Utc::now().to_rfc3339(),
         source: "agent".to_string(),
         agent_session_id: None,
+        turn_id: None,
         status: "pending".to_string(),
         version: 1,
         original_json: None,
@@ -291,6 +317,10 @@ fn test_audit_row_written_on_draft_created() {
         rejection_reason: None,
         stitch_id: None,
         preview_json: None,
+        opened_by: None,
+        opened_at: None,
+        last_autosave_at: None,
+        abandoned_at: None,
     };
 
     hoop_daemon::fleet::insert_draft(&draft).expect("insert draft");
@@ -426,6 +456,7 @@ fn test_rejection_with_reason() {
         created_at: chrono::Utc::now().to_rfc3339(),
         source: "agent".to_string(),
         agent_session_id: None,
+        turn_id: None,
         status: "pending".to_string(),
         version: 1,
         original_json: None,
@@ -434,6 +465,10 @@ fn test_rejection_with_reason() {
         rejection_reason: None,
         stitch_id: None,
         preview_json: None,
+        opened_by: None,
+        opened_at: None,
+        last_autosave_at: None,
+        abandoned_at: None,
     };
 
     hoop_daemon::fleet::insert_draft(&draft).expect("insert draft");
@@ -578,6 +613,7 @@ fn test_edit_increments_version_and_stores_original() {
         created_at: chrono::Utc::now().to_rfc3339(),
         source: "agent".to_string(),
         agent_session_id: None,
+        turn_id: None,
         status: "pending".to_string(),
         version: 1,
         original_json: None,
@@ -586,6 +622,10 @@ fn test_edit_increments_version_and_stores_original() {
         rejection_reason: None,
         stitch_id: None,
         preview_json: None,
+        opened_by: None,
+        opened_at: None,
+        last_autosave_at: None,
+        abandoned_at: None,
     };
 
     hoop_daemon::fleet::insert_draft(&draft).expect("insert draft");
@@ -634,6 +674,7 @@ fn test_approved_draft_records_stitch_id() {
         created_at: chrono::Utc::now().to_rfc3339(),
         source: "agent".to_string(),
         agent_session_id: None,
+        turn_id: None,
         status: "pending".to_string(),
         version: 1,
         original_json: None,
@@ -642,6 +683,10 @@ fn test_approved_draft_records_stitch_id() {
         rejection_reason: None,
         stitch_id: None,
         preview_json: None,
+        opened_by: None,
+        opened_at: None,
+        last_autosave_at: None,
+        abandoned_at: None,
     };
 
     hoop_daemon::fleet::insert_draft(&draft).expect("insert draft");

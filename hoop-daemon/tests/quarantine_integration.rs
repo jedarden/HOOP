@@ -158,7 +158,7 @@ fn per_adapter_parse_error_isolation() {
     let mut f = fs::File::create(&gemini_file).unwrap();
     writeln!(f, r#"{{"type":"metadata","session_id":"gemini-456","cwd":"/tmp"}}"#).unwrap();
     writeln!(f, r#"{{"type":"message","role":"user","content":"Hello Gemini","timestamp":"2025-01-01T00:00:00Z"}}"#).unwrap();
-    writeln!(f, "INVALID JSON IN GEMINI {{{").unwrap();
+    writeln!(f, "INVALID JSON IN GEMHI {{{{").unwrap();
     writeln!(f, r#"{{"type":"message","role":"assistant","content":"Hi from Gemini","timestamp":"2025-01-01T00:00:01Z"}}"#).unwrap();
     drop(f);
 

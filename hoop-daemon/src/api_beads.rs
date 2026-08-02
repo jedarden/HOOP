@@ -1094,7 +1094,78 @@ mod tests {
 
     #[test]
     fn test_resolve_actor_fallback() {
-        let actor = resolve_actor(None);
+        let state = crate::DaemonState {
+            config: crate::Config::default(),
+            started_at: tokio::time::Instant::now(),
+            worker_registry: std::sync::Arc::new(crate::ws::WorkerRegistry::new()),
+            beads: std::sync::Arc::new(std::sync::RwLock::new(Vec::new())),
+            bead_tx: tokio::sync::broadcast::channel(1).0,
+            stitch_tx: tokio::sync::broadcast::channel(1).0,
+            shutdown: std::sync::Arc::new(crate::shutdown::ShutdownCoordinator::new()),
+            supervisor: std::sync::Arc::new(crate::supervisor::ProjectSupervisor::new(
+                tokio::sync::broadcast::channel(1).0,
+                tokio::sync::broadcast::channel(1).0,
+                std::sync::Arc::new(crate::ws::WorkerRegistry::new()),
+                std::sync::Arc::new(std::sync::RwLock::new(Vec::new())),
+                std::sync::Arc::new(crate::shutdown::ShutdownCoordinator::new()),
+                std::sync::Arc::new(std::sync::RwLock::new(
+                    crate::cost::CostAggregator::new("/tmp/test-cost.db".into()).expect("cost aggregator"),
+                )),
+                std::sync::Arc::new(std::sync::RwLock::new(crate::vector_index::VectorIndex::new())),
+                std::path::PathBuf::from("/tmp/test-scripts"),
+                std::sync::Arc::new(std::sync::Mutex::new(crate::stuck_detector::StuckDetector::new())),
+            )),
+            projects: std::sync::Arc::new(std::sync::RwLock::new(Vec::new())),
+            project_metadata: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+            config_status_tx: tokio::sync::broadcast::channel(1).0,
+            config_status: std::sync::Arc::new(std::sync::RwLock::new(crate::ws::ConfigStatusData::default())),
+            project_status_tx: tokio::sync::broadcast::channel(1).0,
+            capacity_tx: tokio::sync::broadcast::channel(1).0,
+            cost_aggregator: std::sync::Arc::new(std::sync::RwLock::new(
+                crate::cost::CostAggregator::new("/tmp/test-cost.db".into()).expect("cost aggregator"),
+            )),
+            transcription_service: None,
+            upload_registry: std::sync::Arc::new(
+                crate::uploads::UploadRegistry::new(crate::uploads::UploadConfig::default())
+                    .expect("upload registry"),
+            ),
+            active_project: std::sync::Arc::new(std::sync::RwLock::new(None)),
+            vector_index: std::sync::Arc::new(std::sync::RwLock::new(crate::vector_index::VectorIndex::new())),
+            agent_session_manager: None,
+            morning_brief_runner: None,
+            script_scheduler: None,
+            brief_tx: tokio::sync::broadcast::channel(1).0,
+            draft_tx: tokio::sync::broadcast::channel(1).0,
+            resolved_config: std::sync::Arc::new(crate::config_resolver::ResolvedConfig::default()),
+            ws_connection_tracker: std::sync::Arc::new(crate::ws::WsConnectionTracker::new()),
+            worker_ack_monitor: std::sync::Arc::new(crate::worker_ack::WorkerAckMonitor::new()),
+            collision_alert_tx: tokio::sync::broadcast::channel(1).0,
+            pattern_tx: tokio::sync::broadcast::channel(1).0,
+            bead_created_by_hoop_tx: tokio::sync::broadcast::channel(1).0,
+            saturation_alert_tx: tokio::sync::broadcast::channel(1).0,
+            presence_tx: tokio::sync::broadcast::channel(1).0,
+            reflection_tx: tokio::sync::broadcast::channel(1).0,
+            redaction_policy_state: std::sync::Arc::new(tokio::sync::RwLock::new(
+                crate::redaction_policy::RedactionPolicyState::new(
+                    crate::config_resolver::ResolvedConfig::default(),
+                    std::sync::Arc::new(std::sync::RwLock::new(Vec::new())),
+                ),
+            )),
+            stuck_detector: std::sync::Arc::new(std::sync::Mutex::new(crate::stuck_detector::StuckDetector::new())),
+            backup_runner: None,
+            template_library: template_library::TemplateStore::new(),
+            prompt_library: api_prompts::PromptStore::new(),
+            note_library: api_notes::NoteStore::new(),
+            skill_library: api_skills::SkillStore::new(),
+            script_library: api_scripts::ScriptStore::new(),
+            identity_cache: std::sync::Arc::new(crate::identity::IdentityCache::default()),
+            role_resolver: std::sync::Arc::new(crate::auth::RoleResolver::default()),
+            unassigned_tracker: None,
+            reflection_detection_state: None,
+            br_semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(10)),
+            br_semaphore_target_permits: std::sync::Arc::new(std::sync::RwLock::new(10)),
+        };
+        let actor = resolve_actor(None, &state);
         assert!(actor.starts_with("os:"));
     }
 

@@ -303,6 +303,7 @@ async fn test_health_check_not_ready_when_all_failed() {
         },
         workspace_count: 1,
         bead_count: 0,
+        worker_count: 0,
     }];
 
     assert!(!is_ready(&all_failed), "Should not be ready when all failed");
@@ -316,6 +317,7 @@ async fn test_health_check_not_ready_when_all_failed() {
         },
         workspace_count: 1,
         bead_count: 0,
+        worker_count: 0,
     }];
 
     assert!(!is_ready(&all_error), "Should not be ready when all in error state");
@@ -329,6 +331,7 @@ async fn test_health_check_not_ready_when_all_failed() {
         },
         workspace_count: 1,
         bead_count: 0,
+        worker_count: 0,
     }];
 
     assert!(!is_ready(&all_abandoned), "Should not be ready when all abandoned");
@@ -349,6 +352,7 @@ async fn test_health_check_ready_with_one_healthy() {
             },
             workspace_count: 1,
             bead_count: 0,
+            worker_count: 0,
         },
         ProjectRuntimeStatus {
             project_name: "healthy-project".to_string(),
@@ -356,6 +360,7 @@ async fn test_health_check_ready_with_one_healthy() {
             state: ProjectRuntimeState::Healthy,
             workspace_count: 1,
             bead_count: 0,
+            worker_count: 0,
         },
         ProjectRuntimeStatus {
             project_name: "error-project".to_string(),
@@ -366,6 +371,7 @@ async fn test_health_check_ready_with_one_healthy() {
             },
             workspace_count: 1,
             bead_count: 0,
+            worker_count: 0,
         },
     ];
 
@@ -384,6 +390,7 @@ async fn test_health_check_ready_with_one_healthy() {
             },
             workspace_count: 1,
             bead_count: 0,
+            worker_count: 0,
         },
         ProjectRuntimeStatus {
             project_name: "starting-project".to_string(),
@@ -391,6 +398,7 @@ async fn test_health_check_ready_with_one_healthy() {
             state: ProjectRuntimeState::Starting,
             workspace_count: 1,
             bead_count: 0,
+            worker_count: 0,
         },
     ];
 

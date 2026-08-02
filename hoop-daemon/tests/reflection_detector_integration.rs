@@ -499,12 +499,12 @@ fn test_reflection_injection_audit() {
     // Insert approved reflection rules
     let rule1_id = uuid::Uuid::new_v4().to_string();
     let rule2_id = uuid::Uuid::new_v4().to_string();
-    let now = "2026-04-26T10:00:00Z";
+    let now = "2026-04-26T10:00:00Z".to_string();
 
     conn.execute(
         "INSERT INTO reflection_ledger (id, scope, rule, reason, status, created_at, last_applied, applied_count)
          VALUES (?1, 'global', 'always run tests before closing', 'operator repeated 3 times', 'approved', ?2, NULL, 0)",
-        [rule1_id.clone(), now],
+        [rule1_id.clone(), now.clone()],
     ).unwrap();
 
     conn.execute(

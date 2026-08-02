@@ -29,6 +29,7 @@ fn create_test_project(name: &str, path: PathBuf) -> ProjectsRegistryProjectsIte
         canonical_path: None,
         label: None,
         color: None,
+        redaction: None,
     }
 }
 
@@ -340,6 +341,7 @@ async fn test_shutdown_with_permanent_error_state() {
         canonical_path: None,
         label: None,
         color: None,
+        redaction: None,
     };
 
     let config = create_test_config(vec![invalid_project]);

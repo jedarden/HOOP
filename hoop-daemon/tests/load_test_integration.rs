@@ -9,6 +9,7 @@
 //!
 //! Plan reference: §10 Phase 2 exit gate | §6 Phase 6 deliverable 9
 
+use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -63,7 +64,7 @@ async fn load_test_daemon_boots_with_synthetic_data() {
         ..Default::default()
     };
 
-    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg| {
+    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg: &mut Config| {
         // Populate testrepo with load test data before daemon boots
         setup_load_test_projects(cfg, config.clone());
     }))
@@ -92,7 +93,7 @@ async fn load_test_api_latency_within_budget() {
         ..Default::default()
     };
 
-    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg| {
+    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg: &mut Config| {
         setup_load_test_projects(cfg, config.clone());
     }))
     .await
@@ -159,7 +160,7 @@ async fn load_test_memory_within_ceiling() {
         ..Default::default()
     };
 
-    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg| {
+    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg: &mut Config| {
         setup_load_test_projects(cfg, config.clone());
     }))
     .await
@@ -211,7 +212,7 @@ async fn load_test_concurrent_requests_within_budget() {
         ..Default::default()
     };
 
-    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg| {
+    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg: &mut Config| {
         setup_load_test_projects(cfg, config.clone());
     }))
     .await
@@ -278,7 +279,7 @@ async fn load_test_websocket_fanout_within_budget() {
         ..Default::default()
     };
 
-    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg| {
+    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg: &mut Config| {
         setup_load_test_projects(cfg, config.clone());
     }))
     .await
@@ -337,7 +338,7 @@ async fn load_test_full_scale_performance_budgets() {
         ..Default::default()
     };
 
-    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg| {
+    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg: &mut Config| {
         setup_load_test_projects(cfg, config.clone());
     }))
     .await
@@ -459,7 +460,7 @@ async fn load_test_ci_performance_budgets() {
     println!();
 
     // Spawn daemon with load test data
-    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg| {
+    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg: &mut Config| {
         setup_load_test_projects(cfg, config.clone());
     }))
     .await
@@ -520,7 +521,7 @@ mod benchmark_tests {
 
         let start = std::time::Instant::now();
 
-        let _ = spawn_test_daemon_with_config(Some(|cfg| {
+        let _ = spawn_test_daemon_with_config(Some(|cfg: &mut Config| {
             setup_load_test_projects(cfg, config.clone());
         }))
         .await
@@ -549,7 +550,7 @@ mod benchmark_tests {
             ..Default::default()
         };
 
-        let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg| {
+        let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg: &mut Config| {
             setup_load_test_projects(cfg, config.clone());
         }))
         .await

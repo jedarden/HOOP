@@ -18,17 +18,20 @@
 //!
 //! Plan reference: §6 Phase 2 success, §3.9
 
+mod integration_harness;
+
 use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 use tempfile::TempDir;
 use tokio::time::sleep;
 
-use hoop_daemon::integration_harness::spawn_test_daemon_with_config;
+use integration_harness::{spawn_test_daemon, spawn_test_daemon_with_config};
 use hoop_daemon::Config;
+use hoop_schema::ReadinessResponse;
 
 /// Create a temporary project directory with .beads subdirectory
-fn setup_project_dir(name: &str) -> anyhow::Result<(TempDir, PathBuf)> {
+fn setup_project_dir(_name: &str) -> anyhow::Result<(TempDir, PathBuf)> {
     let project_dir = tempfile::tempdir()?;
     let project_path = project_dir.path().to_path_buf();
 
@@ -65,22 +68,6 @@ projects:
     )
 }
 
-/// Readiness response from /readyz endpoint
-#[derive(Debug, serde::Deserialize)]
-struct ReadinessResponse {
-    status: String,
-    #[serde(default)]
-    degraded: Vec<DegradedProject>,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct DegradedProject {
-    project: String,
-    state: String,
-    #[serde(default)]
-    error: Option<String>,
-}
-
 /// Project status from /api/projects endpoint
 #[derive(Debug, serde::Deserialize)]
 struct ProjectStatus {
@@ -97,18 +84,30 @@ async fn test_beads_deletion_readyz_degraded() {
     let (project_b_dir, project_b_path) = setup_project_dir("project-b").unwrap();
     let (project_c_dir, project_c_path) = setup_project_dir("project-c").unwrap();
 
-    // Create projects.yaml referencing all three projects
-    let projects_yaml = create_projects_yaml(&[
-        ("project-a", project_a_path.clone()),
-        ("project-b", project_b_path),
-        ("project-c", project_c_path),
-    ]);
+    // Store project paths as strings for use in the closure
+    let project_a_str = project_a_path.to_string_lossy().to_string();
+    let project_b_str = project_b_path.to_string_lossy().to_string();
+    let project_c_str = project_c_path.to_string_lossy().to_string();
 
     // Spawn daemon with custom projects configuration
-    let (base_url, _daemon) = spawn_test_daemon_with_config::<fn(&mut Config)>(Some(|config| {
-        // Override projects.yaml after temp dir is created
-        let hoop_dir = PathBuf::from(std::env::var("HOME").unwrap()).join(".hoop");
-        fs::write(hoop_dir.join("projects.yaml"), &projects_yaml)
+    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(move |config: &mut Config| {
+        // Create projects.yaml referencing all three projects
+        let projects_yaml = format!(
+            r#"---
+projects:
+  - name: project-a
+    path: "{}"
+  - name: project-b
+    path: "{}"
+  - name: project-c
+    path: "{}"
+"#,
+            project_a_str, project_b_str, project_c_str
+        );
+
+        // Write custom projects.yaml to the test's .hoop directory
+        let hoop_dir = config.control_socket_path.parent().unwrap();
+        fs::write(hoop_dir.join("projects.yaml"), projects_yaml)
             .expect("Failed to write projects.yaml");
     }))
     .await
@@ -287,17 +286,30 @@ async fn test_beads_deletion_sibling_events_continue() {
     let (project_b_dir, project_b_path) = setup_project_dir("project-b").unwrap();
     let (project_c_dir, project_c_path) = setup_project_dir("project-c").unwrap();
 
-    // Create projects.yaml
-    let projects_yaml = create_projects_yaml(&[
-        ("project-a", project_a_path.clone()),
-        ("project-b", project_b_path),
-        ("project-c", project_c_path),
-    ]);
+    // Store project paths as strings for use in the closure
+    let project_a_str = project_a_path.to_string_lossy().to_string();
+    let project_b_str = project_b_path.to_string_lossy().to_string();
+    let project_c_str = project_c_path.to_string_lossy().to_string();
 
     // Spawn daemon
-    let (base_url, _daemon) = spawn_test_daemon_with_config::<fn(&mut Config)>(Some(|config| {
-        let hoop_dir = PathBuf::from(std::env::var("HOME").unwrap()).join(".hoop");
-        fs::write(hoop_dir.join("projects.yaml"), &projects_yaml)
+    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(move |config: &mut Config| {
+        // Create projects.yaml referencing all three projects
+        let projects_yaml = format!(
+            r#"---
+projects:
+  - name: project-a
+    path: "{}"
+  - name: project-b
+    path: "{}"
+  - name: project-c
+    path: "{}"
+"#,
+            project_a_str, project_b_str, project_c_str
+        );
+
+        // Write custom projects.yaml to the test's .hoop directory
+        let hoop_dir = config.control_socket_path.parent().unwrap();
+        fs::write(hoop_dir.join("projects.yaml"), projects_yaml)
             .expect("Failed to write projects.yaml");
     }))
     .await
@@ -320,7 +332,7 @@ async fn test_beads_deletion_sibling_events_continue() {
     // Record baseline metrics for sibling projects
     let metrics_url = format!("{}/api/metrics", base_url);
     let resp_before = client.get(&metrics_url).send().await.unwrap();
-    let metrics_before = resp_before.text().await.unwrap();
+    let _metrics_before = resp_before.text().await.unwrap();
 
     // Delete project A's .beads directory
     let beads_a_path = project_a_path.join(".beads");
@@ -393,7 +405,7 @@ async fn test_beads_deletion_sibling_events_continue() {
 #[tokio::test]
 async fn test_readyz_response_format() {
     // Verify /readyz response format is correct
-    let (base_url, _daemon) = spawn_test_daemon_with_config::<fn(&mut Config)>(None)
+    let (base_url, _daemon) = spawn_test_daemon()
         .await
         .expect("Failed to spawn daemon");
 

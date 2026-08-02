@@ -100,13 +100,12 @@ mod event_ordering {
     /// 1. First try reducing the number of events in the stream
     /// 2. Then try reducing the time gaps between events
     /// 3. Finally try simplifying the event types (e.g., Claim → Claim)
-    #[cfg_attr(not(miri), test)]
-    fn proptest_event_ordering_per_bead() {
-        // Strategy: generate a list of events for a single bead with increasing timestamps
-        proptest!((
+    proptest! {
+        #[cfg_attr(not(miri), test)]
+        fn proptest_event_ordering_per_bead(
             num_events in 0usize..100,
             time_gaps in prop::collection::vec(1u64..1000u64, 0..100)
-        )| {
+        ) {
             // The invariant: timestamps must be non-decreasing
             let mut ts = Utc::now();
             let mut prev_ts: Option<DateTime<Utc>> = None;
@@ -125,9 +124,7 @@ mod event_ordering {
                 }
                 prev_ts = Some(ts);
             }
-
-            Ok(())
-        });
+        }
     }
 
     /// Proptest: worker events maintain causal ordering
@@ -145,21 +142,21 @@ mod event_ordering {
     /// Failing cases shrink to:
     /// 1. Minimal event sequence (e.g., just ["Complete"] without Claim/Dispatch)
     /// 2. Minimal time deltas
-    #[test]
-    fn proptest_worker_causal_ordering() {
-        // Strategy: generate a sequence of events
-        let event_strategy = prop_oneof![
-            Just("Claim"),
-            Just("Dispatch"),
-            Just("Complete"),
-            Just("Fail"),
-            Just("Timeout"),
-            Just("Crash"),
-        ];
-
-        proptest!((
-            events in prop::collection::vec(event_strategy, 0..20)
-        )| {
+    proptest! {
+        #[test]
+        fn proptest_worker_causal_ordering(
+            events in prop::collection::vec(
+                prop_oneof![
+                    Just("Claim"),
+                    Just("Dispatch"),
+                    Just("Complete"),
+                    Just("Fail"),
+                    Just("Timeout"),
+                    Just("Crash"),
+                ],
+                0..20
+            )
+        ) {
             // Verify causal ordering: Claim → Dispatch → Terminal
             let mut claimed: Option<String> = None;
             let mut dispatched: Option<String> = None;
@@ -202,9 +199,7 @@ mod event_ordering {
                     _ => {}
                 }
             }
-
-            Ok(())
-        });
+        }
     }
 
     /// Unit test: verify the event tailer preserves order
@@ -312,38 +307,32 @@ mod status_monotonicity {
     /// 1. Minimal context (0 beads)
     /// 2. Simple bead types (Task vs Review)
     /// 3. Minimal time differences
-    #[test]
-    fn proptest_stitch_status_purity() {
-        // Strategy for generating bead counts
-        let bead_count_strategy = 0usize..20;
-
-        // Strategy for bead types
-        let bead_type_strategy = prop_oneof![
-            Just(BeadType::Task),
-            Just(BeadType::Bug),
-            Just(BeadType::Review),
-            Just(BeadType::Genesis),
-        ];
-
-        // Strategy for bead status
-        let bead_status_strategy = prop_oneof![
-            Just(BeadStatus::Open),
-            Just(BeadStatus::Closed),
-        ];
-
-        // Strategy for optional claimed_by
-        let claimed_by_strategy = prop::option::of("[a-z]{3,10}");
-
-        proptest!((
-            num_beads in bead_count_strategy,
-            bead_types in prop::collection::vec(bead_type_strategy, 0..20),
-            bead_statuses in prop::collection::vec(bead_status_strategy, 0..20),
-            claimed_by in prop::collection::vec(claimed_by_strategy, 0..20),
+    proptest! {
+        #[test]
+        fn proptest_stitch_status_purity(
+            num_beads in 0usize..20,
+            bead_types in prop::collection::vec(
+                prop_oneof![
+                    Just(BeadType::Task),
+                    Just(BeadType::Bug),
+                    Just(BeadType::Review),
+                    Just(BeadType::Genesis),
+                ],
+                0..20
+            ),
+            bead_statuses in prop::collection::vec(
+                prop_oneof![
+                    Just(BeadStatus::Open),
+                    Just(BeadStatus::Closed),
+                ],
+                0..20
+            ),
+            claimed_by in prop::collection::vec(prop::option::of("[a-z]{3,10}"), 0..20),
             has_last_message in any::<bool>(),
             has_last_streaming in any::<bool>(),
             minutes_ago_streaming in 0u64..60,
             days_ago_message in 0u64..100
-        )| {
+        ) {
             // Build a StitchContext
             let now = Utc::now();
             let mut linked_beads = Vec::new();
@@ -389,9 +378,7 @@ mod status_monotonicity {
             // All calls must return the same result
             prop_assert_eq!(status1, status2, "First and second calls differ");
             prop_assert_eq!(status2, status3, "Second and third calls differ");
-
-            Ok(())
-        });
+        }
     }
 
     /// Proptest: status priority order is invariant
@@ -409,14 +396,14 @@ mod status_monotonicity {
     /// Failing cases shrink to:
     /// 1. Minimal bead sets that violate priority (e.g., 1 claimed + 1 review)
     /// 2. Minimal timing differences
-    #[test]
-    fn proptest_status_priority_order() {
-        proptest!((
+    proptest! {
+        #[test]
+        fn proptest_status_priority_order(
             has_claimed in any::<bool>(),
             has_open_review in any::<bool>(),
             has_recent_streaming in any::<bool>(),
             days_since_activity in 0u64..100
-        )| {
+        ) {
             let now = Utc::now();
             let mut linked_beads = Vec::new();
 
@@ -483,9 +470,7 @@ mod status_monotonicity {
                     status
                 );
             }
-
-            Ok(())
-        });
+        }
     }
 
     /// Proptest: quiet days is monotonic with time
@@ -503,13 +488,13 @@ mod status_monotonicity {
     /// Failing cases shrink to:
     /// 1. Minimal day sequences (e.g., day 0 → day 1)
     /// 2. Minimal activity changes
-    #[test]
-    fn proptest_quiet_days_monotonic() {
-        proptest!((
+    proptest! {
+        #[test]
+        fn proptest_quiet_days_monotonic(
             initial_days in 0u64..50,
             additional_days in 0u64..50,
             activity_occurs in any::<bool>()
-        )| {
+        ) {
             let now = Utc::now();
             let initial_ts = now - Duration::days(initial_days as i64);
 
@@ -561,9 +546,7 @@ mod status_monotonicity {
                     days_initial, days_later
                 );
             }
-
-            Ok(())
-        });
+        }
     }
 
     /// Unit test: verify status derivation is deterministic
@@ -668,56 +651,57 @@ mod replay_equals_live {
             }),
         ];
 
-        proptest!((
-            events in prop::collection::vec(event_strategy, 0..20)
-        )| {
-            // Simulate "live" processing: track events as they arrive
-            let mut live_state = Vec::new();
-            for (i, event) in events.iter().enumerate() {
-                live_state.push(format!("{:?}", event));
-            }
-
-            // Simulate "replay": write to disk, read back, parse
-            let tmp_dir = TempDir::new().unwrap();
-            let events_path = tmp_dir.path().join("events.jsonl");
-
-            {
-                let mut file = File::create(&events_path).unwrap();
-                for event in &events {
-                    let json = serde_json::to_string(event).unwrap();
-                    writeln!(file, "{}", json).unwrap();
+        proptest! {
+            #[test]
+            fn proptest_replay_equals_live_inner(
+                events in prop::collection::vec(event_strategy, 0..20)
+            ) {
+                // Simulate "live" processing: track events as they arrive
+                let mut live_state = Vec::new();
+                for (i, event) in events.iter().enumerate() {
+                    live_state.push(format!("{:?}", event));
                 }
-            }
 
-            let mut replay_state = Vec::new();
-            let file = File::open(&events_path).unwrap();
-            let reader = BufReader::new(file);
-            for (i, line) in reader.lines().enumerate() {
-                let line = line.unwrap();
-                if let Ok(event) = serde_json::from_str::<NeedleEvent>(&line) {
-                    replay_state.push(format!("{:?}", event));
+                // Simulate "replay": write to disk, read back, parse
+                let tmp_dir = TempDir::new().unwrap();
+                let events_path = tmp_dir.path().join("events.jsonl");
+
+                {
+                    let mut file = File::create(&events_path).unwrap();
+                    for event in &events {
+                        let json = serde_json::to_string(event).unwrap();
+                        writeln!(file, "{}", json).unwrap();
+                    }
                 }
-            }
 
-            // Assert: replay produces same state as live
-            prop_assert_eq!(
-                live_state.len(),
-                replay_state.len(),
-                "Event count mismatch: live={}, replay={}",
-                live_state.len(),
-                replay_state.len()
-            );
+                let mut replay_state = Vec::new();
+                let file = File::open(&events_path).unwrap();
+                let reader = BufReader::new(file);
+                for (i, line) in reader.lines().enumerate() {
+                    let line = line.unwrap();
+                    if let Ok(event) = serde_json::from_str::<NeedleEvent>(&line) {
+                        replay_state.push(format!("{:?}", event));
+                    }
+                }
 
-            for (i, (live, replay)) in live_state.iter().zip(replay_state.iter()).enumerate() {
+                // Assert: replay produces same state as live
                 prop_assert_eq!(
-                    live, replay,
-                    "Event {} mismatch: live={}, replay={}",
-                    i, live, replay
+                    live_state.len(),
+                    replay_state.len(),
+                    "Event count mismatch: live={}, replay={}",
+                    live_state.len(),
+                    replay_state.len()
                 );
-            }
 
-            Ok(())
-        });
+                for (i, (live, replay)) in live_state.iter().zip(replay_state.iter()).enumerate() {
+                    prop_assert_eq!(
+                        live, replay,
+                        "Event {} mismatch: live={}, replay={}",
+                        i, live, replay
+                    );
+                }
+            }
+        }
     }
 
     /// Proptest: replay handles partial lines correctly
@@ -742,60 +726,61 @@ mod replay_equals_live {
         // Strategy: generate valid JSON and split it arbitrarily
         let valid_event = r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-1"}"#;
 
-        proptest!((
-            split_pos in 0..valid_event.len()
-        )| {
-            // Split the event into two chunks
-            let chunk1 = &valid_event[..split_pos];
-            let chunk2 = &valid_event[split_pos..];
+        proptest! {
+            #[test]
+            fn proptest_replay_handles_partial_lines_inner(
+                split_pos in 0..valid_event.len()
+            ) {
+                // Split the event into two chunks
+                let chunk1 = &valid_event[..split_pos];
+                let chunk2 = &valid_event[split_pos..];
 
-            // Simulate line-buffered reader with partial line carry-over
-            let mut buffer = String::new();
-            let mut parsed_events = Vec::new();
+                // Simulate line-buffered reader with partial line carry-over
+                let mut buffer = String::new();
+                let mut parsed_events = Vec::new();
 
-            // Feed chunk 1 (partial or complete)
-            buffer.push_str(chunk1);
-            if buffer.ends_with('\n') || buffer.contains('\n') {
-                // We have a complete line
-                if let Ok(_) = serde_json::from_str::<NeedleEvent>(&buffer.trim()) {
-                    parsed_events.push(buffer.clone());
-                }
-                buffer.clear();
-            }
-
-            // Feed chunk 2 (completion)
-            buffer.push_str(chunk2);
-            if buffer.ends_with('\n') || !buffer.is_empty() {
-                // Try to parse
-                let trimmed = buffer.trim();
-                if !trimmed.is_empty() {
-                    if let Ok(_) = serde_json::from_str::<NeedleEvent>(trimmed) {
+                // Feed chunk 1 (partial or complete)
+                buffer.push_str(chunk1);
+                if buffer.ends_with('\n') || buffer.contains('\n') {
+                    // We have a complete line
+                    if let Ok(_) = serde_json::from_str::<NeedleEvent>(&buffer.trim()) {
                         parsed_events.push(buffer.clone());
                     }
+                    buffer.clear();
+                }
+
+                // Feed chunk 2 (completion)
+                buffer.push_str(chunk2);
+                if buffer.ends_with('\n') || !buffer.is_empty() {
+                    // Try to parse
+                    let trimmed = buffer.trim();
+                    if !trimmed.is_empty() {
+                        if let Ok(_) = serde_json::from_str::<NeedleEvent>(trimmed) {
+                            parsed_events.push(buffer.clone());
+                        }
+                    }
+                }
+
+                // If the split was at a valid boundary, we should have parsed the event
+                let split_at_boundary = split_pos == 0 || split_pos == valid_event.len();
+
+                if split_at_boundary {
+                    prop_assert_eq!(
+                        parsed_events.len(),
+                        1,
+                        "Should have parsed exactly 1 event when split at boundary (split_pos={})",
+                        split_pos
+                    );
+                } else {
+                    // Split in the middle: either we get 0 events (incomplete) or 1 (if we reassembled)
+                    prop_assert!(
+                        parsed_events.len() <= 1,
+                        "Should have at most 1 event when split in middle, got {}",
+                        parsed_events.len()
+                    );
                 }
             }
-
-            // If the split was at a valid boundary, we should have parsed the event
-            let split_at_boundary = split_pos == 0 || split_pos == valid_event.len();
-
-            if split_at_boundary {
-                prop_assert_eq!(
-                    parsed_events.len(),
-                    1,
-                    "Should have parsed exactly 1 event when split at boundary (split_pos={})",
-                    split_pos
-                );
-            } else {
-                // Split in the middle: either we get 0 events (incomplete) or 1 (if we reassembled)
-                prop_assert!(
-                    parsed_events.len() <= 1,
-                    "Should have at most 1 event when split in middle, got {}",
-                    parsed_events.len()
-                );
-            }
-
-            Ok(())
-        });
+        }
     }
 
     /// Proptest: replay state is idempotent
@@ -830,44 +815,45 @@ mod replay_equals_live {
             }),
         ];
 
-        proptest!((
-            events in prop::collection::vec(event_strategy, 0..10)
-        )| {
-            let tmp_dir = TempDir::new().unwrap();
-            let events_path = tmp_dir.path().join("events.jsonl");
+        proptest! {
+            #[test]
+            fn proptest_replay_is_idempotent_inner(
+                events in prop::collection::vec(event_strategy, 0..10)
+            ) {
+                let tmp_dir = TempDir::new().unwrap();
+                let events_path = tmp_dir.path().join("events.jsonl");
 
-            // Write events
-            {
-                let mut file = File::create(&events_path).unwrap();
-                for event in &events {
-                    let json = serde_json::to_string(event).unwrap();
-                    writeln!(file, "{}", json).unwrap();
+                // Write events
+                {
+                    let mut file = File::create(&events_path).unwrap();
+                    for event in &events {
+                        let json = serde_json::to_string(event).unwrap();
+                        writeln!(file, "{}", json).unwrap();
+                    }
                 }
-            }
 
-            // Replay function
-            fn replay_events(path: &std::path::Path) -> Vec<String> {
-                let mut results = Vec::new();
-                let file = File::open(path).unwrap();
-                let reader = BufReader::new(file);
-                for line in reader.lines() {
-                    let line = line.unwrap();
-                    results.push(line.trim().to_string());
+                // Replay function
+                fn replay_events(path: &std::path::Path) -> Vec<String> {
+                    let mut results = Vec::new();
+                    let file = File::open(path).unwrap();
+                    let reader = BufReader::new(file);
+                    for line in reader.lines() {
+                        let line = line.unwrap();
+                        results.push(line.trim().to_string());
+                    }
+                    results
                 }
-                results
+
+                // Replay multiple times
+                let replay1 = replay_events(&events_path);
+                let replay2 = replay_events(&events_path);
+                let replay3 = replay_events(&events_path);
+
+                // All replays must be identical
+                prop_assert_eq!(replay1, replay2, "First and second replays differ");
+                prop_assert_eq!(replay2, replay3, "Second and third replays differ");
             }
-
-            // Replay multiple times
-            let replay1 = replay_events(&events_path);
-            let replay2 = replay_events(&events_path);
-            let replay3 = replay_events(&events_path);
-
-            // All replays must be identical
-            prop_assert_eq!(replay1, replay2, "First and second replays differ");
-            prop_assert_eq!(replay2, replay3, "Second and third replays differ");
-
-            Ok(())
-        });
+        }
     }
 
     /// Unit test: verify replay handles log rotation

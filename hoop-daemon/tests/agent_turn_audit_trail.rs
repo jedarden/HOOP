@@ -16,7 +16,7 @@ use std::sync::Mutex;
 use tempfile::TempDir;
 
 /// Serialize test setup so parallel tests don't fight over the env var.
-static LOCK: Mutex<()> = Mutex::new();
+static LOCK: Mutex<()> = Mutex::new(());
 
 /// Set up a temporary fleet.db for testing.
 fn setup_test_db() -> (TempDir, PathBuf) {
@@ -208,7 +208,7 @@ fn test_stitch_created_audit_includes_agent_metadata() {
     .expect("write audit row");
 
     // Query the audit row
-    let rows = hoop_daemon::fleet::query_audit_rows(Some(10), None, None, None)
+    let rows = hoop_daemon::fleet::query_audit_rows(Some(10), None, None, None, None, None)
         .expect("query audit rows");
 
     let audit_row = rows

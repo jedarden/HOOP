@@ -196,8 +196,7 @@ impl ContextIndex {
     }
 
     /// Build a minimal context index for testing (no database required)
-    #[cfg(test)]
-    fn build_for_test(projects_config: &serde_yaml::Value) -> Self {
+    pub fn build_for_test(projects_config: &serde_yaml::Value) -> Self {
         let projects = Self::load_projects(projects_config);
 
         Self {

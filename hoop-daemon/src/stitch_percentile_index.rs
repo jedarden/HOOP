@@ -61,11 +61,11 @@ use crate::similarity::tokenize;
 
 /// Number of unique title tokens to consider for bucketing.
 /// Higher values create more specific buckets, lower values create broader buckets.
-const TITLE_TOKEN_BUCKET_SIZE: usize = 5;
+pub const TITLE_TOKEN_BUCKET_SIZE: usize = 5;
 
 /// Minimum number of samples in a bucket to return predictions.
 /// Buckets with fewer samples are considered too sparse for reliable estimates.
-const MIN_SAMPLES_FOR_PREDICTION: usize = 3;
+pub const MIN_SAMPLES_FOR_PREDICTION: usize = 3;
 
 /// Stitch must be inactive for this many seconds before being indexed.
 /// This ensures the Stitch is fully closed before we compute its final metrics.

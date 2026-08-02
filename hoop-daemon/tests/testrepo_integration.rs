@@ -393,15 +393,15 @@ async fn rest_api_endpoints_return_valid_state() {
 
     // Test beads endpoint
     let beads = client.get_beads().await.expect("Failed to fetch beads");
-    assert!(beads.is_array(), "Beads response should be an array");
+    assert!(!beads.is_empty(), "Beads response should not be empty");
 
     // Test workers endpoint
     let workers = client.get_workers().await.expect("Failed to fetch workers");
-    assert!(workers.is_array(), "Workers response should be an array");
+    assert!(!workers.is_empty(), "Workers response should not be empty");
 
     // Test projects endpoint
     let projects = client.get_projects().await.expect("Failed to fetch projects");
-    assert!(projects.is_array(), "Projects response should be an array");
+    assert!(!projects.is_empty(), "Projects response should not be empty");
 
     // Verify testrepo is in projects
     let testrepo_found = projects

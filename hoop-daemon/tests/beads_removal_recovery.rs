@@ -11,12 +11,14 @@
 //!
 //! Plan reference: §6 Phase 2 success, §3.9
 
+mod integration_harness;
+
 use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 use tokio::time::timeout;
 
-use hoop_daemon::tests::integration_harness::spawn_test_daemon_with_config;
+use integration_harness::spawn_test_daemon_with_config;
 use hoop_schema::{DegradedProject, ReadinessResponse};
 
 /// Create a test project directory with .beads/ structure
@@ -69,7 +71,7 @@ async fn test_beads_removal_shows_error_state() {
     let project_c_path_clone = project_c_path.clone();
 
     // Spawn daemon with custom config pointing to all three projects
-    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(move |config| {
+    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(move |config: &mut hoop_daemon::Config| {
         // Customize projects.yaml to include all three projects
         let projects_yaml = format!(
             r#"projects:
@@ -330,7 +332,7 @@ async fn test_multiple_beads_removal_isolated() {
     let project_b_path_clone = project_b_path.clone();
     let project_c_path_clone = project_c_path.clone();
 
-    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(move |config| {
+    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(move |config: &mut hoop_daemon::Config| {
         let projects_yaml = format!(
             r#"projects:
   - name: project_a

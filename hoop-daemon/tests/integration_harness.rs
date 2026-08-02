@@ -278,6 +278,7 @@ pub fn create_mock_bead(id: &str, title: &str, status: BeadStatus, project: &str
         created_by: "test".to_string(),
         dependencies: vec![],
         project: project.to_string(),
+        workspace: format!("/home/coding/testrepo/{}", project),
     }
 }
 
@@ -580,7 +581,7 @@ use tokio::time::timeout;
 /// When dropped, the daemon will be signaled to shut down and the
 /// temporary directory will be cleaned up.
 pub struct DaemonHandle {
-    shutdown_notify: Arc<tokio::sync::Notify>,
+    pub shutdown_notify: Arc<tokio::sync::Notify>,
     pub temp_dir: TempDir,
 }
 
@@ -594,12 +595,11 @@ impl Drop for DaemonHandle {
 
 /// Spawns a test daemon on a random port for hermetic testing.
 ///
-/// Returns the base URL, a shutdown handle, and the temp_dir (which must
-/// be kept alive for the duration of the test). The daemon runs against
-/// testrepo/ with minimal configuration.
-pub async fn spawn_test_daemon() -> anyhow::Result<(String, Arc<tokio::sync::Notify>, TempDir)> {
-    let (base_url, handle) = spawn_test_daemon_internal(None).await?;
-    Ok((base_url, handle.shutdown_notify, handle._temp_dir))
+/// Returns the base URL and a DaemonHandle. When the handle is dropped,
+/// the daemon will be signaled to shut down and the temp directory cleaned up.
+/// The daemon runs against testrepo/ with minimal configuration.
+pub async fn spawn_test_daemon() -> anyhow::Result<(String, DaemonHandle)> {
+    spawn_test_daemon_internal(None::<fn(&mut Config)>).await
 }
 
 /// Spawns a test daemon with a custom configuration callback.
@@ -705,7 +705,7 @@ where
 #[tokio::test]
 async fn test_http_server_boot() {
     // Test that the daemon boots and responds to health checks
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -736,7 +736,7 @@ async fn test_http_server_boot() {
 
 #[tokio::test]
 async fn test_rest_api_endpoints() {
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -779,7 +779,7 @@ async fn test_rest_api_endpoints() {
 
 #[tokio::test]
 async fn test_websocket_connection() {
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -878,7 +878,7 @@ async fn test_websocket_connection() {
 #[tokio::test]
 async fn test_full_daemon_lifecycle() {
     // Spawn the daemon
-    let (base_url, shutdown_notify, _temp_dir) = spawn_test_daemon()
+    let (base_url, handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -912,7 +912,7 @@ async fn test_full_daemon_lifecycle() {
     assert_eq!(resp.status(), 200, "Should be able to get projects");
 
     // Signal shutdown (note: the actual shutdown happens via the task completing)
-    shutdown_notify.notify_one();
+    handle.shutdown_notify.notify_one();
 
     // Give the daemon time to shut down
     tokio::time::sleep(Duration::from_millis(500)).await;
@@ -928,7 +928,7 @@ async fn test_full_daemon_lifecycle() {
 
 #[tokio::test]
 async fn test_project_state_projection() {
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -964,7 +964,7 @@ async fn test_project_state_projection() {
 
 #[tokio::test]
 async fn test_bead_state_projection() {
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -991,7 +991,7 @@ async fn test_bead_state_projection() {
 
 #[tokio::test]
 async fn test_metrics_endpoint() {
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -1021,7 +1021,7 @@ async fn test_metrics_endpoint() {
 
 #[tokio::test]
 async fn test_websocket_snapshot_events() {
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -1076,7 +1076,7 @@ async fn test_websocket_snapshot_events() {
 
 #[tokio::test]
 async fn test_websocket_subscribe_to_project() {
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -1146,7 +1146,7 @@ async fn test_integration_speed() {
     // Verify that integration tests run quickly (< 5s for full suite)
     let start = std::time::Instant::now();
 
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -1178,7 +1178,7 @@ async fn test_integration_speed() {
 #[tokio::test]
 async fn test_daemon_handles_malformed_websocket_messages() {
     // Verify daemon handles malformed WebSocket messages gracefully
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -1243,7 +1243,7 @@ async fn test_daemon_handles_malformed_websocket_messages() {
 #[tokio::test]
 async fn test_daemon_handles_concurrent_rest_requests() {
     // Verify daemon handles concurrent REST requests correctly
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -1286,7 +1286,7 @@ async fn test_daemon_state_persistence_across_restarts() {
     // Verify daemon state persists correctly across restarts
     // This test creates a bead, restarts the daemon, and verifies the bead still exists
 
-    let (base_url1, _shutdown1, _temp_dir1) = spawn_test_daemon()
+    let (base_url1, _handle1) = spawn_test_daemon()
         .await
         .expect("Failed to spawn first daemon");
 
@@ -1309,12 +1309,12 @@ async fn test_daemon_state_persistence_across_restarts() {
     let bead: serde_json::Value = create_resp.json().await.expect("Failed to parse bead");
     let bead_id = bead["id"].as_str().expect("Bead should have an ID");
 
-    // First daemon shuts down when _shutdown1 is dropped
+    // First daemon shuts down when _handle1 is dropped
 
     // Spawn a new daemon with the same temp directory
     // Note: In a real scenario, we'd reuse the temp directory, but for this test
     // we'll just verify that a new daemon can also read from testrepo
-    let (base_url2, _shutdown2, _temp_dir2) = spawn_test_daemon()
+    let (base_url2, _handle2) = spawn_test_daemon()
         .await
         .expect("Failed to spawn second daemon");
 
@@ -1331,7 +1331,7 @@ async fn test_daemon_state_persistence_across_restarts() {
 #[tokio::test]
 async fn test_websocket_connection_limits() {
     // Verify daemon handles multiple concurrent WebSocket connections
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -1385,7 +1385,7 @@ async fn test_websocket_connection_limits() {
 #[tokio::test]
 async fn test_rest_api_error_handling() {
     // Verify REST API handles errors gracefully
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -1424,7 +1424,7 @@ async fn test_rest_api_error_handling() {
 #[tokio::test]
 async fn test_daemon_metrics_collection() {
     // Verify metrics are being collected correctly
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -1459,7 +1459,7 @@ async fn test_daemon_metrics_collection() {
 #[tokio::test]
 async fn test_project_file_listing() {
     // Verify project file listing works correctly
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -1484,7 +1484,7 @@ async fn test_project_file_listing() {
 #[tokio::test]
 async fn test_bead_lifecycle_via_api() {
     // Verify complete bead lifecycle via REST API
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -1538,7 +1538,7 @@ async fn test_bead_lifecycle_via_api() {
 #[tokio::test]
 async fn test_capacity_endpoint() {
     // Verify capacity endpoint returns valid data
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -1561,7 +1561,7 @@ async fn test_capacity_endpoint() {
 #[tokio::test]
 async fn test_config_status_endpoint() {
     // Verify config status endpoint returns valid data
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -1587,7 +1587,7 @@ async fn test_config_status_endpoint() {
 #[tokio::test]
 async fn test_no_external_network_calls() {
     // Verify the daemon works without external network access
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _handle) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 

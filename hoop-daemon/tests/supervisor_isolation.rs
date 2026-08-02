@@ -30,6 +30,7 @@ fn create_test_project(name: &str, path: PathBuf) -> ProjectsRegistryProjectsIte
         canonical_path: None,
         label: None,
         color: None,
+        redaction: None,
     }
 }
 
@@ -48,11 +49,14 @@ fn create_beads_dir(path: &std::path::Path) -> tempfile::TempDir {
 async fn create_test_supervisor() -> ProjectSupervisor {
     let (bead_tx, _) = tokio::sync::broadcast::channel(64);
     let (session_tx, _) = tokio::sync::broadcast::channel(64);
-    let worker_registry = Arc::new(WorkerRegistry::new());
+    let (monitor_event_tx, _) = tokio::sync::broadcast::channel(64);
+    let (session_event_tx, _) = tokio::sync::broadcast::channel(64);
+    let worker_registry = Arc::new(WorkerRegistry::new(monitor_event_tx, session_event_tx));
     let beads = Arc::new(std::sync::RwLock::new(Vec::<Bead>::new()));
     let shutdown = Arc::new(ShutdownCoordinator::new());
     let cost_aggregator = Arc::new(std::sync::RwLock::new(
-        hoop_daemon::cost::CostAggregator::new(),
+        hoop_daemon::cost::CostAggregator::new(PathBuf::from("/tmp/hoop-test-costs"))
+            .expect("CostAggregator creation should succeed"),
     ));
     let vector_index = Arc::new(std::sync::RwLock::new(
         hoop_daemon::vector_index::VectorIndex::new(),
@@ -85,7 +89,7 @@ fn create_test_config(projects: Vec<ProjectsRegistryProjectsItem>) -> ProjectsCo
         let path = project.workspace_views().first().map(|v| v.path.clone());
         if let Some(path) = path {
             if let Ok(canonical) = std::fs::canonicalize(&path) {
-                canonical_cache.insert(format!("{}:{}", name, path), canonical);
+                canonical_cache.insert((name.to_string(), path), canonical);
             }
         }
     }
@@ -324,6 +328,7 @@ async fn test_panic_metric_increments_on_failure() {
         canonical_path: None,
         label: None,
         color: None,
+        redaction: None,
     };
 
     let config = create_test_config(vec![invalid_project]);

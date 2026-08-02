@@ -18,8 +18,10 @@
 //! - Bead–Stitch link absent
 //! - Panel requires manual file path entry
 
+mod integration_harness;
+
 use std::time::{Duration, Instant};
-use crate::integration_harness::spawn_test_daemon;
+use integration_harness::spawn_test_daemon;
 use serde_json::Value as JsonValue;
 
 #[tokio::test]
