@@ -47,7 +47,7 @@ test:
 	@./bin/cleanup-hoop-test-processes.sh || true
 	@echo ""
 	@mkdir -p logs
-	@./bin/run-with-log.sh --auto cargo test --lib --features testing --verbose
+	@./bin/run-with-log.sh logs/unit_test_$$(date -u +"%Y%m%dT%H%M%SZ").log cargo test --lib --features testing --verbose
 	@echo ""
 	@echo "=== Verifying no processes remain after tests ==="
 	@./bin/verify-hoop-test-processes.sh || echo "Warning: Some processes may remain"
@@ -62,7 +62,7 @@ test-beads-deletion:
 	@echo "Log output will be captured to logs/ directory"
 	@echo ""
 	@mkdir -p logs
-	@./bin/run-with-log.sh --auto cargo test -p hoop-daemon --test beads_deletion_http -- --nocapture
+	@./bin/run-with-log.sh logs/beads_deletion_http_$$(date -u +"%Y%m%dT%H%M%SZ").log cargo test -p hoop-daemon --test beads_deletion_http -- --nocapture
 	@echo ""
 	@echo "=== Verifying no processes remain after tests ==="
 	@./bin/verify-hoop-test-processes.sh || echo "Warning: Some processes may remain"
@@ -82,7 +82,7 @@ test-load-medium:
 	HOOP_LOAD_WORKERS=2 \
 	HOOP_LOAD_BEADS=50 \
 	HOOP_LOAD_CADENCE_MS=10 \
-	./bin/run-with-log.sh --auto cargo test --test load_test test_medium_scale_load_test -- --nocapture
+	./bin/run-with-log.sh logs/test_medium_scale_load_test_$$(date -u +"%Y%m%dT%H%M%SZ").log cargo test --test load_test test_medium_scale_load_test -- --nocapture
 	@echo ""
 	@echo "=== Verifying no processes remain after tests ==="
 	@./bin/verify-hoop-test-processes.sh || echo "Warning: Some processes may remain"
@@ -102,7 +102,7 @@ test-load-full:
 	HOOP_LOAD_WORKERS=5 \
 	HOOP_LOAD_BEADS=200 \
 	HOOP_LOAD_CADENCE_MS=10 \
-	./bin/run-with-log.sh --auto cargo test --test load_test test_full_scale_load_test -- --ignored --nocapture
+	./bin/run-with-log.sh logs/test_full_scale_load_test_$$(date -u +"%Y%m%dT%H%M%SZ").log cargo test --test load_test test_full_scale_load_test -- --ignored --nocapture
 	@echo ""
 	@echo "=== Verifying no processes remain after tests ==="
 	@./bin/verify-hoop-test-processes.sh || echo "Warning: Some processes may remain"
@@ -130,7 +130,7 @@ test-load-custom:
 	@echo "  Beads per worker: $${HOOP_LOAD_BEADS:-50}"
 	@echo ""
 	@mkdir -p logs
-	./bin/run-with-log.sh --auto cargo test --test load_test test_medium_scale_load_test -- --nocapture
+	./bin/run-with-log.sh logs/test_load_custom_$$(date -u +"%Y%m%dT%H%M%SZ").log cargo test --test load_test test_medium_scale_load_test -- --nocapture
 	@echo ""
 	@echo "=== Verifying no processes remain after tests ==="
 	@./bin/verify-hoop-test-processes.sh || echo "Warning: Some processes may remain"
