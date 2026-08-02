@@ -76,34 +76,57 @@ This bead should be re-ordered in the dependency chain. The test compilation err
 
 ---
 
-## 2026-08-01 Re-verification
+## 2026-08-01 Final Verification
 
-### Compilation errors (re-count)
-`cargo test --workspace` shows **different error profile** than before:
+### Current compilation errors (as of 2026-08-01 22:14)
+Command run: `make test` (runs `cargo test --lib --features testing`)
 
-- 5 unique error types (E0432, E0433, E0609, E0063, E0308, E0631, E0599)
-- Multiple type mismatches in WebSocket code
-- Missing fields in struct initializers
+**Total: 31 compilation errors** (17 unique error types)
 
-### Current error summary
-```bash
-cargo test --workspace 2>&1 | grep "^error\[E" | wc -l
-# Output: 5 total errors
-```
+### Error breakdown by type:
+
+1. **CapacityMeterConfig missing fields** (11 errors):
+   - 6× missing: `accounts_file`, `gcp_quota_config`, `gemini_dirs` + 1 other
+   - 3× missing: `accounts_file`, `opencode_dirs`
+   - 2× missing: `accounts_file`, `gcp_quota_config`, `opencode_dirs`
+
+2. **Type mismatches** (6 errors - E0308):
+   - Various type incompatibilities in test code
+
+3. **Function signature changes** (3 errors - E0061):
+   - 2× functions taking 1 argument, called with 0
+   - 1× `ProjectSupervisor::new()` takes 9 args, called with 0
+   - 1× `resolve_actor()` takes 2 args, called with 1
+
+4. **Missing struct fields** (6 errors - E0063):
+   - `NeedleEvent`: missing `stash_sha` (2 errors)
+   - `HoopConfig`: missing `embedding`, `redaction`
+   - `DictatedNote`: missing `draft_id`, `synthesis_result`
+   - `DaemonState`: missing `br_semaphore`, `br_semaphore_target_permits`
+   - `PreviewRequest`: missing `attachments_count`
+
+5. **Missing associated functions** (3 errors - E0599):
+   - `SecretPattern::default_secret_patterns()` not found
+   - `ResolvedConfig::default()` not found
+   - `RedactionPolicyState::default()` not found
+
+6. **Missing crate import** (1 error - E0433):
+   - `rand` crate not found in scope
 
 ### Dependency status check
 - `bf-1mohx` (correctness fixes): **OPEN** - Still incomplete
 - `bf-5mpcl` (Phase 1 CI gate): **OPEN** - Blocked by test failures
 
-### Updated verification
-Latest compilation run shows:
+### Production code status
 - Production code compiles cleanly: `cargo check --workspace` passes
 - Only test targets fail compilation
-- Errors are all in test fixtures, not production code
+- All errors are in test fixtures, not production code
 
-### Conclusion remains
-Cannot verify regressions from correctness fixes (bf-1mohx) because:
-1. Tests don't compile - cannot execute
-2. Dependency bead bf-1mohx is still incomplete
+### Final conclusion
+**CANNOT COMPLETE TASK** - Unit tests cannot run due to pre-existing test fixture compilation errors. This is a known Phase 1 blocker documented in AGENTS.md and tracked in bead `bf-5mpcl`.
 
-**Action: Leave bead OPEN** - Precondition for task (running tests) cannot be met.
+The bead `bf-8t0ky` should remain open until:
+1. Test fixtures are updated to match current production struct signatures (31 errors fixed)
+2. Bead `bf-1mohx` completes and its correctness fixes can be verified
+
+**Action: Leave bead OPEN** - Precondition for task (running tests) cannot be met due to pre-existing compilation errors unrelated to the correctness fixes this bead is meant to verify.
