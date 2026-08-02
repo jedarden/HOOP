@@ -102,7 +102,9 @@ trap 'rm -f "$CAPTURED_STDOUT" "$CAPTURED_STDERR"' EXIT
 
 # Run the command with split stdout/stderr capture
 # We redirect both streams to the log file while capturing them separately
-"$@" > >(tee -a "$LOG_FILE" > "$CAPTURED_STDOUT") 2> >(tee -a "$LOG_FILE" > "$CAPTURED_STDERR")
+# Each stream is prefixed to make it distinguishable in the log file
+# We use process substitution with sed to add stream prefixes
+"$@" > >(sed 's/^/[STDOUT] /' | tee -a "$LOG_FILE" > "$CAPTURED_STDOUT") 2> >(sed 's/^/[STDERR] /' | tee -a "$LOG_FILE" > "$CAPTURED_STDERR")
 EXIT_CODE=$?
 
 # Read captured output into memory variables

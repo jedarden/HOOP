@@ -95,21 +95,64 @@ echo ""
 # Check if streams are distinguishable
 echo "Step 7: Checking if streams are distinguishable in log..."
 
-# Check if stderr has the "STDERR: " prefix
-if grep -q "^STDERR: " "${LOG_FILE}"; then
-    echo "✓ Streams ARE distinguishable in log"
-    echo "  - Stdout lines have no prefix"
-    echo "  - Stderr lines are prefixed with 'STDERR: '"
+# Check for stream prefixes
+STDOUT_PREFIX_COUNT=$(grep -c "^\\[STDOUT\\] " "${LOG_FILE}" || true)
+STDERR_PREFIX_COUNT=$(grep -c "^\\[STDERR\\] " "${LOG_FILE}" || true)
+
+echo "Found ${STDOUT_PREFIX_COUNT} lines with [STDOUT] prefix"
+echo "Found ${STDERR_PREFIX_COUNT} lines with [STDERR] prefix"
+
+# Check for interleaved lines (indicative of the bug)
+INTERLEAVED_COUNT=$(grep -c "STDOUT.*STDERR\\|STDERR.*STDOUT" "${LOG_FILE}" || true)
+
+if [ "${INTERLEAVED_COUNT}" -gt 0 ]; then
+    echo "⚠ WARNING: Found ${INTERLEAVED_COUNT} lines with interleaved stdout/stderr content"
+    echo "  This indicates streams are not properly separated"
+else
+    echo "✓ No interleaved content detected"
+fi
+
+# Verify distinguishability using the test-specific markers
+echo ""
+echo "Checking test-specific messages with stream prefixes:"
+if grep -q "\\[STDOUT\\].*This is a message to STDOUT" "${LOG_FILE}"; then
+    echo "✓ Found stdout message with proper prefix"
+else
+    echo "⚠ Stdout message not found with [STDOUT] prefix"
+fi
+
+if grep -q "\\[STDERR\\].*This is a message to STDERR" "${LOG_FILE}"; then
+    echo "✓ Found stderr message with proper prefix"
+else
+    echo "⚠ Stderr message not found with [STDERR] prefix"
+fi
+
+# Final verdict
+if [ "${STDOUT_PREFIX_COUNT}" -gt 0 ] && [ "${STDERR_PREFIX_COUNT}" -gt 0 ] && [ "${INTERLEAVED_COUNT}" -eq 0 ]; then
+    echo ""
+    echo "✓ Streams ARE clearly distinguishable in log"
+    echo "  - Stdout lines are prefixed with '[STDOUT] '"
+    echo "  - Stderr lines are prefixed with '[STDERR] '"
+    echo "  - No interleaved content detected"
 
     # Show sample output with distinction
     echo ""
     echo "Sample output from log file showing stream distinction:"
     echo "---"
-    grep -E "(This is a message to (STDOUT|STDERR)|^STDOUT_MARKER|^STDERR: STDERR_MARKER|^STDOUT_COUNT_|^STDERR: STDERR_COUNT_)" "${LOG_FILE}" | head -10
+    grep -E "\\[(STDOUT|STDERR)\\].*(This is a message to (STDOUT|STDERR)|MARKER|SEQ_0)" "${LOG_FILE}" | head -10
     echo "---"
 else
+    echo ""
     echo "⚠ Streams are NOT clearly distinguishable in log"
-    echo "  (Both streams interleaved without clear markers)"
+    if [ "${INTERLEAVED_COUNT}" -gt 0 ]; then
+        echo "  - Found ${INTERLEAVED_COUNT} interleaved lines"
+    fi
+    if [ "${STDOUT_PREFIX_COUNT}" -eq 0 ]; then
+        echo "  - No stdout prefix markers found"
+    fi
+    if [ "${STDERR_PREFIX_COUNT}" -eq 0 ]; then
+        echo "  - No stderr prefix markers found"
+    fi
 fi
 
 echo ""
@@ -120,10 +163,22 @@ echo "✓ Log file created successfully"
 echo "✓ Stdout content captured"
 echo "✓ Stderr content captured"
 echo "✓ Both streams present in same log file"
-if grep -q "^STDERR: " "${LOG_FILE}"; then
-    echo "✓ Streams are distinguishable in log (stderr prefixed with 'STDERR: ')"
+
+# Check distinguishability with new prefixes
+STDOUT_PREFIX_COUNT=$(grep -c "^\\[STDOUT\\] " "${LOG_FILE}" || true)
+STDERR_PREFIX_COUNT=$(grep -c "^\\[STDERR\\] " "${LOG_FILE}" || true)
+INTERLEAVED_COUNT=$(grep -c "STDOUT.*STDERR\\|STDERR.*STDOUT" "${LOG_FILE}" || true)
+
+if [ "${STDOUT_PREFIX_COUNT}" -gt 0 ] && [ "${STDERR_PREFIX_COUNT}" -gt 0 ] && [ "${INTERLEAVED_COUNT}" -eq 0 ]; then
+    echo "✓ Streams are clearly distinguishable in log"
+    echo "  - Stdout lines prefixed with '[STDOUT]' (${STDOUT_PREFIX_COUNT} lines)"
+    echo "  - Stderr lines prefixed with '[STDERR]' (${STDERR_PREFIX_COUNT} lines)"
+    echo "  - No interleaved content detected"
 else
-    echo "⚠ Streams are NOT distinguishable in log (both interleaved without markers)"
+    echo "⚠ Streams distinguishability check failed:"
+    [ "${STDOUT_PREFIX_COUNT}" -eq 0 ] && echo "  - No stdout prefix markers found"
+    [ "${STDERR_PREFIX_COUNT}" -eq 0 ] && echo "  - No stderr prefix markers found"
+    [ "${INTERLEAVED_COUNT}" -gt 0 ] && echo "  - Found ${INTERLEAVED_COUNT} interleaved lines"
 fi
 echo ""
 echo "Full log available at: ${LOG_FILE}"
