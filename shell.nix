@@ -7,7 +7,7 @@ pkgs.mkShell {
     rust-analyzer
     rustfmt
     clippy
-    nodejs_20
+    nodejs_22
     pnpm
     git
     tmux

@@ -2455,9 +2455,13 @@ mod tests {
 
         let config = CapacityMeterConfig {
             account_dirs: vec![claude_dir],
+            gemini_dirs: vec![],
+            opencode_dirs: vec![],
             refresh_interval_secs: 60,
             cache_max_age_secs: 600,
             cache_base_dir: Some(dir.path().join("cache")),
+            gcp_quota_config: None,
+            accounts_file: None,
         };
 
         let meter = CapacityMeter::new(config);
@@ -2501,9 +2505,13 @@ mod tests {
 
         let config = CapacityMeterConfig {
             account_dirs: vec![claude_dir],
+            gemini_dirs: vec![],
+            opencode_dirs: vec![],
             refresh_interval_secs: 60,
             cache_max_age_secs: 600,
             cache_base_dir: Some(dir.path().join("cache")),
+            gcp_quota_config: None,
+            accounts_file: None,
         };
 
         let meter = CapacityMeter::new(config);
@@ -2571,9 +2579,13 @@ mod tests {
 
         let config = CapacityMeterConfig {
             account_dirs: vec![claude1, claude2],
+            gemini_dirs: vec![],
+            opencode_dirs: vec![],
             refresh_interval_secs: 60,
             cache_max_age_secs: 600,
             cache_base_dir: Some(dir.path().join("cache")),
+            gcp_quota_config: None,
+            accounts_file: None,
         };
 
         let meter = CapacityMeter::new(config);
@@ -2772,9 +2784,13 @@ mod tests {
 
         let config = CapacityMeterConfig {
             account_dirs: vec![claude_dir],
+            gemini_dirs: vec![],
+            opencode_dirs: vec![],
             refresh_interval_secs: 60,
             cache_max_age_secs: 600,
             cache_base_dir: Some(dir.path().join("cache")),
+            gcp_quota_config: None,
+            accounts_file: None,
         };
 
         let meter = CapacityMeter::new(config);
@@ -2849,9 +2865,13 @@ mod tests {
 
         let config = CapacityMeterConfig {
             account_dirs: vec![claude_dir],
+            gemini_dirs: vec![],
+            opencode_dirs: vec![],
             refresh_interval_secs: 60,
             cache_max_age_secs: 600,
             cache_base_dir: Some(dir.path().join("cache")),
+            gcp_quota_config: None,
+            accounts_file: None,
         };
 
         let meter = CapacityMeter::new(config);
@@ -2911,9 +2931,13 @@ mod tests {
         // Build config with custom cache paths for account 1
         let config = CapacityMeterConfig {
             account_dirs: vec![claude1.clone(), claude2],
+            gemini_dirs: vec![],
+            opencode_dirs: vec![],
             refresh_interval_secs: 60,
             cache_max_age_secs: 600,
             cache_base_dir: Some(dir.path().join("cache")),
+            gcp_quota_config: None,
+            accounts_file: None,
         };
 
         let meter = CapacityMeter::new(config.clone());
@@ -3057,9 +3081,12 @@ mod tests {
         let config = CapacityMeterConfig {
             account_dirs: vec![],
             gemini_dirs: vec![gemini_dir],
+            opencode_dirs: vec![],
             refresh_interval_secs: 60,
             cache_max_age_secs: 600,
             cache_base_dir: Some(dir.path().join("cache")),
+            gcp_quota_config: None,
+            accounts_file: None,
         };
 
         let meter = CapacityMeter::new(config);

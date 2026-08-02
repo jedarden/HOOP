@@ -85,7 +85,7 @@ enum QueryExpr {
 }
 
 /// Parse a query string into a QueryExpr
-fn parse_query(query: &str) -> Result<QueryExpr> {
+pub(crate) fn parse_query(query: &str) -> Result<QueryExpr> {
     let tokens = tokenize(query)?;
     let (expr, remaining) = parse_or_expr(&tokens)?;
     if !remaining.is_empty() {
@@ -255,7 +255,7 @@ fn parse_primary_expr(tokens: &[Token]) -> Result<(QueryExpr, &[Token])> {
 }
 
 /// Evaluate a query expression against a stitch context
-fn evaluate_query(expr: &QueryExpr, ctx: &StitchContext) -> Result<bool> {
+pub(crate) fn evaluate_query(expr: &QueryExpr, ctx: &StitchContext) -> Result<bool> {
     match expr {
         QueryExpr::TitleRegex(pattern) => {
             let regex =
