@@ -83,10 +83,51 @@ else
     shift  # Remove log file from arguments, leaving only the command and its args
 fi
 
-# Run the command, redirecting both stdout and stderr to the log file
+# Run the command, capturing stdout and stderr in memory while writing to log file
 # Preserve the exit code
-"$@" > "$LOG_FILE" 2>&1
+
+# Capture stdout and stderr separately
+# We use process substitution and tee to capture to both file and memory
+# This allows us to:
+# 1. Write output to the log file (as before)
+# 2. Store output in memory for potential later use
+# 3. Preserve the original exit code
+
+# Create temporary files for captured output
+CAPTURED_STDOUT=$(mktemp)
+CAPTURED_STDERR=$(mktemp)
+
+# Ensure cleanup on exit
+trap 'rm -f "$CAPTURED_STDOUT" "$CAPTURED_STDERR"' EXIT
+
+# Run the command with split stdout/stderr capture
+# We redirect both streams to the log file while capturing them separately
+"$@" > >(tee -a "$LOG_FILE" > "$CAPTURED_STDOUT") 2> >(tee -a "$LOG_FILE" > "$CAPTURED_STDERR")
 EXIT_CODE=$?
+
+# Read captured output into memory variables
+STDOUT_CONTENT=$(cat "$CAPTURED_STDOUT")
+STDERR_CONTENT=$(cat "$CAPTURED_STDERR")
+
+# Export captured output for potential use by calling scripts
+export HOOP_CAPTURED_STDOUT="$STDOUT_CONTENT"
+export HOOP_CAPTURED_STDERR="$STDERR_CONTENT"
+export HOOP_CAPTURED_LOG_FILE="$LOG_FILE"
+export HOOP_CAPTURED_EXIT_CODE="$EXIT_CODE"
+
+# Print capture summary to stderr (visible to caller but not in log)
+echo "=== Output Capture Summary ===" >&2
+echo "Log file: $LOG_FILE" >&2
+echo "Exit code: $EXIT_CODE" >&2
+echo "Stdout captured: ${#STDOUT_CONTENT} bytes" >&2
+echo "Stderr captured: ${#STDERR_CONTENT} bytes" >&2
+if [ ${#STDOUT_CONTENT} -gt 0 ]; then
+    echo "Stdout preview (first 200 chars): ${STDOUT_CONTENT:0:200}..." >&2
+fi
+if [ ${#STDERR_CONTENT} -gt 0 ]; then
+    echo "Stderr preview (first 200 chars): ${STDERR_CONTENT:0:200}..." >&2
+fi
+echo "=============================" >&2
 
 # Exit with the original command's exit code
 exit $EXIT_CODE
