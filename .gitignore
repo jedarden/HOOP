@@ -59,3 +59,6 @@ hoop-daemon/.fastembed_cache/
 
 # Per-bead worker scratch at repo root (not part of plan layout)
 notes/
+
+# Test output logs
+logs/tests/
