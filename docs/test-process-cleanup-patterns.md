@@ -351,3 +351,57 @@ ps aux | grep -E 'HOOP/target|testrepo|br\s|git\s|rg\s|tailscale\s|age\s|ffmpeg\
 Expected output: (empty - no processes found)
 
 If processes are found, run the comprehensive cleanup again and investigate why they weren't caught.
+
+## Stdout/Stderr Capture in Log Files
+
+### Current Implementation
+
+The `bin/run-with-log.sh` wrapper script captures both stdout and stderr to a single log file:
+
+```bash
+"$@" > >(tee -a "$LOG_FILE" > "$CAPTURED_STDOUT") 2> >(tee -a "$LOG_FILE" > "$CAPTURED_STDERR")
+```
+
+### Verification Results
+
+As of 2026-08-02, stdout/stderr capture has been verified (see `docs/stdout-stderr-capture-verification.md`):
+
+✓ **Both streams are captured** - No output is lost
+✓ **Log files are created** - With ISO 8601 timestamps for uniqueness
+✓ **Separate capture variables** - `HOOP_CAPTURED_STDOUT` and `HOOP_CAPTURED_STDERR` exported for shell inspection
+⚠ **Streams NOT distinguishable in log** - Both streams are interleaved without markers
+
+### Known Limitation
+
+Because both stdout and stderr are appended to the same file without stream markers:
+- Lines from stdout and stderr are interleaved
+- No way to tell from the log file which stream a line came from
+- Potential for mid-line collisions when both streams write simultaneously
+
+Example from actual log output:
+```
+253:STDERR_COUNT_STDOUT_SEQ_0    <-- Collision: stderr+stdout in same line
+256:STDERR_SEQ_0
+```
+
+### Acceptable For Current Use Cases
+
+For most HOOP testing scenarios (load tests, integration tests, general output capture), the current implementation is sufficient because:
+- All output is captured without data loss
+- The log preserves the sequence of events
+- Human review can usually infer the stream from content
+
+### If Stream Distinction Is Needed
+
+To make streams distinguishable in log files, modify `run-with-log.sh` to prefix stderr:
+
+```bash
+"$@" > >(tee -a "$LOG_FILE") 2> >(sed 's/^/STDERR: /' | tee -a "$LOG_FILE")
+```
+
+Or use separate log files:
+```bash
+"$@" > "logs/${LOG_BASE}_stdout.log" 2> "logs/${LOG_BASE}_stderr.log"
+```
+
+See `docs/stdout-stderr-capture-verification.md` for detailed test results and recommendations.
