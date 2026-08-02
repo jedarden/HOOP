@@ -2,7 +2,7 @@
 #
 # Common development tasks for the HOOP project.
 
-.PHONY: help build test test-load test-load-medium test-load-full test-load-watch clean openapi-generate openapi-check ts-client-generate
+.PHONY: help build test test-beads-deletion test-load test-load-medium test-load-full test-load-watch clean openapi-generate openapi-check ts-client-generate
 
 # Default target
 help:
@@ -10,10 +10,12 @@ help:
 	@echo ""
 	@echo "Targets:"
 	@echo "  build              - Build the daemon"
-	@echo "  test               - Run unit tests"
-	@echo "  test-load          - Run medium-scale load test (5x2x50)"
-	@echo "  test-load-medium   - Run medium-scale load test (5x2x50)"
-	@echo "  test-load-full     - Run full-scale load test (20x5x200)"
+	@echo "  test               - Run unit tests with log capture"
+	@echo "  test-beads-deletion - Run beads_deletion_http tests with log capture"
+	@echo "  test-load          - Run medium-scale load test (5x2x50) with log capture"
+	@echo "  test-load-medium   - Run medium-scale load test (5x2x50) with log capture"
+	@echo "  test-load-full     - Run full-scale load test (20x5x200) with log capture"
+	@echo "  test-load-custom   - Run custom load test with log capture"
 	@echo "  test-load-watch    - Run load test in watch mode (re-run on changes)"
 	@echo "  clean              - Clean build artifacts"
 	@echo "  openapi-generate   - Generate OpenAPI spec from utoipa annotations"
@@ -26,9 +28,14 @@ help:
 	@echo "  HOOP_LOAD_BEADS       - Beads per worker (default: 200)"
 	@echo "  HOOP_LOAD_CADENCE_MS  - Delay between events in ms (default: 10)"
 	@echo ""
+	@echo "Log Capture:"
+	@echo "  All test output is captured to logs/ directory with descriptive names"
+	@echo "  Log files use ISO 8601 timestamps for uniqueness"
+	@echo ""
 	@echo "Examples:"
 	@echo "  make test-load"
 	@echo "  HOOP_LOAD_PROJECTS=10 HOOP_LOAD_WORKERS=3 make test-load"
+	@echo "  make test-beads-deletion"
 
 # Build the daemon
 build:
@@ -39,7 +46,23 @@ test:
 	@echo "=== Cleaning up HOOP test processes before tests ==="
 	@./bin/cleanup-hoop-test-processes.sh || true
 	@echo ""
-	cargo test --lib --features testing --verbose
+	@mkdir -p logs
+	@./bin/run-with-log.sh --auto cargo test --lib --features testing --verbose
+	@echo ""
+	@echo "=== Verifying no processes remain after tests ==="
+	@./bin/verify-hoop-test-processes.sh || echo "Warning: Some processes may remain"
+
+# Run beads_deletion_http tests with log capture
+test-beads-deletion:
+	@echo "=== Running beads_deletion_http tests with log capture ==="
+	@echo "=== Cleaning up HOOP test processes before tests ==="
+	@./bin/cleanup-hoop-test-processes.sh || true
+	@echo ""
+	@echo "=== Running beads_deletion_http integration tests ==="
+	@echo "Log output will be captured to logs/ directory"
+	@echo ""
+	@mkdir -p logs
+	@./bin/run-with-log.sh --auto cargo test -p hoop-daemon --test beads_deletion_http -- --nocapture
 	@echo ""
 	@echo "=== Verifying no processes remain after tests ==="
 	@./bin/verify-hoop-test-processes.sh || echo "Warning: Some processes may remain"
@@ -54,11 +77,12 @@ test-load-medium:
 	@echo "=== Medium-Scale Load Test ==="
 	@echo "Configuration: 5 projects × 2 workers × 50 beads"
 	@echo ""
+	@mkdir -p logs
 	HOOP_LOAD_PROJECTS=5 \
 	HOOP_LOAD_WORKERS=2 \
 	HOOP_LOAD_BEADS=50 \
 	HOOP_LOAD_CADENCE_MS=10 \
-	cargo test --test load_test test_medium_scale_load_test -- --nocapture
+	./bin/run-with-log.sh --auto cargo test --test load_test test_medium_scale_load_test -- --nocapture
 	@echo ""
 	@echo "=== Verifying no processes remain after tests ==="
 	@./bin/verify-hoop-test-processes.sh || echo "Warning: Some processes may remain"
@@ -72,12 +96,13 @@ test-load-full:
 	@echo "Configuration: 20 projects × 5 workers × 200 beads"
 	@echo "WARNING: This may take 10+ minutes"
 	@echo ""
+	@mkdir -p logs
 	HOOP_LOAD_TEST_FULL_SCALE=1 \
 	HOOP_LOAD_PROJECTS=20 \
 	HOOP_LOAD_WORKERS=5 \
 	HOOP_LOAD_BEADS=200 \
 	HOOP_LOAD_CADENCE_MS=10 \
-	cargo test --test load_test test_full_scale_load_test -- --ignored --nocapture
+	./bin/run-with-log.sh --auto cargo test --test load_test test_full_scale_load_test -- --ignored --nocapture
 	@echo ""
 	@echo "=== Verifying no processes remain after tests ==="
 	@./bin/verify-hoop-test-processes.sh || echo "Warning: Some processes may remain"
@@ -104,7 +129,8 @@ test-load-custom:
 	@echo "  Workers per project: $${HOOP_LOAD_WORKERS:-2}"
 	@echo "  Beads per worker: $${HOOP_LOAD_BEADS:-50}"
 	@echo ""
-	cargo test --test load_test test_medium_scale_load_test -- --nocapture
+	@mkdir -p logs
+	./bin/run-with-log.sh --auto cargo test --test load_test test_medium_scale_load_test -- --nocapture
 	@echo ""
 	@echo "=== Verifying no processes remain after tests ==="
 	@./bin/verify-hoop-test-processes.sh || echo "Warning: Some processes may remain"
