@@ -545,11 +545,13 @@ mod tests {
         // Simulate what bead_commits table would give us
         let entries = vec![
             CommitEntry {
+                bead_id: "bf-test1".to_string(),
                 workspace: dir.to_string(),
                 sha: sha1.clone(),
                 ts: "2024-01-02T00:00:00+00:00".to_string(),
             },
             CommitEntry {
+                bead_id: "bf-test2".to_string(),
                 workspace: dir.to_string(),
                 sha: sha2.clone(),
                 ts: "2024-01-03T00:00:00+00:00".to_string(),
