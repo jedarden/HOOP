@@ -89,3 +89,26 @@ The bead's acceptance criteria are fully met.
 No source changes — this is a verification bead. This note is the sole artifact.
 Confirms the conclusions of the prior sibling beads (bf-61tte, bf-5ijh8, bf-4am98)
 with an independent clippy run plus a per-file static audit of the full manifest.
+
+## Second independent verification (2026-08-02, bead re-dispatch)
+
+### Method
+1. Grepped all 24 manifest-listed files for `use utoipa::ToSchema;`
+2. Verified files with imports have actual `derive(ToSchema)` usage
+3. Ran `cargo clippy -p hoop-daemon --lib --bins` (no nix-shell on Debian)
+4. Confirmed derive patterns (fully-qualified vs short-form)
+
+### Findings
+- **22 files CLEAN**: No `use utoipa::ToSchema;` import present
+- **2 files with legitimate imports**:
+  - `api_scripts.rs`: 8 structs with `derive(ToSchema)` (short form, cfg-gated)
+  - `api_transcription.rs`: 1 struct with `derive(ToSchema)` (short form, unconditional)
+- **Pattern confirmed**: 22 files use `derive(utoipa::ToSchema)` (fully-qualified)
+- **Clippy**: Exit 0, zero utoipa warnings
+
+### Conclusion
+✅ All 24 manifest-listed locations addressed
+✅ Zero unused `utoipa::ToSchema` imports remain
+✅ Compiler confirms clean state
+
+The original "25" in the manifest header is a labeling artifact; only 24 distinct files were listed. All have been verified.
