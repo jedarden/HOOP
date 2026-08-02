@@ -17,7 +17,7 @@ use std::sync::Mutex;
 use tempfile::TempDir;
 
 /// Serialize test setup so parallel tests don't fight over the env var.
-static LOCK: Mutex<()> = Mutex::new();
+static LOCK: Mutex<()> = Mutex::new(());
 
 /// Set up a temporary fleet.db for testing.
 fn setup_test_db() -> (TempDir, PathBuf) {
@@ -87,6 +87,7 @@ fn test_anthropic_5xx_doesnt_crash_daemon() {
         adapter: "anthropic".to_string(),
         model: "claude-opus-4-7".to_string(),
         anthropic_api_key: Some("sk-ant-test-key".to_string()),
+        anthropic_base_url: None,
         zai_base_url: None,
         zai_api_key: None,
         rate_limit_rpm: None,
@@ -108,6 +109,7 @@ fn test_anthropic_5xx_doesnt_crash_daemon() {
         adapter: "zai".to_string(),
         model: "glm-5".to_string(),
         anthropic_api_key: None,
+        anthropic_base_url: None,
         zai_base_url: Some("https://zai.example.com".to_string()),
         zai_api_key: Some("zai-test-key".to_string()),
         rate_limit_rpm: None,

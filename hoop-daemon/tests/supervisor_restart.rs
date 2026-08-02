@@ -29,6 +29,7 @@ fn create_test_project(name: &str, path: PathBuf) -> ProjectsRegistryProjectsIte
         canonical_path: None,
         label: None,
         color: None,
+        redaction: None,
     }
 }
 
@@ -47,11 +48,13 @@ fn create_beads_dir(path: &std::path::Path) -> tempfile::TempDir {
 async fn create_test_supervisor() -> ProjectSupervisor {
     let (bead_tx, _) = tokio::sync::broadcast::channel(64);
     let (session_tx, _) = tokio::sync::broadcast::channel(64);
-    let worker_registry = Arc::new(WorkerRegistry::new());
+    let (monitor_tx, _) = tokio::sync::broadcast::channel::<hoop_daemon::ws::MonitorEvent>(64);
+    let worker_registry = Arc::new(WorkerRegistry::new(monitor_tx, session_tx.clone()));
     let beads = Arc::new(std::sync::RwLock::new(Vec::<Bead>::new()));
     let shutdown = Arc::new(ShutdownCoordinator::new());
     let cost_aggregator = Arc::new(std::sync::RwLock::new(
-        hoop_daemon::cost::CostAggregator::new(),
+        hoop_daemon::cost::CostAggregator::new(PathBuf::from("/tmp/test-cost-config.json"))
+            .expect("Failed to create cost aggregator"),
     ));
     let vector_index = Arc::new(std::sync::RwLock::new(
         hoop_daemon::vector_index::VectorIndex::new(),

@@ -22,6 +22,7 @@ fn create_test_project(name: &str, path: PathBuf) -> ProjectsRegistryProjectsIte
         canonical_path: None,
         label: None,
         color: None,
+        redaction: None,
     }
 }
 

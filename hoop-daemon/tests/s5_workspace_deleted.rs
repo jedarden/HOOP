@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use hoop_schema::ReadinessResponse;
 use serde_json::Value as JsonValue;
-use crate::integration_harness::setup_test_hoop_home;
+use hoop_daemon::integration_harness::setup_test_hoop_home;
 
 fn create_beads_dir(path: &std::path::Path) {
     let beads_dir = path.join(".beads");

@@ -11,7 +11,6 @@
 //! This is an integration test with actual WebSocket connections and server state.
 
 use futures_util::stream::StreamExt;
-use futures_util::SinkExt;
 use std::time::Duration;
 use tokio::time::timeout;
 use tokio_tungstenite;
@@ -22,7 +21,7 @@ use integration_harness::spawn_test_daemon;
 #[tokio::test]
 async fn test_epoch_sync_init_event_carrying_subscriptions() {
     // Test that the init event carries the server-authoritative subscription list
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _shutdown) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -73,7 +72,7 @@ async fn test_epoch_sync_init_event_carrying_subscriptions() {
 #[tokio::test]
 async fn test_epoch_sync_initial_snapshots_after_init() {
     // Test that init is followed by all snapshot events in order
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _shutdown) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -143,7 +142,7 @@ async fn test_epoch_sync_initial_snapshots_after_init() {
 #[tokio::test]
 async fn test_epoch_sync_reconnect_wipes_and_rebuilds() {
     // Core invariant: disconnect → server state changes → reconnect → stale rows gone
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _shutdown) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -240,7 +239,7 @@ async fn test_epoch_sync_reconnect_wipes_and_rebuilds() {
 #[tokio::test]
 async fn test_epoch_sync_init_is_always_first_message() {
     // Verify that init is always the first message on any connection
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _shutdown) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 
@@ -288,7 +287,7 @@ async fn test_epoch_sync_init_is_always_first_message() {
 #[tokio::test]
 async fn test_epoch_sync_concurrent_connections() {
     // Test that multiple concurrent connections each receive their own init
-    let (base_url, _shutdown, _temp_dir) = spawn_test_daemon()
+    let (base_url, _shutdown) = spawn_test_daemon()
         .await
         .expect("Failed to spawn test daemon");
 

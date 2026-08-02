@@ -13,6 +13,7 @@
 use hoop_daemon::events::{BeadEventData, NeedleEvent};
 use hoop_daemon::heartbeats::HeartbeatMonitor;
 use hoop_daemon::parse_jsonl_safe::LineSource;
+use hoop_daemon::unknown_event_sink::UnknownEventSink;
 use std::fs;
 use std::path::PathBuf;
 
@@ -436,6 +437,11 @@ fn heartbeat_source(line_number: usize) -> LineSource {
     }
 }
 
+/// Helper to create an UnknownEventSink for tests
+fn unknown_sink() -> UnknownEventSink {
+    UnknownEventSink::new("heartbeats_test")
+}
+
 #[test]
 fn heartbeat_executing_state_parses() {
     let content = fs::read_to_string(heartbeats_fixture_path()).unwrap();
@@ -444,7 +450,7 @@ fn heartbeat_executing_state_parses() {
         .find(|l| l.contains(r#""state":"executing""#))
         .expect("fixture must have an executing heartbeat");
 
-    let hb = HeartbeatMonitor::parse_heartbeat_line(line, &heartbeat_source(1))
+    let hb = HeartbeatMonitor::parse_heartbeat_line(line, &heartbeat_source(1), &unknown_sink())
         .expect("executing heartbeat must parse successfully");
 
     assert!(!hb.worker.is_empty(), "heartbeat: worker must be non-empty");
@@ -469,7 +475,7 @@ fn heartbeat_idle_state_parses() {
         .find(|l| l.contains(r#""state":"idle""#))
         .expect("fixture must have an idle heartbeat");
 
-    let hb = HeartbeatMonitor::parse_heartbeat_line(line, &heartbeat_source(1))
+    let hb = HeartbeatMonitor::parse_heartbeat_line(line, &heartbeat_source(1), &unknown_sink())
         .expect("idle heartbeat must parse successfully");
 
     assert!(!hb.worker.is_empty(), "heartbeat: worker must be non-empty");
@@ -484,7 +490,7 @@ fn heartbeat_knot_state_parses() {
         .find(|l| l.contains(r#""state":"knot""#))
         .expect("fixture must have a knot heartbeat");
 
-    let hb = HeartbeatMonitor::parse_heartbeat_line(line, &heartbeat_source(1))
+    let hb = HeartbeatMonitor::parse_heartbeat_line(line, &heartbeat_source(1), &unknown_sink())
         .expect("knot heartbeat must parse successfully");
 
     assert!(!hb.worker.is_empty(), "heartbeat: worker must be non-empty");
@@ -505,7 +511,7 @@ fn all_fixture_heartbeats_parse() {
             continue;
         }
         let source = heartbeat_source(i + 1);
-        let hb = HeartbeatMonitor::parse_heartbeat_line(line, &source);
+        let hb = HeartbeatMonitor::parse_heartbeat_line(line, &source, &unknown_sink());
         assert!(
             hb.is_some(),
             "heartbeat line {} failed to parse: {line}",
@@ -523,7 +529,7 @@ fn heartbeat_timestamps_are_valid_rfc3339() {
             continue;
         }
         let source = heartbeat_source(i + 1);
-        let hb = HeartbeatMonitor::parse_heartbeat_line(line, &source);
+        let hb = HeartbeatMonitor::parse_heartbeat_line(line, &source, &unknown_sink());
         if let Some(hb) = hb {
             // ts field is chrono::DateTime<Utc> — if it parsed, it's valid
             assert!(
@@ -558,7 +564,7 @@ fn consecutive_heartbeats_per_bead_are_roughly_10s_apart() {
             continue;
         }
         let source = heartbeat_source(i + 1);
-        if let Some(hb) = HeartbeatMonitor::parse_heartbeat_line(line, &source) {
+        if let Some(hb) = HeartbeatMonitor::parse_heartbeat_line(line, &source, &unknown_sink()) {
             if let hoop_daemon::WorkerState::Executing { ref bead, .. } = hb.state {
                 per_bead
                     .entry((hb.worker.clone(), bead.clone()))

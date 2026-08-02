@@ -9,7 +9,7 @@
 
 use chrono::Utc;
 use hoop_daemon::stitch_percentile_index::{
-    BucketId, BodyLengthBucket, StitchFeatures, MIN_SAMPLES_FOR_PREDICTION,
+    BucketId, BodyLengthBucket, MIN_SAMPLES_FOR_PREDICTION,
     TITLE_TOKEN_BUCKET_SIZE,
 };
 use rusqlite::Connection;
@@ -409,7 +409,7 @@ fn test_query_performance_under_50ms() {
             &mut conn,
             &format!("stitch_{}", i),
             title,
-            Some(&body),
+            body.as_deref(),
             &labels,
             tokens,
             24,
@@ -562,7 +562,7 @@ fn test_similarity_threshold_implicit() {
         &mut conn,
         "stitch_1",
         "Fix authentication crash",
-        Some("A".repeat(150)), // Medium length
+        Some("A".repeat(150).as_str()), // Medium length
         &["bug".to_string()],
         100_000,
         24,

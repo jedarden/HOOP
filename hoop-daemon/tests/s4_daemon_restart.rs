@@ -22,7 +22,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 use tempfile::TempDir;
-use crate::crate::crate::integration_harness::spawn_test_daemon_with_config;
+use hoop_daemon::integration_harness::spawn_test_daemon_with_config;
 
 /// Serialize test setup
 static LOCK: Mutex<()> = Mutex::new(());
@@ -163,7 +163,7 @@ async fn s4_daemon_restart_no_bead_loss() {
     let initial_event_count = count_events_in_file();
 
     // Spawn first daemon
-    let (base_url1, _daemon1) = crate::crate::integration_harness::spawn_test_daemon_with_config::<fn(&mut hoop_daemon::Config)>(Some(|config| {
+    let (base_url1, _daemon1) = crate::integration_harness::spawn_test_daemon_with_config::<fn(&mut hoop_daemon::Config)>(Some(|config| {
         config.observer_mode = false;
     }))
     .await
@@ -219,7 +219,7 @@ async fn s4_daemon_restart_no_bead_loss() {
     );
 
     // Spawn second daemon (simulating restart)
-    let (base_url2, _daemon2) = crate::crate::integration_harness::spawn_test_daemon_with_config::<fn(&mut hoop_daemon::Config)>(Some(|config| {
+    let (base_url2, _daemon2) = crate::integration_harness::spawn_test_daemon_with_config::<fn(&mut hoop_daemon::Config)>(Some(|config| {
         config.observer_mode = false;
     }))
     .await

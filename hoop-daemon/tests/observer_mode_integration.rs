@@ -107,7 +107,7 @@ async fn test_observer_websocket_event_forwarding() {
 
     let _client = ObserverClient::new(
         primary_addr,
-        event_tx,
+        event_tx.clone(),
         beads,
         workers,
         projects,

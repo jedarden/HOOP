@@ -13,7 +13,7 @@ use std::sync::Mutex;
 use tempfile::TempDir;
 
 /// Serialize test setup so parallel tests don't fight over the env var.
-static LOCK: Mutex<()> = Mutex::new();
+static LOCK: Mutex<()> = Mutex::new(());
 
 /// Set up a temporary fleet.db for testing.
 ///
@@ -66,6 +66,7 @@ fn test_two_concurrent_drafts_both_land() {
         created_at: now.clone(),
         source: "form".to_string(),
         agent_session_id: None,
+        turn_id: None,
         status: "pending".to_string(),
         version: 1,
         original_json: None,
@@ -94,6 +95,7 @@ fn test_two_concurrent_drafts_both_land() {
         created_at: now.clone(),
         source: "form".to_string(),
         agent_session_id: None,
+        turn_id: None,
         status: "pending".to_string(),
         version: 1,
         original_json: None,
@@ -146,6 +148,7 @@ fn test_autosave_preserves_draft_concurrency() {
         created_at: now.clone(),
         source: "form".to_string(),
         agent_session_id: None,
+        turn_id: None,
         status: "pending".to_string(),
         version: 1,
         original_json: None,
@@ -169,7 +172,7 @@ fn test_autosave_preserves_draft_concurrency() {
         Some("Updated description"),
         None,
         Some(7),
-        &["urgent".to_string()],
+        Some(&["urgent".to_string()]),
     ).expect("autosave draft");
 
     let fetched = hoop_daemon::fleet::get_draft("draft-autosave-test")
@@ -205,6 +208,7 @@ fn test_abandon_draft_marks_abandoned() {
         created_at: now.clone(),
         source: "form".to_string(),
         agent_session_id: None,
+        turn_id: None,
         status: "pending".to_string(),
         version: 1,
         original_json: None,
@@ -254,6 +258,7 @@ fn test_detect_similar_drafts_warns_duplication() {
         created_at: now.clone(),
         source: "form".to_string(),
         agent_session_id: None,
+        turn_id: None,
         status: "pending".to_string(),
         version: 1,
         original_json: None,
@@ -642,6 +647,7 @@ fn test_draft_tracks_operator_identity() {
         created_at: now.clone(),
         source: "form".to_string(),
         agent_session_id: None,
+        turn_id: None,
         status: "pending".to_string(),
         version: 1,
         original_json: None,

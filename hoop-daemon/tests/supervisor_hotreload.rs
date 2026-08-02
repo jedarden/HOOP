@@ -29,6 +29,7 @@ fn create_test_project(name: &str, path: PathBuf) -> ProjectsRegistryProjectsIte
         canonical_path: None,
         label: None,
         color: None,
+        redaction: None,
     }
 }
 
@@ -270,6 +271,7 @@ async fn test_reconcile_skips_project_with_no_workspaces() {
         canonical_path: None,
         label: None,
         color: None,
+        redaction: None,
     };
 
     let config = create_test_config(vec![invalid_project]);

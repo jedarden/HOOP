@@ -100,8 +100,9 @@ print(json.dumps({"received": args}))
     // Test valid args
     let args = json!({"message": "hello world"});
     let result = api_skills::execute_skill(
-        &skills[0],
+        &skills[0].run_path,
         &args,
+        skills[0].manifest.timeout_secs,
     );
 
     assert!(result.is_ok());

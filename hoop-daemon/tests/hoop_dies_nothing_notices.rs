@@ -21,7 +21,7 @@ use std::time::Duration;
 use tempfile::TempDir;
 
 /// Serialize test setup so parallel tests don't fight over resources.
-static LOCK: Mutex<()> = Mutex::new>();
+static LOCK: Mutex<()> = Mutex::new(());
 
 /// Get the testrepo path
 fn testrepo_root() -> PathBuf {
@@ -405,7 +405,7 @@ async fn test_projections_rebuild_within_5s() {
     let start = std::time::Instant::now();
 
     // Write 100 events (simulating a busy workspace)
-    for i in 0..100 {
+    for i in 0..100u32 {
         let bead_id = format!("bd-perf-{:03}", i);
         worker
             .write_claim(&bead_id)

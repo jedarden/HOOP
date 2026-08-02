@@ -124,7 +124,7 @@ pub struct FleetNotificationRing {
 }
 
 impl FleetNotificationRing {
-    fn new() -> Self {
+    pub fn new() -> Self {
         let (tx, _) = broadcast::channel(64);
         Self {
             inner: RwLock::new(VecDeque::with_capacity(RING_SIZE)),
