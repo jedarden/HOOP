@@ -798,10 +798,16 @@ fn bead_type_str(t: &crate::BeadType) -> String {
     match t {
         crate::BeadType::Task => "task",
         crate::BeadType::Bug => "bug",
+        crate::BeadType::Chore => "chore",
+        crate::BeadType::Feature => "feature",
+        crate::BeadType::Test => "test",
+        crate::BeadType::Docs => "docs",
+        crate::BeadType::Story => "story",
         crate::BeadType::Epic => "epic",
         crate::BeadType::Genesis => "genesis",
         crate::BeadType::Review => "review",
         crate::BeadType::Fix => "fix",
+        crate::BeadType::Unknown => "unknown",
     }
     .to_string()
 }
