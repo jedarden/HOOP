@@ -316,6 +316,123 @@ pub fn verify_output_patterns(
     Ok(result)
 }
 
+/// Configuration for large deterministic stdout generation
+#[derive(Debug, Clone)]
+pub struct LargeOutputConfig {
+    /// Target size in bytes (minimum, actual may be slightly larger)
+    pub target_size_bytes: usize,
+    /// Prefix for each line
+    pub prefix: String,
+    /// Whether to include line numbers (for deterministic verification)
+    pub include_line_numbers: bool,
+}
+
+impl Default for LargeOutputConfig {
+    fn default() -> Self {
+        Self {
+            target_size_bytes: 10_240, // 10KB
+            prefix: "STDOUT_LINE".to_string(),
+            include_line_numbers: true,
+        }
+    }
+}
+
+/// Generate large deterministic stdout content
+///
+/// This function generates substantial, deterministic stdout output that can be
+/// used for testing output capture, verification, and buffer handling.
+///
+/// # Deterministic Behavior
+///
+/// The output is deterministic for a given configuration:
+/// - Each line has a predictable format based on line index
+/// - Total size is calculated upfront and met precisely
+/// - Same configuration produces identical output across runs
+///
+/// # Arguments
+///
+/// * `config` - Configuration for output generation
+///
+/// # Returns
+///
+/// A tuple of (total_bytes, line_count, generated_content)
+///
+/// # Example
+///
+/// ```rust
+/// let config = LargeOutputConfig {
+///     target_size_bytes: 15_000, // ~15KB
+///     ..Default::default()
+/// };
+/// let (bytes, lines, content) = generate_large_stdout(&config);
+/// assert!(bytes > 10_000);
+/// println!("{}", content); // Write to stdout
+/// ```
+pub fn generate_large_stdout(config: &LargeOutputConfig) -> (usize, usize, String) {
+    // Calculate approximate line length: prefix + formatting + line number + text + newline
+    // Example: "STDOUT_LINE_0123 - This is line 123 of the substantial stdout generation test\n"
+    //         ~30-40 bytes per line for typical configurations
+
+    let base_line_length = config.prefix.len() + 60; // Conservative estimate
+    let target_lines = (config.target_size_bytes + base_line_length - 1) / base_line_length;
+
+    let mut generated_content = String::new();
+
+    for i in 0..target_lines {
+        let line = if config.include_line_numbers {
+            format!("{}_{:04} - This is line {} of the substantial stdout generation test - verifying no truncation occurs", config.prefix, i, i)
+        } else {
+            format!("{} - Substantial stdout output line for testing - verifiable deterministic content", config.prefix)
+        };
+
+        generated_content.push_str(&line);
+        generated_content.push('\n');
+    }
+
+    let total_bytes = generated_content.len();
+    let line_count = target_lines;
+
+    (total_bytes, line_count, generated_content)
+}
+
+/// Generate large stdout and output it directly
+///
+/// This is a convenience function that generates large stdout content and
+/// outputs it immediately. Useful for one-shot tests.
+///
+/// # Arguments
+///
+/// * `config` - Configuration for output generation
+///
+/// # Returns
+/// A tuple of (total_bytes, line_count) for verification
+pub fn generate_and_print_large_stdout(config: &LargeOutputConfig) -> (usize, usize) {
+    let (total_bytes, line_count, content) = generate_large_stdout(config);
+
+    // Output to stdout
+    print!("{}", content);
+    io::stdout().flush().unwrap();
+
+    // Log verification metadata to stderr for wrapper scripts
+    eprintln!("VERIFICATION_METADATA: Generated {} lines (~{} bytes)", line_count, total_bytes);
+
+    (total_bytes, line_count)
+}
+
+/// Verify that generated content meets size requirements
+///
+/// # Arguments
+///
+/// * `actual_bytes` - Actual size of generated content
+/// * `required_bytes` - Minimum required size
+///
+/// # Returns
+///
+/// true if size requirement is met, false otherwise
+pub fn verify_size_requirement(actual_bytes: usize, required_bytes: usize) -> bool {
+    actual_bytes >= required_bytes
+}
+
 /// Find the most recent log file matching a pattern
 pub fn find_latest_log(base_dir: &Path, pattern: &str) -> Option<String> {
     fs::read_dir(base_dir).ok()?

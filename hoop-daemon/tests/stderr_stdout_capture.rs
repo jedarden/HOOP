@@ -128,24 +128,52 @@ fn test_output_flush_behavior() {
 fn test_substantial_stdout_generation() {
     println!("=== Testing substantial stdout generation (>10KB) ===");
 
-    // Generate >10KB of stdout output with verifiable content
-    let lines_to_generate = 200; // Each line ~70 bytes => ~14KB total
-    let mut generated_content = String::new();
+    // Use the reusable large stdout generation function
+    let config = LargeOutputConfig {
+        target_size_bytes: 15_000, // Target ~15KB
+        prefix: "STDOUT_LINE".to_string(),
+        include_line_numbers: true,
+    };
 
-    for i in 0..lines_to_generate {
-        let line = format!("STDOUT_LINE_{:04} - This is line {} of the substantial stdout generation test - verifying no truncation occurs", i, i);
-        generated_content.push_str(&line);
-        generated_content.push('\n');
-        println!("{}", line);
-    }
+    let (total_bytes, line_count) = generate_and_print_large_stdout(&config);
 
-    // Flush to ensure all output is written
-    io::stdout().flush().unwrap();
+    // Verify the output size meets the >10KB requirement
+    assert!(verify_size_requirement(total_bytes, 10_240), "Generated stdout must be at least 10KB, got {} bytes", total_bytes);
 
     // Log verification information for the wrapper script
-    eprintln!("VERIFICATION_METADATA: Generated {} lines (~{} bytes)", lines_to_generate, generated_content.len());
-    eprintln!("VERIFICATION_METADATA: First line: {}", generated_content.lines().next().unwrap_or("N/A"));
-    eprintln!("VERIFICATION_METADATA: Last line: {}", generated_content.lines().last().unwrap_or("N/A"));
+    eprintln!("VERIFICATION_METADATA: Generated {} lines ({} bytes)", line_count, total_bytes);
+    eprintln!("VERIFICATION_METADATA: Size requirement (>10KB): MET");
 
-    println!("=== Substantial stdout generation test completed - Generated {} bytes ===", generated_content.len());
+    println!("=== Substantial stdout generation test completed - Generated {} bytes in {} lines ===", total_bytes, line_count);
+}
+
+#[test]
+fn test_reusable_large_stdout_generation() {
+    println!("=== Testing reusable large stdout generation function ===");
+
+    // Test 1: Generate with default configuration (>10KB)
+    let default_config = LargeOutputConfig::default();
+    let (bytes1, lines1) = generate_and_print_large_stdout(&default_config);
+    assert!(verify_size_requirement(bytes1, 10_240), "Default config must generate >10KB");
+
+    // Test 2: Generate with custom larger size
+    let large_config = LargeOutputConfig {
+        target_size_bytes: 20_000, // ~20KB
+        ..Default::default()
+    };
+    let (bytes2, lines2) = generate_and_print_large_stdout(&large_config);
+    assert!(verify_size_requirement(bytes2, 20_000), "Large config must generate >20KB");
+    assert!(bytes2 > bytes1, "Large config should generate more output than default");
+
+    // Test 3: Verify deterministic behavior - same config produces same size
+    let config_clone = large_config.clone();
+    let (bytes3, _lines3) = generate_and_print_large_stdout(&config_clone);
+    assert_eq!(bytes2, bytes3, "Same configuration should produce identical output size");
+
+    eprintln!("VERIFICATION_METADATA: Reusable function test completed successfully");
+    eprintln!("VERIFICATION_METADATA: Test 1 (default): {} bytes in {} lines", bytes1, lines1);
+    eprintln!("VERIFICATION_METADATA: Test 2 (large): {} bytes in {} lines", bytes2, lines2);
+    eprintln!("VERIFICATION_METADATA: Test 3 (determinism): {} bytes == {} bytes", bytes2, bytes3);
+
+    println!("=== Reusable large stdout generation test completed ===");
 }
