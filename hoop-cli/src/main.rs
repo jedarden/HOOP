@@ -397,9 +397,11 @@ async fn main() -> anyhow::Result<()> {
                 std::process::exit(exit_code_for_error(&e));
             }
         }
-        Commands::Add { path: _ } => {
-            eprintln!("hoop add: not yet implemented");
-            std::process::exit(1);
+        Commands::Add { path } => {
+            if let Err(e) = projects::add_project(&path) {
+                eprintln!("hoop add: {}", e);
+                std::process::exit(exit_code_for_error(&e));
+            }
         }
         Commands::Scan { root, yes } => {
             if let Err(e) = projects::scan_projects(&root, no_interactive || yes) {
@@ -408,8 +410,22 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Commands::List => {
-            eprintln!("hoop list: not yet implemented");
-            std::process::exit(1);
+            let projects = projects::list_projects().unwrap_or_default();
+
+            if projects.is_empty() {
+                println!("No projects registered");
+                println!("\nAdd a project with:");
+                println!("  hoop add <path>");
+                println!("  hoop projects add <path>");
+            } else {
+                println!("Registered projects:");
+                for proj in &projects {
+                    let ws_path = proj
+                        .primary_path()
+                        .unwrap_or_else(|| std::path::Path::new("?"));
+                    println!("  {} - {}", proj.name, ws_path.display());
+                }
+            }
         }
         Commands::Remove { name, confirm } => {
             let removed = projects::remove_project(&name, no_interactive, confirm)?;

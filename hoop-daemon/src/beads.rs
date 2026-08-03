@@ -341,4 +341,198 @@ mod tests {
         assert!(matches!(bead.status, BeadStatus::Open));
         assert!(matches!(bead.issue_type, BeadType::Task));
     }
+
+    #[test]
+    fn test_real_br_line_1_closed_task() {
+        // Real br line from .beads/issues.jsonl line 1
+        let json = r#"{"id":"bf-10k1y","title":"§1.8 S4: Daemon restart acceptance test (continuity)","description":"Integration test for acceptance scenario S4: kill hoop-daemon, verify in-flight br subprocess completes or is cleanly abandoned, restart daemon, verify fleet.db stitches are intact and project supervisors re-attach. Acceptance: no stitch data loss, restart <5s.","design":"","acceptance_criteria":"","notes":"","status":"closed","priority":1,"issue_type":"task","created_at":"2026-05-01T22:17:41.906031666Z","updated_at":"2026-05-13T23:39:12.881456262Z","closed_at":"2026-05-13T23:39:12.881456262Z","close_reason":"Completed","source_repo":".","compaction_level":0}"#;
+
+        let bead: Bead = serde_json::from_str(json).unwrap();
+        assert_eq!(bead.id, "bf-10k1y");
+        assert_eq!(bead.status, BeadStatus::Closed);
+        assert_eq!(bead.issue_type, BeadType::Task);
+        assert_eq!(bead.created_by, ""); // missing field defaults to empty
+        assert!(bead.dependencies.is_empty()); // missing field defaults to empty
+    }
+
+    #[test]
+    fn test_real_br_line_2_open_task() {
+        // Real br line from .beads/issues.jsonl - open task with dependencies, missing created_by
+        let json = r#"{"id":"bf-114ko","title":"Apply pin! macro fixes","description":"Test description","status":"open","priority":2,"issue_type":"task","created_at":"2026-07-10T18:42:14.846403250Z","updated_at":"2026-07-10T18:42:14.846403250Z","source_repo":".","compaction_level":0,"dependencies":[{"issue_id":"bf-114ko","depends_on_id":"bf-422y8","type":"blocks","created_at":"2026-07-10T18:42:27.720711647Z","created_by":"cli","thread_id":""}]}"#;
+
+        let bead: Bead = serde_json::from_str(json).unwrap();
+        assert_eq!(bead.id, "bf-114ko");
+        assert_eq!(bead.status, BeadStatus::Open);
+        assert_eq!(bead.issue_type, BeadType::Task);
+    }
+
+    #[test]
+    fn test_real_br_line_3_blocked_task() {
+        // Real br line from .beads/issues.jsonl - blocked status
+        let json = r#"{"id":"bf-12627","title":"Check ToSchema imports","description":"Check imports","status":"blocked","priority":2,"issue_type":"task","created_at":"2026-07-03T06:19:23.611881906Z","updated_at":"2026-08-01T00:20:40.002621310Z","source_repo":".","compaction_level":0}"#;
+
+        let bead: Bead = serde_json::from_str(json).unwrap();
+        assert_eq!(bead.id, "bf-12627");
+        assert_eq!(bead.status, BeadStatus::Blocked);
+        assert_eq!(bead.issue_type, BeadType::Task);
+    }
+
+    #[test]
+    fn test_real_br_line_bug_type() {
+        // Real br line - bug type
+        let json = r#"{"id":"bf-12m0i","title":"nix-shell not available on HOOP build server","description":"The nix-shell command required for HOOP Rust builds is not available on the build server. Tried nix-shell --run rustc --version but got command not found. System is NOT NixOS per os-release. However rustc 1.95.0 IS available directly. This blocks verification of bf-3lu60 which requires nix-shell access.","design":"","acceptance_criteria":"","notes":"Investigation complete - nix-shell not required on Debian build server. All dependencies available natively. See notes/bf-12m0i.md for details.","status":"closed","priority":2,"issue_type":"bug","assignee":"claude-code-glm47-alpha","created_at":"2026-07-03T03:34:03.778372007Z","updated_at":"2026-07-09T13:47:45.975209252Z","closed_at":"2026-07-09T13:47:45.975209252Z","close_reason":"Data-hygiene remediation (bf-wre): status was completed, a non-terminal Custom status invisible to is_terminal()/get_ready_candidates, silently freezing dependents. Underlying work was already done per bead history; correcting to closed.","source_repo":".","compaction_level":0}"#;
+
+        let bead: Bead = serde_json::from_str(json).unwrap();
+        assert_eq!(bead.id, "bf-12m0i");
+        assert_eq!(bead.status, BeadStatus::Closed);
+        assert_eq!(bead.issue_type, BeadType::Bug);
+    }
+
+    #[test]
+    fn test_all_bead_status_variants() {
+        // Test all BeadStatus lowercase variants that br/bead-forge writes
+        let statuses = [
+            ("open", BeadStatus::Open),
+            ("closed", BeadStatus::Closed),
+            ("blocked", BeadStatus::Blocked),
+            ("completed", BeadStatus::Completed),
+            ("done", BeadStatus::Done),
+        ];
+
+        for (status_str, expected_status) in statuses {
+            let json = r#"{
+                "id": "test-1",
+                "title": "Test",
+                "status": ""#.to_string() + status_str + r#"",
+                "priority": 1,
+                "issue_type": "task",
+                "created_at": "2026-04-22T19:48:33Z",
+                "updated_at": "2026-04-22T19:48:33Z"
+            }"#;
+
+            let bead: Bead = serde_json::from_str(&json).unwrap();
+            assert_eq!(bead.status, expected_status, "Failed to deserialize status: {}", status_str);
+        }
+    }
+
+    #[test]
+    fn test_all_bead_type_variants() {
+        // Test all BeadType lowercase variants that br/bead-forge writes
+        let types = [
+            ("task", BeadType::Task),
+            ("bug", BeadType::Bug),
+            ("chore", BeadType::Chore),
+            ("feature", BeadType::Feature),
+            ("test", BeadType::Test),
+            ("docs", BeadType::Docs),
+            ("story", BeadType::Story),
+            ("epic", BeadType::Epic),
+            ("genesis", BeadType::Genesis),
+            ("review", BeadType::Review),
+            ("fix", BeadType::Fix),
+        ];
+
+        for (type_str, expected_type) in types {
+            let json = r#"{
+                "id": "test-1",
+                "title": "Test",
+                "status": "open",
+                "priority": 1,
+                "issue_type": ""#.to_string() + type_str + r#"",
+                "created_at": "2026-04-22T19:48:33Z",
+                "updated_at": "2026-04-22T19:48:33Z"
+            }"#;
+
+            let bead: Bead = serde_json::from_str(&json).unwrap();
+            assert_eq!(bead.issue_type, expected_type, "Failed to deserialize issue_type: {}", type_str);
+        }
+    }
+
+    #[test]
+    fn test_missing_created_by_defaults_to_empty() {
+        // br/bead-forge may omit created_by on older beads
+        let json = r#"{
+            "id": "test-1",
+            "title": "Test",
+            "status": "open",
+            "priority": 1,
+            "issue_type": "task",
+            "created_at": "2026-04-22T19:48:33Z",
+            "updated_at": "2026-04-22T19:48:33Z"
+        }"#;
+
+        let bead: Bead = serde_json::from_str(json).unwrap();
+        assert_eq!(bead.created_by, "");
+    }
+
+    #[test]
+    fn test_missing_dependencies_defaults_to_empty() {
+        // br/bead-forge may omit dependencies when a bead has no blockers
+        let json = r#"{
+            "id": "test-1",
+            "title": "Test",
+            "status": "open",
+            "priority": 1,
+            "issue_type": "task",
+            "created_at": "2026-04-22T19:48:33Z",
+            "updated_at": "2026-04-22T19:48:33Z"
+        }"#;
+
+        let bead: Bead = serde_json::from_str(json).unwrap();
+        assert!(bead.dependencies.is_empty());
+    }
+
+    #[test]
+    fn test_unknown_status_deserializes_to_unknown() {
+        // Unknown status should deserialize to Unknown variant, not fail
+        let json = r#"{
+            "id": "test-1",
+            "title": "Test",
+            "status": "custom_status",
+            "priority": 1,
+            "issue_type": "task",
+            "created_at": "2026-04-22T19:48:33Z",
+            "updated_at": "2026-04-22T19:48:33Z"
+        }"#;
+
+        let bead: Bead = serde_json::from_str(json).unwrap();
+        assert_eq!(bead.status, BeadStatus::Unknown);
+    }
+
+    #[test]
+    fn test_unknown_type_deserializes_to_unknown() {
+        // Unknown issue_type should deserialize to Unknown variant, not fail
+        let json = r#"{
+            "id": "test-1",
+            "title": "Test",
+            "status": "open",
+            "priority": 1,
+            "issue_type": "custom_type",
+            "created_at": "2026-04-22T19:48:33Z",
+            "updated_at": "2026-04-22T19:48:33Z"
+        }"#;
+
+        let bead: Bead = serde_json::from_str(json).unwrap();
+        assert_eq!(bead.issue_type, BeadType::Unknown);
+    }
+
+    #[test]
+    fn test_extra_unknown_keys_ignored() {
+        // Extra keys should be silently ignored (serde default behavior)
+        let json = r#"{
+            "id": "test-1",
+            "title": "Test",
+            "status": "open",
+            "priority": 1,
+            "issue_type": "task",
+            "created_at": "2026-04-22T19:48:33Z",
+            "updated_at": "2026-04-22T19:48:33Z",
+            "unknown_key": "some_value",
+            "another_unknown": 123
+        }"#;
+
+        let bead: Bead = serde_json::from_str(json).unwrap();
+        assert_eq!(bead.id, "test-1");
+        assert_eq!(bead.status, BeadStatus::Open);
+    }
 }
