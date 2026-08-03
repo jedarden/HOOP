@@ -24,6 +24,39 @@ use std::fs;
 use std::path::Path;
 use std::collections::HashMap;
 
+/// Read log file contents into memory
+///
+/// This is a basic infrastructure function for reading log file contents.
+/// It handles file not found errors gracefully by returning an `io::Error`,
+/// which allows callers to handle errors appropriately (e.g., distinguishing
+/// between "file not found" vs "permission denied" vs other I/O errors).
+///
+/// # Arguments
+///
+/// * `path` - Path to the log file to read
+///
+/// # Returns
+///
+/// * `Ok(String)` - The file contents as a string
+/// * `Err(io::Error)` - The I/O error if reading fails
+///
+/// # Example
+///
+/// ```rust
+/// use std::path::Path;
+///
+/// match read_log_file(Path::new("/tmp/test.log")) {
+///     Ok(contents) => println!("Read {} bytes", contents.len()),
+///     Err(e) if e.kind() == io::ErrorKind::NotFound => {
+///         println!("Log file not found - may not have been created yet");
+///     }
+///     Err(e) => eprintln!("Failed to read log file: {}", e),
+/// }
+/// ```
+pub fn read_log_file<P: AsRef<Path>>(path: P) -> Result<String, io::Error> {
+    fs::read_to_string(path.as_ref())
+}
+
 /// Stream type for output generation
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OutputStream {
@@ -453,9 +486,261 @@ pub fn find_latest_log(base_dir: &Path, pattern: &str) -> Option<String> {
         .map(|(path, _)| path.to_string_lossy().to_string())
 }
 
+/// Character-by-character verification result
+#[derive(Debug)]
+pub struct CharVerificationResult {
+    /// Whether the verification passed (exact match)
+    pub passed: bool,
+    /// Total characters in expected content
+    pub expected_chars: usize,
+    /// Total characters in actual content
+    pub actual_chars: usize,
+    /// Position of first mismatch (0-based index)
+    pub first_mismatch_pos: Option<usize>,
+    /// Line number of first mismatch (1-based)
+    pub first_mismatch_line: Option<usize>,
+    /// Column number of first mismatch (1-based)
+    pub first_mismatch_column: Option<usize>,
+    /// Expected character at mismatch position
+    pub expected_char: Option<char>,
+    /// Actual character at mismatch position
+    pub actual_char: Option<char>,
+    /// Context around the first mismatch (20 characters before and after)
+    pub mismatch_context: Option<String>,
+}
+
+impl CharVerificationResult {
+    /// Create a successful verification result
+    pub fn success(expected_chars: usize, actual_chars: usize) -> Self {
+        Self {
+            passed: true,
+            expected_chars,
+            actual_chars,
+            first_mismatch_pos: None,
+            first_mismatch_line: None,
+            first_mismatch_column: None,
+            expected_char: None,
+            actual_char: None,
+            mismatch_context: None,
+        }
+    }
+
+    /// Create a failed verification result
+    pub fn failure(
+        expected_chars: usize,
+        actual_chars: usize,
+        pos: usize,
+        line: usize,
+        column: usize,
+        expected_char: char,
+        actual_char: char,
+        context: String,
+    ) -> Self {
+        Self {
+            passed: false,
+            expected_chars,
+            actual_chars,
+            first_mismatch_pos: Some(pos),
+            first_mismatch_line: Some(line),
+            first_mismatch_column: Some(column),
+            expected_char: Some(expected_char),
+            actual_char: Some(actual_char),
+            mismatch_context: Some(context),
+        }
+    }
+
+    /// Get a detailed failure message
+    pub fn failure_message(&self) -> String {
+        if self.passed {
+            return "✅ Character-by-character verification passed".to_string();
+        }
+
+        let mut msg = format!("❌ Character-by-character verification failed\n");
+        msg.push_str(&format!("Expected length: {} characters\n", self.expected_chars));
+        msg.push_str(&format!("Actual length: {} characters\n", self.actual_chars));
+
+        if let (Some(pos), Some(line), Some(col), Some(exp), Some(act)) = (
+            self.first_mismatch_pos,
+            self.first_mismatch_line,
+            self.first_mismatch_column,
+            self.expected_char,
+            self.actual_char,
+        ) {
+            msg.push_str(&format!(
+                "First mismatch at position {} (line {}, column {})\n",
+                pos, line, col
+            ));
+            msg.push_str(&format!("Expected character: {:?}\n", exp));
+            msg.push_str(&format!("Actual character: {:?}\n", act));
+
+            if let Some(ref context) = self.mismatch_context {
+                msg.push_str(&format!("Context: \"{}\"\n", context));
+                msg.push_str(&format!(
+                    "              {}^\n",
+                    " ".repeat(context.len().min(20))
+                ));
+            }
+        }
+
+        msg
+    }
+}
+
+/// Extract raw stdout content from a log file (without [STDOUT] prefix)
+pub fn extract_raw_stdout_from_log(log_path: &Path) -> Result<String, String> {
+    let content = fs::read_to_string(log_path)
+        .map_err(|e| format!("Failed to read log file: {}", e))?;
+
+    let mut stdout_lines = Vec::new();
+
+    for line in content.lines() {
+        if let Some(rest) = line.strip_prefix("[STDOUT]") {
+            stdout_lines.push(rest.trim().to_string());
+        }
+    }
+
+    // Reconstruct the original stdout by joining lines with newlines
+    // This matches what was originally printed (each println adds a newline)
+    let reconstructed = stdout_lines.join("\n") + if !stdout_lines.is_empty() { "\n" } else { "" };
+    Ok(reconstructed)
+}
+
+/// Verify character-by-character that expected stdout matches logged stdout
+///
+/// This function performs exact character-by-character comparison between:
+/// 1. The expected stdout content (what should have been generated)
+/// 2. The actual stdout content found in the log file
+///
+/// # Arguments
+///
+/// * `expected_content` - The exact stdout content that should have been generated
+/// * `log_path` - Path to the log file containing the captured output
+///
+/// # Returns
+///
+/// A `CharVerificationResult` containing detailed match/mismatch information
+///
+/// # Example
+///
+/// ```rust
+/// let expected = "Line 1\nLine 2\n";
+/// let result = verify_stdout_char_by_char(expected, Path::new("/tmp/test.log"));
+/// assert!(result.passed);
+/// ```
+pub fn verify_stdout_char_by_char(
+    expected_content: &str,
+    log_path: &Path,
+) -> Result<CharVerificationResult, String> {
+    let actual_content = extract_raw_stdout_from_log(log_path)?;
+
+    let expected_chars: Vec<char> = expected_content.chars().collect();
+    let actual_chars: Vec<char> = actual_content.chars().collect();
+
+    let expected_len = expected_chars.len();
+    let actual_len = actual_chars.len();
+
+    // Find the first mismatch
+    let max_len = expected_len.max(actual_len);
+    for (pos, (&exp_char, &act_char)) in expected_chars.iter()
+        .zip(actual_chars.iter())
+        .enumerate()
+    {
+        if exp_char != act_char {
+            // Calculate line and column (1-based for user readability)
+            let (line, column) = calculate_line_column(&expected_chars[..pos]);
+
+            // Get context around the mismatch
+            let context_start = pos.saturating_sub(20);
+            let context_end = (pos + 20).min(expected_chars.len());
+            let context: String = expected_chars[context_start..context_end].iter().collect();
+
+            return Ok(CharVerificationResult::failure(
+                expected_len,
+                actual_len,
+                pos,
+                line,
+                column,
+                exp_char,
+                act_char,
+                context,
+            ));
+        }
+    }
+
+    // If we haven't found a mismatch yet, check if lengths differ
+    if expected_len != actual_len {
+        let pos = max_len.min(expected_len);
+        let (line, column) = if pos > 0 {
+            calculate_line_column(&expected_chars[..pos])
+        } else {
+            (1, 1)
+        };
+
+        let exp_char = expected_chars.get(pos).copied().unwrap_or('\0');
+        let act_char = actual_chars.get(pos).copied().unwrap_or('\0');
+
+        let context_start = pos.saturating_sub(20);
+        let context_end = (pos + 20).min(expected_chars.len());
+        let context: String = expected_chars[context_start..context_end].iter().collect();
+
+        return Ok(CharVerificationResult::failure(
+            expected_len,
+            actual_len,
+            pos,
+            line,
+            column,
+            exp_char,
+            act_char,
+            context,
+        ));
+    }
+
+    Ok(CharVerificationResult::success(expected_len, actual_len))
+}
+
+/// Calculate line and column (1-based) from a character position
+fn calculate_line_column(chars: &[char]) -> (usize, usize) {
+    let mut line = 1;
+    let mut column = 1;
+
+    for &ch in chars {
+        if ch == '\n' {
+            line += 1;
+            column = 1;
+        } else {
+            column += 1;
+        }
+    }
+
+    (line, column)
+}
+
+/// Verify stdout content from a LargeOutputConfig generation
+///
+/// Convenience function that generates expected content from a config
+/// and verifies it against the log file.
+///
+/// # Arguments
+///
+/// * `config` - The LargeOutputConfig used to generate the stdout
+/// * `log_path` - Path to the log file containing captured output
+///
+/// # Returns
+///
+/// A `CharVerificationResult` with detailed match/mismatch information
+pub fn verify_large_stdout_output(
+    config: &LargeOutputConfig,
+    log_path: &Path,
+) -> Result<CharVerificationResult, String> {
+    let (_bytes, _lines, expected_content) = generate_large_stdout(config);
+    verify_stdout_char_by_char(&expected_content, log_path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::path::PathBuf;
 
     #[test]
     fn test_output_stream_write() {
@@ -489,5 +774,167 @@ mod tests {
             interleave: true,
         };
         generate_configured_output(&config);
+    }
+
+    #[test]
+    fn test_char_verification_success() {
+        // Create a temporary log file with matching content
+        let log_content = "[STDOUT] Line 1\n[STDOUT] Line 2\n";
+        let temp_dir = std::env::temp_dir();
+        let log_path = temp_dir.join("test_char_verify_success.log");
+        fs::write(&log_path, log_content).unwrap();
+
+        let expected = "Line 1\nLine 2\n";
+        let result = verify_stdout_char_by_char(expected, &log_path).unwrap();
+
+        assert!(result.passed, "Verification should pass when content matches");
+        assert_eq!(result.expected_chars, expected.chars().count());
+        assert!(result.first_mismatch_pos.is_none());
+
+        // Cleanup
+        fs::remove_file(&log_path).ok();
+    }
+
+    #[test]
+    fn test_char_verification_failure() {
+        // Create a log file with different content
+        let log_content = "[STDOUT] Line 1\n[STDOUT] Different content\n";
+        let temp_dir = std::env::temp_dir();
+        let log_path = temp_dir.join("test_char_verify_failure.log");
+        fs::write(&log_path, log_content).unwrap();
+
+        let expected = "Line 1\nLine 2\n";
+        let result = verify_stdout_char_by_char(expected, &log_path).unwrap();
+
+        assert!(!result.passed, "Verification should fail when content differs");
+        assert!(result.first_mismatch_pos.is_some());
+        assert!(result.first_mismatch_line.is_some());
+        assert!(result.expected_char.is_some());
+        assert!(result.actual_char.is_some());
+
+        // Cleanup
+        fs::remove_file(&log_path).ok();
+    }
+
+    #[test]
+    fn test_char_verification_length_mismatch() {
+        // Create a log file with shorter content
+        let log_content = "[STDOUT] Short\n";
+        let temp_dir = std::env::temp_dir();
+        let log_path = temp_dir.join("test_char_verify_length.log");
+        fs::write(&log_path, log_content).unwrap();
+
+        let expected = "Short\nExtra\n";
+        let result = verify_stdout_char_by_char(expected, &log_path).unwrap();
+
+        assert!(!result.passed, "Verification should fail when lengths differ");
+        assert_eq!(result.expected_chars, expected.chars().count());
+        assert_ne!(result.expected_chars, result.actual_chars);
+
+        // Cleanup
+        fs::remove_file(&log_path).ok();
+    }
+
+    #[test]
+    fn test_char_verification_exact_match() {
+        // Test exact character-for-character match with special characters
+        let log_content = "[STDOUT] Hello, 世界!\n[STDOUT] Tab\there\n";
+        let temp_dir = std::env::temp_dir();
+        let log_path = temp_dir.join("test_char_verify_exact.log");
+        fs::write(&log_path, log_content).unwrap();
+
+        let expected = "Hello, 世界!\nTab\there\n";
+        let result = verify_stdout_char_by_char(expected, &log_path).unwrap();
+
+        assert!(result.passed, "Should handle unicode and special characters");
+        assert_eq!(result.actual_chars, expected.chars().count());
+
+        // Cleanup
+        fs::remove_file(&log_path).ok();
+    }
+
+    #[test]
+    fn test_extract_raw_stdout() {
+        // Test extraction of stdout content without prefix
+        let log_content = "[STDOUT] Line 1\n[STDOUT] Line 2\n[STDERR] Error 1\n[STDOUT] Line 3\n";
+        let temp_dir = std::env::temp_dir();
+        let log_path = temp_dir.join("test_extract_stdout.log");
+        fs::write(&log_path, log_content).unwrap();
+
+        let extracted = extract_raw_stdout_from_log(&log_path).unwrap();
+        assert_eq!(extracted, "Line 1\nLine 2\nLine 3\n");
+
+        // Cleanup
+        fs::remove_file(&log_path).ok();
+    }
+
+    #[test]
+    fn test_large_output_verification() {
+        // Test verification with large generated content
+        let config = LargeOutputConfig {
+            target_size_bytes: 1024, // 1KB for quick test
+            ..Default::default()
+        };
+
+        let (_bytes, _lines, expected_content) = generate_large_stdout(&config);
+
+        // Create a log file with the generated content
+        let log_lines: String = expected_content
+            .lines()
+            .map(|line| format!("[STDOUT] {}", line))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let temp_dir = std::env::temp_dir();
+        let log_path = temp_dir.join("test_large_verify.log");
+        fs::write(&log_path, log_lines).unwrap();
+
+        let result = verify_large_stdout_output(&config, &log_path).unwrap();
+        assert!(result.passed, "Large output verification should pass");
+
+        // Cleanup
+        fs::remove_file(&log_path).ok();
+    }
+
+    #[test]
+    fn test_calculate_line_column() {
+        // Test line/column calculation
+        let text: Vec<char> = "Line 1\nLine 2\nLine 3".chars().collect();
+
+        // Position 0 should be line 1, column 1
+        let (line, col) = calculate_line_column(&text[..0]);
+        assert_eq!(line, 1);
+        assert_eq!(col, 1);
+
+        // Position 6 (after "Line 1\n") should be line 2, column 1
+        let (line, col) = calculate_line_column(&text[..6]);
+        assert_eq!(line, 2);
+        assert_eq!(col, 1);
+
+        // Position 7 should be line 2, column 2
+        let (line, col) = calculate_line_column(&text[..7]);
+        assert_eq!(line, 2);
+        assert_eq!(col, 2);
+    }
+
+    #[test]
+    fn test_verification_result_message() {
+        let result = CharVerificationResult::success(100, 100);
+        assert!(result.failure_message().contains("✅"));
+
+        let result = CharVerificationResult::failure(
+            100,
+            95,
+            50,
+            3,
+            10,
+            'x',
+            'y',
+            "context...".to_string(),
+        );
+        let msg = result.failure_message();
+        assert!(msg.contains("❌"));
+        assert!(msg.contains("position 50"));
+        assert!(msg.contains("line 3"));
+        assert!(msg.contains("column 10"));
     }
 }
