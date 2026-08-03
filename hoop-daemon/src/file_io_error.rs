@@ -333,6 +333,26 @@ pub fn create_file_with_context(path: &Path) -> Result<std::fs::File> {
     })
 }
 
+/// Create a new file exclusively (fail if exists) with explicit error handling
+///
+/// Returns a clear error message that includes the file path and the
+/// specific type of failure (permission denied, already exists, etc.)
+///
+/// # Examples
+///
+/// ```ignore
+/// use hoop_daemon::file_io_error::create_file_exclusive_with_context;
+///
+/// // This will fail with AlreadyExists if the file exists
+/// let file = create_file_exclusive_with_context(Path::new("/path/to/file"))?;
+/// ```
+pub fn create_file_exclusive_with_context(path: &Path) -> Result<std::fs::File> {
+    std::fs::File::create_new(path).map_err(|e| {
+        let file_error = classify_io_error(&e, path);
+        anyhow::anyhow!("{}", file_error)
+    })
+}
+
 /// Create a directory with explicit error handling
 ///
 /// Returns a clear error message that includes the directory path and the
@@ -915,6 +935,33 @@ mod tests {
     }
 
     #[test]
+    fn test_create_file_exclusive_with_context_success() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.txt");
+
+        let result = create_file_exclusive_with_context(&file_path);
+        assert!(result.is_ok());
+
+        // Verify the file was created
+        assert!(file_path.exists());
+    }
+
+    #[test]
+    fn test_create_file_exclusive_with_context_already_exists() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("test.txt");
+        fs::write(&file_path, "existing content").unwrap();
+
+        // Exclusive creation should fail when file exists
+        let result = create_file_exclusive_with_context(&file_path);
+        assert!(result.is_err());
+
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("already exists") || err_msg.contains("AlreadyExists"));
+        assert!(err_msg.contains("test.txt"));
+    }
+
+    #[test]
     fn test_create_dir_with_context_success() {
         let temp_dir = TempDir::new().unwrap();
         let dir_path = temp_dir.path().join("test_dir");
@@ -973,5 +1020,21 @@ mod tests {
         let err_msg = result.unwrap_err().to_string();
         #[cfg(unix)]
         assert!(err_msg.contains("Permission") || err_msg.contains("permission"));
+    }
+
+    #[test]
+    fn test_create_dir_all_with_context_already_exists() {
+        let temp_dir = TempDir::new().unwrap();
+        // Create a file where we'll try to create a directory
+        let file_path = temp_dir.path().join("blocking_file");
+        fs::write(&file_path, "existing file").unwrap();
+
+        // Try to create a directory at the same path (should fail with AlreadyExists)
+        let result = create_dir_all_with_context(&file_path);
+        assert!(result.is_err());
+
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("already exists") || err_msg.contains("AlreadyExists"));
+        assert!(err_msg.contains("blocking_file"));
     }
 }
