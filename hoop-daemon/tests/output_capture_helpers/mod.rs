@@ -6,7 +6,7 @@
 //! # Usage
 //!
 //! ```rust
-//! use output_capture_helpers::*;
+//! use hoop_daemon::tests::output_capture_helpers::*;
 //!
 //! #[test]
 //! fn test_my_output() {
@@ -438,6 +438,7 @@ pub fn generate_large_stdout(config: &LargeOutputConfig) -> (usize, usize, Strin
 /// * `config` - Configuration for output generation
 ///
 /// # Returns
+///
 /// A tuple of (total_bytes, line_count) for verification
 pub fn generate_and_print_large_stdout(config: &LargeOutputConfig) -> (usize, usize) {
     let (total_bytes, line_count, content) = generate_large_stdout(config);

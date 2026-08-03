@@ -14,6 +14,8 @@
 
 mod integration_harness;
 
+mod output_capture_helpers;
+
 mod s1_morning_review;
 mod s2_transcript_archaeology;
 mod s3_bead_creation_from_chat;
