@@ -25,7 +25,6 @@ mod pure_function_tests {
     use hoop_daemon::ansi_strip;
     use hoop_daemon::cost;
     use hoop_daemon::embedding::{Embedder, NgramEmbedder};
-    use hoop_daemon::parse_jsonl_safe;
     use hoop_daemon::pdf_sanitize;
     use hoop_daemon::prompt_substitute;
     use hoop_daemon::similarity;
@@ -94,7 +93,7 @@ mod pure_function_tests {
 
     #[test]
     fn test_purity_same_inputs_same_output() {
-        use chrono::{Duration, Utc};
+        use chrono::Utc;
         use hoop_daemon::stitch_status::{
             BeadStatus, BeadType, LinkedBead, StitchActivity, StitchContext,
         };
@@ -525,7 +524,7 @@ mod pure_function_tests {
 
     #[test]
     fn test_stitch_status_edge_cases() {
-        use chrono::{Duration, Utc};
+        use chrono::Utc;
         use hoop_daemon::stitch_status::{BeadStatus, BeadType, LinkedBead, StitchActivity, StitchContext};
 
         // No linked beads, no activity
