@@ -1,6 +1,0 @@
-HOOP development environment loaded
-Rust version: rustc 1.95.0 (59807616e 2026-04-14) (built from a source tarball)
-Node version: v22.23.1
-pnpm version: 11.9.0
-    Blocking waiting for file lock on artifact directory
-/tmp/nix-shell-1565796-0/rc: line 3: 1565915 Killed                  cargo test -p hoop-daemon --no-fail-fast -- --test-threads=1 --nocapture

@@ -1,5 +1,0 @@
-these 2 derivations will be built:
-  /nix/store/hrzfa4mckzhxrihvggm30ddqcagl95ia-nodejs-slim-20.20.2.drv
-  /nix/store/1p0bm82r171cciqfr054y1imsag7vb4w-nodejs-20.20.2.drv
-waiting for lock on '/nix/store/048knfwjvn52s18qv5mz93vc80hmkhpq-nodejs-slim-20.20.2-corepack', '/nix/store/095wx035026pfw1ssnwci9i3z0r67rg4-nodejs-slim-20.20.2-dev', '/nix/store/qzavxirpd48w90klvswdswqz0af23r9z-nodejs-slim-20.20.2-npm', '/nix/store/s8k0hlaid9z1r723viahkkrbn4za5r7v-nodejs-slim-20.20.2', '/nix/store/zssd275shsxmgr6d9gxz05whgyhvl48g-nodejs-slim-20.20.2-libv8'...
-error: interrupted by the user

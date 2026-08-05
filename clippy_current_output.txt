@@ -1,8 +1,0 @@
-HOOP development environment loaded
-Rust version: rustc 1.96.0 (ac68faa20 2026-05-25)
-Node version: v20.19.1
-pnpm version: 9.15.9
-    Blocking waiting for file lock on build directory
-    Checking hoop-daemon v1.0.0 (/home/coding/HOOP/hoop-daemon)
-    Checking hoop v1.0.0 (/home/coding/HOOP/hoop-cli)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 44.75s
