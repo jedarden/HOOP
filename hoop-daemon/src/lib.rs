@@ -212,14 +212,28 @@ pub enum BeadStatus {
 }
 
 /// Bead type/issue type
+///
+/// br/bead-forge writes `issue_type` as a lowercase snake_case string
+/// (task, bug, chore, feature, test, docs, story, epic, genesis, review, fix, …).
+/// `rename_all = "snake_case"` maps those wire values onto these variants, and
+/// the `#[serde(other)] Unknown` catch-all ensures any unrecognized type
+/// deserializes instead of failing (which would quarantine the entire bead line).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum BeadType {
     Task,
     Bug,
+    Chore,
+    Feature,
+    Test,
+    Docs,
+    Story,
     Epic,
     Genesis,
     Review,
     Fix,
+    #[serde(other)]
+    Unknown,
 }
 
 /// Control request over Unix socket

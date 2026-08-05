@@ -1,4 +1,3 @@
-use serde::Deserialize;
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

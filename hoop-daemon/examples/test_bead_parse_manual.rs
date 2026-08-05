@@ -1,5 +1,3 @@
-use serde::Deserialize;
-
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Bead {
     pub id: String,

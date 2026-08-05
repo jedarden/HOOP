@@ -10,7 +10,7 @@
 //!
 //! Plan reference: §6 Phase 5 deliverable 7, §7 LLM-agnostic
 
-use hoop_daemon::fleet::{self, AgentSessionRow};
+use hoop_daemon::fleet;
 use serial_test::serial;
 use std::fs;
 use std::path::PathBuf;
