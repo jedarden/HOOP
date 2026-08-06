@@ -1,0 +1,126 @@
+# AlreadyExists Error Messages - HOOP Codebase
+# Generated: 2026-08-06
+# Bead: bf-2qzsz
+
+## Summary
+Total unique AlreadyExists error messages: 1
+
+---
+
+## Error Message 1: "File already exists: {path}"
+
+Error message: "File already exists: {path}"
+Test file: hoop-daemon/src/file_io_error.rs
+Line: 119 (Display implementation)
+
+### Format Details
+- **Template**: File already exists: {path}
+- **Path placeholder**: Replaced with actual file/directory path at runtime
+- **Example**: "File already exists: /test/path.txt"
+- **Example**: "File already exists: test.txt"
+- **Example**: "File already exists: test_dir"
+
+### Definition Locations
+
+**Enum Definition:**
+- File: hoop-daemon/src/file_io_error.rs
+- Line: 60
+- Code: `AlreadyExists(String),`
+
+**Display Implementation:**
+- File: hoop-daemon/src/file_io_error.rs
+- Lines: 118-120
+- Code:
+```rust
+FileIoError::AlreadyExists(path) => {
+    write!(f, "File already exists: {}", path)
+}
+```
+
+**Classification Function:**
+- File: hoop-daemon/src/file_io_error.rs
+- Line: 203
+- Code: `ErrorKind::AlreadyExists => FileIoError::AlreadyExists(path_str),`
+
+### Test Locations (6 test functions)
+
+1. **test_classify_io_error_already_exists**
+   - File: hoop-daemon/src/file_io_error.rs
+   - Line: 782-791
+   - Tests: Error classification produces AlreadyExists variant
+
+2. **test_file_io_error_display**
+   - File: hoop-daemon/src/file_io_error.rs
+   - Line: 708-709
+   - Tests: Display output matches expected format
+   - Assertion: `assert_eq!(err.to_string(), "File already exists: /path/to/file.txt");`
+
+3. **test_create_file_exclusive_with_context_already_exists**
+   - File: hoop-daemon/src/file_io_error.rs
+   - Line: 949-961
+   - Tests: File::create_new() failure produces AlreadyExists
+   - Assertions (lines 959-960):
+     - `assert!(err_msg.contains("File already exists"));`
+     - `assert!(err_msg.contains("test.txt"));`
+
+4. **test_create_dir_with_context_already_exists**
+   - File: hoop-daemon/src/file_io_error.rs
+   - Line: 976-987
+   - Tests: create_dir() failure produces AlreadyExists
+   - Assertions (lines 985-986):
+     - `assert!(err_msg.contains("File already exists"));`
+     - `assert!(err_msg.contains("test_dir"));`
+
+5. **test_create_dir_all_with_context_already_exists**
+   - File: hoop-daemon/src/file_io_error.rs
+   - Line: 1026-1039
+   - Tests: create_dir_all() failure when file blocks path
+   - Assertions (lines 1037-1038):
+     - `assert!(err_msg.contains("File already exists"));`
+     - `assert!(err_msg.contains("blocking_file"));`
+
+6. **test_create_file_with_context_already_exists**
+   - File: hoop-daemon/src/file_io_error.rs
+   - Line: 926-934
+   - Note: This test verifies SUCCESS (File::create truncates), not error
+
+### Usage Patterns
+
+**Produces AlreadyExists error when:**
+1. Creating a file exclusively with File::create_new() when file exists
+2. Creating a directory with create_dir() when path exists
+3. Creating directory tree with create_dir_all() when file blocks path
+
+**Does NOT produce AlreadyExists:**
+- File::create() (standard creation truncates existing files)
+
+### Related Documentation
+
+**Module Documentation:**
+- File: hoop-daemon/src/file_io_error.rs
+- Line: 11
+- Comment: `//! - `AlreadyExists` - File or directory already exists`
+
+**Enum Variant Documentation:**
+- File: hoop-daemon/src/file_io_error.rs
+- Line: 59
+- Comment: `/// File already exists at the specified path`
+
+### Cross-References
+
+**Conversion from std::io::Error:**
+- Function: classify_io_error()
+- Maps: ErrorKind::AlreadyExists → FileIoError::AlreadyExists(String)
+
+**Error propagation chain:**
+1. std::io::Error with ErrorKind::AlreadyExists
+2. ↓ classify_io_error()
+3. FileIoError::AlreadyExists(path)
+4. ↓ Display::fmt()
+5. "File already exists: {path}"
+
+### Notes
+- All AlreadyExists errors follow the same message format
+- No variations or alternative message formats found in codebase
+- Tests verify message contains both static text and dynamic path
+- Message is consistent across file and directory operations
