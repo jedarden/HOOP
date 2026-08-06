@@ -45,7 +45,7 @@
 //! write_file_with_context(Path::new("/path/to/file"), "content")?;
 //! ```
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::io::ErrorKind;
 use std::path::Path;
 
@@ -379,7 +379,6 @@ pub fn create_dir_all_with_context(path: &Path) -> Result<()> {
 mod tests {
     use super::*;
     use std::fs;
-    use std::io::Write;
     use tempfile::TempDir;
 
     #[test]
@@ -515,7 +514,7 @@ mod tests {
 
         let result = open_file_optional(&file_path);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), None);
+        assert!(result.unwrap().is_none());
     }
 
     #[test]
