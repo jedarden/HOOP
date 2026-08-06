@@ -1,0 +1,28 @@
+# utoipa::ToSchema Unused Import Warnings
+# Filtered from .beads/clippy-raw-output.txt
+# Generated: 2026-08-06
+
+# No unused utoipa::ToSchema import warnings found in clippy output.
+# The raw clippy output contained 88 warnings covering the following types:
+# - private_interfaces
+# - dead_code (unused functions, fields, constants)
+# - manual_clamp
+# - filter_next
+# - unnecessary_sort_by
+# - lines_filter_map_ok
+# - disallowed_methods (std::fs::File::create, std::fs::write)
+# - unnecessary_unwrap
+# - explicit_counter_loop
+# - if_same_then_else
+# - too_many_arguments
+# - map_identity
+# - large_enum_variant
+# - type_complexity
+# - should_implement_trait
+# - new_without_default
+# - len_without_is_empty
+# - ptr_arg
+# - doc_overindented_list_items
+# - manual_strip
+#
+# None of these were related to unused utoipa::ToSchema imports.
