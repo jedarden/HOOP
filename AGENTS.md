@@ -34,7 +34,14 @@ All Phase 1 work beads live in the HOOP workspace (`.beads/`). When working on P
 1. `bf claim` the bead to assign it to yourself
 2. Complete the work as described
 3. `bf close` the bead with a structured retrospective when done
-4. Commit your changes before closing (every completed bead MUST produce at least one commit)
+4. Commit your changes before closing — **when you changed files**
+
+A bead does not owe git a commit. Verification-only work, work that turned out to
+be already done, and work you found blocked are all legitimate outcomes with
+nothing to commit. Record those on the bead with `bf update <id> --notes "..."`.
+Never create `notes/<bead-id>.md`, a summary, or a status file to satisfy a commit
+requirement — a commit touching only `notes/` or `.beads/` is not shipped work and
+NEEDLE's shipped-work gate rejects it.
 
 HOOP code structure (files exist; correctness unverified):
 
