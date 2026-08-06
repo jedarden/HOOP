@@ -956,7 +956,7 @@ mod tests {
         assert!(result.is_err());
 
         let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("already exists") || err_msg.contains("AlreadyExists"));
+        assert!(err_msg.contains("File already exists"));
         assert!(err_msg.contains("test.txt"));
     }
 
@@ -982,7 +982,8 @@ mod tests {
         assert!(result.is_err());
 
         let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("already exists") || err_msg.contains("AlreadyExists"));
+        assert!(err_msg.contains("File already exists"));
+        assert!(err_msg.contains("test_dir"));
     }
 
     #[test]
@@ -1033,7 +1034,7 @@ mod tests {
         assert!(result.is_err());
 
         let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("already exists") || err_msg.contains("AlreadyExists"));
+        assert!(err_msg.contains("File already exists"));
         assert!(err_msg.contains("blocking_file"));
     }
 }
