@@ -452,6 +452,14 @@ pub fn list_projects() -> Result<Vec<ProjectEntry>> {
 ///
 /// With no_interactive=true, requires --confirm flag for safety. This prevents
 /// accidental deletion in scripts or CI environments.
+///
+/// # Output stream contract
+///
+/// - **Interactive prompts**: stderr (eprint!/eprintln!)
+/// - **Data output**: none (success/failure signaled via return value)
+/// - **Error messages**: stderr (eprintln!)
+///
+/// This ensures prompts never pollute stdout when piping or capturing output.
 pub fn remove_project(name: &str, no_interactive: bool, confirm: bool) -> Result<bool> {
     let mut registry = ProjectsRegistry::load()?;
 
@@ -583,12 +591,21 @@ pub fn discover_bead_workspaces(root: &Path) -> Result<Vec<PathBuf>> {
 ///
 /// In interactive mode (no_interactive=false), the user is prompted y/n per discovery
 /// and can optionally rename the project from the default (directory basename).
-/// All interactive prompts go to stderr; registration results and errors go to stdout.
+/// All interactive prompts go to stderr; registration results go to stdout.
 ///
 /// With no_interactive=true, all discoveries are registered without prompting.
 /// Already-registered paths are skipped with a note.
 ///
 /// Multi-workspace projects require manual merging via a separate command.
+///
+/// # Output stream contract
+///
+/// - **Interactive prompts**: stderr (eprint!/eprintln!)
+/// - **Registration results**: stdout (println!)
+/// - **Error messages**: stderr (eprintln!)
+/// - **Summary statistics**: stdout (println!)
+///
+/// This ensures prompts never pollute stdout when piping or capturing output.
 pub fn scan_projects(root: &str, no_interactive: bool) -> Result<()> {
     let root_path = PathBuf::from(root);
     if !root_path.exists() {
