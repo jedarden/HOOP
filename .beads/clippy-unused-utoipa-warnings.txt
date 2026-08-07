@@ -1,0 +1,77 @@
+# Unused utoipa::ToSchema Import Warnings
+# Final reference file
+# Generated: 2026-08-06
+# Source: .beads/clippy-raw-output.txt
+
+## Summary
+No unused utoipa::ToSchema import warnings found in clippy output.
+
+## Analysis
+The clippy run produced 88 warnings across the hoop-daemon crate, but none of these
+were related to unused utoipa::ToSchema imports.
+
+## Warnings Found (by category)
+- private_interfaces: 2 warnings
+- dead_code: 8 warnings (unused functions, fields, constants)
+- manual_clamp: 2 warnings
+- filter_next: 1 warning
+- unnecessary_sort_by: 4 warnings
+- lines_filter_map_ok: 5 warnings
+- disallowed_methods: 28 warnings (std::fs::File::create, std::fs::write)
+- unnecessary_unwrap: 2 warnings
+- explicit_counter_loop: 3 warnings
+- if_same_then_else: 1 warning
+- too_many_arguments: 4 warnings
+- map_identity: 2 warnings
+- large_enum_variant: 1 warning
+- type_complexity: 7 warnings
+- should_implement_trait: 2 warnings
+- new_without_default: 1 warning
+- len_without_is_empty: 1 warning
+- ptr_arg: 5 warnings
+- doc_overindented_list_items: 1 warning
+- manual_strip: 4 warnings
+
+## Files with clippy warnings (sorted by path)
+- hoop-daemon/src/api_blame.rs: 2 warnings
+- hoop-daemon/src/api_conversations.rs: 2 warnings
+- hoop-daemon/src/api_cost_per_stitch.rs: 1 warning
+- hoop-daemon/src/api_diff.rs: 2 warnings
+- hoop-daemon/src/api_onboarding.rs: 1 warning
+- hoop-daemon/src/api_screen_capture.rs: 3 warnings
+- hoop-daemon/src/api_scripts.rs: 2 warnings
+- hoop-daemon/src/api_skills.rs: 2 warnings
+- hoop-daemon/src/api_stitch_read.rs: 1 warning
+- hoop-daemon/src/api_timeline.rs: 1 warning
+- hoop-daemon/src/api_unassigned.rs: 1 warning
+- hoop-daemon/src/atomic_write.rs: 2 warnings
+- hoop-daemon/src/attachment_sync.rs: 1 warning
+- hoop-daemon/src/attachments.rs: 1 warning
+- hoop-daemon/src/backup_pipeline.rs: 1 warning
+- hoop-daemon/src/capacity.rs: 9 warnings
+- hoop-daemon/src/config_resolver.rs: 5 warnings
+- hoop-daemon/src/config_watcher.rs: 1 warning
+- hoop-daemon/src/cost.rs: 1 warning
+- hoop-daemon/src/embedding_service.rs: 1 warning
+- hoop-daemon/src/fleet.rs: 3 warnings
+- hoop-daemon/src/fleet_notifications.rs: 1 warning
+- hoop-daemon/src/identity.rs: 1 warning
+- hoop-daemon/src/lib.rs: 4 warnings
+- hoop-daemon/src/log_rotation.rs: 3 warnings
+- hoop-daemon/src/metrics.rs: 4 warnings
+- hoop-daemon/src/parse_jsonl_safe.rs: 1 warning
+- hoop-daemon/src/pattern_query_evaluator.rs: 2 warnings
+- hoop-daemon/src/pdf_sanitize.rs: 5 warnings
+- hoop-daemon/src/projects.rs: 1 warning
+- hoop-daemon/src/reflection_detector.rs: 1 warning
+- hoop-daemon/src/screen_capture.rs: 5 warnings
+- hoop-daemon/src/sessions.rs: 3 warnings
+- hoop-daemon/src/stitch_percentile_index.rs: 2 warnings
+- hoop-daemon/src/stuck_detector.rs: 1 warning
+- hoop-daemon/src/supervisor.rs: 2 warnings
+- hoop-daemon/src/template_library.rs: 1 warning
+- hoop-daemon/src/uploads.rs: 6 warnings
+
+## Conclusion
+No utoipa::ToSchema imports need to be removed. All utoipa imports in the codebase
+are actively used for OpenAPI schema generation.
