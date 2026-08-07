@@ -9,7 +9,7 @@
 # Suppress warnings for complex types that appear in Phase 2+ code
 # These should be fixed when each phase's code is verified
 too-many-arguments-threshold = 12
-type-complexity-threshold = 250
+type-complexity-threshold = 500
 
 # Arithmetic side effects (allow in test code)
 # Allowed in: arithmetic-side-effects

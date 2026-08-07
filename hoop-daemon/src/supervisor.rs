@@ -1070,6 +1070,37 @@ fn lookup_project_for_bead(
         .map(|b| b.project.clone())
 }
 
+/// Validate and sanitize a timestamp string from events.jsonl.
+///
+/// Returns a valid RFC3339 timestamp string, or a default timestamp if the input
+/// is empty or invalid. This prevents "premature end of input" errors when
+/// storing timestamps in the database.
+///
+/// # Arguments
+/// * `ts` - The timestamp string to validate
+///
+/// # Returns
+/// A valid RFC3339 timestamp string (original if valid, or current time if invalid)
+fn sanitize_timestamp(ts: &str) -> String {
+    // If empty, use current time as fallback
+    if ts.is_empty() {
+        warn!("Empty timestamp in event, using current time as fallback");
+        return Utc::now().to_rfc3339();
+    }
+
+    // Try to parse the timestamp to verify it's valid RFC3339
+    match DateTime::parse_from_rfc3339(ts) {
+        Ok(_) => ts.to_string(), // Valid timestamp, return as-is
+        Err(e) => {
+            warn!(
+                "Invalid timestamp format '{}' in event: {}, using current time as fallback",
+                ts, e
+            );
+            Utc::now().to_rfc3339()
+        }
+    }
+}
+
 /// Look up project and kind for a given bead ID from the shared beads store.
 fn lookup_bead_info(
     bead_id: &str,
@@ -1137,11 +1168,13 @@ fn update_fleet_from_event(
             // Register in collision index so concurrent-work detection can fire
             if let Some(ref proj) = project {
                 let now = chrono::Utc::now().to_rfc3339();
+                // Sanitize the timestamp to handle empty/invalid values from events.jsonl
+                let claimed_at = sanitize_timestamp(ts);
                 let entry = fleet::CollisionIndexEntry {
                     bead_id: bead_id.to_string(),
                     project: proj.clone(),
                     worker: Some(worker.to_string()),
-                    claimed_at: ts.to_string(),
+                    claimed_at,
                     file_paths: vec![],
                     updated_at: now,
                 };

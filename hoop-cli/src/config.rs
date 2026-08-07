@@ -330,7 +330,7 @@ pub fn run_validate() -> Result<()> {
     // Check required top-level keys
     if let Some(mapping) = yaml.as_mapping() {
         // Check schema_version
-        match mapping.get(&serde_yaml::Value::String("schema_version".to_string())) {
+        match mapping.get(serde_yaml::Value::String("schema_version".to_string())) {
             None => {
                 println!("❌ Error: Missing required key 'schema_version'");
                 has_errors = true;
@@ -354,7 +354,7 @@ pub fn run_validate() -> Result<()> {
 
     if let Some(mapping) = yaml.as_mapping() {
         for section in &sections {
-            if mapping.contains_key(&serde_yaml::Value::String(section.to_string())) {
+            if mapping.contains_key(serde_yaml::Value::String(section.to_string())) {
                 println!("✓ Section '{}' present", section);
             } else {
                 println!("  Section '{}' not present (will use defaults)", section);

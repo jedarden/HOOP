@@ -498,7 +498,7 @@ fn single_line(text: &str, max: usize) -> String {
     }
     let mut out: String = collapsed.chars().take(max).collect();
     // Walk back to the last whitespace so we don't cut mid-word.
-    while out.chars().last().map_or(true, |c| !c.is_whitespace()) && !out.is_empty() {
+    while out.chars().last().is_none_or(|c| !c.is_whitespace()) && !out.is_empty() {
         out.pop();
     }
     let trimmed = out.trim_end();

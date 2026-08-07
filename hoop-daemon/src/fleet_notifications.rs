@@ -123,6 +123,12 @@ pub struct FleetNotificationRing {
     tx: broadcast::Sender<FleetNotification>,
 }
 
+impl Default for FleetNotificationRing {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FleetNotificationRing {
     pub fn new() -> Self {
         let (tx, _) = broadcast::channel(64);

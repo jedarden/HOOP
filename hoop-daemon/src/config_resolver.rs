@@ -1541,8 +1541,7 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
         None::<u64>,
         env_parse("HOOP_EMBEDDING_CACHE_TTL_SECONDS"),
         yml_ref
-            .and_then(|y| yaml_get_u64(y, "embedding.cache_ttl_seconds"))
-            .map(|v| v),
+            .and_then(|y| yaml_get_u64(y, "embedding.cache_ttl_seconds")),
         86400, // 24 hours default
         "N/A",
         "HOOP_EMBEDDING_CACHE_TTL_SECONDS",
@@ -2393,8 +2392,7 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
             None::<u64>,
             env_parse("HOOP_EMBEDDING_CACHE_TTL_SECONDS"),
             yml_ref
-                .and_then(|y| yaml_get_u64(y, "embedding.cache_ttl_seconds"))
-                .map(|v| v),
+                .and_then(|y| yaml_get_u64(y, "embedding.cache_ttl_seconds")),
             86400,
             "N/A",
             "HOOP_EMBEDDING_CACHE_TTL_SECONDS",

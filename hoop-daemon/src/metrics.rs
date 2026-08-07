@@ -14,6 +14,34 @@ use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
 use std::sync::RwLock;
 
 // ---------------------------------------------------------------------------
+// Type aliases for complex metric types
+// ---------------------------------------------------------------------------
+
+/// Type alias for histogram bucket data: (count, sum_ms, bucket_counts)
+type HistogramBucketData = (u64, f64, Vec<u64>);
+
+/// Type alias for histogram data storage keyed by label values
+type HistogramDataStore = HashMap<Vec<String>, HistogramBucketData>;
+
+/// Type alias for RwLock-wrapped histogram data storage
+type HistogramDataStoreLock = RwLock<HistogramDataStore>;
+
+/// Type alias for histogram observation data: (count, sum_ms, observations)
+type HistogramObservationData = (u64, f64, Vec<f64>);
+
+/// Type alias for observation data storage keyed by label values
+type HistogramObservationStore = HashMap<Vec<String>, HistogramObservationData>;
+
+/// Type alias for RwLock-wrapped observation data storage
+type HistogramObservationStoreLock = RwLock<HistogramObservationStore>;
+
+/// Type alias for snapshot rows vector with percentiles
+type SnapshotRowsWithPercentiles = Vec<SnapshotRowWithPercentiles>;
+
+/// Type alias for snapshot row with percentiles
+type SnapshotRowWithPercentiles = (Vec<String>, u64, f64, Option<f64>, Option<f64>, Option<f64>);
+
+// ---------------------------------------------------------------------------
 // Primitive unlabeled types (backward-compatible with existing call sites)
 // ---------------------------------------------------------------------------
 
@@ -394,7 +422,7 @@ pub struct LabeledHistogram {
     /// Prometheus histogram bucket boundaries (milliseconds)
     pub buckets: Vec<f64>,
     // (count, sum_ms, bucket_counts)
-    data: RwLock<HashMap<Vec<String>, (u64, f64, Vec<u64>)>>,
+    data: HistogramDataStoreLock,
 }
 
 impl LabeledHistogram {
@@ -446,7 +474,7 @@ pub struct LabeledHistogramPercentiles {
     pub label_names: &'static [&'static str],
     /// Per-label: (count, sum_ms, sorted_observations)
     /// Observations are stored as f64 milliseconds.
-    data: RwLock<HashMap<Vec<String>, (u64, f64, Vec<f64>)>>,
+    data: HistogramObservationStoreLock,
     /// Maximum observations to keep per label set
     max_observations: usize,
 }
@@ -513,7 +541,7 @@ impl LabeledHistogramPercentiles {
         }
     }
 
-    pub fn snapshot(&self) -> Vec<(Vec<String>, u64, f64, Option<f64>, Option<f64>, Option<f64>)> {
+    pub fn snapshot(&self) -> SnapshotRowsWithPercentiles {
         self.data
             .read()
             .unwrap()
@@ -655,7 +683,7 @@ fn write_labeled_histogram_percentiles(
     name: &str,
     help: &str,
     label_names: &[&'static str],
-    rows: &[(Vec<String>, u64, f64, Option<f64>, Option<f64>, Option<f64>)],
+    rows: &[SnapshotRowWithPercentiles],
 ) {
     out.push_str(&format!("# HELP {name} {help}\n# TYPE {name} gauge\n"));
     let mut sorted = rows.to_vec();

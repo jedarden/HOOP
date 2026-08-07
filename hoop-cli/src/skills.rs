@@ -394,17 +394,14 @@ struct SkillManifest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 enum SkillScope {
+    #[default]
     Global,
     Project,
     Pattern,
 }
 
-impl Default for SkillScope {
-    fn default() -> Self {
-        SkillScope::Global
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillListEntry {
@@ -621,7 +618,7 @@ fn write_skill_enable_audit(event: &SkillEnableEvent) -> Result<()> {
     Ok(())
 }
 
-fn get_previous_sha256(name: &str) -> Result<Option<String>> {
+fn get_previous_sha256(_name: &str) -> Result<Option<String>> {
     // This would check a history of enabled skills
     // For now, just return None - could be extended to track enable history
     Ok(None)

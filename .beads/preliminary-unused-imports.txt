@@ -1,0 +1,91 @@
+# Preliminary Unused utoipa::ToSchema Imports
+# Generated: 2026-08-07
+# Cross-reference: Catalog (bf-dxljy) + Clippy Warnings (bf-451rw)
+
+## Summary
+- Total files in catalog with ToSchema imports: 67 files
+- Files flagged as unused by clippy: 6 files
+- Files not flagged (presumed in use): 61 files
+
+---
+
+## Files Flagged as UNUSED by Clippy
+
+These 6 files have `use utoipa::ToSchema;` imports that clippy reports as unused:
+
+| File | Import Line | Catalog Entry | Clippy Status |
+|------|-------------|---------------|----------------|
+| hoop-daemon/src/api_backup.rs | 17 | api_backup.rs: 1 usage (import only) | **UNUSED** |
+| hoop-daemon/src/api_scripts.rs | 16 | api_scripts.rs: 1 usage (import only) | **UNUSED** |
+| hoop-daemon/src/api_bead_blockers.rs | 23 | api_bead_blockers.rs: 1 usage (import only) | **UNUSED** |
+| hoop-daemon/src/api_fix_patterns.rs | 22 | api_fix_patterns.rs: 1 usage (import only) | **UNUSED** |
+| hoop-daemon/src/api_risk_patterns.rs | 20 | api_risk_patterns.rs: 1 usage (import only) | **UNUSED** |
+| hoop-daemon/src/api_stitch_links.rs | 18 | api_stitch_links.rs: 1 usage (import only) | **UNUSED** |
+
+**Key Observation:** All 6 files flagged by clippy are catalog entries showing "import only" - meaning they have explicit `use` imports but no actual `#[derive(..., utoipa::ToSchema)]` usage in the file.
+
+---
+
+## Files NOT Flagged (Presumed IN USE)
+
+The following 6 files from the catalog have explicit `use utoipa::ToSchema;` imports but were NOT flagged by clippy, suggesting the imports are actually used:
+
+| File | Import Line | Catalog Entry | Clippy Status |
+|------|-------------|---------------|----------------|
+| hoop-daemon/src/api_bulk_create.rs | 21 | api_bulk_create.rs: 1 usage (import only) | NOT FLAGGED |
+| hoop-daemon/src/api_audit.rs | 8 | api_audit.rs: 1 usage (import only) | NOT FLAGGED |
+| hoop-daemon/src/api_transcription.rs | 16 | api_transcription.rs: 1 usage (import only) | NOT FLAGGED |
+| hoop-daemon/src/api_draft_queue.rs | 28 | api_draft_queue.rs: 5 usages (1 import + 4 derives) | NOT FLAGGED |
+| hoop-daemon/src/api_reflection_detection.rs | 15 | api_reflection_detection.rs: 1 usage (import only) | NOT FLAGGED |
+| hoop-daemon/src/api_embedding.rs | 17 | api_embedding.rs: 1 usage (import only) | NOT FLAGGED |
+
+**Note:** `api_draft_queue.rs` has 4 derive macros in addition to the import, so it's definitely in use. The other 5 files have "import only" entries but were not flagged by clippy - these may have indirect usage or clippy may not have analyzed them.
+
+---
+
+## Files with ToSchema Derives (Not Import-Only)
+
+These 55 files use `#[derive(..., utoipa::ToSchema)]` or `#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]` - these are NOT in scope for clippy unused import warnings since they don't have standalone `use` imports:
+
+High-frequency files (most ToSchema usages):
+- hoop-daemon/src/api_metrics.rs - 13 usages (derive macros)
+- hoop-daemon/src/api_stitch_decompose.rs - 11 usages (derive macros)
+- hoop-daemon/src/screen_capture.rs - 10 usages (derive macros)
+- hoop-daemon/src/api_patterns.rs - 9 usages (derive macros)
+- hoop-daemon/src/api_preview.rs - 9 usages (derive macros)
+- hoop-daemon/src/dictated_notes.rs - 7 usages (derive macros)
+- hoop-daemon/src/api_beads.rs - 7 usages (derive macros)
+
+[+48 additional files with derive macros - see catalog for complete list]
+
+---
+
+## Analysis Notes
+
+1. **Clippy's findings are accurate for import-only files:** The 6 files flagged all have `use` imports with no corresponding derive macros, making them truly unused.
+
+2. **No ToResponse dependency:** The catalog confirms 0 files use `utoipa::ToResponse`, so there's no risk of breaking ToResponse functionality by removing ToSchema imports.
+
+3. **Import-only files not flagged:** 6 files with "import only" catalog entries were NOT flagged by clippy:
+   - These may have been skipped during clippy analysis
+   - Or the imports may be used in ways clippy doesn't detect
+   - Manual verification recommended before removal
+
+4. **Derive macro files:** 55 files use ToSchema in derive macros directly, which don't trigger unused import warnings.
+
+---
+
+## Next Steps
+
+For the 6 files flagged as UNUSED:
+1. Verify each file manually to confirm ToSchema is not referenced
+2. Remove the unused `use utoipa::ToSchema;` import line
+3. Run `cargo clippy` again to verify warnings are cleared
+
+For the 6 import-only files NOT flagged:
+1. Manual verification needed to determine if imports are actually used
+2. May be false negatives from clippy or indirect usage patterns
+
+---
+
+**End of Preliminary List**

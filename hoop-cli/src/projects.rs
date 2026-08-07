@@ -1379,4 +1379,181 @@ workspaces:
             "dedup by canonical should collapse symlink alias"
         );
     }
+
+    // ── Helper function for no_interactive tests ──────────────────────────────────
+
+    /// Create a temporary .hoop directory for testing
+    fn create_test_hoop_dir(tmp_dir: &tempfile::TempDir) -> PathBuf {
+        let hoop_dir = tmp_dir.path().join(".hoop");
+        fs::create_dir_all(&hoop_dir).expect("Failed to create .hoop/ directory");
+        hoop_dir
+    }
+
+    // ── no_interactive flag tests for remove command ─────────────────────────────
+
+    #[test]
+    fn remove_requires_confirm_flag_in_no_interactive_mode() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo = tmp.path().join("test-project");
+        fs::create_dir_all(repo.join(".beads")).expect("mkdir");
+
+        // Create a test registry with a project
+        let hoop_dir = create_test_hoop_dir(&tmp);
+        let registry_path = hoop_dir.join("projects.yaml");
+        let yaml = format!(
+            "projects:\n  - name: test-project\n    path: {}\n    canonical_path: {}\n",
+            repo.display(),
+            repo.display()
+        );
+        fs::write(&registry_path, yaml).expect("write registry");
+
+        // Set HOME to temp dir for this test
+        std::env::set_var("HOME", tmp.path());
+
+        // Test: no_interactive=true WITHOUT --confirm should error
+        let result = remove_project("test-project", true, false);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("--confirm is required"),
+            "Error should require --confirm flag: {}",
+            err_msg
+        );
+        assert!(
+            err_msg.contains("--no-interactive --confirm"),
+            "Error should show correct usage: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn remove_auto_confirms_with_no_interactive_and_confirm_flags() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo = tmp.path().join("test-project");
+        fs::create_dir_all(repo.join(".beads")).expect("mkdir");
+        let canonical = fs::canonicalize(&repo).expect("canonicalize");
+
+        // Create a test registry with a project
+        let hoop_dir = create_test_hoop_dir(&tmp);
+        let registry_path = hoop_dir.join("projects.yaml");
+        let yaml = format!(
+            "projects:\n  - name: test-project\n    path: {}\n    canonical_path: {}\n",
+            repo.display(),
+            canonical.display()
+        );
+        fs::write(&registry_path, yaml).expect("write registry");
+
+        // Set HOME to temp dir for this test
+        std::env::set_var("HOME", tmp.path());
+
+        // Test: no_interactive=true WITH --confirm should succeed without prompting
+        let result = remove_project("test-project", true, true);
+        assert!(result.is_ok());
+        let removed = result.unwrap();
+        assert!(
+            removed,
+            "Project should be removed when no_interactive=true with --confirm"
+        );
+
+        // Verify project was actually removed from registry
+        let registry = ProjectsRegistry::load().expect("load registry");
+        assert!(
+            registry.projects.is_empty(),
+            "Registry should be empty after removal"
+        );
+    }
+
+    #[test]
+    fn remove_prompts_in_interactive_mode() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo = tmp.path().join("test-project");
+        fs::create_dir_all(repo.join(".beads")).expect("mkdir");
+        let canonical = fs::canonicalize(&repo).expect("canonicalize");
+
+        // Create a test registry with a project
+        let hoop_dir = create_test_hoop_dir(&tmp);
+        let registry_path = hoop_dir.join("projects.yaml");
+        let yaml = format!(
+            "projects:\n  - name: test-project\n    path: {}\n    canonical_path: {}\n",
+            repo.display(),
+            canonical.display()
+        );
+        fs::write(&registry_path, yaml).expect("write registry");
+
+        // Set HOME to temp dir for this test
+        std::env::set_var("HOME", tmp.path());
+
+        // Test: no_interactive=false should prompt for confirmation
+        // In the test environment, stdin will read EOF, which results in empty string
+        // The empty string is not "y" or "yes", so the removal is cancelled
+        let result = remove_project("test-project", false, false);
+
+        // The function should succeed but return false (removal cancelled)
+        assert!(result.is_ok());
+        let removed = result.unwrap();
+        assert!(!removed, "Removal should be cancelled when user doesn't confirm");
+
+        // Verify the project still exists in the registry
+        let registry = ProjectsRegistry::load().expect("load registry");
+        assert_eq!(
+            registry.projects.len(),
+            1,
+            "Project should still exist after cancelled removal"
+        );
+    }
+
+    #[test]
+    fn remove_nonexistent_project_returns_false() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let hoop_dir = create_test_hoop_dir(&tmp);
+        let registry_path = hoop_dir.join("projects.yaml");
+        fs::write(&registry_path, "projects: []").expect("write registry");
+
+        // Set HOME to temp dir for this test
+        std::env::set_var("HOME", tmp.path());
+
+        // Test: removing a non-existent project should return Ok(false)
+        let result = remove_project("nonexistent", true, true);
+        assert!(result.is_ok());
+        let removed = result.unwrap();
+        assert!(!removed, "Non-existent project should return false");
+    }
+
+    #[test]
+    fn remove_with_no_interactive_true_removal_succeeds() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let repo = tmp.path().join("test-project");
+        fs::create_dir_all(repo.join(".beads")).expect("mkdir");
+        let canonical = fs::canonicalize(&repo).expect("canonicalize");
+
+        // Create a test registry with a project
+        let hoop_dir = create_test_hoop_dir(&tmp);
+        let registry_path = hoop_dir.join("projects.yaml");
+        let yaml = format!(
+            "projects:\n  - name: test-project\n    path: {}\n    canonical_path: {}\n",
+            repo.display(),
+            canonical.display()
+        );
+        fs::write(&registry_path, yaml).expect("write registry");
+
+        // Set HOME to temp dir for this test
+        std::env::set_var("HOME", tmp.path());
+
+        // Verify the project exists before removal
+        let registry_before = ProjectsRegistry::load().expect("load registry");
+        assert_eq!(registry_before.projects.len(), 1);
+
+        // Test: removal should succeed with no_interactive=true and confirm=true
+        let result = remove_project("test-project", true, true);
+        assert!(result.is_ok());
+        let removed = result.unwrap();
+        assert!(removed, "Project should be removed successfully");
+
+        // Verify the project was removed
+        let registry_after = ProjectsRegistry::load().expect("load registry");
+        assert!(
+            registry_after.projects.is_empty(),
+            "Project should be removed from registry"
+        );
+    }
 }

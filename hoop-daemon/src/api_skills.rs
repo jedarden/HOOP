@@ -322,7 +322,7 @@ pub fn execute_skill(
     // Spawn thread to collect stdout
     thread::spawn(move || {
         let reader = BufReader::new(stdout);
-        for l in reader.lines().flatten() {
+        for l in reader.lines().map_while(Result::ok) {
             let _ = stdout_tx.send(l);
         }
     });
@@ -330,7 +330,7 @@ pub fn execute_skill(
     // Spawn thread to collect stderr
     thread::spawn(move || {
         let reader = BufReader::new(stderr);
-        for l in reader.lines().flatten() {
+        for l in reader.lines().map_while(Result::ok) {
             let _ = stderr_tx.send(l);
         }
     });

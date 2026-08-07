@@ -70,8 +70,8 @@ fn sign_request(
     config: &S3Config,
     method: &str,
     url: &reqwest::Url,
-    bucket: &str,
-    object_key: &str,
+    _bucket: &str,
+    _object_key: &str,
     now: &chrono::DateTime<Utc>,
 ) -> Result<String> {
     let date_stamp = now.format("%Y%m%d").to_string();
@@ -956,5 +956,295 @@ mod tests {
                 .starts_with(".hoop.rollback.")
         });
         assert!(!has_leftovers, "no leftover rollback dirs after cleanup");
+    }
+
+    // ── no_interactive flag tests for restore command ─────────────────────────────
+
+    /// Test 1: Verify restore requires --confirm flag when no_interactive=true
+    #[test]
+    fn test_restore_requires_confirm_in_no_interactive_mode() {
+        // This test verifies that the restore command checks for --confirm
+        // when no_interactive is true, and errors appropriately
+        let code = include_str!("restore.rs");
+
+        // Find the run_restore function
+        let fn_start = code
+            .find("pub async fn run_restore(")
+            .expect("restore.rs must define run_restore()");
+
+        // Find the no_interactive confirm check
+        let no_interactive_check = code[fn_start..]
+            .find("if no_interactive && !confirm {")
+            .expect("run_restore must check no_interactive && !confirm");
+
+        let check_section = &code[fn_start + no_interactive_check..fn_start + no_interactive_check + 500];
+
+        // Verify the check exists and has proper error message
+        assert!(
+            check_section.contains("if no_interactive && !confirm {"),
+            "run_restore must check for --confirm requirement in no_interactive mode"
+        );
+
+        assert!(
+            check_section.contains("--confirm is required in non-interactive mode"),
+            "Error message must mention --confirm is required"
+        );
+
+        assert!(
+            check_section.contains("--no-interactive --confirm"),
+            "Error message must show correct usage pattern"
+        );
+
+        assert!(
+            check_section.contains("DESTRUCTIVE"),
+            "Error message must warn about destructive nature"
+        );
+    }
+
+    /// Test 2: Verify restore prompts for confirmation when no_interactive=false
+    #[test]
+    fn test_restore_prompts_in_interactive_mode() {
+        let code = include_str!("restore.rs");
+
+        // Find the run_restore function
+        let fn_start = code
+            .find("pub async fn run_restore(")
+            .expect("restore.rs must define run_restore()");
+
+        // Find the interactive confirmation prompt
+        let interactive_prompt = code[fn_start..]
+            .find("if !no_interactive {")
+            .expect("run_restore must have interactive prompt for !no_interactive");
+
+        let prompt_section = &code[fn_start + interactive_prompt..fn_start + interactive_prompt + 600];
+
+        // Verify the prompt exists
+        assert!(
+            prompt_section.contains("if !no_interactive {"),
+            "run_restore must check for interactive mode"
+        );
+
+        assert!(
+            prompt_section.contains("WARNING: This will replace"),
+            "Prompt must warn about destructive operation"
+        );
+
+        assert!(
+            prompt_section.contains("Continue? [y/N]"),
+            "Prompt must ask for user confirmation"
+        );
+
+        // Verify the prompt uses stderr (eprint!/eprintln!)
+        assert!(
+            prompt_section.contains("eprintln!") || prompt_section.contains("eprint!"),
+            "Prompts must go to stderr (eprint!/eprintln!)"
+        );
+
+        // Verify it reads from stdin
+        assert!(
+            prompt_section.contains("stdin().read_line"),
+            "Must read user input from stdin"
+        );
+
+        // Verify cancellation logic
+        assert!(
+            prompt_section.contains("Restore cancelled"),
+            "Must handle cancellation when user declines"
+        );
+    }
+
+    /// Test 3: Verify flag position independence using clap parser
+    #[test]
+    fn test_restore_no_interactive_flag_before_command() {
+        use clap::Parser;
+
+        // Test: hoop --no-interactive restore --from s3://bucket/key --confirm
+        let args = ["hoop", "--no-interactive", "restore", "--from", "s3://bucket/key", "--confirm"];
+        let cli = crate::Cli::parse_from(args);
+
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true");
+
+        match cli.command {
+            crate::Commands::Restore { from, dry_run, .. } => {
+                assert_eq!(from, "s3://bucket/key");
+                assert_eq!(dry_run, false);
+            }
+            _ => panic!("Expected Restore command"),
+        }
+    }
+
+    #[test]
+    fn test_restore_no_interactive_flag_after_command() {
+        use clap::Parser;
+
+        // Test: hoop restore --from s3://bucket/key --no-interactive --confirm
+        let args = ["hoop", "restore", "--from", "s3://bucket/key", "--no-interactive", "--confirm"];
+        let cli = crate::Cli::parse_from(args);
+
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true");
+
+        match cli.command {
+            crate::Commands::Restore { from, dry_run, .. } => {
+                assert_eq!(from, "s3://bucket/key");
+                assert_eq!(dry_run, false);
+            }
+            _ => panic!("Expected Restore command"),
+        }
+    }
+
+    #[test]
+    fn test_restore_short_flag_y() {
+        use clap::Parser;
+
+        // Test: hoop -y restore --from s3://bucket/key --confirm
+        let args = ["hoop", "-y", "restore", "--from", "s3://bucket/key", "--confirm"];
+        let cli = crate::Cli::parse_from(args);
+
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y");
+
+        match cli.command {
+            crate::Commands::Restore { from, .. } => {
+                assert_eq!(from, "s3://bucket/key");
+            }
+            _ => panic!("Expected Restore command"),
+        }
+    }
+
+    #[test]
+    fn test_restore_both_positions_extract_same_value() {
+        use clap::Parser;
+
+        // Test with flag before command
+        let args_before = ["hoop", "--no-interactive", "restore", "--from", "s3://bucket/key", "--confirm"];
+        let cli_before = crate::Cli::parse_from(args_before);
+        let no_interactive_before = cli_before.no_interactive;
+
+        // Test with flag after command
+        let args_after = ["hoop", "restore", "--from", "s3://bucket/key", "--no-interactive", "--confirm"];
+        let cli_after = crate::Cli::parse_from(args_after);
+        let no_interactive_after = cli_after.no_interactive;
+
+        assert_eq!(
+            no_interactive_before, no_interactive_after,
+            "no_interactive value must be consistent regardless of flag position"
+        );
+        assert_eq!(no_interactive_before, true, "no_interactive should be true");
+    }
+
+    #[test]
+    fn test_restore_without_flag_is_false() {
+        use clap::Parser;
+
+        // Test: hoop restore --from s3://bucket/key --confirm
+        let args = ["hoop", "restore", "--from", "s3://bucket/key", "--confirm"];
+        let cli = crate::Cli::parse_from(args);
+
+        assert_eq!(
+            cli.no_interactive, false,
+            "no_interactive should be false when not specified"
+        );
+
+        match cli.command {
+            crate::Commands::Restore { from, .. } => {
+                assert_eq!(from, "s3://bucket/key");
+            }
+            _ => panic!("Expected Restore command"),
+        }
+    }
+
+    /// Test 4: Verify flag value is passed from main.rs to run_restore
+    #[test]
+    fn test_restore_flag_passed_from_main() {
+        let main_code = include_str!("main.rs");
+
+        // Find the Restore command handler in main.rs
+        let restore_handler_start = main_code.find("Commands::Restore {")
+            .expect("main.rs should have Restore command handler");
+
+        // Extract the handler section
+        let handler_section = &main_code[restore_handler_start..restore_handler_start + 300];
+
+        // Verify the handler passes no_interactive to run_restore
+        assert!(
+            handler_section.contains("restore::run_restore(&from, dry_run, no_interactive, confirm)"),
+            "Restore handler must pass no_interactive flag to run_restore.\n\
+             Handler section: {}", handler_section
+        );
+
+        // Verify error handling
+        assert!(
+            handler_section.contains("eprintln"),
+            "Handler must provide error output on failure"
+        );
+    }
+
+    /// Test 5: Verify run_restore function signature accepts no_interactive parameter
+    #[test]
+    fn test_restore_function_signature() {
+        let code = include_str!("restore.rs");
+
+        // Verify the function signature
+        assert!(
+            code.contains("pub async fn run_restore(from_uri: &str, dry_run: bool, no_interactive: bool, confirm: bool)"),
+            "run_restore must accept no_interactive parameter"
+        );
+    }
+
+    /// Test: Verify dry-run mode respects no_interactive flag in usage message
+    #[test]
+    fn test_restore_dry_run_respects_no_interactive_in_message() {
+        let code = include_str!("restore.rs");
+
+        // Find the dry-run section
+        let dry_run_section = code.find("if dry_run {")
+            .expect("run_restore must have dry_run mode");
+
+        // Get the dry_run block (expanded window to reach the print statements)
+        let dry_run_block = &code[dry_run_section..dry_run_section + 1500];
+
+        // Verify the dry_run mode shows different messages based on no_interactive
+        assert!(
+            dry_run_block.contains("--no-interactive --confirm"),
+            "Dry-run mode must show --no-interactive --confirm usage when no_interactive is true"
+        );
+
+        // Verify it also shows the interactive version
+        assert!(
+            dry_run_block.contains("hoop restore --from"),
+            "Dry-run mode must show simple usage when no_interactive is false"
+        );
+    }
+
+    /// Test: Verify error handling when --confirm is missing in no_interactive mode
+    #[test]
+    fn test_restore_confirm_requirement_error_quality() {
+        let code = include_str!("restore.rs");
+
+        // Find the --confirm requirement check
+        let check_start = code.find("if no_interactive && !confirm {")
+            .expect("Must have --confirm requirement check");
+
+        let check_section = &code[check_start..check_start + 600];
+
+        // Verify error message quality
+        assert!(
+            check_section.contains("hoop restore: --confirm is required"),
+            "Error must clearly state --confirm is required"
+        );
+
+        assert!(
+            check_section.contains("DESTRUCTIVE"),
+            "Error must warn about destructive operation"
+        );
+
+        assert!(
+            check_section.contains("replace ~/.hoop/"),
+            "Error must explain what will be replaced"
+        );
+
+        assert!(
+            check_section.contains("--no-interactive --confirm"),
+            "Error must show correct re-run command"
+        );
     }
 }

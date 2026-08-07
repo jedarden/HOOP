@@ -4030,7 +4030,7 @@ fn check_and_emit_convoy_complete(
     if let Ok(file) = std::fs::File::open(&events_path) {
         use std::io::BufRead;
         let reader = std::io::BufReader::new(file);
-        for line in reader.lines().flatten() {
+        for line in reader.lines().map_while(Result::ok) {
             if let Ok(event) = serde_json::from_str::<crate::events::NeedleEvent>(&line) {
                 let (bead_id, is_terminal) = match &event {
                     crate::events::NeedleEvent::Complete { bead, .. }

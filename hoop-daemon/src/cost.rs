@@ -18,6 +18,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
+/// Type alias for project-date cost aggregation map
+/// Key: (project, date), Value: (cost, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens)
+type ProjectDateCostMap = HashMap<(String, String), (f64, i64, i64, i64, i64)>;
+
 /// Model pricing configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct ModelPricing {
@@ -496,7 +500,7 @@ impl CostAggregator {
     ///
     /// Aggregates all in-memory buckets by (project, date), summing tokens and cost.
     pub fn get_project_date_rollup(&self) -> Vec<(String, String, f64, i64, i64, i64, i64)> {
-        let mut map: HashMap<(String, String), (f64, i64, i64, i64, i64)> = HashMap::new();
+        let mut map: ProjectDateCostMap = HashMap::new();
         for (key, usage) in &self.buckets {
             let cost = self.calculate_cost(key, usage);
             let entry = map

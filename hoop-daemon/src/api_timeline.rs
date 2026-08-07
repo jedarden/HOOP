@@ -73,7 +73,7 @@ pub async fn get_worker_timeline(
     State(state): State<DaemonState>,
     Query(query): Query<TimelineQuery>,
 ) -> Json<TimelineResponse> {
-    let hours = query.hours.min(168).max(1); // clamp to 1h–7d
+    let hours = query.hours.clamp(1, 168); // clamp to 1h–7d
     let now = chrono::Utc::now();
     let window_start = now - chrono::Duration::hours(hours as i64);
 

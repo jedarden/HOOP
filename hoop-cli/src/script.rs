@@ -75,7 +75,7 @@ struct ScriptManifest {
 fn get_daemon_url() -> String {
     // Try to read from control socket first
     if let Ok(home) = std::env::var("HOME") {
-        let socket_path = format!("{}/.hoop/control.sock", home);
+        let _socket_path = format!("{}/.hoop/control.sock", home);
         // For now, use default localhost URL
         // TODO: Implement Unix socket communication
     }

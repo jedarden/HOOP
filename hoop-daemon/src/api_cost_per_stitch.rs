@@ -106,7 +106,7 @@ async fn get_stitch_trends(
     Query(params): Query<CostTrendsQuery>,
     State(_state): State<crate::DaemonState>,
 ) -> Result<Json<CostTrendsResponse>, (StatusCode, String)> {
-    let window_days = params.window_days.min(180).max(1);
+    let window_days = params.window_days.clamp(1, 180);
 
     let db_path = fleet::db_path();
     let conn = rusqlite::Connection::open_with_flags(

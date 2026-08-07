@@ -141,7 +141,7 @@ fn derive_project_name(cwd: &str, project_paths: &HashMap<String, String>) -> St
     }
 
     // Fallback: try to extract project name from path
-    if let Some(last_seg) = cwd.split('/').filter(|s| !s.is_empty()).next_back() {
+    if let Some(last_seg) = cwd.split('/').rfind(|s| !s.is_empty()) {
         last_seg.to_string()
     } else {
         "unknown".to_string()

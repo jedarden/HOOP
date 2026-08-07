@@ -250,6 +250,10 @@ pub struct PercentileQuery {
     pub sample_count: usize,
 }
 
+/// Type alias for raw stitch data from database query
+/// (id, title, body, attachments_path, cost_usd, duration_seconds)
+type RawStitchRow = (String, String, Option<String>, Option<String>, f64, i64);
+
 /// Current schema version for the percentile index
 const INDEX_SCHEMA_VERSION: &str = "1.0.0";
 
@@ -579,7 +583,7 @@ pub fn rebuild_index(conn: &mut Connection) -> Result<()> {
     })?;
 
     // Collect all stitch IDs first, then load labels in bulk
-    let mut stitches: Vec<(String, String, Option<String>, Option<String>, f64, i64)> = Vec::new();
+    let mut stitches: Vec<RawStitchRow> = Vec::new();
     for row in rows {
         stitches.push(row?);
     }

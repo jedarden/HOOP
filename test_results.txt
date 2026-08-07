@@ -1,0 +1,6 @@
+==================================
+Testing --no-interactive flag
+==================================
+
+1. Testing flag positioning with basic commands
+Testing: scan with --no-interactive before ... [0;32m✓ PASS[0m

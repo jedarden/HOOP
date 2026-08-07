@@ -401,11 +401,261 @@ pub fn run_flag_position_tests(
     (successes, failures)
 }
 
+// ── Test macros for common no_interactive flag testing patterns ──────────────────
+
+/// Macro to generate tests for flag parsing before a command
+///
+/// # Usage
+///
+/// ```rust
+/// test_no_interactive_flag_before!(scan_before, "scan", &["scan", "/tmp"]);
+/// ```
+///
+/// This generates a test function that verifies the no_interactive flag
+/// is correctly parsed when placed before the command.
+#[macro_export]
+macro_rules! test_no_interactive_flag_before {
+    ($test_name:ident, $command:expr, $args:expr) => {
+        #[test]
+        fn $test_name() {
+            let full_args: Vec<&str> = vec!["hoop", "--no-interactive"]
+                .iter()
+                .chain($args.iter())
+                .copied()
+                .collect();
+            let result = $crate::cli_test_utils::parse_cli_with_flag(&full_args);
+            assert!(result.is_ok(), "Failed to parse args: {:?}", full_args);
+            let parsed = result.unwrap();
+            assert_eq!(parsed.no_interactive, true, "no_interactive should be true");
+        }
+    };
+}
+
+/// Macro to generate tests for flag parsing after a command
+///
+/// # Usage
+///
+/// ```rust
+/// test_no_interactive_flag_after!(scan_after, "scan", &["scan", "/tmp"]);
+/// ```
+///
+/// This generates a test function that verifies the no_interactive flag
+/// is correctly parsed when placed after the command.
+#[macro_export]
+macro_rules! test_no_interactive_flag_after {
+    ($test_name:ident, $command:expr, $args:expr) => {
+        #[test]
+        fn $test_name() {
+            let full_args: Vec<&str> = $args
+                .iter()
+                .chain(&["--no-interactive"])
+                .copied()
+                .collect();
+            let result = $crate::cli_test_utils::parse_cli_with_flag(&full_args);
+            assert!(result.is_ok(), "Failed to parse args: {:?}", full_args);
+            let parsed = result.unwrap();
+            assert_eq!(parsed.no_interactive, true, "no_interactive should be true");
+        }
+    };
+}
+
+/// Macro to generate tests for short flag (-y) parsing
+///
+/// # Usage
+///
+/// ```rust
+/// test_short_flag_y!(scan_short, &["scan", "/tmp"]);
+/// ```
+#[macro_export]
+macro_rules! test_short_flag_y {
+    ($test_name:ident, $args:expr) => {
+        #[test]
+        fn $test_name() {
+            let full_args: Vec<&str> = vec!["hoop", "-y"]
+                .iter()
+                .chain($args.iter())
+                .copied()
+                .collect();
+            let result = $crate::cli_test_utils::parse_cli_with_flag(&full_args);
+            assert!(result.is_ok(), "Failed to parse args: {:?}", full_args);
+            let parsed = result.unwrap();
+            assert_eq!(parsed.no_interactive, true, "no_interactive should be true with -y");
+        }
+    };
+}
+
+/// Macro to generate tests verifying both positions extract the same value
+///
+/// # Usage
+///
+/// ```rust
+/// test_both_positions_consistency!(scan_consistency, &["scan", "/tmp"]);
+/// ```
+///
+/// This generates a test that verifies the no_interactive flag is parsed
+/// consistently whether placed before or after the command.
+#[macro_export]
+macro_rules! test_both_positions_consistency {
+    ($test_name:ident, $args:expr) => {
+        #[test]
+        fn $test_name() {
+            // Parse with flag before command
+            let args_before: Vec<&str> = vec!["hoop", "--no-interactive"]
+                .iter()
+                .chain($args.iter())
+                .copied()
+                .collect();
+            let parsed_before = $crate::cli_test_utils::parse_cli_with_flag(&args_before)
+                .expect("Failed to parse with flag before command");
+
+            // Parse with flag after command
+            let args_after: Vec<&str> = $args
+                .iter()
+                .chain(&["--no-interactive"])
+                .copied()
+                .collect();
+            let parsed_after = $crate::cli_test_utils::parse_cli_with_flag(&args_after)
+                .expect("Failed to parse with flag after command");
+
+            assert_eq!(
+                parsed_before.no_interactive,
+                parsed_after.no_interactive,
+                "no_interactive value must be consistent regardless of flag position"
+            );
+            assert_eq!(
+                parsed_before.no_interactive,
+                true,
+                "no_interactive should be true"
+            );
+        }
+    };
+}
+
+/// Macro to generate tests verifying flag defaults to false when not specified
+///
+/// # Usage
+///
+/// ```rust
+/// test_flag_default_false!(scan_default, &["scan", "/tmp"]);
+/// ```
+#[macro_export]
+macro_rules! test_flag_default_false {
+    ($test_name:ident, $args:expr) => {
+        #[test]
+        fn $test_name() {
+            let full_args: Vec<&str> = vec!["hoop"]
+                .iter()
+                .chain($args.iter())
+                .copied()
+                .collect();
+            let result = $crate::cli_test_utils::parse_cli_with_flag(&full_args);
+            assert!(result.is_ok(), "Failed to parse args: {:?}", full_args);
+            let parsed = result.unwrap();
+            assert_eq!(
+                parsed.no_interactive,
+                false,
+                "no_interactive should be false when not specified"
+            );
+        }
+    };
+}
+
+/// Macro to generate a complete test suite for a command
+///
+/// Generates five tests covering:
+/// - Flag before command
+/// - Flag after command
+/// - Short flag (-y)
+/// - Both positions consistency
+/// - Default (no flag)
+///
+/// # Usage
+///
+/// ```rust
+/// test_command_no_interactive_suite!("scan", &["scan", "/tmp"]);
+/// ```
+///
+/// This generates a single test function that verifies all aspects of the flag.
+/// Unlike the individual test macros, this creates one comprehensive test
+/// that checks all patterns.
+#[macro_export]
+macro_rules! test_command_no_interactive_suite {
+    ($command:expr, $args:expr) => {
+        #[test]
+        fn test_no_interactive_complete_suite() {
+            // Test 1: Flag before command
+            let full_args_before: Vec<&str> = vec!["hoop", "--no-interactive"]
+                .iter()
+                .chain($args.iter())
+                .copied()
+                .collect();
+            let result_before = $crate::cli_test_utils::parse_cli_with_flag(&full_args_before);
+            assert!(result_before.is_ok(), "Failed to parse with flag before command");
+            let parsed_before = result_before.unwrap();
+            assert_eq!(parsed_before.no_interactive, true, "no_interactive should be true before command");
+
+            // Test 2: Flag after command
+            let full_args_after: Vec<&str> = $args
+                .iter()
+                .chain(&["--no-interactive"])
+                .copied()
+                .collect();
+            let result_after = $crate::cli_test_utils::parse_cli_with_flag(&full_args_after);
+            assert!(result_after.is_ok(), "Failed to parse with flag after command");
+            let parsed_after = result_after.unwrap();
+            assert_eq!(parsed_after.no_interactive, true, "no_interactive should be true after command");
+
+            // Test 3: Short flag (-y)
+            let full_args_short: Vec<&str> = vec!["hoop", "-y"]
+                .iter()
+                .chain($args.iter())
+                .copied()
+                .collect();
+            let result_short = $crate::cli_test_utils::parse_cli_with_flag(&full_args_short);
+            assert!(result_short.is_ok(), "Failed to parse with -y flag");
+            let parsed_short = result_short.unwrap();
+            assert_eq!(parsed_short.no_interactive, true, "no_interactive should be true with -y");
+
+            // Test 4: Both positions consistency
+            assert_eq!(
+                parsed_before.no_interactive,
+                parsed_after.no_interactive,
+                "no_interactive value must be consistent regardless of flag position"
+            );
+
+            // Test 5: Default (no flag)
+            let full_args_default: Vec<&str> = vec!["hoop"]
+                .iter()
+                .chain($args.iter())
+                .copied()
+                .collect();
+            let result_default = $crate::cli_test_utils::parse_cli_with_flag(&full_args_default);
+            assert!(result_default.is_ok(), "Failed to parse without flag");
+            let parsed_default = result_default.unwrap();
+            assert_eq!(
+                parsed_default.no_interactive,
+                false,
+                "no_interactive should be false when not specified"
+            );
+        }
+    };
+}
+
 // ── Module tests (demonstrating utility usage) ──────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Example: Using the test suite macro for the scan command
+    test_command_no_interactive_suite!(scan_example, "scan", &["scan", "/tmp"]);
+
+    // Example: Using the test suite macro for the remove command
+    test_command_no_interactive_suite!(
+        remove_example,
+        "remove",
+        &["remove", "test-project", "--confirm"]
+    );
 
     #[test]
     fn test_parse_cli_with_flag_before_subcommand() {

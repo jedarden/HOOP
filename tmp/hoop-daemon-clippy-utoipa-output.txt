@@ -1,0 +1,818 @@
+    Checking bit-vec v0.8.0
+    Checking winnow v1.0.2
+    Checking bit-set v0.8.0
+    Checking fancy-regex v0.16.2
+    Checking toml_parser v1.1.2+spec-1.1.0
+    Checking hoop-ui v0.1.0 (/home/coding/HOOP/hoop-ui)
+    Checking syntect v5.3.0
+    Checking serde_spanned v1.1.1
+    Checking toml_datetime v1.1.1+spec-1.1.0
+    Checking wait-timeout v0.2.1
+    Checking quick-error v1.2.3
+    Checking sdd v3.0.10
+    Checking two-face v0.5.1
+    Checking toml_writer v1.1.1+spec-1.1.0
+    Checking scc v2.4.0
+    Checking toml v1.1.2+spec-1.1.0
+    Checking rusty-fork v0.3.1
+    Checking target-triple v1.0.0
+    Checking rand_xorshift v0.4.0
+    Checking futures-executor v0.3.32
+    Checking termcolor v1.4.1
+    Checking unarray v0.1.4
+    Checking trybuild v1.0.116
+    Checking proptest v1.11.0
+    Checking serial_test v3.4.0
+    Checking hoop-daemon v0.1.0 (/home/coding/HOOP/hoop-daemon)
+    Checking fs_extra v1.3.0
+error[E0432]: unresolved import `tempfile`
+  --> hoop-daemon/src/integration_harness.rs:28:5
+   |
+28 | use tempfile::TempDir;
+   |     ^^^^^^^^ use of unresolved module or unlinked crate `tempfile`
+   |
+   = help: if you wanted to use a crate named `tempfile`, use `cargo add tempfile` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `tempfile` in this scope
+   --> hoop-daemon/src/integration_harness.rs:108:20
+    |
+108 |     let temp_dir = tempfile::TempDir::new()?;
+    |                    ^^^^^^^^ use of unresolved module or unlinked crate `tempfile`
+    |
+    = help: if you wanted to use a crate named `tempfile`, use `cargo add tempfile` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `tempfile` in this scope
+   --> hoop-daemon/src/load_test.rs:459:20
+    |
+459 |     let temp_dir = tempfile::TempDir::new()?;
+    |                    ^^^^^^^^ use of unresolved module or unlinked crate `tempfile`
+    |
+    = help: if you wanted to use a crate named `tempfile`, use `cargo add tempfile` to add it to your `Cargo.toml`
+
+error[E0425]: cannot find function `invoke_br_create` in this scope
+   --> hoop-daemon/src/api_beads.rs:597:23
+    |
+597 |         let mut cmd = invoke_br_create(&[]);
+    |                       ^^^^^^^^^^^^^^^^
+    |
+   ::: hoop-daemon/src/br_verbs.rs:176:1
+    |
+176 | pub fn invoke_br_read(verb: ReadVerb, args: &[&str]) -> std::process::Command {
+    | ----------------------------------------------------------------------------- similarly named function `invoke_br_read` defined here
+    |
+help: a function with a similar name exists
+    |
+597 -         let mut cmd = invoke_br_create(&[]);
+597 +         let mut cmd = invoke_br_read(&[]);
+    |
+help: consider importing this function
+    |
+ 12 + use crate::br_verbs::invoke_br_create;
+    |
+
+error[E0425]: cannot find function `invoke_br_create` in this scope
+   --> hoop-daemon/src/api_stitch_decompose.rs:474:27
+    |
+474 |             let mut cmd = invoke_br_create(&[]);
+    |                           ^^^^^^^^^^^^^^^^ not found in this scope
+    |
+help: consider importing this function
+    |
+ 10 + use crate::br_verbs::invoke_br_create;
+    |
+
+error[E0425]: cannot find value `resume_as_new_bead` in this scope
+  --> hoop-daemon/src/api_stitch_replay.rs:78:18
+   |
+78 |             post(resume_as_new_bead),
+   |                  ^^^^^^^^^^^^^^^^^^ not found in this scope
+
+warning: unused import: `ConnectInfo`
+  --> hoop-daemon/src/api_stitch_replay.rs:10:15
+   |
+10 |     extract::{ConnectInfo, Path, State},
+   |               ^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `std::net::SocketAddr`
+  --> hoop-daemon/src/api_stitch_replay.rs:16:5
+   |
+16 | use std::net::SocketAddr;
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+error: cannot find macro `json` in this scope
+   --> hoop-daemon/src/prompt_substitute.rs:542:14
+    |
+542 |             &json!({}),
+    |              ^^^^
+
+error: cannot find macro `json` in this scope
+   --> hoop-daemon/src/prompt_substitute.rs:521:20
+    |
+521 |         let args = json!({
+    |                    ^^^^
+
+error[E0433]: cannot find module or crate `template_library` in this scope
+    --> hoop-daemon/src/api_beads.rs:1162:31
+     |
+1162 |             template_library: template_library::TemplateStore::new(),
+     |                               ^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `template_library`
+     |
+help: to make use of source file hoop-daemon/src/template_library.rs, use `mod template_library` in this file to declare the module
+    -->  hoop-daemon/src/lib.rs:7:1
+     |
+   7 + mod template_library;
+     |
+help: consider importing this type alias
+     |
+ 902 +     use crate::template_library::TemplateStore;
+     |
+help: if you import `TemplateStore`, refer to it directly
+     |
+1162 -             template_library: template_library::TemplateStore::new(),
+1162 +             template_library: TemplateStore::new(),
+     |
+
+error[E0433]: cannot find module or crate `api_prompts` in this scope
+    --> hoop-daemon/src/api_beads.rs:1163:29
+     |
+1163 |             prompt_library: api_prompts::PromptStore::new(),
+     |                             ^^^^^^^^^^^ use of unresolved module or unlinked crate `api_prompts`
+     |
+help: to make use of source file hoop-daemon/src/api_prompts.rs, use `mod api_prompts` in this file to declare the module
+    -->  hoop-daemon/src/lib.rs:7:1
+     |
+   7 + mod api_prompts;
+     |
+help: consider importing this type alias
+     |
+ 902 +     use crate::api_prompts::PromptStore;
+     |
+help: if you import `PromptStore`, refer to it directly
+     |
+1163 -             prompt_library: api_prompts::PromptStore::new(),
+1163 +             prompt_library: PromptStore::new(),
+     |
+
+error[E0433]: cannot find module or crate `api_notes` in this scope
+    --> hoop-daemon/src/api_beads.rs:1164:27
+     |
+1164 |             note_library: api_notes::NoteStore::new(),
+     |                           ^^^^^^^^^ use of unresolved module or unlinked crate `api_notes`
+     |
+help: to make use of source file hoop-daemon/src/api_notes.rs, use `mod api_notes` in this file to declare the module
+    -->  hoop-daemon/src/lib.rs:7:1
+     |
+   7 + mod api_notes;
+     |
+help: consider importing this type alias
+     |
+ 902 +     use crate::api_notes::NoteStore;
+     |
+help: if you import `NoteStore`, refer to it directly
+     |
+1164 -             note_library: api_notes::NoteStore::new(),
+1164 +             note_library: NoteStore::new(),
+     |
+
+error[E0433]: cannot find module or crate `api_skills` in this scope
+    --> hoop-daemon/src/api_beads.rs:1165:28
+     |
+1165 |             skill_library: api_skills::SkillStore::new(),
+     |                            ^^^^^^^^^^ use of unresolved module or unlinked crate `api_skills`
+     |
+help: to make use of source file hoop-daemon/src/api_skills.rs, use `mod api_skills` in this file to declare the module
+    -->  hoop-daemon/src/lib.rs:7:1
+     |
+   7 + mod api_skills;
+     |
+help: consider importing this type alias
+     |
+ 902 +     use crate::api_skills::SkillStore;
+     |
+help: if you import `SkillStore`, refer to it directly
+     |
+1165 -             skill_library: api_skills::SkillStore::new(),
+1165 +             skill_library: SkillStore::new(),
+     |
+
+error[E0433]: cannot find module or crate `api_scripts` in this scope
+    --> hoop-daemon/src/api_beads.rs:1166:29
+     |
+1166 |             script_library: api_scripts::ScriptStore::new(),
+     |                             ^^^^^^^^^^^ use of unresolved module or unlinked crate `api_scripts`
+     |
+help: to make use of source file hoop-daemon/src/api_scripts.rs, use `mod api_scripts` in this file to declare the module
+    -->  hoop-daemon/src/lib.rs:7:1
+     |
+   7 + mod api_scripts;
+     |
+help: consider importing this type alias
+     |
+ 902 +     use crate::api_scripts::ScriptStore;
+     |
+help: if you import `ScriptStore`, refer to it directly
+     |
+1166 -             script_library: api_scripts::ScriptStore::new(),
+1166 +             script_library: ScriptStore::new(),
+     |
+
+warning: unused imports: `AtomicBool` and `Ordering`
+    --> hoop-daemon/src/agent_session.rs:2256:33
+     |
+2256 |         use std::sync::atomic::{AtomicBool, Ordering};
+     |                                 ^^^^^^^^^^  ^^^^^^^^
+     |
+     = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `ConnectInfo`
+  --> hoop-daemon/src/api_stitch_replay.rs:10:15
+   |
+10 |     extract::{ConnectInfo, Path, State},
+   |               ^^^^^^^^^^^
+
+warning: unused import: `crate::tag_join`
+    --> hoop-daemon/src/sessions.rs:3562:13
+     |
+3562 |         use crate::tag_join;
+     |             ^^^^^^^^^^^^^^^
+
+warning: unused import: `std::path::PathBuf`
+   --> hoop-daemon/src/net_diff.rs:419:9
+    |
+419 |     use std::path::PathBuf;
+    |         ^^^^^^^^^^^^^^^^^^
+
+warning: unreachable statement
+   --> hoop-daemon/src/api_beads.rs:490:5
+    |
+483 | /         return Err((
+484 | |             StatusCode::FORBIDDEN,
+485 | |             "Bead creation is disabled in zero-write mode".to_string(),
+486 | |         ));
+    | |__________- any code following this expression is unreachable
+...
+490 | /     crate::auth::check_role_for_addr(
+491 | |         &state.role_resolver,
+492 | |         connect_info.map(|ci| ci.0),
+493 | |         crate::auth::Role::Drafter,
+494 | |     )
+495 | |     .map_err(|e| (e.0, serde_json::to_string(&e.1 .0).unwrap_or_else(|_| e.0.to_string())))?;
+    | |_____________________________________________________________________________________________^ unreachable statement
+    |
+    = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable statement
+   --> hoop-daemon/src/api_stitch_decompose.rs:392:5
+    |
+386 | /     return Err((
+387 | |         StatusCode::FORBIDDEN,
+388 | |         "Stitch submission is disabled in zero-write mode".to_string(),
+389 | |     ));
+    | |______- any code following this expression is unreachable
+...
+392 | /     let stitch_id = req.stitch_id.clone().unwrap_or_else(|| {
+393 | |         format!(
+394 | |             "stitch-{}",
+395 | |             uuid::Uuid::new_v4()
+...   |
+401 | |     });
+    | |_______^ unreachable statement
+
+warning: variable does not need to be mutable
+   --> hoop-daemon/src/load_test.rs:485:22
+    |
+485 |                 let (mut ws_sender, mut ws_receiver) = ws_stream.split();
+    |                      ----^^^^^^^^^
+    |                      |
+    |                      help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+error[E0061]: this function takes 2 arguments but 0 arguments were supplied
+    --> hoop-daemon/src/api_beads.rs:1106:50
+     |
+1106 |             worker_registry: std::sync::Arc::new(crate::ws::WorkerRegistry::new()),
+     |                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-- two arguments of type `tokio::sync::broadcast::Sender<heartbeats::MonitorEvent>` and `tokio::sync::broadcast::Sender<sessions::SessionEvent>` are missing
+     |
+note: associated function defined here
+    --> hoop-daemon/src/ws.rs:1461:12
+     |
+1461 |     pub fn new(
+     |            ^^^
+1462 |         monitor: broadcast::Sender<MonitorEvent>,
+     |         ----------------------------------------
+1463 |         sessions: broadcast::Sender<SessionEvent>,
+     |         -----------------------------------------
+help: provide the arguments
+     |
+1106 |             worker_registry: std::sync::Arc::new(crate::ws::WorkerRegistry::new(/* tokio::sync::broadcast::Sender<heartbeats::MonitorEvent> */, /* tokio::sync::broadcast::Sender<sessions::SessionEvent> */)),
+     |                                                                                 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+error[E0061]: this function takes 2 arguments but 0 arguments were supplied
+    --> hoop-daemon/src/api_beads.rs:1114:37
+     |
+1114 |                 std::sync::Arc::new(crate::ws::WorkerRegistry::new()),
+     |                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-- two arguments of type `tokio::sync::broadcast::Sender<heartbeats::MonitorEvent>` and `tokio::sync::broadcast::Sender<sessions::SessionEvent>` are missing
+     |
+note: associated function defined here
+    --> hoop-daemon/src/ws.rs:1461:12
+     |
+1461 |     pub fn new(
+     |            ^^^
+1462 |         monitor: broadcast::Sender<MonitorEvent>,
+     |         ----------------------------------------
+1463 |         sessions: broadcast::Sender<SessionEvent>,
+     |         -----------------------------------------
+help: provide the arguments
+     |
+1114 |                 std::sync::Arc::new(crate::ws::WorkerRegistry::new(/* tokio::sync::broadcast::Sender<heartbeats::MonitorEvent> */, /* tokio::sync::broadcast::Sender<sessions::SessionEvent> */)),
+     |                                                                    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+error[E0599]: no function or associated item named `default` found for struct `ws::ConfigStatusData` in the current scope
+    --> hoop-daemon/src/api_beads.rs:1127:100
+     |
+1127 |             config_status: std::sync::Arc::new(std::sync::RwLock::new(crate::ws::ConfigStatusData::default())),
+     |                                                                                                    ^^^^^^^ function or associated item not found in `ws::ConfigStatusData`
+     |
+    ::: hoop-daemon/src/ws.rs:523:1
+     |
+ 523 | pub struct ConfigStatusData {
+     | --------------------------- function or associated item `default` not found for this struct
+     |
+     = help: items from traits can only be used if the trait is implemented and in scope
+     = note: the following trait defines an item `default`, perhaps you need to implement it:
+             candidate #1: `std::default::Default`
+
+error[E0599]: no function or associated item named `default` found for struct `config_resolver::ResolvedConfig` in the current scope
+    --> hoop-daemon/src/api_beads.rs:1145:90
+     |
+1145 |             resolved_config: std::sync::Arc::new(crate::config_resolver::ResolvedConfig::default()),
+     |                                                                                          ^^^^^^^ function or associated item not found in `config_resolver::ResolvedConfig`
+     |
+    ::: hoop-daemon/src/config_resolver.rs:535:1
+     |
+ 535 | pub struct ResolvedConfig {
+     | ------------------------- function or associated item `default` not found for this struct
+     |
+     = help: items from traits can only be used if the trait is implemented and in scope
+     = note: the following trait defines an item `default`, perhaps you need to implement it:
+             candidate #1: `std::default::Default`
+
+error[E0308]: mismatched types
+    --> hoop-daemon/src/api_beads.rs:1147:53
+     |
+1147 |             worker_ack_monitor: std::sync::Arc::new(crate::worker_ack::WorkerAckMonitor::new()),
+     |                                 ------------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `WorkerAckMonitor`, found `Result<WorkerAckMonitor, Error>`
+     |                                 |
+     |                                 arguments to this function are incorrect
+     |
+     = note: expected struct `worker_ack::WorkerAckMonitor`
+                  found enum `std::result::Result<worker_ack::WorkerAckMonitor, anyhow::Error>`
+note: associated function defined here
+    --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/alloc/src/sync.rs:419:11
+help: consider using `Result::expect` to unwrap the `std::result::Result<worker_ack::WorkerAckMonitor, anyhow::Error>` value, panicking if the value is a `Result::Err`
+     |
+1147 |             worker_ack_monitor: std::sync::Arc::new(crate::worker_ack::WorkerAckMonitor::new().expect("REASON")),
+     |                                                                                               +++++++++++++++++
+
+error[E0599]: no function or associated item named `default` found for struct `config_resolver::ResolvedConfig` in the current scope
+    --> hoop-daemon/src/api_beads.rs:1156:61
+     |
+1156 |                     crate::config_resolver::ResolvedConfig::default(),
+     |                                                             ^^^^^^^ function or associated item not found in `config_resolver::ResolvedConfig`
+     |
+    ::: hoop-daemon/src/config_resolver.rs:535:1
+     |
+ 535 | pub struct ResolvedConfig {
+     | ------------------------- function or associated item `default` not found for this struct
+     |
+     = help: items from traits can only be used if the trait is implemented and in scope
+     = note: the following trait defines an item `default`, perhaps you need to implement it:
+             candidate #1: `std::default::Default`
+
+error[E0308]: mismatched types
+    --> hoop-daemon/src/api_beads.rs:1157:21
+     |
+1155 |                 crate::redaction_policy::RedactionPolicyState::new(
+     |                 -------------------------------------------------- arguments to this function are incorrect
+1156 |                     crate::config_resolver::ResolvedConfig::default(),
+1157 |                     std::sync::Arc::new(std::sync::RwLock::new(Vec::new())),
+     |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `ProjectsRegistry`, found `Arc<RwLock<Vec<_>>>`
+     |
+     = note: expected struct `hoop_schema::ProjectsRegistry`
+                found struct `std::sync::Arc<std::sync::RwLock<std::vec::Vec<_>>>`
+note: associated function defined here
+    --> hoop-daemon/src/redaction_policy.rs:254:12
+     |
+ 254 |     pub fn new(global_config: &HoopConfig, projects_registry: ProjectsRegistry) -> Self {
+     |            ^^^                             -----------------------------------
+
+error[E0599]: no function or associated item named `default` found for struct `auth::RoleResolver` in the current scope
+    --> hoop-daemon/src/api_beads.rs:1168:75
+     |
+1168 |             role_resolver: std::sync::Arc::new(crate::auth::RoleResolver::default()),
+     |                                                                           ^^^^^^^ function or associated item not found in `auth::RoleResolver`
+     |
+    ::: hoop-daemon/src/auth.rs:79:1
+     |
+  79 | pub struct RoleResolver {
+     | ----------------------- function or associated item `default` not found for this struct
+     |
+note: if you're trying to build a new `auth::RoleResolver` consider using one of the following associated functions:
+      auth::RoleResolver::new
+      auth::RoleResolver::unprivileged
+    --> hoop-daemon/src/auth.rs:92:5
+     |
+  92 |     pub fn new(config: RoleConfig) -> Self {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 118 |     pub fn unprivileged() -> Self {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = help: items from traits can only be used if the trait is implemented and in scope
+     = note: the following trait defines an item `default`, perhaps you need to implement it:
+             candidate #1: `std::default::Default`
+
+error[E0308]: mismatched types
+    --> hoop-daemon/src/api_beads.rs:1172:62
+     |
+1172 |             br_semaphore_target_permits: std::sync::Arc::new(std::sync::RwLock::new(10)),
+     |                                          ------------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `RwLock<usize>`, found `RwLock<{integer}>`
+     |                                          |
+     |                                          arguments to this function are incorrect
+     |
+     = note: `std::sync::RwLock<{integer}>` and `tokio::sync::RwLock<usize>` have similar names, but are actually distinct types
+note: `std::sync::RwLock<{integer}>` is defined in crate `std`
+    --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/std/src/sync/poison/rwlock.rs:94:0
+note: `tokio::sync::RwLock<usize>` is defined in crate `tokio`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.52.3/src/sync/rwlock.rs:87:1
+     |
+  87 | pub struct RwLock<T: ?Sized> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+note: associated function defined here
+    --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/alloc/src/sync.rs:419:11
+
+error[E0063]: missing field `attachments_count` in initializer of `api_preview::PreviewRequest`
+   --> hoop-daemon/src/api_preview.rs:621:22
+    |
+621 |         let params = PreviewRequest {
+    |                      ^^^^^^^^^^^^^^ missing `attachments_count`
+
+error[E0308]: mismatched types
+    --> hoop-daemon/src/api_stitch_decompose.rs:1202:25
+     |
+1202 |             started_at: std::time::Instant::now(),
+     |                         ^^^^^^^^^^^^^^^^^^^^^^^^^ expected `tokio::time::Instant`, found `std::time::Instant`
+     |
+     = note: `std::time::Instant` and `tokio::time::Instant` have similar names, but are actually distinct types
+note: `std::time::Instant` is defined in crate `std`
+    --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/std/src/time.rs:157:0
+note: `tokio::time::Instant` is defined in crate `tokio`
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tokio-1.52.3/src/time/instant.rs:34:1
+     |
+  34 | pub struct Instant {
+     | ^^^^^^^^^^^^^^^^^^
+help: call `Into::into` on this expression to convert `std::time::Instant` into `tokio::time::Instant`
+     |
+1202 |             started_at: std::time::Instant::now().into(),
+     |                                                  +++++++
+
+error[E0061]: this function takes 9 arguments but 0 arguments were supplied
+    --> hoop-daemon/src/api_stitch_decompose.rs:1211:34
+     |
+1211 |             supervisor: Arc::new(crate::supervisor::ProjectSupervisor::new()),
+     |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-- multiple arguments are missing
+     |
+note: associated function defined here
+    --> hoop-daemon/src/supervisor.rs:243:12
+     |
+ 243 |     pub fn new(
+     |            ^^^
+ 244 |         bead_tx: broadcast::Sender<BeadEvent>,
+     |         -------------------------------------
+ 245 |         session_tx: broadcast::Sender<SessionEvent>,
+     |         -------------------------------------------
+ 246 |         worker_registry: Arc<crate::ws::WorkerRegistry>,
+     |         -----------------------------------------------
+ 247 |         beads: Arc<std::sync::RwLock<Vec<Bead>>>,
+     |         ----------------------------------------
+ 248 |         shutdown: Arc<crate::shutdown::ShutdownCoordinator>,
+     |         ---------------------------------------------------
+ 249 |         cost_aggregator: Arc<std::sync::RwLock<CostAggregator>>,
+     |         -------------------------------------------------------
+ 250 |         vector_index: Arc<std::sync::RwLock<crate::vector_index::VectorIndex>>,
+     |         ----------------------------------------------------------------------
+ 251 |         scripts_dir: PathBuf,
+     |         --------------------
+ 252 |         stuck_detector: Arc<std::sync::Mutex<crate::stuck_detector::StuckDetector>>,
+     |         ---------------------------------------------------------------------------
+help: provide the arguments
+     |
+1211 |             supervisor: Arc::new(crate::supervisor::ProjectSupervisor::new(/* tokio::sync::broadcast::Sender<beads::BeadEvent> */, /* tokio::sync::broadcast::Sender<sessions::SessionEvent> */, /* std::sync::Arc<ws::WorkerRegistry> */, /* std::sync::Arc<std::sync::RwLock<std::vec::Vec<Bead>>> */, /* std::sync::Arc<shutdown::ShutdownCoordinator> */, /* std::sync::Arc<std::sync::RwLock<cost::CostAggregator>> */, /* std::sync::Arc<std::sync::RwLock<vector_index::VectorIndex>> */, /* std::path::PathBuf */, /* std::sync::Arc<std::sync::Mutex<stuck_detector::StuckDetector>> */)),
+     |                                                                            +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+error[E0061]: this function takes 1 argument but 0 arguments were supplied
+    --> hoop-daemon/src/api_stitch_decompose.rs:1217:62
+     |
+1217 |             cost_aggregator: Arc::new(std::sync::RwLock::new(crate::cost::CostAggregator::new())),
+     |                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-- argument #1 of type `std::path::PathBuf` is missing
+     |
+note: associated function defined here
+    --> hoop-daemon/src/cost.rs:140:12
+     |
+ 140 |     pub fn new(config_path: PathBuf) -> Result<Self> {
+     |            ^^^ --------------------
+help: provide the argument
+     |
+1217 |             cost_aggregator: Arc::new(std::sync::RwLock::new(crate::cost::CostAggregator::new(/* std::path::PathBuf */))),
+     |                                                                                               ++++++++++++++++++++++++
+
+error[E0308]: mismatched types
+    --> hoop-daemon/src/api_stitch_decompose.rs:1217:62
+     |
+1217 |             cost_aggregator: Arc::new(std::sync::RwLock::new(crate::cost::CostAggregator::new())),
+     |                                       ---------------------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `CostAggregator`, found `Result<CostAggregator, Error>`
+     |                                       |
+     |                                       arguments to this function are incorrect
+     |
+     = note: expected struct `cost::CostAggregator`
+                  found enum `std::result::Result<cost::CostAggregator, anyhow::Error>`
+note: associated function defined here
+    --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/std/src/sync/poison/rwlock.rs:258:17
+help: consider using `Result::expect` to unwrap the `std::result::Result<cost::CostAggregator, anyhow::Error>` value, panicking if the value is a `Result::Err`
+     |
+1217 |             cost_aggregator: Arc::new(std::sync::RwLock::new(crate::cost::CostAggregator::new().expect("REASON"))),
+     |                                                                                                +++++++++++++++++
+
+error[E0061]: this function takes 1 argument but 0 arguments were supplied
+    --> hoop-daemon/src/api_stitch_decompose.rs:1219:39
+     |
+1219 |             upload_registry: Arc::new(crate::uploads::UploadRegistry::new()),
+     |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^-- argument #1 of type `uploads::UploadConfig` is missing
+     |
+note: associated function defined here
+    --> hoop-daemon/src/uploads.rs:87:12
+     |
+  87 |     pub fn new(config: UploadConfig) -> Result<Self> {
+     |            ^^^ --------------------
+help: provide the argument
+     |
+1219 |             upload_registry: Arc::new(crate::uploads::UploadRegistry::new(/* uploads::UploadConfig */)),
+     |                                                                           +++++++++++++++++++++++++++
+
+error[E0308]: mismatched types
+    --> hoop-daemon/src/api_stitch_decompose.rs:1219:39
+     |
+1219 |             upload_registry: Arc::new(crate::uploads::UploadRegistry::new()),
+     |                              -------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `UploadRegistry`, found `Result<UploadRegistry, Error>`
+     |                              |
+     |                              arguments to this function are incorrect
+     |
+     = note: expected struct `uploads::UploadRegistry`
+                  found enum `std::result::Result<uploads::UploadRegistry, anyhow::Error>`
+note: associated function defined here
+    --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/alloc/src/sync.rs:419:11
+help: consider using `Result::expect` to unwrap the `std::result::Result<uploads::UploadRegistry, anyhow::Error>` value, panicking if the value is a `Result::Err`
+     |
+1219 |             upload_registry: Arc::new(crate::uploads::UploadRegistry::new().expect("REASON")),
+     |                                                                            +++++++++++++++++
+
+error[E0599]: no function or associated item named `default` found for struct `config_resolver::ResolvedConfig` in the current scope
+    --> hoop-daemon/src/api_stitch_decompose.rs:1227:79
+     |
+1227 |             resolved_config: Arc::new(crate::config_resolver::ResolvedConfig::default()),
+     |                                                                               ^^^^^^^ function or associated item not found in `config_resolver::ResolvedConfig`
+     |
+    ::: hoop-daemon/src/config_resolver.rs:535:1
+     |
+ 535 | pub struct ResolvedConfig {
+     | ------------------------- function or associated item `default` not found for this struct
+     |
+     = help: items from traits can only be used if the trait is implemented and in scope
+     = note: the following trait defines an item `default`, perhaps you need to implement it:
+             candidate #1: `std::default::Default`
+
+error[E0308]: mismatched types
+    --> hoop-daemon/src/api_stitch_decompose.rs:1229:42
+     |
+1229 |             worker_ack_monitor: Arc::new(crate::worker_ack::WorkerAckMonitor::new()),
+     |                                 -------- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `WorkerAckMonitor`, found `Result<WorkerAckMonitor, Error>`
+     |                                 |
+     |                                 arguments to this function are incorrect
+     |
+     = note: expected struct `worker_ack::WorkerAckMonitor`
+                  found enum `std::result::Result<worker_ack::WorkerAckMonitor, anyhow::Error>`
+note: associated function defined here
+    --> /rustc/59807616e1fa2540724bfbac14d7976d7e4a3860/library/alloc/src/sync.rs:419:11
+help: consider using `Result::expect` to unwrap the `std::result::Result<worker_ack::WorkerAckMonitor, anyhow::Error>` value, panicking if the value is a `Result::Err`
+     |
+1229 |             worker_ack_monitor: Arc::new(crate::worker_ack::WorkerAckMonitor::new().expect("REASON")),
+     |                                                                                    +++++++++++++++++
+
+error[E0599]: no function or associated item named `default` found for struct `redaction_policy::RedactionPolicyState` in the current scope
+    --> hoop-daemon/src/api_stitch_decompose.rs:1234:64
+     |
+1234 |                 crate::redaction_policy::RedactionPolicyState::default(),
+     |                                                                ^^^^^^^ function or associated item not found in `redaction_policy::RedactionPolicyState`
+     |
+    ::: hoop-daemon/src/redaction_policy.rs:26:1
+     |
+  26 | pub struct RedactionPolicyState {
+     | ------------------------------- function or associated item `default` not found for this struct
+     |
+note: if you're trying to build a new `redaction_policy::RedactionPolicyState`, consider using `redaction_policy::RedactionPolicyState::new` which returns `redaction_policy::RedactionPolicyState`
+    --> hoop-daemon/src/redaction_policy.rs:254:5
+     |
+ 254 |     pub fn new(global_config: &HoopConfig, projects_registry: ProjectsRegistry) -> Self {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = help: items from traits can only be used if the trait is implemented and in scope
+     = note: the following trait defines an item `default`, perhaps you need to implement it:
+             candidate #1: `std::default::Default`
+
+error[E0063]: missing fields `br_semaphore` and `br_semaphore_target_permits` in initializer of `DaemonState`
+    --> hoop-daemon/src/api_stitch_decompose.rs:1200:21
+     |
+1200 |         let state = crate::DaemonState {
+     |                     ^^^^^^^^^^^^^^^^^^ missing `br_semaphore` and `br_semaphore_target_permits`
+
+error[E0063]: missing fields `accounts_file`, `gcp_quota_config` and `opencode_dirs` in initializer of `capacity::CapacityMeterConfig`
+    --> hoop-daemon/src/capacity.rs:3137:22
+     |
+3137 |         let config = CapacityMeterConfig {
+     |                      ^^^^^^^^^^^^^^^^^^^ missing `accounts_file`, `gcp_quota_config` and `opencode_dirs`
+
+error[E0063]: missing fields `accounts_file` and `opencode_dirs` in initializer of `capacity::CapacityMeterConfig`
+    --> hoop-daemon/src/capacity.rs:3229:22
+     |
+3229 |         let config = CapacityMeterConfig {
+     |                      ^^^^^^^^^^^^^^^^^^^ missing `accounts_file` and `opencode_dirs`
+
+error[E0063]: missing fields `accounts_file` and `opencode_dirs` in initializer of `capacity::CapacityMeterConfig`
+    --> hoop-daemon/src/capacity.rs:3253:22
+     |
+3253 |         let config = CapacityMeterConfig {
+     |                      ^^^^^^^^^^^^^^^^^^^ missing `accounts_file` and `opencode_dirs`
+
+error[E0063]: missing fields `accounts_file` and `opencode_dirs` in initializer of `capacity::CapacityMeterConfig`
+    --> hoop-daemon/src/capacity.rs:3293:22
+     |
+3293 |         let config = CapacityMeterConfig {
+     |                      ^^^^^^^^^^^^^^^^^^^ missing `accounts_file` and `opencode_dirs`
+
+error[E0063]: missing fields `draft_id` and `synthesis_result` in initializer of `dictated_notes::DictatedNote`
+   --> hoop-daemon/src/dictated_notes.rs:774:18
+    |
+774 |                 &DictatedNote {
+    |                  ^^^^^^^^^^^^ missing `draft_id` and `synthesis_result`
+
+error[E0433]: cannot find module or crate `rand` in this scope
+   --> hoop-daemon/src/integration_harness.rs:192:29
+    |
+192 |         let port = 50000 + (rand::random::<u16>() % 10000);
+    |                             ^^^^ use of unresolved module or unlinked crate `rand`
+    |
+    = help: if you wanted to use a crate named `rand`, use `cargo add rand` to add it to your `Cargo.toml`
+
+error[E0063]: missing field `stash_sha` in initializer of `events::NeedleEvent`
+   --> hoop-daemon/src/load_test.rs:182:29
+    |
+182 |                 events.push(NeedleEvent::Fail {
+    |                             ^^^^^^^^^^^^^^^^^ missing `stash_sha`
+
+error[E0308]: mismatched types
+   --> hoop-daemon/src/heartbeats.rs:935:13
+    |
+935 |             Ok(())
+    |             ^^^^^^ expected `()`, found `Result<(), _>`
+    |
+    = note: expected unit type `()`
+                    found enum `std::result::Result<(), _>`
+note: return type inferred to be `()` here
+   --> hoop-daemon/src/heartbeats.rs:911:13
+    |
+911 |             prop_assert_eq!(computed_liveness, expected_liveness);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = note: this error originates in the macro `$crate::prop_assert` which comes from the expansion of the macro `prop_assert_eq` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0308]: mismatched types
+    --> hoop-daemon/src/heartbeats.rs:1089:13
+     |
+1089 |             Ok(())
+     |             ^^^^^^ expected `()`, found `Result<(), _>`
+     |
+     = note: expected unit type `()`
+                     found enum `std::result::Result<(), _>`
+note: return type inferred to be `()` here
+    --> hoop-daemon/src/heartbeats.rs:1066:13
+     |
+1066 |             prop_assert_eq!(actual, expected);
+     |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     = note: this error originates in the macro `$crate::prop_assert` which comes from the expansion of the macro `prop_assert_eq` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0599]: no function or associated item named `default_secret_patterns` found for struct `config_resolver::SecretPattern` in the current scope
+   --> hoop-daemon/src/redaction.rs:498:47
+    |
+498 |         let default_patterns = SecretPattern::default_secret_patterns();
+    |                                               ^^^^^^^^^^^^^^^^^^^^^^^ function or associated item not found in `config_resolver::SecretPattern`
+    |
+   ::: hoop-daemon/src/config_resolver.rs:30:1
+    |
+ 30 | pub struct SecretPattern {
+    | ------------------------ function or associated item `default_secret_patterns` not found for this struct
+
+error[E0063]: missing fields `embedding` and `redaction` in initializer of `hoop_schema::HoopConfig`
+   --> hoop-daemon/src/redaction_policy.rs:543:22
+    |
+543 |         let config = HoopConfig {
+    |                      ^^^^^^^^^^ missing `embedding` and `redaction`
+
+warning: unused variable: `tmp`
+   --> hoop-daemon/src/atomic_write.rs:462:21
+    |
+462 |                 let tmp = Arc::clone(&tmp);
+    |                     ^^^ help: if this is intentional, prefix it with an underscore: `_tmp`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `words`
+   --> hoop-daemon/src/audio_redaction.rs:456:13
+    |
+456 |         let words = vec![
+    |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_words`
+
+Some errors have detailed explanations: E0063, E0425, E0432, E0433.
+For more information about an error, try `rustc --explain E0063`.
+warning: `hoop-daemon` (lib) generated 4 warnings
+error: could not compile `hoop-daemon` (lib) due to 8 previous errors; 4 warnings emitted
+warning: build failed, waiting for other jobs to finish...
+warning: unused variable: `start`
+   --> hoop-daemon/src/load_test.rs:471:9
+    |
+471 |     let start = Instant::now();
+    |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_start`
+
+warning: unused variable: `client_id`
+   --> hoop-daemon/src/load_test.rs:610:34
+    |
+610 |                         Ok(Some((client_id, recv_time))) => {
+    |                                  ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_client_id`
+
+warning: unused variable: `http_elapsed`
+   --> hoop-daemon/src/load_test.rs:678:9
+    |
+678 |     let http_elapsed = http_start.elapsed();
+    |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_http_elapsed`
+
+warning: unused variable: `out`
+   --> hoop-daemon/src/pdf_sanitize.rs:503:14
+    |
+503 |         let (out, rec) = sanitize_bytes(&pdf);
+    |              ^^^ help: if this is intentional, prefix it with an underscore: `_out`
+
+warning: unused variable: `out`
+   --> hoop-daemon/src/pdf_sanitize.rs:512:14
+    |
+512 |         let (out, rec) = sanitize_bytes(&pdf);
+    |              ^^^ help: if this is intentional, prefix it with an underscore: `_out`
+
+warning: unused variable: `out`
+   --> hoop-daemon/src/pdf_sanitize.rs:519:14
+    |
+519 |         let (out, rec) = sanitize_bytes(&pdf);
+    |              ^^^ help: if this is intentional, prefix it with an underscore: `_out`
+
+warning: unused variable: `out`
+   --> hoop-daemon/src/pdf_sanitize.rs:539:14
+    |
+539 |         let (out, rec) = sanitize_bytes(&pdf);
+    |              ^^^ help: if this is intentional, prefix it with an underscore: `_out`
+
+warning: unused variable: `paths`
+    --> hoop-daemon/src/sessions.rs:3701:13
+     |
+3701 |         let paths = GeminiAdapter::discover_session_paths();
+     |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_paths`
+
+warning: unused variable: `home`
+   --> hoop-daemon/src/config_backup.rs:147:13
+    |
+147 |         let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    |             ^^^^ help: if this is intentional, prefix it with an underscore: `_home`
+
+warning: unused variable: `entries`
+   --> hoop-daemon/src/net_diff.rs:546:13
+    |
+546 |         let entries = vec![
+    |             ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_entries`
+
+warning: unused variable: `has_high_entropy`
+   --> hoop-daemon/src/secrets_scanner.rs:528:13
+    |
+528 |         let has_high_entropy = findings.iter().any(|f| f.pattern_id == "high_entropy");
+    |             ^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_has_high_entropy`
+
+Some errors have detailed explanations: E0061, E0063, E0308, E0425, E0433, E0599.
+For more information about an error, try `rustc --explain E0061`.
+warning: `hoop-daemon` (lib test) generated 21 warnings (3 duplicates)
+error: could not compile `hoop-daemon` (lib test) due to 40 previous errors; 21 warnings emitted

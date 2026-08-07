@@ -162,6 +162,86 @@ Run the examples with:
 cargo test --package hoop --test cli_test_utils_examples -- --nocapture
 ```
 
+## Test Macros for Common Patterns
+
+The module provides several macros to generate common test patterns:
+
+### Individual Test Macros
+
+**`test_no_interactive_flag_before!`**
+Generate a test for flag parsing before the command:
+```rust
+test_no_interactive_flag_before!(scan_before, "scan", &["scan", "/tmp"]);
+```
+
+**`test_no_interactive_flag_after!`**
+Generate a test for flag parsing after the command:
+```rust
+test_no_interactive_flag_after!(scan_after, "scan", &["scan", "/tmp"]);
+```
+
+**`test_short_flag_y!`**
+Generate a test for the short `-y` flag:
+```rust
+test_short_flag_y!(scan_short, &["scan", "/tmp"]);
+```
+
+**`test_both_positions_consistency!`**
+Generate a test verifying both positions extract the same value:
+```rust
+test_both_positions_consistency!(scan_consistency, &["scan", "/tmp"]);
+```
+
+**`test_flag_default_false!`**
+Generate a test verifying the flag defaults to false:
+```rust
+test_flag_default_false!(scan_default, &["scan", "/tmp"]);
+```
+
+### Complete Test Suite Macro
+
+**`test_command_no_interactive_suite!`**
+Generate a complete test suite for a command with 5 tests:
+```rust
+test_command_no_interactive_suite!(
+    scan,
+    "scan",
+    &["scan", "/tmp"]
+);
+```
+
+This generates:
+- `scan_flag_before_command` - Tests `hoop --no-interactive scan /tmp`
+- `scan_flag_after_command` - Tests `hoop scan /tmp --no-interactive`
+- `scan_short_flag_y` - Tests `hoop -y scan /tmp`
+- `scan_both_positions_consistency` - Tests both positions yield same value
+- `scan_flag_default_false` - Tests `hoop scan /tmp` (no flag)
+
+### Using Macros in Tests
+
+Add this to your test file:
+```rust
+// Import macros from cli_test_utils
+use hoop::cli_test_utils::*;
+
+// Generate complete test suites for commands
+test_command_no_interactive_suite!(scan, "scan", &["scan", "/tmp"]);
+test_command_no_interactive_suite!(remove, "remove", &["remove", "test", "--confirm"]);
+test_command_no_interactive_suite!(init, "init", &["init"]);
+
+// Or generate individual tests
+test_no_interactive_flag_before!(status_before, "status", &["status"]);
+test_no_interactive_flag_after!(status_after, "status", &["status"]);
+```
+
+### Benefits of Using Macros
+
+1. **Consistency**: All commands are tested with the same pattern
+2. **Reduced Boilerplate**: No need to write repetitive test code
+3. **Maintainability**: Changes to test patterns are centralized
+4. **Coverage**: Ensures all commands are tested comprehensively
+5. **Type Safety**: Macros are expanded at compile time with full type checking
+
 ## Usage Patterns
 
 ### Testing Flag Position Independence

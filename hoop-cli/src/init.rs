@@ -671,23 +671,22 @@ fn check_url(url: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use clap::Parser;
 
-    // ── Parse tests: Flag position independence ─────────────────────────────────────
+    // ── Test 1 & 2: Parse tests for flag position independence ─────────────────────
 
     /// Test 1: Parse test for `hoop --no-interactive init`
     /// Verifies flag extraction when flag appears BEFORE the init command
     #[test]
     fn test_init_parse_flag_before_command() {
-        use clap::Parser;
-
         let args = ["hoop", "--no-interactive", "init"];
-        let cli = crate::Cli::try_parse_from(args).unwrap();
+        let cli = crate::Cli::parse_from(args);
 
         assert_eq!(cli.no_interactive, true, "Flag should be true when present before init");
 
         match cli.command {
             crate::Commands::Init => {}, // Correct command
-            _ => panic!("Expected Init command"),
+            _ => panic!("Expected Init command, got {:?}", cli.command),
         }
     }
 
@@ -695,26 +694,22 @@ mod tests {
     /// Verifies flag extraction when flag appears AFTER the init command
     #[test]
     fn test_init_parse_flag_after_command() {
-        use clap::Parser;
-
         let args = ["hoop", "init", "--no-interactive"];
-        let cli = crate::Cli::try_parse_from(args).unwrap();
+        let cli = crate::Cli::parse_from(args);
 
         assert_eq!(cli.no_interactive, true, "Flag should be true when present after init");
 
         match cli.command {
             crate::Commands::Init => {}, // Correct command
-            _ => panic!("Expected Init command"),
+            _ => panic!("Expected Init command, got {:?}", cli.command),
         }
     }
 
-    /// Test 3: Parse test for short form `-y` with init
+    /// Test: Parse test for short form `-y` with init
     #[test]
     fn test_init_parse_short_flag_y() {
-        use clap::Parser;
-
         let args = ["hoop", "-y", "init"];
-        let cli = crate::Cli::try_parse_from(args).unwrap();
+        let cli = crate::Cli::parse_from(args);
 
         assert_eq!(cli.no_interactive, true, "Flag should be true with -y short form");
 
@@ -724,19 +719,17 @@ mod tests {
         }
     }
 
-    /// Test 4: Verify flag value consistency across positions
+    /// Test: Verify flag value consistency across positions
     #[test]
     fn test_init_flag_both_positions_extract_same_value() {
-        use clap::Parser;
-
         // Parse with flag before command
         let args_before = ["hoop", "--no-interactive", "init"];
-        let cli_before = crate::Cli::try_parse_from(args_before).unwrap();
+        let cli_before = crate::Cli::parse_from(args_before);
         let no_interactive_before = cli_before.no_interactive;
 
         // Parse with flag after command
         let args_after = ["hoop", "init", "--no-interactive"];
-        let cli_after = crate::Cli::try_parse_from(args_after).unwrap();
+        let cli_after = crate::Cli::parse_from(args_after);
         let no_interactive_after = cli_after.no_interactive;
 
         assert_eq!(
@@ -746,13 +739,11 @@ mod tests {
         assert_eq!(no_interactive_before, true, "Flag should be true");
     }
 
-    /// Test 5: Verify default behavior (no flag = false)
+    /// Test: Verify default behavior (no flag = false)
     #[test]
     fn test_init_without_flag_is_false() {
-        use clap::Parser;
-
         let args = ["hoop", "init"];
-        let cli = crate::Cli::try_parse_from(args).unwrap();
+        let cli = crate::Cli::parse_from(args);
 
         assert_eq!(cli.no_interactive, false, "Flag should be false when not specified");
 
@@ -762,7 +753,7 @@ mod tests {
         }
     }
 
-    // ── Flag extraction tests: Handler receives correct value ────────────────────────
+    // ── Test 3: Verify flag value extraction in handler ───────────────────────────────
 
     /// Test 3 (from requirements): Verify flag value extraction in handler
     /// Confirms that the flag value flows from CLI parsing to the init wizard function
@@ -793,62 +784,134 @@ mod tests {
         );
     }
 
-    // ── Wizard behavior tests: Mocked wizard with flag true vs false ───────────────
+    // ── Test 4: Verify flag is passed correctly to init wizard ──────────────────────────
 
-    /// Test 5 (from requirements): Verify wizard behavior with flag true vs false
+    /// Test 4 (from requirements): Verify flag is passed correctly to init wizard
+    /// Tests that the main.rs Init command handler correctly extracts and passes the flag
+    #[test]
+    fn test_init_flag_passed_to_wizard() {
+        let main_code = std::fs::read_to_string("src/main.rs")
+            .expect("Failed to read main.rs");
+
+        // Find the Init command handler
+        let init_handler_start = main_code.find("Commands::Init =>")
+            .expect("Should have Init handler");
+
+        // Extract the handler section (roughly 200 chars should cover it)
+        let handler_section = &main_code[init_handler_start..init_handler_start + 200];
+
+        // Verify the handler passes no_interactive to run_init_wizard
+        assert!(
+            handler_section.contains("init::run_init_wizard(no_interactive)"),
+            "Init handler must pass no_interactive flag to run_init_wizard.\n\
+             Handler section: {}", handler_section
+        );
+
+        // Verify error handling is in place
+        assert!(
+            handler_section.contains("eprintln"),
+            "Handler must provide error output on failure"
+        );
+
+        assert!(
+            handler_section.contains("hoop init"),
+            "Error message must include 'hoop init' prefix"
+        );
+    }
+
+    /// Test: Verify flag extraction happens once at parse time
+    /// Confirms the pattern: let no_interactive = cli.no_interactive; (line 366 in main.rs)
+    #[test]
+    fn test_flag_extraction_at_parse_time() {
+        let main_code = std::fs::read_to_string("src/main.rs")
+            .expect("Failed to read main.rs");
+
+        // Verify the extraction pattern
+        assert!(
+            main_code.contains("let no_interactive = cli.no_interactive;"),
+            "main() must extract no_interactive flag once at parse time"
+        );
+
+        // Verify it's extracted before the match statement
+        let parse_line = main_code.find("let no_interactive = cli.no_interactive;")
+            .expect("Should have flag extraction");
+        let match_line = main_code.find("match cli.command")
+            .expect("Should have match statement");
+
+        assert!(
+            parse_line < match_line,
+            "Flag extraction must happen BEFORE match statement"
+        );
+    }
+
+    // ── Test 5: Verify wizard behavior with flag true vs false (mocked wizard) ────────────
+
+    /// Test 5a (from requirements): Verify wizard exits early when no_interactive=true
     /// Tests that when no_interactive=true, the wizard exits with appropriate error
     #[test]
     fn test_init_wizard_exits_with_no_interactive_true() {
-        // Verify that when no_interactive=true, the wizard exits early
         let code = std::fs::read_to_string("src/init.rs")
             .expect("Failed to read init.rs");
 
-        // Check for the early exit logic
+        // Check for the early exit logic at the start of run_init_wizard
+        let func_start = code.find("pub fn run_init_wizard(no_interactive: bool)")
+            .expect("Should have run_init_wizard function");
+
+        // Find the first if no_interactive block (should be near the start)
+        let early_exit_start = code[func_start..].find("if no_interactive {")
+            .expect("Wizard must check no_interactive at the start");
+
+        // Extend the slice to ensure we capture the full early exit block (including the exit call)
+        let early_exit_section = &code[func_start + early_exit_start..func_start + early_exit_start + 600];
+
+        // Verify early exit behavior
         assert!(
-            code.contains("if no_interactive"),
+            early_exit_section.contains("if no_interactive {"),
             "Wizard must check no_interactive at the start"
         );
 
         assert!(
-            code.contains("cannot run in non-interactive mode"),
+            early_exit_section.contains("cannot run in non-interactive mode"),
             "Wizard must explain why it cannot run in non-interactive mode"
         );
 
         assert!(
-            code.contains("std::process::exit(2)"),
-            "Wizard must exit with code 2 when no_interactive is true"
+            early_exit_section.contains("std::process::exit(2)") || early_exit_section.contains("std::process::exit(2);"),
+            "Wizard must exit with code 2 when no_interactive is true.\n\
+             Section content: {}", early_exit_section
         );
 
         // Verify the error message is helpful
         assert!(
-            code.contains("manually create ~/.hoop/config.yml"),
+            early_exit_section.contains("manually create ~/.hoop/config.yml"),
             "Error message must guide user to manual setup"
         );
     }
 
-    /// Test: Verify wizard continues when no_interactive=false
+    /// Test 5b (from requirements): Verify wizard continues when no_interactive=false
     /// Confirms the wizard banner and stages are only shown when interactive
     #[test]
     fn test_init_wizard_continues_with_no_interactive_false() {
         let code = std::fs::read_to_string("src/init.rs")
             .expect("Failed to read init.rs");
 
-        // Verify that when no_interactive=false, the wizard proceeds
         // Find the early exit block
         let early_exit_start = code.find("if no_interactive {").expect("Should have early exit");
         let early_exit_end = code[early_exit_start..]
             .find('}')
-            .expect("Should close early exit") + early_exit_start;
+            .expect("Should close early exit") + early_exit_start + 1;
 
         // Find print_wizard_banner() call - it should come AFTER the early exit
-        let banner_call = code.find("print_wizard_banner();").expect("Should call banner");
+        let banner_call = code.find("print_wizard_banner();")
+            .expect("Should call banner");
 
         assert!(
             banner_call > early_exit_end,
-            "Banner must only print AFTER the early exit check (i.e., only when no_interactive=false)"
+            "Banner must only print AFTER the early exit check (i.e., only when no_interactive=false)\n\
+             Early exit ends at: {}, Banner called at: {}", early_exit_end, banner_call
         );
 
-        // Verify that stages are called
+        // Verify that stages are called (they should only execute when no_interactive=false)
         assert!(
             code.contains("stage_1_dependency_check()?"),
             "Stage 1 must be called when interactive"
@@ -858,23 +921,39 @@ mod tests {
             code.contains("stage_2_project_registration()?"),
             "Stage 2 must be called when interactive"
         );
+
+        assert!(
+            code.contains("stage_3_agent_setup()?"),
+            "Stage 3 must be called when interactive"
+        );
+
+        assert!(
+            code.contains("stage_4_systemd_install()?"),
+            "Stage 4 must be called when interactive"
+        );
+
+        assert!(
+            code.contains("stage_5_health_check()?"),
+            "Stage 5 must be called when interactive"
+        );
     }
 
-    /// Test: Verify error message content when no_interactive=true
-    /// Checks that the error message provides clear guidance
+    /// Test: Verify error message provides clear guidance
+    /// Checks that the error message contains all necessary information
     #[test]
     fn test_init_no_interactive_error_message_quality() {
         let code = std::fs::read_to_string("src/init.rs")
             .expect("Failed to read init.rs");
 
-        // Extract the error message block
+        // Find the error message block
         let error_start = code.find("if no_interactive {").expect("Should have error block");
         let error_block = &code[error_start..error_start + 500]; // Get enough context
 
         // Verify the error message contains key information
         assert!(
             error_block.contains("hoop init: cannot run in non-interactive mode"),
-            "Error must clearly state init cannot run in non-interactive mode"
+            "Error must clearly state init cannot run in non-interactive mode.\n\
+             Got: {}", error_block
         );
 
         assert!(
@@ -893,27 +972,74 @@ mod tests {
         );
     }
 
-    /// Test: Verify both flag positions call the handler correctly
-    /// This is an integration-style test ensuring the full flow works
+    // ── Additional behavioral tests ─────────────────────────────────────────────────────
+
+    /// Test: Verify wizard never runs when no_interactive=true
+    /// Ensures that none of the wizard stages execute when the flag is set
     #[test]
-    fn test_init_both_positions_pass_flag_to_handler() {
-        let main_code = std::fs::read_to_string("src/main.rs")
-            .expect("Failed to read main.rs");
+    fn test_wizard_stages_never_execute_with_no_interactive_true() {
+        let code = std::fs::read_to_string("src/init.rs")
+            .expect("Failed to read init.rs");
 
-        // Find the Init command handler
-        let init_handler = main_code.find("Commands::Init =>").expect("Should have Init handler");
-        let handler_section = &main_code[init_handler..init_handler + 300];
+        // Find the early exit block
+        let early_exit_start = code.find("if no_interactive {").expect("Should have early exit");
+        let early_exit_end = code[early_exit_start..]
+            .find('}')
+            .expect("Should close early exit block") + early_exit_start;
 
-        // Verify the handler passes no_interactive to run_init_wizard
+        // Find all stage calls
+        let stages = [
+            "stage_1_dependency_check()?",
+            "stage_2_project_registration()?",
+            "stage_3_agent_setup()?",
+            "stage_4_systemd_install()?",
+            "stage_5_health_check()?",
+        ];
+
+        for stage in stages {
+            if let Some(stage_pos) = code.find(stage) {
+                assert!(
+                    stage_pos > early_exit_end,
+                    "Stage '{}' must be called AFTER the early exit block, \
+                     otherwise it would execute even when no_interactive=true.\n\
+                     Early exit ends at: {}, Stage called at: {}",
+                    stage, early_exit_end, stage_pos
+                );
+            } else {
+                panic!("Stage '{}' not found in code", stage);
+            }
+        }
+    }
+
+    /// Test: Verify print_wizard_banner is only called when interactive
+    /// Ensures the banner is inside the interactive flow, not before the no_interactive check
+    #[test]
+    fn test_wizard_banner_only_prints_when_interactive() {
+        let code = std::fs::read_to_string("src/init.rs")
+            .expect("Failed to read init.rs");
+
+        // Find function start
+        let func_start = code.find("pub fn run_init_wizard(no_interactive: bool)")
+            .expect("Should have run_init_wizard function");
+
+        // Find early exit
+        let early_exit_start = code[func_start..].find("if no_interactive {")
+            .expect("Should have early exit") + func_start;
+        let early_exit_end = code[early_exit_start..]
+            .find('}')
+            .expect("Should close early exit") + early_exit_start + 1;
+
+        // Find banner call
+        let banner_call = code.find("print_wizard_banner();")
+            .expect("Should call banner");
+
+        // Banner must come AFTER early exit
         assert!(
-            handler_section.contains("init::run_init_wizard(no_interactive)"),
-            "Init handler must pass no_interactive flag to run_init_wizard"
-        );
-
-        // Verify error handling is in place
-        assert!(
-            handler_section.contains("eprintln!(\"hoop init"),
-            "Handler must provide error prefix on failure"
+            banner_call > early_exit_end,
+            "print_wizard_banner() must only be called AFTER the no_interactive check, \
+             ensuring it only runs when interactive.\n\
+             Early exit ends at: {}, Banner called at: {}",
+            early_exit_end, banner_call
         );
     }
 }
