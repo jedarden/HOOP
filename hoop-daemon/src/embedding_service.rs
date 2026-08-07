@@ -415,8 +415,9 @@ impl EmbeddingService {
                 anyhow::anyhow!("Failed to acquire rate limit permit: {}", e)
             })?;
 
-            // Step 2: Check rate limit and record timestamp in minimal lock scope
-            {
+            // Step 2: Check rate limit and determine if we need to wait
+            // Compute wait duration in a minimal lock scope (no await here)
+            let should_wait_and_for_how_long = {
                 let mut timestamps = self.request_timestamps.write().unwrap();
                 let now = Instant::now();
                 let window = Duration::from_secs(60);
@@ -428,29 +429,32 @@ impl EmbeddingService {
                 if let Some(rpm) = self.config.rate_limit_rpm {
                     let requests_per_minute = timestamps.len() as u32;
                     if requests_per_minute >= rpm {
+                        // Need to wait - compute duration but don't sleep yet
                         let oldest = timestamps.first().copied().unwrap_or(now);
                         let wait_duration = window.saturating_sub(now.duration_since(oldest));
-
-                        // Release lock before sleeping
-                        drop(timestamps);
-
-                        // Sleep WITHOUT holding lock
-                        if wait_duration > Duration::ZERO {
-                            tokio::time::sleep(wait_duration).await;
-                        }
-
-                        // Re-acquire lock to record timestamp
-                        let mut timestamps = self.request_timestamps.write().unwrap();
-                        timestamps.push(Instant::now());
+                        Some(wait_duration)
                     } else {
                         // Within rate limit, record timestamp immediately
                         timestamps.push(now);
+                        None
                     }
                 } else {
                     // No rate limit configured, just record timestamp
                     timestamps.push(now);
+                    None
                 }
-                // Lock released here at end of block
+                // Lock released here automatically at end of scope
+            };
+
+            // Step 3: Sleep outside lock scope if needed
+            if let Some(wait_duration) = should_wait_and_for_how_long {
+                if wait_duration > Duration::ZERO {
+                    tokio::time::sleep(wait_duration).await;
+                }
+
+                // Step 4: Record timestamp after waiting (separate lock scope)
+                let mut timestamps = self.request_timestamps.write().unwrap();
+                timestamps.push(Instant::now());
             }
             // Permit released here after lock is released
         }
