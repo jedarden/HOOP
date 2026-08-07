@@ -1,0 +1,6 @@
+# Unused utoipa::ToSchema Import Warnings
+# Final reference file - sorted by file path
+# Generated: 2026-08-06
+# Source: .beads/clippy-utoipa-filtered.txt
+
+# No unused utoipa::ToSchema warnings found in clippy output
