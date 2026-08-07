@@ -16,6 +16,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use tokio::sync::Semaphore;
@@ -65,20 +66,24 @@ pub enum AdapterKind {
 }
 
 impl AdapterKind {
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "local" => Some(Self::Local),
-            "remote" => Some(Self::Remote),
-            "cached" => Some(Self::Cached),
-            _ => None,
-        }
-    }
-
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Local => "local",
             Self::Remote => "remote",
             Self::Cached => "cached",
+        }
+    }
+}
+
+impl std::str::FromStr for AdapterKind {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "local" => Ok(Self::Local),
+            "remote" => Ok(Self::Remote),
+            "cached" => Ok(Self::Cached),
+            _ => Err(format!("Unknown AdapterKind: {}", s)),
         }
     }
 }
@@ -131,6 +136,7 @@ impl EmbeddingService {
     pub fn from_config() -> Result<Self> {
         let config = crate::config_resolver::resolve(crate::config_resolver::CliOverrides::default());
         let _adapter_kind = AdapterKind::from_str(&config.embedding_adapter.value)
+            .ok()
             .unwrap_or(AdapterKind::Local);
 
         let embedding_config = EmbeddingConfig {
@@ -153,6 +159,7 @@ impl EmbeddingService {
     /// 4. Updates metrics
     pub async fn embed(&self, text: &str) -> Result<EmbeddingVec> {
         let adapter_kind = AdapterKind::from_str(&self.config.adapter)
+            .ok()
             .unwrap_or(AdapterKind::Local);
 
         match adapter_kind {
@@ -171,6 +178,7 @@ impl EmbeddingService {
     /// Generate embeddings for multiple texts efficiently.
     pub async fn embed_batch(&self, texts: &[&str]) -> Result<Vec<EmbeddingVec>> {
         let adapter_kind = AdapterKind::from_str(&self.config.adapter)
+            .ok()
             .unwrap_or(AdapterKind::Local);
 
         match adapter_kind {
@@ -395,11 +403,20 @@ impl EmbeddingService {
     }
 
     /// Acquire rate limit permit.
+    ///
+    /// Rate limiting strategy:
+    /// 1. Acquire semaphore permit (controls concurrency)
+    /// 2. Check and update rate limit state atomically
+    /// 3. No .await points while holding write lock
     async fn acquire_rate_limit(&self) -> Result<()> {
         if let Some(ref semaphore) = self.rate_limiter {
-            // First pass: compute wait time WITHOUT holding the semaphore permit
-            let wait_time = {
-                // Lock only to check rate limit status
+            // Step 1: Acquire semaphore permit WITHOUT holding write lock
+            let _permit = semaphore.acquire().await.map_err(|e| {
+                anyhow::anyhow!("Failed to acquire rate limit permit: {}", e)
+            })?;
+
+            // Step 2: Check rate limit and record timestamp in minimal lock scope
+            {
                 let mut timestamps = self.request_timestamps.write().unwrap();
                 let now = Instant::now();
                 let window = Duration::from_secs(60);
@@ -412,33 +429,30 @@ impl EmbeddingService {
                     let requests_per_minute = timestamps.len() as u32;
                     if requests_per_minute >= rpm {
                         let oldest = timestamps.first().copied().unwrap_or(now);
-                        Some(window.saturating_sub(now.duration_since(oldest)))
+                        let wait_duration = window.saturating_sub(now.duration_since(oldest));
+
+                        // Release lock before sleeping
+                        drop(timestamps);
+
+                        // Sleep WITHOUT holding lock
+                        if wait_duration > Duration::ZERO {
+                            tokio::time::sleep(wait_duration).await;
+                        }
+
+                        // Re-acquire lock to record timestamp
+                        let mut timestamps = self.request_timestamps.write().unwrap();
+                        timestamps.push(Instant::now());
                     } else {
-                        None
+                        // Within rate limit, record timestamp immediately
+                        timestamps.push(now);
                     }
                 } else {
-                    None
+                    // No rate limit configured, just record timestamp
+                    timestamps.push(now);
                 }
-                // Lock is released here
-            };
-
-            // Sleep WITHOUT holding any locks
-            if let Some(duration) = wait_time {
-                if duration > Duration::ZERO {
-                    tokio::time::sleep(duration).await;
-                }
+                // Lock released here at end of block
             }
-
-            // Acquire semaphore permit (await without holding the write lock)
-            let _permit = semaphore.acquire().await.map_err(|e| {
-                anyhow::anyhow!("Failed to acquire rate limit permit: {}", e)
-            })?;
-
-            // Now acquire the write lock and record the timestamp
-            let mut timestamps = self.request_timestamps.write().unwrap();
-            let now = Instant::now();
-            timestamps.push(now);
-            // Both permit and lock are dropped here
+            // Permit released here after lock is released
         }
         Ok(())
     }
@@ -477,11 +491,12 @@ mod tests {
 
     #[test]
     fn test_adapter_kind_from_str() {
-        assert_eq!(AdapterKind::from_str("local"), Some(AdapterKind::Local));
-        assert_eq!(AdapterKind::from_str("remote"), Some(AdapterKind::Remote));
-        assert_eq!(AdapterKind::from_str("cached"), Some(AdapterKind::Cached));
-        assert_eq!(AdapterKind::from_str("invalid"), None);
-        assert_eq!(AdapterKind::from_str("LOCAL"), Some(AdapterKind::Local));
+        use std::str::FromStr;
+        assert_eq!(AdapterKind::from_str("local"), Ok(AdapterKind::Local));
+        assert_eq!(AdapterKind::from_str("remote"), Ok(AdapterKind::Remote));
+        assert_eq!(AdapterKind::from_str("cached"), Ok(AdapterKind::Cached));
+        assert!(AdapterKind::from_str("invalid").is_err());
+        assert_eq!(AdapterKind::from_str("LOCAL"), Ok(AdapterKind::Local));
     }
 
     #[test]
