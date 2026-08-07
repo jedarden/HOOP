@@ -42,15 +42,14 @@
 //! 3. **Flag propagation**: Ensure global flags are accessible to all subcommands
 //! 4. **Consistency**: Same flag value regardless of position
 
-use std::path::PathBuf;
-
 // ── Import the actual CLI structure from lib ─────────────────────────────────────
 //
 // The CLI types (Cli, Commands, etc.) are now defined in src/cli.rs and
 // re-exported through lib.rs, making them accessible to tests in the tests/
 // directory.
 
-pub use hoop_cli::{AuditCommands, Cli, Commands, ProjectsCommands};
+pub use hoop::{AuditCommands, Cli, Commands, ProjectsCommands};
+use clap::Parser;
 
 // ── Core parsing helpers ───────────────────────────────────────────────────────────
 
@@ -76,6 +75,131 @@ pub use hoop_cli::{AuditCommands, Cli, Commands, ProjectsCommands};
 /// ```
 pub fn parse_cli(args: &[&str]) -> Result<Cli, clap::Error> {
     Cli::try_parse_from(args)
+}
+
+/// Parse a command with a global flag (flag before subcommand)
+///
+/// This is a general-purpose function that parses commands with flags that appear
+/// BEFORE the subcommand, following the pattern: `hoop --flag CMD [args]`.
+///
+/// # Arguments
+///
+/// * `flag_args` - Flag arguments (e.g., `["--no-interactive"]` or `["--verbose", "-v"]`)
+/// * `cmd_args` - Command arguments without program name (e.g., `["scan", "/tmp"]`)
+///
+/// # Returns
+///
+/// * `Result<Cli, clap::Error>` - Parsed CLI structure or clap error
+///
+/// # Examples
+///
+/// ```rust
+/// // Parse: hoop --no-interactive scan /tmp
+/// let cli = parse_command_with_global_flag(
+///     &["--no-interactive"],
+///     &["scan", "/tmp"]
+/// )?;
+///
+/// // Parse: hoop --verbose --no-interactive scan /tmp
+/// let cli = parse_command_with_global_flag(
+///     &["--verbose", "--no-interactive"],
+///     &["scan", "/tmp"]
+/// )?;
+///
+/// // Parse: hoop -v -y scan /tmp
+/// let cli = parse_command_with_global_flag(
+///     &["-v", "-y"],
+///     &["scan", "/tmp"]
+/// )?;
+/// ```
+pub fn parse_command_with_global_flag(flag_args: &[&str], cmd_args: &[&str]) -> Result<Cli, clap::Error> {
+    let full_args: Vec<&str> = ["hoop"]
+        .iter()
+        .chain(flag_args.iter())
+        .chain(cmd_args.iter())
+        .copied()
+        .collect();
+    parse_cli(&full_args)
+}
+
+/// Parse a command with a subcommand flag (flag after subcommand)
+///
+/// This is a general-purpose function that parses commands with flags that appear
+/// AFTER the subcommand, following the pattern: `hoop CMD [args] --flag`.
+///
+/// # Arguments
+///
+/// * `cmd_args` - Command arguments without program name (e.g., `["scan", "/tmp"]`)
+/// * `flag_args` - Flag arguments (e.g., `["--no-interactive"]` or `["--confirm"]`)
+///
+/// # Returns
+///
+/// * `Result<Cli, clap::Error>` - Parsed CLI structure or clap error
+///
+/// # Examples
+///
+/// ```rust
+/// // Parse: hoop scan /tmp --no-interactive
+/// let cli = parse_command_with_subcommand_flag(
+///     &["scan", "/tmp"],
+///     &["--no-interactive"]
+/// )?;
+///
+/// // Parse: hoop scan /tmp --no-interactive --confirm
+/// let cli = parse_command_with_subcommand_flag(
+///     &["scan", "/tmp"],
+///     &["--no-interactive", "--confirm"]
+/// )?;
+///
+/// // Parse: hoop projects remove my-project --confirm
+/// let cli = parse_command_with_subcommand_flag(
+///     &["projects", "remove", "my-project"],
+///     &["--confirm"]
+/// )?;
+/// ```
+pub fn parse_command_with_subcommand_flag(cmd_args: &[&str], flag_args: &[&str]) -> Result<Cli, clap::Error> {
+    let full_args: Vec<&str> = ["hoop"]
+        .iter()
+        .chain(cmd_args.iter())
+        .chain(flag_args.iter())
+        .copied()
+        .collect();
+    parse_cli(&full_args)
+}
+
+/// Extract command matches from parsed CLI output
+///
+/// This helper function provides a convenient way to extract and match on specific
+/// command variants from the parsed CLI structure. It returns the command and
+/// allows pattern matching to extract command-specific arguments.
+///
+/// # Arguments
+///
+/// * `cli` - Parsed CLI structure
+///
+/// # Returns
+///
+/// * `&Commands` - Reference to the command enum for pattern matching
+///
+/// # Examples
+///
+/// ```rust
+/// let cli = parse_cli(&["hoop", "scan", "/tmp"])?;
+/// let command = extract_command_matches(&cli);
+///
+/// match command {
+///     Commands::Scan { root, auto_confirm } => {
+///         assert_eq!(root, "/tmp");
+///         println!("Scan command with root: {}", root);
+///     }
+///     Commands::Remove { name, confirm } => {
+///         println!("Remove command for project: {}", name);
+///     }
+///     _ => println!("Other command"),
+/// }
+/// ```
+pub fn extract_command_matches(cli: &Cli) -> &Commands {
+    &cli.command
 }
 
 /// Parse CLI and extract the no_interactive flag value
@@ -324,7 +448,164 @@ pub fn verify_flag_default_false(cmd_args: &[&str]) -> Result<(), String> {
     verify_no_interactive_value(&cli, false)
 }
 
+/// Verify that the global flag properly propagates to subcommands
+///
+/// This helper verifies that the no_interactive global flag is correctly
+/// accessible and has the expected value when used with subcommands.
+///
+/// It tests:
+/// 1. Global flag is accessible from subcommand context
+/// 2. Flag value is correct when specified before subcommand
+/// 3. Flag value is correct when specified after subcommand
+/// 4. Flag propagates through nested subcommands (e.g., projects scan)
+///
+/// # Arguments
+///
+/// * `cmd_args` - Command arguments including subcommand (without program name or flag)
+/// * `expected_value` - Expected value of no_interactive (default: true)
+///
+/// # Returns
+///
+/// * `Result<(), String>` - Ok if verification passes, Err with specific failure message
+///
+/// # Examples
+///
+/// ```rust
+/// use clap_test_utils::*;
+///
+/// // Verify flag propagates to simple subcommand
+/// assert!(verify_flag_propagation(&["scan", "/tmp"], true).is_ok());
+///
+/// // Verify flag propagates to nested subcommand
+/// assert!(verify_flag_propagation(&["projects", "scan", "/tmp"], true).is_ok());
+///
+/// // Verify with flag before subcommand
+/// let cli = parse_command_with_global_flag(&["--no-interactive"], &["scan", "/tmp"])?;
+/// let flag_value = extract_no_interactive_flag(&cli);
+/// assert_eq!(flag_value, true);
+///
+/// // Verify with flag after subcommand
+/// let cli = parse_command_with_subcommand_flag(&["scan", "/tmp"], &["--no-interactive"])?;
+/// let flag_value = extract_no_interactive_flag(&cli);
+/// assert_eq!(flag_value, true);
+/// ```
+///
+/// # Error Messages
+///
+/// This function provides clear error messages for different failure modes:
+///
+/// - "Failed to parse with flag before subcommand: {error}" - Parse error when flag before command
+/// - "Failed to parse with flag after subcommand: {error}" - Parse error when flag after command
+/// - "Flag value mismatch with flag before subcommand: expected={expected}, got={actual}" - Value mismatch
+/// - "Flag value mismatch with flag after subcommand: expected={expected}, got={actual}" - Value mismatch
+/// - "Flag propagation failed: both positions failed to yield expected value" - Both positions failed
+///
+/// # Implementation Details
+///
+/// This function tests both positions (before and after subcommand) because:
+/// 1. Clap's global flag attribute (`global = true`) should make the flag work in both positions
+/// 2. Some commands may have position-dependent parsing (this would be a bug)
+/// 3. Testing both positions ensures consistent behavior regardless of how the user specifies the flag
+///
+/// The verification process:
+/// 1. Parse with flag before subcommand: `hoop --no-interactive <cmd> <args>`
+/// 2. Parse with flag after subcommand: `hoop <cmd> <args> --no-interactive`
+/// 3. Extract flag value from both parses using `extract_no_interactive_flag()`
+/// 4. Compare both values to expected
+/// 5. Return Ok if both match, Err with details if either fails
+pub fn verify_flag_propagation(cmd_args: &[&str], expected_value: bool) -> Result<(), String> {
+    // Test 1: Flag before subcommand
+    let cli_before = parse_command_with_global_flag(&["--no-interactive"], cmd_args)
+        .map_err(|e| format!("Failed to parse with flag before subcommand: {}", e))?;
+
+    let flag_before = extract_no_interactive_flag(&cli_before);
+    if flag_before != expected_value {
+        return Err(format!(
+            "Flag value mismatch with flag before subcommand: expected={}, got={}",
+            expected_value, flag_before
+        ));
+    }
+
+    // Test 2: Flag after subcommand
+    let cli_after = parse_command_with_subcommand_flag(cmd_args, &["--no-interactive"])
+        .map_err(|e| format!("Failed to parse with flag after subcommand: {}", e))?;
+
+    let flag_after = extract_no_interactive_flag(&cli_after);
+    if flag_after != expected_value {
+        return Err(format!(
+            "Flag value mismatch with flag after subcommand: expected={}, got={}",
+            expected_value, flag_after
+        ));
+    }
+
+    // Both positions should yield the same value
+    if flag_before != flag_after {
+        return Err(format!(
+            "Flag propagation failed: inconsistent values - before={}, after={}",
+            flag_before, flag_after
+        ));
+    }
+
+    Ok(())
+}
+
 // ── Command extraction helpers ─────────────────────────────────────────────────────
+
+/// Extract the no_interactive flag value from parsed CLI
+///
+/// This function extracts the boolean value of the no_interactive flag from
+/// a parsed CLI structure. It handles both global flag extraction (when specified
+/// before or after the subcommand) and provides a consistent interface for
+/// accessing the flag value.
+///
+/// The no_interactive flag is a global flag (with clap's `global = true` attribute),
+/// meaning it is accessible at the top-level Cli struct regardless of which
+/// subcommand is being executed. This function provides a clean abstraction for
+/// extracting that value.
+///
+/// # Arguments
+///
+/// * `cli` - Parsed CLI structure
+///
+/// # Returns
+///
+/// * `bool` - The value of the no_interactive flag
+///
+/// # Examples
+///
+/// ```rust
+/// use clap_test_utils::*;
+///
+/// // Extract from a parsed CLI with flag before subcommand
+/// let cli = parse_cli(&["hoop", "--no-interactive", "scan", "/tmp"])?;
+/// let no_interactive = extract_no_interactive_flag(&cli);
+/// assert_eq!(no_interactive, true);
+///
+/// // Extract from a parsed CLI with flag after subcommand
+/// let cli = parse_cli(&["hoop", "scan", "/tmp", "--no-interactive"])?;
+/// let no_interactive = extract_no_interactive_flag(&cli);
+/// assert_eq!(no_interactive, true);
+///
+/// // Extract from a parsed CLI without the flag (defaults to false)
+/// let cli = parse_cli(&["hoop", "scan", "/tmp"])?;
+/// let no_interactive = extract_no_interactive_flag(&cli);
+/// assert_eq!(no_interactive, false);
+///
+/// // Extract from a nested subcommand (global flag propagates)
+/// let cli = parse_cli(&["hoop", "--no-interactive", "projects", "scan", "/tmp"])?;
+/// let no_interactive = extract_no_interactive_flag(&cli);
+/// assert_eq!(no_interactive, true);
+/// ```
+///
+/// # Implementation Notes
+///
+/// - The flag is stored at the top-level `Cli` struct, not on individual commands
+/// - Due to clap's `global = true` attribute, the flag is accessible for all subcommands
+/// - This function is a simple accessor that returns `cli.no_interactive`
+/// - Use this instead of directly accessing `cli.no_interactive` for consistency
+pub fn extract_no_interactive_flag(cli: &Cli) -> bool {
+    cli.no_interactive
+}
 
 /// Extract the command variant from parsed CLI
 ///
@@ -825,6 +1106,136 @@ mod tests {
         assert_eq!(failures.len(), 0);
     }
 
+    // ── General parsing function tests ─────────────────────────────────────────────
+
+    #[test]
+    fn test_parse_command_with_global_flag_single() {
+        // Test: hoop --no-interactive scan /tmp
+        let cli = parse_command_with_global_flag(
+            &["--no-interactive"],
+            &["scan", "/tmp"]
+        ).unwrap();
+
+        assert_eq!(cli.no_interactive, true);
+        match cli.command {
+            Commands::Scan { root, .. } => {
+                assert_eq!(root, "/tmp");
+            }
+            _ => panic!("Expected Scan command"),
+        }
+    }
+
+    #[test]
+    fn test_parse_command_with_global_flag_position_independence() {
+        // Test that global flag position doesn't matter
+        // Both before and after subcommand should work identically
+        let before = parse_command_with_global_flag(
+            &["--no-interactive"],
+            &["scan", "/tmp"]
+        ).unwrap();
+
+        let after = parse_command_with_subcommand_flag(
+            &["scan", "/tmp"],
+            &["--no-interactive"]
+        ).unwrap();
+
+        assert_eq!(before.no_interactive, after.no_interactive);
+        assert_eq!(before.no_interactive, true);
+    }
+
+    #[test]
+    fn test_parse_command_with_subcommand_flag_single() {
+        // Test: hoop scan /tmp --no-interactive
+        let cli = parse_command_with_subcommand_flag(
+            &["scan", "/tmp"],
+            &["--no-interactive"]
+        ).unwrap();
+
+        assert_eq!(cli.no_interactive, true);
+        match cli.command {
+            Commands::Scan { root, .. } => {
+                assert_eq!(root, "/tmp");
+            }
+            _ => panic!("Expected Scan command"),
+        }
+    }
+
+    #[test]
+    fn test_parse_command_with_subcommand_flag_multiple() {
+        // Test: hoop scan /tmp --no-interactive --yes
+        let cli = parse_command_with_subcommand_flag(
+            &["scan", "/tmp"],
+            &["--no-interactive", "--yes"]
+        ).unwrap();
+
+        assert_eq!(cli.no_interactive, true);
+        match cli.command {
+            Commands::Scan { root, auto_confirm } => {
+                assert_eq!(root, "/tmp");
+                assert_eq!(auto_confirm, true);
+            }
+            _ => panic!("Expected Scan command"),
+        }
+    }
+
+    #[test]
+    fn test_extract_command_matches_scan() {
+        let cli = parse_cli(&["hoop", "scan", "/tmp"]).unwrap();
+        let command = extract_command_matches(&cli);
+
+        match command {
+            Commands::Scan { root, auto_confirm } => {
+                assert_eq!(root, "/tmp");
+                assert_eq!(*auto_confirm, false);
+            }
+            _ => panic!("Expected Scan command"),
+        }
+    }
+
+    #[test]
+    fn test_extract_command_matches_remove() {
+        let cli = parse_cli(&["hoop", "remove", "test-project", "--confirm"]).unwrap();
+        let command = extract_command_matches(&cli);
+
+        match command {
+            Commands::Remove { name, confirm } => {
+                assert_eq!(name, "test-project");
+                assert_eq!(*confirm, true);
+            }
+            _ => panic!("Expected Remove command"),
+        }
+    }
+
+    #[test]
+    fn test_extract_command_matches_projects_subcommand() {
+        let cli = parse_cli(&["hoop", "projects", "scan", "/tmp"]).unwrap();
+        let command = extract_command_matches(&cli);
+
+        match command {
+            Commands::Projects(ProjectsCommands::Scan { root, .. }) => {
+                assert_eq!(root, "/tmp");
+            }
+            _ => panic!("Expected Projects::Scan command"),
+        }
+    }
+
+    #[test]
+    fn test_general_flag_parsing_position_independence() {
+        // Test that both global and subcommand flag positions work correctly
+        let before = parse_command_with_global_flag(
+            &["--no-interactive"],
+            &["scan", "/tmp"]
+        ).unwrap();
+
+        let after = parse_command_with_subcommand_flag(
+            &["scan", "/tmp"],
+            &["--no-interactive"]
+        ).unwrap();
+
+        assert_eq!(before.no_interactive, after.no_interactive);
+        assert_eq!(before.no_interactive, true);
+    }
+
     // ── Edge cases ─────────────────────────────────────────────────────────
 
     #[test]
@@ -849,7 +1260,7 @@ mod tests {
 
         match cli.command {
             Commands::Projects(cmd) => match cmd {
-                hoop_cli::main::ProjectsCommands::Scan { root, .. } => {
+                ProjectsCommands::Scan { root, .. } => {
                     assert_eq!(root, "/tmp");
                 }
                 _ => panic!("Expected Projects::Scan command"),
@@ -871,90 +1282,287 @@ mod tests {
         let cli = parse_cli(&["hoop", "scan", "/tmp"]).unwrap();
         assert_eq!(cli.no_interactive, false);
     }
+
+    // ── New flag extraction and verification tests ─────────────────────────────
+
+    #[test]
+    fn test_extract_no_interactive_flag_true() {
+        let cli = parse_cli(&["hoop", "--no-interactive", "scan", "/tmp"]).unwrap();
+        let flag = extract_no_interactive_flag(&cli);
+        assert_eq!(flag, true);
+    }
+
+    #[test]
+    fn test_extract_no_interactive_flag_false() {
+        let cli = parse_cli(&["hoop", "scan", "/tmp"]).unwrap();
+        let flag = extract_no_interactive_flag(&cli);
+        assert_eq!(flag, false);
+    }
+
+    #[test]
+    fn test_extract_no_interactive_flag_after_subcommand() {
+        let cli = parse_cli(&["hoop", "scan", "/tmp", "--no-interactive"]).unwrap();
+        let flag = extract_no_interactive_flag(&cli);
+        assert_eq!(flag, true);
+    }
+
+    #[test]
+    fn test_extract_no_interactive_flag_nested_subcommand() {
+        let cli = parse_cli(&["hoop", "--no-interactive", "projects", "scan", "/tmp"]).unwrap();
+        let flag = extract_no_interactive_flag(&cli);
+        assert_eq!(flag, true);
+    }
+
+    #[test]
+    fn test_verify_flag_propagation_simple_command() {
+        // Verify flag propagates to simple subcommand
+        assert!(verify_flag_propagation(&["scan", "/tmp"], true).is_ok());
+    }
+
+    #[test]
+    fn test_verify_flag_propagation_nested_subcommand() {
+        // Verify flag propagates to nested subcommand
+        assert!(verify_flag_propagation(&["projects", "scan", "/tmp"], true).is_ok());
+    }
+
+    #[test]
+    fn test_verify_flag_propagation_remove_command() {
+        // Verify flag propagates to remove command with confirm flag
+        assert!(verify_flag_propagation(&["remove", "test-project", "--confirm"], true).is_ok());
+    }
+
+    #[test]
+    fn test_verify_flag_propagation_restore_command() {
+        // Verify flag propagates to restore command with multiple args
+        assert!(verify_flag_propagation(
+            &["restore", "--from", "s3://bucket/key", "--confirm"],
+            true
+        ).is_ok());
+    }
+
+    #[test]
+    fn test_verify_flag_propagation_init_command() {
+        // Verify flag propagates to init command (even though init rejects it)
+        assert!(verify_flag_propagation(&["init"], true).is_ok());
+    }
+
+    #[test]
+    fn test_verify_flag_propagation_with_extraction() {
+        // Integration test: parse, extract, and verify
+        let cli_before = parse_command_with_global_flag(
+            &["--no-interactive"],
+            &["scan", "/tmp"]
+        ).unwrap();
+
+        let cli_after = parse_command_with_subcommand_flag(
+            &["scan", "/tmp"],
+            &["--no-interactive"]
+        ).unwrap();
+
+        // Extract flags
+        let flag_before = extract_no_interactive_flag(&cli_before);
+        let flag_after = extract_no_interactive_flag(&cli_after);
+
+        // Verify both are true and equal
+        assert_eq!(flag_before, true);
+        assert_eq!(flag_after, true);
+        assert_eq!(flag_before, flag_after);
+    }
+
+    #[test]
+    fn test_extract_and_verify_workflow() {
+        // Complete workflow: extract and verify in sequence
+        let cli = parse_cli(&["hoop", "--no-interactive", "projects", "scan", "/tmp"]).unwrap();
+
+        // Extract the flag
+        let no_interactive = extract_no_interactive_flag(&cli);
+
+        // Verify the extracted value is correct
+        assert!(verify_no_interactive_value(&cli, no_interactive).is_ok());
+
+        // Verify flag propagated correctly
+        assert!(verify_flag_propagation(&["projects", "scan", "/tmp"], no_interactive).is_ok());
+    }
 }
 
 // ── Documentation examples ───────────────────────────────────────────────────────
-
-/// # Example: Testing a Single Command
-///
-/// ```rust
-/// use clap_test_utils::*;
-///
-/// #[test]
-/// fn test_my_command_no_interactive() {
-///     // Test flag before command
-///     let cli = parse_flag_before_subcommand(&["my-command", "arg1"]).unwrap();
-///     assert_eq!(cli.no_interactive, true);
-///
-///     // Test flag after command
-///     let cli = parse_flag_after_subcommand(&["my-command", "arg1"]).unwrap();
-///     assert_eq!(cli.no_interactive, true);
-///
-///     // Test position independence
-///     assert!(parse_both_positions_yield_same_value(
-///         &["my-command", "arg1"],
-///         &["--no-interactive"]
-///     ));
-///
-///     // Test default value
-///     let cli = parse_cli(&["hoop", "my-command", "arg1"]).unwrap();
-///     assert_eq!(cli.no_interactive, false);
-/// }
-/// ```
-///
-/// # Example: Using Test Macros
-///
-/// ```rust
-/// use clap_test_utils::*;
-///
-/// // Generate complete test suite for a command
-/// test_command_no_interactive_suite!(scan, &["scan", "/tmp"]);
-/// test_command_no_interactive_suite!(remove, &["remove", "test", "--confirm"]);
-/// test_command_no_interactive_suite!(init, &["init"]);
-/// ```
-///
-/// # Example: Batch Testing Multiple Commands
-///
-/// ```rust
-/// use clap_test_utils::*;
-///
-/// #[test]
-/// fn test_all_commands_no_interactive() {
-///     let test_cases = vec![
-///         ClapTestCase {
-///             description: "scan with flag".to_string(),
-///             args: vec!["hoop", "--no-interactive", "scan", "/tmp"]
-///                 .iter().map(|s| s.to_string()).collect(),
-///             expected_no_interactive: true,
-///             should_parse: true,
-///         },
-///         // ... more test cases
-///     ];
-///
-///     let (successes, failures) = run_clap_tests(test_cases);
-///     assert_eq!(failures.len(), 0, "Some tests failed: {:?}", failures);
-/// }
-/// ```
-///
-/// # Example: Verifying Command-Specific Arguments
-///
-/// ```rust
-/// use clap_test_utils::*;
-///
-/// #[test]
-/// fn test_scan_command_arguments() {
-///     let cli = parse_cli(&["hoop", "--no-interactive", "scan", "/tmp"]).unwrap();
-///
-///     // Verify global flag
-///     assert_eq!(cli.no_interactive, true);
-///
-///     // Verify command-specific arguments
-///     match cli.command {
-///         Commands::Scan { root, auto_confirm } => {
-///             assert_eq!(root, "/tmp");
-///             assert_eq!(auto_confirm, false);
-///         }
-///         _ => panic!("Expected Scan command"),
-///     }
-/// }
-/// ```
+//
+// These are example usage patterns that demonstrate how to use the utilities in this module.
+// They are provided as reference for writing new tests.
+//
+// Example: Testing a Single Command
+// -----------------------------------
+// ```rust
+// use clap_test_utils::*;
+//
+// #[test]
+// fn test_my_command_no_interactive() {
+//     // Test flag before command
+//     let cli = parse_flag_before_subcommand(&["my-command", "arg1"]).unwrap();
+//     assert_eq!(cli.no_interactive, true);
+//
+//     // Test flag after command
+//     let cli = parse_flag_after_subcommand(&["my-command", "arg1"]).unwrap();
+//     assert_eq!(cli.no_interactive, true);
+//
+//     // Test position independence
+//     assert!(parse_both_positions_yield_same_value(
+//         &["my-command", "arg1"],
+//         &["--no-interactive"]
+//     ));
+//
+//     // Test default value
+//     let cli = parse_cli(&["hoop", "my-command", "arg1"]).unwrap();
+//     assert_eq!(cli.no_interactive, false);
+// }
+// ```
+//
+// Example: Using Test Macros
+// ---------------------------
+// ```rust
+// use clap_test_utils::*;
+//
+// // Generate complete test suite for a command
+// test_command_no_interactive_suite!(scan, &["scan", "/tmp"]);
+// test_command_no_interactive_suite!(remove, &["remove", "test", "--confirm"]);
+// test_command_no_interactive_suite!(init, &["init"]);
+// ```
+//
+// Example: Batch Testing Multiple Commands
+// -------------------------------------------
+// ```rust
+// use clap_test_utils::*;
+//
+// #[test]
+// fn test_all_commands_no_interactive() {
+//     let test_cases = vec![
+//         ClapTestCase {
+//             description: "scan with flag".to_string(),
+//             args: vec!["hoop", "--no-interactive", "scan", "/tmp"]
+//                 .iter().map(|s| s.to_string()).collect(),
+//             expected_no_interactive: true,
+//             should_parse: true,
+//         },
+//         // ... more test cases
+//     ];
+//
+//     let (successes, failures) = run_clap_tests(test_cases);
+//     assert_eq!(failures.len(), 0, "Some tests failed: {:?}", failures);
+// }
+// ```
+//
+// Example: Verifying Command-Specific Arguments
+// ------------------------------------------------
+// ```rust
+// use clap_test_utils::*;
+//
+// #[test]
+// fn test_scan_command_arguments() {
+//     let cli = parse_cli(&["hoop", "--no-interactive", "scan", "/tmp"]).unwrap();
+//
+//     // Verify global flag
+//     assert_eq!(cli.no_interactive, true);
+//
+//     // Verify command-specific arguments
+//     match cli.command {
+//         Commands::Scan { root, auto_confirm } => {
+//             assert_eq!(root, "/tmp");
+//             assert_eq!(auto_confirm, false);
+//         }
+//         _ => panic!("Expected Scan command"),
+//     }
+// }
+// ```
+//
+// Example: Using General-Purpose Flag Parsing Functions
+// ------------------------------------------------------
+// The new general-purpose functions can work with any flag, not just `--no-interactive`:
+//
+// ```rust
+// use clap_test_utils::*;
+//
+// #[test]
+// fn test_various_flag_positions() {
+//     // Test with different flags
+//     let verbose_before = parse_command_with_global_flag(
+//         &["--verbose"],
+//         &["scan", "/tmp"]
+//     ).unwrap();
+//
+//     let confirm_after = parse_command_with_subcommand_flag(
+//         &["remove", "test-project"],
+//         &["--confirm"]
+//     ).unwrap();
+//
+//     // Extract and match on commands
+//     let command = extract_command_matches(&verbose_before);
+//     match command {
+//         Commands::Scan { root, .. } => {
+//             assert_eq!(root, "/tmp");
+//         }
+//         _ => panic!("Expected Scan command"),
+//     }
+//
+//     let command = extract_command_matches(&confirm_after);
+//     match command {
+//         Commands::Remove { name, confirm } => {
+//             assert_eq!(name, "test-project");
+//             assert_eq!(confirm, true);
+//         }
+//         _ => panic!("Expected Remove command"),
+//     }
+// }
+// ```
+//
+// Example: Testing Position Independence with Any Flag
+// ------------------------------------------------------
+// ```rust
+// use clap_test_utils::*;
+//
+// #[test]
+// fn test_flag_position_independence_generic() {
+//     // Test that flag position doesn't matter for parsing
+//     let before = parse_command_with_global_flag(
+//         &["--no-interactive"],
+//         &["scan", "/tmp"]
+//     ).unwrap();
+//
+//     let after = parse_command_with_subcommand_flag(
+//         &["scan", "/tmp"],
+//         &["--no-interactive"]
+//     ).unwrap();
+//
+//     // Both should yield the same parsed result
+//     assert_eq!(before.no_interactive, after.no_interactive);
+// }
+// ```
+//
+// Example: Complex Multi-Flag Scenarios
+// --------------------------------------
+// ```rust
+// use clap_test_utils::*;
+//
+// #[test]
+// fn test_multiple_flags_combinations() {
+//     // Multiple flags before command
+//     let cli1 = parse_command_with_global_flag(
+//         &["--verbose", "--no-interactive"],
+//         &["scan", "/tmp"]
+//     ).unwrap();
+//     assert_eq!(cli1.no_interactive, true);
+//
+//     // Multiple flags after command
+//     let cli2 = parse_command_with_subcommand_flag(
+//         &["restore", "--from", "s3://bucket/key"],
+//         &["--no-interactive", "--confirm"]
+//     ).unwrap();
+//     assert_eq!(cli2.no_interactive, true);
+//
+//     // Short flags
+//     let cli3 = parse_command_with_global_flag(
+//         &["-v", "-y"],
+//         &["scan", "/tmp"]
+//     ).unwrap();
+//     assert_eq!(cli3.no_interactive, true);
+// }
+// ```
