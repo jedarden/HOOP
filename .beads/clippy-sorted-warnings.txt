@@ -1,0 +1,982 @@
+warning: stripping a prefix manually
+   --> hoop-daemon/src/api_blame.rs:228:31
+    |
+228 |             if let Ok(unix) = line[12..].trim().parse::<i64>() {
+    |                               ^^^^^^^^^^
+    |
+note: the prefix was tested here
+   --> hoop-daemon/src/api_blame.rs:227:16
+    |
+227 |         } else if line.starts_with("author-time ") {
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#manual_strip
+    = note: `#[warn(clippy::manual_strip)]` on by default
+help: try using the `strip_prefix` method
+    |
+227 ~         } else if let Some(<stripped>) = line.strip_prefix("author-time ") {
+228 ~             if let Ok(unix) = <stripped>.trim().parse::<i64>() {
+    |
+
+warning: stripping a prefix manually
+   --> hoop-daemon/src/api_blame.rs:237:27
+    |
+237 |             cur_summary = line[8..].to_string();
+    |                           ^^^^^^^^^
+    |
+note: the prefix was tested here
+   --> hoop-daemon/src/api_blame.rs:236:16
+    |
+236 |         } else if line.starts_with("summary ") {
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#manual_strip
+help: try using the `strip_prefix` method
+    |
+236 ~         } else if let Some(<stripped>) = line.strip_prefix("summary ") {
+237 ~             cur_summary = <stripped>.to_string();
+    |
+
+warning: called `filter(..).next_back()` on an `DoubleEndedIterator`. This is more succinctly expressed by calling `.rfind(..)` instead
+   --> hoop-daemon/src/api_conversations.rs:144:29
+    |
+144 |     if let Some(last_seg) = cwd.split('/').filter(|s| !s.is_empty()).next_back() {
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: try: `cwd.split('/').rfind(|s| !s.is_empty())`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#filter_next
+    = note: `#[warn(clippy::filter_next)]` on by default
+
+warning: consider using `sort_by_key`
+   --> hoop-daemon/src/api_conversations.rs:327:9
+    |
+327 | /         all_conversations
+328 | |             .sort_by(|a, b| b.get_sort_key(sort_field).cmp(&a.get_sort_key(sort_field)));
+    | |________________________________________________________________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#unnecessary_sort_by
+    = note: `#[warn(clippy::unnecessary_sort_by)]` on by default
+help: try
+    |
+328 -             .sort_by(|a, b| b.get_sort_key(sort_field).cmp(&a.get_sort_key(sort_field)));
+328 +             .sort_by_key(|b| std::cmp::Reverse(b.get_sort_key(sort_field)));
+    |
+
+warning: clamp-like pattern without using clamp function
+   --> hoop-daemon/src/api_cost_per_stitch.rs:109:23
+    |
+109 |     let window_days = params.window_days.min(180).max(1);
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with clamp: `params.window_days.clamp(1, 180)`
+    |
+    = note: clamp will panic if max < min
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#manual_clamp
+    = note: `#[warn(clippy::manual_clamp)]` on by default
+
+warning: stripping a prefix manually
+   --> hoop-daemon/src/api_diff.rs:169:21
+    |
+169 |             let p = line[4..].trim_start_matches("a/");
+    |                     ^^^^^^^^^
+    |
+note: the prefix was tested here
+   --> hoop-daemon/src/api_diff.rs:168:9
+    |
+168 |         if line.starts_with("--- ") {
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#manual_strip
+help: try using the `strip_prefix` method
+    |
+168 ~         if let Some(<stripped>) = line.strip_prefix("--- ") {
+169 ~             let p = <stripped>.trim_start_matches("a/");
+    |
+
+warning: stripping a prefix manually
+   --> hoop-daemon/src/api_diff.rs:178:21
+    |
+178 |             let p = line[4..].trim_start_matches("b/");
+    |                     ^^^^^^^^^
+    |
+note: the prefix was tested here
+   --> hoop-daemon/src/api_diff.rs:177:9
+    |
+177 |         if line.starts_with("+++ ") {
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#manual_strip
+help: try using the `strip_prefix` method
+    |
+177 ~         if let Some(<stripped>) = line.strip_prefix("+++ ") {
+178 ~             let p = <stripped>.trim_start_matches("b/");
+    |
+
+warning: consider using `sort_by_key`
+   --> hoop-daemon/src/api_onboarding.rs:228:5
+    |
+228 |     sorted_prompts.sort_by(|a, b| b.priority.cmp(&a.priority));
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#unnecessary_sort_by
+help: try
+    |
+228 -     sorted_prompts.sort_by(|a, b| b.priority.cmp(&a.priority));
+228 +     sorted_prompts.sort_by_key(|b| std::cmp::Reverse(b.priority));
+    |
+
+warning: use of a disallowed method `std::fs::write`
+   --> hoop-daemon/src/api_screen_capture.rs:149:5
+    |
+149 |     std::fs::write(&video_path, &video_data).map_err(|e| {
+    |     ^^^^^^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+   --> hoop-daemon/src/api_screen_capture.rs:164:5
+    |
+164 |     std::fs::write(&frame_samples_path, frame_samples_json).map_err(|e| {
+    |     ^^^^^^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+   --> hoop-daemon/src/api_screen_capture.rs:214:5
+    |
+214 |     std::fs::write(&meta_path, meta_json).map_err(|e| {
+    |     ^^^^^^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: `flatten()` will run forever if the iterator repeatedly produces an `Err`
+   --> hoop-daemon/src/api_scripts.rs:344:33
+    |
+344 |         for l in reader.lines().flatten() {
+    |                                 ^^^^^^^^^ help: replace with: `map_while(Result::ok)`
+    |
+note: this expression returning a `std::io::Lines` may produce an infinite number of `Err` in case of a read error
+   --> hoop-daemon/src/api_scripts.rs:344:18
+    |
+344 |         for l in reader.lines().flatten() {
+    |                  ^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#lines_filter_map_ok
+    = note: `#[warn(clippy::lines_filter_map_ok)]` on by default
+
+warning: `flatten()` will run forever if the iterator repeatedly produces an `Err`
+   --> hoop-daemon/src/api_scripts.rs:352:33
+    |
+352 |         for l in reader.lines().flatten() {
+    |                                 ^^^^^^^^^ help: replace with: `map_while(Result::ok)`
+    |
+note: this expression returning a `std::io::Lines` may produce an infinite number of `Err` in case of a read error
+   --> hoop-daemon/src/api_scripts.rs:352:18
+    |
+352 |         for l in reader.lines().flatten() {
+    |                  ^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#lines_filter_map_ok
+
+warning: `flatten()` will run forever if the iterator repeatedly produces an `Err`
+   --> hoop-daemon/src/api_skills.rs:325:33
+    |
+325 |         for l in reader.lines().flatten() {
+    |                                 ^^^^^^^^^ help: replace with: `map_while(Result::ok)`
+    |
+note: this expression returning a `std::io::Lines` may produce an infinite number of `Err` in case of a read error
+   --> hoop-daemon/src/api_skills.rs:325:18
+    |
+325 |         for l in reader.lines().flatten() {
+    |                  ^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#lines_filter_map_ok
+
+warning: `flatten()` will run forever if the iterator repeatedly produces an `Err`
+   --> hoop-daemon/src/api_skills.rs:333:33
+    |
+333 |         for l in reader.lines().flatten() {
+    |                                 ^^^^^^^^^ help: replace with: `map_while(Result::ok)`
+    |
+note: this expression returning a `std::io::Lines` may produce an infinite number of `Err` in case of a read error
+   --> hoop-daemon/src/api_skills.rs:333:18
+    |
+333 |         for l in reader.lines().flatten() {
+    |                  ^^^^^^^^^^^^^^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#lines_filter_map_ok
+
+warning: consider using `sort_by_key`
+   --> hoop-daemon/src/api_stitch_read.rs:470:5
+    |
+470 |     files.sort_by(|a, b| b.mention_count.cmp(&a.mention_count));
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#unnecessary_sort_by
+help: try
+    |
+470 -     files.sort_by(|a, b| b.mention_count.cmp(&a.mention_count));
+470 +     files.sort_by_key(|b| std::cmp::Reverse(b.mention_count));
+    |
+
+warning: clamp-like pattern without using clamp function
+  --> hoop-daemon/src/api_timeline.rs:76:17
+   |
+76 |     let hours = query.hours.min(168).max(1); // clamp to 1h–7d
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: replace with clamp: `query.hours.clamp(1, 168)`
+   |
+   = note: clamp will panic if max < min
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#manual_clamp
+
+warning: consider using `sort_by_key`
+   --> hoop-daemon/src/api_unassigned.rs:320:9
+    |
+320 |         cache.sort_by(|a, b| b.discovered_at.cmp(&a.discovered_at));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#unnecessary_sort_by
+help: try
+    |
+320 -         cache.sort_by(|a, b| b.discovered_at.cmp(&a.discovered_at));
+320 +         cache.sort_by_key(|b| std::cmp::Reverse(b.discovered_at));
+    |
+
+warning: use of a disallowed method `std::fs::File::create`
+  --> hoop-daemon/src/atomic_write.rs:97:20
+   |
+97 |     let mut file = File::create(&tmp_path)
+   |                    ^^^^^^^^^^^^
+   |
+   = note: Use atomic_write::atomic_write_file instead (crash-safe: tmp + fsync + rename)
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+   = note: `#[warn(clippy::disallowed_methods)]` on by default
+
+warning: use of a disallowed method `std::fs::File::create`
+   --> hoop-daemon/src/atomic_write.rs:188:24
+    |
+188 |         let mut file = File::create(&tmp_path)
+    |                        ^^^^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+  --> hoop-daemon/src/attachment_sync.rs:86:9
+   |
+86 |         std::fs::write(&tmp_path, &json)
+   |         ^^^^^^^^^^^^^^
+   |
+   = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+   --> hoop-daemon/src/attachments.rs:613:5
+    |
+613 |     std::fs::write(&tmp, data)
+    |     ^^^^^^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+   --> hoop-daemon/src/backup_pipeline.rs:561:9
+    |
+561 |         std::fs::write(&output, &compressed)
+    |         ^^^^^^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: field `session_id` is never read
+   --> hoop-daemon/src/capacity.rs:358:5
+    |
+355 | struct ParsedPrompt {
+    |        ------------ field in this struct
+...
+358 |     session_id: String,
+    |     ^^^^^^^^^^
+    |
+    = note: `ParsedPrompt` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: function `get_opencode_limits` is never used
+   --> hoop-daemon/src/capacity.rs:472:4
+    |
+472 | fn get_opencode_limits() -> OpenCodePromptLimits {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: field `session_subpath` is never read
+   --> hoop-daemon/src/capacity.rs:526:5
+    |
+522 | struct GeminiAccountPaths {
+    |        ------------------ field in this struct
+...
+526 |     session_subpath: String,
+    |     ^^^^^^^^^^^^^^^
+    |
+    = note: `GeminiAccountPaths` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: field `rpm_limit` is never read
+  --> hoop-daemon/src/capacity.rs:55:13
+   |
+51 |     pub struct GeminiQuotaLimits {
+   |                ----------------- field in this struct
+...
+55 |         pub rpm_limit: Option<u64>,
+   |             ^^^^^^^^^
+   |
+   = note: `GeminiQuotaLimits` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: struct `QuotaLimit` is never constructed
+  --> hoop-daemon/src/capacity.rs:60:12
+   |
+60 |     struct QuotaLimit {
+   |            ^^^^^^^^^^
+
+warning: called `unwrap` on `gcp_quota_config` after checking its variant with `is_some`
+   --> hoop-daemon/src/capacity.rs:603:17
+    |
+600 |         if gcp_quota_config.is_some() {
+    |         ----------------------------- help: try: `if let Some(<item>) = &gcp_quota_config`
+...
+603 |                 gcp_quota_config.as_ref().unwrap().project_id,
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#unnecessary_unwrap
+    = note: `#[warn(clippy::unnecessary_unwrap)]` on by default
+
+warning: called `unwrap` on `gcp_quota_config` after checking its variant with `is_some`
+   --> hoop-daemon/src/capacity.rs:604:17
+    |
+600 |         if gcp_quota_config.is_some() {
+    |         ----------------------------- help: try: `if let Some(<item>) = &gcp_quota_config`
+...
+604 |                 gcp_quota_config.as_ref().unwrap().region
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#unnecessary_unwrap
+
+warning: the variable `line_number` is used as a loop counter
+    --> hoop-daemon/src/capacity.rs:1613:9
+     |
+1613 |         for line in reader.lines() {
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider using: `for (line_number, line) in reader.lines().enumerate()`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#explicit_counter_loop
+     = note: `#[warn(clippy::explicit_counter_loop)]` on by default
+
+warning: the variable `line_number` is used as a loop counter
+    --> hoop-daemon/src/capacity.rs:1772:9
+     |
+1772 |         for line in reader.lines() {
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider using: `for (line_number, line) in reader.lines().enumerate()`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#explicit_counter_loop
+
+warning: this `if` has identical blocks
+   --> hoop-daemon/src/config_resolver.rs:371:185
+    |
+371 |           let expected = if msg.contains("expected u8") || msg.contains("expected u16") || msg.contains("expected u32") || msg.contains("expected u64") || msg.contains("expected usize") {
+    |  _________________________________________________________________________________________________________________________________________________________________________________________^
+372 | |             Some("integer".to_string())
+373 | |         } else if msg.contains("expected i8") || msg.contains("expected i16") || msg.contains("expected i32") || msg.contains("expected i64") || msg.contains("expected isize") {
+    | |_________^
+    |
+note: same as this
+   --> hoop-daemon/src/config_resolver.rs:373:177
+    |
+373 |           } else if msg.contains("expected i8") || msg.contains("expected i16") || msg.contains("expected i32") || msg.contains("expected i64") || msg.contains("expected isize") {
+    |  _________________________________________________________________________________________________________________________________________________________________________________^
+374 | |             Some("integer".to_string())
+375 | |         } else if msg.contains("expected f32") || msg.contains("expected f64") {
+    | |_________^
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#if_same_then_else
+    = note: `#[warn(clippy::if_same_then_else)]` on by default
+
+warning: this function has too many arguments (9/7)
+   --> hoop-daemon/src/config_resolver.rs:679:1
+    |
+679 | / fn resolve_opt_strict<T: Clone + Serialize>(
+680 | |     cli: Option<T>,
+681 | |     env_val: Option<T>,
+682 | |     yml_ref: Option<&serde_yaml::Value>,
+...   |
+688 | |     type_validator: fn(&serde_yaml::Value, &str) -> Result<Option<T>, ConfigError>,
+689 | | ) -> Result<Resolved<T>, ConfigError> {
+    | |_____________________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#too_many_arguments
+    = note: `#[warn(clippy::too_many_arguments)]` on by default
+
+warning: unnecessary map of the identity function
+    --> hoop-daemon/src/config_resolver.rs:1544:74
+     |
+1544 |               .and_then(|y| yaml_get_u64(y, "embedding.cache_ttl_seconds"))
+     |  __________________________________________________________________________^
+1545 | |             .map(|v| v),
+     | |_______________________^ help: remove the call to `map`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#map_identity
+     = note: `#[warn(clippy::map_identity)]` on by default
+
+warning: this function has too many arguments (9/7)
+    --> hoop-daemon/src/config_resolver.rs:1678:5
+     |
+1678 | /     fn resolve_validated_str(
+1679 | |         cli: Option<String>,
+1680 | |         env_var: &str,
+1681 | |         yml_ref: Option<&serde_yaml::Value>,
+...    |
+1687 | |         validator: fn(&str) -> Result<(), String>,
+1688 | |     ) -> Result<Resolved<String>, ConfigError> {
+     | |______________________________________________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#too_many_arguments
+
+warning: unnecessary map of the identity function
+    --> hoop-daemon/src/config_resolver.rs:2396:78
+     |
+2396 |                   .and_then(|y| yaml_get_u64(y, "embedding.cache_ttl_seconds"))
+     |  ______________________________________________________________________________^
+2397 | |                 .map(|v| v),
+     | |___________________________^ help: remove the call to `map`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#map_identity
+
+warning: large size difference between variants
+  --> hoop-daemon/src/config_watcher.rs:40:1
+   |
+40 | /   pub enum ConfigEvent {
+41 | |       /// Configuration was reloaded successfully
+42 | | /     ConfigReloaded {
+43 | | |         config: ResolvedConfig,
+44 | | |         /// Hash of the previous config file contents
+45 | | |         prev_hash: String,
+...  | |
+49 | | |         agent_config_changed: Option<AgentConfigChanged>,
+50 | | |     },
+   | | |_____- the largest variant contains at least 2160 bytes
+51 | |       /// Configuration failed to parse
+52 | | /     ConfigError {
+53 | | |         error: ConfigError,
+54 | | |         /// Hash of the previous (last-good) config file contents
+55 | | |         prev_hash: String,
+56 | | |     },
+   | | |_____- the second-largest variant contains at least 136 bytes
+57 | |   }
+   | |___^ the entire enum is at least 2160 bytes
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#large_enum_variant
+   = note: `#[warn(clippy::large_enum_variant)]` on by default
+help: consider boxing the large fields or introducing indirection in some other way to reduce the total size of the enum
+   |
+43 -         config: ResolvedConfig,
+43 +         config: Box<ResolvedConfig>,
+   |
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+   --> hoop-daemon/src/cost.rs:499:22
+    |
+499 |         let mut map: HashMap<(String, String), (f64, i64, i64, i64, i64)> = HashMap::new();
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+    = note: `#[warn(clippy::type_complexity)]` on by default
+
+warning: method `from_str` can be confused for the standard trait method `std::str::FromStr::from_str`
+  --> hoop-daemon/src/embedding_service.rs:68:5
+   |
+68 | /     pub fn from_str(s: &str) -> Option<Self> {
+69 | |         match s.to_lowercase().as_str() {
+70 | |             "local" => Some(Self::Local),
+71 | |             "remote" => Some(Self::Remote),
+...  |
+75 | |     }
+   | |_____^
+   |
+   = help: consider implementing the trait `std::str::FromStr` or choosing a less ambiguous method name
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#should_implement_trait
+   = note: `#[warn(clippy::should_implement_trait)]` on by default
+
+warning: this function has too many arguments (12/7)
+   --> hoop-daemon/src/fleet.rs:645:1
+    |
+645 | / pub fn create_stitch_with_audit(
+646 | |     stitch_id: &str,
+647 | |     project: &str,
+648 | |     kind: &str,
+...   |
+657 | |     turn_id: Option<&str>,
+658 | | ) -> Result<()> {
+    | |_______________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+    --> hoop-daemon/src/fleet.rs:5217:1
+     |
+5217 | / fn accumulate_cost_rollup_conn(
+5218 | |     conn: &Connection,
+5219 | |     project: &str,
+5220 | |     date: &str,
+...    |
+5225 | |     cache_write_tokens: i64,
+5226 | | ) -> Result<()> {
+     | |_______________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#too_many_arguments
+
+warning: this function has too many arguments (8/7)
+    --> hoop-daemon/src/fleet.rs:5322:1
+     |
+5322 | / fn snapshot_project_cost_row_conn(
+5323 | |     conn: &Connection,
+5324 | |     project: &str,
+5325 | |     date: &str,
+...    |
+5330 | |     cache_write_tokens: i64,
+5331 | | ) -> Result<()> {
+     | |_______________^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#too_many_arguments
+
+warning: you should consider adding a `Default` implementation for `FleetNotificationRing`
+   --> hoop-daemon/src/fleet_notifications.rs:127:5
+    |
+127 | /     pub fn new() -> Self {
+128 | |         let (tx, _) = broadcast::channel(64);
+129 | |         Self {
+130 | |             inner: RwLock::new(VecDeque::with_capacity(RING_SIZE)),
+...   |
+133 | |     }
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#new_without_default
+    = note: `#[warn(clippy::new_without_default)]` on by default
+help: try adding this
+    |
+126 + impl Default for FleetNotificationRing {
+127 +     fn default() -> Self {
+128 +         Self::new()
+129 +     }
+130 + }
+    |
+
+warning: struct `IdentityCache` has a public `len` method, but no `is_empty` method
+   --> hoop-daemon/src/identity.rs:123:5
+    |
+123 |     pub fn len(&self) -> usize {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#len_without_is_empty
+    = note: `#[warn(clippy::len_without_is_empty)]` on by default
+
+warning: function `openapi_router` is never used
+    --> hoop-daemon/src/lib.rs:1307:4
+     |
+1307 | fn openapi_router() -> Router<DaemonState> {
+     |    ^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `load_hoop_config` is never used
+    --> hoop-daemon/src/lib.rs:3826:10
+     |
+3826 | async fn load_hoop_config() -> Option<hoop_schema::HoopConfig> {
+     |          ^^^^^^^^^^^^^^^^
+
+warning: function `check_and_emit_capacity_alert` is never used
+    --> hoop-daemon/src/lib.rs:4093:4
+     |
+4093 | fn check_and_emit_capacity_alert() -> anyhow::Result<()> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: consider using `sort_by_key`
+    --> hoop-daemon/src/lib.rs:1219:5
+     |
+1219 |     workers_by_project.sort_by(|a, b| b.worker_count.cmp(&a.worker_count));
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#unnecessary_sort_by
+help: try
+     |
+1219 -     workers_by_project.sort_by(|a, b| b.worker_count.cmp(&a.worker_count));
+1219 +     workers_by_project.sort_by_key(|b| std::cmp::Reverse(b.worker_count));
+     |
+
+warning: `flatten()` will run forever if the iterator repeatedly produces an `Err`
+    --> hoop-daemon/src/lib.rs:4033:36
+     |
+4033 |         for line in reader.lines().flatten() {
+     |                                    ^^^^^^^^^ help: replace with: `map_while(Result::ok)`
+     |
+note: this expression returning a `std::io::Lines` may produce an infinite number of `Err` in case of a read error
+    --> hoop-daemon/src/lib.rs:4033:21
+     |
+4033 |         for line in reader.lines().flatten() {
+     |                     ^^^^^^^^^^^^^^
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#lines_filter_map_ok
+
+warning: use of a disallowed method `std::fs::File::create`
+   --> hoop-daemon/src/log_rotation.rs:110:14
+    |
+110 |             (File::create(&path)?, 0)
+    |              ^^^^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::File::create`
+   --> hoop-daemon/src/log_rotation.rs:117:23
+    |
+117 |                 file: File::create(&path)?,
+    |                       ^^^^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::File::create`
+   --> hoop-daemon/src/log_rotation.rs:145:21
+    |
+145 |         self.file = File::create(&path)?;
+    |                     ^^^^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+   --> hoop-daemon/src/metrics.rs:397:11
+    |
+397 |     data: RwLock<HashMap<Vec<String>, (u64, f64, Vec<u64>)>>,
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+   --> hoop-daemon/src/metrics.rs:449:11
+    |
+449 |     data: RwLock<HashMap<Vec<String>, (u64, f64, Vec<f64>)>>,
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+   --> hoop-daemon/src/metrics.rs:516:31
+    |
+516 |     pub fn snapshot(&self) -> Vec<(Vec<String>, u64, f64, Option<f64>, Option<f64>, Option<f64>)> {
+    |                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+   --> hoop-daemon/src/metrics.rs:658:11
+    |
+658 |     rows: &[(Vec<String>, u64, f64, Option<f64>, Option<f64>, Option<f64>)],
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: use of a disallowed method `std::fs::write`
+    --> hoop-daemon/src/metrics.rs:1336:13
+     |
+1336 |     let _ = std::fs::write(path, reason);
+     |             ^^^^^^^^^^^^^^
+     |
+     = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+   --> hoop-daemon/src/parse_jsonl_safe.rs:236:5
+    |
+236 |     fs::write(
+    |     ^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: type `pattern_query_evaluator::QueryExpr` is more private than the item `pattern_query_evaluator::parse_query`
+  --> hoop-daemon/src/pattern_query_evaluator.rs:88:1
+   |
+88 | pub(crate) fn parse_query(query: &str) -> Result<QueryExpr> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ function `pattern_query_evaluator::parse_query` is reachable at visibility `pub(crate)`
+   |
+note: but type `pattern_query_evaluator::QueryExpr` is only usable at visibility `pub(self)`
+  --> hoop-daemon/src/pattern_query_evaluator.rs:70:1
+   |
+70 | enum QueryExpr {
+   | ^^^^^^^^^^^^^^
+   = note: `#[warn(private_interfaces)]` on by default
+
+warning: type `pattern_query_evaluator::QueryExpr` is more private than the item `pattern_query_evaluator::evaluate_query`
+   --> hoop-daemon/src/pattern_query_evaluator.rs:258:1
+    |
+258 | pub(crate) fn evaluate_query(expr: &QueryExpr, ctx: &StitchContext) -> Result<bool> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ function `pattern_query_evaluator::evaluate_query` is reachable at visibility `pub(crate)`
+    |
+note: but type `pattern_query_evaluator::QueryExpr` is only usable at visibility `pub(self)`
+   --> hoop-daemon/src/pattern_query_evaluator.rs:70:1
+    |
+ 70 | enum QueryExpr {
+    | ^^^^^^^^^^^^^^
+
+warning: writing `&mut Vec` instead of `&mut [_]` involves a new object where a slice will do
+   --> hoop-daemon/src/pdf_sanitize.rs:184:36
+    |
+184 | fn neutralise_open_action_js(data: &mut Vec<u8>, record: &mut PdfSanitizeRecord) {
+    |                                    ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#ptr_arg
+    = note: `#[warn(clippy::ptr_arg)]` on by default
+help: change this to
+    |
+184 - fn neutralise_open_action_js(data: &mut Vec<u8>, record: &mut PdfSanitizeRecord) {
+184 + fn neutralise_open_action_js(data: &mut [u8], record: &mut PdfSanitizeRecord) {
+    |
+
+warning: writing `&mut Vec` instead of `&mut [_]` involves a new object where a slice will do
+   --> hoop-daemon/src/pdf_sanitize.rs:222:30
+    |
+222 | fn neutralise_names_js(data: &mut Vec<u8>, record: &mut PdfSanitizeRecord) {
+    |                              ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#ptr_arg
+help: change this to
+    |
+222 - fn neutralise_names_js(data: &mut Vec<u8>, record: &mut PdfSanitizeRecord) {
+222 + fn neutralise_names_js(data: &mut [u8], record: &mut PdfSanitizeRecord) {
+    |
+
+warning: writing `&mut Vec` instead of `&mut [_]` involves a new object where a slice will do
+   --> hoop-daemon/src/pdf_sanitize.rs:259:11
+    |
+259 |     data: &mut Vec<u8>,
+    |           ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#ptr_arg
+help: change this to
+    |
+259 -     data: &mut Vec<u8>,
+259 +     data: &mut [u8],
+    |
+
+warning: writing `&mut Vec` instead of `&mut [_]` involves a new object where a slice will do
+   --> hoop-daemon/src/pdf_sanitize.rs:279:11
+    |
+279 |     data: &mut Vec<u8>,
+    |           ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#ptr_arg
+help: change this to
+    |
+279 -     data: &mut Vec<u8>,
+279 +     data: &mut [u8],
+    |
+
+warning: writing `&mut Vec` instead of `&mut [_]` involves a new object where a slice will do
+   --> hoop-daemon/src/pdf_sanitize.rs:311:11
+    |
+311 |     data: &mut Vec<u8>,
+    |           ^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#ptr_arg
+help: change this to
+    |
+311 -     data: &mut Vec<u8>,
+311 +     data: &mut [u8],
+    |
+
+warning: use of a disallowed method `std::fs::write`
+   --> hoop-daemon/src/projects.rs:113:9
+    |
+113 |         fs::write(path, yaml).context("Failed to write projects.yaml")?;
+    |         ^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: type `reflection_detector::PatternCategory` is more private than the item `reflection_detector::DetectedPattern::category`
+  --> hoop-daemon/src/reflection_detector.rs:88:5
+   |
+88 |     pub category: PatternCategory,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ field `reflection_detector::DetectedPattern::category` is reachable at visibility `pub`
+   |
+note: but type `reflection_detector::PatternCategory` is only usable at visibility `pub(self)`
+  --> hoop-daemon/src/reflection_detector.rs:60:1
+   |
+60 | enum PatternCategory {
+   | ^^^^^^^^^^^^^^^^^^^^
+
+warning: use of a disallowed method `std::fs::write`
+   --> hoop-daemon/src/screen_capture.rs:353:9
+    |
+353 |         fs::write(&metadata_path, metadata_json)
+    |         ^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::File::create`
+   --> hoop-daemon/src/screen_capture.rs:358:9
+    |
+358 |         File::create(&partial_path)
+    |         ^^^^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+   --> hoop-daemon/src/screen_capture.rs:418:9
+    |
+418 |         fs::write(&metadata_path, metadata_json)
+    |         ^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+   --> hoop-daemon/src/screen_capture.rs:452:9
+    |
+452 |         fs::write(&frame_samples_path, frame_samples_json)
+    |         ^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+   --> hoop-daemon/src/screen_capture.rs:494:9
+    |
+494 |         fs::write(&meta_path, meta_json)
+    |         ^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: field `subpath` is never read
+   --> hoop-daemon/src/sessions.rs:557:5
+    |
+555 | pub struct GeminiSessionPath {
+    |            ----------------- field in this struct
+556 |     /// Subpath to sessions (e.g., "tmp" or "sessions")
+557 |     subpath: String,
+    |     ^^^^^^^
+    |
+    = note: `GeminiSessionPath` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: constant `MAX_UNASSIGNED_SESSIONS` is never used
+   --> hoop-daemon/src/sessions.rs:763:7
+    |
+763 | const MAX_UNASSIGNED_SESSIONS: usize = 100;
+    |       ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: the variable `line_number` is used as a loop counter
+    --> hoop-daemon/src/sessions.rs:1155:9
+     |
+1155 |         for line in reader.lines() {
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider using: `for (line_number, line) in reader.lines().enumerate()`
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#explicit_counter_loop
+
+warning: constant `STITCH_CLOSED_THRESHOLD_SECONDS` is never used
+  --> hoop-daemon/src/stitch_percentile_index.rs:72:7
+   |
+72 | const STITCH_CLOSED_THRESHOLD_SECONDS: i64 = 300;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+   --> hoop-daemon/src/stitch_percentile_index.rs:582:23
+    |
+582 |     let mut stitches: Vec<(String, String, Option<String>, Option<String>, f64, i64)> = Vec::new();
+    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: method `from_str` can be confused for the standard trait method `std::str::FromStr::from_str`
+  --> hoop-daemon/src/stuck_detector.rs:66:5
+   |
+66 | /     pub fn from_str(s: &str) -> Option<Self> {
+67 | |         match s.to_lowercase().as_str() {
+68 | |             "claude" => Some(Self::Claude),
+69 | |             "codex" => Some(Self::Codex),
+...  |
+75 | |     }
+   | |_____^
+   |
+   = help: consider implementing the trait `std::str::FromStr` or choosing a less ambiguous method name
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#should_implement_trait
+
+warning: this function has too many arguments (9/7)
+   --> hoop-daemon/src/supervisor.rs:243:5
+    |
+243 | /     pub fn new(
+244 | |         bead_tx: broadcast::Sender<BeadEvent>,
+245 | |         session_tx: broadcast::Sender<SessionEvent>,
+246 | |         worker_registry: Arc<crate::ws::WorkerRegistry>,
+...   |
+252 | |         stuck_detector: Arc<std::sync::Mutex<crate::stuck_detector::StuckDetector>>,
+253 | |     ) -> Self {
+    | |_____________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#too_many_arguments
+
+warning: doc list item overindented
+    --> hoop-daemon/src/supervisor.rs:1091:5
+     |
+1091 | ///            → remove collision_index entry + touch project last_event_at
+     |     ^^^^^^^^^^^ help: try using `  ` (2 spaces)
+     |
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#doc_overindented_list_items
+     = note: `#[warn(clippy::doc_overindented_list_items)]` on by default
+
+warning: use of a disallowed method `std::fs::write`
+   --> hoop-daemon/src/template_library.rs:424:25
+    |
+424 |         if let Err(e) = std::fs::write(&path, content) {
+    |                         ^^^^^^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+   --> hoop-daemon/src/uploads.rs:132:9
+    |
+132 |         fs::write(&meta_path, content).context("failed to write metadata")?;
+    |         ^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::File::create`
+   --> hoop-daemon/src/uploads.rs:190:9
+    |
+190 |         File::create(&partial_path).context("failed to create partial file")?;
+    |         ^^^^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+   --> hoop-daemon/src/uploads.rs:446:5
+    |
+446 |     fs::write(&unsafe_path, &svg_data)
+    |     ^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+   --> hoop-daemon/src/uploads.rs:470:5
+    |
+470 |     fs::write(&tmp_path, &result.safe_bytes).context("failed to write sanitized SVG to tmp")?;
+    |     ^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+   --> hoop-daemon/src/uploads.rs:516:5
+    |
+516 |     fs::write(&unsafe_path, &pdf_data)
+    |     ^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
+
+warning: use of a disallowed method `std::fs::write`
+   --> hoop-daemon/src/uploads.rs:540:5
+    |
+540 |     fs::write(&tmp_path, &result.safe_bytes).context("failed to write sanitized PDF to tmp")?;
+    |     ^^^^^^^^^
+    |
+    = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
