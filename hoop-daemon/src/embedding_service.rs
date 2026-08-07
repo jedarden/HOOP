@@ -9,6 +9,77 @@
 //! - Fallback: if remote down, use local
 //!
 //! Plan reference: §6 Phase 5 marquee #11, hoop-ttb.6.10.1
+//!
+//! # Async Safety and Lock Hygiene
+//!
+//! This module follows strict async safety patterns to avoid deadlocks and
+//! satisfy the clippy `await_holding_lock` lint (see: clippy::await_holding_lock).
+//!
+//! ## Core Principle
+//!
+//! **NEVER hold a lock across an `.await` point.**
+//!
+//! When you `.await` while holding a `Mutex` or `RwLock` guard, the async runtime
+//! may suspend the task and switch to another task that tries to acquire the same
+//! lock. This causes a deadlock because:
+//!
+//! 1. Task A holds the lock and suspends at `.await`
+//! 2. Task B runs and tries to acquire the same lock
+//! 3. Task A cannot resume until the `.await` completes
+//! 4. Task B cannot proceed until Task A releases the lock
+//! 5. Result: deadlock
+//!
+//! ## Prevention Pattern: Scoped Lock Acquisition
+//!
+//! The correct pattern is to use **scope-based lock acquisition**:
+//!
+//! ```rust
+//! // ❌ WRONG: Lock held across .await
+//! let data = {
+//!     let guard = self.lock.write().unwrap();
+//!     some_computation(&guard)
+//! }; // Guard still live here
+//! some_async_function(data).await; // DEADLOCK: guard still held!
+//!
+//! // ✅ CORRECT: Lock released before .await
+//! let result = {
+//!     let guard = self.lock.write().unwrap();
+//!     some_computation(&guard)
+//! }; // Guard dropped here at scope end
+//! some_async_function(result).await; // Safe: guard already dropped
+//! ```
+//!
+//! ## Why Not `drop(guard)` Explicitly?
+//!
+//! Clippy's `await_holding_lock` analysis is conservative and does NOT recognize
+//! explicit `drop(guard)` calls before `.await` points. You must use scope-based
+//! automatic release instead:
+//!
+//! ```rust
+//! // ❌ STILL WRONG: Clippy doesn't recognize explicit drop
+//! let mut guard = self.lock.write().unwrap();
+//! // ... work with guard ...
+//! drop(guard); // Clippy misses this
+//! some_async_function().await; // Still triggers lint!
+//!
+//! // ✅ CORRECT: Scope-based release
+//! let result = {
+//!     let mut guard = self.lock.write().unwrap();
+//!     // ... work with guard, return result ...
+//!     result
+//! }; // Automatic drop at scope end - Clippy recognizes this
+//! some_async_function().await; // No lint!
+//! ```
+//!
+//! ## Module Implementation
+//!
+//! This module contains 2 `RwLock` instances with 8 acquisition points. All are
+//! verified safe (no `.await` while holding lock). See `acquire_rate_limit()` for
+//! a comprehensive example of multi-phase lock scoping.
+//!
+//! For detailed analysis and historical fixes, see:
+//! - `docs/await-holding-lock-final-report.md`
+//! - Commit 86997dd: "fix(embedding_service): eliminate await_holding_lock warning"
 
 use crate::embedding::{Embedder, NgramEmbedder};
 use crate::metrics::metrics;
@@ -316,10 +387,15 @@ impl EmbeddingService {
     }
 
     /// Generate embedding with caching.
+    ///
+    /// This function demonstrates **scoped read lock** pattern for cache access.
+    /// The read lock is acquired in a minimal scope and released before the
+    /// potential `.await` in `self.embed_remote()`.
     async fn embed_cached(&self, text: &str) -> Result<EmbeddingVec> {
         let hash = self.compute_hash(text);
 
-        // Check cache
+        // === Phase 1: Check cache (minimal read lock scope) ===
+        // No .await in this scope, so holding the lock is safe
         {
             let cache = self.cache.read().unwrap();
             if let Some(entry) = cache.get(&hash) {
@@ -332,7 +408,10 @@ impl EmbeddingService {
                     return Ok(entry.embedding);
                 }
             }
+            // === Read lock released here automatically ===
         }
+
+        metrics().hoop_embedding_cache_misses_total.inc();
 
         metrics().hoop_embedding_cache_misses_total.inc();
 
@@ -348,7 +427,8 @@ impl EmbeddingService {
             self.embed_local(text)?
         };
 
-        // Store in cache
+        // === Phase 2: Store in cache (minimal write lock scope) ===
+        // No .await in this scope. Lock released before return.
         {
             let mut cache = self.cache.write().unwrap();
             cache.insert(
@@ -358,6 +438,7 @@ impl EmbeddingService {
                     created_at: Instant::now(),
                 },
             );
+            // === Write lock released here automatically ===
         }
 
         self.update_cache_hit_rate();
@@ -402,21 +483,77 @@ impl EmbeddingService {
         Err(anyhow::anyhow!("Remote embedding not implemented"))
     }
 
-    /// Acquire rate limit permit.
+    /// Acquire rate limit permit with scoped lock hygiene.
     ///
-    /// Rate limiting strategy:
-    /// 1. Acquire semaphore permit (controls concurrency)
-    /// 2. Check and update rate limit state atomically
-    /// 3. No .await points while holding write lock
+    /// This function demonstrates the **correct pattern** for rate limiting with
+    /// locks in async code. It uses a **multi-phase scoped lock acquisition**
+    /// strategy to ensure locks are NEVER held across `.await` points.
+    ///
+    /// # Rate Limiting Strategy
+    ///
+    /// 1. **Acquire semaphore permit** (controls concurrency) — NO lock yet
+    /// 2. **Check rate limit state** in minimal lock scope — compute wait duration
+    /// 3. **Release lock automatically** at scope end — BEFORE any `.await`
+    /// 4. **Sleep if needed** — NO lock held during `.await`
+    /// 5. **Re-acquire lock** in separate scope to record timestamp
+    ///
+    /// # Why This Pattern Is Safe
+    ///
+    /// ```text
+    /// Phase 1: Semaphore (no lock)
+    ///   permit = semaphore.acquire().await  ✅ Safe: no lock held
+    ///
+    /// Phase 2: Compute wait time (minimal lock scope)
+    ///   {                                      ← Scope begins
+    ///       guard = timestamps.write()        ← Lock acquired
+    ///       ... compute wait_duration ...
+    ///       return Some(duration) or None     ← Value computed
+    ///   }                                      ← Lock dropped HERE ✅
+    ///
+    /// Phase 3: Sleep (no lock)
+    ///   if let Some(duration) = result {      ✅ Safe: lock already dropped
+    ///       tokio::time::sleep(duration).await
+    ///   }
+    ///
+    /// Phase 4: Record timestamp (separate lock scope)
+    ///   {                                      ← NEW scope
+    ///       guard = timestamps.write()        ← Lock re-acquired
+    ///       timestamps.push(now)
+    ///   }                                      ← Lock dropped HERE ✅
+    /// ```
+    ///
+    /// # Historical Note
+    ///
+    /// This function previously had an `await_holding_lock` violation (fixed in
+    /// commit 86997dd). The old code pattern was:
+    ///
+    /// ```rust
+    /// // ❌ OLD (WRONG): Lock held across await
+    /// let mut timestamps = self.request_timestamps.write().unwrap();
+    /// // ... compute wait_duration ...
+    /// drop(timestamps);  // Explicit drop - clippy doesn't recognize this!
+    /// tokio::time::sleep(duration).await;  // STILL triggered lint!
+    /// ```
+    ///
+    /// The fix uses **scope-based automatic release** which clippy DOES recognize.
+    ///
+    /// # Clippy Rule Reference
+    ///
+    /// This satisfies `clippy::await_holding_lock` lint. The lint checks that no
+    /// `MutexGuard` or `RwLockGuard` is live across an `.await` suspension point.
+    ///
+    /// See: <https://rust-lang.github.io/rust-clippy/master/index.html#/await_holding_lock>
     async fn acquire_rate_limit(&self) -> Result<()> {
         if let Some(ref semaphore) = self.rate_limiter {
-            // Step 1: Acquire semaphore permit WITHOUT holding write lock
+            // === PHASE 1: Acquire semaphore permit (no RwLock yet) ===
+            // This await is safe because we haven't acquired request_timestamps lock yet
             let _permit = semaphore.acquire().await.map_err(|e| {
                 anyhow::anyhow!("Failed to acquire rate limit permit: {}", e)
             })?;
 
-            // Step 2: Check rate limit and determine if we need to wait
-            // Compute wait duration in a minimal lock scope (no await here)
+            // === PHASE 2: Check rate limit state in minimal lock scope ===
+            // Compute wait duration and return it. NO await inside this scope.
+            // The RwLock guard is automatically dropped at scope end.
             let should_wait_and_for_how_long = {
                 let mut timestamps = self.request_timestamps.write().unwrap();
                 let now = Instant::now();
@@ -443,20 +580,28 @@ impl EmbeddingService {
                     timestamps.push(now);
                     None
                 }
-                // Lock released here automatically at end of scope
+                // === LOCK RELEASED HERE AUTOMATICALLY ===
+                // Clippy recognizes scope-based release. The guard is dropped.
             };
 
-            // Step 3: Sleep outside lock scope if needed
+            // === PHASE 3: Sleep if needed (no lock held during await) ===
+            // CRITICAL: The RwLock is already dropped before this await.
+            // This is why clippy::await_holding_lock passes.
             if let Some(wait_duration) = should_wait_and_for_how_long {
                 if wait_duration > Duration::ZERO {
                     tokio::time::sleep(wait_duration).await;
+                    // ✅ SAFE: No RwLock guard is live during this await
                 }
 
-                // Step 4: Record timestamp after waiting (separate lock scope)
-                let mut timestamps = self.request_timestamps.write().unwrap();
-                timestamps.push(Instant::now());
+                // === PHASE 4: Record timestamp after waiting (separate lock scope) ===
+                // This is a NEW lock acquisition in a separate scope. Not held across await.
+                {
+                    let mut timestamps = self.request_timestamps.write().unwrap();
+                    timestamps.push(Instant::now());
+                    // === LOCK RELEASED HERE ===
+                }
             }
-            // Permit released here after lock is released
+            // Semaphore permit released here after all lock work is complete
         }
         Ok(())
     }
