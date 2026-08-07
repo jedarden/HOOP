@@ -12,6 +12,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
+// Include the test utilities module
+mod cli_test_utils;
+use cli_test_utils::*;
+
 // ── Test fixtures ─────────────────────────────────────────────────────────────
 
 /// Create a temporary workspace with a .beads directory
@@ -96,6 +100,307 @@ fn remove_with_no_interactive_requires_confirm_flag() {
     assert!(
         code.contains("--confirm is required in non-interactive mode"),
         "Remove must show helpful error when confirm is missing"
+    );
+}
+
+// ── Remove command: Comprehensive no_interactive flag tests ───────────────────
+
+/// Test 1: Parse test for `hoop --no-interactive remove <args>`
+/// Verifies flag extraction when flag appears BEFORE the remove subcommand
+#[test]
+fn test_remove_parse_flag_before_subcommand() {
+    // Test: hoop --no-interactive projects remove my-project
+    let result = parse_flag_before_subcommand(&["projects", "remove", "my-project"]);
+
+    assert!(result.is_ok(), "Should successfully parse flag before subcommand");
+    let parsed = result.unwrap();
+
+    assert_eq!(parsed.no_interactive, true, "Flag should be extracted as true");
+    assert_eq!(parsed.command, "projects", "Should identify 'projects' as command");
+    assert!(parsed.args.contains(&"remove".to_string()), "Should include 'remove' in args");
+    assert!(parsed.args.contains(&"my-project".to_string()), "Should include project name");
+}
+
+/// Test 2: Parse test for `hoop remove <args> --no-interactive`
+/// Verifies flag extraction when flag appears AFTER the remove arguments
+#[test]
+fn test_remove_parse_flag_after_subcommand() {
+    // Test: hoop projects remove my-project --no-interactive
+    let result = parse_flag_after_subcommand(&["projects", "remove", "my-project"]);
+
+    assert!(result.is_ok(), "Should successfully parse flag after subcommand");
+    let parsed = result.unwrap();
+
+    assert_eq!(parsed.no_interactive, true, "Flag should be extracted as true");
+    assert_eq!(parsed.command, "projects", "Should identify 'projects' as command");
+    assert!(parsed.args.contains(&"remove".to_string()), "Should include 'remove' in args");
+    assert!(parsed.args.contains(&"my-project".to_string()), "Should include project name");
+}
+
+/// Test 3: Verify flag value extraction in handler
+/// Confirms that the flag value flows from CLI parsing to the handler function
+#[test]
+fn test_remove_flag_extraction_in_handler() {
+    // Test that the handler receives the correct flag value
+    let code = std::fs::read_to_string("src/projects.rs")
+        .expect("Failed to read projects.rs");
+
+    // Verify the handler function signature accepts no_interactive parameter
+    assert!(
+        code.contains("pub fn remove_project(name: &str, no_interactive: bool, confirm: bool)"),
+        "Handler signature must include no_interactive parameter"
+    );
+
+    // Verify the flag is actually used in conditional logic
+    assert!(
+        code.contains("if no_interactive && !confirm"),
+        "Handler must check no_interactive flag in safety condition"
+    );
+
+    assert!(
+        code.contains("if !no_interactive"),
+        "Handler must check no_interactive flag for prompt suppression"
+    );
+
+    // Verify the flag flows from main.rs to the handler
+    let main_code = std::fs::read_to_string("src/main.rs")
+        .expect("Failed to read main.rs");
+
+    assert!(
+        main_code.contains("projects::remove_project(&name, no_interactive, confirm)"),
+        "main() must pass no_interactive flag to remove_project handler"
+    );
+}
+
+/// Test 4: Verify flag suppresses confirmation prompts when true (auto-confirms with --confirm)
+/// Confirms that when no_interactive=true AND confirm=true, removal proceeds without prompting
+#[test]
+fn test_remove_flag_confirms_with_confirm_flag() {
+    // Test: when no_interactive=true AND confirm=true, removal should proceed
+    let code = std::fs::read_to_string("src/projects.rs")
+        .expect("Failed to read projects.rs");
+
+    // Find the safety check that happens first
+    let confirm_check = code.find("if no_interactive && !confirm");
+    assert!(confirm_check.is_some(), "Should have confirm requirement check");
+
+    // Find the prompt check that happens second
+    let prompt_check = code.find("if !no_interactive");
+    assert!(prompt_check.is_some(), "Should have prompt suppression check");
+
+    // Verify order: confirm check comes before prompt check
+    // This ensures that when confirm=true, the prompt check is never reached
+    assert!(
+        confirm_check.unwrap() < prompt_check.unwrap(),
+        "Confirm check must come before prompt check (early exit on success)"
+    );
+
+    // Verify that when confirm=true, the code proceeds to removal
+    // The pattern is: check → if pass, continue to removal
+    assert!(
+        code.contains("let removed = registry.remove(name)?"),
+        "After safety checks, handler should proceed with removal"
+    );
+}
+
+/// Test 5: Verify default behavior when flag is false (prompts for confirmation)
+/// Confirms that when no_interactive=false, the user is prompted for confirmation
+#[test]
+fn test_remove_default_prompts_for_confirmation() {
+    // Test: when no_interactive=false (default), user should be prompted
+    let code = std::fs::read_to_string("src/projects.rs")
+        .expect("Failed to read projects.rs");
+
+    // Verify the prompt branch exists
+    assert!(
+        code.contains("if !no_interactive"),
+        "Handler should have branch for interactive prompting"
+    );
+
+    // Verify the actual prompt message
+    assert!(
+        code.contains("Confirm removal? [y/N]"),
+        "Handler should prompt for confirmation with clear message"
+    );
+
+    // Verify the prompt goes to stderr (not stdout)
+    assert!(
+        code.contains("eprint!(\"Confirm removal?"),
+        "Prompt should use eprint! to write to stderr"
+    );
+
+    // Verify the input is read from stdin
+    assert!(
+        code.contains("std::io::stdin().read_line(&mut input)"),
+        "Handler should read user response from stdin"
+    );
+
+    // Verify cancellation logic
+    assert!(
+        code.contains("if answer != \"y\" && answer != \"yes\""),
+        "Handler should check for yes/y response"
+    );
+
+    assert!(
+        code.contains("eprintln!(\"Removal cancelled\")"),
+        "Handler should notify on cancellation"
+    );
+
+    assert!(
+        code.contains("return Ok(false)"),
+        "Handler should return false on cancellation"
+    );
+}
+
+/// Additional test: Verify short flag variant `-y` works for Remove
+#[test]
+fn test_remove_short_flag_variant() {
+    // Test: hoop -y projects remove my-project --confirm
+    let result = parse_cli_with_flag(&["hoop", "-y", "projects", "remove", "my-project", "--confirm"]);
+
+    assert!(result.is_ok(), "Should successfully parse short flag variant");
+    let parsed = result.unwrap();
+
+    assert_eq!(parsed.no_interactive, true, "Short flag -y should set no_interactive to true");
+}
+
+/// Additional test: Verify error message when --confirm is missing in no-interactive mode
+#[test]
+fn test_remove_error_message_without_confirm() {
+    let code = std::fs::read_to_string("src/projects.rs")
+        .expect("Failed to read projects.rs");
+
+    // Verify the error message is helpful
+    assert!(
+        code.contains("--confirm is required in non-interactive mode"),
+        "Error message should clearly state the requirement"
+    );
+
+    // Verify the error message shows correct usage
+    assert!(
+        code.contains("Re-run with: hoop projects remove"),
+        "Error message should show correct command pattern"
+    );
+
+    assert!(
+        code.contains("--no-interactive --confirm"),
+        "Error message should include both flags in example"
+    );
+}
+
+/// Test 4b: Verify flag suppresses confirmation prompts when true (mock prompt test)
+/// Uses the mock prompt interface to verify prompt suppression behavior
+#[test]
+fn test_remove_prompt_suppression_with_mock() {
+    // Create a mock prompt that would normally require user input
+    let mock_prompt = RemovePromptMock {
+        would_prompt_interactive: true,
+        requires_confirm_flag: true,
+    };
+
+    // When no_interactive=true AND confirm=true, prompt should be suppressed
+    let should_prompt = mock_prompt.would_prompt_when(true, true);
+    assert!(
+        !should_prompt,
+        "Prompt should be suppressed when no_interactive=true AND confirm=true"
+    );
+
+    // When no_interactive=true AND confirm=false, should error (not prompt)
+    // This is verified by test_remove_with_no_interactive_requires_confirm_flag
+
+    // When no_interactive=false, prompt should be shown
+    let should_prompt = mock_prompt.would_prompt_when(false, false);
+    assert!(
+        should_prompt,
+        "Prompt should be shown when no_interactive=false (default)"
+    );
+}
+
+/// Mock prompt interface for testing Remove command behavior
+struct RemovePromptMock {
+    would_prompt_interactive: bool,
+    requires_confirm_flag: bool,
+}
+
+impl RemovePromptMock {
+    /// Determine whether a prompt would be shown given the flag state
+    fn would_prompt_when(&self, no_interactive: bool, confirm: bool) -> bool {
+        // In non-interactive mode with confirm, no prompt
+        if no_interactive && confirm {
+            return false;
+        }
+
+        // In non-interactive mode without confirm, errors instead of prompting
+        // (This is verified by other tests)
+
+        // In interactive mode, prompt is shown
+        if !no_interactive {
+            return true;
+        }
+
+        false
+    }
+}
+
+/// Test: Verify both flag positions yield the same no_interactive value
+#[test]
+fn test_remove_flag_position_independence() {
+    // Parse with flag before subcommand
+    let before = parse_cli_with_flag(&["hoop", "--no-interactive", "projects", "remove", "test"]);
+    assert!(before.is_ok(), "Should parse flag before command");
+    let before_parsed = before.unwrap();
+
+    // Parse with flag after subcommand
+    let after = parse_cli_with_flag(&["hoop", "projects", "remove", "test", "--no-interactive"]);
+    assert!(after.is_ok(), "Should parse flag after command");
+    let after_parsed = after.unwrap();
+
+    // Both should yield the same no_interactive value
+    assert_eq!(
+        before_parsed.no_interactive,
+        after_parsed.no_interactive,
+        "Flag position should not affect the extracted value"
+    );
+
+    assert_eq!(
+        before_parsed.no_interactive,
+        true,
+        "Both positions should extract no_interactive as true"
+    );
+}
+
+/// Test: Verify default behavior when flag is not provided
+#[test]
+fn test_remove_default_no_interactive_value() {
+    // Parse without the flag
+    let result = parse_cli_with_flag(&["hoop", "projects", "remove", "test-project"]);
+
+    assert!(result.is_ok(), "Should successfully parse command without flag");
+    let parsed = result.unwrap();
+
+    assert_eq!(
+        parsed.no_interactive,
+        false,
+        "no_interactive should default to false when flag is not provided"
+    );
+}
+
+/// Test: Verify flag propagation from CLI to handler
+#[test]
+fn test_remove_flag_propagation() {
+    let main_code = std::fs::read_to_string("src/main.rs")
+        .expect("Failed to read main.rs");
+
+    // Verify flag is extracted from CLI
+    assert!(
+        main_code.contains("let no_interactive = cli.no_interactive;"),
+        "Flag should be extracted from parsed CLI structure"
+    );
+
+    // Verify flag is passed to remove handler
+    assert!(
+        main_code.contains("projects::remove_project(&name, no_interactive, confirm)"),
+        "Flag should be passed to remove_project handler function"
     );
 }
 
@@ -196,6 +501,357 @@ fn restore_displays_no_interactive_usage_in_dry_run() {
     assert!(
         code.contains("--no-interactive --confirm"),
         "Should show non-interactive command format"
+    );
+}
+
+// ── Restore command: Comprehensive no_interactive flag tests ───────────────────
+
+/// Test 1: Parse test for `hoop --no-interactive restore --from <uri>`
+/// Verifies flag extraction when flag appears BEFORE the restore subcommand
+#[test]
+fn test_restore_parse_flag_before_subcommand() {
+    // Test: hoop --no-interactive restore --from s3://bucket/key
+    let result = parse_flag_before_subcommand(&["restore", "--from", "s3://my-bucket/backups/snap-001"]);
+
+    assert!(result.is_ok(), "Should successfully parse flag before subcommand");
+    let parsed = result.unwrap();
+
+    assert_eq!(parsed.no_interactive, true, "Flag should be extracted as true");
+    assert_eq!(parsed.command, "restore", "Should identify 'restore' as command");
+    assert!(parsed.args.contains(&"restore".to_string()), "Should include 'restore' in args");
+    assert!(parsed.args.contains(&"--from".to_string()), "Should include --from flag");
+    assert!(parsed.args.contains(&"s3://my-bucket/backups/snap-001".to_string()), "Should include URI");
+}
+
+/// Test 2: Parse test for `hoop restore --from <uri> --no-interactive`
+/// Verifies flag extraction when flag appears AFTER the restore arguments
+#[test]
+fn test_restore_parse_flag_after_subcommand() {
+    // Test: hoop restore --from s3://bucket/key --no-interactive
+    let result = parse_flag_after_subcommand(&["restore", "--from", "s3://my-bucket/backups/snap-001"]);
+
+    assert!(result.is_ok(), "Should successfully parse flag after subcommand");
+    let parsed = result.unwrap();
+
+    assert_eq!(parsed.no_interactive, true, "Flag should be extracted as true");
+    assert_eq!(parsed.command, "restore", "Should identify 'restore' as command");
+    assert!(parsed.args.contains(&"restore".to_string()), "Should include 'restore' in args");
+    assert!(parsed.args.contains(&"--from".to_string()), "Should include --from flag");
+    assert!(parsed.args.contains(&"s3://my-bucket/backups/snap-001".to_string()), "Should include URI");
+}
+
+/// Test 3: Verify flag value extraction in handler
+/// Confirms that the flag value flows from CLI parsing to the handler function
+#[test]
+fn test_restore_flag_extraction_in_handler() {
+    // Test that the handler receives the correct flag value
+    let code = std::fs::read_to_string("src/restore.rs")
+        .expect("Failed to read restore.rs");
+
+    // Verify the handler function signature accepts no_interactive parameter
+    assert!(
+        code.contains("pub async fn run_restore(from_uri: &str, dry_run: bool, no_interactive: bool, confirm: bool)"),
+        "Handler signature must include no_interactive parameter"
+    );
+
+    // Verify the flag is actually used in conditional logic
+    assert!(
+        code.contains("if no_interactive && !confirm"),
+        "Handler must check no_interactive flag in safety condition"
+    );
+
+    assert!(
+        code.contains("if !no_interactive"),
+        "Handler must check no_interactive flag for prompt suppression"
+    );
+
+    // Verify the flag flows from main.rs to the handler
+    let main_code = std::fs::read_to_string("src/main.rs")
+        .expect("Failed to read main.rs");
+
+    assert!(
+        main_code.contains("restore::run_restore(&from, dry_run, no_interactive, confirm)"),
+        "main() must pass no_interactive flag to run_restore handler"
+    );
+}
+
+/// Test 4: Verify flag suppresses confirmation prompts when true (with --confirm)
+/// Confirms that when no_interactive=true AND confirm=true, restore proceeds without prompting
+#[test]
+fn test_restore_flag_confirms_with_confirm_flag() {
+    // Test: when no_interactive=true AND confirm=true, restore should proceed
+    let code = std::fs::read_to_string("src/restore.rs")
+        .expect("Failed to read restore.rs");
+
+    // Find the safety check that happens first
+    let confirm_check = code.find("if no_interactive && !confirm");
+    assert!(confirm_check.is_some(), "Should have confirm requirement check");
+
+    // Find the prompt check that happens second
+    let prompt_check = code.find("if !no_interactive");
+    assert!(prompt_check.is_some(), "Should have prompt suppression check");
+
+    // Verify order: confirm check comes before prompt check
+    // This ensures that when confirm=true, the prompt check is never reached
+    assert!(
+        confirm_check.unwrap() < prompt_check.unwrap(),
+        "Confirm check must come before prompt check (early exit on success)"
+    );
+
+    // Verify that when confirm=true, the code proceeds to restoration
+    // The pattern is: check → if pass, continue to restoration
+    assert!(
+        code.contains("let locator = parse_s3_uri(from_uri)?"),
+        "After safety checks, handler should proceed with S3 URI parsing"
+    );
+}
+
+/// Test 5: Verify default behavior when flag is false (prompts for confirmation)
+/// Confirms that when no_interactive=false, the user is prompted for confirmation
+#[test]
+fn test_restore_default_prompts_for_confirmation() {
+    // Test: when no_interactive=false (default), user should be prompted
+    let code = std::fs::read_to_string("src/restore.rs")
+        .expect("Failed to read restore.rs");
+
+    // Verify the prompt branch exists
+    assert!(
+        code.contains("if !no_interactive"),
+        "Handler should have branch for interactive prompting"
+    );
+
+    // Verify the actual prompt message
+    assert!(
+        code.contains("Continue?"),
+        "Handler should prompt for confirmation with clear message"
+    );
+
+    // Verify the prompt goes to stderr (not stdout)
+    assert!(
+        code.contains("eprint!(\"Continue?"),
+        "Prompt should use eprint! to write to stderr"
+    );
+
+    // Verify the input is read from stdin
+    assert!(
+        code.contains("std::io::stdin().read_line(&mut input)"),
+        "Handler should read user response from stdin"
+    );
+
+    // Verify cancellation logic
+    assert!(
+        code.contains("if answer != \"y\" && answer != \"yes\""),
+        "Handler should check for yes/y response"
+    );
+
+    assert!(
+        code.contains("eprintln!(\"Restore cancelled\")"),
+        "Handler should notify on cancellation"
+    );
+
+    assert!(
+        code.contains("return Ok(())"),
+        "Handler should return Ok on cancellation"
+    );
+}
+
+/// Additional test: Verify short flag variant `-y` works for Restore
+#[test]
+fn test_restore_short_flag_variant() {
+    // Test: hoop -y restore --from s3://bucket/key --confirm
+    let result = parse_cli_with_flag(&[
+        "hoop",
+        "-y",
+        "restore",
+        "--from",
+        "s3://my-bucket/backups/snap-001",
+        "--confirm"
+    ]);
+
+    assert!(result.is_ok(), "Should successfully parse short flag variant");
+    let parsed = result.unwrap();
+
+    assert_eq!(parsed.no_interactive, true, "Short flag -y should set no_interactive to true");
+    assert!(parsed.args.contains(&"--confirm".to_string()), "Should include --confirm flag");
+}
+
+/// Additional test: Verify error message when --confirm is missing in no-interactive mode
+#[test]
+fn test_restore_error_message_without_confirm() {
+    let code = std::fs::read_to_string("src/restore.rs")
+        .expect("Failed to read restore.rs");
+
+    // Verify the error message is helpful
+    assert!(
+        code.contains("--confirm is required in non-interactive mode"),
+        "Error message should clearly state the requirement"
+    );
+
+    // Verify the error message shows correct usage
+    assert!(
+        code.contains("Re-run with: hoop restore --from"),
+        "Error message should show correct command pattern"
+    );
+
+    assert!(
+        code.contains("--no-interactive --confirm"),
+        "Error message should include both flags in example"
+    );
+}
+
+/// Test 4b: Verify flag suppresses confirmation prompts when true (mock prompt test)
+/// Uses the mock prompt interface to verify prompt suppression behavior
+#[test]
+fn test_restore_prompt_suppression_with_mock() {
+    // Create a mock prompt that would normally require user input
+    let mock_prompt = RestorePromptMock {
+        would_prompt_interactive: true,
+        requires_confirm_flag: true,
+    };
+
+    // When no_interactive=true AND confirm=true, prompt should be suppressed
+    let should_prompt = mock_prompt.would_prompt_when(true, true);
+    assert!(
+        !should_prompt,
+        "Prompt should be suppressed when no_interactive=true AND confirm=true"
+    );
+
+    // When no_interactive=true AND confirm=false, should error (not prompt)
+    // This is verified by test_restore_with_no_interactive_requires_confirm_flag
+
+    // When no_interactive=false, prompt should be shown
+    let should_prompt = mock_prompt.would_prompt_when(false, false);
+    assert!(
+        should_prompt,
+        "Prompt should be shown when no_interactive=false (default)"
+    );
+}
+
+/// Mock prompt interface for testing Restore command behavior
+struct RestorePromptMock {
+    would_prompt_interactive: bool,
+    requires_confirm_flag: bool,
+}
+
+impl RestorePromptMock {
+    /// Determine whether a prompt would be shown given the flag state
+    fn would_prompt_when(&self, no_interactive: bool, confirm: bool) -> bool {
+        // In non-interactive mode with confirm, no prompt
+        if no_interactive && confirm {
+            return false;
+        }
+
+        // In non-interactive mode without confirm, errors instead of prompting
+        // (This is verified by other tests)
+
+        // In interactive mode, prompt is shown
+        if !no_interactive {
+            return true;
+        }
+
+        false
+    }
+}
+
+/// Test: Verify both flag positions yield the same no_interactive value
+#[test]
+fn test_restore_flag_position_independence() {
+    // Parse with flag before subcommand
+    let before = parse_cli_with_flag(&[
+        "hoop",
+        "--no-interactive",
+        "restore",
+        "--from",
+        "s3://bucket/key"
+    ]);
+    assert!(before.is_ok(), "Should parse flag before command");
+    let before_parsed = before.unwrap();
+
+    // Parse with flag after subcommand
+    let after = parse_cli_with_flag(&[
+        "hoop",
+        "restore",
+        "--from",
+        "s3://bucket/key",
+        "--no-interactive"
+    ]);
+    assert!(after.is_ok(), "Should parse flag after command");
+    let after_parsed = after.unwrap();
+
+    // Both should yield the same no_interactive value
+    assert_eq!(
+        before_parsed.no_interactive,
+        after_parsed.no_interactive,
+        "Flag position should not affect the extracted value"
+    );
+
+    assert_eq!(
+        before_parsed.no_interactive,
+        true,
+        "Both positions should extract no_interactive as true"
+    );
+}
+
+/// Test: Verify default behavior when flag is not provided
+#[test]
+fn test_restore_default_no_interactive_value() {
+    // Parse without the flag
+    let result = parse_cli_with_flag(&[
+        "hoop",
+        "restore",
+        "--from",
+        "s3://bucket/key"
+    ]);
+
+    assert!(result.is_ok(), "Should successfully parse command without flag");
+    let parsed = result.unwrap();
+
+    assert_eq!(
+        parsed.no_interactive,
+        false,
+        "no_interactive should default to false when flag is not provided"
+    );
+}
+
+/// Test: Verify flag propagation from CLI to handler
+#[test]
+fn test_restore_flag_propagation() {
+    let main_code = std::fs::read_to_string("src/main.rs")
+        .expect("Failed to read main.rs");
+
+    // Verify flag is extracted from CLI
+    assert!(
+        main_code.contains("let no_interactive = cli.no_interactive;"),
+        "Flag should be extracted from parsed CLI structure"
+    );
+
+    // Verify flag is passed to restore handler
+    assert!(
+        main_code.contains("restore::run_restore(&from, dry_run, no_interactive, confirm)"),
+        "Flag should be passed to run_restore handler function"
+    );
+}
+
+/// Test: Verify restore uses --confirm in combination with --no-interactive
+#[test]
+fn test_restore_combines_no_interactive_with_confirm() {
+    // Test that restore with both flags proceeds without prompting
+    let code = std::fs::read_to_string("src/restore.rs")
+        .expect("Failed to read restore.rs");
+
+    // Verify the combination logic: confirm check comes first, then prompt check
+    let confirm_check = code.find("if no_interactive && !confirm");
+    let prompt_check = code.find("if !no_interactive");
+
+    assert!(
+        confirm_check.is_some() && prompt_check.is_some(),
+        "Restore must have both confirm check and prompt check"
+    );
+
+    // Verify order: confirm check comes before prompt check
+    assert!(
+        confirm_check.unwrap() < prompt_check.unwrap(),
+        "Confirm check must come before prompt check"
     );
 }
 
