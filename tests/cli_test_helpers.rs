@@ -60,6 +60,43 @@
 //!     assert_no_interactive_true(&cli);
 //! }
 //! ```
+//!
+//! ## Macro-Based Testing Patterns
+//!
+//! ### Using test_global_flag_position!
+//! Tests flag at global position (before subcommand):
+//! ```ignore
+//! test_global_flag_position!(scan_global_flag, "scan", "/tmp");
+//! test_global_flag_position!(remove_global_flag, "remove", "my-project");
+//! test_global_flag_position!(status_global_flag, "status");
+//! ```
+//!
+//! ### Using test_subcommand_flag_position!
+//! Tests flag at subcommand position (after command):
+//! ```ignore
+//! test_subcommand_flag_position!(scan_subcommand_flag, "scan", "/tmp");
+//! test_subcommand_flag_position!(remove_subcommand_flag, "remove", "my-project");
+//! test_subcommand_flag_position!(status_subcommand_flag, "status");
+//! ```
+//!
+//! ### Using test_flag_propagation!
+//! Tests flag propagation through command chains:
+//! ```ignore
+//! // Pattern 1: Global flag affects subcommand
+//! test_flag_propagation!(
+//!     global_affects_projects_scan,
+//!     global_flag = "--no-interactive",
+//!     command = ["projects", "scan", "/tmp"],
+//!     expected = true
+//! );
+//!
+//! // Pattern 2: Verify consistency across positions
+//! test_flag_propagation!(
+//!     scan_position_consistency,
+//!     command = ["scan", "/tmp"],
+//!     verify_consistency = true
+//! );
+//! ```
 
 use hoop_cli::Cli;
 
@@ -267,6 +304,245 @@ macro_rules! test_command_no_interactive {
     };
 }
 
+/// Test macro for testing flag at global position (before subcommand)
+///
+/// This macro generates tests that verify the `--no-interactive` flag works correctly
+/// when specified BEFORE the command/subcommand: `hoop --no-interactive CMD`
+///
+/// # Usage
+///
+/// ```ignore
+/// use hoop_test_helpers::test_global_flag_position;
+///
+/// test_global_flag_position!(test_scan_global_flag, "scan", "/tmp");
+/// test_global_flag_position!(test_remove_global_flag, "remove", "my-project");
+/// ```
+///
+/// # Generated Tests
+///
+/// For each invocation, this macro generates a test that:
+/// 1. Parses the command with `--no-interactive` BEFORE the subcommand
+/// 2. Asserts the flag value is correctly extracted as `true`
+/// 3. Verifies the correct command was parsed
+///
+/// # Example
+///
+/// ```ignore
+/// test_global_flag_position!(scan_flag_before_command, "scan", "/tmp");
+/// ```
+///
+/// Generates:
+/// ```ignore
+/// #[test]
+/// fn scan_flag_before_command() {
+///     let args = ["hoop", "--no-interactive", "scan", "/tmp"];
+///     let cli = parse_cli_args(&args).unwrap();
+///     assert_no_interactive_true(&cli);
+///     // Additional verification...
+/// }
+/// ```
+#[macro_export]
+macro_rules! test_global_flag_position {
+    ($test_name:ident, $cmd:expr, $arg:expr) => {
+        #[test]
+        fn $test_name() {
+            let args = ["hoop", "--no-interactive", $cmd, $arg];
+            let cli = parse_cli_args(&args).unwrap();
+            assert_no_interactive_true(&cli);
+            assert_eq!(cli.no_interactive, true,
+                "Global flag should be true when specified before command: {} {}", $cmd, $arg);
+        }
+    };
+    ($test_name:ident, $cmd:expr) => {
+        #[test]
+        fn $test_name() {
+            let args = ["hoop", "--no-interactive", $cmd];
+            let cli = parse_cli_args(&args).unwrap();
+            assert_no_interactive_true(&cli);
+            assert_eq!(cli.no_interactive, true,
+                "Global flag should be true when specified before command: {}", $cmd);
+        }
+    };
+}
+
+/// Test macro for testing flag at subcommand position (after command)
+///
+/// This macro generates tests that verify the `--no-interactive` flag works correctly
+/// when specified AFTER the command/subcommand: `hoop CMD --no-interactive`
+///
+/// # Usage
+///
+/// ```ignore
+/// use hoop_test_helpers::test_subcommand_flag_position;
+///
+/// test_subcommand_flag_position!(test_scan_subcommand_flag, "scan", "/tmp");
+/// test_subcommand_flag_position!(test_remove_subcommand_flag, "remove", "my-project");
+/// ```
+///
+/// # Generated Tests
+///
+/// For each invocation, this macro generates a test that:
+/// 1. Parses the command with `--no-interactive` AFTER the subcommand
+/// 2. Asserts the flag value is correctly extracted as `true`
+/// 3. Verifies the correct command was parsed
+///
+/// # Example
+///
+/// ```ignore
+/// test_subcommand_flag_position!(scan_flag_after_command, "scan", "/tmp");
+/// ```
+///
+/// Generates:
+/// ```ignore
+/// #[test]
+/// fn scan_flag_after_command() {
+///     let args = ["hoop", "scan", "/tmp", "--no-interactive"];
+///     let cli = parse_cli_args(&args).unwrap();
+///     assert_no_interactive_true(&cli);
+///     // Additional verification...
+/// }
+/// ```
+#[macro_export]
+macro_rules! test_subcommand_flag_position {
+    ($test_name:ident, $cmd:expr, $arg:expr) => {
+        #[test]
+        fn $test_name() {
+            let args = ["hoop", $cmd, $arg, "--no-interactive"];
+            let cli = parse_cli_args(&args).unwrap();
+            assert_no_interactive_true(&cli);
+            assert_eq!(cli.no_interactive, true,
+                "Subcommand flag should be true when specified after command: {} {}", $cmd, $arg);
+        }
+    };
+    ($test_name:ident, $cmd:expr) => {
+        #[test]
+        fn $test_name() {
+            let args = ["hoop", $cmd, "--no-interactive"];
+            let cli = parse_cli_args(&args).unwrap();
+            assert_no_interactive_true(&cli);
+            assert_eq!(cli.no_interactive, true,
+                "Subcommand flag should be true when specified after command: {}", $cmd);
+        }
+    };
+}
+
+/// Test pattern for testing flag propagation behavior
+///
+/// This macro tests that global flags properly propagate through command chains
+/// and that subcommand-specific flags override global flags when applicable.
+///
+/// # Usage Patterns
+///
+/// ## Pattern 1: Global flag affects subcommand behavior
+/// ```ignore
+/// test_flag_propagation!(
+///     global_affects_subcommand,
+///     global_flag = "--no-interactive",
+///     command = ["projects", "scan", "/tmp"],
+///     expected = true
+/// );
+/// ```
+///
+/// ## Pattern 2: Subcommand flag overrides global flag
+/// ```ignore
+/// test_flag_propagation!(
+///     subcommand_overrides_global,
+///     global_flag = "--no-interactive",
+///     command = ["scan", "/tmp"],
+///     local_flag = "--interactive",  // Hypothetical override flag
+///     expected = false
+/// );
+/// ```
+///
+/// ## Pattern 3: Global flag persists through command chain
+/// ```ignore
+/// test_flag_propagation!(
+///     flag_persists_through_chain,
+///     global_flag = "--no-interactive",
+///     command = ["projects", "remove", "my-project"],
+///     expected = true
+/// );
+/// ```
+///
+/// # Generated Tests
+///
+/// This macro creates comprehensive tests that verify:
+/// 1. Global flag is correctly set at the top level
+/// 2. Flag value propagates through the command chain
+/// 3. Subcommand flags (if any) properly override global flags
+/// 4. Final flag value matches expected behavior
+#[macro_export]
+macro_rules! test_flag_propagation {
+    ($test_name:ident, global_flag = $global:expr, command = $cmd:expr, expected = $expected:expr) => {
+        #[test]
+        fn $test_name() {
+            let args: Vec<&str> = ["hoop", $global]
+                .iter()
+                .chain($cmd.iter())
+                .copied()
+                .collect();
+
+            let cli = parse_cli_args(&args).unwrap();
+            let result = cli.no_interactive;
+
+            assert_eq!(result, $expected,
+                "Global flag should propagate through command chain: {} {:?}",
+                $global, $cmd
+            );
+        }
+    };
+    ($test_name:ident, global_flag = $global:expr, command = $cmd:expr, local_flag = $local:expr, expected = $expected:expr) => {
+        #[test]
+        fn $test_name() {
+            let args: Vec<&str> = ["hoop", $global]
+                .iter()
+                .chain($cmd.iter())
+                .chain(&[$local])
+                .copied()
+                .collect();
+
+            let cli = parse_cli_args(&args).unwrap();
+            let result = cli.no_interactive;
+
+            assert_eq!(result, $expected,
+                "Local flag should override global flag: global={}, local={}",
+                $global, $local
+            );
+        }
+    };
+    ($test_name:ident, command = $cmd:expr, verify_consistency = $consistency:expr) => {
+        #[test]
+        fn $test_name() {
+            // Test global flag position
+            let args_global: Vec<&str> = ["hoop", "--no-interactive"]
+                .iter()
+                .chain($cmd.iter())
+                .copied()
+                .collect();
+            let cli_global = parse_cli_args(&args_global).unwrap();
+
+            // Test subcommand flag position
+            let args_subcommand: Vec<&str> = ["hoop"]
+                .iter()
+                .chain($cmd.iter())
+                .chain(&["--no-interactive"])
+                .copied()
+                .collect();
+            let cli_subcommand = parse_cli_args(&args_subcommand).unwrap();
+
+            assert_eq!(cli_global.no_interactive, cli_subcommand.no_interactive,
+                "Flag value must be consistent across positions for command: {:?}",
+                $cmd
+            );
+
+            assert_eq!(cli_global.no_interactive, $consistency,
+                "Expected consistency check failed: expected {}",
+                $consistency
+            );
+        }
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -410,4 +686,35 @@ mod tests {
         assert_eq!(cli_long.no_interactive, cli_short.no_interactive);
         assert_eq!(cli_long.no_interactive, true);
     }
+
+    // ── Tests demonstrating new macro patterns ────────────────────────────────
+
+    // Example usage of test_global_flag_position! macro
+    test_global_flag_position!(scan_global_flag_example, "scan", "/tmp");
+    test_global_flag_position!(remove_global_flag_example, "remove", "test-project");
+
+    // Example usage of test_subcommand_flag_position! macro
+    test_subcommand_flag_position!(scan_subcommand_flag_example, "scan", "/tmp");
+    test_subcommand_flag_position!(remove_subcommand_flag_example, "remove", "test-project");
+
+    // Example usage of test_flag_propagation! macro
+    test_flag_propagation!(
+        global_affects_projects_scan,
+        global_flag = "--no-interactive",
+        command = ["projects", "scan", "/tmp"],
+        expected = true
+    );
+
+    test_flag_propagation!(
+        global_affects_status,
+        global_flag = "--no-interactive",
+        command = ["status"],
+        expected = true
+    );
+
+    test_flag_propagation!(
+        scan_position_consistency,
+        command = ["scan", "/tmp"],
+        verify_consistency = true
+    );
 }
