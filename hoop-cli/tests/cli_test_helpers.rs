@@ -1731,7 +1731,12 @@ macro_rules! test_flag_positions {
             use super::prelude::*;
 
             // Test flag before subcommand
-            let before = parse_flag_before_subcommand($base_args);
+            let args_before: Vec<&str> = vec!["--no-interactive"]
+                .iter()
+                .chain($base_args.iter())
+                .copied()
+                .collect();
+            let before = parse_flag_before_subcommand(&args_before);
             assert!(
                 before.is_ok(),
                 "Failed to parse flag before subcommand for {}",
@@ -1745,7 +1750,12 @@ macro_rules! test_flag_positions {
             );
 
             // Test flag after subcommand
-            let after = parse_flag_after_subcommand($base_args);
+            let args_after: Vec<&str> = $base_args
+                .iter()
+                .chain(&["--no-interactive"])
+                .copied()
+                .collect();
+            let after = parse_flag_after_subcommand(&args_after);
             assert!(
                 after.is_ok(),
                 "Failed to parse flag after subcommand for {}",
