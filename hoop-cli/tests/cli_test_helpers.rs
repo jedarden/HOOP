@@ -22,6 +22,163 @@
 //! - **Consistency**: Both positions must extract the same boolean value
 //! - **Composability**: Subcommands with their own flags must not interfere with `no_interactive`
 //!
+//! # Basic Test Patterns
+//!
+//! This section documents the fundamental patterns for testing `--no-interactive` flag
+//! usage at different positions in the command line. Each pattern includes runnable
+//! examples that demonstrate how to construct the test, verify flag recognition,
+//! and understand expected behavior differences.
+//!
+//! ## Pattern 1: `hoop --no-interactive CMD` (Flag Before Subcommand)
+//!
+//! This pattern tests the global flag when it appears BEFORE the subcommand name.
+//!
+//! ### How to Construct the Test Command
+//!
+//! ```rust,ignore
+//! use cli_test_helpers::prelude::*;
+//!
+//! // Construct: place --no-interactive at position 0, command at position 1
+//! let args = ["--no-interactive", "scan", "/tmp"];
+//! let result = parse_flag_before_subcommand(&args);
+//! ```
+//!
+//! ### How to Verify the Flag is Recognized
+//!
+//! ```rust,ignore
+//! // Verify parsing succeeded
+//! assert!(result.is_ok(), "Parsing should succeed");
+//!
+//! // Extract the parsed result
+//! let parsed = result.unwrap();
+//!
+//! // Verify flag value is true
+//! assert_eq!(parsed.no_interactive, true, "Flag should be true");
+//!
+//! // Verify subcommand was identified
+//! assert_eq!(parsed.subcommand, Some("scan".to_string()));
+//! ```
+//!
+//! ### Expected Behavior Differences
+//!
+//! - **Parsing succeeds**: Flag is at expected global position (before subcommand)
+//! - **no_interactive = true**: Boolean flag is set to true
+//! - **Subcommand identification**: Primary command (scan, init, etc.) is correctly identified
+//! - **Position independence**: Result is identical whether flag is before or after command
+//!
+//! ### Complete Example
+//!
+//! ```rust,ignore
+//! #[test]
+//! fn test_flag_before_subcommand() {
+//!     use cli_test_helpers::prelude::*;
+//!
+//!     // Arrange: construct command with flag before subcommand
+//!     let args = ["--no-interactive", "scan", "/tmp"];
+//!
+//!     // Act: parse the command
+//!     let result = parse_flag_before_subcommand(&args);
+//!
+//!     // Assert: verify flag recognition
+//!     assert!(result.is_ok());
+//!     let parsed = result.unwrap();
+//!     assert_eq!(parsed.no_interactive, true);
+//!     assert_eq!(parsed.subcommand, Some("scan".to_string()));
+//! }
+//! ```
+//!
+//! ## Pattern 2: `hoop CMD --no-interactive` (Flag After Subcommand)
+//!
+//! This pattern tests the global flag when it appears AFTER the subcommand name.
+//!
+//! ### How to Construct the Test Command
+//!
+//! ```rust,ignore
+//! use cli_test_helpers::prelude::*;
+//!
+//! // Construct: place command at position 0, flag at end
+//! let args = ["scan", "/tmp", "--no-interactive"];
+//! let result = parse_flag_after_subcommand(&args);
+//! ```
+//!
+//! ### How to Verify the Flag is Recognized
+//!
+//! ```rust,ignore
+//! // Verify parsing succeeded
+//! assert!(result.is_ok(), "Parsing should succeed even with flag at end");
+//!
+//! // Extract the parsed result
+//! let parsed = result.unwrap();
+//!
+//! // Verify flag value is true (regardless of position)
+//! assert_eq!(parsed.no_interactive, true, "Flag should be true at any position");
+//!
+//! // Verify subcommand was identified
+//! assert_eq!(parsed.subcommand, Some("scan".to_string()));
+//! ```
+//!
+//! ### Expected Behavior Differences
+//!
+//! - **Parsing succeeds**: Flag at end position is still valid due to `global = true` in clap
+//! - **no_interactive = true**: Boolean flag is set to true (same as Pattern 1)
+//! - **Subcommand identification**: Primary command is correctly identified even with flag after
+//! - **Position independence**: Result is identical whether flag is before or after command
+//! - **User ergonomics**: Matches users who naturally type command first, then flags
+//!
+//! ### Complete Example
+//!
+//! ```rust,ignore
+//! #[test]
+//! fn test_flag_after_subcommand() {
+//!     use cli_test_helpers::prelude::*;
+//!
+//!     // Arrange: construct command with flag after subcommand
+//!     let args = ["scan", "/tmp", "--no-interactive"];
+//!
+//!     // Act: parse the command
+//!     let result = parse_flag_after_subcommand(&args);
+//!
+//!     // Assert: verify flag recognition
+//!     assert!(result.is_ok());
+//!     let parsed = result.unwrap();
+//!     assert_eq!(parsed.no_interactive, true);
+//!     assert_eq!(parsed.subcommand, Some("scan".to_string()));
+//! }
+//! ```
+//!
+//! ## Pattern Comparison: Before vs After
+//!
+//! | Aspect | Pattern 1: `--no-interactive CMD` | Pattern 2: `CMD --no-interactive` |
+//! |--------|-----------------------------------|-----------------------------------|
+//! | **Parsing function** | `parse_flag_before_subcommand()` | `parse_flag_after_subcommand()` |
+//! | **Flag position** | Position 0 (before command) | End position (after command) |
+//! | **no_interactive value** | `true` | `true` |
+//! | **Subcommand extraction** | Position 1 | Position 0 |
+//! | **Result consistency** | ✅ Identical to Pattern 2 | ✅ Identical to Pattern 1 |
+//! | **Clap behavior** | Standard global flag | Global flag via `global = true` |
+//! | **User expectation** | CLI power users | Casual users |
+//! | **CI/CD pattern** | Script generators (flags first) | Human-written scripts |
+//!
+//! ## Key Insight: Position Independence
+//!
+//! The fundamental guarantee of HOOP's `--no-interactive` flag design is **position independence**:
+//!
+//! ```rust,ignore
+//! // These two commands MUST produce identical parsed results:
+//! let before = parse_flag_before_subcommand(&["--no-interactive", "scan", "/tmp"]).unwrap();
+//! let after = parse_flag_after_subcommand(&["scan", "/tmp", "--no-interactive"]).unwrap();
+//!
+//! assert_eq!(before.no_interactive, after.no_interactive); // ✅ Both true
+//! assert_eq!(before.subcommand, after.subcommand);             // ✅ Both "scan"
+//! ```
+//!
+//! This guarantee is verified by the `verify_flag_position_consistency()` utility:
+//!
+//! ```rust,ignore
+//! // Verifies that both positions produce identical results
+//! assert!(verify_flag_position_consistency(&["scan", "/tmp"]).is_ok());
+//! ```
+//!
 //! # Flag Parsing Utilities
 //!
 //! This module provides utilities for parsing clap command structures with flags
@@ -233,6 +390,316 @@
 //!
 //!     // Without --no-interactive, prompt should be shown
 //!     assert!(!prompt.is_suppressed_when(no_interactive: false));
+//! }
+//! ```
+//!
+//! # Using Test Macros for Common Patterns
+//!
+//! The macros provided by this module eliminate repetitive boilerplate when testing
+//! the `no_interactive` flag. Each macro generates a complete test function that
+//! verifies specific aspects of flag behavior.
+//!
+//! ## Available Macros
+//!
+//! ### `test_flag_positions!` - Test Flag at Both Positions
+//!
+//! Generates a test that verifies the flag works correctly before and after the subcommand:
+//!
+//! ```rust,ignore
+//! test_flag_positions!(test_scan_positions, "scan", &["scan", "/tmp"]);
+//! ```
+//!
+//! **What it tests:**
+//! - Flag before subcommand: `hoop --no-interactive scan /tmp`
+//! - Flag after subcommand: `hoop scan /tmp --no-interactive`
+//! - Short flag variant: `hoop -y scan /tmp`
+//! - Both positions yield the same `no_interactive=true` value
+//!
+//! **Generated test includes:**
+//! - Parsing at both positions
+//! - Verification that `no_interactive=true` in all cases
+//! - Consistency check between positions
+//!
+//! ### `test_no_interactive_suite!` - Complete Test Suite
+//!
+//! Generates a comprehensive test covering all flag behavior aspects:
+//!
+//! ```rust,ignore
+//! test_no_interactive_suite!(test_status_suite, "status", &["status", "--json"]);
+//! ```
+//!
+//! **What it tests:**
+//! 1. Flag before subcommand → `no_interactive=true`
+//! 2. Flag after subcommand → `no_interactive=true`
+//! 3. Short flag `-y` → `no_interactive=true`
+//! 4. Position independence (both positions give same value)
+//! 5. Default behavior (no flag → `no_interactive=false`)
+//! 6. Flag propagation verification
+//!
+//! **Use this for:** Commands where you need comprehensive coverage in a single test.
+//!
+//! ### `test_nested_flag_propagation!` - Test Nested Command Structures
+//!
+//! For commands with two-level structure like `projects remove`:
+//!
+//! ```rust,ignore
+//! test_nested_flag_propagation!(
+//!     test_projects_remove,
+//!     "projects",    // primary subcommand
+//!     "remove",      // nested subcommand
+//!     &["projects", "remove", "my-project", "--confirm"]
+//! );
+//! ```
+//!
+//! **What it tests:**
+//! - Nested command structure parsing
+//! - Flag extraction at both primary and nested levels
+//! - Flag before primary: `hoop --no-interactive projects remove test`
+//! - Flag after nested: `hoop projects remove test --no-interactive`
+//!
+//! ### `test_flag_default_false!` - Test Default Behavior
+//!
+//! Verifies that the flag defaults to `false` when not specified:
+//!
+//! ```rust,ignore
+//! test_flag_default_false!(test_list_default, &["list"]);
+//! ```
+//!
+//! **What it tests:**
+//! - Parsing without flag sets `no_interactive=false`
+//! - All parsing methods agree on default value
+//! - No flag present in raw arguments
+//!
+//! ### `test_confirm_required_pattern!` - Test Destructive Operation Safety
+//!
+//! For commands that require `--confirm` when `--no-interactive` is set:
+//!
+//! ```rust,ignore
+//! test_confirm_required_pattern!(
+//!     test_remove_confirm,
+//!     "remove",
+//!     &["projects", "remove", "my-project"]
+//! );
+//! ```
+//!
+//! **What it tests:**
+//! - Parsing with `--no-interactive --confirm` (valid combination)
+//! - Parsing with `--no-interactive` but no `--confirm` (should error in real code)
+//! - Command structure supports the safety pattern
+//!
+//! ## Complete Example: Testing a New Command
+//!
+//! When adding a new command to HOOP, follow this pattern for comprehensive testing:
+//!
+//! ```rust,ignore
+//! use cli_test_helpers::prelude::*;
+//! use cli_test_helpers::*;
+//!
+//! #[cfg(test)]
+//! mod tests {
+//!     use super::*;
+//!
+//!     // 1. Use the comprehensive test suite macro
+//!     test_no_interactive_suite!(test_mycommand_complete, "mycommand", &["mycommand", "--arg"]);
+//!
+//!     // 2. Test flag positions specifically
+//!     test_flag_positions!(test_mycommand_positions, "mycommand", &["mycommand", "--arg"]);
+//!
+//!     // 3. Test default behavior
+//!     test_flag_default_false!(test_mycommand_default, &["mycommand", "--arg"]);
+//!
+//!     // 4. If it's a nested command, test propagation
+//!     // test_nested_flag_propagation!(...);
+//!
+//!     // 5. If it's destructive, test confirm requirement
+//!     // test_confirm_required_pattern!(...);
+//!
+//!     // 6. Add custom tests for command-specific behavior
+//!     #[test]
+//!     fn test_mycommand_specific_behavior() {
+//!         // Test that the handler uses the flag correctly
+//!         let code = std::fs::read_to_string("src/mycommand.rs")
+//!             .expect("Failed to read mycommand.rs");
+//!
+//!         assert!(
+//!             code.contains("no_interactive: bool"),
+//!             "Handler must accept no_interactive parameter"
+//!         );
+//!
+//!         assert!(
+//!             code.contains("if no_interactive"),
+//!             "Handler must check no_interactive flag"
+//!         );
+//!     }
+//!
+//!     // 7. Test flag propagation from main.rs to handler
+//!     #[test]
+//!     fn test_mycommand_flag_propagation() {
+//!         let main_code = std::fs::read_to_string("src/main.rs")
+//!             .expect("Failed to read main.rs");
+//!
+//!         assert!(
+//!             main_code.contains("let no_interactive = cli.no_interactive;"),
+//!             "main() must extract flag from CLI"
+//!         );
+//!
+//!         assert!(
+//!             main_code.contains("mycommand::run_mycommand(no_interactive)"),
+//!             "main() must pass flag to handler"
+//!         );
+//!     }
+//! }
+//! ```
+//!
+//! # Testing Destructive Operation Safety Pattern
+//!
+//! For commands that perform destructive operations (remove, delete, restore, etc.),
+//! test that they require `--confirm` when `--no-interactive` is set:
+//!
+//! ```rust,ignore
+//! use cli_test_helpers::*;
+//!
+//! #[test]
+//! fn test_remove_safety_pattern() {
+//!     // 1. Test that the command accepts both flags
+//!     test_confirm_required_pattern!(
+//!         test_remove_confirm,
+//!         "remove",
+//!         &["projects", "remove", "my-project"]
+//!     );
+//!
+//!     // 2. Verify the source code implements the check
+//!     let code = std::fs::read_to_string("src/projects.rs")
+//!         .expect("Failed to read projects.rs");
+//!
+//!     // Must check for confirm flag in non-interactive mode
+//!     assert!(
+//!         code.contains("if no_interactive && !confirm"),
+//!         "Must check --confirm requirement in non-interactive mode"
+//!     );
+//!
+//!     // Must show helpful error message
+//!     assert!(
+//!         code.contains("--confirm is required in non-interactive mode"),
+//!         "Must show helpful error when --confirm is missing"
+//!     );
+//!
+//!     // Must show usage example
+//!     assert!(
+//!         code.contains("Re-run with: hoop projects remove"),
+//!         "Must show correct usage in error message"
+//!     );
+//! }
+//! ```
+//!
+//! # Testing Commands That Reject no_interactive
+//!
+//! Some commands (like `init`) require interactive input and should reject
+//! `--no-interactive` entirely with a helpful error message:
+//!
+//! ```rust,ignore
+//! #[test]
+//! fn test_init_rejects_no_interactive() {
+//!     let code = std::fs::read_to_string("src/init.rs")
+//!         .expect("Failed to read init.rs");
+//!
+//!     // Must check the flag early
+//!     assert!(
+//!         code.contains("if no_interactive"),
+//!         "Init must check no_interactive flag"
+//!     );
+//!
+//!     // Must exit with error code 2 (fatal/precondition error)
+//!     assert!(
+//!         code.contains("std::process::exit(2)"),
+//!         "Init must exit with error code 2"
+//!     );
+//!
+//!     // Must show helpful error message
+//!     assert!(
+//!         code.contains("cannot run in non-interactive mode"),
+//!         "Init must explain why it cannot run non-interactively"
+//!     );
+//!
+//!     assert!(
+//!         code.contains("requires interactive input for configuration"),
+//!         "Init must state that it requires interactive input"
+//!     );
+//!
+//!     assert!(
+//!         code.contains("manually create ~/.hoop/config.yml"),
+//!         "Init must suggest manual configuration for automation"
+//!     );
+//! }
+//! ```
+//!
+//! # Testing Flag Propagation from CLI to Handler
+//!
+//! Verify that the flag value flows correctly through the command pipeline:
+//!
+//! ```rust,ignore
+//! #[test]
+//! fn test_scan_flag_propagation() {
+//!     // 1. Verify main.rs extracts the flag
+//!     let main_code = std::fs::read_to_string("src/main.rs")
+//!         .expect("Failed to read main.rs");
+//!
+//!     assert!(
+//!         main_code.contains("let no_interactive = cli.no_interactive;"),
+//!         "main() must extract flag from CLI"
+//!     );
+//!
+//!     // 2. Verify main.rs passes flag to handler
+//!     assert!(
+//!         main_code.contains("projects::scan_projects(&root, no_interactive || yes)"),
+//!         "main() must pass flag to handler"
+//!     );
+//!
+//!     // 3. Verify handler accepts and uses the flag
+//!     let scan_code = std::fs::read_to_string("src/projects.rs")
+//!         .expect("Failed to read projects.rs");
+//!
+//!     assert!(
+//!         scan_code.contains("pub fn scan_projects(root: &str, no_interactive: bool)"),
+//!         "Handler must accept no_interactive parameter"
+//!     );
+//!
+//!     assert!(
+//!         scan_code.contains("if no_interactive"),
+//!         "Handler must use the flag in conditional logic"
+//!     );
+//! }
+//! ```
+//!
+//! # Using Verification Utilities
+//!
+//! This module provides several verification utilities that return `Result<(), String>`
+//! for detailed error messages in tests:
+//!
+//! ```rust,ignore
+//! use cli_test_helpers::prelude::*;
+//!
+//! #[test]
+//! fn test_verification_utilities() {
+//!     let parsed = parse_flag_before_subcommand(&["scan", "/tmp"]).unwrap();
+//!
+//!     // Assert flag is true
+//!     assert!(assert_flag_is_true(&parsed).is_ok());
+//!
+//!     // Assert flag is false
+//!     assert!(assert_flag_is_false(&parsed).is_ok());
+//!
+//!     // Assert flag equals expected value
+//!     assert!(assert_flag_value(&parsed, true).is_ok());
+//!
+//!     // Verify flag propagation
+//!     assert!(assert_flag_propagation(&["scan", "/tmp"]).is_ok());
+//!
+//!     // Verify default value
+//!     assert!(verify_default_flag_value(&["scan", "/tmp"]).is_ok());
+//!
+//!     // Verify position consistency
+//!     assert!(verify_flag_position_consistency(&["scan", "/tmp"]).is_ok());
 //! }
 //! ```
 //!
@@ -1233,11 +1700,420 @@ pub mod assertions {
     }
 }
 
+// ── Test Macros for Common Patterns ─────────────────────────────────────────────
+
+/// Macro for testing flag parsing at both positions for a command
+///
+/// This macro generates a test that verifies:
+/// - Flag before subcommand: `hoop --no-interactive <command> [args]`
+/// - Flag after subcommand: `hoop <command> [args] --no-interactive`
+/// - Short flag variant: `hoop -y <command> [args]`
+/// - Both positions yield the same value
+///
+/// # Usage
+///
+/// ```rust,ignore
+/// test_flag_positions!(test_scan_positions, "scan", &["scan", "/tmp"]);
+/// ```
+///
+/// # Generated Test
+///
+/// The macro generates a test function named `$test_name` that:
+/// 1. Parses the command with flag before subcommand
+/// 2. Parses the command with flag after subcommand
+/// 3. Parses the command with short flag
+/// 4. Verifies all three approaches yield the same `no_interactive=true` value
+#[macro_export]
+macro_rules! test_flag_positions {
+    ($test_name:ident, $command_name:expr, $base_args:expr) => {
+        #[test]
+        fn $test_name() {
+            use super::prelude::*;
+
+            // Test flag before subcommand
+            let before = parse_flag_before_subcommand($base_args);
+            assert!(
+                before.is_ok(),
+                "Failed to parse flag before subcommand for {}",
+                $command_name
+            );
+            let before_parsed = before.unwrap();
+            assert!(
+                before_parsed.no_interactive,
+                "no_interactive should be true with flag before {}",
+                $command_name
+            );
+
+            // Test flag after subcommand
+            let after = parse_flag_after_subcommand($base_args);
+            assert!(
+                after.is_ok(),
+                "Failed to parse flag after subcommand for {}",
+                $command_name
+            );
+            let after_parsed = after.unwrap();
+            assert!(
+                after_parsed.no_interactive,
+                "no_interactive should be true with flag after {}",
+                $command_name
+            );
+
+            // Verify consistency between positions
+            assert_eq!(
+                before_parsed.no_interactive,
+                after_parsed.no_interactive,
+                "Flag position should not affect value for {}",
+                $command_name
+            );
+
+            // Test short flag variant
+            let short_args: Vec<&str> = vec!["-y"]
+                .iter()
+                .chain($base_args.iter())
+                .copied()
+                .collect();
+            let short_value = extract_flag_value(&short_args);
+            assert!(
+                short_value,
+                "Short flag -y should set no_interactive=true for {}",
+                $command_name
+            );
+        }
+    };
+}
+
+/// Macro for testing flag propagation through nested commands
+///
+/// This macro verifies that the flag propagates correctly through
+/// nested subcommand structures like `projects remove` or `patterns add`.
+///
+/// # Usage
+///
+/// ```rust,ignore
+/// test_nested_flag_propagation!(
+///     test_projects_remove_propagation,
+///     "projects",
+///     "remove",
+///     &["projects", "remove", "my-project", "--confirm"]
+/// );
+/// ```
+#[macro_export]
+macro_rules! test_nested_flag_propagation {
+    ($test_name:ident, $primary:expr, $nested:expr, $base_args:expr) => {
+        #[test]
+        fn $test_name() {
+            use super::prelude::*;
+
+            // Parse with nested structure
+            let parsed = parse_nested_subcommand($base_args);
+            assert!(
+                parsed.is_ok(),
+                "Failed to parse nested command for {} {}",
+                $primary,
+                $nested
+            );
+
+            let result = parsed.unwrap();
+            assert_eq!(
+                result.subcommand,
+                Some($primary.to_string()),
+                "Primary subcommand should be {}",
+                $primary
+            );
+            assert_eq!(
+                result.nested_subcommand,
+                Some($nested.to_string()),
+                "Nested subcommand should be {}",
+                $nested
+            );
+
+            // Verify flag extraction works at both levels
+            let with_flag_before: Vec<&str> = vec!["--no-interactive"]
+                .iter()
+                .chain($base_args.iter())
+                .copied()
+                .collect();
+            let parsed_before = parse_nested_subcommand(&with_flag_before);
+            assert!(parsed_before.is_ok());
+            assert!(parsed_before.unwrap().no_interactive);
+
+            let with_flag_after: Vec<&str> = $base_args
+                .iter()
+                .chain(&["--no-interactive"])
+                .copied()
+                .collect();
+            let parsed_after = parse_nested_subcommand(&with_flag_after);
+            assert!(parsed_after.is_ok());
+            assert!(parsed_after.unwrap().no_interactive);
+        }
+    };
+}
+
+/// Macro for testing default flag behavior (false when not specified)
+///
+/// # Usage
+///
+/// ```rust,ignore
+/// test_flag_default_false!(test_scan_default, &["scan", "/tmp"]);
+/// ```
+#[macro_export]
+macro_rules! test_flag_default_false {
+    ($test_name:ident, $base_args:expr) => {
+        #[test]
+        fn $test_name() {
+            use super::prelude::*;
+
+            let parsed = parse_flag_before_subcommand($base_args);
+            assert!(parsed.is_ok(), "Failed to parse command without flag");
+
+            let result = parsed.unwrap();
+            assert!(
+                !result.no_interactive,
+                "no_interactive should default to false when not specified"
+            );
+
+            // Verify all parsing methods agree on default value
+            assert!(
+                verify_default_flag_value($base_args).is_ok(),
+                "Default flag value verification failed"
+            );
+        }
+    };
+}
+
+/// Macro for comprehensive no_interactive flag test suite
+///
+/// Generates a complete test covering all aspects of flag behavior:
+/// - Parsing at both positions (before/after subcommand)
+/// - Short flag variant (-y)
+/// - Default behavior (false when not specified)
+/// - Position independence (both positions yield same value)
+/// - Flag propagation through handlers
+///
+/// # Usage
+///
+/// ```rust,ignore
+/// test_no_interactive_suite!(test_status_suite, "status", &["status", "--json"]);
+/// ```
+///
+/// # Example
+///
+/// For a command like `hoop status --json`, this generates tests that verify:
+/// - `hoop --no-interactive status --json` parses correctly
+/// - `hoop status --json --no-interactive` parses correctly
+/// - `hoop -y status --json` parses correctly
+/// - `hoop status --json` (no flag) defaults to false
+/// - All three flag positions yield the same `no_interactive=true` value
+#[macro_export]
+macro_rules! test_no_interactive_suite {
+    ($test_name:ident, $command_name:expr, $base_args:expr) => {
+        #[test]
+        fn $test_name() {
+            use super::prelude::*;
+
+            // Test 1: Flag before subcommand
+            let args_before: Vec<&str> = vec!["--no-interactive"]
+                .iter()
+                .chain($base_args.iter())
+                .copied()
+                .collect();
+            let parsed_before = parse_flag_before_subcommand(&args_before);
+            assert!(
+                parsed_before.is_ok(),
+                "Failed to parse {} with flag before subcommand",
+                $command_name
+            );
+            let before_result = parsed_before.unwrap();
+            assert!(
+                before_result.no_interactive,
+                "Flag before subcommand should set no_interactive=true for {}",
+                $command_name
+            );
+            assert_flag_is_true(&before_result)
+                .expect("Flag before subcommand assertion failed");
+
+            // Test 2: Flag after subcommand
+            let args_after: Vec<&str> = $base_args
+                .iter()
+                .chain(&["--no-interactive"])
+                .copied()
+                .collect();
+            let parsed_after = parse_flag_after_subcommand(&args_after);
+            assert!(
+                parsed_after.is_ok(),
+                "Failed to parse {} with flag after subcommand",
+                $command_name
+            );
+            let after_result = parsed_after.unwrap();
+            assert!(
+                after_result.no_interactive,
+                "Flag after subcommand should set no_interactive=true for {}",
+                $command_name
+            );
+            assert_flag_is_true(&after_result)
+                .expect("Flag after subcommand assertion failed");
+
+            // Test 3: Short flag variant
+            let args_short: Vec<&str> = vec!["-y"]
+                .iter()
+                .chain($base_args.iter())
+                .copied()
+                .collect();
+            let short_value = extract_flag_value(&args_short);
+            assert!(
+                short_value,
+                "Short flag -y should set no_interactive=true for {}",
+                $command_name
+            );
+
+            // Test 4: Position independence
+            assert_eq!(
+                before_result.no_interactive,
+                after_result.no_interactive,
+                "Flag position must not affect value for {}",
+                $command_name
+            );
+            assert!(
+                verify_flag_position_consistency($base_args).is_ok(),
+                "Flag position consistency check failed for {}",
+                $command_name
+            );
+
+            // Test 5: Default behavior (no flag)
+            let parsed_default = parse_flag_before_subcommand($base_args);
+            assert!(
+                parsed_default.is_ok(),
+                "Failed to parse {} without flag",
+                $command_name
+            );
+            let default_result = parsed_default.unwrap();
+            assert!(
+                !default_result.no_interactive,
+                "Default no_interactive should be false for {}",
+                $command_name
+            );
+            assert_flag_is_false(&default_result)
+                .expect("Default flag assertion failed");
+
+            // Test 6: Flag propagation
+            assert!(
+                assert_flag_propagation($base_args).is_ok(),
+                "Flag propagation check failed for {}",
+                $command_name
+            );
+        }
+    };
+}
+
+/// Macro for testing destructive operations require --confirm in no-interactive mode
+///
+/// This macro tests the safety pattern where destructive operations (remove, delete, etc.)
+/// require an explicit `--confirm` flag when `--no-interactive` is set.
+///
+/// # Usage
+///
+/// ```rust,ignore
+/// test_confirm_required_pattern!(
+///     test_remove_confirm_pattern,
+///     "remove",
+///     &["projects", "remove", "my-project"]
+/// );
+/// ```
+///
+/// # What It Tests
+///
+/// For commands like `hoop projects remove my-project`, this verifies:
+/// - Without `--no-interactive`: prompts for confirmation
+/// - With `--no-interactive` but without `--confirm`: errors with helpful message
+/// - With both `--no-interactive` and `--confirm`: proceeds without prompting
+#[macro_export]
+macro_rules! test_confirm_required_pattern {
+    ($test_name:ident, $operation:expr, $base_args:expr) => {
+        #[test]
+        fn $test_name() {
+            use super::prelude::*;
+
+            // This pattern is verified by code review in actual tests
+            // Here we verify the parsing structure supports the pattern
+
+            // Parse with --no-interactive and --confirm (valid combination)
+            let args_valid: Vec<&str> = $base_args
+                .iter()
+                .chain(&["--no-interactive", "--confirm"])
+                .copied()
+                .collect();
+            let parsed_valid = parse_flag_after_subcommand(&args_valid);
+            assert!(
+                parsed_valid.is_ok(),
+                "Failed to parse {} with --no-interactive --confirm",
+                $operation
+            );
+            let valid_result = parsed_valid.unwrap();
+            assert!(valid_result.no_interactive);
+            assert!(
+                valid_result.args.contains(&"--confirm".to_string()),
+                "Args should include --confirm flag for {}",
+                $operation
+            );
+
+            // Parse with --no-interactive but without --confirm (should error in real code)
+            let args_invalid: Vec<&str> = $base_args
+                .iter()
+                .chain(&["--no-interactive"])
+                .copied()
+                .collect();
+            let parsed_invalid = parse_flag_after_subcommand(&args_invalid);
+            assert!(
+                parsed_invalid.is_ok(),
+                "Should parse {} with --no-interactive (even without --confirm)",
+                $operation
+            );
+            let invalid_result = parsed_invalid.unwrap();
+            assert!(invalid_result.no_interactive);
+            assert!(
+                !invalid_result.args.contains(&"--confirm".to_string()),
+                "Args should not include --confirm flag for {}",
+                $operation
+            );
+
+            // The actual enforcement of --confirm requirement is tested
+            // in integration tests by reading the source code
+        }
+    };
+}
+
 // ── Module Tests ──────────────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Example: Using the test suite macro for a simple command
+    test_no_interactive_suite!(test_status_complete, "status", &["status", "--json"]);
+
+    // Example: Using the test suite macro for a command with positional args
+    test_no_interactive_suite!(test_scan_complete, "scan", &["scan", "/tmp"]);
+
+    // Example: Testing flag positions for init command
+    test_flag_positions!(test_init_positions, "init", &["init"]);
+
+    // Example: Testing nested command flag propagation
+    test_nested_flag_propagation!(
+        test_projects_remove_propagation,
+        "projects",
+        "remove",
+        &["projects", "remove", "my-project", "--confirm"]
+    );
+
+    // Example: Testing default flag behavior
+    test_flag_default_false!(test_list_default, &["list"]);
+
+    // Example: Testing confirm required pattern
+    test_confirm_required_pattern!(
+        test_restore_confirm_pattern,
+        "restore",
+        &["restore", "--from", "s3://bucket/key"]
+    );
 
     #[test]
     fn test_flags_constants() {

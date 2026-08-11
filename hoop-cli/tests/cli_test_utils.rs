@@ -648,14 +648,10 @@ mod tests {
     use super::*;
 
     // Example: Using the test suite macro for the scan command
-    test_command_no_interactive_suite!(scan_example, "scan", &["scan", "/tmp"]);
+    test_command_no_interactive_suite!(scan_example, &["scan", "/tmp"]);
 
     // Example: Using the test suite macro for the remove command
-    test_command_no_interactive_suite!(
-        remove_example,
-        "remove",
-        &["remove", "test-project", "--confirm"]
-    );
+    test_command_no_interactive_suite!(remove_example, &["remove", "test-project", "--confirm"]);
 
     #[test]
     fn test_parse_cli_with_flag_before_subcommand() {
