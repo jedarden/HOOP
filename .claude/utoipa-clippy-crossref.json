@@ -1,0 +1,192 @@
+{
+  "analysis_metadata": {
+    "generated_at": "2026-08-11T13:19:00Z",
+    "bead": "bf-24fy6",
+    "catalog_source": ".claude/utoipa-parsed.json",
+    "warnings_source": ".beads/clippy-unused-utoipa-parsed.json",
+    "purpose": "Cross-reference clippy unused import warnings with utoipa catalog"
+  },
+  "catalog_entries": {
+    "unused_imports": [
+      {
+        "file_path": "hoop-daemon/src/api_beads.rs",
+        "line_number": 28,
+        "warning_text": "unused import: `utoipa::path`",
+        "clippy_match_status": "not_in_clippy_warnings",
+        "note": "utoipa::path unused import not in clippy ToSchema warnings (different import type)"
+      }
+    ],
+    "missing_toschema_imports": [
+      {
+        "file_path": "hoop-daemon/src/api_draft_queue.rs",
+        "line_number": 34,
+        "warning_text": "cannot find derive macro `ToSchema` in this scope",
+        "clippy_match_status": "not_in_clippy_warnings",
+        "note": "Missing ToSchema import - not an unused import warning"
+      },
+      {
+        "file_path": "hoop-daemon/src/api_draft_queue.rs",
+        "line_number": 72,
+        "warning_text": "cannot find derive macro `ToSchema` in this scope",
+        "clippy_match_status": "not_in_clippy_warnings",
+        "note": "Missing ToSchema import - not an unused import warning"
+      },
+      {
+        "file_path": "hoop-daemon/src/api_draft_queue.rs",
+        "line_number": 79,
+        "warning_text": "cannot find derive macro `ToSchema` in this scope",
+        "clippy_match_status": "not_in_clippy_warnings",
+        "note": "Missing ToSchema import - not an unused import warning"
+      },
+      {
+        "file_path": "hoop-daemon/src/api_draft_queue.rs",
+        "line_number": 89,
+        "warning_text": "cannot find derive macro `ToSchema` in this scope",
+        "clippy_match_status": "not_in_clippy_warnings",
+        "note": "Missing ToSchema import - not an unused import warning"
+      },
+      {
+        "file_path": "hoop-daemon/src/api_draft_queue.rs",
+        "line_number": 99,
+        "warning_text": "cannot find derive macro `ToSchema` in this scope",
+        "clippy_match_status": "not_in_clippy_warnings",
+        "note": "Missing ToSchema import - not an unused import warning"
+      },
+      {
+        "file_path": "hoop-daemon/src/api_draft_queue.rs",
+        "line_number": 106,
+        "warning_text": "cannot find derive macro `ToSchema` in this scope",
+        "clippy_match_status": "not_in_clippy_warnings",
+        "note": "Missing ToSchema import - not an unused import warning"
+      },
+      {
+        "file_path": "hoop-daemon/src/api_draft_queue.rs",
+        "line_number": 115,
+        "warning_text": "cannot find derive macro `ToSchema` in this scope",
+        "clippy_match_status": "not_in_clippy_warnings",
+        "note": "Missing ToSchema import - not an unused import warning"
+      },
+      {
+        "file_path": "hoop-daemon/src/api_draft_queue.rs",
+        "line_number": 123,
+        "warning_text": "cannot find derive macro `ToSchema` in this scope",
+        "clippy_match_status": "not_in_clippy_warnings",
+        "note": "Missing ToSchema import - not an unused import warning"
+      },
+      {
+        "file_path": "hoop-daemon/src/api_draft_queue.rs",
+        "line_number": 131,
+        "warning_text": "cannot find derive macro `ToSchema` in this scope",
+        "clippy_match_status": "not_in_clippy_warnings",
+        "note": "Missing ToSchema import - not an unused import warning"
+      },
+      {
+        "file_path": "hoop-daemon/src/api_draft_queue.rs",
+        "line_number": 138,
+        "warning_text": "cannot find derive macro `ToSchema` in this scope",
+        "clippy_match_status": "not_in_clippy_warnings",
+        "note": "Missing ToSchema import - not an unused import warning"
+      },
+      {
+        "file_path": "hoop-daemon/src/api_draft_queue.rs",
+        "line_number": 145,
+        "warning_text": "cannot find derive macro `ToSchema` in this scope",
+        "clippy_match_status": "not_in_clippy_warnings",
+        "note": "Missing ToSchema import - not an unused import warning"
+      },
+      {
+        "file_path": "hoop-daemon/src/api_draft_queue.rs",
+        "line_number": 161,
+        "warning_text": "cannot find derive macro `ToSchema` in this scope",
+        "clippy_match_status": "not_in_clippy_warnings",
+        "note": "Missing ToSchema import - not an unused import warning"
+      },
+      {
+        "file_path": "hoop-daemon/src/api_draft_queue.rs",
+        "line_number": 167,
+        "warning_text": "cannot find derive macro `ToSchema` in this scope",
+        "clippy_match_status": "not_in_clippy_warnings",
+        "note": "Missing ToSchema import - not an unused import warning"
+      },
+      {
+        "file_path": "hoop-daemon/src/api_draft_queue.rs",
+        "line_number": 175,
+        "warning_text": "cannot find derive macro `ToSchema` in this scope",
+        "clippy_match_status": "not_in_clippy_warnings",
+        "note": "Missing ToSchema import - not an unused import warning"
+      }
+    ]
+  },
+  "clippy_warnings": [
+    {
+      "file_path": "hoop-daemon/src/api_backup.rs",
+      "warning_type": "unused_import",
+      "import_name": "utoipa::ToSchema",
+      "severity": "warning",
+      "catalog_match_status": "not_in_catalog",
+      "note": "This file is not in the utoipa-parsed.json catalog"
+    },
+    {
+      "file_path": "hoop-daemon/src/api_scripts.rs",
+      "warning_type": "unused_import",
+      "import_name": "utoipa::ToSchema",
+      "severity": "warning",
+      "catalog_match_status": "not_in_catalog",
+      "note": "This file is not in the utoipa-parsed.json catalog"
+    },
+    {
+      "file_path": "hoop-daemon/src/api_bead_blockers.rs",
+      "warning_type": "unused_import",
+      "import_name": "utoipa::ToSchema",
+      "severity": "warning",
+      "catalog_match_status": "not_in_catalog",
+      "note": "This file is not in the utoipa-parsed.json catalog"
+    },
+    {
+      "file_path": "hoop-daemon/src/api_fix_patterns.rs",
+      "warning_type": "unused_import",
+      "import_name": "utoipa::ToSchema",
+      "severity": "warning",
+      "catalog_match_status": "not_in_catalog",
+      "note": "This file is not in the utoipa-parsed.json catalog"
+    },
+    {
+      "file_path": "hoop-daemon/src/api_risk_patterns.rs",
+      "warning_type": "unused_import",
+      "import_name": "utoipa::ToSchema",
+      "severity": "warning",
+      "catalog_match_status": "not_in_catalog",
+      "note": "This file is not in the utoipa-parsed.json catalog"
+    },
+    {
+      "file_path": "hoop-daemon/src/api_stitch_links.rs",
+      "warning_type": "unused_import",
+      "import_name": "utoipa::ToSchema",
+      "severity": "warning",
+      "catalog_match_status": "not_in_catalog",
+      "note": "This file is not in the utoipa-parsed.json json catalog"
+    }
+  ],
+  "cross_reference_summary": {
+    "catalog_entries": {
+      "total": 15,
+      "unused_imports": 1,
+      "missing_toschema_imports": 14
+    },
+    "clippy_warnings": {
+      "total": 6,
+      "unused_toschema_imports": 6
+    },
+    "matches": {
+      "exact_matches": 0,
+      "catalog_not_in_clippy": 15,
+      "clippy_not_in_catalog": 6
+    },
+    "findings": [
+      "NO OVERLAP: The catalog (utoipa-parsed.json) and clippy warnings (clippy-unused-utoipa-parsed.json) have ZERO files in common",
+      "Catalog contains: api_beads.rs (unused path), api_draft_queue.rs (14 missing ToSchema)",
+      "Clippy warnings contain: 6 different API files with unused ToSchema imports",
+      "These appear to be from DIFFERENT clippy runs or different filtering passes"
+    ]
+  }
+}
