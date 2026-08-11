@@ -6,6 +6,67 @@
 //! - Verifying flag extraction in command args
 //! - Testing flag suppresses prompts (with mockable prompt interface)
 //!
+//! # Getting Started
+//!
+//! **Looking for comprehensive testing patterns and macros?** See [`cli_test_helpers`]
+//! for high-level testing patterns, macros, and the complete "Getting Started" guide.
+//!
+//! **New to testing the `--no-interactive` flag?** See [`TEST_PATTERNS_QUICK_START.md`]
+//! for a unified guide covering both this module and `cli_test_helpers` with real-world
+//! examples and decision trees.
+//!
+//! This module offers three levels of abstraction for testing CLI flag behavior:
+//!
+//! ## 1. Manual Implementation (Low-level, Maximum Control)
+//!
+//! Use the helper functions directly when you need custom test logic or want to
+//! understand exactly what's being tested at each step.
+//!
+//! **When to use:**
+//! - Debugging a specific flag parsing issue
+//! - Writing one-off tests for unique scenarios
+//! - Learning how the flag parsing works internally
+//!
+//! **Functions:**
+//! - `parse_cli_with_flag()` - Parse CLI args and extract the no_interactive flag
+//! - `parse_flag_before_subcommand()` - Convenience for flag-before-subcommand parsing
+//! - `parse_flag_after_subcommand()` - Convenience for flag-after-subcommand parsing
+//! - `verify_flag_extraction()` - Verify the flag was correctly extracted
+//! - `verify_no_flag_present()` - Verify the flag is NOT present
+//! - `verify_prompt_suppressed()` - Test that prompts are suppressed with the flag
+//! - `verify_confirm_required()` - Test that --confirm is required for destructive ops
+//!
+//! ## 2. Individual Test Macros (Medium-level, Focused Tests)
+//!
+//! Use individual macros when you want separate test functions for each pattern,
+//! making it easy to identify which specific pattern failed.
+//!
+//! **When to use:**
+//! - Testing a single command's flag behavior
+//! - Wanting granular test failure reports
+//! - Building a custom test suite with selective patterns
+//!
+//! **Macros:**
+//! - `test_no_interactive_flag_before!()` - Generate test for flag-before-command
+//! - `test_no_interactive_flag_after!()` - Generate test for flag-after-command
+//! - `test_short_flag_y!()` - Generate test for short -y flag
+//! - `test_both_positions_consistency!()` - Generate test comparing both positions
+//! - `test_flag_default_false!()` - Generate test that flag defaults to false
+//!
+//! ## 3. Comprehensive Test Suite Macro (High-level, Complete Coverage)
+//!
+//! Use the suite macro for one-stop testing of all flag patterns. This generates
+//! a single test that verifies all five patterns: flag before, flag after, short flag,
+//! consistency between positions, and default behavior.
+//!
+//! **When to use:**
+//! - Quick coverage of all flag patterns for a command
+//! - Regression testing with minimal boilerplate
+//! - Ensuring all patterns are tested consistently
+//!
+//! **Macro:**
+//! - `test_command_no_interactive_suite!()` - Generate complete 5-in-1 test
+//!
 //! # Example Usage
 //!
 //! ```rust
@@ -26,6 +87,22 @@
 //!     assert_eq!(cli.no_interactive, true);
 //! }
 //! ```
+//!
+//! # Common Mistakes to Avoid
+//!
+//! 1. **Forgetting the short flag (-y):** The no_interactive flag has two forms:
+//!    `--no-interactive` and `-y`. Always test both if you're writing manual tests.
+//!
+//! 2. **Missing default behavior test:** Don't forget to test that the flag defaults
+//!    to `false` when not specified. This catches cases where the flag is always true.
+//!
+//! 3. **Inconsistent position handling:** The flag should work identically whether
+//!    placed before or after the subcommand. Use `test_both_positions_consistency!()`
+//!    or verify this manually.
+//!
+//! 4. **Testing position in isolation:** When using individual macros, you often
+//!    need multiple tests to cover all patterns. Consider using `test_command_no_interactive_suite!()`
+//!    to ensure complete coverage.
 
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -423,7 +500,7 @@ macro_rules! test_no_interactive_flag_before {
                 .chain($args.iter())
                 .copied()
                 .collect();
-            let result = $crate::cli_test_utils::parse_cli_with_flag(&full_args);
+            let result = parse_cli_with_flag(&full_args);
             assert!(result.is_ok(), "Failed to parse args: {:?}", full_args);
             let parsed = result.unwrap();
             assert_eq!(parsed.no_interactive, true, "no_interactive should be true");
@@ -451,7 +528,7 @@ macro_rules! test_no_interactive_flag_after {
                 .chain(&["--no-interactive"])
                 .copied()
                 .collect();
-            let result = $crate::cli_test_utils::parse_cli_with_flag(&full_args);
+            let result = parse_cli_with_flag(&full_args);
             assert!(result.is_ok(), "Failed to parse args: {:?}", full_args);
             let parsed = result.unwrap();
             assert_eq!(parsed.no_interactive, true, "no_interactive should be true");
@@ -476,7 +553,7 @@ macro_rules! test_short_flag_y {
                 .chain($args.iter())
                 .copied()
                 .collect();
-            let result = $crate::cli_test_utils::parse_cli_with_flag(&full_args);
+            let result = parse_cli_with_flag(&full_args);
             assert!(result.is_ok(), "Failed to parse args: {:?}", full_args);
             let parsed = result.unwrap();
             assert_eq!(parsed.no_interactive, true, "no_interactive should be true with -y");
@@ -505,7 +582,7 @@ macro_rules! test_both_positions_consistency {
                 .chain($args.iter())
                 .copied()
                 .collect();
-            let parsed_before = $crate::cli_test_utils::parse_cli_with_flag(&args_before)
+            let parsed_before = parse_cli_with_flag(&args_before)
                 .expect("Failed to parse with flag before command");
 
             // Parse with flag after command
@@ -514,7 +591,7 @@ macro_rules! test_both_positions_consistency {
                 .chain(&["--no-interactive"])
                 .copied()
                 .collect();
-            let parsed_after = $crate::cli_test_utils::parse_cli_with_flag(&args_after)
+            let parsed_after = parse_cli_with_flag(&args_after)
                 .expect("Failed to parse with flag after command");
 
             assert_eq!(
@@ -548,7 +625,7 @@ macro_rules! test_flag_default_false {
                 .chain($args.iter())
                 .copied()
                 .collect();
-            let result = $crate::cli_test_utils::parse_cli_with_flag(&full_args);
+            let result = parse_cli_with_flag(&full_args);
             assert!(result.is_ok(), "Failed to parse args: {:?}", full_args);
             let parsed = result.unwrap();
             assert_eq!(
@@ -572,7 +649,8 @@ macro_rules! test_flag_default_false {
 /// # Usage
 ///
 /// ```rust
-/// test_command_no_interactive_suite!("scan", &["scan", "/tmp"]);
+/// test_command_no_interactive_suite!(scan_suite, "scan", &["scan", "/tmp"]);
+/// test_command_no_interactive_suite!(remove_suite, "remove", &["remove", "test-project", "--confirm"]);
 /// ```
 ///
 /// This generates a single test function that verifies all aspects of the flag.
@@ -580,16 +658,16 @@ macro_rules! test_flag_default_false {
 /// that checks all patterns.
 #[macro_export]
 macro_rules! test_command_no_interactive_suite {
-    ($command:expr, $args:expr) => {
+    ($test_name:ident, $command:expr, $args:expr) => {
         #[test]
-        fn test_no_interactive_complete_suite() {
+        fn $test_name() {
             // Test 1: Flag before command
             let full_args_before: Vec<&str> = vec!["hoop", "--no-interactive"]
                 .iter()
                 .chain($args.iter())
                 .copied()
                 .collect();
-            let result_before = $crate::cli_test_utils::parse_cli_with_flag(&full_args_before);
+            let result_before = parse_cli_with_flag(&full_args_before);
             assert!(result_before.is_ok(), "Failed to parse with flag before command");
             let parsed_before = result_before.unwrap();
             assert_eq!(parsed_before.no_interactive, true, "no_interactive should be true before command");
@@ -600,7 +678,7 @@ macro_rules! test_command_no_interactive_suite {
                 .chain(&["--no-interactive"])
                 .copied()
                 .collect();
-            let result_after = $crate::cli_test_utils::parse_cli_with_flag(&full_args_after);
+            let result_after = parse_cli_with_flag(&full_args_after);
             assert!(result_after.is_ok(), "Failed to parse with flag after command");
             let parsed_after = result_after.unwrap();
             assert_eq!(parsed_after.no_interactive, true, "no_interactive should be true after command");
@@ -611,7 +689,7 @@ macro_rules! test_command_no_interactive_suite {
                 .chain($args.iter())
                 .copied()
                 .collect();
-            let result_short = $crate::cli_test_utils::parse_cli_with_flag(&full_args_short);
+            let result_short = parse_cli_with_flag(&full_args_short);
             assert!(result_short.is_ok(), "Failed to parse with -y flag");
             let parsed_short = result_short.unwrap();
             assert_eq!(parsed_short.no_interactive, true, "no_interactive should be true with -y");
@@ -629,7 +707,7 @@ macro_rules! test_command_no_interactive_suite {
                 .chain($args.iter())
                 .copied()
                 .collect();
-            let result_default = $crate::cli_test_utils::parse_cli_with_flag(&full_args_default);
+            let result_default = parse_cli_with_flag(&full_args_default);
             assert!(result_default.is_ok(), "Failed to parse without flag");
             let parsed_default = result_default.unwrap();
             assert_eq!(
@@ -641,6 +719,289 @@ macro_rules! test_command_no_interactive_suite {
     };
 }
 
+// ── Complete integration example: demonstrating all patterns together ─────────────
+//
+// This section shows a complete, runnable example that combines all the patterns,
+// macros, and helpers provided by this module. Use this as a reference when writing
+// comprehensive tests for new commands.
+//
+// The example demonstrates:
+// 1. Manual implementation with helper functions
+// 2. Individual test macros for granular testing
+// 3. The comprehensive suite macro for complete coverage
+// 4. Prompt suppression testing
+// 5. Batch testing with multiple test cases
+//
+// ────────────────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod integration_example {
+    //! Complete integration example demonstrating all test patterns
+    //!
+    //! This module shows how to use all the utilities together to write
+    //! comprehensive tests for CLI flag behavior. Use this as a template
+    //! when adding tests for new commands.
+
+    use super::*;
+    use tempfile::TempDir;
+
+    /// Example 1: Manual implementation with helper functions
+    ///
+    /// This example shows the low-level approach using helper functions directly.
+    /// Use this when you need maximum control or are debugging specific issues.
+    #[test]
+    fn example_manual_implementation() {
+        // Test 1a: Flag before subcommand (manual)
+        let args_before = &["hoop", "--no-interactive", "status", "--json"];
+        let parsed_before = parse_cli_with_flag(args_before)
+            .expect("Failed to parse with flag before subcommand");
+        assert_eq!(parsed_before.no_interactive, true);
+        assert_eq!(parsed_before.command, "status");
+
+        // Test 1b: Flag after subcommand (manual)
+        let args_after = &["hoop", "status", "--json", "--no-interactive"];
+        let parsed_after = parse_cli_with_flag(args_after)
+            .expect("Failed to parse with flag after subcommand");
+        assert_eq!(parsed_after.no_interactive, true);
+        assert_eq!(parsed_after.command, "status");
+
+        // Test 1c: Verify consistency between positions (manual)
+        assert_eq!(
+            parsed_before.no_interactive,
+            parsed_after.no_interactive,
+            "Flag value must be consistent regardless of position"
+        );
+
+        // Test 1d: Verify the flag extraction (manual)
+        assert!(verify_flag_extraction(&parsed_before, "before").is_ok());
+        assert!(verify_flag_extraction(&parsed_after, "after").is_ok());
+
+        // Test 1e: Test short flag form (manual)
+        let args_short = &["hoop", "-y", "status", "--json"];
+        let parsed_short = parse_cli_with_flag(args_short)
+            .expect("Failed to parse with -y flag");
+        assert_eq!(parsed_short.no_interactive, true);
+
+        // Test 1f: Test default behavior (no flag)
+        let args_default = &["hoop", "status", "--json"];
+        let parsed_default = parse_cli_with_flag(args_default)
+            .expect("Failed to parse without flag");
+        assert_eq!(parsed_default.no_interactive, false);
+        assert!(verify_no_flag_present(&parsed_default).is_ok());
+    }
+
+    /// Example 2: Using convenience helpers
+    ///
+    /// This example shows the shorthand helpers for common patterns.
+    #[test]
+    fn example_convenience_helpers() {
+        // Parse with flag before subcommand (helper)
+        let parsed_before = parse_flag_before_subcommand(&["scan", "/tmp"])
+            .expect("Failed to parse with flag before subcommand");
+        assert_eq!(parsed_before.no_interactive, true);
+
+        // Parse with flag after subcommand (helper)
+        let parsed_after = parse_flag_after_subcommand(&["scan", "/tmp"])
+            .expect("Failed to parse with flag after subcommand");
+        assert_eq!(parsed_after.no_interactive, true);
+
+        // Verify both positions produce same result
+        assert_eq!(
+            parsed_before.no_interactive,
+            parsed_after.no_interactive
+        );
+    }
+
+    /// Example 3: Testing prompt suppression
+    ///
+    /// This example shows how to test that prompts are properly suppressed
+    /// when the no_interactive flag is set.
+    #[test]
+    fn example_prompt_suppression() {
+        // Create a mock prompt (simulating "Delete project?" confirmation)
+        let delete_prompt = MockYesNoPrompt {
+            text: "Delete project test-project?".to_string(),
+            requires_confirm: true, // Requires --confirm in no-interactive mode
+        };
+
+        // Test 1: Prompt should be suppressed with no_interactive=true
+        assert!(verify_prompt_suppressed(&delete_prompt, true).is_ok());
+        assert!(!delete_prompt.would_prompt(true));
+
+        // Test 2: Prompt should be shown with no_interactive=false
+        assert!(delete_prompt.would_prompt(false));
+
+        // Test 3: Destructive operation requires --confirm in no-interactive mode
+        // This should fail: no_interactive=true but confirm=false
+        assert!(verify_confirm_required(&delete_prompt, true, false).is_err());
+
+        // This should succeed: no_interactive=true and confirm=true
+        assert!(verify_confirm_required(&delete_prompt, true, true).is_ok());
+
+        // This should succeed: no_interactive=false (prompts allowed)
+        assert!(verify_confirm_required(&delete_prompt, false, false).is_ok());
+    }
+
+    /// Example 4: Batch testing with multiple test cases
+    ///
+    /// This example shows how to run multiple test cases efficiently
+    /// using the batch testing helper.
+    #[test]
+    fn example_batch_testing() {
+        let test_cases = vec![
+            FlagPositionTestCase {
+                description: "add command with flag before".to_string(),
+                command: vec!["hoop", "--no-interactive", "add", "/path/to/project"]
+                    .iter().map(|s| s.to_string()).collect(),
+                expected_result: true,
+            },
+            FlagPositionTestCase {
+                description: "add command with flag after".to_string(),
+                command: vec!["hoop", "add", "/path/to/project", "--no-interactive"]
+                    .iter().map(|s| s.to_string()).collect(),
+                expected_result: true,
+            },
+            FlagPositionTestCase {
+                description: "add command with short flag".to_string(),
+                command: vec!["hoop", "-y", "add", "/path/to/project"]
+                    .iter().map(|s| s.to_string()).collect(),
+                expected_result: true,
+            },
+            FlagPositionTestCase {
+                description: "add command without flag".to_string(),
+                command: vec!["hoop", "add", "/path/to/project"]
+                    .iter().map(|s| s.to_string()).collect(),
+                expected_result: false,
+            },
+        ];
+
+        let (successes, failures) = run_flag_position_tests(test_cases);
+
+        assert_eq!(successes.len(), 4, "All 4 test cases should succeed");
+        assert_eq!(failures.len(), 0, "No test cases should fail");
+    }
+
+    /// Example 5: Using test fixtures
+    ///
+    /// This example shows how to use the test fixtures for integration testing
+    /// that requires temporary files and directories.
+    #[test]
+    fn example_test_fixtures() {
+        let tmp_dir = TempDir::new().expect("Failed to create temp dir");
+
+        // Create a test workspace with .beads directory
+        let workspace = create_test_workspace(&tmp_dir, "my-project");
+        assert!(workspace.exists());
+        assert!(workspace.join(".beads").exists());
+
+        // Create a HOOP config directory
+        let hoop_dir = create_hoop_config_dir(&tmp_dir);
+        assert!(hoop_dir.exists());
+        assert!(hoop_dir.ends_with(".hoop"));
+
+        // Create a projects.yaml registry
+        let registry_path = create_test_registry(&tmp_dir);
+        assert!(registry_path.exists());
+        assert!(registry_path.file_name().unwrap() == "projects.yaml");
+
+        // TempDir is automatically cleaned up when it goes out of scope
+    }
+
+    /// Example 6: Complex scenario combining all patterns
+    ///
+    /// This example demonstrates a realistic test scenario that combines
+    /// multiple patterns: parsing, verification, prompt suppression, and fixtures.
+    #[test]
+    fn example_complex_scenario() {
+        // Setup: Create test fixtures
+        let tmp_dir = TempDir::new().expect("Failed to create temp dir");
+        let workspace = create_test_workspace(&tmp_dir, "test-project");
+        let config_dir = create_hoop_config_dir(&tmp_dir);
+
+        // Scenario: Testing the "remove" command with various flag positions
+        let remove_args = &["remove", "test-project", "--confirm"];
+
+        // Parse and verify flag before subcommand
+        let parsed_before = parse_flag_before_subcommand(remove_args)
+            .expect("Failed to parse remove with flag before");
+        assert_eq!(parsed_before.no_interactive, true);
+        assert_eq!(parsed_before.command, "remove");
+        assert!(verify_flag_extraction(&parsed_before, "before").is_ok());
+
+        // Parse and verify flag after subcommand
+        let parsed_after = parse_flag_after_subcommand(remove_args)
+            .expect("Failed to parse remove with flag after");
+        assert_eq!(parsed_after.no_interactive, true);
+        assert_eq!(parsed_after.command, "remove");
+        assert!(verify_flag_extraction(&parsed_after, "after").is_ok());
+
+        // Verify consistency
+        assert_eq!(
+            parsed_before.no_interactive,
+            parsed_after.no_interactive,
+            "Flag must be consistent regardless of position"
+        );
+
+        // Test prompt suppression for destructive operation
+        let remove_prompt = MockYesNoPrompt {
+            text: format!("Remove project {:?}?", workspace),
+            requires_confirm: true,
+        };
+
+        // Verify prompt is suppressed with no_interactive=true
+        assert!(verify_prompt_suppressed(&remove_prompt, true).is_ok());
+
+        // Verify --confirm is required
+        assert!(verify_confirm_required(&remove_prompt, true, true).is_ok());
+        assert!(verify_confirm_required(&remove_prompt, true, false).is_err());
+
+        // Verify no confirm required when no_interactive=false
+        assert!(verify_confirm_required(&remove_prompt, false, false).is_ok());
+
+        // Verify test fixtures were created correctly
+        assert!(workspace.exists());
+        assert!(config_dir.exists());
+        assert!(workspace.join(".beads").exists());
+    }
+
+    /// Example 7: Edge cases and error handling
+    ///
+    /// This example tests edge cases and error conditions.
+    #[test]
+    fn example_edge_cases() {
+        // Empty arguments
+        let result = parse_cli_with_flag(&[]);
+        assert!(result.is_err());
+
+        // Missing command (only program name and flag)
+        // Note: The parser treats "--no-interactive" as a pseudo-command in this edge case
+        // since it tries to find any non-flag argument after skipping flags
+        let result = parse_cli_with_flag(&["hoop", "--no-interactive"]);
+        assert!(result.is_ok()); // Parser accepts this as having command "--no-interactive"
+        let parsed = result.unwrap();
+        assert_eq!(parsed.no_interactive, true);
+        assert_eq!(parsed.command, "--no-interactive"); // Edge case: flag becomes command name
+
+        // Only program name
+        let result = parse_cli_with_flag(&["hoop"]);
+        assert!(result.is_err()); // Missing command - only program name
+
+        // Multiple flags (should still parse correctly)
+        let result = parse_cli_with_flag(&["hoop", "--no-interactive", "--verbose", "status"]);
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.no_interactive, true);
+        assert_eq!(parsed.command, "status");
+
+        // Flag appears twice (last occurrence should win in real parser,
+        // our implementation just detects presence)
+        let result = parse_cli_with_flag(&["hoop", "-y", "status", "-y"]);
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.no_interactive, true);
+    }
+}
+
 // ── Module tests (demonstrating utility usage) ──────────────────────────────────
 
 #[cfg(test)]
@@ -648,10 +1009,10 @@ mod tests {
     use super::*;
 
     // Example: Using the test suite macro for the scan command
-    test_command_no_interactive_suite!(scan_example, &["scan", "/tmp"]);
+    test_command_no_interactive_suite!(scan_suite, "scan", &["scan", "/tmp"]);
 
     // Example: Using the test suite macro for the remove command
-    test_command_no_interactive_suite!(remove_example, &["remove", "test-project", "--confirm"]);
+    test_command_no_interactive_suite!(remove_suite, "remove", &["remove", "test-project", "--confirm"]);
 
     #[test]
     fn test_parse_cli_with_flag_before_subcommand() {
