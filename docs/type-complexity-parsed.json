@@ -1,0 +1,314 @@
+{
+  "warnings": [
+    {
+      "warning_number": 1,
+      "file": "hoop-schema/build/types.rs",
+      "line": 22064,
+      "field_name": "args",
+      "type_signature": "Result<::serde_json::Map<String, ::serde_json::Value>, String>",
+      "suggested_alias": "type JsonMapResult = Result<::serde_json::Map<String, ::serde_json::Value>, String>;"
+    },
+    {
+      "warning_number": 2,
+      "file": "hoop-schema/build/types.rs",
+      "line": 22949,
+      "field_name": "window_end",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 3,
+      "file": "hoop-schema/build/types.rs",
+      "line": 22950,
+      "field_name": "window_start",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 4,
+      "file": "hoop-schema/build/types.rs",
+      "line": 24115,
+      "field_name": "timestamp",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 5,
+      "file": "hoop-schema/build/types.rs",
+      "line": 25066,
+      "field_name": "last_success_iso",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 6,
+      "file": "hoop-schema/build/types.rs",
+      "line": 26864,
+      "field_name": "adapters",
+      "type_signature": "Result<::std::collections::HashMap<String, super::HoopConfigPricingAdaptersValue>, String>",
+      "suggested_alias": "type HoopConfigPricingAdaptersResult = Result<::std::collections::HashMap<String, super::HoopConfigPricingAdaptersValue>, String>;"
+    },
+    {
+      "warning_number": 7,
+      "file": "hoop-schema/build/types.rs",
+      "line": 26909,
+      "field_name": "models",
+      "type_signature": "Result<::std::collections::HashMap<String, super::HoopConfigPricingAdaptersValueModelsValue>, String>",
+      "suggested_alias": "type HoopConfigPricingAdaptersModelsResult = Result<::std::collections::HashMap<String, super::HoopConfigPricingAdaptersValueModelsValue>, String>;"
+    },
+    {
+      "warning_number": 8,
+      "file": "hoop-schema/build/types.rs",
+      "line": 27290,
+      "field_name": "adapters",
+      "type_signature": "Result<::std::collections::HashMap<String, super::HoopConfigStuckDetectorAdaptersValue>, String>",
+      "suggested_alias": "type HoopConfigStuckDetectorAdaptersResult = Result<::std::collections::HashMap<String, super::HoopConfigStuckDetectorAdaptersValue>, String>;"
+    },
+    {
+      "warning_number": 9,
+      "file": "hoop-schema/build/types.rs",
+      "line": 28206,
+      "field_name": "timestamp",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 10,
+      "file": "hoop-schema/build/types.rs",
+      "line": 28465,
+      "field_name": "closed_at",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 11,
+      "file": "hoop-schema/build/types.rs",
+      "line": 28467,
+      "field_name": "deadline",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 12,
+      "file": "hoop-schema/build/types.rs",
+      "line": 28478,
+      "field_name": "updated_at",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 13,
+      "file": "hoop-schema/build/types.rs",
+      "line": 28692,
+      "field_name": "added_at",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 14,
+      "file": "hoop-schema/build/types.rs",
+      "line": 28787,
+      "field_name": "created_at",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 15,
+      "file": "hoop-schema/build/types.rs",
+      "line": 28964,
+      "field_name": "adapters",
+      "type_signature": "Result<::std::collections::HashMap<String, super::PricingConfigAdaptersValue>, String>",
+      "suggested_alias": "type PricingConfigAdaptersResult = Result<::std::collections::HashMap<String, super::PricingConfigAdaptersValue>, String>;"
+    },
+    {
+      "warning_number": 16,
+      "file": "hoop-schema/build/types.rs",
+      "line": 29006,
+      "field_name": "models",
+      "type_signature": "Result<::std::collections::HashMap<String, super::PricingConfigAdaptersValueModelsValue>, String>",
+      "suggested_alias": "type PricingConfigAdaptersModelsResult = Result<::std::collections::HashMap<String, super::PricingConfigAdaptersValueModelsValue>, String>;"
+    },
+    {
+      "warning_number": 17,
+      "file": "hoop-schema/build/types.rs",
+      "line": 29763,
+      "field_name": "approved_at",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 18,
+      "file": "hoop-schema/build/types.rs",
+      "line": 29765,
+      "field_name": "archived_at",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 19,
+      "file": "hoop-schema/build/types.rs",
+      "line": 29769,
+      "field_name": "last_applied",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 20,
+      "file": "hoop-schema/build/types.rs",
+      "line": 30409,
+      "field_name": "timestamp",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 21,
+      "file": "hoop-schema/build/types.rs",
+      "line": 30576,
+      "field_name": "archived_at",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 22,
+      "file": "hoop-schema/build/types.rs",
+      "line": 30579,
+      "field_name": "closed_at",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 23,
+      "file": "hoop-schema/build/types.rs",
+      "line": 30590,
+      "field_name": "updated_at",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 24,
+      "file": "hoop-schema/build/types.rs",
+      "line": 30846,
+      "field_name": "linked_at",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 25,
+      "file": "hoop-schema/build/types.rs",
+      "line": 30970,
+      "field_name": "created_at",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 26,
+      "file": "hoop-schema/build/types.rs",
+      "line": 31100,
+      "field_name": "tool_use",
+      "type_signature": "Result<Option<::serde_json::Map<String, ::serde_json::Value>>, String>",
+      "suggested_alias": "type OptionalJsonMapResult = Result<Option<::serde_json::Map<String, ::serde_json::Value>>, String>;"
+    },
+    {
+      "warning_number": 27,
+      "file": "hoop-schema/build/types.rs",
+      "line": 31597,
+      "field_name": "end",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 28,
+      "file": "hoop-schema/build/types.rs",
+      "line": 31598,
+      "field_name": "start",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 29,
+      "file": "hoop-schema/build/types.rs",
+      "line": 32848,
+      "field_name": "agent_first_used",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 30,
+      "file": "hoop-schema/build/types.rs",
+      "line": 32849,
+      "field_name": "mic_first_used",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 31,
+      "file": "hoop-schema/build/types.rs",
+      "line": 32850,
+      "field_name": "patterns_first_used",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 32,
+      "file": "hoop-schema/build/types.rs",
+      "line": 32851,
+      "field_name": "reflection_ledger_first_used",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 33,
+      "file": "hoop-schema/build/types.rs",
+      "line": 34379,
+      "field_name": "timestamp",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    },
+    {
+      "warning_number": 34,
+      "file": "hoop-schema/build/types.rs",
+      "line": 34844,
+      "field_name": "timestamp",
+      "type_signature": "Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>",
+      "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;"
+    }
+  ],
+  "summary": {
+    "total_warnings": 34,
+    "unique_type_signatures": 6,
+    "categorization": {
+      "Result<Option<DateTime<Utc>>, String>": {
+        "count": 21,
+        "fields": [
+          "window_end", "window_start", "timestamp", "last_success_iso",
+          "closed_at", "deadline", "updated_at", "added_at", "created_at",
+          "approved_at", "archived_at", "last_applied", "linked_at", "end", "start",
+          "agent_first_used", "mic_first_used", "patterns_first_used",
+          "reflection_ledger_first_used"
+        ],
+        "suggested_alias": "type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;",
+        "description": "Optional UTC datetime field that can fail to parse"
+      },
+      "Result<HashMap<String, SpecificType>, String>": {
+        "count": 5,
+        "fields": ["adapters", "models"],
+        "suggested_alias": "type ConfigHashMapResult<T> = Result<::std::collections::HashMap<String, T>, String>;",
+        "description": "HashMap configuration field that can fail to parse"
+      },
+      "Result<Map<String, Value>, String>": {
+        "count": 1,
+        "fields": ["args"],
+        "suggested_alias": "type JsonMapResult = Result<::serde_json::Map<String, ::serde_json::Value>, String>;",
+        "description": "JSON object field that can fail to parse"
+      },
+      "Result<Option<Map<String, Value>>, String>": {
+        "count": 1,
+        "fields": ["tool_use"],
+        "suggested_alias": "type OptionalJsonMapResult = Result<Option<::serde_json::Map<String, ::serde_json::Value>>, String>;",
+        "description": "Optional JSON object field that can fail to parse"
+      }
+    },
+    "file_location": "hoop-schema/build/types.rs (generated code)",
+    "note": "These are generated types from hoop-schema via typify. Type aliases should be added to the source schema or build script, not manually to the generated file."
+  }
+}
