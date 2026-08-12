@@ -1,328 +1,302 @@
 # Type Complexity Catalog
 
-Complete catalog of all `clippy::type_complexity` warnings in the HOOP workspace.
+This document catalogs all `clippy::type_complexity` warnings in the HOOP codebase as of 2026-08-12.
 
-**Generated:** 2026-08-12
-**Total warnings:** 35 unique warnings (34 in generated code, 1 in source code)
-**Clippy threshold:** Types scoring > 250 on the complexity metric
+**Total warnings: 35**
+- 34 from `hoop-schema` (generated code in `target/debug/build/hoop-schema-*/out/types.rs`)
+- 1 from `hoop-mcp` (hand-written code in `hoop-mcp/src/tools.rs`)
 
 ## Summary
 
-- **34 warnings** in `hoop-schema` generated code (`target/debug/build/hoop-schema-*/out/types.rs`)
-- **1 warning** in `hoop-mcp` source code (`hoop-mcp/src/tools.rs:917`)
-- **0 warnings** in `hoop-daemon` source code
-- **0 warnings** in `hoop-cli` source code
+The vast majority of warnings (34/35) are in **auto-generated schema code** produced by `typify` from JSON Schema definitions in `hoop-schema/`. These are generated during build and cannot be directly edited — fixing them requires changes to the JSON Schema source files or the code generation process.
 
-## Category Breakdown
+Only **1 warning** is in hand-written code (`hoop-mcp/src/tools.rs`).
 
-### Generated Code Warnings (hoop-schema)
+## Categorization
 
-All 34 warnings in `hoop-schema` are in auto-generated Rust types from JSON Schema via `typify`. These warnings cannot be fixed directly in the generated output — they must be addressed at the schema generation level or by introducing type aliases in the post-processing phase.
+### Pattern 1: Optional DateTime Fields (26 occurrences)
 
-**File:** `target/debug/build/hoop-schema-*/out/types.rs`
-**Origin:** `hoop-schema/build.rs` → `typify` code generation
-**Impact:** Documentation only — generated code compiles and runs correctly
-
-### Source Code Warnings
-
-Only one type_complexity warning exists in hand-written source code.
-
----
-
-## Warning #1: hoop-mcp/tools.rs:917
-
-**File:** `hoop-mcp/src/tools.rs`
-**Line:** 917
-**Function:** `find_stitches` tool handler
-**Crate:** `hoop-mcp`
-
-### Complex Type
-
-```rust
-(String, Vec<Box<dyn rusqlite::types::ToSql>>)
-```
-
-### Context
-
-```rust
-let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(kind) = kind_filter {
-    (
-        "SELECT id, project, kind, title, created_by, created_at, last_activity_at, participants
-         FROM stitches
-         WHERE project = ?1 AND kind = ?2
-         ORDER BY last_activity_at DESC
-         LIMIT ?3".to_string(),
-        vec![Box::new(project.to_string()), Box::new(kind.to_string()), Box::new(limit)],
-    )
-} else {
-    // ... other branch with same tuple type
-};
-```
-
-### Suggested Type Alias
-
-```rust
-type SqlQuery = (String, Vec<Box<dyn rusqlite::types::ToSql>>);
-```
-
-### Implementation Notes
-
-**Priority:** Medium
-**Complexity:** ~265 points (above 250 threshold)
-**Usage pattern:** Dynamic SQL query construction with parameterized values
-
-**Why it's complex:**
-- Nested generics: `Vec<Box<dyn Trait>>` → double indirection
-- Trait object: `dyn rusqlite::types::ToSql` → dynamic dispatch
-- Tuple type: couples two distinct concerns (SQL string + parameters)
-
-**Suggested fix:**
-```rust
-// At top of hoop-mcp/src/tools.rs:
-type SqlQuery = (String, Vec<Box<dyn rusqlite::types::ToSql>>);
-
-// Then in the function:
-let (sql, params): SqlQuery = if let Some(kind) = kind_filter {
-    // ...
-};
-```
-
-**Alternative approach (better abstraction):**
-```rust
-struct SqlQuery {
-    sql: String,
-    params: Vec<Box<dyn rusqlite::types::ToSql>>,
-}
-
-// Then:
-let query = SqlQuery { /* ... */ };
-```
-
-**Why this hasn't been fixed:**
-- Low-impact warning (cosmetic)
-- Only one occurrence in the codebase
-- Function is clear despite the complex type
-- More pressing Phase 1 blockers take priority
-
----
-
-## Generated Code Patterns
-
-The 34 warnings in `hoop-schema` generated code all follow predictable patterns. Understanding these patterns helps address them at the source.
-
-### Pattern 1: Optional DateTime Fields (20+ occurrences)
-
-**Type:**
+**Type signature:**
 ```rust
 Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>
 ```
 
-**Examples:**
-- `window_end: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- `window_start: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- `timestamp: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- `closed_at: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- `deadline: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- `updated_at: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- `created_at: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- `approved_at: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- `archived_at: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- `last_applied: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- `linked_at: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- `agent_first_used: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- `mic_first_used: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- `patterns_first_used: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- `reflection_ledger_first_used: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
+**Used for:** Optional timestamp fields that may fail parsing
 
-**Suggested alias:**
+**Field names:**
+- `timestamp` (4 occurrences: lines 24115, 28206, 30409, 34379, 34844)
+- `window_end` (1 occurrence: line 22949)
+- `window_start` (1 occurrence: line 22950)
+- `last_success_iso` (1 occurrence: line 25066)
+- `closed_at` (2 occurrences: lines 28465, 30579)
+- `deadline` (1 occurrence: line 28467)
+- `updated_at` (2 occurrences: lines 28478, 30590)
+- `added_at` (1 occurrence: line 28692)
+- `created_at` (2 occurrences: lines 28787, 30970)
+- `approved_at` (1 occurrence: line 29763)
+- `archived_at` (2 occurrences: lines 29765, 30576)
+- `last_applied` (1 occurrence: line 29769)
+- `linked_at` (1 occurrence: line 30846)
+- `end` (1 occurrence: line 31597)
+- `start` (1 occurrence: line 31598)
+- `agent_first_used` (1 occurrence: line 32848)
+- `mic_first_used` (1 occurrence: line 32849)
+- `patterns_first_used` (1 occurrence: line 32850)
+- `reflection_ledger_first_used` (1 occurrence: line 32851)
+
+**Suggested type alias:**
 ```rust
-type OptDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;
+// In hoop-schema/src/lib.rs or a dedicated types module
+type ParseOptionalDateTime = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;
 ```
 
-### Pattern 2: HashMap Adapter Configs (4+ occurrences)
+**Implementation notes:** This pattern appears in auto-generated struct fields for schema-defined datetime fields. To fix at the source, modify the JSON Schema definitions in `hoop-schema/schemas/` to use a custom format that `typify` will recognize as needing a type alias, or post-process the generated code to inject type aliases.
 
-**Type:**
+---
+
+### Pattern 2: HashMap Adapter Configurations (4 occurrences)
+
+**Type signature:**
 ```rust
-Result<::std::collections::HashMap<String, <AdapterValueType>>, String>
+Result<::std::collections::HashMap<String, AdapterValueType>, String>
 ```
 
-**Examples:**
-- `Result<::std::collections::HashMap<String, super::HoopConfigPricingAdaptersValue>, String>`
-- `Result<::std::collections::HashMap<String, super::HoopConfigStuckDetectorAdaptersValue>, String>`
-- `Result<::std::collections::HashMap<String, super::PricingConfigAdaptersValue>, String>`
+**Where:**
+- Line 26864: `HoopConfigPricingAdaptersValue` → `super::HoopConfigPricingAdaptersValue`
+- Line 26909: `HoopConfigPricingAdaptersValueModelsValue` → `super::HoopConfigPricingAdaptersValueModelsValue`
+- Line 27290: `HoopConfigStuckDetectorAdaptersValue` → `super::HoopConfigStuckDetectorAdaptersValue`
+- Line 28964: `PricingConfigAdaptersValue` → `super::PricingConfigAdaptersValue`
 
-**Suggested alias:**
+**Suggested type aliases:**
 ```rust
-type AdapterMapResult<T> = Result<::std::collections::HashMap<String, T>, String>;
+// For pricing adapters
+type ParsePricingAdapters = Result<::std::collections::HashMap<String, HoopConfigPricingAdaptersValue>, String>;
+type ParsePricingAdapterModels = Result<::std::collections::HashMap<String, HoopConfigPricingAdaptersValueModelsValue>, String>;
+
+// For stuck detector adapters
+type ParseStuckDetectorAdapters = Result<::std::collections::HashMap<String, HoopConfigStuckDetectorAdaptersValue>, String>;
+
+// For generic pricing config adapters
+type ParseConfigAdapters = Result<::std::collections::HashMap<String, PricingConfigAdaptersValue>, String>;
 ```
 
-### Pattern 3: HashMap Model Configs (2+ occurrences)
+**Implementation notes:** These represent adapter configuration maps in the HOOP config schema. The nested type names suggest these are generated from complex nested object schemas.
 
-**Type:**
+---
+
+### Pattern 3: JSON Object Fields (2 occurrences)
+
+**Type signature:**
 ```rust
-Result<::std::collections::HashMap<String, <ModelValueType>>, String>
+Result<::serde_json::Map<String, ::serde_json::Value>, String>
 ```
 
-**Examples:**
-- `Result<::std::collections::HashMap<String, super::HoopConfigPricingAdaptersValueModelsValue>, String>`
-- `Result<::std::collections::HashMap<String, super::PricingConfigAdaptersValueModelsValue>, String>`
+**Where:**
+- Line 22064: Field name `args` — likely function/tool arguments
+- Line 31100: Field name `tool_use` — likely agent tool use records
 
-**Suggested alias:**
+**Suggested type alias:**
 ```rust
-type ModelMapResult<T> = Result<::std::collections::HashMap<String, T>, String>;
+type ParseJsonObject = Result<::serde_json::Map<String, ::serde_json::Value>, String>;
 ```
 
-### Pattern 4: JSON Object Fields (1 occurrence)
-
-**Type:**
+**Alternative:** Use a more specific alias based on context:
 ```rust
-Result<Option<::serde_json::Map<String, ::serde_json::Value>>, String>
-```
-
-**Example:**
-- `tool_use: Result<Option<::serde_json::Map<String, ::serde_json::Value>>, String>`
-
-**Suggested alias:**
-```rust
-type OptJsonObjectResult = Result<Option<::serde_json::Map<String, ::serde_json::Value>>, String>;
+type ParseToolArgs = Result<::serde_json::Map<String, ::serde_json::Value>, String>;
+type ParseToolUse = Result<::serde_json::Map<String, ::serde_json::Value>, String>;
 ```
 
 ---
 
-## Why Generated Code Has These Warnings
+### Pattern 4: Nested HashMap Models (1 occurrence)
 
-`hoop-schema` uses `typify` to generate Rust types from JSON Schema draft-07. The generation process:
+**Type signature:**
+```rust
+Result<::std::collections::HashMap<String, super::PricingConfigAdaptersValueModelsValue>, String>
+```
 
-1. Reads JSON Schema files from `hoop-schema/schemas/`
-2. Translates schema types to Rust types via `typify`
-3. Writes generated code to `target/debug/build/hoop-schema-*/out/types.rs`
-4. Includes generated types in the crate via `include!()` macro
+**Where:**
+- Line 29006: Field name `models` in pricing configuration
 
-**The problem:**
-- `typify` generates idiomatic Rust types but doesn't add type aliases
-- JSON Schema "string-or-null" becomes `Result<Option<T>, String>` for validation
-- JSON Schema "object with string keys and <Adapter> values" becomes `HashMap<String, AdapterType>`
-- The combination (`Result<Option<...>>`, `Result<HashMap<...>>`) exceeds Clippy's complexity threshold
-
-**Why it's acceptable:**
-- Generated code is read-only for humans
-- Types are semantically correct (validation is proper)
-- Warnings don't indicate bugs, only stylistic complexity
-- Fixing requires modifying `typify` or post-processing the output
+**Suggested type alias:**
+```rust
+type ParsePricingModels = Result<::std::collections::HashMap<String, PricingConfigAdaptersValueModelsValue>, String>;
+```
 
 ---
 
-## Recommended Fixes
+### Pattern 5: SQL Parameter Tuple (1 occurrence) — HAND-WRITTEN CODE
 
-### For hoop-mcp/tools.rs (Immediate Fix)
+**File:** `hoop-mcp/src/tools.rs:917`
 
-**Option 1: Simple type alias**
+**Type signature:**
 ```rust
-// In hoop-mcp/src/tools.rs (top of file):
+(String, Vec<Box<dyn rusqlite::types::ToSql>>)
+```
+
+**Context:** Variable binding for SQL query parameters in the MCP server
+
+**Code:**
+```rust
+let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(kind) =
+```
+
+**Suggested type alias:**
+```rust
+// At top of hoop-mcp/src/tools.rs
 type SqlQuery = (String, Vec<Box<dyn rusqlite::types::ToSql>>);
-
-// In function:
-let (sql, params): SqlQuery = /* ... */;
 ```
 
-**Option 2: Struct wrapper (better)**
+**Or more descriptive:**
 ```rust
-struct SqlQuery {
-    sql: String,
-    params: Vec<Box<dyn rusqlite::types::ToSql>>,
-}
-
-// Usage:
-let query = SqlQuery {
-    sql: "...".to_string(),
-    params: vec![/* ... */],
-};
+type BoundSqlQuery = (String, Vec<Box<dyn rusqlite::types::ToSql>>);
 ```
 
-### For hoop-schema (Long-term Fix)
+**Implementation notes:** This is the **only hand-written occurrence** in the codebase. Fixing this is straightforward:
 
-**Option 1: Suppress the warning in generated code**
-```rust
-// In hoop-schema/build.rs, add to generated file header:
-#![allow(clippy::type_complexity)]
-```
-
-**Option 2: Add type aliases in post-processing**
-- Parse `types.rs` after generation
-- Identify repeated complex types
-- Inject type aliases at top of file
-- Replace occurrences with aliases
-
-**Option 3: Modify typify**
-- Submit upstream PR to add `--generate-type-aliases` flag
-- Or fork `typify` and add alias generation
-
-**Option 4: Accept it**
-- Add crate-level `#![allow(clippy::type_complexity)]` to `hoop-schema/src/lib.rs`
-- Document in `CLAUDE.md` that generated code has this warning
+1. Add the type alias at the module level
+2. Update the variable binding to use the alias:
+   ```rust
+   let (sql, params): BoundSqlQuery = if let Some(kind) = ...
+   ```
 
 ---
 
-## Clippy Complexity Scoring
+## Recommended Fix Strategy
 
-Clippy calculates type complexity as:
+### Priority 1: Fix hand-written code (hoop-mcp)
 
-```
-complexity = sum of:
-  - Function pointer: 10
-  - Trait object (dyn Trait): 10
-  - Tuple: N elements × 5
-  - Array: N elements × 5
-  - Generic parameter: 2
-  - Reference (&, &mut): 2
-  - Box, Rc, Arc: 2
-  - Slice, Vec: 2
-  - HashMap, HashSet: 3
-  - Option, Result: 1
-  - Other type constructors: 1
-```
+The single warning in `hoop-mcp/src/tools.rs` should be fixed immediately:
 
-**Example calculation for `Result<Option<DateTime<Utc>>, String>`:**
-- `Result`: 1
-- `Option`: 1
-- `DateTime<Utc>` (chrono): `DateTime` is 1, generic `Utc` is 2 → 3
-- `String`: 1
-- **Total: 1 + 1 + 3 + 1 = 6** (below threshold)
+1. Add type alias to `hoop-mcp/src/tools.rs`:
+   ```rust
+   type BoundSqlQuery = (String, Vec<Box<dyn rusqlite::types::ToSql>>);
+   ```
 
-**Example for our actual case:**
-- `Result`: 1
-- `Option`: 1
-- `chrono::DateTime<chrono::offset::Utc>`:
-  - `chrono::DateTime`: 1
-  - `chrono::offset::Utc`: `chrono` module path + `offset` + `Utc` → counts as nested generics
-- `String`: 1
-- **Estimated: > 250** (the actual computed value from Clippy)
+2. Update line 917 to use the alias
 
-**Example for `(String, Vec<Box<dyn ToSql>>)`:**
-- Tuple: 2 elements × 5 = 10
-- `String`: 1
-- `Vec`: 2
-- `Box`: 2
-- `dyn rusqlite::types::ToSql`:
-  - Trait object: 10
-  - `rusqlite::types::ToSql`: long path
-- **Estimated: ~265** (above threshold of 250)
+### Priority 2: Address generated code (hoop-schema)
+
+For the 34 warnings in generated code, options include:
+
+**Option A: Suppress the warning**
+- Add `#![allow(clippy::type_complexity)]` to the generated `types.rs` module
+- Requires modifying the code generation template
+
+**Option B: Modify JSON Schema definitions**
+- Investigate whether `typify` has configuration options or schema patterns that generate simpler types
+- May require restructuring how schemas are defined
+
+**Option C: Post-process generated code**
+- Add a build step that injects type aliases into the generated `types.rs`
+- Complex and fragile; not recommended
+
+**Option D: Accept the warnings**
+- These are in generated code that developers don't directly maintain
+- The complexity reflects the complexity of the HOOP configuration schema
+- Consider allowing at the crate level: `#![allow(clippy::type_complexity)]` in `hoop-schema/src/lib.rs`
 
 ---
 
-## Acceptance Criteria (from bead bf-3h025)
+## Line Number Reference
 
-- [x] `docs/type-complexity-catalog.md` exists with all warnings documented
-- [x] Each warning has: file location, type signature, suggested alias name, and implementation notes
-- [x] Catalog is markdown-formatted with clear sections per warning
-- [x] Patterns are identified and grouped (generated code patterns)
-- [x] Recommended fixes are provided
+All generated code warnings are in:
+```
+target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs
+```
+
+**Note:** This path is build-dependent. The `eec83911af1a1b70` hash changes with build configuration.
+
+### Hand-written warning
+
+| Line | File | Field | Pattern |
+|------|------|-------|---------|
+| 917 | `hoop-mcp/src/tools.rs` | `sql, params` | SQL parameter tuple |
+
+### Generated warnings (hoop-schema)
+
+| Line | Field | Type | Pattern |
+|------|-------|------|---------|
+| 22064 | `args` | `ParseJsonObject` | JSON object |
+| 22949 | `window_end` | `ParseOptionalDateTime` | Optional datetime |
+| 22950 | `window_start` | `ParseOptionalDateTime` | Optional datetime |
+| 24115 | `timestamp` | `ParseOptionalDateTime` | Optional datetime |
+| 25066 | `last_success_iso` | `ParseOptionalDateTime` | Optional datetime |
+| 26864 | `adapters` | `ParsePricingAdapters` | HashMap config |
+| 26909 | `models` | `ParsePricingAdapterModels` | HashMap config |
+| 27290 | `adapters` | `ParseStuckDetectorAdapters` | HashMap config |
+| 28206 | `timestamp` | `ParseOptionalDateTime` | Optional datetime |
+| 28465 | `closed_at` | `ParseOptionalDateTime` | Optional datetime |
+| 28467 | `deadline` | `ParseOptionalDateTime` | Optional datetime |
+| 28478 | `updated_at` | `ParseOptionalDateTime` | Optional datetime |
+| 28692 | `added_at` | `ParseOptionalDateTime` | Optional datetime |
+| 28787 | `created_at` | `ParseOptionalDateTime` | Optional datetime |
+| 28964 | `adapters` | `ParseConfigAdapters` | HashMap config |
+| 29006 | `models` | `ParsePricingModels` | HashMap config |
+| 29763 | `approved_at` | `ParseOptionalDateTime` | Optional datetime |
+| 29765 | `archived_at` | `ParseOptionalDateTime` | Optional datetime |
+| 29769 | `last_applied` | `ParseOptionalDateTime` | Optional datetime |
+| 30409 | `timestamp` | `ParseOptionalDateTime` | Optional datetime |
+| 30576 | `archived_at` | `ParseOptionalDateTime` | Optional datetime |
+| 30579 | `closed_at` | `ParseOptionalDateTime` | Optional datetime |
+| 30590 | `updated_at` | `ParseOptionalDateTime` | Optional datetime |
+| 30846 | `linked_at` | `ParseOptionalDateTime` | Optional datetime |
+| 30970 | `created_at` | `ParseOptionalDateTime` | Optional datetime |
+| 31100 | `tool_use` | `ParseJsonObject` | JSON object |
+| 31597 | `end` | `ParseOptionalDateTime` | Optional datetime |
+| 31598 | `start` | `ParseOptionalDateTime` | Optional datetime |
+| 32848 | `agent_first_used` | `ParseOptionalDateTime` | Optional datetime |
+| 32849 | `mic_first_used` | `ParseOptionalDateTime` | Optional datetime |
+| 32850 | `patterns_first_used` | `ParseOptionalDateTime` | Optional datetime |
+| 32851 | `reflection_ledger_first_used` | `ParseOptionalDateTime` | Optional datetime |
+| 34379 | `timestamp` | `ParseOptionalDateTime` | Optional datetime |
+| 34844 | `timestamp` | `ParseOptionalDateTime` | Optional datetime |
 
 ---
 
-## References
+## Complexity Metrics
 
-- Clippy documentation: https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
-- hoOP schema generation: `hoop-schema/build.rs`
-- typify crate: https://docs.rs/typify/
-- bead bf-3h025: `.beads/issues.jsonl` (closed bead)
+Clippy's `type_complexity` lint uses a scoring algorithm. Based on the types seen:
+
+- **`Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`** — Likely scores ~250+
+  - Nested `Result<Option<T>>` pattern
+  - Long fully-qualified path `chrono::DateTime<chrono::offset::Utc>`
+
+- **`Result<HashMap<String, ComplexNestedType>, String>`** — Likely scores ~200-300
+  - `HashMap` with two type parameters
+  - Long type names for values
+
+- **`(String, Vec<Box<dyn rusqlite::types::ToSql>>)`** — Likely scores ~150-200
+  - Tuple with two complex types
+  - `Box<dyn Trait>` adds complexity
+  - Fully qualified path
+
+The default threshold is 250. To see individual scores, run:
+```bash
+cargo clippy --workspace -- -D clippy::type_complexity
+```
+
+---
+
+## Verification
+
+Generated on: 2026-08-12
+
+Command used to capture warnings:
+```bash
+cargo clippy --workspace 2>&1 | grep -A 10 "type_complexity"
+```
+
+Total warnings captured: 35
+- Generated code: 34
+- Hand-written: 1
+
+---
+
+## Next Steps
+
+1. **Fix the hand-written warning** in `hoop-mcp/src/tools.rs` (Priority 1)
+2. **Decide on generated code strategy**:
+   - Suppress at crate level with `#![allow(clippy::type_complexity)]`
+   - Or investigate `typify` configuration/schema changes
+3. **Re-run clippy** after fixes to verify resolution
