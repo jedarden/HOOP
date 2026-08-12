@@ -1,0 +1,4800 @@
+{
+  "metadata": {
+    "total_files": 81,
+    "total_test_entries": 305,
+    "total_error_messages": 502,
+    "source_bead": "bf-5z50g",
+    "generated_by": "bf-yucsh",
+    "format_version": "1.0"
+  },
+  "inventory": {
+    "hoop-cli/tests/clap_test_utils.rs": {
+      "test_extract_and_verify_workflow": [
+        {
+          "line_number": 1381,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_no_interactive_value(&cli, no_interactive).is_ok());",
+          "message": null,
+          "condition": "verify_no_interactive_value(&cli",
+          "additional_context": "no_interactive).is_ok()"
+        },
+        {
+          "line_number": 1384,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_propagation(&[\"projects\", \"scan\", \"/tmp\"], no_interactive).is_ok());",
+          "message": "scan",
+          "condition": "verify_flag_propagation(&[\"projects\"",
+          "additional_context": "\"/tmp\"], no_interactive).is_ok()"
+        }
+      ],
+      "test_extract_command_matches_projects_subcommand": [
+        {
+          "line_number": 1218,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Projects::Scan command\"",
+          "message": "Expected Projects::Scan command",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_extract_command_matches_remove": [
+        {
+          "line_number": 1205,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Remove command\"",
+          "message": "Expected Remove command",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_extract_command_matches_scan": [
+        {
+          "line_number": 1191,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Scan command\"",
+          "message": "Expected Scan command",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_get_command_scan": [
+        {
+          "line_number": 1039,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Scan command\"",
+          "message": "Expected Scan command",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_parse_command_with_global_flag_single": [
+        {
+          "line_number": 1124,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Scan command\"",
+          "message": "Expected Scan command",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_parse_command_with_subcommand_flag_multiple": [
+        {
+          "line_number": 1177,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Scan command\"",
+          "message": "Expected Scan command",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_parse_command_with_subcommand_flag_single": [
+        {
+          "line_number": 1159,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Scan command\"",
+          "message": "Expected Scan command",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_projects_scan_subcommand_with_global_flag": [
+        {
+          "line_number": 1266,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Projects::Scan command\"",
+          "message": "Expected Projects::Scan command",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 1268,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Projects command\"",
+          "message": "Expected Projects command",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_scan_command_arguments": [
+        {
+          "line_number": 1472,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Scan command\"",
+          "message": "Expected Scan command",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_scan_no_interactive": [
+        {
+          "line_number": 477,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_propagation(&[\"scan\", \"/tmp\"], true).is_ok());",
+          "message": null,
+          "condition": "verify_flag_propagation(&[\"scan\"",
+          "additional_context": "\"/tmp\"], true).is_ok()"
+        },
+        {
+          "line_number": 480,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_propagation(&[\"projects\", \"scan\", \"/tmp\"], true).is_ok());",
+          "message": "scan",
+          "condition": "verify_flag_propagation(&[\"projects\"",
+          "additional_context": "\"/tmp\"], true).is_ok()"
+        }
+      ],
+      "test_scan_with_local_yes_flag_and_global_no_interactive": [
+        {
+          "line_number": 1252,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Scan command\"",
+          "message": "Expected Scan command",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_various_flag_positions": [
+        {
+          "line_number": 1503,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Scan command\"",
+          "message": "Expected Scan command",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 1512,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Remove command\"",
+          "message": "Expected Remove command",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_verify_flag_at_position_after": [
+        {
+          "line_number": 989,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_at_position(&[\"scan\", \"/tmp\"], \"after\", true).is_ok());",
+          "message": null,
+          "condition": "verify_flag_at_position(&[\"scan\"",
+          "additional_context": "\"/tmp\"], \"after\", true).is_ok()"
+        }
+      ],
+      "test_verify_flag_at_position_before": [
+        {
+          "line_number": 984,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_at_position(&[\"scan\", \"/tmp\"], \"before\", true).is_ok());",
+          "message": null,
+          "condition": "verify_flag_at_position(&[\"scan\"",
+          "additional_context": "\"/tmp\"], \"before\", true).is_ok()"
+        }
+      ],
+      "test_verify_flag_default_false": [
+        {
+          "line_number": 999,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_default_false(&[\"scan\", \"/tmp\"]).is_ok());",
+          "message": null,
+          "condition": "verify_flag_default_false(&[\"scan\"",
+          "additional_context": "\"/tmp\"]).is_ok()"
+        }
+      ],
+      "test_verify_flag_propagation_init_command": [
+        {
+          "line_number": 1346,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_propagation(&[\"init\"], true).is_ok());",
+          "message": null,
+          "condition": "verify_flag_propagation(&[\"init\"]",
+          "additional_context": "true).is_ok()"
+        }
+      ],
+      "test_verify_flag_propagation_nested_subcommand": [
+        {
+          "line_number": 1325,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_propagation(&[\"projects\", \"scan\", \"/tmp\"], true).is_ok());",
+          "message": "scan",
+          "condition": "verify_flag_propagation(&[\"projects\"",
+          "additional_context": "\"/tmp\"], true).is_ok()"
+        }
+      ],
+      "test_verify_flag_propagation_remove_command": [
+        {
+          "line_number": 1331,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_propagation(&[\"remove\", \"test-project\", \"--confirm\"], true).is_ok());",
+          "message": "test-project",
+          "condition": "verify_flag_propagation(&[\"remove\"",
+          "additional_context": "\"--confirm\"], true).is_ok()"
+        }
+      ],
+      "test_verify_flag_propagation_simple_command": [
+        {
+          "line_number": 1319,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_propagation(&[\"scan\", \"/tmp\"], true).is_ok());",
+          "message": null,
+          "condition": "verify_flag_propagation(&[\"scan\"",
+          "additional_context": "\"/tmp\"], true).is_ok()"
+        }
+      ],
+      "test_verify_no_interactive_value_false": [
+        {
+          "line_number": 979,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_no_interactive_value(&cli, false).is_ok());",
+          "message": null,
+          "condition": "verify_no_interactive_value(&cli",
+          "additional_context": "false).is_ok()"
+        }
+      ],
+      "test_verify_no_interactive_value_true": [
+        {
+          "line_number": 973,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_no_interactive_value(&cli, true).is_ok());",
+          "message": null,
+          "condition": "verify_no_interactive_value(&cli",
+          "additional_context": "true).is_ok()"
+        }
+      ],
+      "test_verify_position_independence": [
+        {
+          "line_number": 994,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_position_independence(&[\"scan\", \"/tmp\"]).is_ok());",
+          "message": null,
+          "condition": "verify_position_independence(&[\"scan\"",
+          "additional_context": "\"/tmp\"]).is_ok()"
+        }
+      ]
+    },
+    "hoop-cli/tests/cli_test_helpers.rs": {
+      "comprehensive_example_all_patterns_together": [
+        {
+          "line_number": 2912,
+          "pattern_type": "assert!",
+          "full_match": "assert!(assert_flag_value(&parsed, true).is_ok());",
+          "message": null,
+          "condition": "assert_flag_value(&parsed",
+          "additional_context": "true).is_ok()"
+        },
+        {
+          "line_number": 2913,
+          "pattern_type": "assert!",
+          "full_match": "assert!(assert_flag_value(&parsed, false).is_err());",
+          "message": null,
+          "condition": "assert_flag_value(&parsed",
+          "additional_context": "false).is_err()"
+        }
+      ],
+      "test_assert_flag_is_false_failure": [
+        {
+          "line_number": 2665,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_assert_flag_is_true_failure": [
+        {
+          "line_number": 2651,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_assert_flag_value_false": [
+        {
+          "line_number": 2677,
+          "pattern_type": "assert!",
+          "full_match": "assert!(assert_flag_value(&result, false).is_ok());",
+          "message": null,
+          "condition": "assert_flag_value(&result",
+          "additional_context": "false).is_ok()"
+        }
+      ],
+      "test_assert_flag_value_true": [
+        {
+          "line_number": 2671,
+          "pattern_type": "assert!",
+          "full_match": "assert!(assert_flag_value(&result, true).is_ok());",
+          "message": null,
+          "condition": "assert_flag_value(&result",
+          "additional_context": "true).is_ok()"
+        }
+      ],
+      "test_assert_flag_value_with_short_form": [
+        {
+          "line_number": 2766,
+          "pattern_type": "assert!",
+          "full_match": "assert!(assert_flag_value(&result, true).is_ok());",
+          "message": null,
+          "condition": "assert_flag_value(&result",
+          "additional_context": "true).is_ok()"
+        }
+      ],
+      "test_extract_and_assert_flag_consistency": [
+        {
+          "line_number": 2790,
+          "pattern_type": "assert!",
+          "full_match": "assert!(assert_flag_value(&parsed, true).is_ok());",
+          "message": null,
+          "condition": "assert_flag_value(&parsed",
+          "additional_context": "true).is_ok()"
+        }
+      ],
+      "test_flag_after_subcommand": [
+        {
+          "line_number": 410,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_position_consistency(&[\"scan\", \"/tmp\"]).is_ok());",
+          "message": null,
+          "condition": "verify_flag_position_consistency(&[\"scan\"",
+          "additional_context": "\"/tmp\"]).is_ok()"
+        }
+      ],
+      "test_parse_flag_after_subcommand_empty_args": [
+        {
+          "line_number": 2613,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_parse_flag_before_subcommand_empty_args": [
+        {
+          "line_number": 2606,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_parse_nested_subcommand_empty_args": [
+        {
+          "line_number": 2620,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_scan_flag_positions": [
+        {
+          "line_number": 445,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_position_consistency(&[\"scan\", \"/tmp\"]).is_ok());",
+          "message": null,
+          "condition": "verify_flag_position_consistency(&[\"scan\"",
+          "additional_context": "\"/tmp\"]).is_ok()"
+        }
+      ],
+      "test_verification_utilities": [
+        {
+          "line_number": 924,
+          "pattern_type": "assert!",
+          "full_match": "assert!(assert_flag_value(&parsed, true).is_ok());",
+          "message": null,
+          "condition": "assert_flag_value(&parsed",
+          "additional_context": "true).is_ok()"
+        },
+        {
+          "line_number": 927,
+          "pattern_type": "assert!",
+          "full_match": "assert!(assert_flag_propagation(&[\"scan\", \"/tmp\"]).is_ok());",
+          "message": null,
+          "condition": "assert_flag_propagation(&[\"scan\"",
+          "additional_context": "\"/tmp\"]).is_ok()"
+        },
+        {
+          "line_number": 930,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_default_flag_value(&[\"scan\", \"/tmp\"]).is_ok());",
+          "message": null,
+          "condition": "verify_default_flag_value(&[\"scan\"",
+          "additional_context": "\"/tmp\"]).is_ok()"
+        },
+        {
+          "line_number": 933,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_position_consistency(&[\"scan\", \"/tmp\"]).is_ok());",
+          "message": null,
+          "condition": "verify_flag_position_consistency(&[\"scan\"",
+          "additional_context": "\"/tmp\"]).is_ok()"
+        },
+        {
+          "line_number": 1549,
+          "pattern_type": "assert!",
+          "full_match": "assert!(assert_flag_value(&result, true).is_ok());",
+          "message": null,
+          "condition": "assert_flag_value(&result",
+          "additional_context": "true).is_ok()"
+        },
+        {
+          "line_number": 1552,
+          "pattern_type": "assert!",
+          "full_match": "assert!(assert_flag_value(&result, false).is_ok());",
+          "message": null,
+          "condition": "assert_flag_value(&result",
+          "additional_context": "false).is_ok()"
+        },
+        {
+          "line_number": 1977,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n                before_parsed.no_interactive,\n                \"no_interactive should be true with flag before {}\",\n                $command_name\n            );",
+          "message": "no_interactive should be true with flag before {}",
+          "condition": "before_parsed.no_interactive",
+          "additional_context": "$command_name"
+        },
+        {
+          "line_number": 1996,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n                after_parsed.no_interactive,\n                \"no_interactive should be true with flag after {}\",\n                $command_name\n            );",
+          "message": "no_interactive should be true with flag after {}",
+          "condition": "after_parsed.no_interactive",
+          "additional_context": "$command_name"
+        },
+        {
+          "line_number": 2017,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n                short_value,\n                \"Short flag -y should set no_interactive=true for {}\",\n                $command_name\n            );",
+          "message": "Short flag -y should set no_interactive=true for {}",
+          "condition": "short_value",
+          "additional_context": "$command_name"
+        },
+        {
+          "line_number": 2111,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n                !result.no_interactive,\n                \"no_interactive should default to false when not specified\"\n            );",
+          "message": "no_interactive should default to false when not specified",
+          "condition": "!result.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 2168,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n                before_result.no_interactive,\n                \"Flag before subcommand should set no_interactive=true for {}\",\n                $command_name\n            );",
+          "message": "Flag before subcommand should set no_interactive=true for {}",
+          "condition": "before_result.no_interactive",
+          "additional_context": "$command_name"
+        },
+        {
+          "line_number": 2189,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n                after_result.no_interactive,\n                \"Flag after subcommand should set no_interactive=true for {}\",\n                $command_name\n            );",
+          "message": "Flag after subcommand should set no_interactive=true for {}",
+          "condition": "after_result.no_interactive",
+          "additional_context": "$command_name"
+        },
+        {
+          "line_number": 2204,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n                short_value,\n                \"Short flag -y should set no_interactive=true for {}\",\n                $command_name\n            );",
+          "message": "Short flag -y should set no_interactive=true for {}",
+          "condition": "short_value",
+          "additional_context": "$command_name"
+        },
+        {
+          "line_number": 2231,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n                !default_result.no_interactive,\n                \"Default no_interactive should be false for {}\",\n                $command_name\n            );",
+          "message": "Default no_interactive should be false for {}",
+          "condition": "!default_result.no_interactive",
+          "additional_context": "$command_name"
+        },
+        {
+          "line_number": 2293,
+          "pattern_type": "assert!",
+          "full_match": "assert!(valid_result.no_interactive);",
+          "message": null,
+          "condition": "valid_result.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 2313,
+          "pattern_type": "assert!",
+          "full_match": "assert!(invalid_result.no_interactive);",
+          "message": null,
+          "condition": "invalid_result.no_interactive",
+          "additional_context": null
+        }
+      ],
+      "unknown": [
+        {
+          "line_number": 74,
+          "pattern_type": "assert!",
+          "full_match": "assert!(parsed.no_interactive);",
+          "message": null,
+          "condition": "parsed.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 75,
+          "pattern_type": "assert!",
+          "full_match": "assert!(assert_flag_propagation(&[\"scan\", \"/tmp\"]).is_ok());",
+          "message": null,
+          "condition": "assert_flag_propagation(&[\"scan\"",
+          "additional_context": "\"/tmp\"]).is_ok()"
+        },
+        {
+          "line_number": 107,
+          "pattern_type": "assert!",
+          "full_match": "assert!(parsed_with.no_interactive);",
+          "message": null,
+          "condition": "parsed_with.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 127,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_position_consistency(&[\"scan\", \"/tmp\"]).is_ok());",
+          "message": null,
+          "condition": "verify_flag_position_consistency(&[\"scan\"",
+          "additional_context": "\"/tmp\"]).is_ok()"
+        },
+        {
+          "line_number": 157,
+          "pattern_type": "assert!",
+          "full_match": "assert!(parsed.no_interactive);",
+          "message": null,
+          "condition": "parsed.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 161,
+          "pattern_type": "assert!",
+          "full_match": "assert!(assert_flag_propagation(&[\"scan\", \"/tmp\"]).is_ok());",
+          "message": null,
+          "condition": "assert_flag_propagation(&[\"scan\"",
+          "additional_context": "\"/tmp\"]).is_ok()"
+        }
+      ]
+    },
+    "hoop-cli/tests/cli_test_utils.rs": {
+      "example_complex_scenario": [
+        {
+          "line_number": 929,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_extraction(&parsed_before, \"before\").is_ok());",
+          "message": null,
+          "condition": "verify_flag_extraction(&parsed_before",
+          "additional_context": "\"before\").is_ok()"
+        },
+        {
+          "line_number": 936,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_extraction(&parsed_after, \"after\").is_ok());",
+          "message": null,
+          "condition": "verify_flag_extraction(&parsed_after",
+          "additional_context": "\"after\").is_ok()"
+        },
+        {
+          "line_number": 952,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_prompt_suppressed(&remove_prompt, true).is_ok());",
+          "message": null,
+          "condition": "verify_prompt_suppressed(&remove_prompt",
+          "additional_context": "true).is_ok()"
+        },
+        {
+          "line_number": 955,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_confirm_required(&remove_prompt, true, true).is_ok());",
+          "message": null,
+          "condition": "verify_confirm_required(&remove_prompt",
+          "additional_context": "true, true).is_ok()"
+        },
+        {
+          "line_number": 956,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_confirm_required(&remove_prompt, true, false).is_err());",
+          "message": null,
+          "condition": "verify_confirm_required(&remove_prompt",
+          "additional_context": "true, false).is_err()"
+        },
+        {
+          "line_number": 959,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_confirm_required(&remove_prompt, false, false).is_ok());",
+          "message": null,
+          "condition": "verify_confirm_required(&remove_prompt",
+          "additional_context": "false, false).is_ok()"
+        }
+      ],
+      "example_manual_implementation": [
+        {
+          "line_number": 776,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_extraction(&parsed_before, \"before\").is_ok());",
+          "message": null,
+          "condition": "verify_flag_extraction(&parsed_before",
+          "additional_context": "\"before\").is_ok()"
+        },
+        {
+          "line_number": 777,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_extraction(&parsed_after, \"after\").is_ok());",
+          "message": null,
+          "condition": "verify_flag_extraction(&parsed_after",
+          "additional_context": "\"after\").is_ok()"
+        }
+      ],
+      "example_prompt_suppression": [
+        {
+          "line_number": 828,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_prompt_suppressed(&delete_prompt, true).is_ok());",
+          "message": null,
+          "condition": "verify_prompt_suppressed(&delete_prompt",
+          "additional_context": "true).is_ok()"
+        },
+        {
+          "line_number": 836,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_confirm_required(&delete_prompt, true, false).is_err());",
+          "message": null,
+          "condition": "verify_confirm_required(&delete_prompt",
+          "additional_context": "true, false).is_err()"
+        },
+        {
+          "line_number": 839,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_confirm_required(&delete_prompt, true, true).is_ok());",
+          "message": null,
+          "condition": "verify_confirm_required(&delete_prompt",
+          "additional_context": "true, true).is_ok()"
+        },
+        {
+          "line_number": 842,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_confirm_required(&delete_prompt, false, false).is_ok());",
+          "message": null,
+          "condition": "verify_confirm_required(&delete_prompt",
+          "additional_context": "false, false).is_ok()"
+        }
+      ],
+      "test_confirm_required_for_destructive_operation": [
+        {
+          "line_number": 1128,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_confirm_required(&prompt, true, false).is_err());",
+          "message": null,
+          "condition": "verify_confirm_required(&prompt",
+          "additional_context": "true, false).is_err()"
+        },
+        {
+          "line_number": 1131,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_confirm_required(&prompt, true, true).is_ok());",
+          "message": null,
+          "condition": "verify_confirm_required(&prompt",
+          "additional_context": "true, true).is_ok()"
+        },
+        {
+          "line_number": 1134,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_confirm_required(&prompt, false, false).is_ok());",
+          "message": null,
+          "condition": "verify_confirm_required(&prompt",
+          "additional_context": "false, false).is_ok()"
+        }
+      ],
+      "test_prompt_suppressed_with_no_interactive": [
+        {
+          "line_number": 1106,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_prompt_suppressed(&prompt, true).is_ok());",
+          "message": null,
+          "condition": "verify_prompt_suppressed(&prompt",
+          "additional_context": "true).is_ok()"
+        }
+      ],
+      "test_verify_flag_extraction_after": [
+        {
+          "line_number": 1090,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_extraction(&parsed, \"after\").is_ok());",
+          "message": null,
+          "condition": "verify_flag_extraction(&parsed",
+          "additional_context": "\"after\").is_ok()"
+        }
+      ],
+      "test_verify_flag_extraction_before": [
+        {
+          "line_number": 1084,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_extraction(&parsed, \"before\").is_ok());",
+          "message": null,
+          "condition": "verify_flag_extraction(&parsed",
+          "additional_context": "\"before\").is_ok()"
+        }
+      ]
+    },
+    "hoop-cli/tests/cli_test_utils_examples.rs": {
+      "example_complex_multi_command_test": [
+        {
+          "line_number": 386,
+          "pattern_type": "assert!",
+          "full_match": "assert!(all_passed, \"All complex multi-command tests should pass\");",
+          "message": "All complex multi-command tests should pass",
+          "condition": "all_passed",
+          "additional_context": null
+        }
+      ],
+      "example_comprehensive_end_to_end_test": [
+        {
+          "line_number": 450,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_extraction(&parsed_before, \"before\").is_ok());",
+          "message": null,
+          "condition": "verify_flag_extraction(&parsed_before",
+          "additional_context": "\"before\").is_ok()"
+        },
+        {
+          "line_number": 451,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_flag_extraction(&parsed_after, \"after\").is_ok());",
+          "message": null,
+          "condition": "verify_flag_extraction(&parsed_after",
+          "additional_context": "\"after\").is_ok()"
+        },
+        {
+          "line_number": 458,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_prompt_suppressed(&safe_prompt, true).is_ok());",
+          "message": null,
+          "condition": "verify_prompt_suppressed(&safe_prompt",
+          "additional_context": "true).is_ok()"
+        },
+        {
+          "line_number": 465,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_confirm_required(&destructive_prompt, true, true).is_ok());",
+          "message": null,
+          "condition": "verify_confirm_required(&destructive_prompt",
+          "additional_context": "true, true).is_ok()"
+        },
+        {
+          "line_number": 466,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_confirm_required(&destructive_prompt, true, false).is_err());",
+          "message": null,
+          "condition": "verify_confirm_required(&destructive_prompt",
+          "additional_context": "true, false).is_err()"
+        }
+      ],
+      "example_error_handling_empty_args": [
+        {
+          "line_number": 397,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "example_error_handling_missing_confirm_for_destructive": [
+        {
+          "line_number": 423,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-cli/tests/init_no_interactive_flag.rs": {
+      "test_init_comprehensive_no_interactive_coverage": [
+        {
+          "line_number": 461,
+          "pattern_type": "assert!",
+          "full_match": "assert!(true, \"All Init command no_interactive tests verified\");",
+          "message": "All Init command no_interactive tests verified",
+          "condition": "true",
+          "additional_context": null
+        }
+      ],
+      "test_init_mock_wizard_rejects_no_interactive": [
+        {
+          "line_number": 285,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        !would_run,\n        \"Wizard should not run when no_interactive=true (explicit rejection)\"\n    );",
+          "message": "Wizard should not run when no_interactive=true (explicit rejection)",
+          "condition": "!would_run",
+          "additional_context": null
+        }
+      ],
+      "test_init_mock_wizard_runs_interactively": [
+        {
+          "line_number": 302,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        would_run,\n        \"Wizard should run when no_interactive=false (default interactive mode)\"\n    );",
+          "message": "Wizard should run when no_interactive=false (default interactive mode)",
+          "condition": "would_run",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-cli/tests/no_interactive_flag_behavior.rs": {
+      "scan_combines_no_interactive_with_yes_flag": [
+        {
+          "line_number": 78,
+          "pattern_type": "assert!",
+          "full_match": "assert!(true, \"Scan combines no_interactive || yes correctly\");",
+          "message": "Scan combines no_interactive || yes correctly",
+          "condition": "true",
+          "additional_context": null
+        }
+      ],
+      "scan_without_no_interactive_prompts_for_confirmation": [
+        {
+          "line_number": 67,
+          "pattern_type": "assert!",
+          "full_match": "assert!(true, \"Interactive scan requires prompts (verified by code review)\");",
+          "message": "Interactive scan requires prompts (verified by code review)",
+          "condition": "true",
+          "additional_context": null
+        }
+      ],
+      "test_remove_prompt_suppression_with_mock": [
+        {
+          "line_number": 303,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        !should_prompt,\n        \"Prompt should be suppressed when no_interactive=true AND confirm=true\"\n    );",
+          "message": "Prompt should be suppressed when no_interactive=true AND confirm=true",
+          "condition": "!should_prompt",
+          "additional_context": null
+        },
+        {
+          "line_number": 313,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        should_prompt,\n        \"Prompt should be shown when no_interactive=false (default)\"\n    );",
+          "message": "Prompt should be shown when no_interactive=false (default)",
+          "condition": "should_prompt",
+          "additional_context": null
+        }
+      ],
+      "test_restore_prompt_suppression_with_mock": [
+        {
+          "line_number": 714,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        !should_prompt,\n        \"Prompt should be suppressed when no_interactive=true AND confirm=true\"\n    );",
+          "message": "Prompt should be suppressed when no_interactive=true AND confirm=true",
+          "condition": "!should_prompt",
+          "additional_context": null
+        },
+        {
+          "line_number": 724,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        should_prompt,\n        \"Prompt should be shown when no_interactive=false (default)\"\n    );",
+          "message": "Prompt should be shown when no_interactive=false (default)",
+          "condition": "should_prompt",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-cli/tests/remove_no_interactive_flag.rs": {
+      "test_remove_all_prompts_shown_when_no_interactive_false": [
+        {
+          "line_number": 559,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        prompt && !confirm_req,\n        \"When no_interactive=false: prompt shown AND --confirm not required\"\n    );",
+          "message": "When no_interactive=false: prompt shown AND --confirm not required",
+          "condition": "prompt && !confirm_req",
+          "additional_context": null
+        }
+      ],
+      "test_remove_all_prompts_suppressed_when_no_interactive_true": [
+        {
+          "line_number": 541,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        !prompt && confirm_req,\n        \"When no_interactive=true: prompt suppressed AND --confirm required\"\n    );",
+          "message": "When no_interactive=true: prompt suppressed AND --confirm required",
+          "condition": "!prompt && confirm_req",
+          "additional_context": null
+        }
+      ],
+      "test_remove_comprehensive_no_interactive_coverage": [
+        {
+          "line_number": 1076,
+          "pattern_type": "assert!",
+          "full_match": "assert!(true, \"All Remove command no_interactive tests verified\");",
+          "message": "All Remove command no_interactive tests verified",
+          "condition": "true",
+          "additional_context": null
+        }
+      ],
+      "test_remove_confirm_not_required_when_no_interactive_false": [
+        {
+          "line_number": 523,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        !confirm_required,\n        \"--confirm should NOT be required when no_interactive=false (prompts instead)\"\n    );",
+          "message": "--confirm should NOT be required when no_interactive=false (prompts instead)",
+          "condition": "!confirm_required",
+          "additional_context": null
+        }
+      ],
+      "test_remove_confirm_required_when_no_interactive_true": [
+        {
+          "line_number": 507,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        confirm_required,\n        \"--confirm should be required when no_interactive=true\"\n    );",
+          "message": "--confirm should be required when no_interactive=true",
+          "condition": "confirm_required",
+          "additional_context": null
+        }
+      ],
+      "test_remove_confirmation_prompt_shown_when_no_interactive_false": [
+        {
+          "line_number": 491,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        prompt_shown,\n        \"Confirmation prompt should be shown when no_interactive=false (default)\"\n    );",
+          "message": "Confirmation prompt should be shown when no_interactive=false (default)",
+          "condition": "prompt_shown",
+          "additional_context": null
+        }
+      ],
+      "test_remove_confirmation_prompt_suppressed_when_no_interactive_true": [
+        {
+          "line_number": 475,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        !prompt_shown,\n        \"Confirmation prompt should be suppressed when no_interactive=true\"\n    );",
+          "message": "Confirmation prompt should be suppressed when no_interactive=true",
+          "condition": "!prompt_shown",
+          "additional_context": null
+        }
+      ],
+      "test_remove_mock_prompt_no_interactive_false": [
+        {
+          "line_number": 457,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        would_prompt,\n        \"Prompt should be shown when no_interactive=false (default)\"\n    );",
+          "message": "Prompt should be shown when no_interactive=false (default)",
+          "condition": "would_prompt",
+          "additional_context": null
+        }
+      ],
+      "test_remove_mock_prompt_no_interactive_true": [
+        {
+          "line_number": 441,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        !would_prompt,\n        \"Prompt should not be shown when no_interactive=true\"\n    );",
+          "message": "Prompt should not be shown when no_interactive=true",
+          "condition": "!would_prompt",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-cli/tests/restore_no_interactive_flag.rs": {
+      "test_restore_code_order_validates_before_destructive": [
+        {
+          "line_number": 580,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        validate_pos < move_aside_pos,\n        \"manifest.validate() must be called before move_aside_for_rollback() \\\n         (validate at offset {validate_pos}, move_aside at offset {move_aside_pos} from fn start)\"\n    );",
+          "message": "manifest.validate() must be called before move_aside_for_rollback() \\\n         (validate at offset {validate_pos}, move_aside at offset {move_aside_pos} from fn start)",
+          "condition": "validate_pos < move_aside_pos",
+          "additional_context": null
+        }
+      ],
+      "test_restore_comprehensive_no_interactive_coverage": [
+        {
+          "line_number": 792,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        validate_pos < move_aside_pos,\n        \"\u2713 manifest.validate() called before move_aside_for_rollback()\"\n    );",
+          "message": "\u2713 manifest.validate() called before move_aside_for_rollback()",
+          "condition": "validate_pos < move_aside_pos",
+          "additional_context": null
+        }
+      ],
+      "test_restore_confirm_check_before_prompt": [
+        {
+          "line_number": 608,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        confirm_check < prompt_check,\n        \"Confirm requirement check must come before prompt check \\\n         (confirm at offset {confirm_check}, prompt at offset {prompt_check} from fn start)\"\n    );",
+          "message": "Confirm requirement check must come before prompt check \\\n         (confirm at offset {confirm_check}, prompt at offset {prompt_check} from fn start)",
+          "condition": "confirm_check < prompt_check",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-cli/tests/scan_no_interactive_flag.rs": {
+      "test_scan_all_prompts_shown_when_no_interactive_false": [
+        {
+          "line_number": 603,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        reg_prompt && rename_prompt && !auto_reg,\n        \"When no_interactive=false: both prompts shown AND auto-registration disabled\"\n    );",
+          "message": "When no_interactive=false: both prompts shown AND auto-registration disabled",
+          "condition": "reg_prompt && rename_prompt && !auto_reg",
+          "additional_context": null
+        }
+      ],
+      "test_scan_all_prompts_suppressed_when_no_interactive_true": [
+        {
+          "line_number": 584,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        !reg_prompt && !rename_prompt && auto_reg,\n        \"When no_interactive=true: both prompts suppressed AND auto-registration enabled\"\n    );",
+          "message": "When no_interactive=true: both prompts suppressed AND auto-registration enabled",
+          "condition": "!reg_prompt && !rename_prompt && auto_reg",
+          "additional_context": null
+        }
+      ],
+      "test_scan_behavior_auto_registers_when_no_interactive_true": [
+        {
+          "line_number": 549,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        auto_register,\n        \"Scan should auto-register when no_interactive=true\"\n    );",
+          "message": "Scan should auto-register when no_interactive=true",
+          "condition": "auto_register",
+          "additional_context": null
+        }
+      ],
+      "test_scan_comprehensive_no_interactive_coverage": [
+        {
+          "line_number": 818,
+          "pattern_type": "assert!",
+          "full_match": "assert!(true, \"All Scan command no_interactive tests verified\");",
+          "message": "All Scan command no_interactive tests verified",
+          "condition": "true",
+          "additional_context": null
+        }
+      ],
+      "test_scan_does_not_auto_register_when_no_interactive_false": [
+        {
+          "line_number": 565,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        !auto_register,\n        \"Scan should not auto-register when no_interactive=false (requires confirmation)\"\n    );",
+          "message": "Scan should not auto-register when no_interactive=false (requires confirmation)",
+          "condition": "!auto_register",
+          "additional_context": null
+        }
+      ],
+      "test_scan_mock_prompt_no_interactive_false": [
+        {
+          "line_number": 467,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        would_prompt,\n        \"Prompt should be shown when no_interactive=false (default)\"\n    );",
+          "message": "Prompt should be shown when no_interactive=false (default)",
+          "condition": "would_prompt",
+          "additional_context": null
+        }
+      ],
+      "test_scan_mock_prompt_no_interactive_true": [
+        {
+          "line_number": 452,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        !would_prompt,\n        \"Prompt should not be shown when no_interactive=true\"\n    );",
+          "message": "Prompt should not be shown when no_interactive=true",
+          "condition": "!would_prompt",
+          "additional_context": null
+        }
+      ],
+      "test_scan_registration_prompt_shown_when_no_interactive_false": [
+        {
+          "line_number": 501,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        prompt_shown,\n        \"Registration prompt should be shown when no_interactive=false (default)\"\n    );",
+          "message": "Registration prompt should be shown when no_interactive=false (default)",
+          "condition": "prompt_shown",
+          "additional_context": null
+        }
+      ],
+      "test_scan_registration_prompt_suppressed_when_no_interactive_true": [
+        {
+          "line_number": 485,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        !prompt_shown,\n        \"Registration prompt should be suppressed when no_interactive=true\"\n    );",
+          "message": "Registration prompt should be suppressed when no_interactive=true",
+          "condition": "!prompt_shown",
+          "additional_context": null
+        }
+      ],
+      "test_scan_rename_prompt_shown_when_no_interactive_false": [
+        {
+          "line_number": 533,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        prompt_shown,\n        \"Rename prompt should be shown when no_interactive=false (default)\"\n    );",
+          "message": "Rename prompt should be shown when no_interactive=false (default)",
+          "condition": "prompt_shown",
+          "additional_context": null
+        }
+      ],
+      "test_scan_rename_prompt_suppressed_when_no_interactive_true": [
+        {
+          "line_number": 517,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        !prompt_shown,\n        \"Rename prompt should be suppressed when no_interactive=true\"\n    );",
+          "message": "Rename prompt should be suppressed when no_interactive=true",
+          "condition": "!prompt_shown",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/acceptance/s1_morning_review.rs": {
+      "s1_morning_review_all_facts_present": [
+        {
+          "line_number": 73,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        total_cost >= 0.0,\n        \"total_spend_usd must be non-negative, got: {}\",\n        total_cost\n    );",
+          "message": "total_spend_usd must be non-negative, got: {}",
+          "condition": "total_cost >= 0.0",
+          "additional_context": "total_cost"
+        }
+      ],
+      "s1_morning_review_cost_accuracy": [
+        {
+          "line_number": 255,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        total_cost >= 0.0,\n        \"Total cost must be non-negative\"\n    );",
+          "message": "Total cost must be non-negative",
+          "condition": "total_cost >= 0.0",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/acceptance/s3_bead_creation_from_chat.rs": {
+      "s3_chat_creates_draft_in_queue": [
+        {
+          "line_number": 179,
+          "pattern_type": "assert!",
+          "full_match": "assert!(found, \"Draft should appear in the draft queue\");",
+          "message": "Draft should appear in the draft queue",
+          "condition": "found",
+          "additional_context": null
+        }
+      ],
+      "s3_end_to_end_chat_flow": [
+        {
+          "line_number": 478,
+          "pattern_type": "assert!",
+          "full_match": "assert!(draft_in_queue, \"Draft should be in queue\");",
+          "message": "Draft should be in queue",
+          "condition": "draft_in_queue",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/acceptance/s4_daemon_restart.rs": {
+      "s4_daemon_restart_no_bead_loss": [
+        {
+          "line_number": 218,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        mid_event_count > initial_event_count,\n        \"Worker should have written more events while HOOP was down\"\n    );",
+          "message": "Worker should have written more events while HOOP was down",
+          "condition": "mid_event_count > initial_event_count",
+          "additional_context": null
+        }
+      ],
+      "s4_fleet_unaffected_by_restart": [
+        {
+          "line_number": 430,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        events_downtime > events_before,\n        \"Worker should continue writing events during HOOP downtime\"\n    );",
+          "message": "Worker should continue writing events during HOOP downtime",
+          "condition": "events_downtime > events_before",
+          "additional_context": null
+        },
+        {
+          "line_number": 462,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        events_after > events_downtime,\n        \"Worker should continue after HOOP restart\"\n    );",
+          "message": "Worker should continue after HOOP restart",
+          "condition": "events_after > events_downtime",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/acceptance/s5_workspace_deleted.rs": {
+      "s5_auto_recovery_on_restore": [
+        {
+          "line_number": 385,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        status == 503 || readyz.status == \"degraded\",\n        \"Should be in degraded state after workspace deletion\"\n    );",
+          "message": "Should be in degraded state after workspace deletion",
+          "condition": "status == 503 || readyz.status == \"degraded\"",
+          "additional_context": null
+        },
+        {
+          "line_number": 411,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        recovered,\n        \"Auto-recovery should occur within 10s of workspace restore\"\n    );",
+          "message": "Auto-recovery should occur within 10s of workspace restore",
+          "condition": "recovered",
+          "additional_context": null
+        }
+      ],
+      "s5_workspace_deleted_error_within_10s": [
+        {
+          "line_number": 194,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        degraded_detected,\n        \"Error card should appear within 10s of workspace deletion\"\n    );",
+          "message": "Error card should appear within 10s of workspace deletion",
+          "condition": "degraded_detected",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/acceptance/s6_machine_mode.rs": {
+      "s6_no_prompts_to_stdout": [
+        {
+          "line_number": 404,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to run hoop with args: {:?}\"",
+          "message": "Failed to run hoop with args: {:?}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "s6_projects_scan_yes_no_prompt": [
+        {
+          "line_number": 284,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        line_count < 50,\n        \"Output should be concise without prompts, got {} lines\",\n        line_count\n    );",
+          "message": "Output should be concise without prompts, got {} lines",
+          "condition": "line_count < 50",
+          "additional_context": "line_count"
+        }
+      ]
+    },
+    "hoop-daemon/tests/adapter_failover_integration.rs": {
+      "test_session_continuity_after_daemon_restart": [
+        {
+          "line_number": 615,
+          "pattern_type": "assert!",
+          "full_match": "assert!(!loaded_session.has_started_session);",
+          "message": null,
+          "condition": "!loaded_session.has_started_session",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/adapter_failover_test.rs": {
+      "anthropic_5xx_mock_server_daemon_survives": [
+        {
+          "line_number": 899,
+          "pattern_type": "assert!",
+          "full_match": "assert!(checks >= 6, \"Should have performed at least 6 health checks over 30s\");",
+          "message": "Should have performed at least 6 health checks over 30s",
+          "condition": "checks >= 6",
+          "additional_context": null
+        }
+      ],
+      "unknown": [
+        {
+          "line_number": 49,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"Daemon did not become ready\"",
+          "message": "Daemon did not become ready",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/backup_config_deserialization.rs": {
+      "full_config_uses_explicit_values": [
+        {
+          "line_number": 85,
+          "pattern_type": "assert!",
+          "full_match": "assert!(config.encryption);",
+          "message": null,
+          "condition": "config.encryption",
+          "additional_context": null
+        }
+      ],
+      "minimal_config_applies_defaults": [
+        {
+          "line_number": 59,
+          "pattern_type": "assert!",
+          "full_match": "assert!(!config.encryption);",
+          "message": null,
+          "condition": "!config.encryption",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/backup_restore_cycle.rs": {
+      "backup_fails_when_encryption_enabled_but_key_missing": [
+        {
+          "line_number": 313,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "backup_scheduler_runs_on_cron_schedule": [
+        {
+          "line_number": 641,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"age-keygen failed: {}\"",
+          "message": "age-keygen failed: {}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "backup_succeeds_with_encryption_when_key_provided": [
+        {
+          "line_number": 350,
+          "pattern_type": "assert!",
+          "full_match": "assert!(config.encryption, \"Config should have encryption enabled\");",
+          "message": "Config should have encryption enabled",
+          "condition": "config.encryption",
+          "additional_context": null
+        }
+      ],
+      "backup_succeeds_without_encryption_when_disabled": [
+        {
+          "line_number": 391,
+          "pattern_type": "assert!",
+          "full_match": "assert!(!config.encryption, \"Config should have encryption disabled\");",
+          "message": "Config should have encryption disabled",
+          "condition": "!config.encryption",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/bead_created_by_hoop_broadcast.rs": {
+      "test_fleet_notification_ring_retains_bead_created_by_hoop": [
+        {
+          "line_number": 148,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        found,\n        \"Fleet notification ring should contain bead_created_by_hoop event\"\n    );",
+          "message": "Fleet notification ring should contain bead_created_by_hoop event",
+          "condition": "found",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/bead_real_line_deserialization.rs": {
+      "all_bead_status_lowercase_values_deserialize": [
+        {
+          "line_number": 89,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Status '{}' must deserialize\"",
+          "message": "Status '{}' must deserialize",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "all_bead_type_lowercase_values_deserialize": [
+        {
+          "line_number": 123,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Issue type '{}' must deserialize\"",
+          "message": "Issue type '{}' must deserialize",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "unrecognized_bead_status_becomes_unknown": [
+        {
+          "line_number": 145,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Unrecognized status '{}' must deserialize as Unknown\"",
+          "message": "Unrecognized status '{}' must deserialize as Unknown",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "unrecognized_bead_type_becomes_unknown": [
+        {
+          "line_number": 167,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Unrecognized issue type '{}' must deserialize as Unknown\"",
+          "message": "Unrecognized issue type '{}' must deserialize as Unknown",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/beads_deletion_http.rs": {
+      "test_beads_deletion_readyz_degraded": [
+        {
+          "line_number": 139,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        initially_healthy,\n        \"Daemon should become healthy initially within 10s\"\n    );",
+          "message": "Daemon should become healthy initially within 10s",
+          "condition": "initially_healthy",
+          "additional_context": null
+        },
+        {
+          "line_number": 173,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        project_a_degraded,\n        \"/readyz should report project-a as degraded within 30s\"\n    );",
+          "message": "/readyz should report project-a as degraded within 30s",
+          "condition": "project_a_degraded",
+          "additional_context": null
+        },
+        {
+          "line_number": 186,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        project_a_status.state != \"Healthy\",\n        \"project-a state should not be Healthy, got: {}\",\n        project_a_status.state\n    );",
+          "message": "project-a state should not be Healthy, got: {}",
+          "condition": "project_a_status.state != \"Healthy\"",
+          "additional_context": "project_a_status.state"
+        },
+        {
+          "line_number": 216,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        project_b_api.state == \"Healthy\" || project_b_api.state == \"Starting\",\n        \"project-b should be Healthy or Starting, got: {}\",\n        project_b_api.state\n    );",
+          "message": "project-b should be Healthy or Starting, got: {}",
+          "condition": "project_b_api.state == \"Healthy\" || project_b_api.state == \"Starting\"",
+          "additional_context": "project_b_api.state"
+        },
+        {
+          "line_number": 223,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        project_c_api.state == \"Healthy\" || project_c_api.state == \"Starting\",\n        \"project-c should be Healthy or Starting, got: {}\",\n        project_c_api.state\n    );",
+          "message": "project-c should be Healthy or Starting, got: {}",
+          "condition": "project_c_api.state == \"Healthy\" || project_c_api.state == \"Starting\"",
+          "additional_context": "project_c_api.state"
+        },
+        {
+          "line_number": 255,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        recovered,\n        \"Daemon should recover to healthy state after .beads/ restoration\"\n    );",
+          "message": "Daemon should recover to healthy state after .beads/ restoration",
+          "condition": "recovered",
+          "additional_context": null
+        }
+      ],
+      "test_beads_deletion_sibling_events_continue": [
+        {
+          "line_number": 356,
+          "pattern_type": "assert!",
+          "full_match": "assert!(degraded, \"project-a should be degraded\");",
+          "message": "project-a should be degraded",
+          "condition": "degraded",
+          "additional_context": null
+        },
+        {
+          "line_number": 379,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        project_b.state == \"Healthy\" || project_b.state == \"Starting\",\n        \"project-b should be operational, got: {}\",\n        project_b.state\n    );",
+          "message": "project-b should be operational, got: {}",
+          "condition": "project_b.state == \"Healthy\" || project_b.state == \"Starting\"",
+          "additional_context": "project_b.state"
+        },
+        {
+          "line_number": 384,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        project_c.state == \"Healthy\" || project_c.state == \"Starting\",\n        \"project-c should be operational, got: {}\",\n        project_c.state\n    );",
+          "message": "project-c should be operational, got: {}",
+          "condition": "project_c.state == \"Healthy\" || project_c.state == \"Starting\"",
+          "additional_context": "project_c.state"
+        }
+      ]
+    },
+    "hoop-daemon/tests/beads_removal_recovery.rs": {
+      "test_beads_removal_shows_error_state": [
+        {
+          "line_number": 223,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        project_b_healthy,\n        \"Project B should remain healthy during project A's degradation\"\n    );",
+          "message": "Project B should remain healthy during project A's degradation",
+          "condition": "project_b_healthy",
+          "additional_context": null
+        },
+        {
+          "line_number": 228,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        project_c_healthy,\n        \"Project C should remain healthy during project A's degradation\"\n    );",
+          "message": "Project C should remain healthy during project A's degradation",
+          "condition": "project_c_healthy",
+          "additional_context": null
+        },
+        {
+          "line_number": 305,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        project_a_recovered,\n        \"Project A should recover after .beads/ is restored and config is reloaded\"\n    );",
+          "message": "Project A should recover after .beads/ is restored and config is reloaded",
+          "condition": "project_a_recovered",
+          "additional_context": null
+        }
+      ],
+      "test_multiple_beads_removal_isolated": [
+        {
+          "line_number": 410,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        degraded_count >= 2,\n        \"At least 2 projects should be degraded\"\n    );",
+          "message": "At least 2 projects should be degraded",
+          "condition": "degraded_count >= 2",
+          "additional_context": null
+        },
+        {
+          "line_number": 434,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        project_c_healthy,\n        \"Project C should remain healthy even when A and B are degraded\"\n    );",
+          "message": "Project C should remain healthy even when A and B are degraded",
+          "condition": "project_c_healthy",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/claimed_at_parsing.rs": {
+      "demonstrates_premature_end_of_input_issue": [
+        {
+          "line_number": 191,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "empty_variants": [
+        {
+          "line_number": 700,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n            !result,\n            \"Empty variant '{}' should not parse\",\n            ts.escape_debug()\n        );",
+          "message": "Empty variant '{}' should not parse",
+          "condition": "!result",
+          "additional_context": "ts.escape_debug()"
+        },
+        {
+          "line_number": 713,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "extreme_future_dates": [
+        {
+          "line_number": 559,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n            result,\n            \"Extreme future date '{}' should parse as valid RFC3339\",\n            ts\n        );",
+          "message": "Extreme future date '{}' should parse as valid RFC3339",
+          "condition": "result",
+          "additional_context": "ts"
+        }
+      ],
+      "invalid_characters": [
+        {
+          "line_number": 441,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n            !result,\n            \"Timestamp with invalid character '{}' should not parse\",\n            ts\n        );",
+          "message": "Timestamp with invalid character '{}' should not parse",
+          "condition": "!result",
+          "additional_context": "ts"
+        }
+      ],
+      "invalid_timezone_offsets": [
+        {
+          "line_number": 588,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n            !result,\n            \"Invalid timezone offset '{}' should not parse\",\n            ts\n        );",
+          "message": "Invalid timezone offset '{}' should not parse",
+          "condition": "!result",
+          "additional_context": "ts"
+        }
+      ],
+      "negative_timestamps_before_epoch": [
+        {
+          "line_number": 528,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n            result,\n            \"Negative timestamp (before epoch) '{}' should parse as valid RFC3339\",\n            ts\n        );",
+          "message": "Negative timestamp (before epoch) '{}' should parse as valid RFC3339",
+          "condition": "result",
+          "additional_context": "ts"
+        }
+      ],
+      "special_characters_and_unicode": [
+        {
+          "line_number": 671,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n            !result,\n            \"Timestamp with special character '{}' should not parse\",\n            ts\n        );",
+          "message": "Timestamp with special character '{}' should not parse",
+          "condition": "!result",
+          "additional_context": "ts"
+        }
+      ],
+      "sql_injection_attempts": [
+        {
+          "line_number": 473,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n            !result,\n            \"SQL injection attempt '{}' should not parse as valid timestamp\",\n            ts\n        );",
+          "message": "SQL injection attempt '{}' should not parse as valid timestamp",
+          "condition": "!result",
+          "additional_context": "ts"
+        }
+      ],
+      "timestamps_with_extra_text": [
+        {
+          "line_number": 739,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n            !result,\n            \"Timestamp with extra text '{}' should not parse\",\n            ts\n        );",
+          "message": "Timestamp with extra text '{}' should not parse",
+          "condition": "!result",
+          "additional_context": "ts"
+        }
+      ]
+    },
+    "hoop-daemon/tests/config_field_validation.rs": {
+      "test_error_includes_line_and_column_numbers": [
+        {
+          "line_number": 1005,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        err.line > 0,\n        \"error should include line number: {:?}\",\n        err.line\n    );",
+          "message": "error should include line number: {:?}",
+          "condition": "err.line > 0",
+          "additional_context": "err.line"
+        },
+        {
+          "line_number": 1010,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        err.col > 0,\n        \"error should include column number: {:?}\",\n        err.col\n    );",
+          "message": "error should include column number: {:?}",
+          "condition": "err.col > 0",
+          "additional_context": "err.col"
+        }
+      ],
+      "test_yaml_syntax_error_invalid_escape_sequence": [
+        {
+          "line_number": 969,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        err.line > 0,\n        \"error should include line number: {:?}\",\n        err.line\n    );",
+          "message": "error should include line number: {:?}",
+          "condition": "err.line > 0",
+          "additional_context": "err.line"
+        }
+      ],
+      "test_yaml_syntax_error_trailing_comma_in_array": [
+        {
+          "line_number": 988,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        err.line > 0,\n        \"error should include line number: {:?}\",\n        err.line\n    );",
+          "message": "error should include line number: {:?}",
+          "condition": "err.line > 0",
+          "additional_context": "err.line"
+        }
+      ],
+      "test_yaml_syntax_error_unclosed_quote": [
+        {
+          "line_number": 935,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        err.line > 0,\n        \"error should include line number: {:?}\",\n        err.line\n    );",
+          "message": "error should include line number: {:?}",
+          "condition": "err.line > 0",
+          "additional_context": "err.line"
+        }
+      ],
+      "test_yaml_syntax_error_unmatched_bracket": [
+        {
+          "line_number": 952,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        err.line > 0,\n        \"error should include line number: {:?}\",\n        err.line\n    );",
+          "message": "error should include line number: {:?}",
+          "condition": "err.line > 0",
+          "additional_context": "err.line"
+        }
+      ]
+    },
+    "hoop-daemon/tests/config_reload_audit.rs": {
+      "test_config_reload_audit_rejected": [
+        {
+          "line_number": 192,
+          "pattern_type": "assert!",
+          "full_match": "assert!(matches!(row.result, fleet::ActionResult::Failure));",
+          "message": null,
+          "condition": "matches!(row.result",
+          "additional_context": "fleet::ActionResult::Failure)"
+        },
+        {
+          "line_number": 194,
+          "pattern_type": "assert!",
+          "full_match": "assert!(row.hash_prev != row.hash_self);",
+          "message": null,
+          "condition": "row.hash_prev != row.hash_self",
+          "additional_context": null
+        }
+      ],
+      "test_config_reload_audit_success": [
+        {
+          "line_number": 118,
+          "pattern_type": "assert!",
+          "full_match": "assert!(matches!(row.result, fleet::ActionResult::Success));",
+          "message": null,
+          "condition": "matches!(row.result",
+          "additional_context": "fleet::ActionResult::Success)"
+        },
+        {
+          "line_number": 120,
+          "pattern_type": "assert!",
+          "full_match": "assert!(row.hash_prev != row.hash_self, \"hash chain must advance\");",
+          "message": "hash chain must advance",
+          "condition": "row.hash_prev != row.hash_self",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/config_reload_cycle.rs": {
+      "test_schema_violation_surfaces_structured_details": [
+        {
+          "line_number": 262,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 275,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 277,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        err2.line > 0,\n        \"type error should report line number: line={}\",\n        err2.line,\n    );",
+          "message": "type error should report line number: line={}",
+          "condition": "err2.line > 0",
+          "additional_context": "err2.line,"
+        },
+        {
+          "line_number": 293,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 295,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        err3.line > 0,\n        \"parse error should report line number: line={}\",\n        err3.line,\n    );",
+          "message": "parse error should report line number: line={}",
+          "condition": "err3.line > 0",
+          "additional_context": "err3.line,"
+        }
+      ]
+    },
+    "hoop-daemon/tests/create_only_stub.rs": {
+      "test_runtime_guard_rejects_forbidden_verbs": [
+        {
+          "line_number": 265,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/create_stitch_no_auto_submit.rs": {
+      "test_create_draft_never_creates_bead_directly": [
+        {
+          "line_number": 306,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n            fetched.status != \"submitted\",\n            \"draft must NOT be in 'submitted' status immediately after creation (combo: {})\",\n            combo.description\n        );",
+          "message": "draft must NOT be in 'submitted' status immediately after creation (combo: {})",
+          "condition": "fetched.status != \"submitted\"",
+          "additional_context": "combo.description"
+        },
+        {
+          "line_number": 312,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n            fetched.status != \"approved\",\n            \"draft must NOT be in 'approved' status immediately after creation (combo: {})\",\n            combo.description\n        );",
+          "message": "draft must NOT be in 'approved' status immediately after creation (combo: {})",
+          "condition": "fetched.status != \"approved\"",
+          "additional_context": "combo.description"
+        }
+      ]
+    },
+    "hoop-daemon/tests/cross_workspace_blockers.rs": {
+      "test_stitch_links_schema_has_workspace_columns": [
+        {
+          "line_number": 191,
+          "pattern_type": "assert!",
+          "full_match": "assert!(workspace_from_exists, \"workspace_from column should exist\");",
+          "message": "workspace_from column should exist",
+          "condition": "workspace_from_exists",
+          "additional_context": null
+        },
+        {
+          "line_number": 202,
+          "pattern_type": "assert!",
+          "full_match": "assert!(workspace_to_exists, \"workspace_to column should exist\");",
+          "message": "workspace_to column should exist",
+          "condition": "workspace_to_exists",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/disaster_recovery_runbook.rs": {
+      "test_manifest_validation_rejects_newer_schema": [
+        {
+          "line_number": 556,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_scenario_1_pitfall_version_mismatch_detected": [
+        {
+          "line_number": 198,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/epoch_sync_invariant.rs": {
+      "test_epoch_sync_init_event_carrying_subscriptions": [
+        {
+          "line_number": 68,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected text message for init, got {:?}\"",
+          "message": "Expected text message for init, got {:?}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_epoch_sync_init_is_always_first_message": [
+        {
+          "line_number": 280,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected text message (iteration {})\"",
+          "message": "Expected text message (iteration {})",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_epoch_sync_initial_snapshots_after_init": [
+        {
+          "line_number": 128,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        received_workers_snapshot,\n        \"Should receive workers_snapshot after init\"\n    );",
+          "message": "Should receive workers_snapshot after init",
+          "condition": "received_workers_snapshot",
+          "additional_context": null
+        },
+        {
+          "line_number": 132,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        received_beads_snapshot,\n        \"Should receive beads_snapshot after init\"\n    );",
+          "message": "Should receive beads_snapshot after init",
+          "condition": "received_beads_snapshot",
+          "additional_context": null
+        },
+        {
+          "line_number": 136,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        received_config_status,\n        \"Should receive config_status after init\"\n    );",
+          "message": "Should receive config_status after init",
+          "condition": "received_config_status",
+          "additional_context": null
+        }
+      ],
+      "test_epoch_sync_reconnect_wipes_and_rebuilds": [
+        {
+          "line_number": 226,
+          "pattern_type": "assert!",
+          "full_match": "assert!(received_init, \"Reconnect should receive init event\");",
+          "message": "Reconnect should receive init event",
+          "condition": "received_init",
+          "additional_context": null
+        },
+        {
+          "line_number": 227,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        received_beads_snapshot,\n        \"Reconnect should receive beads_snapshot\"\n    );",
+          "message": "Reconnect should receive beads_snapshot",
+          "condition": "received_beads_snapshot",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/filesystem_failure_isolation.rs": {
+      "test_beads_removal_degraded_readyz_recovery": [
+        {
+          "line_number": 361,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        degraded_detected,\n        \"project-a should be detected as degraded within 30 seconds\"\n    );",
+          "message": "project-a should be detected as degraded within 30 seconds",
+          "condition": "degraded_detected",
+          "additional_context": null
+        },
+        {
+          "line_number": 397,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        recovered,\n        \"project-a should recover after .beads/ is restored\"\n    );",
+          "message": "project-a should recover after .beads/ is restored",
+          "condition": "recovered",
+          "additional_context": null
+        }
+      ],
+      "test_beads_removal_shows_error_state_siblings_unaffected": [
+        {
+          "line_number": 245,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        degraded_detected,\n        \"project-a should be detected as degraded within 30 seconds\"\n    );",
+          "message": "project-a should be detected as degraded within 30 seconds",
+          "condition": "degraded_detected",
+          "additional_context": null
+        }
+      ],
+      "test_sibling_projects_continue_during_degradation": [
+        {
+          "line_number": 516,
+          "pattern_type": "assert!",
+          "full_match": "assert!(project_a_degraded, \"project-a should be degraded\");",
+          "message": "project-a should be degraded",
+          "condition": "project_a_degraded",
+          "additional_context": null
+        },
+        {
+          "line_number": 568,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        received_b_status,\n        \"project-b should continue sending status events\"\n    );",
+          "message": "project-b should continue sending status events",
+          "condition": "received_b_status",
+          "additional_context": null
+        },
+        {
+          "line_number": 572,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        received_c_status,\n        \"project-c should continue sending status events\"\n    );",
+          "message": "project-c should continue sending status events",
+          "condition": "received_c_status",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/fix_patterns_integration.rs": {
+      "fix_pattern_cosine_similarity_edge_cases": [
+        {
+          "line_number": 364,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n            matches[0].similarity < 0.01,\n            \"orthogonal vectors should have near-zero similarity\"\n        );",
+          "message": "orthogonal vectors should have near-zero similarity",
+          "condition": "matches[0].similarity < 0.01",
+          "additional_context": null
+        }
+      ],
+      "fix_pattern_signature_matching": [
+        {
+          "line_number": 182,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        matches[0].similarity > 0.99,\n        \"first match similarity should be > 0.99\"\n    );",
+          "message": "first match similarity should be > 0.99",
+          "condition": "matches[0].similarity > 0.99",
+          "additional_context": null
+        },
+        {
+          "line_number": 186,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        matches[1].similarity > 0.99,\n        \"second match similarity should be > 0.99\"\n    );",
+          "message": "second match similarity should be > 0.99",
+          "condition": "matches[1].similarity > 0.99",
+          "additional_context": null
+        },
+        {
+          "line_number": 193,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        matches[2].similarity > 0.5,\n        \"different pattern should have similarity > 0.5\"\n    );",
+          "message": "different pattern should have similarity > 0.5",
+          "condition": "matches[2].similarity > 0.5",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/golden_transcripts_regression.rs": {
+      "all_golden_transcripts_parse_successfully": [
+        {
+          "line_number": 502,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to read {:?}: {}\"",
+          "message": "Failed to read {:?}: {}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "all_jsonl_files_contain_valid_json": [
+        {
+          "line_number": 170,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to read {:?}: {}\"",
+          "message": "Failed to read {:?}: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 177,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\n                        \"Invalid JSON on line {} of {:?}: {}\\n  Line: {}\"",
+          "message": "Invalid JSON on line {} of {:?}: {}\\n  Line: {}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "all_scenario_files_have_content": [
+        {
+          "line_number": 199,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to read {:?}: {}\"",
+          "message": "Failed to read {:?}: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 212,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to read {:?}: {}\"",
+          "message": "Failed to read {:?}: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 217,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n                    non_empty_lines > 0,\n                    \"Golden transcript file {:?} must contain at least one non-empty JSON line\",\n                    path\n                );",
+          "message": "Golden transcript file {:?} must contain at least one non-empty JSON line",
+          "condition": "non_empty_lines > 0",
+          "additional_context": "path"
+        }
+      ],
+      "all_scenarios_exist_for_each_adapter": [
+        {
+          "line_number": 107,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to read scenario directory {scenario_path:?}: {e}\"",
+          "message": "Failed to read scenario directory {scenario_path:?}: {e}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "corpus_size_is_bounded": [
+        {
+          "line_number": 149,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        total_size < MAX_SIZE_BYTES,\n        \"Golden transcripts corpus must be < 10MB, currently {} bytes\",\n        total_size\n    );",
+          "message": "Golden transcripts corpus must be < 10MB, currently {} bytes",
+          "condition": "total_size < MAX_SIZE_BYTES",
+          "additional_context": "total_size"
+        }
+      ],
+      "failure_scenarios_contain_error_events": [
+        {
+          "line_number": 361,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to read {:?}: {}\"",
+          "message": "Failed to read {:?}: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 374,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to read {:?}: {}\"",
+          "message": "Failed to read {:?}: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 391,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n                has_error,\n                \"Failure scenario {:?} for adapter '{}' must contain at least one error indication\",\n                path, adapter\n            );",
+          "message": "Failure scenario {:?} for adapter '{}' must contain at least one error indication",
+          "condition": "has_error",
+          "additional_context": "path, adapter"
+        }
+      ],
+      "failure_scenarios_parse_to_error_events": [
+        {
+          "line_number": 637,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to read {:?}: {}\"",
+          "message": "Failed to read {:?}: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 650,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to read {:?}: {}\"",
+          "message": "Failed to read {:?}: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 665,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n                has_error,\n                \"Failure scenario {:?} for adapter '{}' must parse to at least one Error event\",\n                path, adapter\n            );",
+          "message": "Failure scenario {:?} for adapter '{}' must parse to at least one Error event",
+          "condition": "has_error",
+          "additional_context": "path, adapter"
+        }
+      ],
+      "simple_turn_scenarios_contain_text_events": [
+        {
+          "line_number": 235,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to read {:?}: {}\"",
+          "message": "Failed to read {:?}: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 248,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to read {:?}: {}\"",
+          "message": "Failed to read {:?}: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 280,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n                has_text,\n                \"Simple turn scenario {:?} for adapter '{}' must contain at least one text event\",\n                path, adapter\n            );",
+          "message": "Simple turn scenario {:?} for adapter '{}' must contain at least one text event",
+          "condition": "has_text",
+          "additional_context": "path, adapter"
+        }
+      ],
+      "simple_turn_scenarios_parse_to_text_delta": [
+        {
+          "line_number": 530,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to read {:?}: {}\"",
+          "message": "Failed to read {:?}: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 543,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to read {:?}: {}\"",
+          "message": "Failed to read {:?}: {}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "tool_heavy_scenarios_contain_tool_events": [
+        {
+          "line_number": 297,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to read {:?}: {}\"",
+          "message": "Failed to read {:?}: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 310,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to read {:?}: {}\"",
+          "message": "Failed to read {:?}: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 344,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n                has_tool,\n                \"Tool-heavy scenario {:?} for adapter '{}' must contain at least one tool event\",\n                path, adapter\n            );",
+          "message": "Tool-heavy scenario {:?} for adapter '{}' must contain at least one tool event",
+          "condition": "has_tool",
+          "additional_context": "path, adapter"
+        }
+      ],
+      "tool_heavy_scenarios_parse_to_tool_events": [
+        {
+          "line_number": 579,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to read {:?}: {}\"",
+          "message": "Failed to read {:?}: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 592,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to read {:?}: {}\"",
+          "message": "Failed to read {:?}: {}",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/hoop_dies_nothing_notices.rs": {
+      "test_corrupted_events_dont_cause_hoop_to_crash": [
+        {
+          "line_number": 672,
+          "pattern_type": "assert!",
+          "full_match": "assert!(valid_count >= 4, \"should still parse all valid events\");",
+          "message": "should still parse all valid events",
+          "condition": "valid_count >= 4",
+          "additional_context": null
+        }
+      ],
+      "test_events_jsonl_persists_across_restarts": [
+        {
+          "line_number": 505,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        count_after_run2 > count_after_run1,\n        \"events should accumulate across restarts\"\n    );",
+          "message": "events should accumulate across restarts",
+          "condition": "count_after_run2 > count_after_run1",
+          "additional_context": null
+        }
+      ],
+      "test_hoop_dies_nothing_notices_repeated": [
+        {
+          "line_number": 320,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n            events_before >= 6,\n            \"iteration {}: should have at least 6 events before HOOP starts\",\n            iteration\n        );",
+          "message": "iteration {}: should have at least 6 events before HOOP starts",
+          "condition": "events_before >= 6",
+          "additional_context": "iteration"
+        },
+        {
+          "line_number": 339,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n            during_absence_count > before_hoop_count,\n            \"iteration {}: worker should write more events during HOOP absence\",\n            iteration\n        );",
+          "message": "iteration {}: worker should write more events during HOOP absence",
+          "condition": "during_absence_count > before_hoop_count",
+          "additional_context": "iteration"
+        },
+        {
+          "line_number": 346,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n            events_during > events_before,\n            \"iteration {}: events.jsonl should grow during HOOP absence\",\n            iteration\n        );",
+          "message": "iteration {}: events.jsonl should grow during HOOP absence",
+          "condition": "events_during > events_before",
+          "additional_context": "iteration"
+        }
+      ],
+      "test_hoop_dies_nothing_notices_single_iteration": [
+        {
+          "line_number": 211,
+          "pattern_type": "assert!",
+          "full_match": "assert!(initial_count >= 2, \"worker should have written at least 2 events\");",
+          "message": "worker should have written at least 2 events",
+          "condition": "initial_count >= 2",
+          "additional_context": null
+        },
+        {
+          "line_number": 215,
+          "pattern_type": "assert!",
+          "full_match": "assert!(file_count >= 2, \"events.jsonl should contain at least 2 events\");",
+          "message": "events.jsonl should contain at least 2 events",
+          "condition": "file_count >= 2",
+          "additional_context": null
+        },
+        {
+          "line_number": 232,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        parsed_count >= 2,\n        \"should be able to parse at least 2 events from events.jsonl\"\n    );",
+          "message": "should be able to parse at least 2 events from events.jsonl",
+          "condition": "parsed_count >= 2",
+          "additional_context": null
+        },
+        {
+          "line_number": 249,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        after_death_count > initial_count,\n        \"worker should continue writing events during HOOP absence\"\n    );",
+          "message": "worker should continue writing events during HOOP absence",
+          "condition": "after_death_count > initial_count",
+          "additional_context": null
+        },
+        {
+          "line_number": 256,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        file_count_after >= 4,\n        \"events.jsonl should contain events written during HOOP absence\"\n    );",
+          "message": "events.jsonl should contain events written during HOOP absence",
+          "condition": "file_count_after >= 4",
+          "additional_context": null
+        }
+      ],
+      "unknown": [
+        {
+          "line_number": 168,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"testrepo should exist at {:?}\"",
+          "message": "testrepo should exist at {:?}",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/integration_harness.rs": {
+      "test_bead_lifecycle_via_api": [
+        {
+          "line_number": 1535,
+          "pattern_type": "assert!",
+          "full_match": "assert!(found, \"New bead should appear in list\");",
+          "message": "New bead should appear in list",
+          "condition": "found",
+          "additional_context": null
+        }
+      ],
+      "test_daemon_metrics_collection": [
+        {
+          "line_number": 1456,
+          "pattern_type": "assert!",
+          "full_match": "assert!(has_valid_metric, \"Metrics should contain at least one valid metric line\");",
+          "message": "Metrics should contain at least one valid metric line",
+          "condition": "has_valid_metric",
+          "additional_context": null
+        }
+      ],
+      "test_integration_hermetic_no_external_deps": [
+        {
+          "line_number": 698,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"Daemon failed to become ready within 10 seconds\"",
+          "message": "Daemon failed to become ready within 10 seconds",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_websocket_connection": [
+        {
+          "line_number": 815,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected text message, got {:?}\"",
+          "message": "Expected text message, got {:?}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_websocket_snapshot_events": [
+        {
+          "line_number": 1066,
+          "pattern_type": "assert!",
+          "full_match": "assert!(received_init, \"Should receive init event\");",
+          "message": "Should receive init event",
+          "condition": "received_init",
+          "additional_context": null
+        },
+        {
+          "line_number": 1067,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        received_workers_snapshot,\n        \"Should receive workers_snapshot event\"\n    );",
+          "message": "Should receive workers_snapshot event",
+          "condition": "received_workers_snapshot",
+          "additional_context": null
+        },
+        {
+          "line_number": 1071,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        received_beads_snapshot,\n        \"Should receive beads_snapshot event\"\n    );",
+          "message": "Should receive beads_snapshot event",
+          "condition": "received_beads_snapshot",
+          "additional_context": null
+        }
+      ],
+      "unknown": [
+        {
+          "line_number": 109,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"testrepo should exist at {:?}\"",
+          "message": "testrepo should exist at {:?}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 115,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"testrepo/.beads/events.jsonl should exist\"",
+          "message": "testrepo/.beads/events.jsonl should exist",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 121,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"testrepo/.beads/heartbeats.jsonl should exist\"",
+          "message": "testrepo/.beads/heartbeats.jsonl should exist",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 127,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"events.jsonl should not be empty\"",
+          "message": "events.jsonl should not be empty",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 136,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"events.jsonl line {} is not valid JSON\"",
+          "message": "events.jsonl line {} is not valid JSON",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 143,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"heartbeats.jsonl should not be empty\"",
+          "message": "heartbeats.jsonl should not be empty",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 152,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"heartbeats.jsonl line {} is not valid JSON\"",
+          "message": "heartbeats.jsonl line {} is not valid JSON",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 171,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::anyhow!(\"Failed to parse event line {}: {}\"",
+          "message": "Failed to parse event line {}: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 191,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::anyhow!(\"Failed to parse heartbeat line {}: {}\"",
+          "message": "Failed to parse heartbeat line {}: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 217,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"Events fixture should contain at least one claim event\"",
+          "message": "Events fixture should contain at least one claim event",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 220,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"Events fixture should contain at least one dispatch event\"",
+          "message": "Events fixture should contain at least one dispatch event",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 223,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"Events fixture should contain at least one complete event\"",
+          "message": "Events fixture should contain at least one complete event",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 226,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"Events fixture should contain at least one fail event\"",
+          "message": "Events fixture should contain at least one fail event",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 247,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"Heartbeats fixture should contain at least one idle state\"",
+          "message": "Heartbeats fixture should contain at least one idle state",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 250,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"Heartbeats fixture should contain at least one executing state\"",
+          "message": "Heartbeats fixture should contain at least one executing state",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 359,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"projects.yaml should be created\"",
+          "message": "projects.yaml should be created",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 365,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"config.yml should be created\"",
+          "message": "config.yml should be created",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 371,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"projects.yaml should reference testrepo\"",
+          "message": "projects.yaml should reference testrepo",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/lint_regex_global_state.rs": {
+      "lint_regex_global_state": [
+        {
+          "line_number": 102,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\n            \"Found {} violation(s) of regex_global_state lint\"",
+          "message": "Found {} violation(s) of regex_global_state lint",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/load_test.rs": {
+      "test_full_scale_load_test": [
+        {
+          "line_number": 285,
+          "pattern_type": "assert!",
+          "full_match": "assert!(report.total_events > 0, \"Should process events\");",
+          "message": "Should process events",
+          "condition": "report.total_events > 0",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/load_test_integration.rs": {
+      "load_test_ci_performance_budgets": [
+        {
+          "line_number": 492,
+          "pattern_type": "assert!",
+          "full_match": "assert!(report.passed, \"Load test should pass all budgets\");",
+          "message": "Load test should pass all budgets",
+          "condition": "report.passed",
+          "additional_context": null
+        }
+      ],
+      "load_test_full_scale_performance_budgets": [
+        {
+          "line_number": 360,
+          "pattern_type": "assert!",
+          "full_match": "assert!(report.passed, \"Load test should pass all budgets\");",
+          "message": "Load test should pass all budgets",
+          "condition": "report.passed",
+          "additional_context": null
+        }
+      ],
+      "load_test_websocket_fanout_within_budget": [
+        {
+          "line_number": 306,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to connect WS client {}: {}\"",
+          "message": "Failed to connect WS client {}: {}",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/multi_operator_concurrency.rs": {
+      "test_reflection_proposal_approval_single_operator": [
+        {
+          "line_number": 372,
+          "pattern_type": "assert!",
+          "full_match": "assert!(approved, \"proposal should be approved\");",
+          "message": "proposal should be approved",
+          "condition": "approved",
+          "additional_context": null
+        }
+      ],
+      "test_reflection_proposal_rejection_prevents_reproposal": [
+        {
+          "line_number": 422,
+          "pattern_type": "assert!",
+          "full_match": "assert!(rejected, \"proposal should be rejected\");",
+          "message": "proposal should be rejected",
+          "condition": "rejected",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/mutation_handler_test.rs": {
+      "test_reject_auth_failure_emits_error_and_authoritative_state": [
+        {
+          "line_number": 205,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_reject_contention_emits_error_and_authoritative_state": [
+        {
+          "line_number": 238,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_reject_field_validation_emits_error_and_authoritative_state": [
+        {
+          "line_number": 163,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/needle_events_roundtrip.rs": {
+      "claim_event_parses_with_strand": [
+        {
+          "line_number": 122,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Claim, got {other:?}\"",
+          "message": "Expected Claim, got {other:?}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "complete_event_parses_outcome_and_duration": [
+        {
+          "line_number": 192,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Complete, got {other:?}\"",
+          "message": "Expected Complete, got {other:?}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "consecutive_heartbeats_per_bead_are_roughly_10s_apart": [
+        {
+          "line_number": 585,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n                gap >= 5 && gap <= 30,\n                \"worker={worker}, bead={bead}: consecutive heartbeats must be ~10s apart (got {gap}s)\"\n            );",
+          "message": "worker={worker}, bead={bead}: consecutive heartbeats must be ~10s apart (got {gap}s)",
+          "condition": "gap >= 5 && gap <= 30",
+          "additional_context": null
+        }
+      ],
+      "crash_event_parses_exit_code": [
+        {
+          "line_number": 286,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Crash, got {other:?}\"",
+          "message": "Expected Crash, got {other:?}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "dispatch_event_parses_adapter_and_model": [
+        {
+          "line_number": 153,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Dispatch, got {other:?}\"",
+          "message": "Expected Dispatch, got {other:?}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "events_fixture_covers_all_event_types": [
+        {
+          "line_number": 74,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n            found,\n            \"fixture must contain at least one '{event_type}' event \u2014 add one to testrepo/.beads/events.jsonl\"\n        );",
+          "message": "fixture must contain at least one '{event_type}' event \u2014 add one to testrepo/.beads/events.jsonl",
+          "condition": "found",
+          "additional_context": null
+        }
+      ],
+      "fail_event_parses_error_and_duration": [
+        {
+          "line_number": 220,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Fail, got {other:?}\"",
+          "message": "Expected Fail, got {other:?}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "heartbeat_executing_state_parses": [
+        {
+          "line_number": 463,
+          "pattern_type": "assert!",
+          "full_match": "assert!(pid > 0, \"executing: pid must be positive\");",
+          "message": "executing: pid must be positive",
+          "condition": "pid > 0",
+          "additional_context": null
+        },
+        {
+          "line_number": 466,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Executing state, got {other:?}\"",
+          "message": "Expected Executing state, got {other:?}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "heartbeat_idle_state_parses": [
+        {
+          "line_number": 482,
+          "pattern_type": "assert!",
+          "full_match": "assert!(matches!(hb.state, hoop_daemon::WorkerState::Idle { .. }));",
+          "message": null,
+          "condition": "matches!(hb.state",
+          "additional_context": "hoop_daemon::WorkerState::Idle { .. })"
+        }
+      ],
+      "heartbeat_knot_state_parses": [
+        {
+          "line_number": 501,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Knot state, got {other:?}\"",
+          "message": "Expected Knot state, got {other:?}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "heartbeats_fixture_covers_all_states": [
+        {
+          "line_number": 91,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n            found,\n            \"fixture must contain at least one '{state}' heartbeat \u2014 add one to testrepo/.beads/heartbeats.jsonl\"\n        );",
+          "message": "fixture must contain at least one '{state}' heartbeat \u2014 add one to testrepo/.beads/heartbeats.jsonl",
+          "condition": "found",
+          "additional_context": null
+        }
+      ],
+      "release_event_parses": [
+        {
+          "line_number": 240,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Release, got {other:?}\"",
+          "message": "Expected Release, got {other:?}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "timeout_event_parses": [
+        {
+          "line_number": 260,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Timeout, got {other:?}\"",
+          "message": "Expected Timeout, got {other:?}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "unknown": [
+        {
+          "line_number": 41,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to parse event line: {e}\\n  Line: {line}\"",
+          "message": "Failed to parse event line: {e}\\n  Line: {line}",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/observer_mode_integration.rs": {
+      "test_observer_config_creation": [
+        {
+          "line_number": 39,
+          "pattern_type": "assert!",
+          "full_match": "assert!(config.observer_mode);",
+          "message": null,
+          "condition": "config.observer_mode",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/orphans_integration.rs": {
+      "orphan_attach_to_stitch_creates_referenced_link": [
+        {
+          "line_number": 162,
+          "pattern_type": "assert!",
+          "full_match": "assert!(link_exists, \"stitch_beads link should exist with relationship='referenced'\");",
+          "message": "stitch_beads link should exist with relationship='referenced'",
+          "condition": "link_exists",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/pattern_query_evaluator_integration.rs": {
+      "pattern_query_basic_evaluation": [
+        {
+          "line_number": 172,
+          "pattern_type": "assert!",
+          "full_match": "assert!(results[0].matched, \"query should match the stitch title\");",
+          "message": "query should match the stitch title",
+          "condition": "results[0].matched",
+          "additional_context": null
+        },
+        {
+          "line_number": 173,
+          "pattern_type": "assert!",
+          "full_match": "assert!(!results[0].is_slow, \"query should not be slow\");",
+          "message": "query should not be slow",
+          "condition": "!results[0].is_slow",
+          "additional_context": null
+        },
+        {
+          "line_number": 181,
+          "pattern_type": "assert!",
+          "full_match": "assert!(inserted, \"first insert should succeed\");",
+          "message": "first insert should succeed",
+          "condition": "inserted",
+          "additional_context": null
+        },
+        {
+          "line_number": 189,
+          "pattern_type": "assert!",
+          "full_match": "assert!(!inserted_again, \"second insert should return false (idempotent)\");",
+          "message": "second insert should return false (idempotent)",
+          "condition": "!inserted_again",
+          "additional_context": null
+        }
+      ],
+      "pattern_query_complex_expressions": [
+        {
+          "line_number": 375,
+          "pattern_type": "assert!",
+          "full_match": "assert!(matches, \"AND query should match\");",
+          "message": "AND query should match",
+          "condition": "matches",
+          "additional_context": null
+        },
+        {
+          "line_number": 382,
+          "pattern_type": "assert!",
+          "full_match": "assert!(matches, \"NOT query should match\");",
+          "message": "NOT query should match",
+          "condition": "matches",
+          "additional_context": null
+        },
+        {
+          "line_number": 389,
+          "pattern_type": "assert!",
+          "full_match": "assert!(matches, \"OR query should match\");",
+          "message": "OR query should match",
+          "condition": "matches",
+          "additional_context": null
+        },
+        {
+          "line_number": 396,
+          "pattern_type": "assert!",
+          "full_match": "assert!(!matches, \"non-matching query should not match\");",
+          "message": "non-matching query should not match",
+          "condition": "!matches",
+          "additional_context": null
+        }
+      ],
+      "pattern_query_kind_filter": [
+        {
+          "line_number": 420,
+          "pattern_type": "assert!",
+          "full_match": "assert!(matches_operator, \"kind:operator should match operator stitch\");",
+          "message": "kind:operator should match operator stitch",
+          "condition": "matches_operator",
+          "additional_context": null
+        },
+        {
+          "line_number": 423,
+          "pattern_type": "assert!",
+          "full_match": "assert!(!matches_worker, \"kind:operator should not match worker stitch\");",
+          "message": "kind:operator should not match worker stitch",
+          "condition": "!matches_worker",
+          "additional_context": null
+        }
+      ],
+      "pattern_query_standalone_word_as_label": [
+        {
+          "line_number": 439,
+          "pattern_type": "assert!",
+          "full_match": "assert!(matches, \"standalone word should match as label\");",
+          "message": "standalone word should match as label",
+          "condition": "matches",
+          "additional_context": null
+        },
+        {
+          "line_number": 444,
+          "pattern_type": "assert!",
+          "full_match": "assert!(!matches, \"non-matching standalone word should not match\");",
+          "message": "non-matching standalone word should not match",
+          "condition": "!matches",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/per_project_redaction_integration.rs": {
+      "test_customer_data_reject_blocks_risky_attachments": [
+        {
+          "line_number": 266,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_same_attachment_different_outcomes": [
+        {
+          "line_number": 188,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_schema_redaction_field_exists": [
+        {
+          "line_number": 103,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Variant0 project\"",
+          "message": "Expected Variant0 project",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 118,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Variant0 project\"",
+          "message": "Expected Variant0 project",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 128,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Variant0 project\"",
+          "message": "Expected Variant0 project",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/phase2_exit_gate.rs": {
+      "phase2_exit_gate_all_core_deliverables_verified": [
+        {
+          "line_number": 415,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        report.passed,\n        \"Phase 2 exit gate FAILED: {} of 13 core deliverables lack passing tests. \\\n        Marquee features (14-17) cannot merge until all core deliverables are verified.\",\n        report.unverified\n    );",
+          "message": "Phase 2 exit gate FAILED: {} of 13 core deliverables lack passing tests. \\\n        Marquee features (14-17) cannot merge until all core deliverables are verified.",
+          "condition": "report.passed",
+          "additional_context": "report.unverified"
+        }
+      ]
+    },
+    "hoop-daemon/tests/privacy_surface_audit.rs": {
+      "coverage_report_all_surfaces_accounted_for": [
+        {
+          "line_number": 461,
+          "pattern_type": "assert!",
+          "full_match": "assert!(scan_draft_body(\"\", None).is_empty());",
+          "message": null,
+          "condition": "scan_draft_body(\"\"",
+          "additional_context": "None).is_empty()"
+        },
+        {
+          "line_number": 463,
+          "pattern_type": "assert!",
+          "full_match": "assert!(scan_propagation_draft(\"\", \"\").is_empty());",
+          "message": null,
+          "condition": "scan_propagation_draft(\"\"",
+          "additional_context": "\"\").is_empty()"
+        }
+      ],
+      "phase3_finding_position_metadata_accurate": [
+        {
+          "line_number": 145,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        any_in_range,\n        \"at least one finding should overlap the key portion\"\n    );",
+          "message": "at least one finding should overlap the key portion",
+          "condition": "any_in_range",
+          "additional_context": null
+        },
+        {
+          "line_number": 152,
+          "pattern_type": "assert!",
+          "full_match": "assert!(f.match_len > 0, \"finding match_len must be > 0; got: {f:?}\");",
+          "message": "finding match_len must be > 0; got: {f:?}",
+          "condition": "f.match_len > 0",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/projection_file_audit.rs": {
+      "no_projection_file_writes_in_workspace": [
+        {
+          "line_number": 229,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"failed to read {}: {}\"",
+          "message": "failed to read {}: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 262,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"{}\"",
+          "message": "{}",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/property_invariants.rs": {
+      "proptest_quiet_days_monotonic": [
+        {
+          "line_number": 540,
+          "pattern_type": "assert!",
+          "full_match": "assert!(days_later >= 0);",
+          "message": null,
+          "condition": "days_later >= 0",
+          "additional_context": null
+        },
+        {
+          "line_number": 543,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n                    days_later >= days_initial,\n                    \"Quiet days decreased: {} -> {}\",\n                    days_initial, days_later\n                );",
+          "message": "Quiet days decreased: {} -> {}",
+          "condition": "days_later >= days_initial",
+          "additional_context": "days_initial, days_later"
+        }
+      ],
+      "test_event_tailer_preserves_order": [
+        {
+          "line_number": 278,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Event type mismatch at index {}\"",
+          "message": "Event type mismatch at index {}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "unknown": [
+        {
+          "line_number": 119,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n                        ts >= prev,\n                        \"Event timestamp out of order: {} < {}\",\n                        ts, prev\n                    );",
+          "message": "Event timestamp out of order: {} < {}",
+          "condition": "ts >= prev",
+          "additional_context": "ts, prev"
+        }
+      ]
+    },
+    "hoop-daemon/tests/protocol_contract.rs": {
+      "test_control_response_error_round_trip": [
+        {
+          "line_number": 288,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"expected ControlResponse::Error\"",
+          "message": "expected ControlResponse::Error",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_control_response_status_round_trip": [
+        {
+          "line_number": 256,
+          "pattern_type": "assert!",
+          "full_match": "assert!(status.daemon_running);",
+          "message": null,
+          "condition": "status.daemon_running",
+          "additional_context": null
+        },
+        {
+          "line_number": 268,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"expected ControlResponse::Status\"",
+          "message": "expected ControlResponse::Status",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_create_draft_response_daemon_serializes_fixture_shape": [
+        {
+          "line_number": 82,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\n                \"CreateDraftResponse missing field '{}' (fixture declares it)\"",
+          "message": "CreateDraftResponse missing field '{}' (fixture declares it)",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_ws_event_round_trip_from_fixture": [
+        {
+          "line_number": 654,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"fixture {} must deserialize as WsEvent: {}\"",
+          "message": "fixture {} must deserialize as WsEvent: {}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "unknown": [
+        {
+          "line_number": 28,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"fixture file missing: {}\"",
+          "message": "fixture file missing: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 30,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"invalid JSON in fixture {}: {}\"",
+          "message": "invalid JSON in fixture {}: {}",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/pure_functions.rs": {
+      "test_cost_edge_cases": [
+        {
+          "line_number": 447,
+          "pattern_type": "assert!",
+          "full_match": "assert!(true);",
+          "message": null,
+          "condition": "true",
+          "additional_context": null
+        }
+      ],
+      "test_detects_javascript_action": [
+        {
+          "line_number": 261,
+          "pattern_type": "assert!",
+          "full_match": "assert!(result.record.was_modified);",
+          "message": null,
+          "condition": "result.record.was_modified",
+          "additional_context": null
+        }
+      ],
+      "test_legit_pdf_unchanged": [
+        {
+          "line_number": 270,
+          "pattern_type": "assert!",
+          "full_match": "assert!(!result.record.was_modified);",
+          "message": null,
+          "condition": "!result.record.was_modified",
+          "additional_context": null
+        }
+      ],
+      "test_parse_line_valid_json": [
+        {
+          "line_number": 334,
+          "pattern_type": "assert!",
+          "full_match": "assert!(matches!(result, ParseResult::Ok(_)));",
+          "message": null,
+          "condition": "matches!(result",
+          "additional_context": "ParseResult::Ok(_))"
+        }
+      ],
+      "test_pdf_sanitize_edge_cases": [
+        {
+          "line_number": 517,
+          "pattern_type": "assert!",
+          "full_match": "assert!(!result.record.was_modified);",
+          "message": null,
+          "condition": "!result.record.was_modified",
+          "additional_context": null
+        },
+        {
+          "line_number": 522,
+          "pattern_type": "assert!",
+          "full_match": "assert!(result.record.was_modified);",
+          "message": null,
+          "condition": "result.record.was_modified",
+          "additional_context": null
+        }
+      ],
+      "test_stitch_status_edge_cases": [
+        {
+          "line_number": 544,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Quiet with 999 days\"",
+          "message": "Expected Quiet with 999 days",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_strips_onclick_attr": [
+        {
+          "line_number": 248,
+          "pattern_type": "assert!",
+          "full_match": "assert!(result.record.was_modified);",
+          "message": null,
+          "condition": "result.record.was_modified",
+          "additional_context": null
+        }
+      ],
+      "test_strips_script_element": [
+        {
+          "line_number": 239,
+          "pattern_type": "assert!",
+          "full_match": "assert!(result.record.was_modified);",
+          "message": null,
+          "condition": "result.record.was_modified",
+          "additional_context": null
+        }
+      ],
+      "test_svg_sanitize_edge_cases": [
+        {
+          "line_number": 500,
+          "pattern_type": "assert!",
+          "full_match": "assert!(!result.record.was_modified);",
+          "message": null,
+          "condition": "!result.record.was_modified",
+          "additional_context": null
+        },
+        {
+          "line_number": 504,
+          "pattern_type": "assert!",
+          "full_match": "assert!(!result.record.was_modified);",
+          "message": null,
+          "condition": "!result.record.was_modified",
+          "additional_context": null
+        },
+        {
+          "line_number": 509,
+          "pattern_type": "assert!",
+          "full_match": "assert!(result.record.was_modified);",
+          "message": null,
+          "condition": "result.record.was_modified",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/reflection_detector_integration.rs": {
+      "test_reflection_injection_audit": [
+        {
+          "line_number": 583,
+          "pattern_type": "assert!",
+          "full_match": "assert!(rule_id == &rule1_id || rule_id == &rule2_id);",
+          "message": null,
+          "condition": "rule_id == &rule1_id || rule_id == &rule2_id",
+          "additional_context": null
+        }
+      ],
+      "test_synthetic_repeated_instruction_fixtures": [
+        {
+          "line_number": 384,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        proposed >= 1,\n        \"Should detect at least 1 pattern from synthetic fixtures, got {}\",\n        proposed\n    );",
+          "message": "Should detect at least 1 pattern from synthetic fixtures, got {}",
+          "condition": "proposed >= 1",
+          "additional_context": "proposed"
+        },
+        {
+          "line_number": 405,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        has_multi_source,\n        \"At least one pattern should span 3+ Stitches\"\n    );",
+          "message": "At least one pattern should span 3+ Stitches",
+          "condition": "has_multi_source",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/risk_patterns_standalone.rs": {
+      "test_add_pattern_with_mixed_keywords": [
+        {
+          "line_number": 197,
+          "pattern_type": "assert!",
+          "full_match": "assert!(matches_both[0].confidence > matches_title[0].confidence,\n            \"Combined match should have higher confidence\");",
+          "message": "Combined match should have higher confidence",
+          "condition": "matches_both[0].confidence > matches_title[0].confidence",
+          "additional_context": null
+        }
+      ],
+      "test_match_confidence": [
+        {
+          "line_number": 64,
+          "pattern_type": "assert!",
+          "full_match": "assert!(codegen_match.confidence > 0.5);",
+          "message": null,
+          "condition": "codegen_match.confidence > 0.5",
+          "additional_context": null
+        }
+      ],
+      "test_match_sorted_by_confidence": [
+        {
+          "line_number": 95,
+          "pattern_type": "assert!",
+          "full_match": "assert!(matches[i - 1].confidence >= matches[i].confidence);",
+          "message": null,
+          "condition": "matches[i - 1].confidence >= matches[i].confidence",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/s1_morning_review.rs": {
+      "s1_morning_review_all_facts_present": [
+        {
+          "line_number": 73,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        total_cost >= 0.0,\n        \"total_spend_usd must be non-negative, got: {}\",\n        total_cost\n    );",
+          "message": "total_spend_usd must be non-negative, got: {}",
+          "condition": "total_cost >= 0.0",
+          "additional_context": "total_cost"
+        }
+      ],
+      "s1_morning_review_cost_accuracy": [
+        {
+          "line_number": 246,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        total_cost >= 0.0,\n        \"Total cost must be non-negative\"\n    );",
+          "message": "Total cost must be non-negative",
+          "condition": "total_cost >= 0.0",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/s3_bead_creation_from_chat.rs": {
+      "s3_chat_creates_draft_in_queue": [
+        {
+          "line_number": 179,
+          "pattern_type": "assert!",
+          "full_match": "assert!(found, \"Draft should appear in the draft queue\");",
+          "message": "Draft should appear in the draft queue",
+          "condition": "found",
+          "additional_context": null
+        }
+      ],
+      "s3_end_to_end_chat_flow": [
+        {
+          "line_number": 478,
+          "pattern_type": "assert!",
+          "full_match": "assert!(draft_in_queue, \"Draft should be in queue\");",
+          "message": "Draft should be in queue",
+          "condition": "draft_in_queue",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/s4_daemon_restart.rs": {
+      "s4_daemon_restart_no_bead_loss": [
+        {
+          "line_number": 216,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        mid_event_count > initial_event_count,\n        \"Worker should have written more events while HOOP was down\"\n    );",
+          "message": "Worker should have written more events while HOOP was down",
+          "condition": "mid_event_count > initial_event_count",
+          "additional_context": null
+        }
+      ],
+      "s4_fleet_unaffected_by_restart": [
+        {
+          "line_number": 424,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        events_downtime > events_before,\n        \"Worker should continue writing events during HOOP downtime\"\n    );",
+          "message": "Worker should continue writing events during HOOP downtime",
+          "condition": "events_downtime > events_before",
+          "additional_context": null
+        },
+        {
+          "line_number": 456,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        events_after > events_downtime,\n        \"Worker should continue after HOOP restart\"\n    );",
+          "message": "Worker should continue after HOOP restart",
+          "condition": "events_after > events_downtime",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/s5_workspace_deleted.rs": {
+      "s5_auto_recovery_on_restore": [
+        {
+          "line_number": 380,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        status == 503 || readyz.status == \"degraded\",\n        \"Should be in degraded state after workspace deletion\"\n    );",
+          "message": "Should be in degraded state after workspace deletion",
+          "condition": "status == 503 || readyz.status == \"degraded\"",
+          "additional_context": null
+        },
+        {
+          "line_number": 406,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        recovered,\n        \"Auto-recovery should occur within 10s of workspace restore\"\n    );",
+          "message": "Auto-recovery should occur within 10s of workspace restore",
+          "condition": "recovered",
+          "additional_context": null
+        }
+      ],
+      "s5_workspace_deleted_error_within_10s": [
+        {
+          "line_number": 193,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        degraded_detected,\n        \"Error card should appear within 10s of workspace deletion\"\n    );",
+          "message": "Error card should appear within 10s of workspace deletion",
+          "condition": "degraded_detected",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/secrets_scanner_integration.rs": {
+      "test_entropy_calculation": [
+        {
+          "line_number": 341,
+          "pattern_type": "assert!",
+          "full_match": "assert!(e > 4.5, \"API key should have high entropy: {}\", e);",
+          "message": "API key should have high entropy: {}",
+          "condition": "e > 4.5",
+          "additional_context": "e"
+        },
+        {
+          "line_number": 346,
+          "pattern_type": "assert!",
+          "full_match": "assert!(e < 4.5, \"Normal text should have low entropy: {}\", e);",
+          "message": "Normal text should have low entropy: {}",
+          "condition": "e < 4.5",
+          "additional_context": "e"
+        }
+      ],
+      "test_false_positive_rate_on_testrepo": [
+        {
+          "line_number": 528,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        false_positive_rate < 5.0,\n        \"False positive rate ({:.1}%) exceeds 5% threshold\",\n        false_positive_rate\n    );",
+          "message": "False positive rate ({:.1}%) exceeds 5% threshold",
+          "condition": "false_positive_rate < 5.0",
+          "additional_context": "false_positive_rate"
+        },
+        {
+          "line_number": 535,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        files_scanned >= 3,\n        \"Should scan at least 3 files for meaningful test\"\n    );",
+          "message": "Should scan at least 3 files for meaningful test",
+          "condition": "files_scanned >= 3",
+          "additional_context": null
+        }
+      ],
+      "test_pattern_overlap": [
+        {
+          "line_number": 408,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        has_anthropic || has_env_var,\n        \"Should detect with either anthropic_api_key or env_var_secret pattern\"\n    );",
+          "message": "Should detect with either anthropic_api_key or env_var_secret pattern",
+          "condition": "has_anthropic || has_env_var",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/skills_integration.rs": {
+      "test_skill_invocation_rejects_invalid_uri_format": [
+        {
+          "line_number": 246,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_skill_invocation_rejects_missing_required_arg": [
+        {
+          "line_number": 153,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_skill_invocation_rejects_wrong_type": [
+        {
+          "line_number": 200,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_skill_invocation_with_valid_args": [
+        {
+          "line_number": 98,
+          "pattern_type": "assert!",
+          "full_match": "assert!(skills[0].executable);",
+          "message": null,
+          "condition": "skills[0].executable",
+          "additional_context": null
+        },
+        {
+          "line_number": 111,
+          "pattern_type": "assert!",
+          "full_match": "assert!(!response.timed_out);",
+          "message": null,
+          "condition": "!response.timed_out",
+          "additional_context": null
+        }
+      ],
+      "test_skill_manifest_parsing": [
+        {
+          "line_number": 51,
+          "pattern_type": "assert!",
+          "full_match": "assert!(!skills[0].executable);",
+          "message": null,
+          "condition": "!skills[0].executable",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/state_projections.rs": {
+      "test_performance_budget": [
+        {
+          "line_number": 653,
+          "pattern_type": "assert!",
+          "full_match": "assert!(received_all, \"Should receive all snapshot events\");",
+          "message": "Should receive all snapshot events",
+          "condition": "received_all",
+          "additional_context": null
+        }
+      ],
+      "ws_init_event_first_message": [
+        {
+          "line_number": 211,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected text message for init, got {:?}\"",
+          "message": "Expected text message for init, got {:?}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "ws_receives_all_snapshots_after_init": [
+        {
+          "line_number": 226,
+          "pattern_type": "assert!",
+          "full_match": "assert!(snapshots.workers_received, \"Must receive workers_snapshot\");",
+          "message": "Must receive workers_snapshot",
+          "condition": "snapshots.workers_received",
+          "additional_context": null
+        },
+        {
+          "line_number": 227,
+          "pattern_type": "assert!",
+          "full_match": "assert!(snapshots.beads_received, \"Must receive beads_snapshot\");",
+          "message": "Must receive beads_snapshot",
+          "condition": "snapshots.beads_received",
+          "additional_context": null
+        },
+        {
+          "line_number": 228,
+          "pattern_type": "assert!",
+          "full_match": "assert!(snapshots.conversations_received, \"Must receive conversations_snapshot\");",
+          "message": "Must receive conversations_snapshot",
+          "condition": "snapshots.conversations_received",
+          "additional_context": null
+        },
+        {
+          "line_number": 229,
+          "pattern_type": "assert!",
+          "full_match": "assert!(snapshots.projects_received, \"Must receive projects_snapshot\");",
+          "message": "Must receive projects_snapshot",
+          "condition": "snapshots.projects_received",
+          "additional_context": null
+        },
+        {
+          "line_number": 230,
+          "pattern_type": "assert!",
+          "full_match": "assert!(snapshots.config_received, \"Must receive config_status\");",
+          "message": "Must receive config_status",
+          "condition": "snapshots.config_received",
+          "additional_context": null
+        }
+      ],
+      "ws_reconnect_rebuilds_state": [
+        {
+          "line_number": 572,
+          "pattern_type": "assert!",
+          "full_match": "assert!(received_init, \"Reconnect should receive init event\");",
+          "message": "Reconnect should receive init event",
+          "condition": "received_init",
+          "additional_context": null
+        },
+        {
+          "line_number": 573,
+          "pattern_type": "assert!",
+          "full_match": "assert!(received_beads_snapshot, \"Reconnect should receive beads_snapshot\");",
+          "message": "Reconnect should receive beads_snapshot",
+          "condition": "received_beads_snapshot",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/stderr_stdout_capture.rs": {
+      "test_reusable_large_stdout_generation": [
+        {
+          "line_number": 157,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_size_requirement(bytes1, 10_240), \"Default config must generate >10KB\");",
+          "message": null,
+          "condition": "verify_size_requirement(bytes1",
+          "additional_context": "10_240), \"Default config must generate >10KB\""
+        },
+        {
+          "line_number": 165,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_size_requirement(bytes2, 20_000), \"Large config must generate >20KB\");",
+          "message": null,
+          "condition": "verify_size_requirement(bytes2",
+          "additional_context": "20_000), \"Large config must generate >20KB\""
+        },
+        {
+          "line_number": 166,
+          "pattern_type": "assert!",
+          "full_match": "assert!(bytes2 > bytes1, \"Large config should generate more output than default\");",
+          "message": "Large config should generate more output than default",
+          "condition": "bytes2 > bytes1",
+          "additional_context": null
+        }
+      ],
+      "test_substantial_stdout_generation": [
+        {
+          "line_number": 141,
+          "pattern_type": "assert!",
+          "full_match": "assert!(verify_size_requirement(total_bytes, 10_240), \"Generated stdout must be at least 10KB, got {} bytes\", total_bytes);",
+          "message": null,
+          "condition": "verify_size_requirement(total_bytes",
+          "additional_context": "10_240), \"Generated stdout must be at least 10KB, got {} bytes\", total_bytes"
+        }
+      ]
+    },
+    "hoop-daemon/tests/stdout_verification.rs": {
+      "test_unicode_and_special_chars": [
+        {
+          "line_number": 149,
+          "pattern_type": "assert!",
+          "full_match": "assert!(result.passed, \"Unicode verification should pass\");",
+          "message": "Unicode verification should pass",
+          "condition": "result.passed",
+          "additional_context": null
+        }
+      ],
+      "test_verification_detects_mismatch": [
+        {
+          "line_number": 117,
+          "pattern_type": "assert!",
+          "full_match": "assert!(!result.passed, \"Verification should fail for mismatched content\");",
+          "message": "Verification should fail for mismatched content",
+          "condition": "!result.passed",
+          "additional_context": null
+        }
+      ],
+      "test_verification_in_memory": [
+        {
+          "line_number": 88,
+          "pattern_type": "assert!",
+          "full_match": "assert!(result.passed, \"In-memory verification should pass\");",
+          "message": "In-memory verification should pass",
+          "condition": "result.passed",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/stitch_percentile_index_integration.rs": {
+      "test_index_initialization": [
+        {
+          "line_number": 168,
+          "pattern_type": "assert!",
+          "full_match": "assert!(table_exists, \"stitch_percentile_index table should exist\");",
+          "message": "stitch_percentile_index table should exist",
+          "condition": "table_exists",
+          "additional_context": null
+        },
+        {
+          "line_number": 179,
+          "pattern_type": "assert!",
+          "full_match": "assert!(meta_exists, \"stitch_percentile_index_meta table should exist\");",
+          "message": "stitch_percentile_index_meta table should exist",
+          "condition": "meta_exists",
+          "additional_context": null
+        }
+      ],
+      "test_index_update_on_stitch_features": [
+        {
+          "line_number": 383,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cost_p50 > 0.0, \"Cost p50 should be positive\");",
+          "message": "Cost p50 should be positive",
+          "condition": "cost_p50 > 0.0",
+          "additional_context": null
+        },
+        {
+          "line_number": 384,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cost_p90 > cost_p50, \"Cost p90 should be >= p50\");",
+          "message": "Cost p90 should be >= p50",
+          "condition": "cost_p90 > cost_p50",
+          "additional_context": null
+        }
+      ],
+      "test_minimum_samples_for_prediction": [
+        {
+          "line_number": 527,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n            query.sample_count < 3,\n            \"Sample count should be below threshold\"\n        );",
+          "message": "Sample count should be below threshold",
+          "condition": "query.sample_count < 3",
+          "additional_context": null
+        }
+      ],
+      "test_query_performance_under_50ms": [
+        {
+          "line_number": 432,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        bucket_count > 1,\n        \"Should have multiple buckets for diverse stitches\"\n    );",
+          "message": "Should have multiple buckets for diverse stitches",
+          "condition": "bucket_count > 1",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/supervisor_health.rs": {
+      "test_multiple_subscribers_receive_updates": [
+        {
+          "line_number": 230,
+          "pattern_type": "assert!",
+          "full_match": "assert!(true);",
+          "message": null,
+          "condition": "true",
+          "additional_context": null
+        }
+      ],
+      "test_snapshot_returns_all_runtimes": [
+        {
+          "line_number": 152,
+          "pattern_type": "assert!",
+          "full_match": "assert!(status.workspace_count > 0);",
+          "message": null,
+          "condition": "status.workspace_count > 0",
+          "additional_context": null
+        }
+      ],
+      "test_status_broadcasts_on_state_changes": [
+        {
+          "line_number": 483,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        update_count >= 1,\n        \"Should receive at least one status update, got {}\",\n        update_count\n    );",
+          "message": "Should receive at least one status update, got {}",
+          "condition": "update_count >= 1",
+          "additional_context": "update_count"
+        }
+      ],
+      "test_status_subscription_receives_updates": [
+        {
+          "line_number": 186,
+          "pattern_type": "assert!",
+          "full_match": "assert!(received, \"Should receive status update\");",
+          "message": "Should receive status update",
+          "condition": "received",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/supervisor_hotreload.rs": {
+      "test_reconcile_skips_project_with_no_workspaces": [
+        {
+          "line_number": 289,
+          "pattern_type": "assert!",
+          "full_match": "assert!(true);",
+          "message": null,
+          "condition": "true",
+          "additional_context": null
+        }
+      ],
+      "test_supervisor_status_broadcasts_on_reconcile": [
+        {
+          "line_number": 329,
+          "pattern_type": "assert!",
+          "full_match": "assert!(true);",
+          "message": null,
+          "condition": "true",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/supervisor_isolation.rs": {
+      "test_panic_metric_increments_on_failure": [
+        {
+          "line_number": 352,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        final_count > initial_count,\n        \"panic metric should have incremented\"\n    );",
+          "message": "panic metric should have incremented",
+          "condition": "final_count > initial_count",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/supervisor_shutdown.rs": {
+      "test_flush_state_phase_coordination": [
+        {
+          "line_number": 130,
+          "pattern_type": "assert!",
+          "full_match": "assert!(is_running, \"Runtime should be running\");",
+          "message": "Runtime should be running",
+          "condition": "is_running",
+          "additional_context": null
+        }
+      ],
+      "test_runtime_state_transitions_during_lifecycle": [
+        {
+          "line_number": 264,
+          "pattern_type": "assert!",
+          "full_match": "assert!(true);",
+          "message": null,
+          "condition": "true",
+          "additional_context": null
+        }
+      ],
+      "test_shutdown_with_permanent_error_state": [
+        {
+          "line_number": 361,
+          "pattern_type": "assert!",
+          "full_match": "assert!(true);",
+          "message": null,
+          "condition": "true",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/testrepo_harness_integration.rs": {
+      "rest_api_endpoints_return_valid_state": [
+        {
+          "line_number": 377,
+          "pattern_type": "assert!",
+          "full_match": "assert!(true, \"Beads response should be an array\");",
+          "message": "Beads response should be an array",
+          "condition": "true",
+          "additional_context": null
+        },
+        {
+          "line_number": 382,
+          "pattern_type": "assert!",
+          "full_match": "assert!(true, \"Workers response should be an array\");",
+          "message": "Workers response should be an array",
+          "condition": "true",
+          "additional_context": null
+        },
+        {
+          "line_number": 387,
+          "pattern_type": "assert!",
+          "full_match": "assert!(true, \"Conversations response should be an array\");",
+          "message": "Conversations response should be an array",
+          "condition": "true",
+          "additional_context": null
+        },
+        {
+          "line_number": 392,
+          "pattern_type": "assert!",
+          "full_match": "assert!(true, \"Projects response should be an array\");",
+          "message": "Projects response should be an array",
+          "condition": "true",
+          "additional_context": null
+        }
+      ],
+      "unknown": [
+        {
+          "line_number": 57,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"Daemon did not become ready\"",
+          "message": "Daemon did not become ready",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "ws_init_event_is_first_message": [
+        {
+          "line_number": 327,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"First message must be text, got {:?}\"",
+          "message": "First message must be text, got {:?}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "ws_receives_all_snapshot_events": [
+        {
+          "line_number": 343,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        snapshots.workers_received,\n        \"workers_snapshot should be received\"\n    );",
+          "message": "workers_snapshot should be received",
+          "condition": "snapshots.workers_received",
+          "additional_context": null
+        },
+        {
+          "line_number": 347,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        snapshots.beads_received,\n        \"beads_snapshot should be received\"\n    );",
+          "message": "beads_snapshot should be received",
+          "condition": "snapshots.beads_received",
+          "additional_context": null
+        },
+        {
+          "line_number": 351,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        snapshots.conversations_received,\n        \"conversations_snapshot should be received\"\n    );",
+          "message": "conversations_snapshot should be received",
+          "condition": "snapshots.conversations_received",
+          "additional_context": null
+        },
+        {
+          "line_number": 355,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        snapshots.projects_received,\n        \"projects_snapshot should be received\"\n    );",
+          "message": "projects_snapshot should be received",
+          "condition": "snapshots.projects_received",
+          "additional_context": null
+        },
+        {
+          "line_number": 359,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        snapshots.config_received,\n        \"config_status should be received\"\n    );",
+          "message": "config_status should be received",
+          "condition": "snapshots.config_received",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/testrepo_integration.rs": {
+      "rest_api_endpoints_return_valid_state": [
+        {
+          "line_number": 410,
+          "pattern_type": "assert!",
+          "full_match": "assert!(testrepo_found, \"testrepo should be in projects list\");",
+          "message": "testrepo should be in projects list",
+          "condition": "testrepo_found",
+          "additional_context": null
+        }
+      ],
+      "unknown": [
+        {
+          "line_number": 67,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::bail!(\"Daemon did not become ready\"",
+          "message": "Daemon did not become ready",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "ws_init_event_is_first_message": [
+        {
+          "line_number": 299,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"First message must be text, got {:?}\"",
+          "message": "First message must be text, got {:?}",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "ws_receives_all_snapshot_events": [
+        {
+          "line_number": 315,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        snapshots.workers_received,\n        \"workers_snapshot should be received\"\n    );",
+          "message": "workers_snapshot should be received",
+          "condition": "snapshots.workers_received",
+          "additional_context": null
+        },
+        {
+          "line_number": 319,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        snapshots.beads_received,\n        \"beads_snapshot should be received\"\n    );",
+          "message": "beads_snapshot should be received",
+          "condition": "snapshots.beads_received",
+          "additional_context": null
+        },
+        {
+          "line_number": 323,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        snapshots.conversations_received,\n        \"conversations_snapshot should be received\"\n    );",
+          "message": "conversations_snapshot should be received",
+          "condition": "snapshots.conversations_received",
+          "additional_context": null
+        },
+        {
+          "line_number": 327,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        snapshots.projects_received,\n        \"projects_snapshot should be received\"\n    );",
+          "message": "projects_snapshot should be received",
+          "condition": "snapshots.projects_received",
+          "additional_context": null
+        },
+        {
+          "line_number": 331,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        snapshots.config_received,\n        \"config_status should be received\"\n    );",
+          "message": "config_status should be received",
+          "condition": "snapshots.config_received",
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-daemon/tests/zero_write_invariant.rs": {
+      "test_invoke_br_string_create_panics_read_only": [
+        {
+          "line_number": 221,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"invariant violated: this test should not run under create-only-write\"",
+          "message": "invariant violated: this test should not run under create-only-write",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-mcp/tests/forbidden_worker_steering.rs": {
+      "test_runtime_guard_rejects_all_forbidden_verbs": [
+        {
+          "line_number": 126,
+          "pattern_type": "unwrap_err()",
+          "full_match": ".unwrap_err()",
+          "message": null,
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-mcp/tests/protocol_contract.rs": {
+      "test_initialize_request_mcp_parses_fixture": [
+        {
+          "line_number": 58,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"expected Method::Initialize\"",
+          "message": "expected Method::Initialize",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_mcp_create_stitch_request_body_matches_daemon_fixture": [
+        {
+          "line_number": 498,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\n                \"hoop-mcp must send '{}' to daemon (declared in fixture). \\\n                 If the field was intentionally renamed, update both \\\n                 create_stitch_via_daemon and the fixture.\"",
+          "message": "hoop-mcp must send '{}' to daemon (declared in fixture). \\\n                 If the field was intentionally renamed, update both \\\n                 create_stitch_via_daemon and the fixture.",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_prompts_list_request_mcp_parses_fixture": [
+        {
+          "line_number": 151,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"expected Method::PromptsList\"",
+          "message": "expected Method::PromptsList",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_resources_list_request_mcp_parses_fixture": [
+        {
+          "line_number": 203,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"expected Method::ResourcesList\"",
+          "message": "expected Method::ResourcesList",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_shutdown_request_mcp_parses_fixture": [
+        {
+          "line_number": 255,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"expected Method::Shutdown\"",
+          "message": "expected Method::Shutdown",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_tools_call_request_mcp_parses_fixture": [
+        {
+          "line_number": 396,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"expected Method::ToolsCall\"",
+          "message": "expected Method::ToolsCall",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "test_tools_list_request_mcp_parses_fixture": [
+        {
+          "line_number": 80,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"expected Method::ToolsList\"",
+          "message": "expected Method::ToolsList",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "unknown": [
+        {
+          "line_number": 26,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"fixture file missing: {}\"",
+          "message": "fixture file missing: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 28,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"invalid JSON in fixture {}: {}\"",
+          "message": "invalid JSON in fixture {}: {}",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "hoop-schema/tests/schema_drift.rs": {
+      "validate_fixture_roundtrip": [
+        {
+          "line_number": 860,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to read fixture {}: {}\"",
+          "message": "Failed to read fixture {}: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 864,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to parse fixture {} as JSON: {}\"",
+          "message": "Failed to parse fixture {} as JSON: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 868,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to serialize fixture {}: {}\"",
+          "message": "Failed to serialize fixture {}: {}",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 872,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Failed to parse normalized JSON for {}: {}\"",
+          "message": "Failed to parse normalized JSON for {}: {}",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "tests/acceptance/s1_morning_review.rs": {
+      "s1_morning_review_all_facts_present": [
+        {
+          "line_number": 132,
+          "pattern_type": "assert!",
+          "full_match": "assert!(total_cost >= 0.0, \"total_spend_usd must be non-negative\");",
+          "message": "total_spend_usd must be non-negative",
+          "condition": "total_cost >= 0.0",
+          "additional_context": null
+        }
+      ],
+      "s1_morning_review_cost_accuracy": [
+        {
+          "line_number": 270,
+          "pattern_type": "assert!",
+          "full_match": "assert!(total_cost >= 0.0, \"Total cost must be non-negative\");",
+          "message": "Total cost must be non-negative",
+          "condition": "total_cost >= 0.0",
+          "additional_context": null
+        }
+      ],
+      "unknown": [
+        {
+          "line_number": 96,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::anyhow!(\"Daemon failed to start within timeout\"",
+          "message": "Daemon failed to start within timeout",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "tests/acceptance/s2_transcript_archaeology.rs": {
+      "unknown": [
+        {
+          "line_number": 97,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::anyhow!(\"Daemon failed to start within timeout\"",
+          "message": "Daemon failed to start within timeout",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "tests/acceptance/s3_bead_creation_from_chat.rs": {
+      "s3_end_to_end_flow_verification": [
+        {
+          "line_number": 328,
+          "pattern_type": "assert!",
+          "full_match": "assert!(found, \"Draft should appear in queue\");",
+          "message": "Draft should appear in queue",
+          "condition": "found",
+          "additional_context": null
+        }
+      ],
+      "unknown": [
+        {
+          "line_number": 99,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::anyhow!(\"Daemon failed to start within timeout\"",
+          "message": "Daemon failed to start within timeout",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "tests/acceptance/s4_daemon_restart.rs": {
+      "s4_daemon_restart_no_bead_loss": [
+        {
+          "line_number": 219,
+          "pattern_type": "assert!",
+          "full_match": "assert!(mid_event_count > 0, \"Worker should have written events\");",
+          "message": "Worker should have written events",
+          "condition": "mid_event_count > 0",
+          "additional_context": null
+        }
+      ],
+      "s4_fleet_unaffected_by_restart": [
+        {
+          "line_number": 313,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        events_downtime > events_before,\n        \"Worker should continue writing events during HOOP downtime\"\n    );",
+          "message": "Worker should continue writing events during HOOP downtime",
+          "condition": "events_downtime > events_before",
+          "additional_context": null
+        },
+        {
+          "line_number": 327,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        events_after > events_downtime,\n        \"Worker should continue after HOOP restart\"\n    );",
+          "message": "Worker should continue after HOOP restart",
+          "condition": "events_after > events_downtime",
+          "additional_context": null
+        }
+      ],
+      "unknown": [
+        {
+          "line_number": 177,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::anyhow!(\"Daemon failed to start\"",
+          "message": "Daemon failed to start",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "tests/acceptance/s5_workspace_deleted.rs": {
+      "s5_auto_recovery_on_restore": [
+        {
+          "line_number": 335,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        recovered,\n        \"Auto-recovery should occur within 10s of workspace restore\"\n    );",
+          "message": "Auto-recovery should occur within 10s of workspace restore",
+          "condition": "recovered",
+          "additional_context": null
+        }
+      ],
+      "s5_workspace_deleted_error_within_10s": [
+        {
+          "line_number": 199,
+          "pattern_type": "assert!",
+          "full_match": "assert!(\n        degraded_detected,\n        \"Error card should appear within 10s of workspace deletion\"\n    );",
+          "message": "Error card should appear within 10s of workspace deletion",
+          "condition": "degraded_detected",
+          "additional_context": null
+        }
+      ],
+      "unknown": [
+        {
+          "line_number": 130,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::anyhow!(\"Daemon failed to start\"",
+          "message": "Daemon failed to start",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "tests/acceptance/s6_machine_mode.rs": {
+      "unknown": [
+        {
+          "line_number": 98,
+          "pattern_type": "anyhow::",
+          "full_match": "anyhow::anyhow!(\"Daemon failed to start within timeout\"",
+          "message": "Daemon failed to start within timeout",
+          "condition": null,
+          "additional_context": null
+        }
+      ]
+    },
+    "tests/cli_test_helpers.rs": {
+      "child_process_receives_no_interactive_flag": [
+        {
+          "line_number": 498,
+          "pattern_type": "assert!",
+          "full_match": "assert!(parent_cli.no_interactive, \"Parent must have flag set\");",
+          "message": "Parent must have flag set",
+          "condition": "parent_cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 510,
+          "pattern_type": "assert!",
+          "full_match": "assert!(child_cli.no_interactive,\n        \"Child CLI must parse no_interactive=true from passed args\");",
+          "message": "Child CLI must parse no_interactive=true from passed args",
+          "condition": "child_cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 960,
+          "pattern_type": "assert!",
+          "full_match": "assert!(parent_cli.no_interactive, \"Parent must have flag set\");",
+          "message": "Parent must have flag set",
+          "condition": "parent_cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 971,
+          "pattern_type": "assert!",
+          "full_match": "assert!(child_cli.no_interactive,\n        \"Child CLI must parse no_interactive=true from passed args\");",
+          "message": "Child CLI must parse no_interactive=true from passed args",
+          "condition": "child_cli.no_interactive",
+          "additional_context": null
+        }
+      ],
+      "cli_to_handler_propagation_complete_example": [
+        {
+          "line_number": 390,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive, \"CLI must parse flag as true\");",
+          "message": "CLI must parse flag as true",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        }
+      ],
+      "comprehensive_flag_propagation_test": [
+        {
+          "line_number": 822,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive, \"Flag must be true at top level\");",
+          "message": "Flag must be true at top level",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 827,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive, \"Flag accessible at Projects level\");",
+          "message": "Flag accessible at Projects level",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 830,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Projects command\"",
+          "message": "Expected Projects command",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 836,
+          "pattern_type": "assert!",
+          "full_match": "assert!(child_has_flag, \"Child must receive no_interactive flag\");",
+          "message": "Child must receive no_interactive flag",
+          "condition": "child_has_flag",
+          "additional_context": null
+        },
+        {
+          "line_number": 1230,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive, \"Flag must be true at top level\");",
+          "message": "Flag must be true at top level",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 1235,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive, \"Flag accessible at Projects level\");",
+          "message": "Flag accessible at Projects level",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 1238,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Projects command\"",
+          "message": "Expected Projects command",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 1244,
+          "pattern_type": "assert!",
+          "full_match": "assert!(child_has_flag, \"Child must receive no_interactive flag\");",
+          "message": "Child must receive no_interactive flag",
+          "condition": "child_has_flag",
+          "additional_context": null
+        }
+      ],
+      "debug_propagation": [
+        {
+          "line_number": 1301,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive);",
+          "message": null,
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 1315,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive);",
+          "message": null,
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        }
+      ],
+      "environment_variable_propagation_full_example": [
+        {
+          "line_number": 760,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive, \"Flag must be parsed as true\");",
+          "message": "Flag must be parsed as true",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 790,
+          "pattern_type": "assert!",
+          "full_match": "assert!(!cli_no_flag.no_interactive, \"Flag must be false when not specified\");",
+          "message": "Flag must be false when not specified",
+          "condition": "!cli_no_flag.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 1168,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive, \"Flag must be parsed as true\");",
+          "message": "Flag must be parsed as true",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 1198,
+          "pattern_type": "assert!",
+          "full_match": "assert!(!cli_no_flag.no_interactive, \"Flag must be false when not specified\");",
+          "message": "Flag must be false when not specified",
+          "condition": "!cli_no_flag.no_interactive",
+          "additional_context": null
+        }
+      ],
+      "flag_persistence_through_full_command_chain": [
+        {
+          "line_number": 646,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive, \"Level 0: Global flag must be true\");",
+          "message": "Level 0: Global flag must be true",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 652,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive, \"Level 1: Flag accessible in Projects\");",
+          "message": "Level 1: Flag accessible in Projects",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 658,
+          "pattern_type": "assert!",
+          "full_match": "assert!(*confirm, \"Remove's --confirm flag must be true\");",
+          "message": "Remove's --confirm flag must be true",
+          "condition": "*confirm",
+          "additional_context": null
+        },
+        {
+          "line_number": 661,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive, \"Level 2: Flag accessible in Remove\");",
+          "message": "Level 2: Flag accessible in Remove",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 663,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Remove command at Level 2\"",
+          "message": "Expected Remove command at Level 2",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 666,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Projects command at Level 1\"",
+          "message": "Expected Projects command at Level 1",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 1069,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive, \"Level 0: Global flag must be true\");",
+          "message": "Level 0: Global flag must be true",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 1075,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive, \"Level 1: Flag accessible in Projects\");",
+          "message": "Level 1: Flag accessible in Projects",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 1081,
+          "pattern_type": "assert!",
+          "full_match": "assert!(*confirm, \"Remove's --confirm flag must be true\");",
+          "message": "Remove's --confirm flag must be true",
+          "condition": "*confirm",
+          "additional_context": null
+        },
+        {
+          "line_number": 1084,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive, \"Level 2: Flag accessible in Remove\");",
+          "message": "Level 2: Flag accessible in Remove",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 1086,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Remove command at Level 2\"",
+          "message": "Expected Remove command at Level 2",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 1089,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Projects command at Level 1\"",
+          "message": "Expected Projects command at Level 1",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "parse_cli_args_basic": [
+        {
+          "line_number": 2098,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive);",
+          "message": null,
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        }
+      ],
+      "parse_cmd_string_basic": [
+        {
+          "line_number": 2104,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive);",
+          "message": null,
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        }
+      ],
+      "projects_subcommand_helpers_work": [
+        {
+          "line_number": 2206,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Projects subcommand\"",
+          "message": "Expected Projects subcommand",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "remove_command_helpers_work": [
+        {
+          "line_number": 2192,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Remove command\"",
+          "message": "Expected Remove command",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "scan_command_helpers_work": [
+        {
+          "line_number": 2178,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Scan command\"",
+          "message": "Expected Scan command",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "scan_flag_after_command_complete": [
+        {
+          "line_number": 132,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Scan command\"",
+          "message": "Expected Scan command",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "scan_flag_before_command_complete": [
+        {
+          "line_number": 81,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Scan command\"",
+          "message": "Expected Scan command",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "verify_flag_persists_through_nested_subcommands": [
+        {
+          "line_number": 571,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive, \"Top level must have flag\");",
+          "message": "Top level must have flag",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 577,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive, \"Flag accessible at Projects level\");",
+          "message": "Flag accessible at Projects level",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 583,
+          "pattern_type": "assert!",
+          "full_match": "assert!(confirm, \"Confirm flag must be true\");",
+          "message": "Confirm flag must be true",
+          "condition": "confirm",
+          "additional_context": null
+        },
+        {
+          "line_number": 585,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive, \"Flag accessible at Remove level\");",
+          "message": "Flag accessible at Remove level",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 587,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Remove command\"",
+          "message": "Expected Remove command",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 590,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Projects command\"",
+          "message": "Expected Projects command",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 995,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive, \"Top level must have flag\");",
+          "message": "Top level must have flag",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 1001,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive, \"Flag accessible at Projects level\");",
+          "message": "Flag accessible at Projects level",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 1008,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive, \"Flag accessible at Remove level\");",
+          "message": "Flag accessible at Remove level",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 1010,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Remove command\"",
+          "message": "Expected Remove command",
+          "condition": null,
+          "additional_context": null
+        },
+        {
+          "line_number": 1013,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Projects command\"",
+          "message": "Expected Projects command",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "verify_no_interactive_persists_through_command_chain": [
+        {
+          "line_number": 2365,
+          "pattern_type": "assert!",
+          "full_match": "assert!(cli.no_interactive,\n                    \"Flag must remain accessible at Projects level\");",
+          "message": "Flag must remain accessible at Projects level",
+          "condition": "cli.no_interactive",
+          "additional_context": null
+        },
+        {
+          "line_number": 2368,
+          "pattern_type": "panic!",
+          "full_match": "panic!(\"Expected Projects command\"",
+          "message": "Expected Projects command",
+          "condition": null,
+          "additional_context": null
+        }
+      ],
+      "verify_no_interactive_propagates_to_handler": [
+        {
+          "line_number": 338,
+          "pattern_type": "assert!",
+          "full_match": "assert!(no_interactive, \"Flag must be true after extraction\");",
+          "message": "Flag must be true after extraction",
+          "condition": "no_interactive",
+          "additional_context": null
+        }
+      ]
+    }
+  }
+}
