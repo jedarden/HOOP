@@ -13,10 +13,13 @@ use axum::{
     Json, Router,
 };
 use serde::Deserialize;
+
+#[cfg(feature = "openapi")]
 use utoipa::ToSchema;
 
 /// Query parameters for listing transcription jobs
-#[derive(Debug, Deserialize, ToSchema)]
+#[derive(Debug, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ListJobsQuery {
     /// Filter by stitch_id
     pub stitch_id: Option<String>,
