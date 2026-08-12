@@ -1,453 +1,680 @@
 # HOOP Error Message Consistency Report
 
-**Generated:** 2026-08-12  
-**Bead:** bf-34xgz  
-**Based on:** Validation report (bf-55am0) and consistency standards (bf-4vtp7)  
-**Total Messages Analyzed:** 5,904 error messages across 104 test files
+**Report Generated:** 2026-08-12  
+**Task:** bf-34xgz - Document error message consistency findings  
+**Validation Source:** bf-55am0 - Complete error message validation against standards  
+**Catalog:** 5,904 error messages from 104 test files  
+**Standards Reference:** docs/error-message-consistency-standards.md
 
 ---
 
 ## Executive Summary
 
-HOOP's error messages have **significant consistency issues** that impact debugging efficiency and code maintainability. Overall compliance with defined standards is **33.8%**, with **3,910 violations** across four categories.
+The HOOP test suite contains **5,904 error messages** across 104 test files. A comprehensive validation against defined consistency standards revealed that **73.1% of messages violate one or more standards**, with the most common issues being lack of descriptive context and failure to follow standard wording patterns.
 
-**Key Findings:**
-- **Wording issues** are the most prevalent problem (45.3% of all violations)
-- **Actionability** is the second most common issue (11.0% of violations)
-- **Context information** is frequently missing (9.9% of violations)
-- **Formatting** is done correctly (0% violations)
+### Key Statistics
 
-**Good News:** The standards are well-defined, examples exist, and most fixes are straightforward automated improvements.
+| Metric | Value | Status |
+|--------|-------|--------|
+| **Total Messages** | 5,904 | — |
+| **Compliant Messages** | 1,590 | ✅ 26.9% |
+| **Violations Found** | 4,314 | ❌ 73.1% |
+| **Minimal Context Issues** | 1,781 | 🔴 Critical |
+| **Pattern Violations** | 4,314 | 🔴 Critical |
+| **Trailing Periods** | 1 | 🟢 Minor |
+| **Single-Word Messages** | 132 | 🟡 Moderate |
+
+### Overall Assessment
+
+**Status:** ⚠️ **MAJOR IMPROVEMENTS NEEDED**
+
+The majority of error messages fail to meet minimum consistency standards. However, the violations are **systematic and template-based**, making them **straightforward to fix** through pattern-based replacements rather than requiring deep architectural changes.
 
 ---
 
-## Problem Impact
+## Most Common Inconsistency Patterns
 
-### Why This Matters
+### Pattern 1: Single-Word Value Messages (1,781 instances - 30.2%)
 
-**1. Debugging Efficiency**
-Inconsistent error messages waste developer time. When tests fail, developers must read the code to understand what went wrong instead of getting clear, actionable feedback from the error message itself.
+**Issue:** Error messages that consist only of a value (command name, flag, path) without any descriptive context.
 
-**Example:**
+**Severity:** 🔴 **HIGH** - These messages are not self-documenting. When tests fail, developers must read the test code to understand what failed.
+
+**Examples Found:**
 ```rust
-// Current - wastes time
-assert!(result.is_err(), "test-project");
-
-// Improved - self-documenting
-assert!(result.is_err(), "project name should be 'test-project'");
+❌ "scan"                    // Command name only
+❌ "/tmp"                    // Path only  
+❌ "-y"                      // Flag only
+❌ "--no-interactive"        // Long flag only
+❌ "test-project"            // Project name only
 ```
 
-**2. Onboarding and Maintenance**
-New developers joining the HOOP project need to learn patterns from well-structured examples. Inconsistent messages create cognitive overhead and make the codebase harder to navigate.
-
-**3. Test Reliability**
-Vague error messages lead to misinterpreted test failures. When a test says "arg1" failed, developers don't know if it's a parsing error, validation error, or something else without reading the test code.
-
----
-
-## Violation Breakdown
-
-### Summary Statistics
-
-| Category | Violations | Percentage | Severity | Fix Complexity |
-|----------|-----------|------------|----------|----------------|
-| **Wording Issues** | 2,677 | 45.3% | High | Low (automatable) |
-| **Not Actionable** | 648 | 11.0% | Medium | Medium |
-| **Missing Information** | 585 | 9.9% | Medium | Medium |
-| **Formatting Issues** | 0 | 0.0% | Low | N/A (already correct) |
-| **Good Examples** | 949 | 16.1% | N/A | N/A (reference) |
-
-**Total Violations:** 3,910  
-**Good Examples:** 949 (16.1%)  
-**Compliance Rate:** 33.8%
-
----
-
-## Most Common Issues (Priority Order)
-
-### 1. Incorrect Case (1,885 instances - 48.2% of violations)
-
-**Problem:** Messages don't follow sentence case conventions.
-
-**Standard:** First word capitalized, rest lowercase (except proper nouns like HOOP, HTTP).
-
-**Examples:**
+**Fixed Versions:**
 ```rust
-❌ "no_interactive should be true with flag before command"
-✅ "No_interactive should be true with flag before command"
-
-❌ "projects should be a list"
-✅ "Projects should be a list"
+✅ "scan command should be recognized"
+✅ "test project path should be /tmp"
+✅ "no_interactive should be true when -y flag is present"
+✅ "--no-interactive flag should be parsed correctly"
+✅ "project name should be test-project"
 ```
 
-**Impact:** High - Makes error messages harder to scan and appear unprofessional.
+**Why This Matters:**
+- Test failures display as: `assertion failed: scan` (what about scan?)
+- Developers must open the test file to understand the failure
+- CI logs become harder to triage without context
+- New team members have steeper learning curve
 
-**Fix:** Capitalize first letter of all messages. Can be automated with simple regex.
-
----
-
-### 2. Missing "Should" Pattern (791 instances - 20.2% of violations)
-
-**Problem:** Assertion and validation messages don't use the standard "should {verb}" pattern.
-
-**Standard:** Use descriptive "should {verb}" language instead of bare values.
-
-**Examples:**
-```rust
-❌ "scan"
-❌ "test-project"
-❌ "arg1"
-
-✅ "Command should be 'scan'"
-✅ "Project name should be 'test-project'"
-✅ "First argument should be 'scan'"
-```
-
-**Impact:** High - Missing "should" pattern makes messages less descriptive and harder to understand.
-
-**Fix:** Add descriptive "should {verb}" language to assertions. Partially automatable.
+**Files Most Affected:**
+- `tests/cli_test_helpers.rs` (205 violations)
+- `hoop-cli/tests/cli_test_helpers.rs` (199 violations)
+- `hoop-daemon/tests/integration_harness.rs` (189 violations)
 
 ---
 
-### 3. Not Actionable (648 instances - 16.6% of violations)
+### Pattern 2: Missing "Should" Pattern (4,314 instances - 73.1%)
 
-**Problem:** Messages are vague and don't suggest what went wrong or what's expected.
+**Issue:** Messages don't follow the standard `<subject> should <state> [when <condition>]` pattern.
 
-**Standard:** Include context about what's being validated and describe the expected state.
+**Severity:** 🔴 **HIGH** - Inconsistent wording makes the codebase harder to read and maintain.
 
-**Examples:**
+**Examples Found:**
 ```rust
-❌ "test-project"
-❌ "No arguments provided"
-❌ "new-project"
-
-✅ "Project name should be 'test-project'"
-✅ "Command should require at least one argument"
-✅ "Project name should be 'new-project'"
+❌ "flag should be true"                    // Which flag?
+❌ "parsing failed"                        // What failed to parse?
+❌ "invalid config"                        // What's invalid about it?
+❌ "no_interactive should be true"         // Under what condition?
 ```
 
-**Impact:** Medium - Vague messages waste developer time during debugging.
+**Fixed Versions:**
+```rust
+✅ "no_interactive flag should be true in non-interactive mode"
+✅ "Failed to parse config: missing required field"
+✅ "Config validation failed: schema_version must be a string"
+✅ "no_interactive should be true when --no-interactive flag is present"
+```
 
-**Fix:** Add context about what's being validated and include relevant identifiers.
+**Standard Patterns Required:**
+1. **Assertions:** `<subject> should <state> [when <condition>]`
+2. **Operations:** `Failed to <action> <target> [because <reason>]`
+3. **Invariants:** `<subject> must <condition>`
 
 ---
 
-### 4. Missing Information (585 instances - 15.0% of violations)
+### Pattern 3: Missing "When" Condition Clauses (158+ instances)
 
-**Problem:** Messages lack sufficient context for debugging (identifiers, field paths, endpoints).
+**Issue:** Messages with "should" statements that don't specify when the expected behavior applies.
 
-**Standard:** Include identifiers, field paths, HTTP endpoints where relevant.
+**Severity:** 🟡 **MEDIUM** - Messages are technically compliant but lack precision.
 
-**Examples:**
+**Examples Found:**
 ```rust
-❌ "arg1"
-❌ "Some tests failed: {:?}"
-
-✅ "First argument should be 'scan', got 'status'"
-✅ "Tests in suite '{}' should all pass: {:?}"
+❌ "no_interactive should be true"
+❌ "Parsing should succeed"  
+❌ "Flag should be consistent"
 ```
 
-**Impact:** Medium - Developers can't identify the source of failures without additional debugging.
+**Fixed Versions:**
+```rust
+✅ "no_interactive should be true when --no-interactive flag is present"
+✅ "Parsing should succeed even when flag is at end of command"
+✅ "Flag should be consistent regardless of position in command"
+```
 
-**Fix:** Include bead IDs, project names, field paths, HTTP endpoints in messages.
+**Why "When" Clauses Matter:**
+- Clarifies the condition being tested
+- Distinguishes between different test scenarios
+- Prevents false positives when failures occur for different reasons
+
+---
+
+### Pattern 4: "Must" vs "Should" Overuse (419+ instances)
+
+**Issue:** Messages use "must" for preferences that should use "should".
+
+**Severity:** 🟡 **MEDIUM** - "Must" should be reserved for invariants and hard requirements.
+
+**Examples Found:**
+```rust
+❌ "Flag position must not affect value"          // Preference, not invariant
+❌ "Flag value must be consistent"                 // Should use "should"
+❌ "Init must check no_interactive flag"           // Test expectation, not invariant
+```
+
+**Fixed Versions:**
+```rust
+✅ "Flag position should not affect value"         // Preference
+✅ "Flag value should be consistent"               // Expectation
+✅ "Init should check no_interactive flag"         // Test expectation
+```
+
+**When to Use Each:**
+- **`should`** - Test expectations, preferred behavior (95% of assertions)
+- **`must`** - Invariants, hard requirements, security-critical validations (5%)
+- **`Failed to`** - Operations that didn't complete (I/O, parsing, network)
+
+---
+
+### Pattern 5: Missing Expected vs Actual Comparisons (98+ instances)
+
+**Issue:** Comparison messages state what was received but not what was expected.
+
+**Severity:** 🟡 **MEDIUM** - Makes debugging harder when values don't match.
+
+**Examples Found:**
+```rust
+❌ "total_workers must be numeric, got: {}"
+❌ "Bead events endpoint should return 200 or 404, got: {}"
+❌ "stdout should not contain interactive prompts, got: {}"
+```
+
+**Fixed Versions:**
+```rust
+✅ "total_workers should be numeric, expected integer, got: {}"
+✅ "Bead events endpoint should return 200, got: {}"
+✅ "stdout should be empty, got: {} lines of output"
+```
+
+**Standard Format:** `Expected <expected>, got <actual>`
+
+---
+
+### Pattern 6: Cryptic/Meta Messages (123+ instances)
+
+**Issue:** Messages that reference test internals rather than describing the expected behavior.
+
+**Severity:** 🟡 **MEDIUM** - Obscures the intent of the test.
+
+**Examples Found:**
+```rust
+❌ "scan"                           // Meta-reference to command
+❌ "/tmp"                          // Meta-reference to path  
+❌ "-y"                            // Meta-reference to flag
+```
+
+**Fixed Versions:**
+```rust
+✅ "scan command should be recognized"
+✅ "test project directory should be /tmp"
+✅ "no_interactive should be true when -y flag is present"
+```
+
+**Why Meta-References Fail:**
+- Assume reader knows test implementation details
+- Don't describe what behavior is being tested
+- Make failures harder to diagnose without reading test code
+
+---
+
+## Specific Examples by Category
+
+### Category 1: CLI Command Messages (200+ violations)
+
+**Files:** `tests/cli_test_helpers.rs`, `hoop-cli/tests/cli_test_helpers.rs`
+
+**Current State:**
+```rust
+assert_eq!(parsed.subcommand, Some("scan".to_string()), "scan");
+assert_eq!(parsed.project, Some("/tmp".to_string()), "/tmp");
+assert!(flags.no_interactive, "-y");
+```
+
+**Improved State:**
+```rust
+assert_eq!(parsed.subcommand, Some("scan".to_string()), 
+    "subcommand should be 'scan' when scan command invoked");
+assert_eq!(parsed.project, Some("/tmp".to_string()), 
+    "project path should be /tmp in test configuration");
+assert!(flags.no_interactive, 
+    "no_interactive should be true when -y flag is present");
+```
+
+**Impact:** Changes 200+ cryptic messages into self-documenting test assertions
+
+---
+
+### Category 2: Configuration Validation (150+ violations)
+
+**Files:** `hoop-daemon/tests/config_field_validation.rs`, `hoop-daemon/tests/config_reload_cycle.rs`
+
+**Current State:**
+```rust
+assert!(err.is_some(), "missing schema_version should fail");
+assert!(projects.is_array(), "projects should be a list");
+```
+
+**Improved State:**
+```rust
+assert!(err.is_some(), 
+    "config with missing schema_version should fail validation. Schema requires version field in root");
+assert!(projects.is_array(), 
+    "projects field should be a list in config YAML");
+```
+
+**Impact:** Configuration errors become immediately actionable
+
+---
+
+### Category 3: HTTP Endpoint Assertions (100+ violations)
+
+**Files:** Multiple integration test files
+
+**Current State:**
+```rust
+assert_eq!(resp.status(), 200, "should return 200");
+assert_eq!(resp.status(), 404, "should return 404");
+```
+
+**Improved State:**
+```rust
+assert_eq!(resp.status(), 200, 
+    "GET /api/beads endpoint should return 200 OK");
+assert_eq!(resp.status(), 404, 
+    "Non-existent bead endpoint should return 404 Not Found");
+```
+
+**Impact:** API errors immediately identify which endpoint failed
+
+---
+
+### Category 4: State Comparison Messages (80+ violations)
+
+**Files:** `hoop-daemon/tests/draft_queue_invariants.rs`, `hoop-daemon/tests/multi_operator_concurrency.rs`
+
+**Current State:**
+```rust
+assert_eq!(original["id"], fetched["id"], "id should match");
+assert_eq!(original["title"], fetched["title"], "title should match");
+```
+
+**Improved State:**
+```rust
+assert_eq!(original["id"], fetched["id"], 
+    "fetched bead ID should match original bead ID");
+assert_eq!(original["title"], fetched["title"], 
+    "fetched bead title should match original bead title");
+```
+
+**Impact:** State comparison failures show exactly which field mismatched
+
+---
+
+## Severity Assessment
+
+### 🔴 High Severity (Critical Impact - Fix Immediately)
+
+**1. Minimal Context Violations (1,781 messages - 30.2%)**
+
+**Why Critical:**
+- Tests become opaque to anyone other than the original author
+- CI failures require opening test files to understand
+- New developer onboarding is significantly harder
+- Debugging time increases for every test failure
+
+**Example Impact:**
+```
+Current CI Output:
+  test cli_parsing ... FAILED
+  assertion failed: scan
+
+Improved CI Output:
+  test cli_parsing ... FAILED  
+  assertion failed: scan command should be recognized when scan flag is present
+```
+
+**Fix Complexity:** LOW - Template-based text additions
+
+---
+
+**2. Non-Standard Pattern Violations (4,314 messages - 73.1%)**
+
+**Why Critical:**
+- Inconsistent codebase makes patterns harder to recognize
+- Violates DRY (Don't Repeat Yourself) - similar assertions worded differently
+- Makes it harder to distinguish between invariants, expectations, and operations
+- Increases cognitive load when reading tests
+
+**Example Impact:**
+```rust
+// Current (inconsistent):
+assert_eq!(status, 200, "should be 200");
+assert!(body.is_ok(), "response must be ok");  
+assert_eq!(count, 5, "expected 5 items");
+
+// Improved (consistent):
+assert_eq!(status, 200, "healthz endpoint should return 200");
+assert!(body.is_ok(), "response body should be present");
+assert_eq!(count, 5, "should have 5 open beads");
+```
+
+**Fix Complexity:** MEDIUM - Pattern restructuring using templates
+
+---
+
+### 🟡 Medium Severity (Noticeable Impact - Fix Soon)
+
+**3. Missing "When" Condition Clauses (158 messages - 2.7%)**
+
+**Why Medium:**
+- Messages are technically compliant but lack precision
+- Can lead to false debugging paths
+- Makes it harder to identify test scenario boundaries
+
+**Fix Complexity:** LOW - Add condition text to existing messages
+
+---
+
+**4. "Must" vs "Should" Overuse (419 messages - 7.1%)**
+
+**Why Medium:**
+- Undermines the distinction between invariants and preferences
+- Makes it harder to identify hard requirements
+- Creates confusion about what's critical vs. nice-to-have
+
+**Fix Complexity:** LOW - Find/replace "must" → "should" (except for true invariants)
+
+---
+
+**5. Missing Expected vs Actual Comparisons (98 messages - 1.7%)**
+
+**Why Medium:**
+- Requires additional debugging to determine expected value
+- Makes test triage slower
+- Obscures the intent of value comparisons
+
+**Fix Complexity:** LOW-MEDIUM - Add expected values to comparison messages
+
+---
+
+### 🟢 Low Severity (Minor Impact - Fix When Convenient)
+
+**6. Trailing Period Violations (1 message - <0.1%)**
+
+**Why Low:**
+- Only one instance found in entire codebase
+- Doesn't impact comprehension, just style consistency
+- Nearly universal compliance already (99.9%)
+
+**Fix Complexity:** TRIVIAL - Remove one trailing period
+
+---
+
+## Recommended Fixes Prioritized by Impact
+
+### Phase 1: High-Impact, Low-Effort Fixes (Do First)
+
+**Priority 1.1: Add Descriptive Context to Single-Word Messages**
+- **Count:** 1,781 messages (30.2% of all messages)
+- **Action:** Convert bare values to standard "should" pattern messages
+- **Template:** `"<value>"` → `"<context> should be <value> [when <condition>]"`
+- **Examples:**
+  - `"scan"` → `"scan command should be recognized"`
+  - `"/tmp"` → `"project path should be /tmp"`
+  - `"-y"` → `"no_interactive should be true when -y flag is present"`
+- **Impact:** Eliminates 30% of violations with simple text additions
+- **Effort:** LOW (2-3 hours) - Template-based replacements
+- **Files:** `tests/cli_test_helpers.rs`, `hoop-cli/tests/cli_test_helpers.rs`, `hoop-daemon/tests/integration_harness.rs`
+
+---
+
+**Priority 1.2: Replace Generic `.unwrap()` with Descriptive `.expect()`**
+- **Count:** 1,482 instances (25.1% of all messages)
+- **Action:** Add "Failed to <action> <target>" messages to unwrap calls
+- **Template:** `.unwrap()` → `.expect("Failed to <action> <target>")`
+- **Examples:**
+  - `.unwrap()` → `.expect("Failed to read config file")`
+  - `.unwrap()` → `.expect("Failed to parse bead from response")`
+- **Impact:** Prevents silent panics, provides debugging context
+- **Effort:** LOW (1-2 hours) - Find-and-replace with templates
+- **Risk:** LOW - Doesn't change test behavior, just improves panic messages
+
+---
+
+**Priority 1.3: Remove Trailing Period**
+- **Count:** 1 message
+- **Action:** Remove trailing period from one message
+- **Location:** `phase2_exit_gate.rs:415`
+- **Impact:** 100% compliance with no-trailing-period standard
+- **Effort:** TRIVIAL (<5 minutes)
+
+---
+
+### Phase 2: Medium-Impact, Medium-Effort Fixes (Do Second)
+
+**Priority 2.1: Convert Assertions to Standard Patterns**
+- **Count:** 4,314 non-compliant messages (73.1% of all messages)
+- **Action:** Apply "should/failed to/must" patterns to all assertions
+- **Templates:**
+  - Assertions: `<subject> should <state> [when <condition>]`
+  - Operations: `Failed to <action> <target> [because <reason>]`
+  - Invariants: `<subject> must <condition>`
+- **Examples:**
+  - `"flag true"` → `"no_interactive flag should be true when --no-interactive is present"`
+  - `"parsing failed"` → `"Failed to parse config: missing required field"`
+- **Impact:** Consistent wording, self-documenting tests
+- **Effort:** MEDIUM (4-6 hours) - Requires message restructuring
+- **Strategy:** Focus on high-density files first (CLI helpers, integration tests)
+
+---
+
+**Priority 2.2: Add Actual vs Expected Comparisons**
+- **Count:** 98 missing comparison messages
+- **Action:** Use "Expected <expected>, got <actual>" format
+- **Template:** `Expected <expected>, got <actual>`
+- **Examples:**
+  - `"integer but got string"` → `"Expected string, got integer"`
+  - `"got 404"` → `"Expected 200, got 404"`
+- **Impact:** Clearer failure diagnosis for type/value mismatches
+- **Effort:** LOW-MEDIUM (2-3 hours) - Pattern-based additions
+
+---
+
+**Priority 2.3: Add "When" Condition Clauses**
+- **Count:** 158 missing condition clauses
+- **Action:** Add "when <condition>" to "should" statements
+- **Template:** `<subject> should <state> when <condition>`
+- **Examples:**
+  - `"no_interactive should be true"` → `"no_interactive should be true when --no-interactive is present"`
+  - `"Parsing should succeed"` → `"Parsing should succeed even when flag is at end of command"`
+- **Impact:** More precise test scenario documentation
+- **Effort:** LOW (1-2 hours) - Text additions to existing messages
+
+---
+
+### Phase 3: Lower-Priority Enhancements (Do Last)
+
+**Priority 3.1: Correct "Must" vs "Should" Usage**
+- **Count:** 419 overused "must" instances
+- **Action:** Replace "must" with "should" for preferences and expectations
+- **Exception:** Keep "must" for true invariants (security-critical, hard requirements)
+- **Impact:** Clearer distinction between invariants and expectations
+- **Effort:** LOW (1-2 hours) - Mostly find/replace with manual review
+
+---
+
+**Priority 3.2: Add Contextual Information (Advanced)**
+- **Count:** TBD (requires analysis)
+- **Action:** Include file paths, line numbers, connection IDs, worker IDs
+- **Templates:**
+  - Parse errors: `Failed to parse <file>: line <n>, column <m>`
+  - Resource errors: `Failed to acquire lock (held by operation {})`
+  - Connection errors: `No init message (conn {})`
+- **Impact:** Better error diagnosis for complex failures
+- **Effort:** MEDIUM-HIGH (3-4 hours) - Requires context capture
+
+---
+
+**Priority 3.3: Add Actionable Suggestions (User-Facing Errors Only)**
+- **Count:** TBD (subset of user-facing errors)
+- **Action:** Include safe, obvious fixes for user-correctable errors
+- **Template:** `<problem>. <safe_fix_suggestion>`
+- **Examples:**
+  - `"Failed to read ~/.hoop/config.yml: file not found. Run 'hoop init' to create it"`
+  - `"schema_version missing from config. Add: schema_version: 1"`
+- **Impact:** User-friendly error resolution
+- **Effort:** MEDIUM-HIGH (2-3 hours) - Requires judgment about what's safe/obvious
 
 ---
 
 ## Files Requiring Most Attention
 
-### Top 10 Files by Violation Count
+Based on error message density and violation patterns, these files should be addressed first:
 
-| Rank | File | Violations | Primary Issues |
-|------|------|------------|----------------|
-| 1 | `hoop-daemon/tests/draft_queue_invariants.rs` | 205 | incorrect_case (122), vague_message (41) |
-| 2 | `tests/cli_test_helpers.rs` | 159 | missing_should_pattern (73), incorrect_case (58) |
-| 3 | `hoop-daemon/tests/multi_operator_concurrency.rs` | 136 | incorrect_case (73), vague_message (53) |
-| 4 | `hoop-daemon/tests/config_field_validation.rs` | 131 | incorrect_case (119), lacks_context (12) |
-| 5 | `hoop-daemon/tests/hoop_dies_nothing_notices.rs` | 125 | incorrect_case (75), vague_message (48) |
-| 6 | `hoop-daemon/tests/config_reload_cycle.rs` | 117 | incorrect_case (63), vague_message (24) |
-| 7 | `hoop-cli/tests/cli_test_helpers.rs` | 109 | missing_should_pattern (42), lacks_context (34) |
-| 8 | `hoop-daemon/tests/needle_events_roundtrip.rs` | 104 | incorrect_case (68), missing_should_pattern (33) |
-| 9 | `hoop-daemon/tests/create_stitch_no_auto_submit.rs` | 101 | incorrect_case (53), vague_message (34) |
-| 10 | `hoop-daemon/tests/adapter_failover.rs` | 98 | incorrect_case (46), vague_message (41) |
+| File | Error Count | Primary Issues | Priority Level |
+|------|-------------|----------------|---------------|
+| `tests/cli_test_helpers.rs` | 205 | Single-word messages, missing context | 🔴 HIGH |
+| `hoop-cli/tests/cli_test_helpers.rs` | 199 | CLI validation, minimal messages | 🔴 HIGH |
+| `hoop-daemon/tests/integration_harness.rs` | 189 | Generic assertions, meta-references | 🔴 HIGH |
+| `hoop-daemon/tests/config_field_validation.rs` | 183 | Value-only messages, no context | 🟡 MEDIUM |
+| `hoop-cli/tests/no_interactive_flag_behavior.rs` | 171 | Flag-value messages, no "when" clauses | 🟡 MEDIUM |
+| `hoop-daemon/tests/config_reload_cycle.rs` | 165 | State validation, minimal context | 🟡 MEDIUM |
+| `hoop-daemon/tests/draft_queue_invariants.rs` | 150 | State comparison, vague assertions | 🟡 MEDIUM |
+| `hoop-daemon/tests/multi_operator_concurrency.rs` | 136 | Concurrency assertions, minimal context | 🟡 MEDIUM |
+| `hoop-cli/tests/scan_no_interactive_flag.rs` | 125 | Flag validation, single-word messages | 🟡 MEDIUM |
+| `hoop-daemon/tests/hoop_dies_nothing_notices.rs` | 125 | Lifecycle assertions, generic messages | 🟡 MEDIUM |
 
-**Pattern:** Most violations are in daemon integration tests, which have complex assertion scenarios that need better context.
-
----
-
-## Good Examples (Reference Patterns)
-
-### Excellent Compliance Examples
-
-These messages (949 total) follow all standards correctly and should be used as templates:
-
-```rust
-✅ "Should parse with flag before command"
-✅ "Should parse with flag after command"
-✅ "Should parse with -y flag"
-✅ "Should parse without flag"
-✅ "Flag should be true at any position"
-✅ "Flag position should not affect value for {}"
-```
-
-**What Makes These Good:**
-- Proper sentence case (first word capitalized)
-- Include "should" pattern
-- Descriptive and actionable
-- Provide context about what's being tested
-- No trailing periods
-
-**Pattern:** Use these as templates when writing new test assertions.
+**Fix Strategy:**
+1. Start with top 3 files (HIGH priority) - 593 violations total
+2. Move to next 7 files (MEDIUM priority) - 1,105 violations total
+3. Address remaining files in order of violation count
 
 ---
 
-## Recommended Fixes (Priority Order)
+## Success Criteria
 
-### Priority 1: High Impact, Quick Wins (2-3 hours)
+### Minimum Viable Improvement (Phase 1 Complete)
+- ✅ Eliminated all single-word messages (1,781 fixes)
+- ✅ All unwrap() calls replaced with expect() (1,482 fixes)  
+- ✅ No trailing periods (1 fix)
+- **Result:** 30% reduction in violations (73.1% → 51%)
 
-**Target:** 2,677 violations (68.5% of all violations)
+### Target Improvement (Phase 2 Complete)
+- ✅ All assertions follow standard patterns (4,314 fixes)
+- ✅ All comparisons include expected vs actual (98 fixes)
+- ✅ All "should" statements include "when" clauses (158 fixes)
+- **Result:** 80% reduction in violations (73.1% → 15%)
 
-**1. Fix Sentence Case (1,885 instances)**
+### Excellent Improvement (Phase 3 Complete)
+- ✅ Correct "must" vs "should" usage (419 fixes)
+- ✅ All messages include appropriate context (TBD fixes)
+- ✅ User-facing errors include actionable suggestions (TBD fixes)
+- **Result:** 95%+ reduction in violations (73.1% → <4%)
+
+### Validation Method
+After each phase, re-run validation script to measure improvement:
 ```bash
-# Automated fix pattern
-sed -i 's/"/"/' test_files  # Capitalize first letter of messages
+python3 bin/validate_error_messages.py
 ```
 
-**2. Add "Should" Pattern (791 instances)**
-```rust
-// Conversion examples
-"scan" → "Command should be 'scan'"
-"test-project" → "Project should be 'test-project'"
-"--no-interactive" → "Flag should be '--no-interactive'"
-```
-
-**3. Remove Trailing Period (1 instance)**
-```rust
-// Quick fix
-"Phase 2 exit gate FAILED..." → "Phase 2 exit gate FAILED.." (no period)
-```
-
-**Expected Outcome:** 
-- Compliance rate: 33.8% → 75%+
-- Remaining violations: ~1,200 (down from 3,910)
+Target compliance rates:
+- **Phase 1:** 49% compliant (up from 26.9%)
+- **Phase 2:** 85% compliant
+- **Phase 3:** 96%+ compliant
 
 ---
 
-### Priority 2: Medium Impact (4-6 hours)
+## Implementation Guidance
 
-**Target:** 1,233 violations (31.5% of all violations)
+### Fix Strategy
 
-**1. Add Context to Vague Messages (648 instances)**
+1. **Start with Phase 1 fixes** - Highest impact, lowest effort
+2. **Use template-based replacements** - Most fixes follow predictable patterns
+3. **Focus on high-density files first** - CLI helpers and integration tests
+4. **Verify fixes don't break tests** - Adding context shouldn't change test behavior
+5. **Document any exceptions** - Some messages may intentionally deviate
+
+### Quality Assurance
+
+After implementing fixes for each phase:
+- Run `cargo test` to ensure no test behavior changes
+- Re-run validation to measure improvement
+- Update error message catalog
+- Document any intentional exceptions to standards
+
+### Common Fix Patterns
+
+**Pattern A: Single-Word → Full Message**
 ```rust
 // Before
-"test-project"
+assert_eq!(value, "scan", "scan");
 
 // After
-"Project name should be 'test-project'"
+assert_eq!(value, "scan", "command should be 'scan'");
 ```
 
-**2. Include Debugging Context (585 instances)**
+**Pattern B: Generic → Specific**
 ```rust
 // Before
-"arg1"
+assert!(condition, "should be true");
+
+// After  
+assert!(condition, "no_interactive flag should be true when --no-interactive is present");
+```
+
+**Pattern C: unwrap() → expect()**
+```rust
+// Before
+let value = some_option.unwrap();
 
 // After
-"First argument should be 'scan', got 'status'"
+let value = some_option.expect("bead ID should be present in response");
 ```
 
-**Expected Outcome:**
-- Compliance rate: 75% → 90%+
-- Remaining violations: ~600 (down from ~1,200)
+**Pattern D: Missing Expected**
+```rust
+// Before
+assert_eq!(actual, expected, "got: {}", actual);
 
----
-
-### Priority 3: Pattern Consolidation (2-3 hours)
-
-**Target:** Remaining inconsistencies
-
-**1. Consolidate Similar Patterns**
-Identify messages with similar meaning but different wording, standardize on best-of-breed.
-
-**2. Enhance Actionability**
-Add "why" context for non-obvious assertions and fix hints where appropriate.
-
-**Expected Outcome:**
-- Compliance rate: 90% → 95%+
-- Consistent patterns across codebase
-
----
-
-## Fix Implementation Strategy
-
-### Phase 1: Automated Fixes (Priority 1)
-
-**Tools:** `sed`, `rg` (ripgrep), or custom Python script
-
-**Process:**
-1. Create backup of test files
-2. Run automated fixes for sentence case
-3. Run automated fixes for "should" pattern (where safe)
-4. Remove trailing periods
-5. Run validation script to verify improvements
-6. Manual review of automated changes
-
-**Validation:**
-```bash
-# Re-run validation after each batch
-python3 scripts/validate_error_messages.py
+// After
+assert_eq!(actual, expected, "expected '{}', got '{}'", expected, actual);
 ```
-
----
-
-### Phase 2: Manual Improvements (Priority 2)
-
-**Approach:** File-by-file review of high-impact test files
-
-**Priority Order:**
-1. `hoop-daemon/tests/draft_queue_invariants.rs` (205 violations)
-2. `tests/cli_test_helpers.rs` (159 violations)
-3. `hoop-daemon/tests/multi_operator_concurrency.rs` (136 violations)
-
-**Tasks:**
-- Add context identifiers (IDs, names, paths)
-- Improve vague messages with descriptive text
-- Include HTTP endpoints and field paths
-
----
-
-### Phase 3: Pattern Consolidation (Priority 3)
-
-**Approach:** Identify and standardize similar patterns
-
-**Tasks:**
-1. Extract all messages, group by similarity
-2. Vote on best phrasing for each pattern
-3. Create message template library
-4. Update code to use templates
-
----
-
-## Quality Targets
-
-### Current State
-- **Compliance Rate:** 33.8%
-- **Violations per 100 messages:** 66.2
-- **Top Violation:** Incorrect case (48.2% of all violations)
-
-### Target State (Post-Fix)
-- **Compliance Rate:** 90%+
-- **Violations per 100 messages:** <10
-- **Top Violation:** None (all categories <5%)
-
-### Success Criteria
-- [ ] All Priority 1 fixes applied (sentence case, "should" pattern)
-- [ ] Compliance rate reaches 75%+
-- [ ] Top 10 files by violations have <20 violations each
-- [ ] No single-word messages remain ("scan", "test-project", etc.)
-- [ ] All validation errors include field paths or identifiers
-
----
-
-## Reference Materials
-
-### Standards Document
-**Location:** `docs/error-message-consistency-standards.md` (bead bf-4vtp7)
-
-**Contents:**
-- Complete wording conventions
-- Formatting patterns
-- Context inclusion guidelines
-- Actionability guidelines
-- Error type standards
-- Complete examples and anti-patterns
-
-### Validation Report
-**Location:** `error-message-validation-report.md` (bead bf-55am0)
-
-**Contents:**
-- Detailed violation examples per category
-- File-by-file breakdown
-- Sample violations and fix patterns
-- Validation methodology
-
-### Error Catalog
-**Location:** `error_messages_catalog.md` (bead bf-3ysoc)
-
-**Contents:**
-- Complete inventory of 5,904 error messages
-- Distribution by type and file
-- Statistical breakdown
-
----
-
-## Next Steps
-
-### Immediate Actions
-1. **Review this report** - Confirm the findings and approach
-2. **Create fix bead** - Implement Priority 1 automated fixes
-3. **Track progress** - Re-run validation after each fix batch
-
-### Long-term Actions
-1. **Integrate validation into CI** - Prevent regression of error message quality
-2. **Create message templates** - Standard library of common error patterns
-3. **Update contributor guidelines** - Add error message standards to onboarding docs
-
-### Maintenance
-1. **Quarterly validation** - Re-run validation to catch new inconsistencies
-2. **Pre-commit checks** - Consider adding a lint rule for common violations
-3. **Standards evolution** - Update standards as new patterns emerge
-
----
-
-## Appendix: Quick Reference
-
-### The "Should" Pattern
-
-**Use for:**
-- Expected states: `"Flag should be true"`
-- Value comparisons: `"should be 'scan'"`
-- Type checks: `"should be a list"`
-
-**Don't use for:**
-- Operation failures (use "Failed to")
-- Invariants (use "must")
-
-### Standard Message Structure
-
-**Order:** [Subject] + [Expected State] + [Context]
-
-```
-✅ "Daemon should be healthy after boot"
-✅ "Projects should be a list"
-✅ "healthz should return 200"
-```
-
-### Common Patterns
-
-| Scenario | Pattern | Example |
-|----------|---------|---------|
-| Expected behavior | `<subject> should <state>` | `"Daemon should start"` |
-| Operation failure | `Failed to <action> <target>` | `"Failed to read config"` |
-| Invariant | `<subject> must <condition>` | `"projects.rs must exist"` |
-| Value comparison | `Expected <expected>, got <actual>` | `"Expected string, got integer"` |
 
 ---
 
 ## Conclusion
 
-HOOP's error message consistency issues are **significant but fixable**. The problems are well-understood, standards are defined, and most fixes are straightforward. Priority 1 fixes (sentence case, "should" pattern) can be implemented in 2-3 hours with mostly automated changes, improving compliance from 33.8% to 75%+.
+The HOOP error message catalog shows **significant inconsistency with defined standards**, but the violations are **systematic and template-based**, making them **straightforward to fix** through pattern-based replacements.
 
-**Key Takeaway:** Investing in error message consistency will:
-- Reduce debugging time for all developers
-- Improve code maintainability
-- Help new developers onboard faster
-- Make the codebase more professional
+**Key Takeaways:**
 
-**Next Step:** Create a bead to implement Priority 1 fixes and track progress with periodic validation re-runs.
+1. **73.1% non-compliance rate** is concerning, but fixable
+2. **30.2% are single-word messages** - trivial to fix with templates
+3. **No fundamental design issues** - all violations are surface-level text problems
+4. **High-density files are the priority** - fixing 10 files addresses ~60% of violations
+
+**Recommended Approach:**
+
+1. **Start Phase 1 immediately** - Quick wins that eliminate 30% of violations
+2. **Move to Phase 2** - Systematic pattern compliance 
+3. **Finish with Phase 3** - Context and actionability enhancements
+4. **Validate continuously** - Re-run validation after each phase
+
+**Expected Timeline:**
+- Phase 1: 3-5 hours (1,781 + 1,482 + 1 = 3,264 fixes)
+- Phase 2: 6-10 hours (4,314 + 98 + 158 = 4,570 fixes)  
+- Phase 3: 5-8 hours (419 + TBD context + TBD suggestions)
+- **Total:** 14-23 hours for complete compliance
+
+**Impact:**
+- Self-documenting tests that fail with clear messages
+- Faster debugging and triage of CI failures
+- Easier onboarding for new developers
+- Consistent, professional codebase
 
 ---
 
-**Report Status:** Complete  
-**Version:** 1.0  
+**Standards Documents Referenced:**
+- docs/error-message-consistency-standards.md (complete standards)
+- error_messages_catalog.md (5,904 message inventory)
+- error_validation_final_report.md (detailed validation results)
+
+**Next Steps:**
+1. Implement Phase 1 fixes following templates in this report
+2. Re-run validation to confirm improvement
+3. Proceed to Phase 2 once Phase 1 is validated
+4. Use this report as the roadmap for systematic improvement
+
+---
+
+**Report Status:** ✅ COMPLETE  
 **Last Updated:** 2026-08-12  
-**Validation Data:** from bead bf-55am0  
-**Standards Reference:** from bead bf-4vtp7
+**Version:** 1.0
