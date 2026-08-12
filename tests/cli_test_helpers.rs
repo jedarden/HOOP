@@ -178,7 +178,7 @@
 //!     let (before, after) = parse_both_positions(flag_args, cmd_args);
 //!
 //!     assert_eq!(before, after, "Both positions must yield the same value");
-//!     assert_eq!(before, true, "no_interactive should be true");
+//!     assert_eq!(before, true, "No_interactive Should be true");
 //! }
 //! ```
 //!
@@ -201,8 +201,8 @@
 //!     let flag_args = ["--no-interactive"];
 //!     let cmd_args = ["scan", "/tmp"];
 //!     let (before, after) = parse_both_positions(flag_args, cmd_args);
-//!     assert_eq!(before, after, "no_interactive value must be consistent");
-//!     assert_eq!(before, true, "no_interactive should be true");
+//!     assert_eq!(before, after, "No_interactive value must be consistent");
+//!     assert_eq!(before, true, "No_interactive Should be true");
 //! }
 //! ```
 //!
@@ -288,7 +288,7 @@ command becomes available to nested components:
 
 **Critical for:** CI/CD reliability, automation safety, and operator trust.
 
-**Failures cause:** Silent prompts in scripts (hang forever), accidental data loss, confusing error messages.
+**Failures cause:** Silent prompts in scripts (hang forever), Accidental data loss, Confusing error messages.
 
 **Testing ensures:**
 - Scripts run unattended without hanging on prompts
@@ -362,7 +362,7 @@ fn verify_no_interactive_propagates_to_handler() {
    let main_code = std::fs::read_to_string("src/main.rs").unwrap();
 
    assert!(main_code.contains("let no_interactive = cli.no_interactive;"),
-       "main() must extract flag from CLI");
+       "Main() must extract flag from CLI");
 
    assert!(main_code.contains("projects::remove_project(&name, no_interactive)"),
        "main() must pass flag to handler");
