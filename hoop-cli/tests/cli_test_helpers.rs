@@ -1686,36 +1686,36 @@ pub fn compare_flag_values_at_levels(args: &[&str]) -> Result<(), String> {
     if let Ok(before) = &before_result {
         if !before.no_interactive {
             errors.push(format!(
-                "before_subcommand should have flag=true (we added it at position 0), got {}",
+                "Before_subcommand should have flag=true (we added it at position 0), got {}",
                 before.no_interactive
             ));
         }
     } else {
-        errors.push(format!("before_subcommand parsing failed: {:?}", before_result));
+        errors.push(format!("Before_subcommand parsing failed: {:?}", before_result));
     }
 
     // Check that after_subcommand found the flag we added
     if let Ok(after) = &after_result {
         if !after.no_interactive {
             errors.push(format!(
-                "after_subcommand should have flag=true (we added it at end), got {}",
+                "After_subcommand should have flag=true (we added it at end), got {}",
                 after.no_interactive
             ));
         }
     } else {
-        errors.push(format!("after_subcommand parsing failed: {:?}", after_result));
+        errors.push(format!("After_subcommand parsing failed: {:?}", after_result));
     }
 
     // Check that direct extraction and nested agree on the original args
     if let Ok(nested) = &nested_result {
         if nested.no_interactive != direct_flag {
             errors.push(format!(
-                "Direct extraction ({}) != nested_subcommand ({}) - these should agree on original args",
+                "Direct extraction ({}) != Nested_subcommand ({}) - These should agree on original args",
                 direct_flag, nested.no_interactive
             ));
         }
     } else {
-        errors.push(format!("nested_subcommand parsing failed: {:?}", nested_result));
+        errors.push(format!("Nested_subcommand parsing failed: {:?}", nested_result));
     }
 
     if !errors.is_empty() {
@@ -1976,7 +1976,7 @@ macro_rules! test_flag_positions {
             let before_parsed = before.unwrap();
             assert!(
                 before_parsed.no_interactive,
-                "no_interactive should be true with flag before {}",
+                "No_interactive should be true with flag before {}",
                 $command_name
             );
 
@@ -1995,7 +1995,7 @@ macro_rules! test_flag_positions {
             let after_parsed = after.unwrap();
             assert!(
                 after_parsed.no_interactive,
-                "no_interactive should be true with flag after {}",
+                "No_interactive should be true with flag after {}",
                 $command_name
             );
 
@@ -2016,7 +2016,7 @@ macro_rules! test_flag_positions {
             let short_value = extract_flag_value(&short_args);
             assert!(
                 short_value,
-                "Short flag -y should set no_interactive=true for {}",
+                "Short flag -y should set No_interactive=true for {}",
                 $command_name
             );
         }
@@ -2110,7 +2110,7 @@ macro_rules! test_flag_default_false {
             let result = parsed.unwrap();
             assert!(
                 !result.no_interactive,
-                "no_interactive should default to false when not specified"
+                "No_interactive should default to false when not specified"
             );
 
             // Verify all parsing methods agree on default value
@@ -2167,7 +2167,7 @@ macro_rules! test_no_interactive_suite {
             let before_result = parsed_before.unwrap();
             assert!(
                 before_result.no_interactive,
-                "Flag before subcommand should set no_interactive=true for {}",
+                "Flag before subcommand should set No_interactive=true for {}",
                 $command_name
             );
             assert_flag_is_true(&before_result)
@@ -2188,7 +2188,7 @@ macro_rules! test_no_interactive_suite {
             let after_result = parsed_after.unwrap();
             assert!(
                 after_result.no_interactive,
-                "Flag after subcommand should set no_interactive=true for {}",
+                "Flag after subcommand should set No_interactive=true for {}",
                 $command_name
             );
             assert_flag_is_true(&after_result)
@@ -2203,7 +2203,7 @@ macro_rules! test_no_interactive_suite {
             let short_value = extract_flag_value(&args_short);
             assert!(
                 short_value,
-                "Short flag -y should set no_interactive=true for {}",
+                "Short flag -y should set No_interactive=true for {}",
                 $command_name
             );
 
@@ -2230,7 +2230,7 @@ macro_rules! test_no_interactive_suite {
             let default_result = parsed_default.unwrap();
             assert!(
                 !default_result.no_interactive,
-                "Default no_interactive should be false for {}",
+                "Default No_interactive should be false for {}",
                 $command_name
             );
             assert_flag_is_false(&default_result)
