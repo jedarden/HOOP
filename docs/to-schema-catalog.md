@@ -430,4 +430,34 @@ $ grep -r "ToResponse" src/*.rs | wc -l
 
 ---
 
+## Verification Log
+
+### 2026-08-11 - Bead bf-bgls2
+**Task:** Verify which utoipa imports are unused in hoop-daemon
+
+**Method:** Live clippy check against HEAD (2026-08-11)
+
+**Clippy Results:**
+```bash
+cargo clippy -p hoop-daemon -- -W unused_imports
+# Output: 0 unused import warnings
+```
+
+**Manual Verification:**
+- Checked 12 files with explicit `use utoipa::ToSchema;` imports
+- Sample verification: api_audit.rs (8 ToSchema uses), api_backup.rs (3), api_bead_blockers.rs (3), api_bulk_create.rs (7)
+- All imports actively used in derive macros
+
+**ToResponse Check:**
+```bash
+grep -r "ToResponse" hoop-daemon/src/*.rs | wc -l
+# Result: 0
+```
+
+**Conclusion:** Catalog is accurate. NO unused ToSchema imports exist in hoop-daemon. All imports must be preserved for OpenAPI specification generation.
+
+**Bead:** bf-bgls2 (closed 2026-08-11)
+
+---
+
 **End of Catalog**
