@@ -1,1059 +1,552 @@
-# HOOP Error Message Standards — Complete Reference
+# HOOP Error Message Standards
+
+**Purpose:** Define consistent patterns for error messages across the HOOP test suite to ensure clarity, actionability, and maintainability.
 
 **Generated:** 2026-08-12  
-**Purpose:** Comprehensive reference for error message standards across HOOP  
-**Bead:** bf-3w4k2 (consolidated standards)  
-**Related:** bf-4qy5x (wording/formatting), bf-4ory0 (informational/actionability)
+**Derived from:** Analysis of 5,904 error message patterns across 104 test files  
+**Reference:** `error_messages_catalog.md` (bead bf-3ysoc)
 
 ---
 
 ## Table of Contents
 
-1. [Overview](#1-overview)
-2. [Quick Reference](#2-quick-reference)
-3. [Core Principles](#3-core-principles)
-4. [Sentence Structure Standards](#4-sentence-structure-standards)
-5. [Informational Content Requirements](#5-informational-content-requirements)
-6. [Context Inclusion Guidelines](#6-context-inclusion-guidelines)
-7. [Actionability and Suggestions](#7-actionability-and-suggestions)
-8. [Format Rules](#8-format-rules)
-9. [Audience Guidelines](#9-audience-guidelines)
-10. [Complete Examples](#10-complete-examples)
-11. [Anti-Patterns to Avoid](#11-anti-patterns-to-avoid)
-12. [Validation Checklist](#12-validation-checklist)
-13. [Migration Path](#13-migration-path)
+1. [Principles](#principles)
+2. [Wording Conventions](#wording-conventions)
+3. [Formatting Patterns](#formatting-patterns)
+4. [Informational Requirements](#informational-requirements)
+5. [Actionability Guidelines](#actionability-guidelines)
+6. [Error Type Standards](#error-type-standards)
+7. [Examples](#examples)
+8. [Anti-Patterns to Avoid](#anti-patterns-to-avoid)
 
 ---
 
-## 1. Overview
+## Principles
 
-This document consolidates all HOOP error message standards into a single comprehensive reference. It combines:
+### 1. **Clarity First**
+Error messages must be immediately understandable to developers encountering the test failure, even without deep context of the test suite.
 
-- **Wording and formatting standards** — How to phrase and format error messages
-- **Informational content standards** — What information error messages must include
-- **Actionability standards** — When and how to provide fix suggestions
+### 2. **Actionability**
+Whenever possible, messages should suggest what went wrong or what the expected state should be.
 
-Error messages in HOOP serve two primary purposes:
+### 3. **Context-Rich**
+Include relevant identifiers, field paths, or state descriptions to make failures debuggable without stepping through code.
 
-1. **Debugging efficiency** — Enable immediate diagnosis without code inspection
-2. **User guidance** — Guide users toward solutions when appropriate
-
----
-
-## 2. Quick Reference
-
-### 2.1 Minimum Content Formula
-
-```
-What failed + Target + Expected state [+ Actual state if different] [+ Context if relevant] [+ Action if appropriate]
-```
-
-**Example:**
-```
-"Failed to read ~/.hoop/config.yml: file not found. Run 'hoop init' to create it"
- What      target                   cause               suggestion
-```
-
-### 2.2 Standard Pattern Templates
-
-| Purpose | Template | Example |
-|---------|----------|---------|
-| Expected behavior | `<subject> should <state> [when <condition>]` | `no_interactive should be true when --no-interactive is present` |
-| Operation failure | `Failed to <action> <target> [because <reason>]` | `Failed to read config: file not found` |
-| Invariant | `<subject> must <condition>` | `projects.rs must exist in repository` |
-| Value comparison | `Expected <expected>, got <actual>` | `Expected string, got integer` |
-| Validation test | `<action> should <result>` | `missing schema_version should fail validation` |
-
-### 2.3 Actionability Decision Tree
-
-```
-Is the error user-facing (CLI, setup)?
-├─ Yes → Is the fix straightforward and safe?
-│  ├─ Yes → Provide direct action
-│  │         Example: "Run 'hoop init' to create config"
-│  └─ No → Provide diagnostic hint
-│            Example: "Run with --debug for details"
-└─ No (internal/developer) → Is diagnostic value clear?
-   ├─ Yes → Provide diagnostic hint
-   │         Example: "Hint: Check line format matches..."
-   └─ No → Informational only
-              Example: "Failed to deserialize bead line"
-```
-
-### 2.4 Format Rules at a Glance
-
-| Rule | Correct ✅ | Incorrect ❌ |
-|------|-----------|-------------|
-| No trailing periods | `Failed to read config` | `Failed to read config.` |
-| No unnecessary quotes | `should be true` | `should be 'true'` |
-| Capitalize first word | `Failed to read config` | `failed to read config` |
-| Preserve original case | `--no-interactive` | `--no_interactive` |
-| Placeholders at end | `Failed: {}` | `Failed {} to read` |
-| Debug vs display | `{:?}` for dev, `{}` for user | Opposite |
-
-### 2.5 Context Inclusion Quick Guide
-
-| Context Type | Include When | Example |
-|--------------|--------------|---------|
-| **File path** | I/O operations, user files, config | `~/.hoop/config.yml` |
-| **Function name** | Public API, ambiguous origin | `br_create() failed` |
-| **Line/column** | Parsing errors | `line 15, column 3` |
-| **Field name** | Validation errors | `schema_version must be string` |
-| **Component** | Multiple components could fail | `Daemon should start` |
-| **System state** | Resource errors | `(3/5 slots in use)` |
+### 4. **Consistency**
+Follow the same patterns across similar assertion types to build predictable, scannable error output.
 
 ---
 
-## 3. Core Principles
+## Wording Conventions
 
-1. **Clarity over brevity** — Prefer descriptive messages that explain what happened and why
-2. **Complete context** — Include all information needed to understand and diagnose the error
-3. **Actionability when appropriate** — Provide clear next steps or solution hints when safe and obvious
-4. **Audience awareness** — Distinguish between developer-facing and user-facing messages
-5. **Consistency** — Follow established patterns across the codebase
-6. **Context preservation** — Maintain original casing for CLI flags, filenames, and identifiers
+### Standard Phrasing
+
+| Pattern | Standard Form | Example |
+|---------|--------------|---------|
+| Expected behavior | `"Should {verb} {noun}"` | `"Should have 2 open beads"` |
+| Negative expectation | `"Should not {verb}"` | `"Should not accept invalid input"` |
+| HTTP status | `"{endpoint} should return {status}"` | `"healthz should return 200"` |
+| Field validation | `"{field} should fail {condition}"` | `"missing schema_version should fail"` |
+| Type checking | `"{noun} should be {type}"` | `"projects should be a list"` |
+| Required field | `"{field} is required"` | `"error should include field path"` |
+
+### Sentence Structure
+
+**Preferred Order:** [Subject] + [Expected State] + [Context]
+
+```
+✅ Good: "Daemon should be healthy after boot"
+✅ Good: "Fetched bead ID should match"
+✅ Good: "All WebSocket connections should receive init"
+
+❌ Avoid: "bead id should not be empty" (inconsistent capitalization)
+❌ Avoid: "projects should be a list" (missing article "a")
+```
+
+### Capitalization and Punctuation
+
+- **Sentence case:** First word capitalized, others lowercase (except proper nouns)
+- **No trailing period:** Messages should not end with `.`
+- **Use articles:** Include `a`, `an`, `the` for readability
+
+```
+✅ Good: "projects should be a list"
+✅ Good: "Daemon should be healthy"
+✅ Good: "metrics should contain at least one valid metric line"
+
+❌ Avoid: "Projects should be a List" (random capitalization)
+❌ Avoid: "should have 2 open beads." (trailing period)
+❌ Avoid: "metrics should contain valid metric line" (missing articles)
+```
+
+### Comparison Messaging
+
+When comparing values, use **expected vs. actual** order consistently:
+
+```
+✅ Good: "expected 200 OK, got 404 Not Found"
+✅ Good: "expected flag to be true, found false"
+✅ Good: "expected 'scan', got 'status'"
+
+❌ Avoid: "got 404 instead of 200" (inconsistent order)
+❌ Avoid: "found false but expected true" (reversed order)
+```
 
 ---
 
-## 4. Sentence Structure Standards
+## Formatting Patterns
 
-### 4.1 Pattern A: "Should" Pattern (Primary)
+### Quoting and Literals
 
-**Structure:** `<subject> should <expected_state> [when <condition>]`
+**Use quotes for:**
+- String values: `expected "scan", got "status"`
+- Field names: `"no_interactive" flag should be true`
+- Literal values: `expected value 42, got null`
 
-**Usage:**
-- Positive assertions about expected behavior
-- State validation in tests
-- Component behavior verification
+**Don't use quotes for:**
+- Types: `should be a list`, `should be an object`
+- Booleans: `flag should be true` (not `flag should be "true"`)
+- Numbers: `should have 2 open beads`
+
+```rust
+✅ Good: assert_eq!(parsed.subcommand, Some("scan".to_string()), 
+                   "expected 'scan', got something else");
+✅ Good: assert!(projects.is_array(), "projects should be a list");
+
+❌ Avoid: "projects should be 'a list'" (incorrect quoting)
+❌ Avoid: "flag should be 'true'" (incorrect quoting for boolean)
+```
+
+### Format Strings and Context
+
+When including dynamic values in messages:
+
+```rust
+✅ Good: format!("No init (conn {})", i)
+✅ Good: format!("Failed to receive message from {}", worker_id)
+
+❌ Avoid: "no message" (missing context which connection)
+❌ Avoid: "failed" (what failed?)
+```
+
+### Multi-Line Messages
+
+For complex conditions, use multi-line assertions with clear messages:
+
+```rust
+✅ Good: assert!(
+    result.is_ok(),
+    "Bead creation should succeed: {:?}",
+    result.unwrap_err()
+)
+
+❌ Avoid: assert!(result.is_ok()) // no context on failure
+```
+
+---
+
+## Informational Requirements
+
+### Minimum Information per Error Type
+
+| Error Type | Required Information | Optional but Recommended |
+|------------|---------------------|--------------------------|
+| `assert_eq!` | Left value, right value, meaning | Context about what's being compared |
+| `assert!` | Condition being tested, why it matters | Expected state, relevant identifiers |
+| `expect()` | What operation failed, what was expected | Context (thread ID, connection ID, etc.) |
+| `unwrap_err()` | What error was expected | Context about the test scenario |
+| HTTP assertions | Endpoint, expected status, actual status | Request body, relevant headers |
+| Field validation | Field path, expected type/constraint | Actual value received |
+
+### Context Requirements
+
+**Always include when relevant:**
+- **Identifiers:** Bead IDs, project names, worker names
+- **Field paths:** `"agent.adapter"`, `"metrics.enabled"`
+- **HTTP endpoints:** `"GET /api/beads"`, `"/healthz"`
+- **Connection/Thread context:** `"(conn {})"`, `"(worker {})`
+
+```rust
+✅ Good: assert_eq!(fetched_bead["id"], bead["id"], 
+                   "Fetched bead ID should match")
+
+✅ Good: assert!(resp.status() == 404, 
+                "Non-existent bead {} should return 404", bead_id)
+
+❌ Avoid: assert_eq!(fetched_bead["id"], bead["id"]) 
+// Which bead? What field?
+```
+
+### Type Information
+
+When type checking fails, explain both expected and actual types:
+
+```rust
+✅ Good: assert!(projects.is_array(), 
+                "projects should be a list, got {:?}", projects)
+
+✅ Good: assert!(capacity.is_object() || capacity.is_array(),
+                "Capacity should be object or array, got type {:?}", 
+                capacity)
+
+❌ Avoid: assert!(projects.is_array()) 
+// No explanation of what type was received
+```
+
+---
+
+## Actionability Guidelines
+
+### Suggesting the Expected State
+
+Messages should describe what the correct state should be:
+
+```rust
+✅ Good: "healthz should return 200"
+✅ Good: "All WebSocket connections should receive init"
+✅ Good: "Metrics should contain at least one valid metric line"
+✅ Good: "New bead should appear in list"
+
+❌ Avoid: "healthz check failed"
+❌ Avoid: "WebSocket test failed"
+❌ Avoid: "Metrics check failed"
+```
+
+### Explaining Why
+
+For non-obvious assertions, explain the reasoning:
+
+```rust
+✅ Good: "Fetched bead ID should match" (data consistency)
+✅ Good: "First message should be init event" (protocol requirement)
+✅ Good: "Daemon should still be healthy after malformed messages" (robustness)
+
+❌ Avoid: "IDs match" (why does this matter?)
+❌ Avoid: "Correct message type" (which type? why?)
+```
+
+### Providing Next Steps (When Appropriate)
+
+For validation errors, suggest what to fix:
+
+```rust
+✅ Good: "error should include field path for debugging"
+✅ Good: "Invalid adapter value should fail with clear message"
+✅ Good: "unknown field should be rejected"
+
+// Consider including in message:
+✅ Better: "unknown field 'extra_field' should be rejected (check schema)"
+```
+
+---
+
+## Error Type Standards
+
+### `assert_eq!` - Equality Assertions
+
+**Pattern:**
+```rust
+assert_eq!(actual, expected, "{what} should {state}")
+```
 
 **Examples:**
 ```rust
-// ✅ Correct
-"no_interactive should be true when --no-interactive flag is present"
-"schema_version should be a string"
-"healthz endpoint should return 200 status"
+✅ Good: assert_eq!(resp.status(), 200, "healthz should return 200");
+✅ Good: assert_eq!(parsed.subcommand, Some("scan".to_string()), 
+                   "subcommand should be 'scan'");
+✅ Good: assert_eq!(open_count, 2, "Should have 2 open beads");
 
-// ❌ Avoid
-"no_interactive must be true" // "must" is for invariants
-"flag true" // too minimal
-"should be true" // what should be true?
+❌ Avoid: assert_eq!(resp.status(), 200); // No context
 ```
 
-**Rationale:** Most common pattern in codebase (25.4%), declarative, easy to understand.
+### `assert!` - Boolean Assertions
 
-### 4.2 Pattern B: "Failed to" Pattern (Operations)
-
-**Structure:** `Failed to <action> <target> [because <reason>]`
-
-**Usage:**
-- File I/O operations
-- Setup/teardown failures
-- External system interactions
-- Any operation that doesn't complete
+**Pattern:**
+```rust
+assert!(condition, "{subject} should {state}[, context]")
+```
 
 **Examples:**
 ```rust
-// ✅ Correct
-.expect("Failed to read config from ~/.hoop/config.yml")
-.expect("Failed to create .beads/ directory")
-.expect("Failed to parse events.jsonl")
+✅ Good: assert!(projects.is_array(), "projects should be a list");
+✅ Good: assert!(resp.status().is_success(), "Bead creation should succeed");
+✅ Good: assert!(received_init, "Should receive init event");
+✅ Good: assert!(create_resp.status().is_success(), 
+                "Bead creation should succeed for project: {}", project_name);
 
-// ❌ Avoid
-.expect("failed reading") // what failed reading?
-.expect("Failed") // failed to do what?
+❌ Avoid: assert!(condition); // No context
 ```
 
-**Rationale:** Widely used (31.7%), clearly identifies what went wrong and target.
+### `expect()` - Result Expectation
 
-### 4.3 Pattern C: "Must" Pattern (Invariants)
-
-**Structure:** `<subject> must <condition>`
-
-**Usage:**
-- Critical invariants that must always hold
-- Setup requirements that cannot be bypassed
-- Security/safety constraints
+**Pattern:**
+```rust
+some_operation.expect("{what} failed[, context]")
+```
 
 **Examples:**
 ```rust
-// ✅ Correct
-"projects.rs must exist in the repository"
-"schema_version must be a string, not an integer"
-"config file must be readable before daemon starts"
+✅ Good: String::from_utf8(output.stderr)
+            .expect("Invalid UTF-8 in stderr");
+✅ Good: init_msg.expect("Failed to receive init message");
+✅ Good: init_msg.expect(&format!("No init (conn {})", i));
 
-// ❌ Avoid
-"projects.rs should exist" // "should" is for preferences
+❌ Avoid: result.expect("failed"); // What failed?
+❌ Avoid: result.expect("error");  // Useless message
 ```
 
-**Rationale:** "Must" expresses stronger assertions; reserve for invariants.
+### `unwrap()` - Panic on None/Err
 
-### 4.4 Conditional Phrasing
-
-**Standard:** Use `when <condition>` for contextual information
+**Standard:** **Avoid bare `.unwrap()` in production code.** In tests, prefer `.expect()` with context.
 
 ```rust
-// ✅ Correct
-"no_interactive should be true when --no-interactive flag is present"
-"parsing should succeed even when flag is at end of command"
+❌ Avoid: let msg = some_option.unwrap();
+✅ Good:  let msg = some_option.expect("message should be present");
 
-// ❌ Avoid
-"no_interactive should be true with flag" // what flag?
-"flag should be true in this case" // what case?
+❌ Avoid: let config = parse_config(path).unwrap();
+✅ Good:  let config = parse_config(path)
+                       .expect(&format!("Failed to parse config from {}", path));
 ```
 
-### 4.5 Action + Outcome Pattern
+### HTTP Status Assertions
 
-**Structure:** `<action> should <result>`
-
-**Usage:**
-- Validation testing
-- Error path verification
-- Command behavior testing
-
+**Pattern:**
 ```rust
-// ✅ Correct
-"missing schema_version should fail validation"
-"invalid schema_version format should return error"
-"error should include field path"
+assert_eq!(resp.status(), {code}, "{endpoint} should return {status}")
+```
+
+**Examples:**
+```rust
+✅ Good: assert_eq!(resp.status(), 200, 
+                   "GET /api/beads should return 200");
+✅ Good: assert_eq!(resp.status(), 404, 
+                   "Non-existent endpoint should return 404");
+✅ Good: assert!(resp.status().is_success(), 
+                "Bead creation should succeed");
+
+❌ Avoid: assert_eq!(resp.status(), 200);
+```
+
+### Field Validation Assertions
+
+**Pattern:**
+```rust
+assert!(err.is_some(), "{invalid} {field} should fail");
+assert!(err.field.is_some(), "error should include field path");
+```
+
+**Examples:**
+```rust
+✅ Good: assert!(err.is_some(), "missing schema_version should fail");
+✅ Good: assert!(err.is_some(), "invalid adapter value should fail");
+✅ Good: assert!(err.field.is_some(), "error should include field path");
+
+❌ Avoid: assert!(err.is_some()); // What should fail?
 ```
 
 ---
 
-## 5. Informational Content Requirements
+## Examples
 
-### 5.1 Core Information Requirements (Always Required)
-
-Every error message must include at minimum:
-
-#### A. What Failed (Required)
-
-The specific operation, component, or validation that failed.
+### Complete Test Example
 
 ```rust
-// ✅ Correct
-.expect("Failed to read config from ~/.hoop/config.yml")
-.expect("Failed to parse bead line from events.jsonl")
-.assert!(result.is_err(), "missing schema_version should fail validation")
+// ✅ Good: Clear, actionable, context-rich
+#[tokio::test]
+async fn bead_creation_flow() {
+    let resp = client
+        .post("/api/beads")
+        .json(&bead_data)
+        .send()
+        .await
+        .expect("Failed to send bead creation request");
 
-// ❌ Avoid
-.expect("failed") // what failed?
-.expect("error") // what error?
-.assert!(false, "test") // what test?
+    assert_eq!(
+        resp.status(), 
+        201, 
+        "Bead creation should return 201 Created"
+    );
+
+    let body: Value = resp
+        .json()
+        .await
+        .expect("Failed to parse bead creation response");
+
+    assert!(!body["id"].as_str().unwrap().is_empty(), 
+            "Created bead should have non-empty ID");
+    
+    let list_resp = client
+        .get("/api/beads")
+        .send()
+        .await
+        .expect("Failed to fetch bead list");
+
+    assert_eq!(
+        list_resp.status(), 
+        200, 
+        "GET /api/beads should return 200"
+    );
+}
+
+// ❌ Bad: Vague, missing context, unhelpful
+#[tokio::test]
+async fn bead_creation_flow() {
+    let resp = client.post("/api/beads").json(&bead_data).send().await.unwrap();
+    assert_eq!(resp.status(), 201);
+    let body: Value = resp.json().await.unwrap();
+    assert!(!body["id"].as_str().unwrap().is_empty());
+}
 ```
 
-#### B. Target/Subject (Required)
-
-The specific file, field, component, or value involved.
+### Validation Test Example
 
 ```rust
-// ✅ Correct
-"Failed to read config from ~/.hoop/config.yml"
-"schema_version should be a string"
-"projects.rs must exist in the repository"
+// ✅ Good: Clear validation messages
+#[test]
+fn test_config_validation() {
+    let result = validate_config(invalid_yaml);
+    
+    assert!(result.is_err(), "Invalid config should fail validation");
+    
+    let err = result.unwrap_err();
+    assert!(err.field.is_some(), "error should include field path");
+    assert!(
+        err.field.unwrap().starts_with("agent."),
+        "error should be in agent section"
+    );
+    assert!(
+        err.message.contains("adapter"),
+        "error message should mention 'adapter' field"
+    );
+}
 
-// ❌ Avoid
-"Failed to read config" // which config?
-"should be a string" // what should be?
-"must exist" // what must exist?
-```
-
-#### C. Expected State (When Applicable)
-
-What should have happened if the operation succeeded.
-
-```rust
-// ✅ Correct
-"Expected string, got integer"
-"Expected 200 status, got 500"
-"no_interactive should be true when --no-interactive is present"
-
-// ❌ Avoid
-"got integer" // but what was expected?
-"500 error" // what was expected?
-"flag should be true" // under what condition?
-```
-
-### 5.2 Conditional Information (Include When Relevant)
-
-#### Condition Information
-
-Include when behavior differs based on state.
-
-```rust
-// ✅ Correct
-"no_interactive should be true when --no-interactive flag is present"
-"parsing should succeed even when flag is at end of command"
-"daemon should start when config file is valid"
-
-// ❌ Avoid
-"no_interactive should be true" // missing when condition
-"parsing should succeed" // missing when condition
-```
-
-#### Value Information
-
-Include actual values when they differ from expectations.
-
-```rust
-// ✅ Correct
-.expect(&format!("Failed to read config from: {}", path))
-.assert_eq!(value, expected, "field should match: expected {}, got {}", expected, value)
-
-// ❌ Avoid
-.expect("Failed to read config") // which path?
-.assert_eq!(value, expected) // no context on mismatch
-```
-
----
-
-## 6. Context Inclusion Guidelines
-
-### 6.1 File and Location Context
-
-**Include file context when:**
-- The error originates from file I/O operations
-- Multiple files could be the source
-- The path is user-configurable
-- The file is critical for operation
-
-```rust
-// ✅ Include
-.expect("Failed to read config from ~/.hoop/config.yml")
-.expect("Failed to parse events.jsonl at line 15")
-.expect("Failed to create .beads/ directory")
-
-// ❌ Omit (when single hardcoded path)
-.expect("Failed to read config") // OK if only one config
-.expect("Failed to parse bead line") // OK if parsing is single-purpose
-```
-
-### 6.2 Function and Operation Context
-
-**Include function context when:**
-- Multiple operations could produce the same error
-- The function name aids diagnosis
-- The operation is non-obvious from context
-
-```rust
-// ✅ Include
-.expect("ConfigParser::parse() failed: invalid schema_version")
-.expect("BeadDeserialization::from_line() failed: missing claimed_at")
-
-// ❌ Omit (when obvious)
-.expect("Failed to read config") // obvious from code
-.assert!(value, "validation failed") // obvious from assertion type
-```
-
-### 6.3 Field and Property Context
-
-**Always include field context for validation errors.**
-
-```rust
-// ✅ Include
-"schema_version should be a string, not an integer"
-"projects.rs path must be valid"
-"claimed_at timestamp must be parsable"
-
-// ❌ Avoid
-"should be a string" // which field?
-"must be valid" // which property?
-```
-
-### 6.4 Component and Subsystem Context
-
-**Include component context when:**
-- Multiple components could produce the error
-- The component identity aids in routing the fix
-- The error is component-specific
-
-```rust
-// ✅ Include
-"Daemon should start without errors when config is valid"
-"CLI parser should recognize --no-interactive flag"
-"MCP server should reject create_stitch calls in observer mode"
-
-// ❌ Omit (when global context)
-"should start without errors" // OK if test name makes component clear
-"should recognize flag" // OK if scoped to CLI tests
+// ❌ Bad: Cryptic validation
+#[test]
+fn test_config_validation() {
+    let result = validate_config(invalid_yaml);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.field.is_some());
+    assert!(err.field.unwrap().starts_with("agent."));
+}
 ```
 
 ---
 
-## 7. Actionability and Suggestions
+## Anti-Patterns to Avoid
 
-### 7.1 When to Provide Fix Suggestions
-
-**Provide suggestions when:**
-- The fix is straightforward and non-ambiguous
-- The error has a common, well-known solution
-- The user can directly act on the suggestion
-- The suggestion doesn't require deep system knowledge
+### 1. Bare Assertions Without Messages
 
 ```rust
-// ✅ Provide suggestions
-"Failed to read config.yml: file not found. Run 'hoop init' to create default config"
-"schema_version must be a string. In config.yml, change: schema_version: 1 → schema_version: '1'"
-"projects.rs not found. Ensure you're in a valid HOOP workspace root"
+❌ Avoid: assert_eq!(resp.status(), 200);
+❌ Avoid: assert!(condition);
+❌ Avoid: assert!(result.is_ok());
 
-// ❌ Don't provide suggestions when:
-// - The fix is complex or multi-step
-// - Multiple potential causes exist
-// - The suggestion would be speculative
-// - The error requires system-level diagnosis
+✅ Fix: assert_eq!(resp.status(), 200, "healthz should return 200");
+✅ Fix: assert!(condition, "connection should be established");
+✅ Fix: assert!(result.is_ok(), "operation should succeed");
 ```
 
-### 7.2 How to Structure Suggestions
-
-#### Pattern A: Direct Fix (User-Facing)
-
-**Structure:** `<error>. <fix>`
+### 2. Generic or Useless Messages
 
 ```rust
-// ✅ Correct
-"Failed to read config.yml: permission denied. Check file permissions with: ls -la ~/.hoop/config.yml"
-"Invalid bead ID format. Bead IDs must start with 'bf-' prefix"
+❌ Avoid: result.expect("failed");
+❌ Avoid: result.expect("error");
+❌ Avoid: result.expect("panic");
+
+✅ Fix: result.expect("Failed to parse bead from response");
+✅ Fix: result.expect("Failed to connect to daemon at {}", socket_path);
+✅ Fix: result.expect("Failed to deserialize config: invalid schema_version");
 ```
 
-#### Pattern B: Diagnostic Hint (Developer-Facing)
-
-**Structure:** `<error>. Hint: <diagnostic_tip>`
+### 3. Missing Context
 
 ```rust
-// ✅ Correct
-"Failed to deserialize bead. Hint: Check that bead line format matches: <id>|<title>|<status>"
-"Config validation failed. Hint: Run with --debug to see full validation errors"
+❌ Avoid: assert!(init_msg.is_some());
+✅ Fix: assert!(init_msg.is_some(), 
+               "Should receive init message from daemon");
+
+❌ Avoid: assert_eq!(fetched["id"], original["id"]);
+✅ Fix: assert_eq!(fetched["id"], original["id"], 
+                   "Fetched bead ID should match original");
 ```
 
-#### Pattern C: Reference Documentation (Complex Issues)
-
-**Structure:** `<error>. See: <documentation_reference>`
+### 4. Inconsistent Wording
 
 ```rust
-// ✅ Correct
-"Config schema_version 2 is not supported by this daemon version. See docs/config_migration.md"
-"Reflection ledger corrupted. See docs/operations.md#disaster-recovery for recovery steps"
+❌ Avoid: Mixed patterns in same test:
+    assert_eq!(resp.status(), 200, "should be 200");
+    assert!(body.is_ok(), "response must be ok");
+    assert_eq!(count, 5, "expected 5 items");
+
+✅ Fix: Consistent pattern:
+    assert_eq!(resp.status(), 200, "healthz should return 200");
+    assert!(body.is_ok(), "body should be present");
+    assert_eq!(count, 5, "should have 5 items");
 ```
 
-### 7.3 Actionable Message Structure
-
-**Standard structure:** `[Problem] + [Context] + [Consequence] + [Action]`
-
-Not all components are required; include what's relevant.
+### 5. Bare Unwrap Without Context
 
 ```rust
-// Full structure
-"Config file ~/.hoop/config.yml is missing (problem). Daemon cannot start without config (consequence). Run 'hoop init' to create default config (action)"
+❌ Avoid: let bead_id = response["id"].as_str().unwrap();
+❌ Avoid: let config = parse_config(path).unwrap();
 
-// Simplified structures
-"Failed to read config from ~/.hoop/config.yml: file not found" // Problem + Context
-"Invalid schema_version: expected string, got integer. Change schema_version: 1 to schema_version: '1'" // Problem + Context + Action
-"projects.rs not found in repository. Cannot proceed without workspace metadata" // Problem + Consequence
-```
-
-### 7.4 Audience-Based Actionability
-
-**Developer-facing errors (internal diagnostics):**
-```rust
-// ✅ Developer-facing - technical depth
-"Failed to deserialize bead line at offset 12345: missing claimed_at field. Line content: {:?}"
-"Config validation failed at field 'schema_version': type mismatch in YAML parsing"
-```
-
-**User-facing errors (CLI output):**
-```rust
-// ✅ User-facing - simplified, actionable
-"Config file is invalid. Run 'hoop config validate' for details"
-"Failed to create bead: workspace directory not found. Check that you're in a valid workspace"
+✅ Fix: let bead_id = response["id"]
+            .as_str()
+            .expect("bead ID should be present in response");
+✅ Fix: let config = parse_config(path)
+            .expect(&format!("Failed to parse config from {}", path));
 ```
 
 ---
 
-## 8. Format Rules
+## Implementation Checklist
 
-### 8.1 Punctuation Standards
+When writing new tests or updating existing ones, ensure:
 
-#### Periods
-
-**Standard:** Do NOT end error messages with periods
-
-```rust
-// ✅ Correct
-.expect("Failed to read config")
-.assert_eq!(value, true, "flag should be true")
-
-// ❌ Avoid
-.expect("Failed to read config.") // trailing period
-.assert_eq!(value, true, "flag should be true.") // trailing period
-```
-
-**Rationale:** Error messages are fragments, not sentences.
-
-#### Quotes Around Values
-
-**Standard:** Do NOT use quotes around simple values unless necessary for clarity
-
-**When to omit quotes:**
-- Boolean values: `true`, `false`
-- Commands: `scan`, `projects`, `remove`
-- CLI flags: `--no-interactive`, `-y`
-- Simple strings: `schema_version`, `.beads/`
-
-**When to use quotes:**
-- Values containing spaces: `"error message"`
-- Ambiguous strings: `"true"` (as a string, not boolean)
-- User-facing text: `"Please try again"`
-
-```rust
-// ✅ Correct - no quotes needed
-"no_interactive should be true"
-"command should be scan"
-
-// ✅ Correct - quotes for clarity
-"error message should contain 'invalid'"
-
-// ❌ Avoid - unnecessary quotes
-"no_interactive should be 'true'"
-"command should be 'scan'"
-```
-
-#### Commas
-
-**Standard:** Use commas before clauses and in lists
-
-```rust
-// ✅ Correct
-"Failed to read config, but daemon should continue"
-"file, path, and line should all be present"
-
-// ❌ Avoid
-"Failed to read config but daemon should continue" // missing comma
-```
-
-#### Colons
-
-**Standard:** Use colons before format placeholders or explanations
-
-```rust
-// ✅ Correct
-"field path should mention: schema_version"
-"error should mention pattern: {:?}"
-"Failed to read: {}"
-
-// ❌ Avoid
-"error should mention pattern {:?}" // colon missing
-```
-
-### 8.2 Capitalization Conventions
-
-#### Component Names
-
-**Standard:** Use consistent casing
-
-- Acronyms/initialisms: Uppercase (`CLI`, `API`, `HTTP`, `JSON`)
-- Components: Title case (`Daemon`, `Handler`, `Manager`)
-
-```rust
-// ✅ Correct
-"CLI should parse flag correctly"
-"Daemon should start without errors"
-"API should return 200 status"
-```
-
-#### Preserve Original Case
-
-**Standard:** Preserve original casing for system identifiers
-
-```rust
-// ✅ Correct - preserve original
-"projects.rs must exist"
-"--no-interactive flag should be true"
-"scan command should require confirmation"
-".beads/ directory should be created"
-
-// ❌ Avoid - changing original case
-"Projects.rs must exist" // filename case changed
-"--no_interactive flag" // flag format changed
-"Scan command" // command case changed
-```
-
-#### First Word Capitalization
-
-**Standard:** Capitalize the first word of the message
-
-```rust
-// ✅ Correct
-"Failed to read config"
-"CLI should parse flag"
-"schema_version should be a string"
-
-// ❌ Avoid
-"failed to read config" // lowercase first word
-```
-
-### 8.3 Actual vs Expected Value Presentation
-
-**Structure:** `Expected <expected>, got <actual>` or `expected: <expected>, actual: <actual>`
-
-```rust
-// ✅ Correct
-"Expected string, got integer"
-"expected: true, actual: false"
-"Expected 200 status, got 500"
-
-// ✅ With placeholders
-"Expected {}, got {:?}", expected, actual
-
-// ❌ Avoid
-"true vs false" // which is expected?
-"integer but got string" // awkward
-```
-
-### 8.4 Format Placeholder Usage
-
-**Standard:** Use `{:?}` for debugging, `{}` for user-facing
-
-```rust
-// ✅ Debug formatting (developer-facing)
-"Failed to parse config: {:?}", error
-"field path should mention: {:?}", actual_path
-
-// ✅ Display formatting (user-facing)
-"Failed to open file: {}", filename
-"Expected command: {}, got: {}", expected_cmd, actual_cmd
-
-// ❌ Avoid
-"Failed to read: {:?}" // user doesn't need debug format
-"error message: {}" // developer needs more context
-```
-
-### 8.5 Placeholder Placement
-
-**Standard:** Place format placeholders at the end of messages
-
-```rust
-// ✅ Correct
-"Failed to read config: {}", filename
-"field path should mention: {:?}", path
-"Expected {}, got {}", expected, actual
-
-// ❌ Avoid
-"Failed {} to read config" // awkward
-"field path {} should mention: {:?}", path, value // confusing
-```
+- [ ] Every `assert_eq!`, `assert!`, `expect()` has a descriptive message
+- [ ] Messages follow standard wording conventions ("should {verb}")
+- [ ] Context is included (identifiers, field paths, endpoints)
+- [ ] Messages are sentence case with no trailing period
+- [ ] Quotes are used correctly (strings/field names, not types/booleans)
+- [ ] Bare `.unwrap()` is replaced with `.expect()` or proper error handling
+- [ ] HTTP assertions include endpoint and expected status
+- [ ] Field validation explains what should fail and why
 
 ---
 
-## 9. Audience Guidelines
+## Validation and Enforcement
 
-### 9.1 Developer-Facing Messages
+### Automated Checks
 
-**Characteristics:**
-- Debug formatting (`{:?}`)
-- Code locations and stack traces
-- Full technical context
-- Complex type information
+Consider adding lints or checks for:
+1. Bare `unwrap()` calls in test code
+2. Missing messages on `assert!`, `assert_eq!`, `expect()`
+3. Message patterns that violate standards
 
-**Use for:**
-- Test assertion messages
-- Internal diagnostics
-- Development-time errors
-- Invariant violations
+### Code Review Checklist
 
-```rust
-// ✅ Developer-facing
-"Failed to deserialize bead line at offset 12345: missing claimed_at field. Line content: {:?}"
-"Config validation failed at field 'schema_version': type mismatch in YAML parsing"
-"Bead state projection inconsistent: expected state {:?}, found state {:?}"
-```
-
-### 9.2 User-Facing Messages
-
-**Characteristics:**
-- Display formatting (`{}`)
-- User-visible entities
-- Clear, non-technical language
-- Actionable suggestions when possible
-
-**Use for:**
-- CLI error messages
-- API error responses
-- Setup/initialization errors
-- Configuration validation
-
-```rust
-// ✅ User-facing
-"Config file is invalid. Run 'hoop config validate' for details"
-"Failed to create bead: workspace directory not found. Check that you're in a valid workspace"
-"Invalid bead ID format. Bead IDs must start with 'bf-' prefix"
-```
-
-### 9.3 Mixed Audience (Diagnostic + Actionable)
-
-When errors span audiences, provide both:
-
-```rust
-// ✅ Mixed - technical info + user action
-"Failed to read config from ~/.hoop/config.yml: permission denied. \
-Run: ls -la ~/.hoop/config.yml to check permissions"
-
-"schema_version type mismatch: expected string, got integer. \
-In config.yml, change schema_version: 1 to schema_version: '1'"
-```
+When reviewing test code:
+1. Are all assertions descriptive?
+2. Do messages follow the wording conventions?
+3. Is sufficient context provided for debugging?
+4. Are HTTP responses clearly described?
+5. Are validation errors actionable?
 
 ---
 
-## 10. Complete Examples
+## References
 
-### 10.1 File I/O Error (User-Facing)
-
-**❌ Poor:**
-```rust
-let config = std::fs::read_to_string(path).unwrap();
-```
-
-**✅ Good:**
-```rust
-let config = std::fs::read_to_string(path)
-    .expect(&format!("Failed to read config from: {}. Run 'hoop init' if config doesn't exist", path));
-```
-
-**Improvements:**
-- What failed: read config
-- Target: specific path
-- Action: initialization hint
-- User-facing language
-
-### 10.2 Validation Error (Developer-Facing)
-
-**❌ Poor:**
-```rust
-assert!(result.is_err());
-```
-
-**✅ Good:**
-```rust
-assert!(result.is_err(), 
-    "missing schema_version should fail validation. Config requires schema_version field in root");
-```
-
-**Improvements:**
-- What failed: validation
-- Expected: error on missing field
-- Context: why validation should fail
-- Developer-facing depth
-
-### 10.3 Type Mismatch (Internal Diagnostic)
-
-**❌ Poor:**
-```rust
-panic!("expected string, got integer");
-```
-
-**✅ Good:**
-```rust
-panic!(
-    "Config schema_version type mismatch: expected string, got integer. \
-    In config.yml, change schema_version: 1 to schema_version: '1'"
-);
-```
-
-**Improvements:**
-- What failed: type check
-- Expected vs actual: explicit
-- Context: config file location
-- Action: how to fix
-- Shows both diagnostic and actionability
-
-### 10.4 Invariant Violation (Internal)
-
-**❌ Poor:**
-```rust
-assert!(exists, "file must exist");
-```
-
-**✅ Good:**
-```rust
-assert!(exists, 
-    "projects.rs must exist in the repository. Daemon requires workspace metadata to initialize. \
-    Ensure you're in a valid HOOP workspace root");
-```
-
-**Improvements:**
-- What failed: invariant check
-- Why it matters: daemon requires it
-- Context: workspace root requirement
-- Actionable: verify workspace location
-
-### 10.5 Complex Error with Hint
-
-**❌ Poor:**
-```rust
-.expect("Failed to deserialize bead");
-```
-
-**✅ Good:**
-```rust
-.expect(
-    "Failed to deserialize bead line. \
-    Hint: Bead line format is: <id>|<title>|<status>|...| \
-    Check that line contains all required fields"
-);
-```
-
-**Improvements:**
-- What failed: deserialization
-- Context: bead line format
-- Diagnostic hint: what to check
-- Developer-facing (guidance, not specific fix)
+- **Source Analysis:** `error_messages_catalog.md` (5,904 patterns across 104 files)
+- **Industry Best Practices:** Rust testing guidelines, error message usability research
+- **HOOP Context:** `AGENTS.md`, `docs/plan/plan.md`
 
 ---
 
-## 11. Anti-Patterns to Avoid
+## Version History
 
-### 11.1 Cryptic Messages
-
-**❌ Avoid:**
-```rust
-"test failed"
-"error occurred"
-"invalid"
-```
-
-**✅ Instead:**
-```rust
-"config validation should fail with missing schema_version"
-"Failed to parse config.yml: line 15, column 3"
-"invalid schema_version: expected string, got integer"
-```
-
-### 11.2 Over-Vague References
-
-**❌ Avoid:**
-```rust
-"flag should be true"
-"file must exist"
-"value should be correct"
-```
-
-**✅ Instead:**
-```rust
-"no_interactive flag should be true when --no-interactive is present"
-"projects.rs must exist in the repository"
-"schema_version should be a string value"
-```
-
-### 11.3 Missing Context
-
-**❌ Avoid:**
-```rust
-.unwrap()
-.expect("failed")
-.assert_eq!(value, expected)
-```
-
-**✅ Instead:**
-```rust
-.expect("Failed to read config from ~/.hoop/config.yml")
-.expect(&format!("Failed to create directory: {}", path))
-.assert_eq!(value, expected, "field should match expected value: {:?}", expected)
-```
-
-### 11.4 Inconsistent Terminology
-
-**❌ Avoid:**
-```rust
-"cli should parse" // sometimes CLI, sometimes cli
-"testrepo must exist" // sometimes testRepo
-"--no_interactive" // sometimes --no-interactive
-```
-
-**✅ Instead:**
-```rust
-"CLI should parse" // always uppercase
-"testrepo must exist" // consistent casing
-"--no-interactive" // preserve original
-```
-
-### 11.5 Over-Actionable Messages
-
-**❌ Avoid speculating on fixes when the cause is unclear:**
-```rust
-// ❌ Too speculative
-"Failed to read config. Maybe file permissions are wrong? Try reinstalling"
-
-// ✅ Better - diagnostic
-"Failed to read config from: {}. Check file exists and is readable", path
-```
-
-### 11.6 Over-Verbose Messages
-
-**❌ Avoid overwhelming detail:**
-```rust
-// ❌ Too verbose
-"Failed to read config file located at path /home/user/.hoop/config.yml with error code 2 indicating \
-file not found which means the file does not exist at the specified location"
-
-// ✅ Better - concise
-"Failed to read config from ~/.hoop/config.yml: file not found. Run 'hoop init' to create config"
-```
-
-### 11.7 Vague Action Suggestions
-
-**❌ Avoid non-specific suggestions:**
-```rust
-// ❌ Vague
-"Config error. Check the config file"
-"Failed to parse. Fix the error"
-
-// ✅ Better - specific
-"Config validation failed at field 'schema_version': expected string, got integer"
-"Failed to parse bead line: missing claimed_at field at line 15"
-```
-
-### 11.8 Missing Critical Context
-
-**❌ Never omit context that's needed for diagnosis:**
-```rust
-// ❌ Missing target
-"Failed to read config" // which config?
-
-// ❌ Missing expected value
-"got integer" // but what was expected?
-
-// ❌ Missing field
-"validation failed" // what failed validation?
-
-// ✅ Always include
-"Failed to read config from ~/.hoop/config.yml"
-"Expected string, got integer"
-"schema_version validation failed: must be string"
-```
+- **v1.0** (2026-08-12): Initial standards derived from error message catalog analysis
 
 ---
 
-## 12. Validation Checklist
-
-Use this checklist before committing new error messages:
-
-### 12.1 Content Completeness
-
-- [ ] Message identifies **what failed** (operation, assertion, validation)
-- [ ] Message names the **target/subject** (file, field, component)
-- [ ] Message includes **expected state** when relevant
-- [ ] Message includes **actual state** when it differs
-- [ ] Message includes **condition** when behavior is conditional
-
-### 12.2 Context Appropriateness
-
-- [ ] **File context** included when relevant (I/O operations, config)
-- [ ] **Component context** included when multiple components could fail
-- [ ] **Field context** included for validation errors
-- [ ] **Function context** included when operation is non-obvious
-
-### 12.3 Actionability Appropriateness
-
-- [ ] Action suggestions are **specific and accurate**
-- [ ] Action suggestions are **safe to follow**
-- [ ] Diagnostic hints **guide investigation effectively**
-- [ ] No **speculative or vague suggestions**
-- [ ] **Audience-appropriate depth** (user vs developer)
-
-### 12.4 Format Compliance
-
-- [ ] Follows **"should"/"Failed to"/"must"** patterns
-- [ ] **Preserves original case** for identifiers
-- [ ] Uses **`{:?}` for debug**, **`{}` for display**
-- [ ] **No trailing period**
-- [ ] **Placeholders at end** of message
-- [ ] **No unnecessary quotes** around simple values
-- [ ] **First word capitalized**
-
-### 12.5 Self-Documentation
-
-- [ ] Message is **understandable without reading code**
-- [ ] Message uses **consistent terminology** with codebase
-- [ ] Test assertions are **self-documenting**
-- [ ] Error path validations are **clear about expectations**
-
----
-
-## 13. Migration Path
-
-### 13.1 Phase 1: Add Minimum Context
-
-Add basic context to bare messages:
-
-```rust
-// Before
-.unwrap()
-
-// After
-.expect("Failed to read config")
-```
-
-### 13.2 Phase 2: Add Cause and Context
-
-Add more diagnostic information:
-
-```rust
-// After
-.expect("Failed to read config from ~/.hoop/config.yml")
-```
-
-### 13.3 Phase 3: Add Actionable Suggestions
-
-Add safe, obvious fixes:
-
-```rust
-// After
-.expect("Failed to read config from ~/.hoop/config.yml. Run 'hoop init' to create config")
-```
-
-### 13.4 Priority Order
-
-1. **Critical errors first** — unwrap() in production code paths
-2. **Test assertions** — add context to all test failures
-3. **User-facing errors** — CLI and API messages
-4. **Internal diagnostics** — developer-facing debugging aids
-
----
-
-## Appendix: Pattern Summary
-
-### Sentence Patterns
-
-| Pattern | Use When | Example |
-|---------|----------|---------|
-| `<subject> should <state>` | Expected behavior | `flag should be true when --flag present` |
-| `Failed to <action> <target>` | Operation failures | `Failed to read config from path` |
-| `<subject> must <condition>` | Invariants | `file must exist before start` |
-| `Expected <expected>, got <actual>` | Value mismatches | `Expected string, got integer` |
-| `<action> should <result>` | Validation tests | `missing field should fail` |
-
-### Context Rules
-
-| Context | When to Include | Example |
-|---------|----------------|---------|
-| File path | I/O, config, user files | `from ~/.hoop/config.yml` |
-| Function name | Public API, ambiguous | `ConfigParser::parse() failed` |
-| Line/column | Parsing errors | `at line 15, column 3` |
-| Field name | Validation errors | `schema_version must be string` |
-| Component | Multiple components | `Daemon should start` |
-
-### Actionability Levels
-
-| Level | When | Example |
-|-------|------|---------|
-| Informational-only | Internal, diagnostic | `Failed to deserialize bead line` |
-| Diagnostic hint | Complex errors | `Hint: Check line format matches...` |
-| Direct action | User-facing, safe fix | `Run 'hoop init' to create config` |
-| Documentation | Complex recovery | `See docs/operations.md for steps` |
-
----
-
-**Document Status:** Complete  
-**Related Documents:**
-- [Error Message Catalog](../error_messages_catalog.md) — Current inventory
-- [AGENTS.md](../AGENTS.md) — Repository guide for LLMs
-
-**Next Steps:** Apply these standards in error message improvement work across HOOP codebase. Use the validation checklist (Section 12) before committing any new error messages.
+**Note:** These standards are derived from existing patterns in the HOOP codebase and industry best practices. They should be applied to all new test code and used as a guide for improving existing tests incrementally.
