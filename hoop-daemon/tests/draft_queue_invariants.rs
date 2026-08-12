@@ -24,15 +24,15 @@ fn setup_test_db() -> (TempDir, PathBuf) {
     // Acquire lock before touching the env var
     let _guard = LOCK.lock().unwrap();
 
-    let tmp = TempDir::new().expect("create temp dir");
+    let tmp = TempDir::new().expect("Temp directory should be created");
     let hoop_dir = tmp.path().join(".hoop");
-    std::fs::create_dir_all(&hoop_dir).expect("create .hoop dir");
+    std::fs::create_dir_all(&hoop_dir).expect(".hoop directory should be created");
     let db_path = hoop_dir.join("fleet.db");
 
     // Override fleet::db_path() for this test
     std::env::set_var("_HOOP_FLEET_DB_PATH", &db_path);
 
-    hoop_daemon::fleet::init_fleet_db().expect("init fleet.db");
+    hoop_daemon::fleet::init_fleet_db().expect("fleet.db should be initialized");
 
     (tmp, db_path)
 }
@@ -79,16 +79,16 @@ fn test_insert_draft_creates_no_beads() {
         abandoned_at: None,
     };
 
-    hoop_daemon::fleet::insert_draft(&draft).expect("insert draft");
+    hoop_daemon::fleet::insert_draft(&draft).expect("Insert draft");
 
     let fetched = hoop_daemon::fleet::get_draft("draft-test001")
-        .expect("get draft")
-        .expect("draft exists");
+        .expect("Get draft")
+        .expect("Draft should exist");
     assert_eq!(fetched.status, "pending");
     assert_eq!(fetched.source, "agent");
     assert!(
         fetched.stitch_id.is_none(),
-        "draft must not have stitch_id until approved"
+        "Draft should not have stitch_id until approved"
     );
 
     teardown_test_db();
@@ -126,11 +126,11 @@ fn test_agent_source_preserved_in_draft() {
         abandoned_at: None,
     };
 
-    hoop_daemon::fleet::insert_draft(&draft).expect("insert draft");
+    hoop_daemon::fleet::insert_draft(&draft).expect("Insert draft");
 
     let fetched = hoop_daemon::fleet::get_draft("draft-agent-src")
-        .expect("get draft")
-        .expect("draft exists");
+        .expect("Get draft")
+        .expect("Draft should exist");
 
     assert_eq!(fetched.source, "agent");
     assert_eq!(fetched.agent_session_id, Some("sess-worker3".to_string()));
@@ -203,20 +203,20 @@ fn test_drafts_persist_across_simulated_restart() {
         abandoned_at: None,
     };
 
-    hoop_daemon::fleet::insert_draft(&draft1).expect("insert draft1");
-    hoop_daemon::fleet::insert_draft(&draft2).expect("insert draft2");
+    hoop_daemon::fleet::insert_draft(&draft1).expect("Insert draft 1");
+    hoop_daemon::fleet::insert_draft(&draft2).expect("Insert draft 2");
 
-    assert!(db_path.exists(), "fleet.db must persist on disk");
+    assert!(db_path.exists(), "Fleet.db should persist on disk");
 
     let fetched1 = hoop_daemon::fleet::get_draft("draft-persist-1")
-        .expect("get draft1")
-        .expect("draft1 exists");
+        .expect("Get draft 1")
+        .expect("Draft 1 should exist");
     assert_eq!(fetched1.title, "First draft");
     assert_eq!(fetched1.status, "pending");
 
     let fetched2 = hoop_daemon::fleet::get_draft("draft-persist-2")
-        .expect("get draft2")
-        .expect("draft2 exists");
+        .expect("Get draft 2")
+        .expect("Draft 2 should exist");
     assert_eq!(fetched2.title, "Second draft");
     assert_eq!(fetched2.status, "edited");
     assert_eq!(fetched2.version, 2);
@@ -263,23 +263,23 @@ fn test_list_drafts_filters_by_status() {
             last_autosave_at: None,
             abandoned_at: None,
         };
-        hoop_daemon::fleet::insert_draft(&draft).expect("insert draft");
+        hoop_daemon::fleet::insert_draft(&draft).expect("Insert draft");
     }
 
     let pending =
-        hoop_daemon::fleet::list_drafts(None, Some("pending"), 100).expect("list pending");
+        hoop_daemon::fleet::list_drafts(None, Some("pending"), 100).expect("List pending");
     assert_eq!(pending.len(), 2);
     assert!(pending.iter().all(|d| d.status == "pending"));
 
     let rejected =
-        hoop_daemon::fleet::list_drafts(None, Some("rejected"), 100).expect("list rejected");
+        hoop_daemon::fleet::list_drafts(None, Some("rejected"), 100).expect("List rejected");
     assert_eq!(rejected.len(), 1);
     assert_eq!(rejected[0].id, "draft-s6");
 
     let actionable = {
         let mut p =
-            hoop_daemon::fleet::list_drafts(None, Some("pending"), 100).expect("list pending");
-        p.extend(hoop_daemon::fleet::list_drafts(None, Some("edited"), 100).expect("list edited"));
+            hoop_daemon::fleet::list_drafts(None, Some("pending"), 100).expect("List pending");
+        p.extend(hoop_daemon::fleet::list_drafts(None, Some("edited"), 100).expect("List edited"));
         p
     };
     assert_eq!(actionable.len(), 3); // 2 pending + 1 edited
@@ -323,7 +323,7 @@ fn test_audit_row_written_on_draft_created() {
         abandoned_at: None,
     };
 
-    hoop_daemon::fleet::insert_draft(&draft).expect("insert draft");
+    hoop_daemon::fleet::insert_draft(&draft).expect("Insert draft");
 
     let result = hoop_daemon::fleet::write_audit_row(
         "os:test-agent",
@@ -337,7 +337,7 @@ fn test_audit_row_written_on_draft_created() {
         None,
         None,
     );
-    assert!(result.is_ok(), "audit row should be written successfully");
+    assert!(result.is_ok(), "Audit row should be written successfully");
 
     let audit_row = result.unwrap();
     assert_eq!(audit_row.actor, "os:test-agent");
@@ -346,11 +346,11 @@ fn test_audit_row_written_on_draft_created() {
     assert_eq!(audit_row.project, Some("test-project".to_string()));
     assert!(
         !audit_row.hash_self.is_empty(),
-        "hash_self must be populated"
+        "hash_self should be populated"
     );
     assert!(
         !audit_row.hash_prev.is_empty(),
-        "hash_prev must be populated (genesis or previous)"
+        "hash_prev should be populated (genesis or previous)"
     );
 
     teardown_test_db();
@@ -383,7 +383,7 @@ fn test_audit_row_captures_approver_identity() {
         preview_json: None,
     };
 
-    hoop_daemon::fleet::insert_draft(&draft).expect("insert draft");
+    hoop_daemon::fleet::insert_draft(&draft).expect("Insert draft");
 
     let operator = "os:jedarden";
     let now = chrono::Utc::now().to_rfc3339();
@@ -396,7 +396,7 @@ fn test_audit_row_captures_approver_identity() {
         None,
         None,
     )
-    .expect("update draft status");
+    .expect("Update draft status");
 
     let audit_row = hoop_daemon::fleet::write_audit_row(
         operator,
@@ -416,7 +416,7 @@ fn test_audit_row_captures_approver_identity() {
         None,
         None,
     )
-    .expect("write audit row");
+    .expect("Write audit row");
 
     assert_eq!(audit_row.actor, operator);
     assert_eq!(
@@ -426,8 +426,8 @@ fn test_audit_row_captures_approver_identity() {
     assert!(audit_row.source.as_deref() == Some("operator"));
 
     let updated = hoop_daemon::fleet::get_draft("draft-approve-audit")
-        .expect("get draft")
-        .expect("draft exists");
+        .expect("Get draft")
+        .expect("Draft should exist");
     assert_eq!(updated.resolved_by, Some(operator.to_string()));
     assert_eq!(updated.resolved_at, Some(now));
     assert_eq!(updated.status, "approved");
@@ -471,7 +471,7 @@ fn test_rejection_with_reason() {
         abandoned_at: None,
     };
 
-    hoop_daemon::fleet::insert_draft(&draft).expect("insert draft");
+    hoop_daemon::fleet::insert_draft(&draft).expect("Insert draft");
 
     let operator = "os:jedarden";
     let reason = "Duplicate of existing stitch stitch-abc123";
@@ -485,11 +485,11 @@ fn test_rejection_with_reason() {
         Some(reason),
         None,
     )
-    .expect("reject draft");
+    .expect("Reject draft");
 
     let rejected = hoop_daemon::fleet::get_draft("draft-reject-reason")
-        .expect("get draft")
-        .expect("draft exists");
+        .expect("Get draft")
+        .expect("Draft should exist");
 
     assert_eq!(rejected.status, "rejected");
     assert_eq!(rejected.rejection_reason, Some(reason.to_string()));
@@ -526,7 +526,7 @@ fn test_rejection_without_reason() {
         preview_json: None,
     };
 
-    hoop_daemon::fleet::insert_draft(&draft).expect("insert draft");
+    hoop_daemon::fleet::insert_draft(&draft).expect("Insert draft");
 
     let operator = "os:jedarden";
     let now = chrono::Utc::now().to_rfc3339();
@@ -539,11 +539,11 @@ fn test_rejection_without_reason() {
         None,
         None,
     )
-    .expect("reject draft");
+    .expect("Reject draft");
 
     let rejected = hoop_daemon::fleet::get_draft("draft-reject-noreason")
-        .expect("get draft")
-        .expect("draft exists");
+        .expect("Get draft")
+        .expect("Draft should exist");
 
     assert_eq!(rejected.status, "rejected");
     assert_eq!(
@@ -578,7 +578,7 @@ fn test_rejection_audit_captures_reason() {
         None,
         None,
     )
-    .expect("write audit row");
+    .expect("Write audit row");
 
     assert_eq!(
         audit_row.kind,
@@ -628,7 +628,7 @@ fn test_edit_increments_version_and_stores_original() {
         abandoned_at: None,
     };
 
-    hoop_daemon::fleet::insert_draft(&draft).expect("insert draft");
+    hoop_daemon::fleet::insert_draft(&draft).expect("Insert draft");
 
     hoop_daemon::fleet::edit_draft(
         "draft-edit-ver",
@@ -638,20 +638,20 @@ fn test_edit_increments_version_and_stores_original() {
         Some(8),
         None,
     )
-    .expect("edit draft");
+    .expect("Edit draft");
 
     let edited = hoop_daemon::fleet::get_draft("draft-edit-ver")
-        .expect("get draft")
-        .expect("draft exists");
+        .expect("Get draft")
+        .expect("Draft should exist");
 
     assert_eq!(edited.title, "Updated title");
     assert_eq!(edited.description, Some("Updated description".to_string()));
     assert_eq!(edited.priority, Some(8));
-    assert_eq!(edited.version, 2, "edit must increment version");
-    assert_eq!(edited.status, "edited", "edit must set status to 'edited'");
+    assert_eq!(edited.version, 2, "edit should increment version");
+    assert_eq!(edited.status, "edited", "edit should set status to 'edited'");
     assert!(
         edited.original_json.is_some(),
-        "first edit must store original_json"
+        "first edit should store original_json"
     );
 
     teardown_test_db();
@@ -689,7 +689,7 @@ fn test_approved_draft_records_stitch_id() {
         abandoned_at: None,
     };
 
-    hoop_daemon::fleet::insert_draft(&draft).expect("insert draft");
+    hoop_daemon::fleet::insert_draft(&draft).expect("Insert draft");
 
     let operator = "os:jedarden";
     let now = chrono::Utc::now().to_rfc3339();
@@ -703,11 +703,11 @@ fn test_approved_draft_records_stitch_id() {
         None,
         Some(stitch_id),
     )
-    .expect("approve and submit draft");
+    .expect("Approve and submit draft");
 
     let submitted = hoop_daemon::fleet::get_draft("draft-stitch-id")
-        .expect("get draft")
-        .expect("draft exists");
+        .expect("Get draft")
+        .expect("Draft should exist");
 
     assert_eq!(submitted.status, "submitted");
     assert_eq!(submitted.stitch_id, Some(stitch_id.to_string()));
@@ -742,18 +742,18 @@ fn test_hash_chain_integrity_with_draft_actions() {
             None,
             None,
         )
-        .expect("write audit row");
+        .expect("Write audit row");
 
         if i > 0 {
             assert_eq!(
                 row.hash_prev, prev_hash,
-                "hash_prev must match previous row's hash_self"
+                "hash_prev should match previous row's hash_self"
             );
         }
         prev_hash = row.hash_self.clone();
     }
 
-    hoop_daemon::fleet::verify_hash_chain().expect("hash chain must be valid after draft actions");
+    hoop_daemon::fleet::verify_hash_chain().expect("Hash chain should be valid after draft actions");
 
     teardown_test_db();
 }
@@ -771,11 +771,11 @@ fn test_open_draft_creates_new_draft() {
     let opened_by = "os:test-operator";
 
     hoop_daemon::fleet::open_draft(draft_id, project, opened_by)
-        .expect("open_draft should succeed");
+        .expect("Open draft should succeed");
 
     let draft = hoop_daemon::fleet::get_draft(draft_id)
-        .expect("get draft should succeed")
-        .expect("draft should exist");
+        .expect("Get draft should succeed")
+        .expect("Draft should exist");
 
     assert_eq!(draft.id, draft_id);
     assert_eq!(draft.project, project);
@@ -799,8 +799,8 @@ fn test_open_draft_updates_existing_draft() {
         .expect("first open should succeed");
 
     let first_draft = hoop_daemon::fleet::get_draft(draft_id)
-        .expect("get draft should succeed")
-        .expect("draft should exist");
+        .expect("Get draft should succeed")
+        .expect("Draft should exist");
 
     assert_eq!(first_draft.opened_by, Some("os:operator-a".to_string()));
 
@@ -808,8 +808,8 @@ fn test_open_draft_updates_existing_draft() {
     hoop_daemon::fleet::abandon_draft(draft_id).expect("abandon should succeed");
 
     let abandoned = hoop_daemon::fleet::get_draft(draft_id)
-        .expect("get draft should succeed")
-        .expect("draft should exist");
+        .expect("Get draft should succeed")
+        .expect("Draft should exist");
 
     assert!(abandoned.abandoned_at.is_some(), "abandoned_at should be set");
 
@@ -818,8 +818,8 @@ fn test_open_draft_updates_existing_draft() {
         .expect("second open should succeed");
 
     let reopened = hoop_daemon::fleet::get_draft(draft_id)
-        .expect("get draft should succeed")
-        .expect("draft should exist");
+        .expect("Get draft should succeed")
+        .expect("Draft should exist");
 
     assert_eq!(reopened.opened_by, Some("os:operator-b".to_string()));
     assert!(reopened.opened_at.is_some());
@@ -851,8 +851,8 @@ fn test_autosave_draft_updates_fields() {
     .expect("autosave should succeed");
 
     let draft = hoop_daemon::fleet::get_draft(draft_id)
-        .expect("get draft should succeed")
-        .expect("draft should exist");
+        .expect("Get draft should succeed")
+        .expect("Draft should exist");
 
     assert_eq!(draft.title, "Updated Title");
     assert_eq!(draft.description, Some("Updated Description".to_string()));
@@ -875,8 +875,8 @@ fn test_autosave_draft_updates_fields() {
     .expect("second autosave should succeed");
 
     let updated = hoop_daemon::fleet::get_draft(draft_id)
-        .expect("get draft should succeed")
-        .expect("draft should exist");
+        .expect("Get draft should succeed")
+        .expect("Draft should exist");
 
     assert_eq!(updated.version, original_version, "autosave should not increment version");
 
@@ -895,8 +895,8 @@ fn test_abandon_draft_marks_as_abandoned() {
         .expect("open should succeed");
 
     let draft = hoop_daemon::fleet::get_draft(draft_id)
-        .expect("get draft should succeed")
-        .expect("draft should exist");
+        .expect("Get draft should succeed")
+        .expect("Draft should exist");
 
     assert_eq!(draft.status, "pending");
     assert!(draft.abandoned_at.is_none());
@@ -906,8 +906,8 @@ fn test_abandon_draft_marks_as_abandoned() {
         .expect("abandon should succeed");
 
     let abandoned = hoop_daemon::fleet::get_draft(draft_id)
-        .expect("get draft should succeed")
-        .expect("draft should exist");
+        .expect("Get draft should succeed")
+        .expect("Draft should exist");
 
     assert_eq!(abandoned.status, "abandoned");
     assert!(abandoned.abandoned_at.is_some(), "abandoned_at should be set");
@@ -950,7 +950,7 @@ fn test_abandon_draft_fails_for_submitted_draft() {
         abandoned_at: None,
     };
 
-    hoop_daemon::fleet::insert_draft(&draft).expect("insert draft");
+    hoop_daemon::fleet::insert_draft(&draft).expect("Insert draft");
 
     // The abandon_draft function itself doesn't enforce this check,
     // but the API endpoint does. For now, we just verify that
@@ -1042,13 +1042,13 @@ fn test_cleanup_abandoned_drafts_removes_old_drafts() {
 
     // Verify old draft is gone
     let old_draft_after = hoop_daemon::fleet::get_draft(old_draft_id)
-        .expect("get draft should succeed");
+        .expect("Get draft should succeed");
 
     assert!(old_draft_after.is_none(), "old abandoned draft should be deleted");
 
     // Verify recent draft still exists
     let recent_draft_after = hoop_daemon::fleet::get_draft(recent_draft_id)
-        .expect("get draft should succeed")
+        .expect("Get draft should succeed")
         .expect("recent abandoned draft should still exist");
 
     assert_eq!(recent_draft_after.id, recent_draft_id);
@@ -1069,8 +1069,8 @@ fn test_full_draft_lifecycle() {
         .expect("open should succeed");
 
     let draft = hoop_daemon::fleet::get_draft(draft_id)
-        .expect("get draft should succeed")
-        .expect("draft should exist");
+        .expect("Get draft should succeed")
+        .expect("Draft should exist");
 
     assert_eq!(draft.status, "pending");
     assert!(draft.opened_at.is_some());
@@ -1087,8 +1087,8 @@ fn test_full_draft_lifecycle() {
     .expect("autosave should succeed");
 
     let autosaved = hoop_daemon::fleet::get_draft(draft_id)
-        .expect("get draft should succeed")
-        .expect("draft should exist");
+        .expect("Get draft should succeed")
+        .expect("Draft should exist");
 
     assert_eq!(autosaved.title, "My Stitch Title");
     assert!(autosaved.last_autosave_at.is_some());
@@ -1109,15 +1109,15 @@ fn test_full_draft_lifecycle() {
         .expect("abandon should succeed");
 
     let abandoned = hoop_daemon::fleet::get_draft(draft_id)
-        .expect("get draft should succeed")
-        .expect("draft should exist");
+        .expect("Get draft should succeed")
+        .expect("Draft should exist");
 
     assert_eq!(abandoned.status, "abandoned");
     assert!(abandoned.abandoned_at.is_some());
 
     // 5. Verify draft is retained (not immediately deleted)
     let still_exists = hoop_daemon::fleet::get_draft(draft_id)
-        .expect("get draft should succeed")
+        .expect("Get draft should succeed")
         .expect("abandoned draft should still exist");
 
     assert_eq!(still_exists.id, draft_id);
