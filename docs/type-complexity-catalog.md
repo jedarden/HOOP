@@ -1,461 +1,310 @@
-# Type Complexity Catalog
+# Type Complexity Catalog — Suggested Aliases
 
-**Generated:** 2026-08-11  
-**Bead:** needle:bf-6csyd  
-**Purpose:** Comprehensive catalog of type complexity warnings with suggested refactorings
+**Generated:** 2026-08-12  
+**Source:** `docs/type-complexity-parsed.md`  
+**Total warnings:** 33  
+**Patterns identified:** 3
 
 ## Overview
 
-This catalog documents all type complexity warnings from Clippy in the HOOP codebase. Each warning represents a type signature that exceeds Clippy's complexity threshold, making code harder to read and maintain. For each warning, we provide:
+This catalog provides type alias suggestions for all Clippy type complexity warnings in the HOOP codebase. All warnings originate from **generated code** in `hoop-schema/build/out/types.rs`, which is auto-generated from JSON Schema via `typify`.
 
-- The exact location (file and line number)
-- The complex type signature
-- Context about where and how it's used
-- A suggested type alias with semantic rationale
-- Implementation notes for refactoring
-
-**Why this matters:** Complex type signatures in generated code (from `typify`) cascade into documentation, error messages, and API boundaries. By introducing semantic type aliases, we improve code readability, make error messages clearer, and create better self-documentation.
-
-**Statistics:**
-- **Total warnings:** 34
-- **Unique type patterns:** 6
-- **Generated file:** `hoop-schema/build/types.rs` (all occurrences)
-- **Source:** JSON schema code generation via `typify`
+**Key principle:** These aliases should be implemented at the schema generation level (`hoop-schema/build.rs` or typify configuration), not by manually editing the generated Rust code.
 
 ---
 
-## Pattern 1: Event Timestamp Fields
+## Pattern 1: Optional DateTime Results (27 instances)
 
-**Occurrences:** 21 warnings  
-**Complexity Score:** High (nested `Result<Option<>>` with chrono generics)
-
-### Warnings
-
-#### 1.1. `window_end` - CapacityWindowEnd
-- **Location:** `hoop-schema/build/types.rs:22949:21`
-- **Type:** `Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- **Context:** End timestamp for capacity monitoring windows
-- **Suggested Alias:** `ParsedEventTimestamp`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-#### 1.2. `window_start` - CapacityWindowStart
-- **Location:** `hoop-schema/build/types.rs:22950:23`
-- **Type:** `Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- **Context:** Start timestamp for capacity monitoring windows
-- **Suggested Alias:** `ParsedEventTimestamp`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-#### 1.3. `timestamp` - EventTimestamp (4 occurrences)
-- **Locations:** 
-  - `hoop-schema/build/types.rs:24115:20`
-  - `hoop-schema/build/types.rs:28206:20`
-  - `hoop-schema/build/types.rs:30409:20`
-  - `hoop-schema/build/types.rs:34379:20`
-  - `hoop-schema/build/types.rs:34844:20`
-- **Type:** `Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- **Context:** Generic event timestamps across multiple event types
-- **Suggested Alias:** `ParsedEventTimestamp`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-#### 1.4. `last_success_iso` - LastSuccessTimestamp
-- **Location:** `hoop-schema/build/types.rs:25066:27`
-- **Type:** `Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- **Context:** Last successful operation timestamp in ISO format
-- **Suggested Alias:** `ParsedEventTimestamp`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-#### 1.5. `closed_at` - ClosedAtTimestamp (2 occurrences)
-- **Locations:**
-  - `hoop-schema/build/types.rs:28465:20`
-  - `hoop-schema/build/types.rs:30579:20`
-- **Type:** `Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- **Context:** When a stitch or bead was closed
-- **Suggested Alias:** `ParsedEventTimestamp`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-#### 1.6. `deadline` - DeadlineTimestamp
-- **Location:** `hoop-schema/build/types.rs:28467:19`
-- **Type:** `Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- **Context:** Deadline for a stitch or task
-- **Suggested Alias:** `ParsedEventTimestamp`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-#### 1.7. `updated_at` - UpdatedAtTimestamp (2 occurrences)
-- **Locations:**
-  - `hoop-schema/build/types.rs:28478:21`
-  - `hoop-schema/build/types.rs:30590:21`
-- **Type:** `Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- **Context:** Last update timestamp for records
-- **Suggested Alias:** `ParsedEventTimestamp`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-#### 1.8. `added_at` - AddedAtTimestamp
-- **Location:** `hoop-schema/build/types.rs:28692:19`
-- **Type:** `Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- **Context:** When a resource was added to the system
-- **Suggested Alias:** `ParsedEventTimestamp`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-#### 1.9. `created_at` - CreatedAtTimestamp (2 occurrences)
-- **Locations:**
-  - `hoop-schema/build/types.rs:28787:21`
-  - `hoop-schema/build/types.rs:30970:21`
-- **Type:** `Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- **Context:** Creation timestamp for records
-- **Suggested Alias:** `ParsedEventTimestamp`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-#### 1.10. `approved_at` - ApprovedAtTimestamp
-- **Location:** `hoop-schema/build/types.rs:29763:22`
-- **Type:** `Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- **Context:** When a reflection ledger entry was approved
-- **Suggested Alias:** `ParsedEventTimestamp`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-#### 1.11. `archived_at` - ArchivedAtTimestamp (2 occurrences)
-- **Locations:**
-  - `hoop-schema/build/types.rs:29765:22`
-  - `hoop-schema/build/types.rs:30576:22`
-- **Type:** `Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- **Context:** When a resource was archived
-- **Suggested Alias:** `ParsedEventTimestamp`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-#### 1.12. `last_applied` - LastAppliedTimestamp
-- **Location:** `hoop-schema/build/types.rs:29769:23`
-- **Type:** `Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- **Context:** When a reflection ledger rule was last applied
-- **Suggested Alias:** `ParsedEventTimestamp`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-#### 1.13. `linked_at` - LinkedAtTimestamp
-- **Location:** `hoop-schema/build/types.rs:30846:20`
-- **Type:** `Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- **Context:** When a stitch was linked to a pattern
-- **Suggested Alias:** `ParsedEventTimestamp`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-#### 1.14. `end` - SessionEndTimestamp
-- **Location:** `hoop-schema/build/types.rs:31597:14`
-- **Type:** `Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- **Context:** End timestamp for a time range or session
-- **Suggested Alias:** `ParsedEventTimestamp`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-#### 1.15. `start` - SessionStartTimestamp
-- **Location:** `hoop-schema/build/types.rs:31598:16`
-- **Type:** `Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- **Context:** Start timestamp for a time range or session
-- **Suggested Alias:** `ParsedEventTimestamp`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-#### 1.16. `agent_first_used` - AgentFirstUsedTimestamp
-- **Location:** `hoop-schema/build/types.rs:32848:27`
-- **Type:** `Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- **Context:** First timestamp when the agent was used
-- **Suggested Alias:** `ParsedEventTimestamp`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-#### 1.17. `mic_first_used` - MicFirstUsedTimestamp
-- **Location:** `hoop-schema/build/types.rs:32849:25`
-- **Type:** `Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- **Context:** First timestamp when microphone was used
-- **Suggested Alias:** `ParsedEventTimestamp`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-#### 1.18. `patterns_first_used` - PatternsFirstUsedTimestamp
-- **Location:** `hoop-schema/build/types.rs:32850:30`
-- **Type:** `Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- **Context:** First timestamp when patterns were used
-- **Suggested Alias:** `ParsedEventTimestamp`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-#### 1.19. `reflection_ledger_first_used` - ReflectionLedgerFirstUsedTimestamp
-- **Location:** `hoop-schema/build/types.rs:32851:39`
-- **Type:** `Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>`
-- **Context:** First timestamp when reflection ledger was used
-- **Suggested Alias:** `ParsedEventTimestamp`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-### Pattern 1 Summary
-
-**Type Alias Definition:**
+### Complex Type
 ```rust
-/// A parsed event timestamp from HOOP events or database records.
-///
-/// Represents a timestamp field that may be:
-/// - Present and valid (Ok(Some(datetime)))
-/// - Missing/null (Ok(None))
-/// - Invalid/unparseable (Err(String))
-///
-/// Used throughout HOOP for event timestamps, stitch metadata, and
-/// capacity tracking data where temporal ordering is critical but
-/// data quality may vary.
-pub type ParsedEventTimestamp = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;
+Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>
 ```
 
-**Implementation Notes:**
-1. Create `hoop-schema/src/aliases.rs` with this alias
-2. Add `pub mod aliases;` to `hoop-schema/src/lib.rs`
-3. Re-export: `pub use aliases::ParsedEventTimestamp;`
-4. Update `typify` configuration or post-process generated code to use the alias
-5. Update all 21 field definitions to use `ParsedEventTimestamp`
+### Context
+This pattern appears throughout the schema for optional UTC datetime fields with error handling. Used for timestamps like `created_at`, `updated_at`, `deadline`, etc.
 
-**Impact:** Reduces type signature from 68 to 22 characters (68% reduction), improves semantic clarity.
+### Suggested Type Alias
 
----
-
-## Pattern 2: Configuration Adapter Maps
-
-**Occurrences:** 2 warnings  
-**Complexity Score:** High (nested `Result<HashMap<>>` with long value type names)
-
-### Warnings
-
-#### 2.1. `adapters` - HoopConfigPricingAdapters
-- **Location:** `hoop-schema/build/types.rs:26864:19`
-- **Type:** `Result<::std::collections::HashMap<String, super::HoopConfigPricingAdaptersValue>, String>`
-- **Context:** Pricing adapter configuration in `HoopConfig`
-- **Suggested Alias:** `HoopPricingAdapters = ConfigAdaptersMap<HoopConfigPricingAdaptersValue>`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-#### 2.2. `adapters` - HoopConfigStuckDetectorAdapters
-- **Location:** `hoop-schema/build/types.rs:27290:19`
-- **Type:** `Result<::std::collections::HashMap<String, super::HoopConfigStuckDetectorAdaptersValue>, String>`
-- **Context:** Stuck detector adapter configuration in `HoopConfig`
-- **Suggested Alias:** `HoopStuckDetectorAdapters = ConfigAdaptersMap<HoopConfigStuckDetectorAdaptersValue>`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-### Pattern 2 Summary
-
-**Type Alias Definition:**
 ```rust
-/// A parsed configuration map for adapter settings.
-///
-/// Generic over the adapter value type to support different config sections.
-/// The Result wrapper indicates parsing failures; the String error
-/// contains schema validation messages for operator visibility.
-pub type ConfigAdaptersMap<T> = Result<::std::collections::HashMap<String, T>, String>;
-
-// Specific aliases for each config section:
-pub type HoopPricingAdapters = ConfigAdaptersMap<super::HoopConfigPricingAdaptersValue>;
-pub type HoopStuckDetectorAdapters = ConfigAdaptersMap<super::HoopConfigStuckDetectorAdaptersValue>;
+/// A Result wrapping an optional UTC DateTime with String error type.
+/// Used for timestamp fields that may be null or parsing may fail.
+type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;
 ```
 
-**Implementation Notes:**
-1. Add generic `ConfigAdaptersMap<T>` to `hoop-schema/src/aliases.rs`
-2. Add specific aliases for each config section
-3. Update generated struct fields to use the specific aliases
-4. The generic design allows reuse for future adapter config sections
+### Rationale
 
-**Impact:** Reduces type signature from 88 to 24 characters (73% reduction), provides domain-specific naming.
+**Name choice:** `OptionalUtcDateTimeResult`
 
----
+- **`Optional`** - Clearly signals the inner `Option<>`, indicating the field may be null/absent
+- **`UtcDateTime`** - Describes the payload: a timezone-aware UTC timestamp (more precise than just "DateTime")
+- **`Result`** - Indicates fallibility (parsing/validation can fail with a String error)
+- **Ordering** - Flows from outermost to innermost: Optional → UtcDateTime → Result
 
-## Pattern 3: Configuration Model Maps
+**Why not alternatives considered:**
 
-**Occurrences:** 2 warnings  
-**Complexity Score:** High (nested `Result<HashMap<>>` with long value type names)
+- `OptionalDateTimeResult` - Less precise; doesn't indicate UTC timezone
+- `TimestampResult` - Too vague; doesn't convey Option wrapper
+- `DateTimeOrError` - Non-idiomatic; Rust convention puts the success type first
+- `ParsedTimestamp` - Doesn't convey the Result/Option structure clearly
 
-### Warnings
+**Semantic meaning:** "A nullable UTC timestamp that may fail to parse, returning a String error message."
 
-#### 3.1. `models` - HoopConfigPricingAdaptersValueModels
-- **Location:** `hoop-schema/build/types.rs:26909:17`
-- **Type:** `Result<::std::collections::HashMap<String, super::HoopConfigPricingAdaptersValueModelsValue>, String>`
-- **Context:** Model-specific pricing configuration within adapter config
-- **Suggested Alias:** `HoopPricingAdapterModels = ConfigModelsMap<HoopConfigPricingAdaptersValueModelsValue>`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
+### Usage Example
 
-#### 3.2. `models` - PricingConfigAdaptersValueModels
-- **Location:** `hoop-schema/build/types.rs:29006:17`
-- **Type:** `Result<::std::collections::HashMap<String, super::PricingConfigAdaptersValueModelsValue>, String>`
-- **Context:** Model-specific pricing configuration
-- **Suggested Alias:** `PricingAdapterModels = ConfigModelsMap<PricingConfigAdaptersValueModelsValue>`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-### Pattern 3 Summary
-
-**Type Alias Definition:**
 ```rust
-/// A parsed configuration map for model settings.
-///
-/// Used for pricing adapter model configurations where each adapter
-/// can define per-model pricing/capacity settings. Generic over the
-/// specific model value type.
-pub type ConfigModelsMap<T> = Result<::std::collections::HashMap<String, T>, String>;
-
-// Specific aliases:
-pub type HoopPricingAdapterModels = ConfigModelsMap<super::HoopConfigPricingAdaptersValueModelsValue>;
-pub type PricingAdapterModels = ConfigModelsMap<super::PricingConfigAdaptersValueModelsValue>;
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct EventMetadata {
+    created_at: OptionalUtcDateTimeResult,
+    updated_at: OptionalUtcDateTimeResult,
+    deadline: OptionalUtcDateTimeResult,
+}
 ```
 
-**Implementation Notes:**
-1. Add generic `ConfigModelsMap<T>` to `hoop-schema/src/aliases.rs`
-2. Add specific aliases for each model config section
-3. Update generated struct fields to use the specific aliases
-4. Mirrors `ConfigAdaptersMap` for consistency
+### Impact
 
-**Impact:** Reduces type signature from 95 to 24 characters (75% reduction), maintains parallel structure with adapter maps.
+**Reduces complexity score from:** ~250 (exceeds threshold)  
+**Reduces to:** 1 (type alias reference)  
+**Affects:** 27 fields across the schema
 
 ---
 
-## Pattern 4: Pricing Config Adapters Map
+## Pattern 2: Adapter Configuration Maps (5 instances)
 
-**Occurrences:** 1 warning  
-**Complexity Score:** High (nested `Result<HashMap<>>` with long value type name)
-
-### Warnings
-
-#### 4.1. `adapters` - PricingConfigAdapters
-- **Location:** `hoop-schema/build/types.rs:28964:13`
-- **Type:** `Result<::std::collections::HashMap<String, super::PricingConfigAdaptersValue>, String>`
-- **Context:** Top-level pricing adapter configuration
-- **Suggested Alias:** `PricingConfigAdapters = ConfigAdaptersMap<PricingConfigAdaptersValue>`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-### Pattern 4 Summary
-
-**Type Alias Definition:**
+### Complex Type
 ```rust
-// Uses the same generic ConfigAdaptersMap from Pattern 2:
-pub type PricingConfigAdapters = ConfigAdaptersMap<super::PricingConfigAdaptersValue>;
+Result<::std::collections::HashMap<String, SomeAdapterType>, String>
 ```
 
-**Implementation Notes:**
-1. Reuse the generic `ConfigAdaptersMap<T>` from Pattern 2
-2. Add specific alias to `hoop-schema/src/aliases.rs`
-3. Update generated struct field to use the alias
-4. Demonstrates the value of the generic design
+### Context
+These represent complex nested configuration structures where adapters are keyed by name (String) and contain configuration values. This pattern appears in pricing and stuck detector configurations.
 
-**Impact:** Reduces type signature from 82 to 24 characters (71% reduction), reuses existing generic alias.
+### Suggested Type Aliases
 
----
-
-## Pattern 5: Tool Arguments JSON
-
-**Occurrences:** 1 warning  
-**Complexity Score:** High (nested `Result<Map<>>` with serde_json generics)
-
-### Warnings
-
-#### 5.1. `args` - ToolCallArgs
-- **Location:** `hoop-schema/build/types.rs:22064:15`
-- **Type:** `Result<::serde_json::Map<String, ::serde_json::Value>, String>`
-- **Context:** Structured arguments passed to a Claude Code tool
-- **Suggested Alias:** `ParsedToolArgs`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
-
-### Pattern 5 Summary
-
-**Type Alias Definition:**
 ```rust
-/// Parsed tool arguments from a Claude tool use call.
-///
-/// Represents the structured arguments passed to a Claude Code tool.
-/// The Result wrapper captures JSON parsing errors; the String error
-/// contains the invalid JSON for debugging and operator feedback.
-///
-/// This is the non-optional variant (tool calls always have args).
-/// See `ParsedToolUse` for the optional tool_use field.
-pub type ParsedToolArgs = Result<::serde_json::Map<String, ::serde_json::Value>, String>;
+/// A Result wrapping a HashMap of pricing adapter configurations.
+/// Keys are adapter names, values contain pricing-specific adapter settings.
+type PricingAdaptersMapResult = Result<::std::collections::HashMap<String, HoopConfigPricingAdaptersValue>, String>;
+
+/// A Result wrapping a HashMap of pricing model configurations within adapters.
+/// Keys are model names, values contain model-specific pricing settings.
+type PricingAdapterModelsMapResult = Result<::std::collections::HashMap<String, HoopConfigPricingAdaptersValueModelsValue>, String>;
+
+/// A Result wrapping a HashMap of stuck detector adapter configurations.
+/// Keys are adapter names, values contain detector-specific settings.
+type StuckDetectorAdaptersMapResult = Result<::std::collections::HashMap<String, HoopConfigStuckDetectorAdaptersValue>, String>;
+
+/// A Result wrapping a HashMap of generic pricing adapter configurations.
+/// Used in PricingConfig for adapter overrides.
+type GenericPricingAdaptersMapResult = Result<::std::collections::HashMap<String, PricingConfigAdaptersValue>, String>;
+
+/// A Result wrapping a HashMap of generic pricing model configurations.
+/// Used in PricingConfig for model-specific overrides.
+type GenericPricingAdapterModelsMapResult = Result<::std::collections::HashMap<String, PricingConfigAdaptersValueModelsValue>, String>;
 ```
 
-**Implementation Notes:**
-1. Add `ParsedToolArgs` to `hoop-schema/src/aliases.rs`
-2. Update generated struct field to use the alias
-3. Document the distinction from `ParsedToolUse` (optional vs required)
-4. Consider adding validation helpers for common tool argument patterns
+### Rationale
 
-**Impact:** Reduces type signature from 72 to 15 characters (79% reduction), clearly indicates tool-specific domain.
+**Name choice pattern:** `<Domain><Purpose>MapResult`
 
----
+- **Domain prefix** - Identifies the configuration domain (`Pricing`, `StuckDetector`, `GenericPricing`)
+- **Purpose** - What the map contains (`Adapters`, `AdapterModels`, `StuckDetector`)
+- **`Map`** - Indicates HashMap structure (key-value pairs)
+- **`Result`** - Signals fallibility with String error type
 
-## Pattern 6: Optional Tool Use JSON
+**Why `Map` not `HashMap`:** More abstract; allows changing the implementation from HashMap to BTreeMap without updating the alias name.
 
-**Occurrences:** 1 warning  
-**Complexity Score:** Very High (nested `Result<Option<Map<>>` with serde_json generics)
+**Why `Result` suffix:** Clearly indicates this is a fallible operation, not just a container.
 
-### Warnings
+**Semantic meaning:** "A configuration map of domain-specific adapters/models that may fail to load/parse, returning a String error."
 
-#### 6.1. `tool_use` - MessageToolUse
-- **Location:** `hoop-schema/build/types.rs:31100:19`
-- **Type:** `Result<Option<::serde_json::Map<String, ::serde_json::Value>>, String>`
-- **Context:** Optional tool use content in a message (may be text-only)
-- **Suggested Alias:** `ParsedToolUse`
-- **Implementation:** See `hoop-schema/src/aliases.rs`
+### Usage Example
 
-### Pattern 6 Summary
-
-**Type Alias Definition:**
 ```rust
-/// Parsed optional tool use data from a message.
-///
-/// Represents tool_use content that may be present, absent, or invalid.
-/// The three-state Result<Option<>> structure matches Claude message semantics:
-/// - Ok(Some(Map)): Valid tool use content
-/// - Ok(None): No tool use in this message (e.g., text-only)
-/// - Err(String): Invalid tool_use JSON
-///
-/// Distinct from `ParsedToolArgs` which is always present in tool calls.
-pub type ParsedToolUse = Result<Option<::serde_json::Map<String, ::serde_json::Value>>, String>;
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct HoopConfigPricing {
+    adapters: PricingAdaptersMapResult,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct HoopConfigStuckDetector {
+    adapters: StuckDetectorAdaptersMapResult,
+}
 ```
 
-**Implementation Notes:**
-1. Add `ParsedToolUse` to `hoop-schema/src/aliases.rs`
-2. Update generated struct field to use the alias
-3. Emphasize the three-state nature in documentation
-4. Keep close to `ParsedToolArgs` definition for easy comparison
+### Impact
 
-**Impact:** Reduces type signature from 80 to 15 characters (81% reduction), documents the optional semantics explicitly.
+**Reduces complexity score from:** ~200-250 per instance  
+**Reduces to:** 1 (type alias reference)  
+**Affects:** 5 fields across pricing and stuck detector configurations
 
 ---
 
-## Implementation Roadmap
+## Pattern 3: Optional JSON Map Results (1 instance)
 
-### Phase 1: Create Type Aliases
-1. Create `hoop-schema/src/aliases.rs` with all 6 pattern aliases
-2. Add `pub mod aliases;` to `hoop-schema/src/lib.rs`
-3. Re-export all aliases with `pub use aliases::*;`
-4. Run `cargo check` to verify compilation
+### Complex Type
+```rust
+Result<Option<::serde_json::Map<String, ::serde_json::Value>>, String>
+```
 
-### Phase 2: Update Generated Code
-1. Modify `hoop-schema/build.rs` to post-process `typify` output
-2. Replace complex types with appropriate aliases
-3. Regenerate `hoop-schema/build/types.rs`
-4. Verify no Clippy type complexity warnings remain
+### Context
 
-### Phase 3: Update Tests and Documentation
-1. Update any tests that reference the full type signatures
-2. Add rustdoc examples for each alias
-3. Update this catalog to mark warnings as resolved
-4. Update `docs/type-complexity-aliases.md` with implementation status
+This pattern appears in the `tool_use` field, representing structured JSON data that may be null and may fail to parse. It's distinct from Pattern 1 because it uses `serde_json::Map` instead of `chrono::DateTime`.
 
-### Phase 4: Verification
-1. Run `cargo clippy -- -D warnings` to confirm all warnings resolved
-2. Run `cargo test --workspace` to ensure no test breakage
-3. Review generated API documentation for clarity
-4. Close bead `needle:bf-6csyd` with implementation notes
+### Suggested Type Alias
+
+```rust
+/// A Result wrapping an optional JSON object (Map of String to Value) with String error type.
+/// Used for JSON payloads that may be null or parsing may fail.
+type OptionalJsonObjectResult = Result<Option<::serde_json::Map<String, ::serde_json::Value>>, String>;
+```
+
+### Rationale
+
+**Name choice:** `OptionalJsonObjectResult`
+
+- **`Optional`** - Signals the inner `Option<>`; field may be null
+- **`JsonObject`** - Describes the payload: a JSON object (Map<String, Value>)
+  - Not `JsonMap` - "Object" is the semantic JSON type name; "Map" is the implementation detail
+  - Not `JsonData` - Too vague; doesn't convey it's an object (could be an array)
+- **`Result`** - Indicates fallibility with String error type
+
+**Why "JsonObject" not "JsonMap":**
+- In JSON terminology, "object" is the standard name for `{ "key": "value" }` structures
+- `serde_json::Map` is the Rust implementation; users think in JSON terms
+- Aligns with semantic naming: we're describing a JSON object, not a HashMap
+
+**Why not alternatives:**
+- `OptionalJsonMapResult` - "Map" is an implementation detail, not the domain concept
+- `OptionalJsonResult` - Too vague; could be a JSON array or string
+- `JsonToolUseResult` - Too specific to one field; not reusable
+
+**Semantic meaning:** "A nullable JSON object (structured key-value data) that may fail to parse, returning a String error."
+
+### Usage Example
+
+```rust
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct ToolUseEvent {
+    tool_use: OptionalJsonObjectResult,  // May be null, may be malformed JSON
+}
+```
+
+### Impact
+
+**Reduces complexity score from:** ~260  
+**Reduces to:** 1 (type alias reference)  
+**Affects:** 1 field (`tool_use`)
 
 ---
 
-## Related Documentation
+## Summary of All Type Aliases
 
-- **Type alias recommendations:** `docs/type-complexity-aliases.md`
-- **Raw Clippy output:** `docs/type-complexity-raw.txt`
-- **Parsed warning data:** `docs/type-complexity-parsed.json`
-- **Schema definitions:** `hoop-schema/schemas/*.json`
-- **Build configuration:** `hoop-schema/build.rs`
+### Core Reusable Aliases (Recommended for Base Module)
+
+```rust
+// Pattern 1: Timestamps
+pub type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;
+
+// Pattern 3: JSON objects
+pub type OptionalJsonObjectResult = Result<Option<::serde_json::Map<String, ::serde_json::Value>>, String>;
+```
+
+### Domain-Specific Aliases (Configuration Modules)
+
+```rust
+// Pattern 2: Pricing configurations
+pub type PricingAdaptersMapResult = Result<::std::collections::HashMap<String, HoopConfigPricingAdaptersValue>, String>;
+pub type PricingAdapterModelsMapResult = Result<::std::collections::HashMap<String, HoopConfigPricingAdaptersValueModelsValue>, String>;
+pub type GenericPricingAdaptersMapResult = Result<::std::collections::HashMap<String, PricingConfigAdaptersValue>, String>;
+pub type GenericPricingAdapterModelsMapResult = Result<::std::collections::HashMap<String, PricingConfigAdaptersValueModelsValue>, String>;
+
+// Pattern 2: Stuck detector configurations
+pub type StuckDetectorAdaptersMapResult = Result<::std::collections::HashMap<String, HoopConfigStuckDetectorAdaptersValue>, String>;
+```
 
 ---
 
-## Bead Context
+## Implementation Guidance
 
-**Task:** needle:bf-6csyd - Create type-complexity catalog markdown document  
-**Dependency:** needle:bf-5i5bo (alias suggestions)  
-**Acceptance Criteria:**
-- ✅ `docs/type-complexity-catalog.md` exists
-- ✅ All 34 warnings documented with required fields
-- ✅ Document is well-formatted markdown with clear sections
-- ✅ Intro explains the catalog purpose
+### Where to Define These Aliases
 
-**Status:** Complete - Catalog provides comprehensive documentation for all type complexity warnings with implementation guidance
+**Option A: In `hoop-schema` (Recommended)**
+
+Add to `hoop-schema/src/lib.rs` or a new `hoop-schema/src/types.rs`:
+
+```rust
+// Re-export commonly-used type aliases for generated code
+pub mod types {
+    pub use super::generated_types::OptionalUtcDateTimeResult;
+    pub use super::generated_types::OptionalJsonObjectResult;
+    // ... domain-specific aliases
+}
+```
+
+**Option B: Via Build Script Injection**
+
+Modify `hoop-schema/build.rs` to prepend aliases to the generated file:
+
+```rust
+fn main() {
+    let aliases = r#"
+// Auto-generated type aliases for complexity reduction
+type OptionalUtcDateTimeResult = Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>;
+type OptionalJsonObjectResult = Result<Option<::serde_json::Map<String, ::serde_json::Value>>, String>;
+"#;
+
+    // Prepend to generated types.rs
+}
+```
+
+### Naming Convention Checklist
+
+Each alias follows this convention:
+- ✅ **PascalCase** - Rust type naming standard
+- ✅ **Descriptive domain prefix** - What domain? (Pricing, StuckDetector, etc.)
+- ✅ **Semantic payload** - What does it contain? (DateTime, JsonObject, Adapters)
+- ✅ **Structure suffix** - What container? (Result, Map)
+- ✅ **No abbreviations** - "UtcDateTime" not "UTCDT", "JsonObject" not "JSONObject"
+- ✅ **Consistent ordering** - Optional → Payload → Result
+
+### Complexity Reduction Impact
+
+| Pattern | Instances | Original Complexity | After Alias | Reduction |
+|---------|-----------|---------------------|-------------|-----------|
+| DateTime timestamps | 27 | ~250 each | 1 | ~6,723 total |
+| Adapter maps | 5 | ~200-250 each | 1 | ~1,125 total |
+| JSON objects | 1 | ~260 | 1 | 260 total |
+| **TOTAL** | **33** | **~8,108** | **33** | **~8,075** |
+
+---
+
+## Alternative Approach: Clippy Threshold Adjustment
+
+If implementing type aliases is not feasible, an alternative is to increase Clippy's type complexity threshold in `clippy.toml`:
+
+```toml
+[type-complexity]
+threshold = 300  # Increase from default 250 to accommodate generated patterns
+```
+
+**Trade-off:** This suppresses warnings without improving code readability. Type aliases are preferred for maintainability.
+
+---
+
+## Next Steps
+
+1. **Review this catalog** with the HOOP team to confirm alias naming
+2. **Implement aliases** in `hoop-schema` at the generation level
+3. **Verify fix** by re-running `cargo clippy -- -W type_complexity`
+4. **Update documentation** to reference these aliases in schema contribution guides
+5. **Consider schema improvements** to reduce complexity at the source (e.g., defining custom timestamp types in JSON Schema)
+
+---
+
+## Related Files
+
+- `docs/type-complexity-parsed.md` — Source warning analysis
+- `docs/type-complexity-raw.txt` — Original clippy output
+- `clippy.toml` — Current Clippy configuration
+- `hoop-schema/build.rs` — Schema code generation script
+- `hoop-schema/build/out/types.rs` — Generated types (DO NOT EDIT MANUALLY)
