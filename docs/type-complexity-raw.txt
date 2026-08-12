@@ -1,36 +1,345 @@
-HOOP development environment loaded
-Rust version: rustc 1.97.1 (8bab26f4f 2026-07-14) (built from a source tarball)
-Node version: v22.23.2
-pnpm version: 11.20.0
-   Compiling hoop-schema v0.1.0 (/home/coding/HOOP/hoop-schema)
-    Checking hoop-ui v0.1.0 (/home/coding/HOOP/hoop-ui)
-    Checking test_backup_deser v0.1.0 (/home/coding/HOOP/test_backup_deser)
-    Checking hoop-daemon v0.1.0 (/home/coding/HOOP/hoop-daemon)
-    Checking hoop-mcp v0.1.0 (/home/coding/HOOP/hoop-mcp)
-warning: type `pattern_query_evaluator::QueryExpr` is more private than the item `pattern_query_evaluator::parse_query`
-  --> hoop-daemon/src/pattern_query_evaluator.rs:88:1
-   |
-88 | pub(crate) fn parse_query(query: &str) -> Result<QueryExpr> {
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ function `pattern_query_evaluator::parse_query` is reachable at visibility `pub(crate)`
-   |
-note: but type `pattern_query_evaluator::QueryExpr` is only usable at visibility `pub(self)`
-  --> hoop-daemon/src/pattern_query_evaluator.rs:70:1
-   |
-70 | enum QueryExpr {
-   | ^^^^^^^^^^^^^^
-   = note: `#[warn(private_interfaces)]` on by default
+    Blocking waiting for file lock on build directory
+warning: lint name `type_complexity` is deprecated and may not have an effect in the future
+  |
+  = help: change it to clippy::type_complexity
+  = note: requested on the command line with `-W type_complexity`
+  = note: `#[warn(renamed_and_removed_lints)]` on by default
 
-warning: type `pattern_query_evaluator::QueryExpr` is more private than the item `pattern_query_evaluator::evaluate_query`
-   --> hoop-daemon/src/pattern_query_evaluator.rs:258:1
-    |
-258 | pub(crate) fn evaluate_query(expr: &QueryExpr, ctx: &StitchContext) -> Result<bool> {
-    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ function `pattern_query_evaluator::evaluate_query` is reachable at visibility `pub(crate)`
-    |
-note: but type `pattern_query_evaluator::QueryExpr` is only usable at visibility `pub(self)`
-   --> hoop-daemon/src/pattern_query_evaluator.rs:70:1
-    |
- 70 | enum QueryExpr {
-    | ^^^^^^^^^^^^^^
+warning: `hoop-schema` (build script) generated 1 warning
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:22064:15
+      |
+22064 |         args: Result<::serde_json::Map<String, ::serde_json::Value>, String>,
+      |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+      = note: `#[warn(clippy::type_complexity)]` on by default
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:22949:21
+      |
+22949 |         window_end: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:22950:23
+      |
+22950 |         window_start: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:24115:20
+      |
+24115 |         timestamp: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:25066:27
+      |
+25066 |         last_success_iso: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:26864:19
+      |
+26864 |           adapters: Result<
+      |  ___________________^
+26865 | |             ::std::collections::HashMap<String, super::HoopConfigPricingAdaptersValue>,
+26866 | |             String,
+26867 | |         >,
+      | |_________^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:26909:17
+      |
+26909 |           models: Result<
+      |  _________________^
+26910 | |             ::std::collections::HashMap<String, super::HoopConfigPricingAdaptersValueModelsValue>,
+26911 | |             String,
+26912 | |         >,
+      | |_________^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:27290:19
+      |
+27290 |           adapters: Result<
+      |  ___________________^
+27291 | |             ::std::collections::HashMap<String, super::HoopConfigStuckDetectorAdaptersValue>,
+27292 | |             String,
+27293 | |         >,
+      | |_________^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:28206:20
+      |
+28206 |         timestamp: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:28465:20
+      |
+28465 |         closed_at: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:28467:19
+      |
+28467 |         deadline: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:28478:21
+      |
+28478 |         updated_at: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:28692:19
+      |
+28692 |         added_at: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:28787:21
+      |
+28787 |         created_at: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:28964:13
+      |
+28964 |             Result<::std::collections::HashMap<String, super::PricingConfigAdaptersValue>, String>,
+      |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:29006:17
+      |
+29006 |           models: Result<
+      |  _________________^
+29007 | |             ::std::collections::HashMap<String, super::PricingConfigAdaptersValueModelsValue>,
+29008 | |             String,
+29009 | |         >,
+      | |_________^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:29763:22
+      |
+29763 |         approved_at: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:29765:22
+      |
+29765 |         archived_at: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:29769:23
+      |
+29769 |         last_applied: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:30409:20
+      |
+30409 |         timestamp: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:30576:22
+      |
+30576 |         archived_at: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:30579:20
+      |
+30579 |         closed_at: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:30590:21
+      |
+30590 |         updated_at: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:30846:20
+      |
+30846 |         linked_at: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:30970:21
+      |
+30970 |         created_at: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:31100:19
+      |
+31100 |         tool_use: Result<Option<::serde_json::Map<String, ::serde_json::Value>>, String>,
+      |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:31597:14
+      |
+31597 |         end: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:31598:16
+      |
+31598 |         start: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:32848:27
+      |
+32848 |         agent_first_used: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:32849:25
+      |
+32849 |         mic_first_used: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:32850:30
+      |
+32850 |         patterns_first_used: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:32851:39
+      |
+32851 |         reflection_ledger_first_used: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:34379:20
+      |
+34379 |         timestamp: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: very complex type used. Consider factoring parts into `type` definitions
+     --> /home/coding/target/debug/build/hoop-schema-eec83911af1a1b70/out/types.rs:34844:20
+      |
+34844 |         timestamp: Result<Option<chrono::DateTime<chrono::offset::Utc>>, String>,
+      |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      |
+      = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+
+warning: `hoop-schema` (lib) generated 35 warnings (1 duplicate)
+warning: `hoop-ui` (lib) generated 1 warning (1 duplicate)
+warning: unused import: `crate::template_library`
+  --> hoop-daemon/src/api_beads.rs:18:5
+   |
+18 | use crate::template_library;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::api_prompts`
+  --> hoop-daemon/src/api_beads.rs:20:5
+   |
+20 | use crate::api_prompts;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::api_notes`
+  --> hoop-daemon/src/api_beads.rs:22:5
+   |
+22 | use crate::api_notes;
+   |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::api_skills`
+  --> hoop-daemon/src/api_beads.rs:24:5
+   |
+24 | use crate::api_skills;
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::api_scripts`
+  --> hoop-daemon/src/api_beads.rs:26:5
+   |
+26 | use crate::api_scripts;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `utoipa::ToSchema`
+  --> hoop-daemon/src/api_transcription.rs:18:5
+   |
+18 | use utoipa::ToSchema;
+   |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `serde_json::json`
+  --> hoop-daemon/src/prompt_substitute.rs:15:5
+   |
+15 | use serde_json::json;
+   |     ^^^^^^^^^^^^^^^^
 
 warning: type `reflection_detector::PatternCategory` is more private than the item `reflection_detector::DetectedPattern::category`
   --> hoop-daemon/src/reflection_detector.rs:88:5
@@ -43,6 +352,7 @@ note: but type `reflection_detector::PatternCategory` is only usable at visibili
    |
 60 | enum PatternCategory {
    | ^^^^^^^^^^^^^^^^^^^^
+   = note: `#[warn(private_interfaces)]` on by default
 
 warning: function `openapi_router` is never used
     --> hoop-daemon/src/lib.rs:1307:4
@@ -139,7 +449,7 @@ warning: consider using `sort_by_key`
 328 | |             .sort_by(|a, b| b.get_sort_key(sort_field).cmp(&a.get_sort_key(sort_field)));
     | |________________________________________________________________________________________^
     |
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unnecessary_sort_by
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#unnecessary_sort_by
     = note: `#[warn(clippy::unnecessary_sort_by)]` on by default
 help: try
     |
@@ -153,7 +463,7 @@ warning: consider using `sort_by_key`
 228 |     sorted_prompts.sort_by(|a, b| b.priority.cmp(&a.priority));
     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     |
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unnecessary_sort_by
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#unnecessary_sort_by
 help: try
     |
 228 -     sorted_prompts.sort_by(|a, b| b.priority.cmp(&a.priority));
@@ -166,7 +476,7 @@ warning: consider using `sort_by_key`
 470 |     files.sort_by(|a, b| b.mention_count.cmp(&a.mention_count));
     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     |
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unnecessary_sort_by
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#unnecessary_sort_by
 help: try
     |
 470 -     files.sort_by(|a, b| b.mention_count.cmp(&a.mention_count));
@@ -179,7 +489,7 @@ warning: consider using `sort_by_key`
 320 |         cache.sort_by(|a, b| b.discovered_at.cmp(&a.discovered_at));
     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     |
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unnecessary_sort_by
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#unnecessary_sort_by
 help: try
     |
 320 -         cache.sort_by(|a, b| b.discovered_at.cmp(&a.discovered_at));
@@ -193,7 +503,7 @@ warning: use of a disallowed method `std::fs::File::create`
    |                    ^^^^^^^^^^^^
    |
    = note: Use atomic_write::atomic_write_file instead (crash-safe: tmp + fsync + rename)
-   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
    = note: `#[warn(clippy::disallowed_methods)]` on by default
 
 warning: use of a disallowed method `std::fs::File::create`
@@ -203,7 +513,7 @@ warning: use of a disallowed method `std::fs::File::create`
     |                        ^^^^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::write`
   --> hoop-daemon/src/attachment_sync.rs:86:9
@@ -212,7 +522,7 @@ warning: use of a disallowed method `std::fs::write`
    |         ^^^^^^^^^^^^^^
    |
    = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
-   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::write`
    --> hoop-daemon/src/attachments.rs:613:5
@@ -221,7 +531,7 @@ warning: use of a disallowed method `std::fs::write`
     |     ^^^^^^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::write`
    --> hoop-daemon/src/backup_pipeline.rs:561:9
@@ -230,7 +540,7 @@ warning: use of a disallowed method `std::fs::write`
     |         ^^^^^^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: called `unwrap` on `gcp_quota_config` after checking its variant with `is_some`
    --> hoop-daemon/src/capacity.rs:603:17
@@ -241,7 +551,7 @@ warning: called `unwrap` on `gcp_quota_config` after checking its variant with `
 603 |                 gcp_quota_config.as_ref().unwrap().project_id,
     |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     |
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unnecessary_unwrap
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#unnecessary_unwrap
     = note: `#[warn(clippy::unnecessary_unwrap)]` on by default
 
 warning: called `unwrap` on `gcp_quota_config` after checking its variant with `is_some`
@@ -253,7 +563,7 @@ warning: called `unwrap` on `gcp_quota_config` after checking its variant with `
 604 |                 gcp_quota_config.as_ref().unwrap().region
     |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     |
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unnecessary_unwrap
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#unnecessary_unwrap
 
 warning: the variable `line_number` is used as a loop counter
     --> hoop-daemon/src/capacity.rs:1613:9
@@ -261,7 +571,7 @@ warning: the variable `line_number` is used as a loop counter
 1613 |         for line in reader.lines() {
      |         ^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider using: `for (line_number, line) in reader.lines().enumerate()`
      |
-     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#explicit_counter_loop
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#explicit_counter_loop
      = note: `#[warn(clippy::explicit_counter_loop)]` on by default
 
 warning: the variable `line_number` is used as a loop counter
@@ -270,7 +580,7 @@ warning: the variable `line_number` is used as a loop counter
 1772 |         for line in reader.lines() {
      |         ^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider using: `for (line_number, line) in reader.lines().enumerate()`
      |
-     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#explicit_counter_loop
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#explicit_counter_loop
 
 warning: this `if` has identical blocks
    --> hoop-daemon/src/config_resolver.rs:371:185
@@ -289,7 +599,7 @@ note: same as this
 374 | |             Some("integer".to_string())
 375 | |         } else if msg.contains("expected f32") || msg.contains("expected f64") {
     | |_________^
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#if_same_then_else
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#if_same_then_else
     = note: `#[warn(clippy::if_same_then_else)]` on by default
 
 warning: this function has too many arguments (9/7)
@@ -304,7 +614,7 @@ warning: this function has too many arguments (9/7)
 689 | | ) -> Result<Resolved<T>, ConfigError> {
     | |_____________________________________^
     |
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#too_many_arguments
     = note: `#[warn(clippy::too_many_arguments)]` on by default
 
 warning: this function has too many arguments (9/7)
@@ -319,7 +629,7 @@ warning: this function has too many arguments (9/7)
 1687 | |     ) -> Result<Resolved<String>, ConfigError> {
      | |______________________________________________^
      |
-     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#too_many_arguments
 
 warning: large size difference between variants
   --> hoop-daemon/src/config_watcher.rs:40:1
@@ -344,7 +654,7 @@ warning: large size difference between variants
 57 | |   }
    | |___^ the entire enum is at least 2160 bytes
    |
-   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#large_enum_variant
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#large_enum_variant
    = note: `#[warn(clippy::large_enum_variant)]` on by default
 help: consider boxing the large fields or introducing indirection in some other way to reduce the total size of the enum
    |
@@ -364,16 +674,7 @@ warning: this function has too many arguments (12/7)
 658 | | ) -> Result<()> {
     | |_______________^
     |
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
-
-warning: redundant reference in `format!` argument
-    --> hoop-daemon/src/fleet.rs:4611:9
-     |
-4611 |         &session_row.created_at[..19].replace('T', " "),
-     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the redundant `&`: `session_row.created_at[..19].replace('T', " ")`
-     |
-     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#useless_borrows_in_formatting
-     = note: `#[warn(clippy::useless_borrows_in_formatting)]` on by default
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#too_many_arguments
 
 warning: this function has too many arguments (8/7)
     --> hoop-daemon/src/fleet.rs:5217:1
@@ -387,7 +688,7 @@ warning: this function has too many arguments (8/7)
 5226 | | ) -> Result<()> {
      | |_______________^
      |
-     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#too_many_arguments
 
 warning: this function has too many arguments (8/7)
     --> hoop-daemon/src/fleet.rs:5322:1
@@ -401,7 +702,7 @@ warning: this function has too many arguments (8/7)
 5331 | | ) -> Result<()> {
      | |_______________^
      |
-     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#too_many_arguments
 
 warning: struct `IdentityCache` has a public `len` method, but no `is_empty` method
    --> hoop-daemon/src/identity.rs:123:5
@@ -409,7 +710,7 @@ warning: struct `IdentityCache` has a public `len` method, but no `is_empty` met
 123 |     pub fn len(&self) -> usize {
     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
     |
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#len_without_is_empty
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#len_without_is_empty
     = note: `#[warn(clippy::len_without_is_empty)]` on by default
 
 warning: use of a disallowed method `std::fs::File::create`
@@ -419,7 +720,7 @@ warning: use of a disallowed method `std::fs::File::create`
     |              ^^^^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::File::create`
    --> hoop-daemon/src/log_rotation.rs:117:23
@@ -428,7 +729,7 @@ warning: use of a disallowed method `std::fs::File::create`
     |                       ^^^^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::File::create`
    --> hoop-daemon/src/log_rotation.rs:145:21
@@ -437,7 +738,7 @@ warning: use of a disallowed method `std::fs::File::create`
     |                     ^^^^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::write`
     --> hoop-daemon/src/metrics.rs:1364:13
@@ -446,7 +747,7 @@ warning: use of a disallowed method `std::fs::write`
      |             ^^^^^^^^^^^^^^
      |
      = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
-     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::write`
    --> hoop-daemon/src/parse_jsonl_safe.rs:236:5
@@ -455,7 +756,7 @@ warning: use of a disallowed method `std::fs::write`
     |     ^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: writing `&mut Vec` instead of `&mut [_]` involves a new object where a slice will do
    --> hoop-daemon/src/pdf_sanitize.rs:184:36
@@ -463,7 +764,7 @@ warning: writing `&mut Vec` instead of `&mut [_]` involves a new object where a 
 184 | fn neutralise_open_action_js(data: &mut Vec<u8>, record: &mut PdfSanitizeRecord) {
     |                                    ^^^^^^^^^^^^
     |
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#ptr_arg
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#ptr_arg
     = note: `#[warn(clippy::ptr_arg)]` on by default
 help: change this to
     |
@@ -477,7 +778,7 @@ warning: writing `&mut Vec` instead of `&mut [_]` involves a new object where a 
 222 | fn neutralise_names_js(data: &mut Vec<u8>, record: &mut PdfSanitizeRecord) {
     |                              ^^^^^^^^^^^^
     |
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#ptr_arg
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#ptr_arg
 help: change this to
     |
 222 - fn neutralise_names_js(data: &mut Vec<u8>, record: &mut PdfSanitizeRecord) {
@@ -490,7 +791,7 @@ warning: writing `&mut Vec` instead of `&mut [_]` involves a new object where a 
 259 |     data: &mut Vec<u8>,
     |           ^^^^^^^^^^^^
     |
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#ptr_arg
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#ptr_arg
 help: change this to
     |
 259 -     data: &mut Vec<u8>,
@@ -503,7 +804,7 @@ warning: writing `&mut Vec` instead of `&mut [_]` involves a new object where a 
 279 |     data: &mut Vec<u8>,
     |           ^^^^^^^^^^^^
     |
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#ptr_arg
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#ptr_arg
 help: change this to
     |
 279 -     data: &mut Vec<u8>,
@@ -516,7 +817,7 @@ warning: writing `&mut Vec` instead of `&mut [_]` involves a new object where a 
 311 |     data: &mut Vec<u8>,
     |           ^^^^^^^^^^^^
     |
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#ptr_arg
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#ptr_arg
 help: change this to
     |
 311 -     data: &mut Vec<u8>,
@@ -530,7 +831,7 @@ warning: use of a disallowed method `std::fs::write`
     |         ^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: the variable `line_number` is used as a loop counter
     --> hoop-daemon/src/sessions.rs:1155:9
@@ -538,7 +839,7 @@ warning: the variable `line_number` is used as a loop counter
 1155 |         for line in reader.lines() {
      |         ^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider using: `for (line_number, line) in reader.lines().enumerate()`
      |
-     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#explicit_counter_loop
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#explicit_counter_loop
 
 warning: method `from_str` can be confused for the standard trait method `std::str::FromStr::from_str`
   --> hoop-daemon/src/stuck_detector.rs:66:5
@@ -552,7 +853,7 @@ warning: method `from_str` can be confused for the standard trait method `std::s
    | |_____^
    |
    = help: consider implementing the trait `std::str::FromStr` or choosing a less ambiguous method name
-   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#should_implement_trait
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#should_implement_trait
    = note: `#[warn(clippy::should_implement_trait)]` on by default
 
 warning: this function has too many arguments (9/7)
@@ -567,15 +868,15 @@ warning: this function has too many arguments (9/7)
 253 | |     ) -> Self {
     | |_____________^
     |
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#too_many_arguments
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#too_many_arguments
 
 warning: doc list item overindented
-    --> hoop-daemon/src/supervisor.rs:1122:5
+    --> hoop-daemon/src/supervisor.rs:1408:5
      |
-1122 | ///            → remove collision_index entry + touch project last_event_at
+1408 | ///            → remove collision_index entry + touch project last_event_at
      |     ^^^^^^^^^^^ help: try using `  ` (2 spaces)
      |
-     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#doc_overindented_list_items
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#doc_overindented_list_items
      = note: `#[warn(clippy::doc_overindented_list_items)]` on by default
 
 warning: use of a disallowed method `std::fs::write`
@@ -585,7 +886,7 @@ warning: use of a disallowed method `std::fs::write`
     |                         ^^^^^^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::write`
    --> hoop-daemon/src/uploads.rs:132:9
@@ -594,7 +895,7 @@ warning: use of a disallowed method `std::fs::write`
     |         ^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::File::create`
    --> hoop-daemon/src/uploads.rs:190:9
@@ -603,7 +904,7 @@ warning: use of a disallowed method `std::fs::File::create`
     |         ^^^^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::write`
    --> hoop-daemon/src/uploads.rs:446:5
@@ -612,7 +913,7 @@ warning: use of a disallowed method `std::fs::write`
     |     ^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::write`
    --> hoop-daemon/src/uploads.rs:470:5
@@ -621,7 +922,7 @@ warning: use of a disallowed method `std::fs::write`
     |     ^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::write`
    --> hoop-daemon/src/uploads.rs:516:5
@@ -630,7 +931,7 @@ warning: use of a disallowed method `std::fs::write`
     |     ^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::write`
    --> hoop-daemon/src/uploads.rs:540:5
@@ -639,7 +940,7 @@ warning: use of a disallowed method `std::fs::write`
     |     ^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: stripping a prefix manually
    --> hoop-daemon/src/api_blame.rs:228:31
@@ -652,7 +953,7 @@ note: the prefix was tested here
     |
 227 |         } else if line.starts_with("author-time ") {
     |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_strip
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#manual_strip
     = note: `#[warn(clippy::manual_strip)]` on by default
 help: try using the `strip_prefix` method
     |
@@ -671,7 +972,7 @@ note: the prefix was tested here
     |
 236 |         } else if line.starts_with("summary ") {
     |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_strip
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#manual_strip
 help: try using the `strip_prefix` method
     |
 236 ~         } else if let Some(<stripped>) = line.strip_prefix("summary ") {
@@ -689,7 +990,7 @@ note: the prefix was tested here
     |
 168 |         if line.starts_with("--- ") {
     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_strip
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#manual_strip
 help: try using the `strip_prefix` method
     |
 168 ~         if let Some(<stripped>) = line.strip_prefix("--- ") {
@@ -707,7 +1008,7 @@ note: the prefix was tested here
     |
 177 |         if line.starts_with("+++ ") {
     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#manual_strip
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#manual_strip
 help: try using the `strip_prefix` method
     |
 177 ~         if let Some(<stripped>) = line.strip_prefix("+++ ") {
@@ -721,7 +1022,7 @@ warning: use of a disallowed method `std::fs::write`
     |     ^^^^^^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::write`
    --> hoop-daemon/src/api_screen_capture.rs:164:5
@@ -730,7 +1031,7 @@ warning: use of a disallowed method `std::fs::write`
     |     ^^^^^^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::write`
    --> hoop-daemon/src/api_screen_capture.rs:214:5
@@ -739,7 +1040,7 @@ warning: use of a disallowed method `std::fs::write`
     |     ^^^^^^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::write`
    --> hoop-daemon/src/screen_capture.rs:353:9
@@ -748,7 +1049,7 @@ warning: use of a disallowed method `std::fs::write`
     |         ^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::File::create`
    --> hoop-daemon/src/screen_capture.rs:358:9
@@ -757,7 +1058,7 @@ warning: use of a disallowed method `std::fs::File::create`
     |         ^^^^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::write`
    --> hoop-daemon/src/screen_capture.rs:418:9
@@ -766,7 +1067,7 @@ warning: use of a disallowed method `std::fs::write`
     |         ^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::write`
    --> hoop-daemon/src/screen_capture.rs:452:9
@@ -775,7 +1076,7 @@ warning: use of a disallowed method `std::fs::write`
     |         ^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: use of a disallowed method `std::fs::write`
    --> hoop-daemon/src/screen_capture.rs:494:9
@@ -784,7 +1085,7 @@ warning: use of a disallowed method `std::fs::write`
     |         ^^^^^^^^^
     |
     = note: Use atomic_write::atomic_write_file or atomic_write::atomic_write_file_str instead (crash-safe: tmp + fsync + rename)
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#disallowed_methods
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#disallowed_methods
 
 warning: consider using `sort_by_key`
     --> hoop-daemon/src/lib.rs:1219:5
@@ -792,15 +1093,25 @@ warning: consider using `sort_by_key`
 1219 |     workers_by_project.sort_by(|a, b| b.worker_count.cmp(&a.worker_count));
      |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
      |
-     = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#unnecessary_sort_by
+     = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#unnecessary_sort_by
 help: try
      |
 1219 -     workers_by_project.sort_by(|a, b| b.worker_count.cmp(&a.worker_count));
 1219 +     workers_by_project.sort_by_key(|b| std::cmp::Reverse(b.worker_count));
      |
 
-warning: `hoop-daemon` (lib) generated 71 warnings (run `cargo clippy --fix --lib -p hoop-daemon -- -W clippy::type_complexity` to apply 1 suggestion)
-    Checking hoop v0.1.0 (/home/coding/HOOP/hoop-cli)
+warning: `hoop-daemon` (lib) generated 76 warnings (1 duplicate) (run `cargo clippy --fix --lib -p hoop-daemon -- -W type_complexity` to apply 7 suggestions)
+warning: very complex type used. Consider factoring parts into `type` definitions
+   --> hoop-mcp/src/tools.rs:917:28
+    |
+917 |         let (sql, params): (String, Vec<Box<dyn rusqlite::types::ToSql>>) = if let Some(kind) =
+    |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.95.0/index.html#type_complexity
+    = note: `#[warn(clippy::type_complexity)]` on by default
+
+warning: `hoop` (lib) generated 1 warning (1 duplicate)
+warning: `hoop-mcp` (lib) generated 2 warnings (1 duplicate)
 warning: field `schema_version` is never read
   --> hoop-cli/src/config.rs:33:5
    |
@@ -838,61 +1149,6 @@ warning: field `name` is never read
    |
    = note: `ScriptManifest` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
 
-warning: this `match` expression can be replaced with `?`
-   --> hoop-cli/src/config.rs:254:9
-    |
-254 | /         match current.get(part) {
-255 | |             Some(v) => {
-256 | |                 if i == parts.len() - 1 {
-...   |
-268 | |             None => return None,
-269 | |         }
-    | |_________^
-    |
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#question_mark
-    = note: `#[warn(clippy::question_mark)]` on by default
-help: try instead
-    |
-254 ~         {
-255 +             let v = current.get(part)?;
-256 +             if i == parts.len() - 1 {
-257 +                 // Last part - return the value as string
-258 +                 return match v {
-259 +                     serde_yaml::Value::String(s) => Some(s.clone()),
-260 +                     serde_yaml::Value::Number(n) => Some(n.to_string()),
-261 +                     serde_yaml::Value::Bool(b) => Some(b.to_string()),
-262 +                     serde_yaml::Value::Null => Some("null".to_string()),
-263 +                     _ => Some(serde_yaml::to_string(v).unwrap_or_else(|_| "[complex value]".to_string())),
-264 +                 };
-265 +             }
-266 +             current = v;
-267 +         }
-    |
-
-warning: this `match` expression can be replaced with `?`
-   --> hoop-cli/src/config.rs:279:9
-    |
-279 | /         match current.get(part) {
-280 | |             Some(v) => {
-281 | |                 if i == parts.len() - 1 {
-...   |
-287 | |             None => return None,
-288 | |         }
-    | |_________^
-    |
-    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#question_mark
-help: try instead
-    |
-279 ~         {
-280 +             let v = current.get(part)?;
-281 +             if i == parts.len() - 1 {
-282 +                 // Last part - return the value as bool
-283 +                 return v.as_bool();
-284 +             }
-285 +             current = v;
-286 +         }
-    |
-
 warning: structure field `DNSName` should have a snake case name
   --> hoop-cli/src/init.rs:36:5
    |
@@ -901,5 +1157,15 @@ warning: structure field `DNSName` should have a snake case name
    |
    = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
 
-warning: `hoop` (bin "hoop") generated 7 warnings (run `cargo clippy --fix --bin "hoop" -p hoop -- -W clippy::type_complexity` to apply 2 suggestions)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 42.94s
+warning: `hoop` (bin "hoop") generated 6 warnings (1 duplicate)
+warning: `hoop-mcp` (bin "hoop-mcp") generated 2 warnings (2 duplicates)
+warning: `hoop-daemon` (bin "generate_openapi") generated 1 warning (1 duplicate)
+warning: `test_backup_deser` (bin "test_backup_deser") generated 1 warning (1 duplicate)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 29.15s
+Name: String,
+   |     ^^^^^^^ help: convert the identifier to snake case: `dnsname`
+   |
+   = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: `hoop` (bin "hoop") generated 6 warnings (1 duplicate)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 32.77s
