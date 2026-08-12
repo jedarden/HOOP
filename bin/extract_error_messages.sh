@@ -1,98 +1,53 @@
 #!/bin/bash
-# Extract Error type and anyhow error messages from HOOP tests
+# Extract all error messages from HOOP test suite
 
-OUTPUT_FILE="/home/coding/HOOP/error_messages_catalog.md"
-echo "# Error Messages Catalog - HOOP Tests" > "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "Generated: $(date)" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-echo "## Summary" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
+echo "Extracting error messages from HOOP test suite..."
+echo "========================================"
+echo ""
 
-# Count total patterns
-TOTAL_EXPECT=$(grep -r "\.expect(" /home/coding/HOOP --include="*test*.rs" --include="*/tests/*.rs" | wc -l)
-TOTAL_UNWRAP_ERR=$(grep -r "\.unwrap_err(" /home/coding/HOOP --include="*test*.rs" --include="*/tests/*.rs" | wc -l)
-TOTAL_ANYHOW=$(grep -r "anyhow!(" /home/coding/HOOP --include="*test*.rs" --include="*/tests/*.rs" | wc -l)
-TOTAL_BAIL=$(grep -r "anyhow::bail!" /home/coding/HOOP --include="*test*.rs" --include="*/tests/*.rs" | wc -l)
-TOTAL_CONTEXT=$(grep -r "\.context(" /home/coding/HOOP --include="*test*.rs" --include="*/tests/*.rs" | wc -l)
+OUTPUT_DIR="/tmp/hoop_error_messages"
+mkdir -p "$OUTPUT_DIR"
 
-echo "- \`.expect()\` patterns: $TOTAL_EXPECT" >> "$OUTPUT_FILE"
-echo "- \`.unwrap_err()\` patterns: $TOTAL_UNWRAP_ERR" >> "$OUTPUT_FILE"
-echo "- \`anyhow!()\` patterns: $TOTAL_ANYHOW" >> "$OUTPUT_FILE"
-echo "- \`anyhow::bail!()\` patterns: $TOTAL_BAIL" >> "$OUTPUT_FILE"
-echo "- \`.context()\` patterns: $TOTAL_CONTEXT" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
+# Search for different error patterns
+echo "Searching for error patterns..."
 
-echo "## Error Type Patterns" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
+# 1. assert! patterns
+echo "=== assert! patterns ===" > "$OUTPUT_DIR/assert_messages.txt"
+grep -rn "assert!" /home/coding/HOOP/tests/ 2>/dev/null >> "$OUTPUT_DIR/assert_messages.txt"
 
-### Extract .expect() patterns
-echo "### \`.expect()\` patterns" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-grep -rn "\.expect(" /home/coding/HOOP --include="*test*.rs" --include="*/tests/*.rs" | while IFS=: read -r file line rest; do
-    # Extract the error message from .expect("...")
-    message=$(echo "$rest" | grep -oP '\.expect\(\K[^)]+\)' | head -1)
-    if [ -n "$message" ]; then
-        echo "- **File:** \`$file:$line\`" >> "$OUTPUT_FILE"
-        echo "  - **Message:** \`.expect($message)\`" >> "$OUTPUT_FILE"
-        echo "  - **Type:** Error type" >> "$OUTPUT_FILE"
-        echo "" >> "$OUTPUT_FILE"
-    fi
-done
+# 2. assert_eq! and assert_ne! patterns
+echo "=== assert_eq! and assert_ne! patterns ===" > "$OUTPUT_DIR/assert_eq_ne_messages.txt"
+grep -rn "assert_eq\|assert_ne" /home/coding/HOOP/tests/ 2>/dev/null >> "$OUTPUT_DIR/assert_eq_ne_messages.txt"
 
-### Extract .unwrap_err() patterns
-echo "### \`.unwrap_err()\` patterns" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-grep -rn "\.unwrap_err(" /home/coding/HOOP --include="*test*.rs" --include="*/tests/*.rs" | while IFS=: read -r file line rest; do
-    echo "- **File:** \`$file:$line\`" >> "$OUTPUT_FILE"
-    echo "  - **Message:** \`.unwrap_err()\`" >> "$OUTPUT_FILE"
-    echo "  - **Type:** Error type" >> "$OUTPUT_FILE"
-    echo "" >> "$OUTPUT_FILE"
-done
+# 3. panic! patterns
+echo "=== panic! patterns ===" > "$OUTPUT_DIR/panic_messages.txt"
+grep -rn "panic!" /home/coding/HOOP/tests/ 2>/dev/null >> "$OUTPUT_DIR/panic_messages.txt"
 
-echo "## anyhow Error Patterns" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
+# 4. unwrap() and expect() patterns
+echo "=== unwrap() and expect() patterns ===" > "$OUTPUT_DIR/unwrap_expect_messages.txt"
+grep -rn "\.unwrap()\|\.expect(" /home/coding/HOOP/tests/ 2>/dev/null >> "$OUTPUT_DIR/unwrap_expect_messages.txt"
 
-### Extract anyhow!() patterns
-echo "### \`anyhow!()\` patterns" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-grep -rn "anyhow!(" /home/coding/HOOP --include="*test*.rs" --include="*/tests/*.rs" | while IFS=: read -r file line rest; do
-    # Extract the error message from anyhow!("...")
-    message=$(echo "$rest" | grep -oP 'anyhow!\(\K[^)]+\)' | head -1)
-    if [ -n "$message" ]; then
-        echo "- **File:** \`$file:$line\`" >> "$OUTPUT_FILE"
-        echo "  - **Message:** \`anyhow!($message)\`" >> "$OUTPUT_FILE"
-        echo "  - **Type:** anyhow error" >> "$OUTPUT_FILE"
-        echo "" >> "$OUTPUT_FILE"
-    fi
-done
+# 5. anyhow patterns
+echo "=== anyhow patterns ===" > "$OUTPUT_DIR/anyhow_messages.txt"
+grep -rn "anyhow::" /home/coding/HOOP/tests/ 2>/dev/null >> "$OUTPUT_DIR/anyhow_messages.txt"
 
-### Extract anyhow::bail!() patterns
-echo "### \`anyhow::bail!()\` patterns" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-grep -rn "anyhow::bail!" /home/coding/HOOP --include="*test*.rs" --include="*/tests/*.rs" | while IFS=: read -r file line rest; do
-    # Extract the error message from anyhow::bail!("...")
-    message=$(echo "$rest" | grep -oP 'anyhow::bail!\(\K[^)]+\)' | head -1)
-    if [ -n "$message" ]; then
-        echo "- **File:** \`$file:$line\`" >> "$OUTPUT_FILE"
-        echo "  - **Message:** \`anyhow::bail!($message)\`" >> "$OUTPUT_FILE"
-        echo "  - **Type:** anyhow bail" >> "$OUTPUT_FILE"
-        echo "" >> "$OUTPUT_FILE"
-    fi
-done
+# 6. Error and Result patterns
+echo "=== Error and Result patterns ===" > "$OUTPUT_DIR/error_result_messages.txt"
+grep -rn "Error::\|Result<.*,.*E>" /home/coding/HOOP/tests/ 2>/dev/null >> "$OUTPUT_DIR/error_result_messages.txt"
 
-### Extract .context() patterns
-echo "### \`.context()\` patterns" >> "$OUTPUT_FILE"
-echo "" >> "$OUTPUT_FILE"
-grep -rn "\.context(" /home/coding/HOOP --include="*test*.rs" --include="*/tests/*.rs" | while IFS=: read -r file line rest; do
-    # Extract the error message from .context("...")
-    message=$(echo "$rest" | grep -oP '\.context\(\K[^)]+\)' | head -1)
-    if [ -n "$message" ]; then
-        echo "- **File:** \`$file:$line\`" >> "$OUTPUT_FILE"
-        echo "  - **Message:** \`.context($message)\`" >> "$OUTPUT_FILE"
-        echo "  - **Type:** anyhow context" >> "$OUTPUT_FILE"
-        echo "" >> "$OUTPUT_FILE"
-    fi
-done
+# 7. expect_err! patterns
+echo "=== expect_err! patterns ===" > "$OUTPUT_DIR/expect_err_messages.txt"
+grep -rn "expect_err!" /home/coding/HOOP/tests/ 2>/dev/null >> "$OUTPUT_DIR/expect_err_messages.txt"
 
-echo "Extraction complete: $OUTPUT_FILE"
+# 8. should_panic patterns
+echo "=== should_panic patterns ===" > "$OUTPUT_DIR/should_panic_messages.txt"
+grep -rn "#\[should_panic" /home/coding/HOOP/tests/ 2>/dev/null >> "$OUTPUT_DIR/should_panic_messages.txt"
+
+# 9. To assist with pattern matching, I'll expand the search to include additional error-related patterns
+echo "=== Additional error patterns ===" > "$OUTPUT_DIR/additional_error_messages.txt"
+grep -rn "bail!\|ensure!\|return Err\|map_err\|unwrap_err" /home/coding/HOOP/tests/ 2>/dev/null >> "$OUTPUT_DIR/additional_error_messages.txt"
+
+echo "Error messages extracted to $OUTPUT_DIR"
+echo ""
+echo "Summary:"
+wc -l "$OUTPUT_DIR"/*.txt
