@@ -230,7 +230,7 @@
 //!
 //!         assert!(
 //!             main_code.contains("mycommand::run_mycommand(no_interactive)"),
-//!             "main() must pass flag to handler"
+//!             "Main() must pass flag to handler"
 //!         );
 //!     }
 //! }
@@ -413,7 +413,7 @@
 //! # Flag Parsing Utilities
 //!
 //! This module provides utilities for parsing clap command structures with flags
-//! at different positions:
+//! At different positions:
 //!
 //! ## Available Functions
 //!
@@ -466,7 +466,7 @@
 //! ## 2. Flag Extraction Verification
 //!
 //! We verify that the flag is correctly extracted from the parsed arguments and
-//! that the boolean value is consistent regardless of position.
+//! That the boolean value is consistent regardless of position.
 //!
 //! ## 3. Prompt Suppression Testing
 //!
@@ -480,7 +480,7 @@
 //! ## 4. Destructive Operation Testing
 //!
 //! Destructive operations (remove, delete, etc.) require an additional `--confirm`
-//! flag when `--no-interactive` is set:
+//! Flag when `--no-interactive` is set:
 //!
 //! ```rust,ignore
 //! # Must fail - destructive without --confirm
