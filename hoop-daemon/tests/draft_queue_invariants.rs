@@ -32,7 +32,7 @@ fn setup_test_db() -> (TempDir, PathBuf) {
     // Override fleet::db_path() for this test
     std::env::set_var("_HOOP_FLEET_DB_PATH", &db_path);
 
-    hoop_daemon::fleet::init_fleet_db().expect("fleet.db should be initialized");
+    hoop_daemon::fleet::init_fleet_db().expect("Fleet.db should be initialized");
 
     (tmp, db_path)
 }
@@ -346,11 +346,11 @@ fn test_audit_row_written_on_draft_created() {
     assert_eq!(audit_row.project, Some("test-project".to_string()));
     assert!(
         !audit_row.hash_self.is_empty(),
-        "hash_self should be populated"
+        "Hash_self should be populated"
     );
     assert!(
         !audit_row.hash_prev.is_empty(),
-        "hash_prev should be populated (genesis or previous)"
+        "Hash_prev should be populated (genesis or previous)"
     );
 
     teardown_test_db();
@@ -548,7 +548,7 @@ fn test_rejection_without_reason() {
     assert_eq!(rejected.status, "rejected");
     assert_eq!(
         rejected.rejection_reason, None,
-        "rejection reason is optional"
+        "Rejection reason is optional"
     );
     assert_eq!(rejected.resolved_by, Some(operator.to_string()));
 
@@ -647,11 +647,11 @@ fn test_edit_increments_version_and_stores_original() {
     assert_eq!(edited.title, "Updated title");
     assert_eq!(edited.description, Some("Updated description".to_string()));
     assert_eq!(edited.priority, Some(8));
-    assert_eq!(edited.version, 2, "edit should increment version");
-    assert_eq!(edited.status, "edited", "edit should set status to 'edited'");
+    assert_eq!(edited.version, 2, "Edit should increment version");
+    assert_eq!(edited.status, "edited", "Edit should set status to 'edited'");
     assert!(
         edited.original_json.is_some(),
-        "first edit should store original_json"
+        "First edit should store original_json"
     );
 
     teardown_test_db();
@@ -747,7 +747,7 @@ fn test_hash_chain_integrity_with_draft_actions() {
         if i > 0 {
             assert_eq!(
                 row.hash_prev, prev_hash,
-                "hash_prev should match previous row's hash_self"
+                "Hash_prev should match previous row's hash_self"
             );
         }
         prev_hash = row.hash_self.clone();
@@ -780,7 +780,7 @@ fn test_open_draft_creates_new_draft() {
     assert_eq!(draft.id, draft_id);
     assert_eq!(draft.project, project);
     assert_eq!(draft.opened_by, Some(opened_by.to_string()));
-    assert!(draft.opened_at.is_some(), "opened_at should be set");
+    assert!(draft.opened_at.is_some(), "Opened_at should be set");
     assert_eq!(draft.status, "pending");
     assert_eq!(draft.source, "form");
 
@@ -796,7 +796,7 @@ fn test_open_draft_updates_existing_draft() {
 
     // First open creates the draft
     hoop_daemon::fleet::open_draft(draft_id, project, "os:operator-a")
-        .expect("first open should succeed");
+        .expect("First open should succeed");
 
     let first_draft = hoop_daemon::fleet::get_draft(draft_id)
         .expect("Get draft should succeed")
@@ -805,17 +805,17 @@ fn test_open_draft_updates_existing_draft() {
     assert_eq!(first_draft.opened_by, Some("os:operator-a".to_string()));
 
     // Second open should update opened_by and opened_at, clear abandoned_at if set
-    hoop_daemon::fleet::abandon_draft(draft_id).expect("abandon should succeed");
+    hoop_daemon::fleet::abandon_draft(draft_id).expect("Abandon should succeed");
 
     let abandoned = hoop_daemon::fleet::get_draft(draft_id)
         .expect("Get draft should succeed")
         .expect("Draft should exist");
 
-    assert!(abandoned.abandoned_at.is_some(), "abandoned_at should be set");
+    assert!(abandoned.abandoned_at.is_some(), "Abandoned_at should be set");
 
     // Re-open should clear abandoned_at
     hoop_daemon::fleet::open_draft(draft_id, project, "os:operator-b")
-        .expect("second open should succeed");
+        .expect("Second open should succeed");
 
     let reopened = hoop_daemon::fleet::get_draft(draft_id)
         .expect("Get draft should succeed")
@@ -823,7 +823,7 @@ fn test_open_draft_updates_existing_draft() {
 
     assert_eq!(reopened.opened_by, Some("os:operator-b".to_string()));
     assert!(reopened.opened_at.is_some());
-    assert!(reopened.abandoned_at.is_none(), "abandoned_at should be cleared on reopen");
+    assert!(reopened.abandoned_at.is_none(), "Abandoned_at should be cleared on reopen");
 
     teardown_test_db();
 }
@@ -837,7 +837,7 @@ fn test_autosave_draft_updates_fields() {
 
     // First open a draft
     hoop_daemon::fleet::open_draft(draft_id, project, "os:test-operator")
-        .expect("open should succeed");
+        .expect("Open should succeed");
 
     // Autosave should update fields
     hoop_daemon::fleet::autosave_draft(
@@ -848,7 +848,7 @@ fn test_autosave_draft_updates_fields() {
         Some(7),
         Some(&["urgent".to_string(), "security".to_string()]),
     )
-    .expect("autosave should succeed");
+    .expect("Autosave should succeed");
 
     let draft = hoop_daemon::fleet::get_draft(draft_id)
         .expect("Get draft should succeed")
@@ -859,7 +859,7 @@ fn test_autosave_draft_updates_fields() {
     assert_eq!(draft.kind, "investigation");
     assert_eq!(draft.priority, Some(7));
     assert_eq!(draft.labels, vec!["urgent".to_string(), "security".to_string()]);
-    assert!(draft.last_autosave_at.is_some(), "last_autosave_at should be set");
+    assert!(draft.last_autosave_at.is_some(), "Last_autosave_at should be set");
 
     // Autosave should not increment version (only manual edits increment version)
     let original_version = draft.version;
@@ -872,13 +872,13 @@ fn test_autosave_draft_updates_fields() {
         None,
         None,
     )
-    .expect("second autosave should succeed");
+    .expect("Second autosave should succeed");
 
     let updated = hoop_daemon::fleet::get_draft(draft_id)
         .expect("Get draft should succeed")
         .expect("Draft should exist");
 
-    assert_eq!(updated.version, original_version, "autosave should not increment version");
+    assert_eq!(updated.version, original_version, "Autosave should not increment version");
 
     teardown_test_db();
 }
@@ -892,7 +892,7 @@ fn test_abandon_draft_marks_as_abandoned() {
 
     // First open a draft
     hoop_daemon::fleet::open_draft(draft_id, project, "os:test-operator")
-        .expect("open should succeed");
+        .expect("Open should succeed");
 
     let draft = hoop_daemon::fleet::get_draft(draft_id)
         .expect("Get draft should succeed")
@@ -903,14 +903,14 @@ fn test_abandon_draft_marks_as_abandoned() {
 
     // Abandon the draft
     hoop_daemon::fleet::abandon_draft(draft_id)
-        .expect("abandon should succeed");
+        .expect("Abandon should succeed");
 
     let abandoned = hoop_daemon::fleet::get_draft(draft_id)
         .expect("Get draft should succeed")
         .expect("Draft should exist");
 
     assert_eq!(abandoned.status, "abandoned");
-    assert!(abandoned.abandoned_at.is_some(), "abandoned_at should be set");
+    assert!(abandoned.abandoned_at.is_some(), "Abandoned_at should be set");
 
     teardown_test_db();
 }
@@ -999,7 +999,7 @@ fn test_cleanup_abandoned_drafts_removes_old_drafts() {
         abandoned_at: Some(old_time.to_rfc3339()),
     };
 
-    hoop_daemon::fleet::insert_draft(&old_draft).expect("insert old draft");
+    hoop_daemon::fleet::insert_draft(&old_draft).expect("Insert old draft");
 
     // Create a recent abandoned draft (2 days ago)
     let recent_time = chrono::Utc::now() - chrono::Duration::days(2);
@@ -1032,24 +1032,24 @@ fn test_cleanup_abandoned_drafts_removes_old_drafts() {
         abandoned_at: Some(recent_time.to_rfc3339()),
     };
 
-    hoop_daemon::fleet::insert_draft(&recent_draft).expect("insert recent draft");
+    hoop_daemon::fleet::insert_draft(&recent_draft).expect("Insert recent draft");
 
     // Run cleanup - should remove only the old draft
     let deleted = hoop_daemon::fleet::cleanup_abandoned_drafts()
-        .expect("cleanup should succeed");
+        .expect("Cleanup should succeed");
 
-    assert_eq!(deleted, 1, "should delete exactly one old draft");
+    assert_eq!(deleted, 1, "Should delete exactly one old draft");
 
     // Verify old draft is gone
     let old_draft_after = hoop_daemon::fleet::get_draft(old_draft_id)
         .expect("Get draft should succeed");
 
-    assert!(old_draft_after.is_none(), "old abandoned draft should be deleted");
+    assert!(old_draft_after.is_none(), "Old abandoned draft should be deleted");
 
     // Verify recent draft still exists
     let recent_draft_after = hoop_daemon::fleet::get_draft(recent_draft_id)
         .expect("Get draft should succeed")
-        .expect("recent abandoned draft should still exist");
+        .expect("Recent abandoned draft should still exist");
 
     assert_eq!(recent_draft_after.id, recent_draft_id);
 
@@ -1066,7 +1066,7 @@ fn test_full_draft_lifecycle() {
 
     // 1. Open draft (form opened)
     hoop_daemon::fleet::open_draft(draft_id, project, operator)
-        .expect("open should succeed");
+        .expect("Open should succeed");
 
     let draft = hoop_daemon::fleet::get_draft(draft_id)
         .expect("Get draft should succeed")
@@ -1084,7 +1084,7 @@ fn test_full_draft_lifecycle() {
         Some(5),
         Some(&["frontend".to_string()]),
     )
-    .expect("autosave should succeed");
+    .expect("Autosave should succeed");
 
     let autosaved = hoop_daemon::fleet::get_draft(draft_id)
         .expect("Get draft should succeed")
@@ -1102,11 +1102,11 @@ fn test_full_draft_lifecycle() {
         None,
         None,
     )
-    .expect("second autosave should succeed");
+    .expect("Second autosave should succeed");
 
     // 4. Simulate form close without submit - abandon draft
     hoop_daemon::fleet::abandon_draft(draft_id)
-        .expect("abandon should succeed");
+        .expect("Abandon should succeed");
 
     let abandoned = hoop_daemon::fleet::get_draft(draft_id)
         .expect("Get draft should succeed")
@@ -1118,7 +1118,7 @@ fn test_full_draft_lifecycle() {
     // 5. Verify draft is retained (not immediately deleted)
     let still_exists = hoop_daemon::fleet::get_draft(draft_id)
         .expect("Get draft should succeed")
-        .expect("abandoned draft should still exist");
+        .expect("Abandoned draft should still exist");
 
     assert_eq!(still_exists.id, draft_id);
 
