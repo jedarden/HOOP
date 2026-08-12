@@ -35,10 +35,27 @@ type HistogramObservationStore = HashMap<Vec<String>, HistogramObservationData>;
 /// Type alias for RwLock-wrapped observation data storage
 type HistogramObservationStoreLock = RwLock<HistogramObservationStore>;
 
-/// Type alias for snapshot rows vector with percentiles
+/// Type alias for a vector of histogram snapshot rows with percentile calculations.
+///
+/// Each row represents a labeled histogram metric's snapshot including:
+/// - Count and sum of all observations
+/// - Three percentile calculations (p50, p95, p99)
+///
+/// Used for exporting histogram data to Prometheus format.
 type SnapshotRowsWithPercentiles = Vec<SnapshotRowWithPercentiles>;
 
-/// Type alias for snapshot row with percentiles
+/// Type alias for a single histogram snapshot row with percentile calculations.
+///
+/// Tuple fields represent:
+/// - `0`: Vec<String> - Label values for the metric (e.g., ["endpoint", "/api/users"])
+/// - `1`: u64 - Count of observations
+/// - `2`: f64 - Sum of observations
+/// - `3`: Option<f64> - p50 (50th percentile value)
+/// - `4`: Option<f64> - p95 (95th percentile value)
+/// - `5`: Option<f64> - p99 (99th percentile value)
+///
+/// Percentiles are Option<T> because they may not be calculable if there
+/// are insufficient observations in the bucket.
 type SnapshotRowWithPercentiles = (Vec<String>, u64, f64, Option<f64>, Option<f64>, Option<f64>);
 
 // ---------------------------------------------------------------------------
