@@ -466,7 +466,7 @@
 //! ## 2. Flag Extraction Verification
 //!
 //! We verify that the flag is correctly extracted from the parsed arguments and
-//! That the boolean value is consistent regardless of position.
+//! that the boolean value is consistent regardless of position.
 //!
 //! ## 3. Prompt Suppression Testing
 //!
