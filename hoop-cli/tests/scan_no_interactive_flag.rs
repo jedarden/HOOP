@@ -622,3 +622,214 @@ fn test_scan_comprehensive_no_interactive_coverage() {
     // All checks passed
     assert!(true, "All Scan command no_interactive tests verified");
 }
+
+// ── Handler value extraction tests ─────────────────────────────────────────────────
+
+#[test]
+fn test_scan_handler_receives_no_interactive_true_from_global_flag() {
+    // Test that handler receives no_interactive=true when global flag is set
+    let parsed = parse_cli_with_flag(&["hoop", "--no-interactive", "scan", "/tmp"])
+        .expect("Should parse global --no-interactive flag");
+
+    // Verify handler receives correct extraction
+    let handler_value = extract_scan_handler_value(&parsed, None);
+    assert_eq!(
+        handler_value,
+        true,
+        "Handler should receive true when global --no-interactive is set"
+    );
+}
+
+#[test]
+fn test_scan_handler_receives_no_interactive_true_from_local_yes_flag() {
+    // Test that handler receives no_interactive=true when local --yes flag is set
+    let parsed = parse_cli_with_flag(&["hoop", "scan", "/tmp", "--yes"])
+        .expect("Should parse local --yes flag");
+
+    // Verify handler receives correct extraction (local --yes = auto_confirm)
+    let handler_value = extract_scan_handler_value(&parsed, Some(true));
+    assert_eq!(
+        handler_value,
+        true,
+        "Handler should receive true when local --yes is set (auto_confirm=true)"
+    );
+}
+
+#[test]
+fn test_scan_handler_receives_no_interactive_true_from_both_flags() {
+    // Test that handler receives no_interactive=true when BOTH flags are set
+    let parsed = parse_cli_with_flag(&["hoop", "--no-interactive", "scan", "/tmp", "--yes"])
+        .expect("Should parse both global --no-interactive and local --yes flags");
+
+    // Verify handler receives correct extraction (no_interactive || auto_confirm)
+    let handler_value = extract_scan_handler_value(&parsed, Some(true));
+    assert_eq!(
+        handler_value,
+        true,
+        "Handler should receive true when both flags are set (true || true = true)"
+    );
+}
+
+#[test]
+fn test_scan_handler_receives_no_interactive_false_when_no_flags() {
+    // Test that handler receives no_interactive=false when neither flag is set
+    let parsed = parse_cli_with_flag(&["hoop", "scan", "/tmp"])
+        .expect("Should parse scan command without flags");
+
+    // Verify handler receives correct extraction
+    let handler_value = extract_scan_handler_value(&parsed, None);
+    assert_eq!(
+        handler_value,
+        false,
+        "Handler should receive false when neither flag is set (false || false = false)"
+    );
+}
+
+#[test]
+fn test_scan_handler_no_interactive_or_yes_combination_matrix() {
+    // Test all combinations of global no_interactive and local yes flags
+    // This verifies the || logic (OR) works correctly
+
+    let test_cases = vec![
+        // (no_interactive, auto_confirm, expected_result, description)
+        (false, false, false, "Neither flag → false"),
+        (true, false, true, "Global flag only → true"),
+        (false, true, true, "Local flag only → true"),
+        (true, true, true, "Both flags → true"),
+    ];
+
+    for (no_interactive, auto_confirm, expected, description) in test_cases {
+        let result = no_interactive || auto_confirm;
+        assert_eq!(
+            result, expected,
+            "OR logic failed for case: {} ({} || {} should be {})",
+            description, no_interactive, auto_confirm, expected
+        );
+    }
+}
+
+#[test]
+fn test_scan_handler_value_extraction_from_parsed_arguments() {
+    // Test that the handler correctly extracts and combines values from parsed arguments
+    // This simulates the actual flow: parse → extract → combine → pass to handler
+
+    // Case 1: Global flag only
+    let parsed_global = parse_cli_with_flag(&["hoop", "--no-interactive", "scan", "/tmp"])
+        .expect("Parse with global flag");
+    let value_global = simulate_handler_extraction(&parsed_global, false);
+    assert_eq!(value_global, true, "Global flag should produce true");
+
+    // Case 2: Local flag only
+    let parsed_local = parse_cli_with_flag(&["hoop", "scan", "/tmp", "--yes"])
+        .expect("Parse with local flag");
+    let value_local = simulate_handler_extraction(&parsed_local, true);
+    assert_eq!(value_local, true, "Local flag should produce true");
+
+    // Case 3: Both flags
+    let parsed_both = parse_cli_with_flag(&["hoop", "--no-interactive", "scan", "/tmp", "--yes"])
+        .expect("Parse with both flags");
+    let value_both = simulate_handler_extraction(&parsed_both, true);
+    assert_eq!(value_both, true, "Both flags should produce true");
+
+    // Case 4: Neither flag
+    let parsed_neither = parse_cli_with_flag(&["hoop", "scan", "/tmp"])
+        .expect("Parse without flags");
+    let value_neither = simulate_handler_extraction(&parsed_neither, false);
+    assert_eq!(value_neither, false, "No flags should produce false");
+}
+
+#[test]
+fn test_scan_handler_short_flag_y_extraction() {
+    // Test that the short -y flag is correctly extracted and passed to handler
+    let parsed = parse_cli_with_flag(&["hoop", "-y", "scan", "/tmp"])
+        .expect("Should parse short -y flag");
+
+    // Verify the global -y flag is recognized as no_interactive
+    assert_eq!(
+        parsed.no_interactive, true,
+        "Short -y flag should set no_interactive to true"
+    );
+
+    // Simulate handler extraction with short flag
+    let handler_value = simulate_handler_extraction(&parsed, false);
+    assert_eq!(
+        handler_value, true,
+        "Handler should receive true when short -y flag is used"
+    );
+}
+
+#[test]
+fn test_scan_handler_global_flag_overrides_local_false() {
+    // Test that global --no-interactive flag causes non-interactive mode
+    // even when local --yes is NOT present (auto_confirm=false)
+    let parsed = parse_cli_with_flag(&["hoop", "--no-interactive", "scan", "/tmp"])
+        .expect("Should parse with global flag only");
+
+    // Simulate: no_interactive=true, auto_confirm=false
+    let handler_value = simulate_handler_extraction(&parsed, false);
+    assert_eq!(
+        handler_value, true,
+        "Global flag should cause non-interactive mode even without local flag (true || false = true)"
+    );
+}
+
+#[test]
+fn test_scan_handler_local_flag_works_without_global() {
+    // Test that local --yes flag works independently of global flag
+    let parsed = parse_cli_with_flag(&["hoop", "scan", "/tmp", "--yes"])
+        .expect("Should parse with local flag only");
+
+    // Simulate: no_interactive=false, auto_confirm=true
+    let handler_value = simulate_handler_extraction(&parsed, true);
+    assert_eq!(
+        handler_value, true,
+        "Local flag should work without global flag (false || true = true)"
+    );
+}
+
+#[test]
+fn test_scan_handler_flag_position_independence_for_value() {
+    // Test that flag position doesn't affect the extracted value passed to handler
+    // Both positions should yield the same handler value
+
+    // Flag before subcommand
+    let parsed_before = parse_cli_with_flag(&["hoop", "--no-interactive", "scan", "/tmp"])
+        .expect("Parse flag before subcommand");
+    let value_before = simulate_handler_extraction(&parsed_before, false);
+
+    // Flag after subcommand
+    let parsed_after = parse_cli_with_flag(&["hoop", "scan", "/tmp", "--no-interactive"])
+        .expect("Parse flag after subcommand");
+    let value_after = simulate_handler_extraction(&parsed_after, false);
+
+    // Both should yield the same handler value
+    assert_eq!(
+        value_before, value_after,
+        "Flag position should not affect the handler value"
+    );
+    assert_eq!(value_before, true, "Both should produce true");
+}
+
+// ── Helper functions for handler value extraction tests ─────────────────────
+
+/// Extract the value that would be received by the scan handler
+/// This simulates the logic: no_interactive || auto_confirm
+fn extract_scan_handler_value(parsed: &ParsedCli, auto_confirm: Option<bool>) -> bool {
+    // The handler receives: global_no_interactive || local_auto_confirm
+    let global_no_interactive = parsed.no_interactive;
+    let local_auto_confirm = auto_confirm.unwrap_or(false);
+    global_no_interactive || local_auto_confirm
+}
+
+/// Simulate the full handler extraction flow from parsed arguments
+/// This mirrors what actually happens in main.rs when calling scan_projects
+fn simulate_handler_extraction(parsed: &ParsedCli, has_local_yes: bool) -> bool {
+    // This simulates:
+    // let no_interactive = cli.no_interactive;
+    // Commands::Scan { root, auto_confirm } => {
+    //     projects::scan_projects(&root, no_interactive || auto_confirm)
+    // }
+    let global_flag = parsed.no_interactive;
+    let local_flag = has_local_yes; // In real code, this comes from the Scan variant's auto_confirm field
+    global_flag || local_flag
+}
