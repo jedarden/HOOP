@@ -1,0 +1,174 @@
+HOOP development environment loaded
+Rust version: rustc 1.97.1 (8bab26f4f 2026-07-14) (built from a source tarball)
+Node version: v22.23.2
+pnpm version: 11.20.0
+warning: unused import: `utoipa::ToSchema`
+  --> hoop-daemon/src/api_transcription.rs:18:5
+   |
+18 | use utoipa::ToSchema;
+   |     ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: type `QueryExpr` is more private than the item `parse_query`
+  --> hoop-daemon/src/pattern_query_evaluator.rs:88:1
+   |
+88 | pub(crate) fn parse_query(query: &str) -> Result<QueryExpr> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ function `parse_query` is reachable at visibility `pub(crate)`
+   |
+note: but type `QueryExpr` is only usable at visibility `pub(self)`
+  --> hoop-daemon/src/pattern_query_evaluator.rs:70:1
+   |
+70 | enum QueryExpr {
+   | ^^^^^^^^^^^^^^
+   = note: `#[warn(private_interfaces)]` on by default
+
+warning: type `QueryExpr` is more private than the item `evaluate_query`
+   --> hoop-daemon/src/pattern_query_evaluator.rs:258:1
+    |
+258 | pub(crate) fn evaluate_query(expr: &QueryExpr, ctx: &StitchContext) -> Result<bool> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ function `evaluate_query` is reachable at visibility `pub(crate)`
+    |
+note: but type `QueryExpr` is only usable at visibility `pub(self)`
+   --> hoop-daemon/src/pattern_query_evaluator.rs:70:1
+    |
+ 70 | enum QueryExpr {
+    | ^^^^^^^^^^^^^^
+
+warning: type `PatternCategory` is more private than the item `DetectedPattern::category`
+  --> hoop-daemon/src/reflection_detector.rs:88:5
+   |
+88 |     pub category: PatternCategory,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ field `DetectedPattern::category` is reachable at visibility `pub`
+   |
+note: but type `PatternCategory` is only usable at visibility `pub(self)`
+  --> hoop-daemon/src/reflection_detector.rs:60:1
+   |
+60 | enum PatternCategory {
+   | ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `openapi_router` is never used
+    --> hoop-daemon/src/lib.rs:1307:4
+     |
+1307 | fn openapi_router() -> Router<DaemonState> {
+     |    ^^^^^^^^^^^^^^
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `load_hoop_config` is never used
+    --> hoop-daemon/src/lib.rs:3826:10
+     |
+3826 | async fn load_hoop_config() -> Option<hoop_schema::HoopConfig> {
+     |          ^^^^^^^^^^^^^^^^
+
+warning: function `check_and_emit_capacity_alert` is never used
+    --> hoop-daemon/src/lib.rs:4093:4
+     |
+4093 | fn check_and_emit_capacity_alert() -> anyhow::Result<()> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: field `session_id` is never read
+   --> hoop-daemon/src/capacity.rs:358:5
+    |
+355 | struct ParsedPrompt {
+    |        ------------ field in this struct
+...
+358 |     session_id: String,
+    |     ^^^^^^^^^^
+    |
+    = note: `ParsedPrompt` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: function `get_opencode_limits` is never used
+   --> hoop-daemon/src/capacity.rs:472:4
+    |
+472 | fn get_opencode_limits() -> OpenCodePromptLimits {
+    |    ^^^^^^^^^^^^^^^^^^^
+
+warning: field `session_subpath` is never read
+   --> hoop-daemon/src/capacity.rs:526:5
+    |
+522 | struct GeminiAccountPaths {
+    |        ------------------ field in this struct
+...
+526 |     session_subpath: String,
+    |     ^^^^^^^^^^^^^^^
+    |
+    = note: `GeminiAccountPaths` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: field `rpm_limit` is never read
+  --> hoop-daemon/src/capacity.rs:55:13
+   |
+51 |     pub struct GeminiQuotaLimits {
+   |                ----------------- field in this struct
+...
+55 |         pub rpm_limit: Option<u64>,
+   |             ^^^^^^^^^
+   |
+   = note: `GeminiQuotaLimits` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: struct `QuotaLimit` is never constructed
+  --> hoop-daemon/src/capacity.rs:60:12
+   |
+60 |     struct QuotaLimit {
+   |            ^^^^^^^^^^
+
+warning: field `subpath` is never read
+   --> hoop-daemon/src/sessions.rs:557:5
+    |
+555 | pub struct GeminiSessionPath {
+    |            ----------------- field in this struct
+556 |     /// Subpath to sessions (e.g., "tmp" or "sessions")
+557 |     subpath: String,
+    |     ^^^^^^^
+    |
+    = note: `GeminiSessionPath` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: constant `MAX_UNASSIGNED_SESSIONS` is never used
+   --> hoop-daemon/src/sessions.rs:763:7
+    |
+763 | const MAX_UNASSIGNED_SESSIONS: usize = 100;
+    |       ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `STITCH_CLOSED_THRESHOLD_SECONDS` is never used
+  --> hoop-daemon/src/stitch_percentile_index.rs:72:7
+   |
+72 | const STITCH_CLOSED_THRESHOLD_SECONDS: i64 = 300;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `hoop-daemon` (lib) generated 15 warnings (run `cargo fix --lib -p hoop-daemon` to apply 1 suggestion)
+   Compiling hoop-daemon v0.1.0 (/home/coding/HOOP/hoop-daemon)
+error[E0603]: enum `MonitorEvent` is private
+  --> hoop-daemon/tests/supervisor_restart.rs:51:78
+   |
+51 |     let (monitor_tx, _) = tokio::sync::broadcast::channel::<hoop_daemon::ws::MonitorEvent>(64);
+   |                                                                              ^^^^^^^^^^^^ private enum
+   |
+note: the enum `MonitorEvent` is defined here
+  --> hoop-daemon/src/ws.rs:6:25
+   |
+ 6 | use crate::heartbeats::{MonitorEvent, WorkerHeartbeat, WorkerLiveness};
+   |                         ^^^^^^^^^^^^
+help: import `MonitorEvent` directly
+   |
+51 -     let (monitor_tx, _) = tokio::sync::broadcast::channel::<hoop_daemon::ws::MonitorEvent>(64);
+51 +     let (monitor_tx, _) = tokio::sync::broadcast::channel::<hoop_daemon::heartbeats::MonitorEvent>(64);
+   |
+
+warning: unused import: `hoop_daemon::projects::ProjectsConfig`
+  --> hoop-daemon/tests/supervisor_restart.rs:17:5
+   |
+17 | use hoop_daemon::projects::ProjectsConfig;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `ProjectsRegistry`
+  --> hoop-daemon/tests/supervisor_restart.rs:22:19
+   |
+22 | use hoop_schema::{ProjectsRegistry, ProjectsRegistryProjectsItem};
+   |                   ^^^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0603`.
+warning: `hoop-daemon` (test "supervisor_restart") generated 2 warnings
+error: could not compile `hoop-daemon` (test "supervisor_restart") due to 1 previous error; 2 warnings emitted
+warning: build failed, waiting for other jobs to finish...
