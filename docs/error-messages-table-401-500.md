@@ -9,9 +9,12 @@
 
 | Line | Error Message | Category | Notes |
 |------|---------------|----------|-------|
+| 402 | `assert_eq!(before.no_interactive, after.no_interactive);` | other | Assert statement in doc comment example |
 | 403 | `assert_eq!(before.subcommand, after.subcommand);` | other | Assert statement in doc comment example |
 | 410 | `assert!(verify_flag_position_consistency(&["scan", "/tmp"]).is_ok());` | other | Assert statement in doc comment example |
+| 436 | `assert_eq!(before.no_interactive, true);` | other | Assert statement in doc comment example |
 | 437 | `assert_eq!(before.subcommand, Some("scan".to_string()));` | other | Assert statement in doc comment example |
+| 441 | `assert_eq!(after.no_interactive, true);` | other | Assert statement in doc comment example |
 | 442 | `assert_eq!(after.subcommand, Some("scan".to_string()));` | other | Assert statement in doc comment example |
 | 445 | `assert!(verify_flag_position_consistency(&["scan", "/tmp"]).is_ok());` | other | Assert statement in doc comment example |
 
@@ -19,15 +22,16 @@
 
 | Category | Count | Percentage |
 |----------|-------|------------|
-| other | 5 | 100% |
-| **Total** | **5** | **100%** |
+| other | 8 | 100% |
+| **Total** | **8** | **100%** |
 
 ## Key Findings
 
 - **Lines 401-500 contain only documentation** (`//!` doc comments)
 - **No runtime error messages** exist in this range
 - All extracted messages are **code examples** showing test utility usage
-- These are **assert statements** embedded in documentation, not actual error handling
+- These are **8 assert statements** embedded in documentation, not actual error handling
+- Captures all `assert_eq!` and `assert!` examples in the documentation for flag position consistency utilities
 
 ## Cross-Reference
 
