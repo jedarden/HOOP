@@ -36,7 +36,7 @@ pub struct Cli {
 /// Available CLI commands
 ///
 /// Each variant represents a top-level command in the HOOP CLI.
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
     /// Run the daemon (web UI + WS + REST)
     Serve {
@@ -143,7 +143,7 @@ pub enum Commands {
 }
 
 /// Projects subcommands
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum ProjectsCommands {
     /// Add a project to the registry
     Add {
@@ -184,7 +184,7 @@ pub enum ProjectsCommands {
 }
 
 /// Audit subcommands
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum AuditCommands {
     /// Startup binary/env audit
     Check {
@@ -210,10 +210,110 @@ pub enum AuditCommands {
 mod tests {
     use super::*;
 
+    // ── Test Helper Functions ─────────────────────────────────────────────────────
+
     /// Helper function to parse CLI arguments and extract the parsed Cli struct
+    ///
+    /// This is the foundational helper for all clap parser tests. It wraps
+    /// `Cli::try_parse_from` and returns a `Result` type that can be used with
+    /// `expect()` for successful parses or `assert!(result.is_err())` for failures.
+    ///
+    /// # Usage
+    ///
+    /// ```rust
+    /// let cli = parse_args(&["hoop", "init"]).expect("should parse successfully");
+    /// assert!(cli.command.is_init());
+    /// ```
     fn parse_args(args: &[&str]) -> Result<Cli, clap::Error> {
         Cli::try_parse_from(args)
     }
+
+    /// Helper function to build Init command arguments with optional flags
+    ///
+    /// Constructs a vector of command-line arguments for the Init command,
+    /// optionally including the `--no-interactive` flag. This helper reduces
+    /// boilerplate when testing multiple flag configurations.
+    ///
+    /// # Arguments
+    ///
+    /// * `no_interactive` - If true, includes `--no-interactive` flag
+    ///
+    /// # Returns
+    ///
+    /// A vector of string slices representing the full command line
+    ///
+    /// # Usage
+    ///
+    /// ```rust
+    /// let args = build_init_args(true);
+    /// assert_eq!(args, vec!["hoop", "--no-interactive", "init"]);
+    /// ```
+    fn build_init_args(no_interactive: bool) -> Vec<&'static str> {
+        let mut args = vec!["hoop"];
+        if no_interactive {
+            args.push("--no-interactive");
+        }
+        args.push("init");
+        args
+    }
+
+    /// Helper function to parse Init command and extract both flag and command
+    ///
+    /// Provides a convenient way to get both the `no_interactive` flag value
+    /// and the parsed `Commands` enum in a single call. This is useful for
+    /// tests that need to verify both the flag value and the command variant.
+    ///
+    /// # Arguments
+    ///
+    /// * `args` - Slice of command-line arguments (should start with "hoop")
+    ///
+    /// # Returns
+    ///
+    /// `Result<(bool, Commands), clap::Error>` - Tuple of (no_interactive flag, command)
+    ///
+    /// # Usage
+    ///
+    /// ```rust
+    /// let (no_interactive, command) = parse_init_command(&["hoop", "--no-interactive", "init"])
+    ///     .expect("should parse successfully");
+    /// assert_eq!(no_interactive, true);
+    /// assert!(matches!(command, Commands::Init));
+    /// ```
+    fn parse_init_command(args: &[&str]) -> Result<(bool, Commands), clap::Error> {
+        let cli = Cli::try_parse_from(args)?;
+        Ok((cli.no_interactive, cli.command))
+    }
+
+    /// Helper function to build generic command arguments with optional no_interactive flag
+    ///
+    /// A more flexible version of `build_init_args` that works with any command.
+    /// Use this when testing commands other than Init.
+    ///
+    /// # Arguments
+    ///
+    /// * `command` - The command string (e.g., "init", "remove", "scan")
+    /// * `no_interactive` - If true, includes `--no-interactive` flag
+    ///
+    /// # Returns
+    ///
+    /// A vector of string slices representing the full command line
+    ///
+    /// # Usage
+    ///
+    /// ```rust
+    /// let args = build_command_args("scan", true);
+    /// assert_eq!(args, vec!["hoop", "--no-interactive", "scan"]);
+    /// ```
+    fn build_command_args(command: &'static str, no_interactive: bool) -> Vec<&'static str> {
+        let mut args = vec!["hoop"];
+        if no_interactive {
+            args.push("--no-interactive");
+        }
+        args.push(command);
+        args
+    }
+
+    // ── Top-level Remove command tests ───────────────────────────────────────
 
     // ── Top-level Remove command tests ───────────────────────────────────────
 
@@ -756,5 +856,189 @@ mod tests {
             }
             _ => panic!("expected Restore command"),
         }
+    }
+
+    // ── Init command tests ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_init_no_interactive_flag_before_command() {
+        let args = ["hoop", "--no-interactive", "init"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears before init");
+
+        match cli.command {
+            Commands::Init => {
+                // Success - command parsed correctly
+            }
+            _ => panic!("expected Init command, got {:?}", cli.command),
+        }
+    }
+
+    #[test]
+    fn test_init_no_interactive_flag_after_command() {
+        let args = ["hoop", "init", "--no-interactive"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears after init");
+
+        match cli.command {
+            Commands::Init => {
+                // Success - command parsed correctly
+            }
+            _ => panic!("expected Init command, got {:?}", cli.command),
+        }
+    }
+
+    #[test]
+    fn test_init_short_flag_y_before_command() {
+        let args = ["hoop", "-y", "init"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y short flag");
+
+        match cli.command {
+            Commands::Init => {
+                // Success - command parsed correctly
+            }
+            _ => panic!("expected Init command"),
+        }
+    }
+
+    #[test]
+    fn test_init_short_flag_y_after_command() {
+        let args = ["hoop", "init", "-y"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y short flag after init");
+
+        match cli.command {
+            Commands::Init => {
+                // Success - command parsed correctly
+            }
+            _ => panic!("expected Init command"),
+        }
+    }
+
+    #[test]
+    fn test_init_without_no_interactive_flag_is_false() {
+        let args = ["hoop", "init"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, false, "no_interactive should be false when flag is not provided");
+
+        match cli.command {
+            Commands::Init => {
+                // Success - command parsed correctly
+            }
+            _ => panic!("expected Init command"),
+        }
+    }
+
+    #[test]
+    fn test_init_no_interactive_flag_extraction_consistency() {
+        // Test that flag parsing is consistent regardless of position
+        let args_before = ["hoop", "--no-interactive", "init"];
+        let args_after = ["hoop", "init", "--no-interactive"];
+
+        let cli_before = parse_args(&args_before).expect("should parse successfully");
+        let cli_after = parse_args(&args_after).expect("should parse successfully");
+
+        assert_eq!(cli_before.no_interactive, cli_after.no_interactive,
+                   "no_interactive value must be consistent regardless of flag position");
+        assert_eq!(cli_before.no_interactive, true, "no_interactive should be true");
+    }
+
+    #[test]
+    fn test_init_command_parsing_with_invalid_flag() {
+        let args = ["hoop", "--no-interactive", "init", "--invalid-flag"];
+        let result = parse_args(&args);
+        assert!(result.is_err(), "should fail with invalid flag");
+    }
+
+    #[test]
+    fn test_init_command_flag_order_independence() {
+        // Test different flag orderings
+        let test_cases = vec![
+            ["hoop", "--no-interactive", "init"],
+            ["hoop", "-y", "init"],
+        ];
+
+        for args in test_cases {
+            let cli = parse_args(&args).expect("should parse successfully with any flag ordering");
+            assert_eq!(cli.no_interactive, true, "no_interactive should be true regardless of flag order");
+
+            match cli.command {
+                Commands::Init => {
+                    // Success
+                }
+                _ => panic!("expected Init command"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_init_default_no_interactive_value() {
+        let args = ["hoop", "init"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, false, "no_interactive should default to false");
+    }
+
+    #[test]
+    fn test_init_command_takes_no_arguments() {
+        let args = ["hoop", "init", "extra-argument"];
+        let result = parse_args(&args);
+        assert!(result.is_err(), "should fail when extra arguments are provided");
+    }
+
+    // ── Helper function tests for Init command parsing ─────────────────────────
+
+    /// Test helper function to verify Init command parsing
+    #[test]
+    fn test_parse_init_command_helper() {
+        /// Helper function to parse Init command and extract both flag and command
+        fn parse_init_command(args: &[&str]) -> Result<(bool, Commands), clap::Error> {
+            let cli = Cli::try_parse_from(args)?;
+            Ok((cli.no_interactive, cli.command))
+        }
+
+        // Test 1: Flag before command
+        let (no_interactive, command) = parse_init_command(&["hoop", "--no-interactive", "init"])
+            .expect("should parse successfully");
+        assert_eq!(no_interactive, true);
+        assert!(matches!(command, Commands::Init));
+
+        // Test 2: Flag after command
+        let (no_interactive, command) = parse_init_command(&["hoop", "init", "--no-interactive"])
+            .expect("should parse successfully");
+        assert_eq!(no_interactive, true);
+        assert!(matches!(command, Commands::Init));
+
+        // Test 3: No flag
+        let (no_interactive, command) = parse_init_command(&["hoop", "init"])
+            .expect("should parse successfully");
+        assert_eq!(no_interactive, false);
+        assert!(matches!(command, Commands::Init));
+    }
+
+    /// Test helper function for building test arguments
+    #[test]
+    fn test_build_init_args_helper() {
+        /// Helper function to build Init command arguments with optional flags
+        fn build_init_args(no_interactive: bool) -> Vec<&'static str> {
+            let mut args = vec!["hoop"];
+            if no_interactive {
+                args.push("--no-interactive");
+            }
+            args.push("init");
+            args
+        }
+
+        // Test with no_interactive=true
+        let args_with_flag = build_init_args(true);
+        let cli = parse_args(&args_with_flag).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true);
+        assert!(matches!(cli.command, Commands::Init));
+
+        // Test with no_interactive=false
+        let args_without_flag = build_init_args(false);
+        let cli = parse_args(&args_without_flag).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, false);
+        assert!(matches!(cli.command, Commands::Init));
     }
 }
