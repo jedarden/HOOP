@@ -4608,7 +4608,7 @@ pub fn archive_session_as_stitch(
     let title = format!(
         "Agent session {} ({})",
         session_row.adapter,
-        &session_row.created_at[..19].replace('T', " "),
+        session_row.created_at[..19].replace('T', " "),
     );
 
     conn.execute(
