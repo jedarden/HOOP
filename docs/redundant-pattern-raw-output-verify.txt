@@ -1,5 +1,6 @@
     Blocking waiting for file lock on package cache
-    Blocking waiting for file lock on build directory
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
 warning: type `pattern_query_evaluator::QueryExpr` is more private than the item `pattern_query_evaluator::parse_query`
   --> hoop-daemon/src/pattern_query_evaluator.rs:88:1
    |
@@ -894,4 +895,4 @@ warning: structure field `DNSName` should have a snake case name
    = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
 
 warning: `hoop` (bin "hoop") generated 7 warnings (run `cargo clippy --fix --bin "hoop" -p hoop -- ` to apply 2 suggestions)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.65s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.20s
