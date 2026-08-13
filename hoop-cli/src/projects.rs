@@ -803,6 +803,9 @@ mod tests {
     use super::*;
     use serial_test::serial;
 
+    // Import CLI structure for flag extraction tests
+    use crate::cli::{Cli, Commands};
+
     fn make_entry(name: &str, path: PathBuf) -> ProjectEntry {
         ProjectEntry {
             name: name.to_string(),
@@ -1814,5 +1817,154 @@ workspaces:
         assert!(project_names.contains("existing-project"), "Existing project should remain");
         assert!(project_names.contains("new-project-a"), "New project-a should be registered");
         assert!(project_names.contains("new-project-b"), "New project-b should be registered");
+    }
+
+    // ── Handler Flag Extraction Tests ─────────────────────────────────────────────
+    //
+    // This section provides a test scaffold for verifying that handler functions
+    // correctly extract and use the no_interactive flag value.
+    //
+    // Test Infrastructure:
+    // - Uses Cli and Commands parsing from the main CLI structure
+    // - Builds on test helpers from child 1 (cli_test_helpers)
+    // - Provides test function signatures for flag extraction verification
+    //
+    // These tests verify that handler functions receive the correct boolean value
+    // for the no_interactive flag and that the flag value is used correctly in
+    // conditional logic within the handlers.
+    //
+    // Test Coverage Areas:
+    // 1. Flag value extraction from parsed CLI structures
+    // 2. Boolean value retrieval (true when flag present, false when absent)
+    // 3. Handler logic verification for correct flag usage
+    // 4. Integration flow: CLI parse → flag extract → handler receive
+    //
+    // See Also: init_handler_flag_extraction.rs for comprehensive Init command tests
+
+    // ── Scaffold: Basic Flag Extraction Test ───────────────────────────────────────
+
+    #[test]
+    fn test_projects_remove_flag_extraction_present() {
+        // Test scaffold for verifying no_interactive flag extraction in remove_project handler
+        //
+        // This test verifies that when the --no-interactive flag is present,
+        // the remove_project handler correctly extracts and receives the flag value.
+        //
+        // Test Setup:
+        // - Parse CLI arguments with --no-interactive flag
+        // - Extract the Commands::Projects Remove variant
+        // - Verify flag value is correctly passed to handler
+        //
+        // Expected Behavior:
+        // - Flag value should be true when --no-interactive is present
+        // - Handler should receive the correct boolean value
+        //
+        // Implementation: To be completed in subsequent beads
+
+        // TODO: Implement flag extraction test for remove_project
+        // 1. Parse CLI with --no-interactive projects remove <name>
+        // 2. Extract Commands::Projects(Remove { no_interactive, ... })
+        // 3. Assert flag value is true
+    }
+
+    #[test]
+    fn test_projects_remove_flag_extraction_absent() {
+        // Test scaffold for verifying default flag behavior in remove_project handler
+        //
+        // This test verifies that when the --no-interactive flag is absent,
+        // the remove_project handler correctly defaults to false.
+        //
+        // Expected Behavior:
+        // - Flag value should default to false when not specified
+        // - Handler should receive false as the flag value
+        //
+        // Implementation: To be completed in subsequent beads
+
+        // TODO: Implement default flag value test for remove_project
+        // 1. Parse CLI with projects remove <name> (no flag)
+        // 2. Extract Commands::Projects(Remove { no_interactive, ... })
+        // 3. Assert flag value is false
+    }
+
+    #[test]
+    fn test_projects_scan_flag_extraction_present() {
+        // Test scaffold for verifying no_interactive flag extraction in scan_projects handler
+        //
+        // This test verifies that when the --no-interactive flag is present,
+        // the scan_projects handler correctly extracts and receives the flag value.
+        //
+        // Expected Behavior:
+        // - Flag value should be true when --no-interactive is present
+        // - Handler should suppress all user prompts when flag is true
+        //
+        // Implementation: To be completed in subsequent beads
+
+        // TODO: Implement flag extraction test for scan_projects
+        // 1. Parse CLI with --no-interactive projects scan <path>
+        // 2. Extract Commands::Projects(Scan { no_interactive, path })
+        // 3. Assert flag value is true
+    }
+
+    #[test]
+    fn test_projects_scan_flag_extraction_absent() {
+        // Test scaffold for verifying default flag behavior in scan_projects handler
+        //
+        // This test verifies that when the --no-interactive flag is absent,
+        // the scan_projects handler correctly defaults to false.
+        //
+        // Expected Behavior:
+        // - Flag value should default to false when not specified
+        // - Handler should show user prompts when flag is false
+        //
+        // Implementation: To be completed in subsequent beads
+
+        // TODO: Implement default flag value test for scan_projects
+        // 1. Parse CLI with projects scan <path> (no flag)
+        // 2. Extract Commands::Projects(Scan { no_interactive, path })
+        // 3. Assert flag value is false
+    }
+
+    // ── Scaffold: Handler Integration Tests ────────────────────────────────────────
+
+    #[test]
+    fn test_projects_remove_handler_receives_flag() {
+        // Integration test scaffold for handler flag reception
+        //
+        // This test verifies the complete flow:
+        // CLI parse → flag extract → Commands::Projects → handler receives flag
+        //
+        // Implementation: To be completed in subsequent beads
+
+        // TODO: Implement integration test for remove_project handler flow
+    }
+
+    #[test]
+    fn test_projects_scan_handler_receives_flag() {
+        // Integration test scaffold for handler flag reception
+        //
+        // This test verifies the complete flow:
+        // CLI parse → flag extract → Commands::Projects → handler receives flag
+        //
+        // Implementation: To be completed in subsequent beads
+
+        // TODO: Implement integration test for scan_projects handler flow
+    }
+
+    // ── Scaffold: Flag Propagation Verification ────────────────────────────────────
+
+    #[test]
+    fn test_projects_flag_propagation_from_cli_to_handler() {
+        // Verification test scaffold for flag propagation through the call chain
+        //
+        // This test verifies that the flag value flows correctly:
+        // Cli::try_parse() → cli.no_interactive → Commands::Projects → handler function
+        //
+        // Implementation: To be completed in subsequent beads
+
+        // TODO: Implement flag propagation test
+        // 1. Parse CLI with flag
+        // 2. Verify extraction at Cli level
+        // 3. Verify propagation to Commands::Projects
+        // 4. Verify handler function receives correct value
     }
 }
