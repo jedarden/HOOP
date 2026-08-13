@@ -626,6 +626,37 @@ fn test_commands_init_fixture_with_no_interactive_true() {
 }
 
 #[test]
+fn test_commands_init_fixture_with_no_interactive_false() {
+    // Basic test fixture for Commands::Init with no_interactive=false
+    //
+    // This test demonstrates the basic pattern for creating a Commands::Init
+    // fixture with the no_interactive flag absent (defaults to false).
+    //
+    // Acceptance criteria:
+    // - Creates a Commands::Init fixture with no_interactive=false (or default)
+    // - Extracts the flag value from the parsed command
+    // - Asserts extraction returns false
+    // - Mirrors test structure from test_commands_init_fixture_with_no_interactive_true
+    // - Compiles without errors
+
+    // Parse CLI arguments without --no-interactive flag (default behavior)
+    let args = ["hoop", "init"];
+    let cli = Cli::try_parse_from(args).expect("CLI parsing should succeed");
+
+    // Verify the command is Commands::Init
+    match cli.command {
+        Commands::Init => {
+            // Successfully created Commands::Init fixture
+            // The no_interactive flag defaults to false when not specified
+            let no_interactive = cli.no_interactive;
+            assert_eq!(no_interactive, false,
+                "Commands::Init fixture should have no_interactive=false (default)");
+        }
+        _ => panic!("Expected Commands::Init, got {:?}", cli.command),
+    }
+}
+
+#[test]
 fn test_commands_init_fixture_basic_structure() {
     // Basic fixture test demonstrating Commands::Init structure
     //
