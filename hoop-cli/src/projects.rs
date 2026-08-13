@@ -22,7 +22,19 @@ fn get_actor() -> String {
 
 /// Path to the projects registry file
 fn registry_path() -> Result<PathBuf> {
-    let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    // Respect HOME env var (for tests) before falling back to system home dir
+    // If HOME is set but doesn't exist (e.g., test temp dir was cleaned up), fall back to system home
+    let mut home = if let Ok(home_env) = std::env::var("HOME") {
+        let home_path = PathBuf::from(&home_env);
+        // Only use HOME if the directory actually exists
+        if home_path.exists() {
+            home_path
+        } else {
+            dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
+        }
+    } else {
+        dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
+    };
     home.push(".hoop");
     home.push("projects.yaml");
     Ok(home)
@@ -30,7 +42,19 @@ fn registry_path() -> Result<PathBuf> {
 
 /// Ensure the ~/.hoop directory exists
 fn ensure_hoop_dir() -> Result<PathBuf> {
-    let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    // Respect HOME env var (for tests) before falling back to system home dir
+    // If HOME is set but doesn't exist (e.g., test temp dir was cleaned up), fall back to system home
+    let mut home = if let Ok(home_env) = std::env::var("HOME") {
+        let home_path = PathBuf::from(&home_env);
+        // Only use HOME if the directory actually exists
+        if home_path.exists() {
+            home_path
+        } else {
+            dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
+        }
+    } else {
+        dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
+    };
     home.push(".hoop");
     fs::create_dir_all(&home).context("Failed to create ~/.hoop directory")?;
     Ok(home)
@@ -777,6 +801,7 @@ pub fn scan_projects(root: &str, no_interactive: bool) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
 
     fn make_entry(name: &str, path: PathBuf) -> ProjectEntry {
         ProjectEntry {
@@ -1389,9 +1414,28 @@ workspaces:
         hoop_dir
     }
 
+    /// Set HOME environment variable for testing and return a guard that restores it on drop
+    fn set_test_home(tmp_dir: &tempfile::TempDir) -> impl Drop {
+        let old_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", tmp_dir.path());
+
+        // Return a guard that restores HOME on drop
+        struct HomeGuard(Option<String>);
+        impl Drop for HomeGuard {
+            fn drop(&mut self) {
+                match &self.0 {
+                    Some(old) => std::env::set_var("HOME", old),
+                    None => std::env::remove_var("HOME"),
+                }
+            }
+        }
+        HomeGuard(old_home)
+    }
+
     // ── no_interactive flag tests for remove command ─────────────────────────────
 
     #[test]
+    #[serial]
     fn remove_requires_confirm_flag_in_no_interactive_mode() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let repo = tmp.path().join("test-project");
@@ -1427,6 +1471,7 @@ workspaces:
     }
 
     #[test]
+    #[serial]
     fn remove_auto_confirms_with_no_interactive_and_confirm_flags() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let repo = tmp.path().join("test-project");
@@ -1464,6 +1509,7 @@ workspaces:
     }
 
     #[test]
+    #[serial]
     fn remove_prompts_in_interactive_mode() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let repo = tmp.path().join("test-project");
@@ -1503,6 +1549,7 @@ workspaces:
     }
 
     #[test]
+    #[serial]
     fn remove_nonexistent_project_returns_false() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let hoop_dir = create_test_hoop_dir(&tmp);
@@ -1520,6 +1567,7 @@ workspaces:
     }
 
     #[test]
+    #[serial]
     fn remove_with_no_interactive_true_removal_succeeds() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let repo = tmp.path().join("test-project");
@@ -1555,5 +1603,216 @@ workspaces:
             registry_after.projects.is_empty(),
             "Project should be removed from registry"
         );
+    }
+
+    // ── no_interactive flag tests for scan command ───────────────────────────────
+
+    #[test]
+    #[serial]
+    fn scan_auto_registers_all_with_no_interactive_true() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let _home_guard = set_test_home(&tmp); // Automatically restores HOME on drop
+
+        let hoop_dir = create_test_hoop_dir(&tmp);
+        let registry_path = hoop_dir.join("projects.yaml");
+        fs::write(&registry_path, "projects: []").expect("write empty registry");
+
+        // Create multiple workspaces with .beads directories
+        let repo_a = tmp.path().join("repo-a");
+        let repo_b = tmp.path().join("repo-b");
+        let repo_c = tmp.path().join("repo-c");
+        fs::create_dir_all(repo_a.join(".beads")).expect("mkdir");
+        fs::create_dir_all(repo_b.join(".beads")).expect("mkdir");
+        fs::create_dir_all(repo_c.join(".beads")).expect("mkdir");
+
+        // Test: no_interactive=true should register all discoveries without prompting
+        let result = scan_projects(tmp.path().to_str().unwrap(), true);
+        assert!(result.is_ok(), "scan should succeed with no_interactive=true");
+
+        // Verify all projects were registered
+        let registry = ProjectsRegistry::load().expect("load registry");
+        assert_eq!(registry.projects.len(), 3, "All 3 projects should be registered, found: {}", registry.projects.len());
+
+        // Verify project names
+        let project_names: Vec<&str> = registry.projects.iter().map(|p| p.name.as_str()).collect();
+        assert!(project_names.contains(&"repo-a"), "repo-a should be registered");
+        assert!(project_names.contains(&"repo-b"), "repo-b should be registered");
+        assert!(project_names.contains(&"repo-c"), "repo-c should be registered");
+    }
+
+    #[test]
+    #[serial]
+    fn scan_skips_already_registered_in_no_interactive_mode() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let _home_guard = set_test_home(&tmp); // Automatically restores HOME on drop
+
+        let repo_a = tmp.path().join("repo-a");
+        let repo_b = tmp.path().join("repo-b");
+        fs::create_dir_all(repo_a.join(".beads")).expect("mkdir");
+        fs::create_dir_all(repo_b.join(".beads")).expect("mkdir");
+        let canonical_a = fs::canonicalize(&repo_a).expect("canonicalize");
+
+        // Create a test registry with repo-a already registered
+        let hoop_dir = create_test_hoop_dir(&tmp);
+        let registry_path = hoop_dir.join("projects.yaml");
+        let yaml = format!(
+            "projects:\n  - name: repo-a\n    path: {}\n    canonical_path: {}\n",
+            repo_a.display(),
+            canonical_a.display()
+        );
+        fs::write(&registry_path, yaml).expect("write registry");
+
+        // Test: no_interactive=true should skip already-registered projects
+        let result = scan_projects(tmp.path().to_str().unwrap(), true);
+        assert!(result.is_ok(), "scan should succeed");
+
+        // Verify: repo-a remains, repo-b was added (repo-a was skipped during scan)
+        let registry = ProjectsRegistry::load().expect("load registry");
+        assert_eq!(registry.projects.len(), 2, "Should have original + new project");
+        assert!(registry.projects.iter().any(|p| p.name == "repo-a"), "Original repo-a should remain");
+        assert!(registry.projects.iter().any(|p| p.name == "repo-b"), "New repo-b should be added");
+    }
+
+    #[test]
+    #[serial]
+    fn scan_includes_nested_workspaces_in_no_interactive_mode() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let hoop_dir = create_test_hoop_dir(&tmp);
+        let registry_path = hoop_dir.join("projects.yaml");
+        fs::write(&registry_path, "projects: []").expect("write empty registry");
+
+        // Create nested workspace structure
+        let parent = tmp.path().join("parent");
+        let child = parent.join("child-repo");
+        fs::create_dir_all(child.join(".beads")).expect("mkdir");
+
+        // Set HOME to temp dir for this test
+        std::env::set_var("HOME", tmp.path());
+
+        // Test: no_interactive=true should find and register nested workspaces
+        let result = scan_projects(tmp.path().to_str().unwrap(), true);
+        assert!(result.is_ok(), "scan should succeed with no_interactive=true");
+
+        // Verify nested workspace was registered
+        let registry = ProjectsRegistry::load().expect("load registry");
+        assert_eq!(registry.projects.len(), 1, "Nested workspace should be registered");
+        assert_eq!(registry.projects[0].name, "child-repo", "Nested workspace should have correct name");
+    }
+
+    #[test]
+    #[serial]
+    fn scan_handles_empty_root_in_no_interactive_mode() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let hoop_dir = create_test_hoop_dir(&tmp);
+        let registry_path = hoop_dir.join("projects.yaml");
+        fs::write(&registry_path, "projects: []").expect("write empty registry");
+
+        // Create directories without .beads
+        fs::create_dir_all(tmp.path().join("no-beads-here")).expect("mkdir");
+
+        // Set HOME to temp dir for this test
+        std::env::set_var("HOME", tmp.path());
+
+        // Test: no_interactive=true should handle empty discovery gracefully
+        let result = scan_projects(tmp.path().to_str().unwrap(), true);
+        assert!(result.is_ok(), "scan should succeed even with no discoveries");
+
+        // Verify no projects were registered
+        let registry = ProjectsRegistry::load().expect("load registry");
+        assert!(registry.projects.is_empty(), "No projects should be registered");
+    }
+
+    #[test]
+    #[serial]
+    fn scan_prompts_in_interactive_mode_returns_cancelled() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let hoop_dir = create_test_hoop_dir(&tmp);
+        let registry_path = hoop_dir.join("projects.yaml");
+        fs::write(&registry_path, "projects: []").expect("write empty registry");
+
+        // Create a workspace with .beads directory
+        let repo = tmp.path().join("test-repo");
+        fs::create_dir_all(repo.join(".beads")).expect("mkdir");
+
+        // Set HOME to temp dir for this test
+        std::env::set_var("HOME", tmp.path());
+
+        // Test: no_interactive=false should prompt for each discovery
+        // In the test environment, stdin will read EOF, resulting in empty input
+        // Empty input is not "y" or "yes", so the registration is cancelled for all
+        let result = scan_projects(tmp.path().to_str().unwrap(), false);
+        assert!(result.is_ok(), "scan should succeed even when prompts are cancelled");
+
+        // Verify no projects were registered (user cancelled all prompts)
+        let registry = ProjectsRegistry::load().expect("load registry");
+        assert!(
+            registry.projects.is_empty(),
+            "No projects should be registered when user cancels prompts"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn scan_error_on_nonexistent_root_in_no_interactive_mode() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let hoop_dir = create_test_hoop_dir(&tmp);
+        let registry_path = hoop_dir.join("projects.yaml");
+        fs::write(&registry_path, "projects: []").expect("write empty registry");
+
+        // Set HOME to temp dir for this test
+        std::env::set_var("HOME", tmp.path());
+
+        // Test: no_interactive=true should still error on invalid root path
+        let nonexistent = tmp.path().join("does-not-exist");
+        let result = scan_projects(nonexistent.to_str().unwrap(), true);
+        assert!(result.is_err(), "scan should fail with nonexistent root");
+
+        let err_msg = result.unwrap_err().to_string();
+        assert!(
+            err_msg.contains("does not exist") || err_msg.contains("not a directory"),
+            "Error should mention path does not exist: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn scan_handles_mixed_registered_and_new_in_no_interactive_mode() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let _home_guard = set_test_home(&tmp); // Automatically restores HOME on drop
+
+        let hoop_dir = create_test_hoop_dir(&tmp);
+
+        // Create multiple workspaces
+        let existing = tmp.path().join("existing-project");
+        let new_a = tmp.path().join("new-project-a");
+        let new_b = tmp.path().join("new-project-b");
+        fs::create_dir_all(existing.join(".beads")).expect("mkdir");
+        fs::create_dir_all(new_a.join(".beads")).expect("mkdir");
+        fs::create_dir_all(new_b.join(".beads")).expect("mkdir");
+        let canonical_existing = fs::canonicalize(&existing).expect("canonicalize");
+
+        // Create a registry with one existing project
+        let registry_path = hoop_dir.join("projects.yaml");
+        let yaml = format!(
+            "projects:\n  - name: existing-project\n    path: {}\n    canonical_path: {}\n",
+            existing.display(),
+            canonical_existing.display()
+        );
+        fs::write(&registry_path, yaml).expect("write registry");
+
+        // Test: no_interactive=true should register only new projects
+        let result = scan_projects(tmp.path().to_str().unwrap(), true);
+        assert!(result.is_ok(), "scan should succeed");
+
+        // Verify: original project remains, two new ones added
+        let registry = ProjectsRegistry::load().expect("load registry");
+        assert_eq!(registry.projects.len(), 3, "Should have 3 projects total, found: {}", registry.projects.len());
+
+        let project_names: std::collections::HashSet<String> =
+            registry.projects.iter().map(|p| p.name.clone()).collect();
+        assert!(project_names.contains("existing-project"), "Existing project should remain");
+        assert!(project_names.contains("new-project-a"), "New project-a should be registered");
+        assert!(project_names.contains("new-project-b"), "New project-b should be registered");
     }
 }
