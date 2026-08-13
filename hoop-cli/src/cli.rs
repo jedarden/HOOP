@@ -203,3 +203,558 @@ pub enum AuditCommands {
         json: bool,
     },
 }
+
+// ── Tests for no_interactive flag in Remove command ─────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Helper function to parse CLI arguments and extract the parsed Cli struct
+    fn parse_args(args: &[&str]) -> Result<Cli, clap::Error> {
+        Cli::try_parse_from(args)
+    }
+
+    // ── Top-level Remove command tests ───────────────────────────────────────
+
+    #[test]
+    fn test_remove_no_interactive_flag_before_command() {
+        let args = ["hoop", "--no-interactive", "remove", "my-project", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears before command");
+
+        // Verify the command was parsed correctly
+        match cli.command {
+            Commands::Remove { name, confirm } => {
+                assert_eq!(name, "my-project");
+                assert_eq!(confirm, true);
+            }
+            _ => panic!("expected Remove command"),
+        }
+    }
+
+    #[test]
+    fn test_remove_no_interactive_flag_after_command() {
+        let args = ["hoop", "remove", "my-project", "--no-interactive", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears after command");
+
+        match cli.command {
+            Commands::Remove { name, confirm } => {
+                assert_eq!(name, "my-project");
+                assert_eq!(confirm, true);
+            }
+            _ => panic!("expected Remove command"),
+        }
+    }
+
+    #[test]
+    fn test_remove_short_flag_y_before_command() {
+        let args = ["hoop", "-y", "remove", "my-project", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y short flag");
+
+        match cli.command {
+            Commands::Remove { name, confirm } => {
+                assert_eq!(name, "my-project");
+                assert_eq!(confirm, true);
+            }
+            _ => panic!("expected Remove command"),
+        }
+    }
+
+    #[test]
+    fn test_remove_short_flag_y_after_command() {
+        let args = ["hoop", "remove", "my-project", "-y", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y short flag after command");
+
+        match cli.command {
+            Commands::Remove { name, confirm } => {
+                assert_eq!(name, "my-project");
+                assert_eq!(confirm, true);
+            }
+            _ => panic!("expected Remove command"),
+        }
+    }
+
+    #[test]
+    fn test_remove_without_no_interactive_flag_is_false() {
+        let args = ["hoop", "remove", "my-project", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, false, "no_interactive should be false when flag is not provided");
+
+        match cli.command {
+            Commands::Remove { name, confirm } => {
+                assert_eq!(name, "my-project");
+                assert_eq!(confirm, true);
+            }
+            _ => panic!("expected Remove command"),
+        }
+    }
+
+    #[test]
+    fn test_remove_no_interactive_flag_extraction_consistency() {
+        // Test that flag parsing is consistent regardless of position
+        let args_before = ["hoop", "--no-interactive", "remove", "test-project", "--confirm"];
+        let args_after = ["hoop", "remove", "test-project", "--no-interactive", "--confirm"];
+
+        let cli_before = parse_args(&args_before).expect("should parse successfully");
+        let cli_after = parse_args(&args_after).expect("should parse successfully");
+
+        assert_eq!(cli_before.no_interactive, cli_after.no_interactive,
+                   "no_interactive value must be consistent regardless of flag position");
+        assert_eq!(cli_before.no_interactive, true, "no_interactive should be true");
+    }
+
+    #[test]
+    fn test_remove_command_with_all_flags() {
+        let args = ["hoop", "--no-interactive", "remove", "my-project", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+
+        assert_eq!(cli.no_interactive, true);
+
+        match cli.command {
+            Commands::Remove { name, confirm } => {
+                assert_eq!(name, "my-project");
+                assert_eq!(confirm, true);
+            }
+            _ => panic!("expected Remove command"),
+        }
+    }
+
+    // ── Projects::Remove subcommand tests ──────────────────────────────────────
+
+    #[test]
+    fn test_projects_remove_no_interactive_flag_before_subcommand() {
+        let args = ["hoop", "--no-interactive", "projects", "remove", "my-project", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears before projects subcommand");
+
+        match cli.command {
+            Commands::Projects(ProjectsCommands::Remove { name, confirm }) => {
+                assert_eq!(name, "my-project");
+                assert_eq!(confirm, true);
+            }
+            _ => panic!("expected Projects::Remove command"),
+        }
+    }
+
+    #[test]
+    fn test_projects_remove_no_interactive_flag_after_subcommand() {
+        let args = ["hoop", "projects", "remove", "my-project", "--no-interactive", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears after projects remove subcommand");
+
+        match cli.command {
+            Commands::Projects(ProjectsCommands::Remove { name, confirm }) => {
+                assert_eq!(name, "my-project");
+                assert_eq!(confirm, true);
+            }
+            _ => panic!("expected Projects::Remove command"),
+        }
+    }
+
+    #[test]
+    fn test_projects_remove_short_flag_y_before_subcommand() {
+        let args = ["hoop", "-y", "projects", "remove", "my-project", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y short flag before projects subcommand");
+
+        match cli.command {
+            Commands::Projects(ProjectsCommands::Remove { name, confirm }) => {
+                assert_eq!(name, "my-project");
+                assert_eq!(confirm, true);
+            }
+            _ => panic!("expected Projects::Remove command"),
+        }
+    }
+
+    #[test]
+    fn test_projects_remove_without_no_interactive_flag_is_false() {
+        let args = ["hoop", "projects", "remove", "my-project", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, false, "no_interactive should be false when flag is not provided");
+
+        match cli.command {
+            Commands::Projects(ProjectsCommands::Remove { name, confirm }) => {
+                assert_eq!(name, "my-project");
+                assert_eq!(confirm, true);
+            }
+            _ => panic!("expected Projects::Remove command"),
+        }
+    }
+
+    #[test]
+    fn test_projects_remove_no_interactive_flag_extraction_consistency() {
+        // Test that flag parsing is consistent for projects remove regardless of position
+        let args_before = ["hoop", "--no-interactive", "projects", "remove", "test-project", "--confirm"];
+        let args_after = ["hoop", "projects", "remove", "test-project", "--no-interactive", "--confirm"];
+
+        let cli_before = parse_args(&args_before).expect("should parse successfully");
+        let cli_after = parse_args(&args_after).expect("should parse successfully");
+
+        assert_eq!(cli_before.no_interactive, cli_after.no_interactive,
+                   "no_interactive value must be consistent for projects remove regardless of flag position");
+        assert_eq!(cli_before.no_interactive, true, "no_interactive should be true");
+    }
+
+    #[test]
+    fn test_projects_remove_confirm_flag_extraction() {
+        let args = ["hoop", "--no-interactive", "projects", "remove", "my-project", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+
+        match cli.command {
+            Commands::Projects(ProjectsCommands::Remove { name, confirm }) => {
+                assert_eq!(name, "my-project", "project name should be extracted correctly");
+                assert_eq!(confirm, true, "confirm flag should be extracted correctly");
+            }
+            _ => panic!("expected Projects::Remove command"),
+        }
+    }
+
+    #[test]
+    fn test_projects_remove_without_confirm_flag() {
+        let args = ["hoop", "--no-interactive", "projects", "remove", "my-project"];
+        let cli = parse_args(&args).expect("should parse successfully");
+
+        match cli.command {
+            Commands::Projects(ProjectsCommands::Remove { name, confirm }) => {
+                assert_eq!(name, "my-project", "project name should be extracted correctly");
+                assert_eq!(confirm, false, "confirm flag should be false when not provided");
+            }
+            _ => panic!("expected Projects::Remove command"),
+        }
+    }
+
+    // ── Global flag persistence tests ─────────────────────────────────────────
+
+    #[test]
+    fn test_no_interactive_persists_through_projects_command_chain() {
+        let args = ["hoop", "--no-interactive", "projects", "remove", "test-project", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true,
+                   "global no_interactive flag should persist through the entire command chain");
+    }
+
+    #[test]
+    fn test_global_flag_works_with_nested_subcommands() {
+        let args = ["hoop", "--no-interactive", "projects", "remove", "test-project", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+
+        // Verify the flag is accessible at the top level
+        assert_eq!(cli.no_interactive, true);
+
+        // Verify nested command structure is correct
+        match cli.command {
+            Commands::Projects(ProjectsCommands::Remove { .. }) => {
+                // Success - command parsed correctly
+            }
+            _ => panic!("expected Projects::Remove command"),
+        }
+    }
+
+    // ── Error handling tests ─────────────────────────────────────────────────
+
+    #[test]
+    fn test_remove_command_requires_project_name() {
+        let args = ["hoop", "--no-interactive", "remove"];
+        let result = parse_args(&args);
+        assert!(result.is_err(), "should fail when project name is missing");
+    }
+
+    #[test]
+    fn test_projects_remove_command_requires_project_name() {
+        let args = ["hoop", "--no-interactive", "projects", "remove"];
+        let result = parse_args(&args);
+        assert!(result.is_err(), "should fail when project name is missing for projects remove");
+    }
+
+    #[test]
+    fn test_remove_command_parsing_with_invalid_flag() {
+        let args = ["hoop", "--no-interactive", "remove", "my-project", "--invalid-flag"];
+        let result = parse_args(&args);
+        assert!(result.is_err(), "should fail with invalid flag");
+    }
+
+    // ── Edge cases ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_remove_with_special_characters_in_project_name() {
+        let project_name = "my-project-123";
+        let args = ["hoop", "--no-interactive", "remove", project_name, "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+
+        match cli.command {
+            Commands::Remove { name, .. } => {
+                assert_eq!(name, project_name, "project name with special characters should be parsed correctly");
+            }
+            _ => panic!("expected Remove command"),
+        }
+    }
+
+    #[test]
+    fn test_projects_remove_with_special_characters_in_project_name() {
+        let project_name = "test-project_456";
+        let args = ["hoop", "--no-interactive", "projects", "remove", project_name, "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+
+        match cli.command {
+            Commands::Projects(ProjectsCommands::Remove { name, .. }) => {
+                assert_eq!(name, project_name, "project name with special characters should be parsed correctly for projects remove");
+            }
+            _ => panic!("expected Projects::Remove command"),
+        }
+    }
+
+    #[test]
+    fn test_remove_command_flag_order_independence() {
+        // Test different flag orderings
+        let test_cases = vec![
+            ["hoop", "--no-interactive", "remove", "proj", "--confirm"],
+            ["hoop", "remove", "--no-interactive", "proj", "--confirm"],
+            ["hoop", "remove", "proj", "--no-interactive", "--confirm"],
+            ["hoop", "remove", "proj", "--confirm", "--no-interactive"],
+        ];
+
+        for args in test_cases {
+            let cli = parse_args(&args).expect("should parse successfully with any flag ordering");
+            assert_eq!(cli.no_interactive, true, "no_interactive should be true regardless of flag order");
+
+            match &cli.command {
+                Commands::Remove { name, confirm } => {
+                    assert_eq!(name, "proj");
+                    assert_eq!(*confirm, true);
+                }
+                _ => panic!("expected Remove command"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_projects_remove_command_flag_order_independence() {
+        // Test different flag orderings for projects remove
+        let test_cases = vec![
+            ["hoop", "--no-interactive", "projects", "remove", "proj", "--confirm"],
+            ["hoop", "projects", "--no-interactive", "remove", "proj", "--confirm"],
+            ["hoop", "projects", "remove", "proj", "--no-interactive", "--confirm"],
+            ["hoop", "projects", "remove", "proj", "--confirm", "--no-interactive"],
+        ];
+
+        for args in test_cases {
+            let cli = parse_args(&args).expect("should parse successfully with any flag ordering");
+            assert_eq!(cli.no_interactive, true, "no_interactive should be true regardless of flag order");
+
+            match &cli.command {
+                Commands::Projects(ProjectsCommands::Remove { name, confirm }) => {
+                    assert_eq!(name, "proj");
+                    assert_eq!(*confirm, true);
+                }
+                _ => panic!("expected Projects::Remove command"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_remove_default_no_interactive_value() {
+        let args = ["hoop", "remove", "my-project", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, false, "no_interactive should default to false");
+    }
+
+    #[test]
+    fn test_projects_remove_default_no_interactive_value() {
+        let args = ["hoop", "projects", "remove", "my-project", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, false, "no_interactive should default to false for projects remove");
+    }
+
+    // ── Restore command tests ───────────────────────────────────────────────────
+
+    #[test]
+    fn test_restore_no_interactive_flag_before_command() {
+        let args = ["hoop", "--no-interactive", "restore", "--from", "s3://bucket/path/snap", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears before restore command");
+
+        match cli.command {
+            Commands::Restore { from, dry_run, confirm } => {
+                assert_eq!(from, "s3://bucket/path/snap");
+                assert_eq!(dry_run, false);
+                assert_eq!(confirm, true);
+            }
+            _ => panic!("expected Restore command"),
+        }
+    }
+
+    #[test]
+    fn test_restore_no_interactive_flag_after_command() {
+        let args = ["hoop", "restore", "--from", "s3://bucket/path/snap", "--no-interactive", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears after restore command");
+
+        match cli.command {
+            Commands::Restore { from, dry_run, confirm } => {
+                assert_eq!(from, "s3://bucket/path/snap");
+                assert_eq!(dry_run, false);
+                assert_eq!(confirm, true);
+            }
+            _ => panic!("expected Restore command"),
+        }
+    }
+
+    #[test]
+    fn test_restore_short_flag_y_before_command() {
+        let args = ["hoop", "-y", "restore", "--from", "s3://bucket/path/snap", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y short flag");
+
+        match cli.command {
+            Commands::Restore { from, dry_run, confirm } => {
+                assert_eq!(from, "s3://bucket/path/snap");
+                assert_eq!(dry_run, false);
+                assert_eq!(confirm, true);
+            }
+            _ => panic!("expected Restore command"),
+        }
+    }
+
+    #[test]
+    fn test_restore_short_flag_y_after_command() {
+        let args = ["hoop", "restore", "-y", "--from", "s3://bucket/path/snap", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y short flag after restore command");
+
+        match cli.command {
+            Commands::Restore { from, dry_run, confirm } => {
+                assert_eq!(from, "s3://bucket/path/snap");
+                assert_eq!(dry_run, false);
+                assert_eq!(confirm, true);
+            }
+            _ => panic!("expected Restore command"),
+        }
+    }
+
+    #[test]
+    fn test_restore_without_no_interactive_flag_is_false() {
+        let args = ["hoop", "restore", "--from", "s3://bucket/path/snap", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, false, "no_interactive should be false when flag is not provided");
+
+        match cli.command {
+            Commands::Restore { from, dry_run, confirm } => {
+                assert_eq!(from, "s3://bucket/path/snap");
+                assert_eq!(dry_run, false);
+                assert_eq!(confirm, true);
+            }
+            _ => panic!("expected Restore command"),
+        }
+    }
+
+    #[test]
+    fn test_restore_no_interactive_flag_extraction_consistency() {
+        // Test that flag parsing is consistent regardless of position
+        let args_before = ["hoop", "--no-interactive", "restore", "--from", "s3://bucket/snap", "--confirm"];
+        let args_after = ["hoop", "restore", "--from", "s3://bucket/snap", "--no-interactive", "--confirm"];
+
+        let cli_before = parse_args(&args_before).expect("should parse successfully");
+        let cli_after = parse_args(&args_after).expect("should parse successfully");
+
+        assert_eq!(cli_before.no_interactive, cli_after.no_interactive,
+                   "no_interactive value must be consistent regardless of flag position");
+        assert_eq!(cli_before.no_interactive, true, "no_interactive should be true");
+    }
+
+    #[test]
+    fn test_restore_command_with_all_flags() {
+        let args = ["hoop", "--no-interactive", "restore", "--from", "s3://bucket/path/snap", "--dry-run", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+
+        assert_eq!(cli.no_interactive, true);
+
+        match cli.command {
+            Commands::Restore { from, dry_run, confirm } => {
+                assert_eq!(from, "s3://bucket/path/snap");
+                assert_eq!(dry_run, true);
+                assert_eq!(confirm, true);
+            }
+            _ => panic!("expected Restore command"),
+        }
+    }
+
+    #[test]
+    fn test_restore_with_dry_run_flag() {
+        let args = ["hoop", "restore", "--from", "s3://bucket/path/snap", "--dry-run"];
+        let cli = parse_args(&args).expect("should parse successfully");
+
+        assert_eq!(cli.no_interactive, false, "no_interactive should be false when not provided");
+
+        match cli.command {
+            Commands::Restore { from, dry_run, confirm } => {
+                assert_eq!(from, "s3://bucket/path/snap");
+                assert_eq!(dry_run, true);
+                assert_eq!(confirm, false);
+            }
+            _ => panic!("expected Restore command"),
+        }
+    }
+
+    #[test]
+    fn test_restore_command_flag_order_independence() {
+        // Test different flag orderings
+        let test_cases = vec![
+            ["hoop", "--no-interactive", "restore", "--from", "s3://b/s", "--confirm"],
+            ["hoop", "restore", "--no-interactive", "--from", "s3://b/s", "--confirm"],
+            ["hoop", "restore", "--from", "s3://b/s", "--no-interactive", "--confirm"],
+            ["hoop", "restore", "--from", "s3://b/s", "--confirm", "--no-interactive"],
+        ];
+
+        for args in test_cases {
+            let cli = parse_args(&args).expect("should parse successfully with any flag ordering");
+            assert_eq!(cli.no_interactive, true, "no_interactive should be true regardless of flag order");
+
+            match &cli.command {
+                Commands::Restore { from, confirm, .. } => {
+                    assert_eq!(*from, "s3://b/s");
+                    assert_eq!(*confirm, true);
+                }
+                _ => panic!("expected Restore command"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_restore_default_no_interactive_value() {
+        let args = ["hoop", "restore", "--from", "s3://bucket/path/snap", "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, false, "no_interactive should default to false");
+    }
+
+    #[test]
+    fn test_restore_command_requires_from_flag() {
+        let args = ["hoop", "--no-interactive", "restore", "--confirm"];
+        let result = parse_args(&args);
+        assert!(result.is_err(), "should fail when --from flag is missing");
+    }
+
+    #[test]
+    fn test_restore_command_parsing_with_invalid_flag() {
+        let args = ["hoop", "--no-interactive", "restore", "--from", "s3://bucket/snap", "--invalid-flag"];
+        let result = parse_args(&args);
+        assert!(result.is_err(), "should fail with invalid flag");
+    }
+
+    #[test]
+    fn test_restore_with_complex_s3_uri() {
+        let s3_uri = "s3://my-bucket/backups/snapshot-2024-01-15T10:30:00Z";
+        let args = ["hoop", "--no-interactive", "restore", "--from", s3_uri, "--confirm"];
+        let cli = parse_args(&args).expect("should parse successfully");
+
+        match cli.command {
+            Commands::Restore { from, .. } => {
+                assert_eq!(from, s3_uri, "complex S3 URI should be parsed correctly");
+            }
+            _ => panic!("expected Restore command"),
+        }
+    }
+}
