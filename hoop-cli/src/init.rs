@@ -1042,4 +1042,88 @@ mod tests {
             early_exit_end, banner_call
         );
     }
+
+    // ── Test for flag presence returning true ───────────────────────────────────────
+
+    /// Test: Verify no_interactive flag presence returns true
+    ///
+    /// This test specifically verifies that when the --no-interactive flag is present
+    /// in the parsed command, the extracted flag value returns true.
+    ///
+    /// # Acceptance Criteria
+    /// - Test creates a Commands::Init with no_interactive set to true
+    /// - Test extracts the flag value from the parsed command
+    /// - Test asserts the extracted value is true
+    /// - Test follows the patterns from existing test infrastructure
+    /// - Test compiles without errors
+    #[test]
+    fn test_no_interactive_flag_presence_returns_true() {
+        use clap::Parser;
+
+        // Test case 1: Flag appears before the init command
+        let args_flag_before = ["hoop", "--no-interactive", "init"];
+        let cli_flag_before = crate::Cli::parse_from(args_flag_before);
+
+        // Extract the flag value from the parsed command
+        let extracted_flag_before = cli_flag_before.no_interactive;
+
+        // Assert the extracted value is true
+        assert_eq!(
+            extracted_flag_before, true,
+            "no_interactive flag must be true when --no-interactive is present before init command.\n\
+             Expected: true, Got: {}",
+            extracted_flag_before
+        );
+
+        // Verify the command is Commands::Init
+        match cli_flag_before.command {
+            crate::Commands::Init => {
+                // Success - correct command parsed
+            }
+            _ => panic!("Expected Commands::Init, got {:?}", cli_flag_before.command),
+        }
+
+        // Test case 2: Flag appears after the init command
+        let args_flag_after = ["hoop", "init", "--no-interactive"];
+        let cli_flag_after = crate::Cli::parse_from(args_flag_after);
+
+        // Extract the flag value from the parsed command
+        let extracted_flag_after = cli_flag_after.no_interactive;
+
+        // Assert the extracted value is true
+        assert_eq!(
+            extracted_flag_after, true,
+            "no_interactive flag must be true when --no-interactive is present after init command.\n\
+             Expected: true, Got: {}",
+            extracted_flag_after
+        );
+
+        // Verify the command is Commands::Init
+        match cli_flag_after.command {
+            crate::Commands::Init => {
+                // Success - correct command parsed
+            }
+            _ => panic!("Expected Commands::Init, got {:?}", cli_flag_after.command),
+        }
+
+        // Test case 3: Verify consistency across positions
+        assert_eq!(
+            extracted_flag_before, extracted_flag_after,
+            "no_interactive flag value must be consistent regardless of flag position.\n\
+             Flag before command: {}, Flag after command: {}",
+            extracted_flag_before, extracted_flag_after
+        );
+
+        // Test case 4: Verify flag is false when not present (baseline)
+        let args_no_flag = ["hoop", "init"];
+        let cli_no_flag = crate::Cli::parse_from(args_no_flag);
+        let extracted_no_flag = cli_no_flag.no_interactive;
+
+        assert_eq!(
+            extracted_no_flag, false,
+            "no_interactive flag must be false when --no-interactive is not present.\n\
+             Expected: false, Got: {}",
+            extracted_no_flag
+        );
+    }
 }
