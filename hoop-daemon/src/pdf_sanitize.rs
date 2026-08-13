@@ -63,7 +63,7 @@ pub fn sanitize(input: &[u8]) -> Result<PdfSanitizeResult> {
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
 /// Replace `/S /JavaScript` action types with `/S /None` (padded).
-fn neutralise_javascript_actions(data: &mut Vec<u8>, record: &mut PdfSanitizeRecord) {
+fn neutralise_javascript_actions(data: &mut [u8], record: &mut PdfSanitizeRecord) {
     replace_all(
         data,
         b"/S /JavaScript", // 14 bytes
@@ -84,7 +84,7 @@ fn neutralise_javascript_actions(data: &mut Vec<u8>, record: &mut PdfSanitizeRec
 ///
 /// Additional Actions can contain JavaScript triggers for various PDF events
 /// (page open, button press, etc.). We neutralise the entire AA dictionary.
-fn neutralise_aa_dictionaries(data: &mut Vec<u8>, record: &mut PdfSanitizeRecord) {
+fn neutralise_aa_dictionaries(data: &mut [u8], record: &mut PdfSanitizeRecord) {
     // Scan for /AA << patterns and replace the dictionary with null.
     // We replace `/AA` followed by dictionary `<<...>>` with `/AA null` padded
     // to match the original length. This is tricky because dictionaries can
@@ -131,7 +131,7 @@ fn neutralise_aa_dictionaries(data: &mut Vec<u8>, record: &mut PdfSanitizeRecord
 /// `/JS` can be followed by:
 /// - A string literal: `/JS (code...)`
 /// - An indirect reference: `/JS 123 0 R`
-fn neutralise_js_entries(data: &mut Vec<u8>, record: &mut PdfSanitizeRecord) {
+fn neutralise_js_entries(data: &mut [u8], record: &mut PdfSanitizeRecord) {
     // Handle `/JS (` — string literal containing JS code
     let mut offset = 0;
     while let Some(pos) = find_bytes(&data[offset..], b"/JS (") {
@@ -181,7 +181,7 @@ fn neutralise_js_entries(data: &mut Vec<u8>, record: &mut PdfSanitizeRecord) {
 }
 
 /// Replace `/OpenAction` pointing to JS with `/OpenAction null`.
-fn neutralise_open_action_js(data: &mut Vec<u8>, record: &mut PdfSanitizeRecord) {
+fn neutralise_open_action_js(data: &mut [u8], record: &mut PdfSanitizeRecord) {
     // /OpenAction can be:
     // - An indirect reference: /OpenAction 123 0 R
     // - A dictionary: /OpenAction << ... /S /JavaScript ... >>
@@ -219,7 +219,7 @@ fn neutralise_open_action_js(data: &mut Vec<u8>, record: &mut PdfSanitizeRecord)
 }
 
 /// Replace JavaScript name-tree nodes under `/Names`.
-fn neutralise_names_js(data: &mut Vec<u8>, record: &mut PdfSanitizeRecord) {
+fn neutralise_names_js(data: &mut [u8], record: &mut PdfSanitizeRecord) {
     // Look for /Names with JavaScript subtree references
     // Pattern: /Names << /JavaScript ... >> or embedded JS name nodes
     let pattern = b"/JavaScript";
@@ -256,7 +256,7 @@ fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 
 /// Replace all occurrences of `from` with `to` (must be same length).
 fn replace_all(
-    data: &mut Vec<u8>,
+    data: &mut [u8],
     from: &[u8],
     to: &[u8],
     record: &mut PdfSanitizeRecord,
@@ -276,7 +276,7 @@ fn replace_all(
 /// Replace `/AA N M R` patterns (indirect reference after /AA) by overwriting
 /// the space and digits with spaces.
 fn replace_all_regex(
-    data: &mut Vec<u8>,
+    data: &mut [u8],
     prefix: &[u8],
     record: &mut PdfSanitizeRecord,
     description: &str,
@@ -308,7 +308,7 @@ fn replace_all_regex(
 
 /// Neutralise a PDF entry at `pos` with `len` bytes by replacing with spaces.
 fn neutralise_entry(
-    data: &mut Vec<u8>,
+    data: &mut [u8],
     pos: usize,
     len: usize,
     record: &mut PdfSanitizeRecord,
