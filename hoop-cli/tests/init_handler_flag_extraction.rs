@@ -593,6 +593,58 @@ fn test_init_flag_absence_returns_false() {
         "Flag absence should yield default value of false");
 }
 
+// ── Basic Commands::Init Fixture Test ────────────────────────────────────────────
+
+#[test]
+fn test_commands_init_fixture_with_no_interactive_true() {
+    // Basic test fixture for Commands::Init with no_interactive=true
+    //
+    // This test demonstrates the basic pattern for creating a Commands::Init
+    // fixture with the no_interactive flag set to true.
+    //
+    // Acceptance criteria:
+    // - Creates a Commands::Init fixture with no_interactive=true
+    // - Uses appropriate test module structure
+    // - Follows naming conventions for test functions
+    // - Compiles without errors
+
+    // Parse CLI arguments with --no-interactive flag
+    let args = ["hoop", "--no-interactive", "init"];
+    let cli = Cli::try_parse_from(args).expect("CLI parsing should succeed");
+
+    // Verify the command is Commands::Init
+    match cli.command {
+        Commands::Init => {
+            // Successfully created Commands::Init fixture
+            // The no_interactive flag is extracted from the Cli struct
+            let no_interactive = cli.no_interactive;
+            assert_eq!(no_interactive, true,
+                "Commands::Init fixture should have no_interactive=true");
+        }
+        _ => panic!("Expected Commands::Init, got {:?}", cli.command),
+    }
+}
+
+#[test]
+fn test_commands_init_fixture_basic_structure() {
+    // Basic fixture test demonstrating Commands::Init structure
+    //
+    // This is the minimal test structure for Commands::Init with no_interactive=true.
+    // It shows the fundamental pattern used across all Init command tests.
+
+    // Arrange: Set up CLI arguments with no_interactive flag
+    let args = ["hoop", "--no-interactive", "init"];
+
+    // Act: Parse the CLI structure
+    let cli = Cli::try_parse_from(args).expect("Should parse successfully");
+
+    // Assert: Verify Commands::Init is created with correct flag
+    assert!(matches!(cli.command, Commands::Init),
+        "Should create Commands::Init command");
+    assert_eq!(cli.no_interactive, true,
+        "Should have no_interactive=true flag set");
+}
+
 // ── Test Suite Summary ───────────────────────────────────────────────────────────
 //
 // This test suite verifies:
@@ -633,3 +685,9 @@ fn test_init_flag_absence_returns_false() {
 //    - Creates Commands::Init with no_interactive absent
 //    - Extracts the flag value from the parsed command
 //    - Asserts the extracted value is false (default value)
+//
+// 8. Basic Commands::Init fixture (NEW)
+//    - test_commands_init_fixture_with_no_interactive_true() provides basic pattern
+//    - test_commands_init_fixture_basic_structure() shows minimal fixture structure
+//    - Both demonstrate creating Commands::Init with no_interactive=true
+//    - Follow established test module and naming conventions
