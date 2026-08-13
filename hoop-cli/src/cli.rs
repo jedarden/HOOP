@@ -1041,4 +1041,219 @@ mod tests {
         assert_eq!(cli.no_interactive, false);
         assert!(matches!(cli.command, Commands::Init));
     }
+
+    // ── Scan command tests ───────────────────────────────────────────────────────
+
+    #[test]
+    fn test_scan_no_interactive_flag_before_command() {
+        let args = ["hoop", "--no-interactive", "scan", "/tmp/projects"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears before scan command");
+
+        match cli.command {
+            Commands::Scan { root, auto_confirm } => {
+                assert_eq!(root, "/tmp/projects");
+                assert_eq!(auto_confirm, false);
+            }
+            _ => panic!("expected Scan command, got {:?}", cli.command),
+        }
+    }
+
+    #[test]
+    fn test_scan_no_interactive_flag_after_command() {
+        let args = ["hoop", "scan", "/tmp/projects", "--no-interactive"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears after scan command");
+
+        match cli.command {
+            Commands::Scan { root, auto_confirm } => {
+                assert_eq!(root, "/tmp/projects");
+                assert_eq!(auto_confirm, false);
+            }
+            _ => panic!("expected Scan command, got {:?}", cli.command),
+        }
+    }
+
+    #[test]
+    fn test_scan_short_flag_y_before_command() {
+        let args = ["hoop", "-y", "scan", "/tmp/projects"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y short flag");
+
+        match cli.command {
+            Commands::Scan { root, auto_confirm } => {
+                assert_eq!(root, "/tmp/projects");
+                assert_eq!(auto_confirm, false);
+            }
+            _ => panic!("expected Scan command"),
+        }
+    }
+
+    #[test]
+    fn test_scan_short_flag_y_after_command() {
+        let args = ["hoop", "scan", "/tmp/projects", "-y"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y short flag after scan command");
+
+        match cli.command {
+            Commands::Scan { root, auto_confirm } => {
+                assert_eq!(root, "/tmp/projects");
+                assert_eq!(auto_confirm, false);
+            }
+            _ => panic!("expected Scan command"),
+        }
+    }
+
+    #[test]
+    fn test_scan_without_no_interactive_flag_is_false() {
+        let args = ["hoop", "scan", "/tmp/projects"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, false, "no_interactive should be false when flag is not provided");
+
+        match cli.command {
+            Commands::Scan { root, auto_confirm } => {
+                assert_eq!(root, "/tmp/projects");
+                assert_eq!(auto_confirm, false);
+            }
+            _ => panic!("expected Scan command"),
+        }
+    }
+
+    #[test]
+    fn test_scan_with_local_yes_flag() {
+        let args = ["hoop", "scan", "/tmp/projects", "--yes"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, false, "Global no_interactive should be false with local --yes");
+
+        match cli.command {
+            Commands::Scan { root, auto_confirm } => {
+                assert_eq!(root, "/tmp/projects");
+                assert_eq!(auto_confirm, true, "local --yes flag should set auto_confirm to true");
+            }
+            _ => panic!("expected Scan command"),
+        }
+    }
+
+    #[test]
+    fn test_scan_with_both_global_and_local_flags() {
+        let args = ["hoop", "--no-interactive", "scan", "/tmp/projects", "--yes"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, true, "Global no_interactive should be true");
+
+        match cli.command {
+            Commands::Scan { root, auto_confirm } => {
+                assert_eq!(root, "/tmp/projects");
+                assert_eq!(auto_confirm, true, "local --yes flag should be true");
+            }
+            _ => panic!("expected Scan command"),
+        }
+    }
+
+    #[test]
+    fn test_scan_no_interactive_flag_extraction_consistency() {
+        // Test that flag parsing is consistent regardless of position
+        let args_before = ["hoop", "--no-interactive", "scan", "/tmp/projects"];
+        let args_after = ["hoop", "scan", "/tmp/projects", "--no-interactive"];
+
+        let cli_before = parse_args(&args_before).expect("should parse successfully");
+        let cli_after = parse_args(&args_after).expect("should parse successfully");
+
+        assert_eq!(cli_before.no_interactive, cli_after.no_interactive,
+                   "no_interactive value must be consistent regardless of flag position");
+        assert_eq!(cli_before.no_interactive, true, "no_interactive should be true");
+    }
+
+    #[test]
+    fn test_scan_command_flag_order_independence() {
+        // Test different flag orderings
+        let test_cases = vec![
+            ["hoop", "--no-interactive", "scan", "/tmp/projects"],
+            ["hoop", "scan", "/tmp/projects", "--no-interactive"],
+            ["hoop", "-y", "scan", "/tmp/projects"],
+            ["hoop", "scan", "/tmp/projects", "-y"],
+        ];
+
+        for args in test_cases {
+            let cli = parse_args(&args).expect("should parse successfully with any flag ordering");
+            assert_eq!(cli.no_interactive, true, "no_interactive should be true regardless of flag order");
+
+            match &cli.command {
+                Commands::Scan { root, .. } => {
+                    assert_eq!(*root, "/tmp/projects");
+                }
+                _ => panic!("expected Scan command"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_scan_default_no_interactive_value() {
+        let args = ["hoop", "scan", "/tmp/projects"];
+        let cli = parse_args(&args).expect("should parse successfully");
+        assert_eq!(cli.no_interactive, false, "no_interactive should default to false");
+    }
+
+    #[test]
+    fn test_scan_command_requires_root_argument() {
+        let args = ["hoop", "--no-interactive", "scan"];
+        let result = parse_args(&args);
+        assert!(result.is_err(), "should fail when root argument is missing");
+    }
+
+    #[test]
+    fn test_scan_command_parsing_with_invalid_flag() {
+        let args = ["hoop", "--no-interactive", "scan", "/tmp/projects", "--invalid-flag"];
+        let result = parse_args(&args);
+        assert!(result.is_err(), "should fail with invalid flag");
+    }
+
+    #[test]
+    fn test_scan_with_complex_root_path() {
+        let root_path = "/var/data/projects/2024/January";
+        let args = ["hoop", "--no-interactive", "scan", root_path];
+        let cli = parse_args(&args).expect("should parse successfully");
+
+        match cli.command {
+            Commands::Scan { root, .. } => {
+                assert_eq!(root, root_path, "complex root path should be parsed correctly");
+            }
+            _ => panic!("expected Scan command"),
+        }
+    }
+
+    #[test]
+    fn test_scan_no_interactive_or_yes_combination_logic() {
+        // This test documents the expected behavior: both flags should work independently
+        // The actual combination logic (no_interactive || auto_confirm) is tested in integration tests
+
+        // Case 1: Only global flag
+        let cli_global = parse_args(&["hoop", "--no-interactive", "scan", "/tmp"])
+            .expect("should parse with global flag only");
+        assert_eq!(cli_global.no_interactive, true);
+        if let Commands::Scan { auto_confirm, .. } = cli_global.command {
+            assert_eq!(auto_confirm, false, "local auto_confirm should be false with only global flag");
+        } else {
+            panic!("Expected Scan command");
+        }
+
+        // Case 2: Only local flag
+        let cli_local = parse_args(&["hoop", "scan", "/tmp", "--yes"])
+            .expect("should parse with local flag only");
+        assert_eq!(cli_local.no_interactive, false);
+        if let Commands::Scan { auto_confirm, .. } = cli_local.command {
+            assert_eq!(auto_confirm, true, "local auto_confirm should be true with --yes flag");
+        } else {
+            panic!("Expected Scan command");
+        }
+
+        // Case 3: Both flags
+        let cli_both = parse_args(&["hoop", "--no-interactive", "scan", "/tmp", "--yes"])
+            .expect("should parse with both flags");
+        assert_eq!(cli_both.no_interactive, true);
+        if let Commands::Scan { auto_confirm, .. } = cli_both.command {
+            assert_eq!(auto_confirm, true, "local auto_confirm should be true with --yes flag");
+        } else {
+            panic!("Expected Scan command");
+        }
+    }
 }
