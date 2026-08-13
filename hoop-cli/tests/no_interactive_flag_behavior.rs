@@ -904,6 +904,41 @@ fn init_without_no_interactive_runs_wizard() {
     );
 }
 
+/// Test: Verify default behavior when flag is not provided for Init command
+#[test]
+fn test_init_default_no_interactive_value() {
+    // Parse without the flag
+    let result = parse_cli_with_flag(&["hoop", "init"]);
+
+    assert!(result.is_ok(), "Should successfully parse command without flag");
+    let parsed = result.unwrap();
+
+    assert_eq!(
+        parsed.no_interactive,
+        false,
+        "no_interactive should default to false when flag is not provided"
+    );
+}
+
+/// Test: Verify flag propagation from CLI to init handler
+#[test]
+fn test_init_flag_propagation() {
+    let main_code = std::fs::read_to_string("src/main.rs")
+        .expect("Failed to read main.rs");
+
+    // Verify flag is extracted from CLI
+    assert!(
+        main_code.contains("let no_interactive = cli.no_interactive;"),
+        "Flag should be extracted from parsed CLI structure"
+    );
+
+    // Verify flag is passed to init handler
+    assert!(
+        main_code.contains("init::run_init_wizard(no_interactive)"),
+        "Flag should be passed to init::run_init_wizard handler function"
+    );
+}
+
 // ── Flag propagation tests ───────────────────────────────────────────────────────
 
 #[test]
