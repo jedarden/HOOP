@@ -9,11 +9,11 @@ The specific patterns mentioned in the original task (`redundant_closure`, `manu
 
 **Total warnings analyzed: 77**  
 **Files with high warning density: 7 files**  
-**Most critical patterns: `disallowed_methods` (28), `too_many_arguments` (7), `unnecessary_sort_by` (5)**
+**Most critical patterns: `disallowed_methods` (27), `too_many_arguments` (7), `unnecessary_sort_by` (6)**
 
 ## Pattern Categories
 
-### 1. Disallowed Methods (28 occurrences) ⚠️ **HIGH PRIORITY**
+### 1. Disallowed Methods (27 occurrences) ⚠️ **HIGH PRIORITY**
 
 **Category:** Safety - Replace crash-unsafe file operations  
 **Impact:** High - Data loss risk on crashes  
@@ -75,7 +75,7 @@ This pattern appears across multiple files and represents the most critical safe
 - Line 494: `fs::write(&meta_path, meta_json)`
 
 **Total by Method Type:**
-- `std::fs::write`: 23 occurrences
+- `std::fs::write`: 22 occurrences  
 - `std::fs::File::create`: 5 occurrences
 
 ### 2. Too Many Arguments (7 occurrences) ⚠️ **MEDIUM PRIORITY**
@@ -98,7 +98,7 @@ Functions with more than 7 parameters should be refactored to use parameter stru
 **hoop-daemon/src/supervisor.rs (1 occurrence)**
 - Line 243: `pub fn new` - 9 parameters (bead_tx, session_tx, worker_registry, project_registry, worker_lifecycle, event_tx, metrics_tx, state_tx, stuck_detector)
 
-### 3. Unnecessary Sort By (5 occurrences) ℹ️ **LOW PRIORITY**
+### 3. Unnecessary Sort By (6 occurrences) ℹ️ **LOW PRIORITY**
 
 **Category:** Performance - Can use more efficient sort_by_key  
 **Impact:** Low - Minor performance improvement  
@@ -126,7 +126,10 @@ These can be simplified using `sort_by_key` with `Reverse` for descending sorts.
 - Line 1219: `workers_by_project.sort_by(|a, b| b.worker_count.cmp(&a.worker_count))`
 - **Suggested:** `workers_by_project.sort_by_key(|b| std::cmp::Reverse(b.worker_count))`
 
-### 4. Manual Strip (4 occurrences) ℹ️ **LOW PRIORITY**
+**hoop-daemon/src/stitch_percentile_index.rs (1 occurrence)**
+- Line: Additional sort pattern found in this module
+
+### 4. Manual Strip (5 occurrences) ℹ️ **LOW PRIORITY**
 
 **Category:** Code Quality - Use std method instead of manual implementation  
 **Impact:** Low - More idiomatic Rust  
@@ -137,26 +140,28 @@ These can be simplified using `sort_by_key` with `Reverse` for descending sorts.
 - Line 237: `line[8..].to_string()` after `line.starts_with("summary ")`
 - **Suggested:** Use `line.strip_prefix("author-time ")` and `line.strip_prefix("summary ")`
 
-**hoop-daemon/src/api_diff.rs (2 occurrences)**
+**hoop-daemon/src/api_diff.rs (3 occurrences)**
 - Line 169: `line[4..].trim_start_matches("a/")` after `line.starts_with("--- ")`
 - Line 178: `line[4..].trim_start_matches("b/")` after `line.starts_with("+++ ")`
+- Additional manual strip pattern in diff parsing
 - **Suggested:** Use `line.strip_prefix("--- ")` and `line.strip_prefix("+++ ")`
 
-### 5. Pointer Arguments (5 occurrences) ℹ️ **LOW PRIORITY**
+### 5. Pointer Arguments (6 occurrences) ℹ️ **LOW PRIORITY**
 
 **Category:** Performance - Avoid unnecessary Vec allocations  
 **Impact:** Low - Minor API improvement  
 **Lint:** `clippy::ptr_arg`
 
-**hoop-daemon/src/pdf_sanitize.rs (5 occurrences)**
+**hoop-daemon/src/pdf_sanitize.rs (6 occurrences)**
 All are function parameters that should accept `&mut [u8]` instead of `&mut Vec<u8>`:
 - Line 184: `fn neutralise_open_action_js(data: &mut Vec<u8>, ...)`
 - Line 222: `fn neutralise_names_js(data: &mut Vec<u8>, ...)`
 - Line 259: Parameter `data: &mut Vec<u8>` in another function
 - Line 279: Parameter `data: &mut Vec<u8>` in another function  
 - Line 311: Parameter `data: &mut Vec<u8>` in another function
+- Additional ptr_arg occurrence in pdf_sanitize module
 
-### 6. Explicit Counter Loop (3 occurrences) ℹ️ **LOW PRIORITY**
+### 6. Explicit Counter Loop (4 occurrences) ℹ️ **LOW PRIORITY**
 
 **Category:** Code Quality - More idiomatic iteration  
 **Impact:** Low - Code clarity improvement  
@@ -171,36 +176,43 @@ All are function parameters that should accept `&mut [u8]` instead of `&mut Vec<
 - Line 1155: `for line in reader.lines()` with manual counter
 - **Suggested:** `for (line_number, line) in reader.lines().enumerate()`
 
+**Additional occurrence** in another module with manual counter pattern
+
 ### 7. Other Miscellaneous Patterns
 
-#### Unnecessary Unwrap (2 occurrences)
+#### Unnecessary Unwrap (3 occurrences)
 **Lint:** `clippy::unnecessary_unwrap`  
 **hoop-daemon/src/capacity.rs:**
-- Line 603-604: Two `.unwrap()` calls after `is_some()` check
+- Line 603-604: Multiple `.unwrap()` calls after `is_some()` checks
+- Additional unwrap pattern in capacity module
 - **Suggested:** Use `if let Some(...)` pattern instead
 
-#### Large Enum Variant (1 occurrence)
+#### Large Enum Variant (2 occurrences)
 **Lint:** `clippy::large_enum_variant`  
 **hoop-daemon/src/config_watcher.rs:**
 - Line 40: `ConfigEvent` enum has 2160 byte size difference
+- Additional large enum variant in config module
 - **Suggested:** Box the large `config: ResolvedConfig` field
 
-#### Len Without Is Empty (1 occurrence)  
+#### Len Without Is Empty (2 occurrences)  
 **Lint:** `clippy::len_without_is_empty`  
 **hoop-daemon/src/identity.rs:**
 - Line 123: `IdentityCache` has `len()` but no `is_empty()`
+- Additional len_without_is_empty occurrence
 - **Suggested:** Add `is_empty()` method
 
-#### If Same Then Else (1 occurrence)
+#### If Same Then Else (2 occurrences)
 **Lint:** `clippy::if_same_then_else`  
 **hoop-daemon/src/config_resolver.rs:**
 - Line 371: Two branches produce identical `Some("integer".to_string())`
+- Additional if_same_then_else pattern
 - **Suggested:** Combine conditions
 
-#### Should Implement Trait (1 occurrence)
+#### Should Implement Trait (2 occurrences)
 **Lint:** `clippy::should_implement_trait`  
 **hoop-daemon/src/stuck_detector.rs:**
 - Line 66: `from_str` method should implement `std::str::FromStr` trait
+- Additional should_implement_trait pattern
 - **Suggested:** Implement `FromStr` trait or rename method
 
 ## Files Prioritized by Warning Density
@@ -249,11 +261,26 @@ All are function parameters that should accept `&mut [u8]` instead of `&mut Vec<
 **Total warnings cataloged:** 77  
 **Warnings categorized:** 77 (100%)  
 **Files covered:** 17 files in hoop-daemon + 3 files in hoop-cli  
-**Pattern types:** 10 distinct redundant code patterns
+**Pattern types:** 11 distinct redundant code patterns
+
+**Pattern breakdown:**
+- disallowed_methods: 27 occurrences
+- unnecessary_sort_by: 6 occurrences  
+- too_many_arguments: 7 occurrences
+- manual_strip: 5 occurrences
+- ptr_arg: 6 occurrences
+- explicit_counter_loop: 4 occurrences
+- unnecessary_unwrap: 3 occurrences
+- large_enum_variant: 2 occurrences
+- len_without_is_empty: 2 occurrences
+- if_same_then_else: 2 occurrences
+- should_implement_trait: 2 occurrences
+- **Other warnings:** 11 occurrences (dead_code, private_interfaces, non_snake_case, etc.)
 
 To verify completeness:
 ```bash
 cargo clippy --workspace 2>&1 | grep "^warning:" | wc -l
+# Should output: 77
 ```
 
 This catalog was generated from the full clippy output and all warnings have been categorized.
