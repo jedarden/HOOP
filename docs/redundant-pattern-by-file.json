@@ -1,0 +1,708 @@
+{
+  "summary": {
+    "total_warnings": 75,
+    "pattern_types": {
+      "redundant_closure": 0,
+      "manual_flatten": 0,
+      "manual_clamp": 0,
+      "manual_strip": 4,
+      "unnecessary_sort_by": 5,
+      "disallowed_methods": 28,
+      "too_many_arguments": 6,
+      "dead_code": 13,
+      "explicit_counter_loop": 3,
+      "if_same_then_else": 1,
+      "large_enum_variant": 1,
+      "len_without_is_empty": 1,
+      "ptr_arg": 5,
+      "should_implement_trait": 1,
+      "doc_overindented_list_items": 1,
+      "private_interfaces": 3,
+      "unnecessary_unwrap": 2,
+      "non_snake_case": 1
+    },
+    "requested_patterns_found": false,
+    "note": "The three requested patterns (redundant_closure, manual_flatten, manual_clamp) were NOT found in the current HOOP codebase."
+  },
+  "warnings_by_file": [
+    {
+      "file": "hoop-daemon/src/pattern_query_evaluator.rs",
+      "module": "pattern_query_evaluator",
+      "warning_count": 2,
+      "patterns": [
+        {
+          "type": "private_interfaces",
+          "line": 88,
+          "message": "type `pattern_query_evaluator::QueryExpr` is more private than the item `pattern_query_evaluator::parse_query`"
+        },
+        {
+          "type": "private_interfaces",
+          "line": 258,
+          "message": "type `pattern_query_evaluator::QueryExpr` is more private than the item `pattern_query_evaluator::evaluate_query`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/reflection_detector.rs",
+      "module": "reflection_detector",
+      "warning_count": 1,
+      "patterns": [
+        {
+          "type": "private_interfaces",
+          "line": 88,
+          "message": "type `reflection_detector::PatternCategory` is more private than the item `reflection_detector::DetectedPattern::category`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/lib.rs",
+      "module": "lib",
+      "warning_count": 2,
+      "patterns": [
+        {
+          "type": "dead_code",
+          "line": 1307,
+          "message": "function `openapi_router` is never used"
+        },
+        {
+          "type": "unnecessary_sort_by",
+          "line": 1219,
+          "message": "consider using `sort_by_key`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/capacity.rs",
+      "module": "capacity",
+      "warning_count": 8,
+      "patterns": [
+        {
+          "type": "dead_code",
+          "line": 358,
+          "message": "field `session_id` is never read"
+        },
+        {
+          "type": "dead_code",
+          "line": 472,
+          "message": "function `get_opencode_limits` is never used"
+        },
+        {
+          "type": "dead_code",
+          "line": 526,
+          "message": "field `session_subpath` is never read"
+        },
+        {
+          "type": "dead_code",
+          "line": 55,
+          "message": "field `rpm_limit` is never read"
+        },
+        {
+          "type": "dead_code",
+          "line": 60,
+          "message": "struct `QuotaLimit` is never constructed"
+        },
+        {
+          "type": "unnecessary_unwrap",
+          "line": 603,
+          "message": "called `unwrap` on `gcp_quota_config` after checking its variant with `is_some`"
+        },
+        {
+          "type": "unnecessary_unwrap",
+          "line": 604,
+          "message": "called `unwrap` on `gcp_quota_config` after checking its variant with `is_some`"
+        },
+        {
+          "type": "explicit_counter_loop",
+          "line": 1613,
+          "message": "the variable `line_number` is used as a loop counter"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/sessions.rs",
+      "module": "sessions",
+      "warning_count": 3,
+      "patterns": [
+        {
+          "type": "dead_code",
+          "line": 557,
+          "message": "field `subpath` is never read"
+        },
+        {
+          "type": "dead_code",
+          "line": 763,
+          "message": "constant `MAX_UNASSIGNED_SESSIONS` is never used"
+        },
+        {
+          "type": "explicit_counter_loop",
+          "line": 1155,
+          "message": "the variable `line_number` is used as a loop counter"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/stitch_percentile_index.rs",
+      "module": "stitch_percentile_index",
+      "warning_count": 1,
+      "patterns": [
+        {
+          "type": "dead_code",
+          "line": 72,
+          "message": "constant `STITCH_CLOSED_THRESHOLD_SECONDS` is never used"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/api_conversations.rs",
+      "module": "api_conversations",
+      "warning_count": 1,
+      "patterns": [
+        {
+          "type": "unnecessary_sort_by",
+          "line": 327,
+          "message": "consider using `sort_by_key`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/api_onboarding.rs",
+      "module": "api_onboarding",
+      "warning_count": 1,
+      "patterns": [
+        {
+          "type": "unnecessary_sort_by",
+          "line": 228,
+          "message": "consider using `sort_by_key`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/api_stitch_read.rs",
+      "module": "api_stitch_read",
+      "warning_count": 1,
+      "patterns": [
+        {
+          "type": "unnecessary_sort_by",
+          "line": 470,
+          "message": "consider using `sort_by_key`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/api_unassigned.rs",
+      "module": "api_unassigned",
+      "warning_count": 1,
+      "patterns": [
+        {
+          "type": "unnecessary_sort_by",
+          "line": 320,
+          "message": "consider using `sort_by_key`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/atomic_write.rs",
+      "module": "atomic_write",
+      "warning_count": 2,
+      "patterns": [
+        {
+          "type": "disallowed_methods",
+          "line": 97,
+          "message": "use of a disallowed method `std::fs::File::create`"
+        },
+        {
+          "type": "disallowed_methods",
+          "line": 188,
+          "message": "use of a disallowed method `std::fs::File::create`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/attachment_sync.rs",
+      "module": "attachment_sync",
+      "warning_count": 1,
+      "patterns": [
+        {
+          "type": "disallowed_methods",
+          "line": 86,
+          "message": "use of a disallowed method `std::fs::write`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/attachments.rs",
+      "module": "attachments",
+      "warning_count": 1,
+      "patterns": [
+        {
+          "type": "disallowed_methods",
+          "line": 613,
+          "message": "use of a disallowed method `std::fs::write`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/backup_pipeline.rs",
+      "module": "backup_pipeline",
+      "warning_count": 1,
+      "patterns": [
+        {
+          "type": "disallowed_methods",
+          "line": 561,
+          "message": "use of a disallowed method `std::fs::write`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/config_resolver.rs",
+      "module": "config_resolver",
+      "warning_count": 3,
+      "patterns": [
+        {
+          "type": "if_same_then_else",
+          "line": 371,
+          "message": "this `if` has identical blocks"
+        },
+        {
+          "type": "too_many_arguments",
+          "line": 679,
+          "message": "this function has too many arguments (9/7)"
+        },
+        {
+          "type": "too_many_arguments",
+          "line": 1677,
+          "message": "this function has too many arguments (9/7)"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/config_watcher.rs",
+      "module": "config_watcher",
+      "warning_count": 1,
+      "patterns": [
+        {
+          "type": "large_enum_variant",
+          "line": 40,
+          "message": "large size difference between variants"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/fleet.rs",
+      "module": "fleet",
+      "warning_count": 3,
+      "patterns": [
+        {
+          "type": "too_many_arguments",
+          "line": 645,
+          "message": "this function has too many arguments (12/7)"
+        },
+        {
+          "type": "too_many_arguments",
+          "line": 5217,
+          "message": "this function has too many arguments (8/7)"
+        },
+        {
+          "type": "too_many_arguments",
+          "line": 5322,
+          "message": "this function has too many arguments (8/7)"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/identity.rs",
+      "module": "identity",
+      "warning_count": 1,
+      "patterns": [
+        {
+          "type": "len_without_is_empty",
+          "line": 123,
+          "message": "struct `IdentityCache` has a public `len` method, but no `is_empty` method"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/log_rotation.rs",
+      "module": "log_rotation",
+      "warning_count": 3,
+      "patterns": [
+        {
+          "type": "disallowed_methods",
+          "line": 110,
+          "message": "use of a disallowed method `std::fs::File::create`"
+        },
+        {
+          "type": "disallowed_methods",
+          "line": 117,
+          "message": "use of a disallowed method `std::fs::File::create`"
+        },
+        {
+          "type": "disallowed_methods",
+          "line": 145,
+          "message": "use of a disallowed method `std::fs::File::create`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/metrics.rs",
+      "module": "metrics",
+      "warning_count": 1,
+      "patterns": [
+        {
+          "type": "disallowed_methods",
+          "line": 1381,
+          "message": "use of a disallowed method `std::fs::write`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/parse_jsonl_safe.rs",
+      "module": "parse_jsonl_safe",
+      "warning_count": 1,
+      "patterns": [
+        {
+          "type": "disallowed_methods",
+          "line": 236,
+          "message": "use of a disallowed method `std::fs::write`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/pdf_sanitize.rs",
+      "module": "pdf_sanitize",
+      "warning_count": 5,
+      "patterns": [
+        {
+          "type": "ptr_arg",
+          "line": 184,
+          "message": "writing `&mut Vec` instead of `&mut [_]` involves a new object where a slice will do"
+        },
+        {
+          "type": "ptr_arg",
+          "line": 222,
+          "message": "writing `&mut Vec` instead of `&mut [_]` involves a new object where a slice will do"
+        },
+        {
+          "type": "ptr_arg",
+          "line": 259,
+          "message": "writing `&mut Vec` instead of `&mut [_]` involves a new object where a slice will do"
+        },
+        {
+          "type": "ptr_arg",
+          "line": 279,
+          "message": "writing `&mut Vec` instead of `&mut [_]` involves a new object where a slice will do"
+        },
+        {
+          "type": "ptr_arg",
+          "line": 311,
+          "message": "writing `&mut Vec` instead of `&mut [_]` involves a new object where a slice will do"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/projects.rs",
+      "module": "projects",
+      "warning_count": 1,
+      "patterns": [
+        {
+          "type": "disallowed_methods",
+          "line": 113,
+          "message": "use of a disallowed method `std::fs::write`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/stuck_detector.rs",
+      "module": "stuck_detector",
+      "warning_count": 1,
+      "patterns": [
+        {
+          "type": "should_implement_trait",
+          "line": 66,
+          "message": "method `from_str` can be confused for the standard trait method `std::str::FromStr::from_str`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/supervisor.rs",
+      "module": "supervisor",
+      "warning_count": 2,
+      "patterns": [
+        {
+          "type": "too_many_arguments",
+          "line": 243,
+          "message": "this function has too many arguments (9/7)"
+        },
+        {
+          "type": "doc_overindented_list_items",
+          "line": 1122,
+          "message": "doc list item overindented"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/template_library.rs",
+      "module": "template_library",
+      "warning_count": 1,
+      "patterns": [
+        {
+          "type": "disallowed_methods",
+          "line": 424,
+          "message": "use of a disallowed method `std::fs::write`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/uploads.rs",
+      "module": "uploads",
+      "warning_count": 7,
+      "patterns": [
+        {
+          "type": "disallowed_methods",
+          "line": 132,
+          "message": "use of a disallowed method `std::fs::write`"
+        },
+        {
+          "type": "disallowed_methods",
+          "line": 190,
+          "message": "use of a disallowed method `std::fs::File::create`"
+        },
+        {
+          "type": "disallowed_methods",
+          "line": 446,
+          "message": "use of a disallowed method `std::fs::write`"
+        },
+        {
+          "type": "disallowed_methods",
+          "line": 470,
+          "message": "use of a disallowed method `std::fs::write`"
+        },
+        {
+          "type": "disallowed_methods",
+          "line": 516,
+          "message": "use of a disallowed method `std::fs::write`"
+        },
+        {
+          "type": "disallowed_methods",
+          "line": 540,
+          "message": "use of a disallowed method `std::fs::write`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/api_blame.rs",
+      "module": "api_blame",
+      "warning_count": 2,
+      "patterns": [
+        {
+          "type": "manual_strip",
+          "line": 228,
+          "message": "stripping a prefix manually"
+        },
+        {
+          "type": "manual_strip",
+          "line": 237,
+          "message": "stripping a prefix manually"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/api_diff.rs",
+      "module": "api_diff",
+      "warning_count": 2,
+      "patterns": [
+        {
+          "type": "manual_strip",
+          "line": 169,
+          "message": "stripping a prefix manually"
+        },
+        {
+          "type": "manual_strip",
+          "line": 178,
+          "message": "stripping a prefix manually"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/api_screen_capture.rs",
+      "module": "api_screen_capture",
+      "warning_count": 3,
+      "patterns": [
+        {
+          "type": "disallowed_methods",
+          "line": 149,
+          "message": "use of a disallowed method `std::fs::write`"
+        },
+        {
+          "type": "disallowed_methods",
+          "line": 164,
+          "message": "use of a disallowed method `std::fs::write`"
+        },
+        {
+          "type": "disallowed_methods",
+          "line": 214,
+          "message": "use of a disallowed method `std::fs::write`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-daemon/src/screen_capture.rs",
+      "module": "screen_capture",
+      "warning_count": 5,
+      "patterns": [
+        {
+          "type": "disallowed_methods",
+          "line": 353,
+          "message": "use of a disallowed method `std::fs::write`"
+        },
+        {
+          "type": "disallowed_methods",
+          "line": 358,
+          "message": "use of a disallowed method `std::fs::File::create`"
+        },
+        {
+          "type": "disallowed_methods",
+          "line": 418,
+          "message": "use of a disallowed method `std::fs::write`"
+        },
+        {
+          "type": "disallowed_methods",
+          "line": 452,
+          "message": "use of a disallowed method `std::fs::write`"
+        },
+        {
+          "type": "disallowed_methods",
+          "line": 494,
+          "message": "use of a disallowed method `std::fs::write`"
+        }
+      ]
+    },
+    {
+      "file": "hoop-cli/src/config.rs",
+      "module": "config",
+      "warning_count": 1,
+      "patterns": [
+        {
+          "type": "dead_code",
+          "line": 33,
+          "message": "field `schema_version` is never read"
+        }
+      ]
+    },
+    {
+      "file": "hoop-cli/src/projects.rs",
+      "module": "projects",
+      "warning_count": 1,
+      "patterns": [
+        {
+          "type": "dead_code",
+          "line": 391,
+          "message": "function `validate_workspace` is never used"
+        }
+      ]
+    },
+    {
+      "file": "hoop-cli/src/script.rs",
+      "module": "script",
+      "warning_count": 2,
+      "patterns": [
+        {
+          "type": "dead_code",
+          "line": 42,
+          "message": "field `script` is never read"
+        },
+        {
+          "type": "dead_code",
+          "line": 63,
+          "message": "field `name` is never read"
+        }
+      ]
+    },
+    {
+      "file": "hoop-cli/src/init.rs",
+      "module": "init",
+      "warning_count": 1,
+      "patterns": [
+        {
+          "type": "non_snake_case",
+          "line": 36,
+          "message": "structure field `DNSName` should have a snake case name"
+        }
+      ]
+    }
+  ],
+  "modules_summary": [
+    {
+      "module": "pattern_query_evaluator",
+      "file": "hoop-daemon/src/pattern_query_evaluator.rs",
+      "warning_count": 2,
+      "patterns": ["private_interfaces"]
+    },
+    {
+      "module": "reflection_detector",
+      "file": "hoop-daemon/src/reflection_detector.rs",
+      "warning_count": 1,
+      "patterns": ["private_interfaces"]
+    },
+    {
+      "module": "capacity",
+      "file": "hoop-daemon/src/capacity.rs",
+      "warning_count": 8,
+      "patterns": ["dead_code", "unnecessary_unwrap", "explicit_counter_loop"]
+    },
+    {
+      "module": "sessions",
+      "file": "hoop-daemon/src/sessions.rs",
+      "warning_count": 3,
+      "patterns": ["dead_code", "explicit_counter_loop"]
+    },
+    {
+      "module": "atomic_write",
+      "file": "hoop-daemon/src/atomic_write.rs",
+      "warning_count": 2,
+      "patterns": ["disallowed_methods"]
+    },
+    {
+      "module": "api_blame",
+      "file": "hoop-daemon/src/api_blame.rs",
+      "warning_count": 2,
+      "patterns": ["manual_strip"]
+    },
+    {
+      "module": "api_diff",
+      "file": "hoop-daemon/src/api_diff.rs",
+      "warning_count": 2,
+      "patterns": ["manual_strip"]
+    },
+    {
+      "module": "pdf_sanitize",
+      "file": "hoop-daemon/src/pdf_sanitize.rs",
+      "warning_count": 5,
+      "patterns": ["ptr_arg"]
+    },
+    {
+      "module": "uploads",
+      "file": "hoop-daemon/src/uploads.rs",
+      "warning_count": 6,
+      "patterns": ["disallowed_methods"]
+    },
+    {
+      "module": "screen_capture",
+      "file": "hoop-daemon/src/screen_capture.rs",
+      "warning_count": 5,
+      "patterns": ["disallowed_methods"]
+    },
+    {
+      "module": "config_resolver",
+      "file": "hoop-daemon/src/config_resolver.rs",
+      "warning_count": 3,
+      "patterns": ["if_same_then_else", "too_many_arguments"]
+    },
+    {
+      "module": "fleet",
+      "file": "hoop-daemon/src/fleet.rs",
+      "warning_count": 3,
+      "patterns": ["too_many_arguments"]
+    }
+  ]
+}
