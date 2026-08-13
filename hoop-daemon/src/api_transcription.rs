@@ -14,8 +14,6 @@ use axum::{
 };
 use serde::Deserialize;
 
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
 
 /// Query parameters for listing transcription jobs
 #[derive(Debug, Deserialize)]
