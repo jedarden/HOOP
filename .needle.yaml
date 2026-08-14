@@ -1,12 +1,15 @@
 prompt:
   context_files:
-    - AGENTS.md
-  instructions: |
-    This is the HOOP repository — a Rust daemon (hoop-daemon) + CLI (hoop-cli) + MCP server (hoop-mcp) + web UI (hoop-ui).
-    The project has active Rust code in all four crates. The canonical implementation plan is at docs/plan/plan.md.
-
-    COMMIT REQUIREMENT: Every completed bead MUST produce at least one git commit. This is mandatory.
-    - For implementation tasks: commit the Rust code, tests, or configuration you wrote.
-    - For documentation tasks: commit the markdown files you created or updated.
-    - For analysis tasks: create notes/<bead_id>.md with a brief summary and commit it.
-    Do not call `br close` without first running `git commit`. If you cannot produce any work product, do NOT close the bead — leave it for retry.
+  - AGENTS.md
+  instructions: "This is the HOOP repository \u2014 a Rust daemon (hoop-daemon) +\
+    \ CLI (hoop-cli) + MCP server (hoop-mcp) + web UI (hoop-ui).\nThe project has\
+    \ active Rust code in all four crates. The canonical implementation plan is at\
+    \ docs/plan/plan.md.\n\nCOMMIT REQUIREMENT: Every completed bead MUST produce\
+    \ at least one git commit. This is mandatory.\n- For implementation tasks: commit\
+    \ the Rust code, tests, or configuration you wrote.\n- For documentation tasks:\
+    \ commit the markdown files you created or updated.\n- For analysis tasks: create\
+    \ notes/<bead_id>.md with a brief summary and commit it.\nDo not call `br close`\
+    \ without first running `git commit`. If you cannot produce any work product,\
+    \ do NOT close the bead \u2014 leave it for retry.\n"
+bead_cli:
+  backend: bead-rs
