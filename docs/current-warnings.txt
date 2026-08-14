@@ -1,0 +1,80 @@
+warning: type `pattern_query_evaluator::QueryExpr` is more private than the item `pattern_query_evaluator::parse_query`
+warning: type `pattern_query_evaluator::QueryExpr` is more private than the item `pattern_query_evaluator::evaluate_query`
+warning: type `reflection_detector::PatternCategory` is more private than the item `reflection_detector::DetectedPattern::category`
+warning: function `openapi_router` is never used
+warning: function `load_hoop_config` is never used
+warning: function `check_and_emit_capacity_alert` is never used
+warning: field `session_id` is never read
+warning: function `get_opencode_limits` is never used
+warning: field `session_subpath` is never read
+warning: field `rpm_limit` is never read
+warning: struct `QuotaLimit` is never constructed
+warning: field `subpath` is never read
+warning: constant `MAX_UNASSIGNED_SESSIONS` is never used
+warning: constant `STITCH_CLOSED_THRESHOLD_SECONDS` is never used
+warning: consider using `sort_by_key`
+warning: consider using `sort_by_key`
+warning: consider using `sort_by_key`
+warning: consider using `sort_by_key`
+warning: use of a disallowed method `std::fs::File::create`
+warning: use of a disallowed method `std::fs::File::create`
+warning: use of a disallowed method `std::fs::write`
+warning: use of a disallowed method `std::fs::write`
+warning: use of a disallowed method `std::fs::write`
+warning: called `unwrap` on `gcp_quota_config` after checking its variant with `is_some`
+warning: called `unwrap` on `gcp_quota_config` after checking its variant with `is_some`
+warning: the variable `line_number` is used as a loop counter
+warning: the variable `line_number` is used as a loop counter
+warning: this `if` has identical blocks
+warning: this function has too many arguments (9/7)
+warning: this function has too many arguments (9/7)
+warning: large size difference between variants
+warning: this function has too many arguments (12/7)
+warning: redundant reference in `format!` argument
+warning: this function has too many arguments (8/7)
+warning: this function has too many arguments (8/7)
+warning: struct `IdentityCache` has a public `len` method, but no `is_empty` method
+warning: use of a disallowed method `std::fs::File::create`
+warning: use of a disallowed method `std::fs::File::create`
+warning: use of a disallowed method `std::fs::File::create`
+warning: use of a disallowed method `std::fs::write`
+warning: use of a disallowed method `std::fs::write`
+warning: writing `&mut Vec` instead of `&mut [_]` involves a new object where a slice will do
+warning: writing `&mut Vec` instead of `&mut [_]` involves a new object where a slice will do
+warning: writing `&mut Vec` instead of `&mut [_]` involves a new object where a slice will do
+warning: writing `&mut Vec` instead of `&mut [_]` involves a new object where a slice will do
+warning: writing `&mut Vec` instead of `&mut [_]` involves a new object where a slice will do
+warning: use of a disallowed method `std::fs::write`
+warning: the variable `line_number` is used as a loop counter
+warning: method `from_str` can be confused for the standard trait method `std::str::FromStr::from_str`
+warning: this function has too many arguments (9/7)
+warning: doc list item overindented
+warning: use of a disallowed method `std::fs::write`
+warning: use of a disallowed method `std::fs::write`
+warning: use of a disallowed method `std::fs::File::create`
+warning: use of a disallowed method `std::fs::write`
+warning: use of a disallowed method `std::fs::write`
+warning: use of a disallowed method `std::fs::write`
+warning: use of a disallowed method `std::fs::write`
+warning: stripping a prefix manually
+warning: stripping a prefix manually
+warning: stripping a prefix manually
+warning: stripping a prefix manually
+warning: use of a disallowed method `std::fs::write`
+warning: use of a disallowed method `std::fs::write`
+warning: use of a disallowed method `std::fs::write`
+warning: use of a disallowed method `std::fs::write`
+warning: use of a disallowed method `std::fs::File::create`
+warning: use of a disallowed method `std::fs::write`
+warning: use of a disallowed method `std::fs::write`
+warning: use of a disallowed method `std::fs::write`
+warning: consider using `sort_by_key`
+warning: `hoop-daemon` (lib) generated 71 warnings (run `cargo clippy --fix --lib -p hoop-daemon -- ` to apply 1 suggestion)
+warning: field `schema_version` is never read
+warning: function `validate_workspace` is never used
+warning: field `script` is never read
+warning: field `name` is never read
+warning: this `match` expression can be replaced with `?`
+warning: this `match` expression can be replaced with `?`
+warning: structure field `DNSName` should have a snake case name
+warning: `hoop` (bin "hoop") generated 7 warnings (run `cargo clippy --fix --bin "hoop" -p hoop -- ` to apply 2 suggestions)

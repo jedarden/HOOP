@@ -14,7 +14,7 @@
 use chrono::{DateTime, Duration, Utc};
 
 /// Derived Stitch status
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum StitchStatus {
     /// Stitch has active work: claimed bead or recent streaming
     InProgress,

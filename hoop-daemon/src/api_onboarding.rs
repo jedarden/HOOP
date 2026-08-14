@@ -225,7 +225,7 @@ pub async fn list_onboarding_prompts(
 
     // Sort by priority (descending)
     let mut sorted_prompts = final_prompts;
-    sorted_prompts.sort_by(|a, b| b.priority.cmp(&a.priority));
+    sorted_prompts.sort_by_key(|b| std::cmp::Reverse(b.priority));
 
     Ok(Json(OnboardingPromptsResponse {
         prompts: sorted_prompts,

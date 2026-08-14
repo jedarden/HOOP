@@ -368,9 +368,8 @@ fn parse_serde_yaml_details(msg: &str) -> (Option<String>, Option<String>, Optio
     // Pattern: invalid type: string "abc", expected a number at ...
     if msg.contains("invalid type") {
         // Extract expected type
-        let expected = if msg.contains("expected u8") || msg.contains("expected u16") || msg.contains("expected u32") || msg.contains("expected u64") || msg.contains("expected usize") {
-            Some("integer".to_string())
-        } else if msg.contains("expected i8") || msg.contains("expected i16") || msg.contains("expected i32") || msg.contains("expected i64") || msg.contains("expected isize") {
+        let expected = if msg.contains("expected u8") || msg.contains("expected u16") || msg.contains("expected u32") || msg.contains("expected u64") || msg.contains("expected usize") ||
+            msg.contains("expected i8") || msg.contains("expected i16") || msg.contains("expected i32") || msg.contains("expected i64") || msg.contains("expected isize") {
             Some("integer".to_string())
         } else if msg.contains("expected f32") || msg.contains("expected f64") {
             Some("number".to_string())
@@ -671,6 +670,16 @@ fn resolve_opt_none<T: Clone + Serialize>(
     )
 }
 
+/// Label metadata for config value attribution.
+///
+/// Used to generate human-readable attribution strings when resolving config values.
+#[derive(Debug, Clone)]
+struct ConfigLabels<'a> {
+    cli_label: &'a str,
+    env_label: &'a str,
+    file_label: &'a str,
+}
+
 /// Strict resolve with type validation for hot-reload (§17.5).
 ///
 /// Like `resolve_opt` but validates that config.yml values have the correct type.
@@ -682,23 +691,21 @@ fn resolve_opt_strict<T: Clone + Serialize>(
     yml_ref: Option<&serde_yaml::Value>,
     yml_path: &str,
     default: T,
-    cli_label: &str,
-    env_label: &str,
-    file_label: &str,
+    labels: ConfigLabels<'_>,
     type_validator: fn(&serde_yaml::Value, &str) -> Result<Option<T>, ConfigError>,
 ) -> Result<Resolved<T>, ConfigError> {
     if let Some(v) = cli {
         return Ok(Resolved::new(
             v,
             ConfigSource::CliFlag,
-            format!("cli flag {}", cli_label),
+            format!("cli flag {}", labels.cli_label),
         ));
     }
     if let Some(v) = env_val {
         return Ok(Resolved::new(
             v,
             ConfigSource::EnvVar,
-            format!("env {}", env_label),
+            format!("env {}", labels.env_label),
         ));
     }
 
@@ -713,7 +720,7 @@ fn resolve_opt_strict<T: Clone + Serialize>(
         return Ok(Resolved::new(
             v,
             ConfigSource::ConfigYml,
-            format!("config.yml: {}", file_label),
+            format!("config.yml: {}", labels.file_label),
         ));
     }
 

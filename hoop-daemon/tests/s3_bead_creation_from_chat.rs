@@ -20,13 +20,15 @@
 //! - Audit log missing stitch_id or operator identity
 //! - Audit log source != "chat"
 
+mod integration_harness;
+
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
-use hoop_daemon::integration_harness::spawn_test_daemon;
+use integration_harness::spawn_test_daemon;
 
 /// Path to the log file written by the fake br stub
 struct FakeBr {

@@ -180,7 +180,7 @@ async fn daemon_survives_simulated_anthropic_5xx() {
 #[tokio::test]
 async fn adapter_switch_creates_new_session_and_archives_old() {
     // Acceptance: Operator switches adapter via /api/agent/switch → new session created
-    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config| {
+    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config: &mut Config| {
         config.allow_br_mismatch = true;
     }))
     .await
@@ -258,7 +258,7 @@ async fn adapter_switch_creates_new_session_and_archives_old() {
 #[tokio::test]
 async fn old_session_transcript_preserved_as_stitch() {
     // Acceptance: Old session's final transcript preserved as closed Stitch (kind=operator)
-    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config| {
+    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config: &mut Config| {
         config.allow_br_mismatch = true;
     }))
     .await
@@ -337,7 +337,7 @@ async fn old_session_transcript_preserved_as_stitch() {
 #[tokio::test]
 async fn reflection_ledger_continuity_preserved_on_switch() {
     // Acceptance: Reflection Ledger continuity preserved
-    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config| {
+    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config: &mut Config| {
         config.allow_br_mismatch = true;
     }))
     .await
@@ -395,7 +395,7 @@ async fn reflection_ledger_continuity_preserved_on_switch() {
 #[tokio::test]
 async fn multiple_adapter_switches_create_multiple_stitches() {
     // Acceptance: Multiple switches archive each session as separate Stitch
-    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config| {
+    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config: &mut Config| {
         config.allow_br_mismatch = true;
     }))
     .await
@@ -473,7 +473,7 @@ async fn multiple_adapter_switches_create_multiple_stitches() {
 #[tokio::test]
 async fn adapter_switch_with_active_turn_preserves_continuity() {
     // Acceptance: Session continuity surfaced after switch (Reflection Ledger carried forward)
-    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config| {
+    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config: &mut Config| {
         config.allow_br_mismatch = true;
     }))
     .await
@@ -532,7 +532,7 @@ async fn adapter_switch_with_active_turn_preserves_continuity() {
 #[tokio::test]
 async fn concurrent_switch_requests_are_handled_gracefully() {
     // Acceptance: Daemon handles concurrent switch requests gracefully
-    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config| {
+    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config: &mut Config| {
         config.allow_br_mismatch = true;
     }))
     .await
@@ -805,7 +805,7 @@ async fn anthropic_5xx_mock_server_daemon_survives() {
         .expect("Failed to start mock Anthropic server");
 
     // Spawn daemon with custom config pointing to mock server
-    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config| {
+    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config: &mut Config| {
         config.allow_br_mismatch = true;
     }))
     .await
@@ -910,7 +910,7 @@ async fn anthropic_5xx_mock_then_adapter_switch_recovery() {
         .expect("Failed to start mock Anthropic server");
 
     // Spawn daemon
-    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config| {
+    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config: &mut Config| {
         config.allow_br_mismatch = true;
     }))
     .await

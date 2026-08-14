@@ -1000,9 +1000,24 @@ pub mod commands {
     pub const PATTERNS: &str = "patterns";
     pub const ADD: &str = "add";
     pub const SHOW: &str = "show";
+    pub const RESTORE: &str = "restore";
+    pub const BACKUP: &str = "backup";
+    pub const MIGRATE: &str = "migrate";
+    pub const AUDIT: &str = "audit";
+    pub const STITCH: &str = "stitch";
+    pub const CONFIG: &str = "config";
+    pub const SCRIPT: &str = "script";
+    pub const AGENT: &str = "agent";
+    pub const NEW: &str = "new";
+    pub const SERVE: &str = "serve";
+    pub const INSTALL_SYSTEMD: &str = "install-systemd";
 
     /// All known top-level subcommands
-    pub const TOP_LEVEL: &[&str] = &[SCAN, INIT, REMOVE, STATUS, LIST, PROJECTS, PATTERNS];
+    pub const TOP_LEVEL: &[&str] = &[
+        SCAN, INIT, REMOVE, STATUS, LIST, PROJECTS, PATTERNS,
+        RESTORE, BACKUP, MIGRATE, AUDIT, STITCH, CONFIG, SCRIPT,
+        AGENT, NEW, SERVE, INSTALL_SYSTEMD,
+    ];
 
     /// All known nested subcommands
     pub const NESTED: &[&str] = &[REMOVE, ADD, SHOW];

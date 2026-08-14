@@ -255,7 +255,7 @@ async fn ws_init_event_is_first_message() {
         .await
         .expect("Failed to spawn daemon");
 
-    let client = TestClient::new(base_url).await.expect("Failed to create test client");
+    let _client = TestClient::new(base_url.clone()).await.expect("Failed to create test client");
 
     let ws_url = base_url.replace("http://", "ws://");
     let ws_url = format!("{}/ws", ws_url);

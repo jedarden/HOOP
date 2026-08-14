@@ -48,11 +48,12 @@ fn create_beads_dir(path: &std::path::Path) -> tempfile::TempDir {
 async fn create_test_supervisor() -> ProjectSupervisor {
     let (bead_tx, _) = tokio::sync::broadcast::channel(64);
     let (session_tx, _) = tokio::sync::broadcast::channel(64);
-    let worker_registry = Arc::new(WorkerRegistry::new());
+    let (monitor_tx, _) = tokio::sync::broadcast::channel(64);
+    let worker_registry = Arc::new(WorkerRegistry::new(monitor_tx, session_tx));
     let beads = Arc::new(std::sync::RwLock::new(Vec::<Bead>::new()));
     let shutdown = Arc::new(ShutdownCoordinator::new());
     let cost_aggregator = Arc::new(std::sync::RwLock::new(
-        hoop_daemon::cost::CostAggregator::new(),
+        hoop_daemon::cost::CostAggregator::new(PathBuf::from("/tmp/test-cost.json")).expect("Failed to create cost aggregator"),
     ));
     let vector_index = Arc::new(std::sync::RwLock::new(
         hoop_daemon::vector_index::VectorIndex::new(),
@@ -85,7 +86,7 @@ fn create_test_config(projects: Vec<ProjectsRegistryProjectsItem>) -> ProjectsCo
         let path = project.workspace_views().first().map(|v| v.path.clone());
         if let Some(path) = path {
             if let Ok(canonical) = std::fs::canonicalize(&path) {
-                canonical_cache.insert(format!("{}:{}", name, path), canonical);
+                canonical_cache.insert((name.to_string(), path), canonical);
             }
         }
     }
@@ -151,7 +152,7 @@ async fn test_graceful_shutdown_on_project_removal() {
 
     // Start with two projects
     let config_two = create_test_config(vec![
-        create_test_project("project-1", project1_path),
+        create_test_project("project-1", project1_path.clone()),
         create_test_project("project-2", project2_path),
     ]);
 

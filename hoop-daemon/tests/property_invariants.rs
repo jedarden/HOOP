@@ -74,8 +74,14 @@ use chrono::{DateTime, Duration, Timelike, Utc};
 use proptest::prelude::*;
 use proptest::strategy::Strategy;
 use std::collections::{HashMap, HashSet};
-use std::io::Write;
+use std::io::{BufRead, Write};
+use std::fs::File;
+use std::io::BufReader;
 use tempfile::TempDir;
+
+// Import HOOP daemon types for tests
+use hoop_daemon::stitch_status::{LinkedBead, StitchActivity, StitchContext, StitchStatus};
+use hoop_daemon::events::{NeedleEvent, WorkerEvent};
 
 // ============================================================================
 // Invariant 1: Event Ordering (§14.2)
@@ -376,7 +382,7 @@ mod status_monotonicity {
             let status3 = ctx.derive_status();
 
             // All calls must return the same result
-            prop_assert_eq!(status1, status2, "First and second calls differ");
+            prop_assert_eq!(status1, status2.clone(), "First and second calls differ");
             prop_assert_eq!(status2, status3, "Second and third calls differ");
         }
     }

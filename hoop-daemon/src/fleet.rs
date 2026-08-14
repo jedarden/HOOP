@@ -21,7 +21,7 @@ use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 /// Current schema version
-pub const SCHEMA_VERSION: &str = "1.34.0";
+pub const SCHEMA_VERSION: &str = "1.33.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -107,6 +107,24 @@ pub struct BeadActionArgs {
     pub priority: Option<i64>,
     pub dependencies: Vec<String>,
     pub labels: Vec<String>,
+}
+
+/// Audit metadata for agent-originated stitches
+///
+/// When a stitch is created from an agent-drafted stitch, these fields
+/// enable full reconstruction back to the agent session and turn that created it.
+#[derive(Debug, Clone, Default)]
+pub struct StitchAuditMetadata<'a> {
+    /// Actor that created the stitch (e.g., "agent", "operator")
+    pub created_by_actor: Option<&'a str>,
+    /// Session ID of the agent or operator
+    pub created_by_session_id: Option<&'a str>,
+    /// Adapter used (e.g., "claude", "anthropic", "zai")
+    pub created_by_adapter: Option<&'a str>,
+    /// Model used (e.g., "claude-opus-4-7")
+    pub created_by_model: Option<&'a str>,
+    /// Turn ID within the agent session
+    pub turn_id: Option<&'a str>,
 }
 
 impl BeadActionArgs {
@@ -629,11 +647,7 @@ pub fn create_stitch(
         created_by,
         bead_ids,
         classification,
-        None, // created_by_actor
-        None, // created_by_session_id
-        None, // created_by_adapter
-        None, // created_by_model
-        None, // turn_id
+        StitchAuditMetadata::default(),
     )
 }
 
@@ -650,11 +664,7 @@ pub fn create_stitch_with_audit(
     created_by: &str,
     bead_ids: &[(&str, &str)], // (bead_id, workspace)
     classification: &str,
-    created_by_actor: Option<&str>,
-    created_by_session_id: Option<&str>,
-    created_by_adapter: Option<&str>,
-    created_by_model: Option<&str>,
-    turn_id: Option<&str>,
+    audit: StitchAuditMetadata<'_>,
 ) -> Result<()> {
     let path = db_path();
     let conn = Connection::open(&path)?;
@@ -667,11 +677,11 @@ pub fn create_stitch_with_audit(
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
         params![stitch_id, project, kind, title, created_by, now, now, classification,
-                created_by_actor, created_by_session_id, created_by_adapter, created_by_model, turn_id],
+                audit.created_by_actor, audit.created_by_session_id, audit.created_by_adapter, audit.created_by_model, audit.turn_id],
     )?;
 
     // Store turn_id in stitch_messages as a system note if provided (for UI display)
-    if let Some(tid) = turn_id {
+    if let Some(tid) = audit.turn_id {
         conn.execute(
             r#"
             INSERT INTO stitch_messages (id, stitch_id, role, content, created_at)
@@ -1545,10 +1555,42 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
         "1.28.0" => {
             migrate!(conn, migrate_v128_to_v129, "1.28.0", "1.29.0", "Add workspace_from/to to stitch_links")?;
             migrate!(conn, migrate_v129_to_v130, "1.29.0", "1.30.0", "Multi-operator concurrency (§19)")?;
+            migrate!(conn, migrate_v130_to_v131, "1.30.0", "1.31.0", "Add agent_sessions table")?;
+            migrate!(conn, migrate_v131_to_v132, "1.31.0", "1.32.0", "Add reflection_ledger table")?;
+            migrate!(conn, migrate_v132_to_v133, "1.32.0", "1.33.0", "Add morning_brief table")?;
+            migrate!(conn, migrate_v133_to_v134, "1.33.0", "1.34.0", "Add skills table")?;
+        }
+        "1.29.0" => {
+            migrate!(conn, migrate_v129_to_v130, "1.29.0", "1.30.0", "Multi-operator concurrency (§19)")?;
+            migrate!(conn, migrate_v130_to_v131, "1.30.0", "1.31.0", "Add agent_sessions table")?;
+            migrate!(conn, migrate_v131_to_v132, "1.31.0", "1.32.0", "Add reflection_ledger table")?;
+            migrate!(conn, migrate_v132_to_v133, "1.32.0", "1.33.0", "Add morning_brief table")?;
+            migrate!(conn, migrate_v133_to_v134, "1.33.0", "1.34.0", "Add skills table")?;
+        }
+        "1.30.0" => {
+            migrate!(conn, migrate_v130_to_v131, "1.30.0", "1.31.0", "Add agent_sessions table")?;
+            migrate!(conn, migrate_v131_to_v132, "1.31.0", "1.32.0", "Add reflection_ledger table")?;
+            migrate!(conn, migrate_v132_to_v133, "1.32.0", "1.33.0", "Add morning_brief table")?;
+            migrate!(conn, migrate_v133_to_v134, "1.33.0", "1.34.0", "Add skills table")?;
+        }
+        "1.31.0" => {
+            migrate!(conn, migrate_v131_to_v132, "1.31.0", "1.32.0", "Add reflection_ledger table")?;
+            migrate!(conn, migrate_v132_to_v133, "1.32.0", "1.33.0", "Add morning_brief table")?;
+            migrate!(conn, migrate_v133_to_v134, "1.33.0", "1.34.0", "Add skills table")?;
+        }
+        "1.32.0" => {
+            migrate!(conn, migrate_v132_to_v133, "1.32.0", "1.33.0", "Add morning_brief table")?;
+            migrate!(conn, migrate_v133_to_v134, "1.33.0", "1.34.0", "Add skills table")?;
+        }
+        "1.33.0" => {
+            migrate!(conn, migrate_v133_to_v134, "1.33.0", "1.34.0", "Add skills table")?;
+        }
+        "1.34.0" => {
+            // Database is at current schema version - no migration needed
         }
         _ => {
             return Err(anyhow::anyhow!(
-                "Unsupported schema version: {}. Expected 0.1.0–1.28.0",
+                "Unsupported schema version: {}. Expected 0.1.0–1.34.0",
                 from_version
             ));
         }

@@ -705,6 +705,14 @@ pub async fn submit_stitch_internal(
     let audit_model = agent_metadata.map(|m| m.model.as_str());
     let audit_turn_id = agent_metadata.and_then(|m| m.turn_id.as_deref());
 
+    let audit_metadata = fleet::StitchAuditMetadata {
+        created_by_actor: audit_actor.as_deref(),
+        created_by_session_id: audit_session_id,
+        created_by_adapter: audit_adapter,
+        created_by_model: audit_model,
+        turn_id: audit_turn_id,
+    };
+
     if let Err(e) = fleet::create_stitch_with_audit(
         &stitch_id,
         project,
@@ -713,11 +721,7 @@ pub async fn submit_stitch_internal(
         actor,
         &bead_links,
         "operator",
-        audit_actor.as_deref(),
-        audit_session_id,
-        audit_adapter,
-        audit_model,
-        audit_turn_id,
+        audit_metadata,
     ) {
         warn!("Failed to persist stitch row for {}: {}", stitch_id, e);
     }
