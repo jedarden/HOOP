@@ -1592,6 +1592,7 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     info!("Running startup audit...");
     let audit_config = audit::AuditConfig {
         allow_br_mismatch: config.allow_br_mismatch,
+        server_bind_addr: config.bind_addr,
         ..Default::default()
     };
     if let Err(e) = audit::daemon_startup_check(&audit_config) {

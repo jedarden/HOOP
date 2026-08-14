@@ -141,6 +141,8 @@ pub struct AuditConfig {
     pub command_timeout: Duration,
     /// Allow br version mismatch (dev override for --allow-br-mismatch)
     pub allow_br_mismatch: bool,
+    /// Server bind address to check for port availability
+    pub server_bind_addr: std::net::SocketAddr,
 }
 
 impl Default for AuditConfig {
@@ -150,6 +152,7 @@ impl Default for AuditConfig {
             include_optional: true,
             command_timeout: Duration::from_secs(5),
             allow_br_mismatch: false,
+            server_bind_addr: std::net::SocketAddr::from(([127, 0, 0, 1], 3030)),
         }
     }
 }
@@ -161,6 +164,12 @@ impl AuditConfig {
             project_paths,
             ..Default::default()
         }
+    }
+
+    /// Set the server bind address
+    pub fn with_bind_addr(mut self, bind_addr: std::net::SocketAddr) -> Self {
+        self.server_bind_addr = bind_addr;
+        self
     }
 }
 
@@ -185,7 +194,7 @@ pub fn run_audit(config: &AuditConfig) -> AuditReport {
         checks.push(check_br_version());
     }
     checks.push(check_tmux());
-    checks.push(check_port_availability());
+    checks.push(check_port_availability(config.server_bind_addr));
     checks.extend(check_beads_accessibility(&config.project_paths));
     checks.push(check_cli_adapter_binaries());
     checks.push(check_cli_session_dirs());
@@ -288,11 +297,14 @@ fn check_tmux() -> AuditCheck {
     }
 }
 
-/// Check if the default HOOP port (3000) is available
-fn check_port_availability() -> AuditCheck {
+/// Check if the configured HOOP port is available
+fn check_port_availability(bind_addr: std::net::SocketAddr) -> AuditCheck {
     use std::net::TcpListener;
 
-    match TcpListener::bind("127.0.0.1:3000") {
+    let port = bind_addr.port();
+    let addr_str = format!("127.0.0.1:{}", port);
+
+    match TcpListener::bind(&addr_str) {
         Ok(listener) => {
             // Successfully bound - port is available
             let local_addr = listener.local_addr().ok();
@@ -302,7 +314,8 @@ fn check_port_availability() -> AuditCheck {
             AuditCheck::passed(
                 "port_availability",
                 format!(
-                    "Port 3000 is available on {}",
+                    "Port {} is available on {}",
+                    port,
                     local_addr.map(|a| a.to_string()).unwrap_or_else(|| "127.0.0.1".to_string())
                 ),
             )
@@ -310,22 +323,22 @@ fn check_port_availability() -> AuditCheck {
         Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
             AuditCheck::critical(
                 "port_availability",
-                "Port 3000 is already in use",
-                "lsof -i :3000  # Find process using the port\n  kill <PID>  # Or change port in ~/.hoop/config.yml",
+                format!("Port {} is already in use", port),
+                format!("lsof -i :{}  # Find process using the port\n  kill <PID>  # Or change port in ~/.hoop/config.yml", port),
             )
         }
         Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
             AuditCheck::critical(
                 "port_availability",
-                "Permission denied to bind port 3000",
+                format!("Permission denied to bind port {}", port),
                 "sudo -v  # Check permissions, or use a port >1024",
             )
         }
         Err(e) => {
             AuditCheck::warning(
                 "port_availability",
-                format!("Cannot check port 3000 availability: {}", e),
-                "netstat -tuln | grep 3000  # Manual check",
+                format!("Cannot check port {} availability: {}", port, e),
+                format!("netstat -tuln | grep {}  # Manual check", port),
             )
         }
     }
