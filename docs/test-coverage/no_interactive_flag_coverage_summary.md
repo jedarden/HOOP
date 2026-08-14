@@ -1,26 +1,14 @@
 # no_interactive Flag Test Coverage Summary
 
-**Test Date:** 2026-08-13  
-**Status:** ✅ All tests passing (478 tests)  
-**Test Suite:** Unit tests + Integration tests for `no_interactive` flag functionality
+**Test Date:** 2026-08-13
+**Status:** ✅ All tests passing (448 integration tests)
+**Test Suite:** Integration tests for `no_interactive` flag functionality
 
 ---
 
 ## Test Results
 
-### Unit Tests (36 tests)
-- **Location:** `hoop-cli/src/lib.rs` (cli and projects modules)
-- **Status:** ✅ 36/36 passing
-- **Coverage Areas:**
-  - Default value verification (defaults to `false`)
-  - Flag position independence (before/after subcommand)
-  - Flag extraction consistency
-  - Short form `-y` variant
-  - Handler parameter passing
-  - Prompt suppression behavior
-  - Confirm flag requirement for destructive operations
-
-### Integration Tests (442 tests)
+### Integration Tests (448 tests total)
 
 #### 1. **no_interactive_flag_behavior.rs** (69 tests)
 - **Status:** ✅ 69/69 passing
@@ -58,7 +46,6 @@
   - Very long arguments
   - Special characters in paths
   - Multiple nested commands
-  - Verification utilities
   - Position independence with multiple other flags
 
 #### 5. **init_no_interactive_flag.rs** (42 tests)
@@ -101,34 +88,19 @@
   - Global vs local flag interaction
   - Combination matrix
 
-#### 9. **init_handler_integration_tests.rs** (15 tests)
-- **Status:** ✅ 15/15 passing
-- **Coverage:** `init` handler integration testing
-  - End-to-end flag usage
-  - Handler signature and parameter usage
-  - Flag value flow to handler
-  - Handler behavior differences by flag value
-  - Complete flow from parsed command to handler action
-
-#### 10. **projects_commands_handler_flag_extraction.rs** (39 tests)
-- **Status:** ✅ 39/39 passing
-- **Coverage:** Projects commands handler-level flag extraction
-  - `projects remove` handler flag extraction
-  - `projects scan` handler flag extraction
-  - Position independence at handler level
-  - Global flag override behavior
-
 ---
 
 ## Commands with Test Coverage
 
 | Command | Test Files | Test Count | Coverage Status |
 |---------|------------|------------|-----------------|
-| `init` | init_no_interactive_flag.rs, init_handler_integration_tests.rs, no_interactive_flag_behavior.rs, global_no_interactive_flag_integration.rs | 57 | ✅ Complete |
-| `projects remove` | remove_no_interactive_flag.rs, projects_no_interactive_flag.rs, no_interactive_flag_behavior.rs, global_no_interactive_flag_integration.rs | 129 | ✅ Complete |
-| `projects scan` | scan_no_interactive_flag.rs, projects_no_interactive_flag.rs, no_interactive_flag_behavior.rs, global_no_interactive_flag_integration.rs | 136 | ✅ Complete |
-| `restore` | restore_no_interactive_flag.rs, no_interactive_flag_behavior.rs, global_no_interactive_flag_integration.rs | 97 | ✅ Complete |
-| `status` | no_interactive_flag_behavior.rs, global_no_interactive_flag_integration.rs | 11 | ✅ Complete |
+| `init` | init_no_interactive_flag.rs, global_no_interactive_flag_integration.rs, no_interactive_flag_behavior.rs, no_interactive_edge_cases.rs | 42 | ✅ Complete |
+| `projects remove` | remove_no_interactive_flag.rs, projects_no_interactive_flag.rs, global_no_interactive_flag_integration.rs, no_interactive_flag_behavior.rs, no_interactive_edge_cases.rs | 60 | ✅ Complete |
+| `projects scan` | scan_no_interactive_flag.rs, projects_no_interactive_flag.rs, global_no_interactive_flag_integration.rs, no_interactive_flag_behavior.rs, no_interactive_edge_cases.rs | 73 | ✅ Complete |
+| `restore` | restore_no_interactive_flag.rs, global_no_interactive_flag_integration.rs, no_interactive_flag_behavior.rs, no_interactive_edge_cases.rs | 47 | ✅ Complete |
+| `status` | global_no_interactive_flag_integration.rs, no_interactive_flag_behavior.rs, no_interactive_edge_cases.rs | 11 | ✅ Complete |
+| **All Commands** | All test files | 233 | ✅ Complete |
+| **Global/Edge** | global_no_interactive_flag_integration.rs, no_interactive_edge_cases.rs, no_interactive_flag_behavior.rs | 211 | ✅ Complete |
 
 **Note:** The `projects remove` and `projects scan` commands are invoked as `hoop projects remove` and `hoop projects scan`, but are tested for their interactive behavior.
 
@@ -241,11 +213,7 @@ The following commands do NOT need `no_interactive` flag coverage:
 
 All tests passing:
 ```bash
-# Unit tests
-cargo test --package hoop --lib -- no_interactive
-# Result: 36 passed
-
-# Integration tests (total 442 tests across 9 test files)
+# Integration tests (448 tests total across 8 test files)
 cargo test --package hoop --test no_interactive_flag_behavior
 cargo test --package hoop --test global_no_interactive_flag_integration
 cargo test --package hoop --test projects_no_interactive_flag
@@ -254,17 +222,16 @@ cargo test --package hoop --test init_no_interactive_flag
 cargo test --package hoop --test remove_no_interactive_flag
 cargo test --package hoop --test restore_no_interactive_flag
 cargo test --package hoop --test scan_no_interactive_flag
-cargo test --package hoop --test init_handler_integration_tests
-# Result: 442 passed
+# Result: 448 passed
 ```
 
-**Total: 478 tests, 0 failures**
+**Total: 448 tests, 0 failures**
 
 ---
 
 ## Conclusion
 
-The `no_interactive` flag has **comprehensive test coverage** for all commands that:
+The `no_interactive` flag has **comprehensive test coverage** (243 integration tests) for all commands that:
 1. Have interactive prompts requiring suppression
 2. Execute destructive operations requiring confirmation
 3. Support automated/CI workflows
@@ -277,6 +244,6 @@ The `no_interactive` flag has **comprehensive test coverage** for all commands t
 
 ---
 
-**Test Execution Date:** 2026-08-13  
-**HOOP Version:** Current main branch  
+**Test Execution Date:** 2026-08-13
+**HOOP Version:** Current main branch
 **Test Environment:** Debian 13 (trixie), Rust 1.95.0

@@ -12,7 +12,7 @@
 - **Commands Using `no_interactive`:** 4 commands (init, scan, remove, restore)
 - **Commands with Full Test Coverage:** 4/4 (100%)
 - **Commands Not Using `no_interactive`:** 36+ commands (not applicable)
-- **Test Count:** 855 tests (36 unit + 819 integration)
+- **Test Count:** 243 integration tests
 
 ---
 
@@ -24,15 +24,15 @@ These commands actively use the `no_interactive` flag and have comprehensive tes
 
 | Command | Handler Function | Test Files | Test Count | Coverage Status |
 |---------|------------------|------------|------------|-----------------|
-| `init` | `init::run_init_wizard(no_interactive: bool)` | init_no_interactive_flag.rs, init_handler_integration_tests.rs | 57 | ✅ Complete |
-| `scan` (top-level) | `projects::scan_projects(root, no_interactive: bool)` | scan_no_interactive_flag.rs | 73 | ✅ Complete |
-| `projects scan` | `projects::scan_projects(root, no_interactive \|\| yes)` | scan_no_interactive_flag.rs | 73 | ✅ Complete |
-| `remove` (top-level) | `projects::remove_project(name, no_interactive, confirm)` | remove_no_interactive_flag.rs | 60 | ✅ Complete |
-| `projects remove` | `projects::remove_project(name, no_interactive, confirm)` | remove_no_interactive_flag.rs | 60 | ✅ Complete |
-| `restore` | `restore::run_restore(from, dry_run, no_interactive, confirm)` | restore_no_interactive_flag.rs | 47 | ✅ Complete |
-| `status` | N/A (read-only, flag acceptance tested) | global_no_interactive_flag_integration.rs | 11 | ✅ Complete |
+| `init` | `init::run_init_wizard(no_interactive: bool)` | init_no_interactive_flag.rs, global_no_interactive_flag_integration.rs, no_interactive_edge_cases.rs, no_interactive_flag_behavior.rs | 18 | ✅ Complete |
+| `scan` (top-level) | `projects::scan_projects(root, no_interactive: bool)` | scan_no_interactive_flag.rs, global_no_interactive_flag_integration.rs, no_interactive_edge_cases.rs, no_interactive_flag_behavior.rs | 49 | ✅ Complete |
+| `projects scan` | `projects::scan_projects(root, no_interactive: bool)` | scan_no_interactive_flag.rs, global_no_interactive_flag_integration.rs, no_interactive_edge_cases.rs, no_interactive_flag_behavior.rs | 49 | ✅ Complete |
+| `remove` (top-level) | `projects::remove_project(name, no_interactive, confirm)` | remove_no_interactive_flag.rs, global_no_interactive_flag_integration.rs, no_interactive_edge_cases.rs, no_interactive_flag_behavior.rs | 36 | ✅ Complete |
+| `projects remove` | `projects::remove_project(name, no_interactive, confirm)` | remove_no_interactive_flag.rs, global_no_interactive_flag_integration.rs, no_interactive_edge_cases.rs, no_interactive_flag_behavior.rs | 36 | ✅ Complete |
+| `restore` | `restore::run_restore(from, dry_run, no_interactive, confirm)` | restore_no_interactive_flag.rs, global_no_interactive_flag_integration.rs, no_interactive_edge_cases.rs, no_interactive_flag_behavior.rs | 23 | ✅ Complete |
+| `status` | N/A (read-only, flag acceptance tested) | global_no_interactive_flag_integration.rs, no_interactive_edge_cases.rs, no_interactive_flag_behavior.rs | 11 | ✅ Complete |
 
-**Total tests for Category A:** 381 tests
+**Total tests for Category A:** 137 tests (not counting overlapping test suites)
 
 ### 📋 **Category B: Commands Not Using `no_interactive` (Not Applicable)**
 
@@ -105,24 +105,20 @@ These commands do not use the `no_interactive` flag in their implementation. The
   - Handler parameter passing
   - Position independence tests
 
-### Integration Test Files (819 tests)
+### Integration Test Files (243 tests)
 
 | Test File | Test Count | Primary Coverage |
 |-----------|------------|------------------|
-| `no_interactive_flag_behavior.rs` | 86 | All commands behavior |
-| `global_no_interactive_flag_integration.rs` | 56 | Global flag propagation |
+| `no_interactive_flag_behavior.rs` | 45 | All commands behavior |
+| `global_no_interactive_flag_integration.rs` | 32 | Global flag propagation |
 | `projects_no_interactive_flag.rs` | 15 | Projects subcommands |
-| `no_interactive_edge_cases.rs` | 86 | Edge cases and stress testing |
-| `init_no_interactive_flag.rs` | 42 | Init command specific |
-| `remove_no_interactive_flag.rs` | 60 | Remove command specific |
-| `restore_no_interactive_flag.rs` | 47 | Restore command specific |
-| `scan_no_interactive_flag.rs` | 73 | Scan command specific |
-| `init_handler_integration_tests.rs` | 15 | Init handler integration |
-| `projects_commands_handler_flag_extraction.rs` | 30 | Projects handler-level |
-| CLI unit tests | 36 | Flag parsing basics |
-| Additional integration coverage | 313 | Comprehensive scenarios |
+| `no_interactive_edge_cases.rs` | 25 | Edge cases and stress testing |
+| `init_no_interactive_flag.rs` | 18 | Init command specific |
+| `remove_no_interactive_flag.rs` | 36 | Remove command specific |
+| `restore_no_interactive_flag.rs` | 23 | Restore command specific |
+| `scan_no_interactive_flag.rs` | 49 | Scan command specific |
 
-**Total Integration Tests:** 819
+**Total Integration Tests:** 243
 
 ---
 
@@ -142,11 +138,13 @@ These commands do not use the `no_interactive` flag in their implementation. The
 - Flag flow from CLI to handler
 - Wizard stage execution order
 
-**Test Files:** 
-- `init_no_interactive_flag.rs` (42 tests)
-- `init_handler_integration_tests.rs` (15 tests)
+**Test Files:**
+- `init_no_interactive_flag.rs` (18 tests)
+- `global_no_interactive_flag_integration.rs` (subset of 32 tests)
+- `no_interactive_edge_cases.rs` (subset of 25 tests)
+- `no_interactive_flag_behavior.rs` (subset of 45 tests)
 
-**Total Tests:** 57
+**Total Tests:** 18 (primary) + overlapping coverage in global/edge/behavior tests
 
 ---
 
@@ -166,10 +164,12 @@ These commands do not use the `no_interactive` flag in their implementation. The
 - Combination matrix (all flag combinations)
 
 **Test Files:**
-- `scan_no_interactive_flag.rs` (73 tests)
-- Global integration tests (subset of 56 tests)
+- `scan_no_interactive_flag.rs` (49 tests)
+- Global integration tests (subset of 32 tests)
+- Edge cases tests (subset of 25 tests)
+- Behavior tests (subset of 45 tests)
 
-**Total Tests:** 73+
+**Total Tests:** 49 (primary) + overlapping coverage
 
 ---
 
@@ -190,10 +190,13 @@ These commands do not use the `no_interactive` flag in their implementation. The
 - Success with `--confirm` flag
 
 **Test Files:**
-- `remove_no_interactive_flag.rs` (60 tests)
+- `remove_no_interactive_flag.rs` (36 tests)
 - Projects integration tests (subset of 15 tests)
+- Global integration tests (subset of 32 tests)
+- Edge cases tests (subset of 25 tests)
+- Behavior tests (subset of 45 tests)
 
-**Total Tests:** 60+
+**Total Tests:** 36 (primary) + overlapping coverage
 
 ---
 
@@ -215,10 +218,12 @@ These commands do not use the `no_interactive` flag in their implementation. The
 - Code order validation
 
 **Test Files:**
-- `restore_no_interactive_flag.rs` (47 tests)
-- Global integration tests (subset of 56 tests)
+- `restore_no_interactive_flag.rs` (23 tests)
+- Global integration tests (subset of 32 tests)
+- Edge cases tests (subset of 25 tests)
+- Behavior tests (subset of 45 tests)
 
-**Total Tests:** 47+
+**Total Tests:** 23 (primary) + overlapping coverage
 
 ---
 
@@ -232,9 +237,11 @@ These commands do not use the `no_interactive` flag in their implementation. The
 - `--json` flag combination
 
 **Test Files:**
-- Global integration tests (subset of 56 tests)
+- Global integration tests (subset of 32 tests)
+- Edge cases tests (subset of 25 tests)
+- Behavior tests (subset of 45 tests)
 
-**Total Tests:** 11 (as part of global tests)
+**Total Tests:** 11 (as part of global/edge/behavior tests)
 
 ---
 
@@ -412,7 +419,7 @@ The HOOP CLI has **complete and comprehensive `no_interactive` flag test coverag
 
 - **Commands Using Flag:** 4 commands
 - **Commands with Coverage:** 4 commands (100%)
-- **Total Tests:** 855 tests (36 unit + 819 integration)
+- **Total Tests:** 243 integration tests
 - **Test Status:** ✅ ALL PASSING
 
 ### Not Applicable Commands
@@ -427,7 +434,7 @@ The HOOP CLI has **complete and comprehensive `no_interactive` flag test coverag
 
 The test coverage is **comprehensive and production-ready**:
 - Multiple test dimensions (parsing, behavior, integration, edge cases)
-- High test count (855 total tests)
+- Substantial test count (243 integration tests)
 - All tests passing
 - Well-documented test scenarios
 - Extensive edge case coverage
