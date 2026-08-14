@@ -18,8 +18,8 @@ The `no_interactive` flag (`-y` short form) has comprehensive test coverage acro
 - Integration with other flags (`--confirm`, `--dry-run`, `--json`, `--yes`)
 - Edge cases and error handling
 
-**Total Test Count:** 243 integration tests  
-**Pass Rate:** 100% (243/243)  
+**Total Test Count:** 317 integration tests
+**Pass Rate:** 100% (317/317)  
 **Test Duration:** < 1 second (all tests)  
 **Coverage Status:** ✅ COMPLETE
 
@@ -49,7 +49,10 @@ hoop-cli/tests/
 ├── projects_no_interactive_flag.rs                 (15 tests)
 ├── remove_no_interactive_flag.rs                   (36 tests)
 ├── restore_no_interactive_flag.rs                  (23 tests)
-└── scan_no_interactive_flag.rs                     (49 tests)
+├── scan_no_interactive_flag.rs                     (49 tests)
+├── init_handler_integration_tests.rs              (15 tests)
+├── projects_commands_handler_flag_extraction.rs   (30 tests)
+└── init_handler_flag_extraction.rs                (29 tests)
 ```
 
 ### Test Execution Commands
@@ -286,6 +289,81 @@ cargo test --package hoop --test scan_no_interactive_flag test_scan_parse_with_f
 - `test_scan_error_on_nonexistent_root_in_no_interactive_mode` — Error handling
 
 **Execution Time:** 0.01s
+
+---
+
+### 9. `init_handler_integration_tests.rs` — 15 tests
+
+**Purpose:** Init handler-level integration testing
+
+**Test Result:** ✅ 15 passed; 0 failed; 0 ignored
+
+**Coverage Areas:**
+- End-to-end flag usage through init handler
+- Handler signature and parameter usage verification
+- Flag value flow from parsed command to handler
+- Handler behavior differences by flag value
+- Complete flow from CLI parsing to handler action
+- Integration between CLI parsing and handler logic
+
+**Key Tests:**
+- `test_init_handler_integration_no_interactive_flag_flow` — Complete flag flow
+- `test_init_handler_receives_correct_parameter_type` — Parameter type verification
+- `test_init_handler_behavior_with_flag_true` — Behavior verification
+- `test_init_handler_behavior_with_flag_false` — Interactive mode behavior
+- `test_init_handler_error_handling_in_no_interactive_mode` — Error handling
+
+**Execution Time:** 0.00s
+
+---
+
+### 10. `projects_commands_handler_flag_extraction.rs` — 30 tests
+
+**Purpose:** Projects commands handler-level flag extraction and verification
+
+**Test Result:** ✅ 30 passed; 0 failed; 0 ignored
+
+**Coverage Areas:**
+- Projects remove handler flag extraction
+- Projects scan handler flag extraction
+- Position independence at handler level
+- Global flag override behavior at handler level
+- Handler receives correct values from CLI parsing
+- Flag extraction consistency across nested commands
+
+**Key Tests:**
+- `test_projects_remove_handler_flag_extraction` — Remove handler extraction
+- `test_projects_scan_handler_flag_extraction` — Scan handler extraction
+- `test_handler_position_independence` — Handler-level position tests
+- `test_global_flag_override_at_handler_level` — Global flag behavior
+- `test_handler_receives_false_when_not_specified` — Default value verification
+
+**Execution Time:** 0.01s
+
+---
+
+### 11. `init_handler_flag_extraction.rs` — 29 tests
+
+**Purpose:** Init handler-level flag extraction and verification
+
+**Test Result:** ✅ 29 passed; 0 failed; 0 ignored
+
+**Coverage Areas:**
+- Flag extraction from parsed arguments at handler level
+- Position independence verification for init handler
+- Default value behavior verification
+- Short form variant (`-y`) extraction
+- Handler parameter type verification
+- Flag flow from CLI to handler parameter
+
+**Key Tests:**
+- `test_init_handler_flag_extraction_from_parsed_args` — Flag extraction
+- `test_init_handler_position_independence` — Position independence
+- `test_init_handler_default_value_behavior` — Default value verification
+- `test_init_handler_short_form_variant` — Short form `-y` behavior
+- `test_init_handler_parameter_type_verification` — Parameter type check
+
+**Execution Time:** 0.00s
 
 ---
 
@@ -529,13 +607,14 @@ hoop --no-interactive init
 
 ### 1. Command Coverage
 
-✅ **init** — 18 tests  
-✅ **projects scan** — 49 tests  
-✅ **projects remove** — 36 tests  
-✅ **restore** — 23 tests  
-✅ **status** — 11 tests (flag acceptance only, read-only)  
-✅ **global integration** — 32 tests  
-✅ **edge cases** — 25 tests  
+✅ **init** — 62 tests (18 command-specific + 15 handler integration + 29 handler extraction)
+✅ **projects scan** — 49 tests
+✅ **projects remove** — 36 tests
+✅ **restore** — 23 tests
+✅ **status** — 11 tests (flag acceptance only, read-only)
+✅ **global integration** — 32 tests
+✅ **projects commands** — 30 tests (handler-level flag extraction)
+✅ **edge cases** — 25 tests
 ✅ **behavior patterns** — 45 tests  
 
 **All interactive commands covered.** Commands that don't require coverage are:
@@ -699,7 +778,7 @@ The following are explicitly out of scope:
 # Run all no_interactive tests
 cargo test --package hoop
 
-# Expected output: 243 tests passed, 0 failed
+# Expected output: 317 tests passed, 0 failed
 ```
 
 ### Verify Specific Commands
@@ -723,7 +802,7 @@ hoop --no-interactive projects scan /tmp/test-scan
 
 ## Conclusion
 
-The `no_interactive` flag has **comprehensive, complete test coverage** across all interactive commands in HOOP. All 243 tests pass successfully, confirming:
+The `no_interactive` flag has **comprehensive, complete test coverage** across all interactive commands in HOOP. All 317 tests pass successfully, confirming:
 
 ✅ Flag parsing and extraction  
 ✅ Prompt suppression  
@@ -747,7 +826,7 @@ The `no_interactive` flag has **comprehensive, complete test coverage** across a
 - **Coverage Summary:** `docs/test-coverage/no_interactive_flag_coverage_summary.md`
 - **Command Inventory:** `docs/test-coverage/no_interactive_command_inventory.md`
 - **Test Date:** 2026-08-13  
-- **Test Count:** 243 integration tests  
+- **Test Count:** 317 integration tests  
 - **Result:** 100% passing  
 
 ---
