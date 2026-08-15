@@ -1,3 +1,0 @@
-# No unused utoipa::ToSchema warnings found in clippy output
-# Generated from: .beads/clippy-raw-output.txt
-# Date: 2026-08-06

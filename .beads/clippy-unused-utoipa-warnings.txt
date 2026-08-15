@@ -1,8 +1,0 @@
-Unused utoipa::ToSchema imports:
-
-hoop-daemon/src/api_backup.rs: unused import: utoipa::ToSchema
-hoop-daemon/src/api_scripts.rs: unused import: utoipa::ToSchema
-hoop-daemon/src/api_bead_blockers.rs: unused import: utoipa::ToSchema
-hoop-daemon/src/api_fix_patterns.rs: unused import: utoipa::ToSchema
-hoop-daemon/src/api_risk_patterns.rs: unused import: utoipa::ToSchema
-hoop-daemon/src/api_stitch_links.rs: unused import: utoipa::ToSchema
