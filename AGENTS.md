@@ -1,24 +1,24 @@
 # AGENTS.md — HOOP repository guide for LLMs
 
-This repository is **HOOP** — a control-plane daemon in the NEEDLE / `br` ecosystem. If you are an LLM asked to work in this repository, read this file first.
+This repository is **HOOP** — a control-plane daemon in the NEEDLE / bead-rs ecosystem. If you are an LLM asked to work in this repository, read this file first.
 
 ## What HOOP is
 
-A long-lived Rust daemon that runs on a single operator host and serves as the human-facing interface to a multi-project NEEDLE worker fleet. HOOP reads artifacts across projects (beads, events, conversations, files, costs, capacity) and writes only one thing: it creates beads via `br create` when the operator or the human-interface agent drafts new work.
+A long-lived Rust daemon that runs on a single operator host and serves as the human-facing interface to a multi-project NEEDLE worker fleet. HOOP reads artifacts across projects (beads, events, conversations, files, costs, capacity) and writes only one thing: it creates beads via `bead create` when the operator or the human-interface agent drafts new work.
 
 HOOP does **not** steer NEEDLE workers (no launch / stop / kill / signal / release / reassign). NEEDLE manages itself; HOOP is adjacent.
 
 ## Current repository state
 
-**ACTUAL STATE (as of 2026-07-26): Phase 0 complete. Phase 1 in progress. The daemon compiles cleanly — `cargo check --workspace` and `cargo build --workspace` both exit 0 with zero errors/warnings. `cargo test --workspace` does NOT compile: 31 errors in the `hoop-daemon` `lib test` target (stale test fixtures — production structs such as `CapacityMeterConfig`, `DaemonState`, `HoopConfig` gained fields that the test initializers were never updated for), so the unit/integration tests never run. `cargo clippy --workspace -- -D warnings` FAILS with 90 errors across 39 files (28 disallowed `std::fs::write`/`File::create` calls, 13 dead-code, 49 style/complexity lints). `hoop status --json | jq .` PASSES (exit 0, valid JSON). Phase 1 CI gate (`bf-5mpcl`) is OPEN on the test-compile and clippy failures — its comment has the current breakdown. Phases 2–7 code exists but has NOT been run or verified.**
+**ACTUAL STATE (as of 2026-07-26): Phase 0 complete. Phase 1 in progress. The daemon compiles cleanly — `cargo check --workspace` and `cargo build --workspace` both exit 0 with zero errors/warnings. `cargo test --workspace` does NOT compile: 31 errors in the `hoop-daemon` `lib test` target (stale test fixtures — production structs such as `CapacityMeterConfig`, `DaemonState`, `HoopConfig` gained fields that the test initializers were never updated for), so the unit/integration tests never run. `cargo clippy --workspace -- -D warnings` FAILS with 90 errors across 39 files (28 disallowed `std::fs::write`/`File::create` calls, 13 dead-code, 49 style/complexity lints). `hoop status --json | jq .` PASSES (exit 0, valid JSON). Phase 1 CI gate (`hoop-7ae9fbff`) is OPEN on the test-compile and clippy failures — its comment has the current breakdown. Phases 2–7 code exists but has NOT been run or verified.**
 
 The crate now compiles, but the Phase 1 exit gate is not met (tests do not compile; clippy not clean). The genesis bead (`hoop-ttb`) was closed prematurely; the bead tracker is the authoritative record of what is actually done.
 
-**Do not trust this file's component list as evidence of working software. Run `br list` and check `docs/plan/plan.md` to know the real state.**
+**Do not trust this file's component list as evidence of working software. Run `bead list` and check `docs/plan/plan.md` to know the real state.**
 
 ### CRITICAL: Phase sequence lock
 
-**DO NOT implement Phase 2+ features until Phase 1 CI gate (bead `bf-5mpcl`) passes.**
+**DO NOT implement Phase 2+ features until Phase 1 CI gate (bead `hoop-7ae9fbff`) passes.**
 
 Phases are strictly sequential. Per plan §10: "A phase may not begin until all of the following pass on the same commit for the preceding phase." Partial phase completion does not exist — deliverables move to the next phase intact, not half-finished.
 
@@ -31,14 +31,14 @@ Phases are strictly sequential. Per plan §10: "A phase may not begin until all 
 ### Bead workflow
 
 All Phase 1 work beads live in the HOOP workspace (`.beads/`). When working on Phase 1 tasks:
-1. `bf claim` the bead to assign it to yourself
+1. `bead claim` the bead to assign it to yourself
 2. Complete the work as described
-3. `bf close` the bead with a structured retrospective when done
+3. `bead close` the bead with a structured retrospective when done
 4. Commit your changes before closing — **when you changed files**
 
 A bead does not owe git a commit. Verification-only work, work that turned out to
 be already done, and work you found blocked are all legitimate outcomes with
-nothing to commit. Record those on the bead with `bf update <id> --notes "..."`.
+nothing to commit. Record those on the bead with `bead update <id> --notes "..."`.
 Never create `notes/<bead-id>.md`, a summary, or a status file to satisfy a commit
 requirement — a commit touching only `notes/` or `.beads/` is not shipped work and
 NEEDLE's shipped-work gate rejects it.
@@ -72,7 +72,7 @@ HOOP code structure (files exist; correctness unverified):
 - **Workspace** — a single repo on disk with its own `.beads/` queue. Beads are workspace-scoped.
 - **Stitch** — a single conversation within a project. Four kinds: `operator` (human ↔ agent chat), `dictated` (voice note), `worker` (NEEDLE worker's CLI session), `ad-hoc` (operator's direct CLI session). Stitches are HOOP's user-facing unit; users don't see beads in normal flow.
 - **Pattern** — optional, operator-curated grouping of Stitches toward a goal. May span projects.
-- **Bead** — NEEDLE's internal execution unit, managed by `br` (beads_rust). HOOP never touches bead state directly beyond `br create`.
+- **Bead** — NEEDLE's internal execution unit, managed by bead-rs. HOOP never touches bead state directly beyond `bead create`.
 - **Human-interface agent** — Persistent LLM session (LLM-agnostic: Claude Code / Anthropic API / ZAI+GLM) hosted by HOOP as the operator's primary conversation partner. Reads everything; writes only by drafting Stitches via the preview flow.
 - **Reflection Ledger** — HOOP's learned-rules store. After each closed operator Stitch, the agent proposes rules from repeated patterns; operator approves/rejects; approved rules inject into every subsequent session.
 
@@ -169,7 +169,7 @@ Always use the canonical terminology: **Stitch**, **Pattern**, **Project**, **Wo
 Do not plan or build features that do any of these:
 
 1. **Steer NEEDLE workers** — no launch, stop, kill, pause, signal, SIGSTOP, SIGTERM, release-claim, reassign, any action touching a worker process or bead lifecycle.
-2. **Mutate bead state beyond creation** — only `br create`. No close, update, depend, claim, release.
+2. **Mutate bead state beyond creation** — only `bead create`. No close, update, depend, claim, release.
 3. **Enforce capacity** — HOOP shows utilization (5h/7d Claude Max windows, per-account headroom); never throttles or rotates.
 4. **Route work by strand** — strands are worker-immutable (set at launch by model + harness). HOOP displays strand; never predicts or routes by strand.
 5. **Expose bead IDs to the operator in normal flow** — users work in Stitches; bead IDs appear only in expert / debug / audit views.
@@ -181,7 +181,7 @@ Do not plan or build features that do any of these:
 - **Language:** Rust for the daemon (matches NEEDLE direction). Single-binary distribution with embedded static assets for the web UI.
 - **Web:** `axum` server, React + Vite + TypeScript + Jotai client, Zod schemas shared via JSON Schema draft-07 + `typify` (Rust) + `json-schema-to-typescript` (TS).
 - **Storage:** SQLite (`~/.hoop/fleet.db`) for audit log, Stitch state, Pattern state, Reflection Ledger. Never stores bead state.
-- **Bead API:** shell out to `br` (beads_rust by Jeffrey Emanuel / dicklesworthstone). Never open `.beads/beads.db` directly.
+- **Bead API:** shell out to the configured `bead` binary. Never open `.beads/beads.db` directly.
 - **CI/CD:** Argo Workflows on the `iad-ci` cluster (not GitHub Actions — those are disabled across this environment). Template lives in `jedarden/declarative-config`.
 - **Deployment:** single binary installed at `~/.local/bin/hoop`, run as a systemd user service, exposed on a Tailscale hostname. Optional container image as a secondary artifact.
 
@@ -199,18 +199,18 @@ These come from the prior-art research in `docs/notes/` and are locked in:
 
 ## When you are stuck: anti-spin rules
 
-**If `br close <id>` appears to succeed but `br list` still shows the bead as open:**
-The SQLite database is out of sync with the JSONL (known issue). Run `br doctor --repair` then re-check `br list`. Do NOT commit doc notes as a substitute for closing the bead.
+**If `bead close <id>` appears to succeed but `bead list` still shows the bead as open:**
+Run `bead doctor` and inspect the native checkpoint state. Do not repair or reconstruct the database unless diagnostics explicitly require it. Do NOT commit doc notes as a substitute for closing the bead.
 
 **If a bead is blocked by an infrastructure/environment issue you cannot fix** (e.g., missing system package, broken network, unavailable cluster):
-1. Create a `bf-` bug bead: `br create --type bug "describe the blocker"` with the specific error and what you tried
-2. Set it as a dependency: `br depend <blocked-bead> <new-bf-bead>`
+1. Create a bug bead: `bead create --title "describe the blocker" --issue-type bug` with the specific error and what you tried
+2. Set it as a dependency: `bead dep add <blocked-bead> <new-blocker-bead> --kind blocks`
 3. Stop and let the operator know — do not loop writing docs or fake verification
 
 **Never write a commit claiming "Phase N complete" or "all deliverables verified" unless:**
 - `cargo test` passed (run directly or via `nix-shell --run 'cargo test'` on NixOS hosts)
 - You ran the actual binary and observed the claimed behavior
-- `br close` succeeded and `br list` confirms the bead is closed
+- `bead close` succeeded and `bead list` confirms the bead is closed
 
 Fabricated verification commits are worse than no progress — they hide the real state.
 
@@ -281,7 +281,7 @@ If asked a question about HOOP, answer from the plan — do not invent semantics
 
 ## Relationship to sibling projects
 
-- **`br` / beads_rust** — the bead queue. `dicklesworthstone/beads_rust`. HOOP depends on it; shells out to it.
+- **bead-rs** — the native bead queue used by NEEDLE. HOOP depends on it and shells out to `bead`.
 - **NEEDLE** — `jedarden/NEEDLE`. The worker supervision system. HOOP observes NEEDLE's events and writes beads NEEDLE workers will pick up. HOOP does not manage NEEDLE.
 - **FABRIC** — `jedarden/FABRIC`. The read-only observability layer. HOOP links to FABRIC via a URL bridge but is not a superset.
 

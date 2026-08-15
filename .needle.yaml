@@ -8,7 +8,7 @@ prompt:
     \ at least one git commit. This is mandatory.\n- For implementation tasks: commit\
     \ the Rust code, tests, or configuration you wrote.\n- For documentation tasks:\
     \ commit the markdown files you created or updated.\n- For analysis tasks: create\
-    \ notes/<bead_id>.md with a brief summary and commit it.\nDo not call `br close`\
+    \ notes/<bead_id>.md with a brief summary and commit it.\nDo not call `bead close`\
     \ without first running `git commit`. If you cannot produce any work product,\
     \ do NOT close the bead \u2014 leave it for retry.\n"
 bead_cli:
