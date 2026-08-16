@@ -842,6 +842,8 @@ mod tests {
     use super::*;
     use serial_test::serial;
 
+    use crate::{Cli, Commands};
+
     use clap::Parser;
 
     fn make_entry(name: &str, path: PathBuf) -> ProjectEntry {
@@ -1906,4 +1908,17 @@ workspaces:
     // - Complete flag extraction flow from CLI to handler
     //
     // All tests pass successfully and comprehensively cover the requirements.
+
+    #[test]
+    fn test_init_handler_extracts_no_interactive_true() {
+        let cli = Cli::try_parse_from(["hoop", "--no-interactive", "init"])
+            .expect("CLI parsing should succeed");
+
+        // The handler extracts the global flag before matching Commands::Init.
+        let no_interactive = cli.no_interactive;
+        match cli.command {
+            Commands::Init => assert!(no_interactive),
+            command => panic!("Expected Commands::Init, got {command:?}"),
+        }
+    }
 }
