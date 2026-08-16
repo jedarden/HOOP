@@ -22,6 +22,14 @@ use tracing::{debug, info, warn};
 /// Key: (project, date), Value: (cost, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens)
 type ProjectDateCostMap = HashMap<(String, String), (f64, i64, i64, i64, i64)>;
 
+/// Type alias for Codex account-date-tier rollup row
+/// (account_id, date, plan_tier, cost_usd, input_tokens, output_tokens)
+type CodexAccountDateRollupRow = (String, String, String, f64, i64, i64);
+
+/// Type alias for project-date rollup row
+/// (project, date, cost_usd, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens)
+type ProjectDateRollupRow = (String, String, f64, i64, i64, i64, i64);
+
 /// Model pricing configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct ModelPricing {

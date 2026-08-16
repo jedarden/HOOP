@@ -254,6 +254,9 @@ pub struct PercentileQuery {
 /// (id, title, body, attachments_path, cost_usd, duration_seconds)
 type RawStitchRow = (String, String, Option<String>, Option<String>, f64, i64);
 
+/// Type alias for bucket-to-stitches mapping used during index rebuild
+type BucketToStitchesMap = HashMap<BucketId, Vec<StitchFeatures>>;
+
 /// Current schema version for the percentile index
 const INDEX_SCHEMA_VERSION: &str = "1.0.0";
 
@@ -712,10 +715,10 @@ where
 pub fn update_on_stitch_close(stitch_id: &str) -> Result<bool> {
     use rusqlite::Connection;
 
-    let db_path =
-        dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
-            .join(".hoop")
-            .join("fleet.db");
+    let db_path = dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".hoop")
+        .join("fleet.db");
 
     if !db_path.exists() {
         return Ok(false);
@@ -996,19 +999,11 @@ mod tests {
     #[test]
     fn test_labels_case_insensitive() {
         // Labels should be case-insensitive (lowercased for hashing)
-        let bucket1 = BucketId::from_features(
-            "Test",
-            50,
-            &["BUG".to_string(), "Auth".to_string()],
-            0,
-        );
+        let bucket1 =
+            BucketId::from_features("Test", 50, &["BUG".to_string(), "Auth".to_string()], 0);
 
-        let bucket2 = BucketId::from_features(
-            "Test",
-            50,
-            &["bug".to_string(), "auth".to_string()],
-            0,
-        );
+        let bucket2 =
+            BucketId::from_features("Test", 50, &["bug".to_string(), "auth".to_string()], 0);
 
         assert_eq!(bucket1.labels_hash, bucket2.labels_hash);
         assert_eq!(bucket1.to_key(), bucket2.to_key());

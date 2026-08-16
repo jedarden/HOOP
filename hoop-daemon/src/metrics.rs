@@ -35,6 +35,12 @@ type HistogramObservationStore = HashMap<Vec<String>, HistogramObservationData>;
 /// Type alias for RwLock-wrapped observation data storage
 type HistogramObservationStoreLock = RwLock<HistogramObservationStore>;
 
+/// Type alias for labeled counter data storage: label values -> count
+type LabeledCounterDataStore = RwLock<HashMap<Vec<String>, u64>>;
+
+/// Type alias for labeled gauge data storage: label values -> value
+type LabeledGaugeDataStore = RwLock<HashMap<Vec<String>, i64>>;
+
 /// Type alias for a vector of histogram snapshot rows with percentile calculations.
 ///
 /// Each row represents a labeled histogram metric's snapshot including:
@@ -290,12 +296,8 @@ pub struct BoundedLabeledCounter {
 
 impl BoundedLabeledCounter {
     pub fn new(label_names: &'static [&'static str], budget: CardinalityBudget) -> Self {
-        let seen_values = (0..label_names.len())
-            .map(|_| HashSet::new())
-            .collect();
-        let budget_exceeded_counts = (0..label_names.len())
-            .map(|_| AtomicU64::new(0))
-            .collect();
+        let seen_values = (0..label_names.len()).map(|_| HashSet::new()).collect();
+        let budget_exceeded_counts = (0..label_names.len()).map(|_| AtomicU64::new(0)).collect();
 
         Self {
             label_names,
@@ -322,7 +324,9 @@ impl BoundedLabeledCounter {
 
         // Increment the global budget exceeded counter if any label was over budget
         if exceeded {
-            metrics().hoop_metric_cardinality_budget_exceeded_total.inc();
+            metrics()
+                .hoop_metric_cardinality_budget_exceeded_total
+                .inc();
         }
     }
 
@@ -461,7 +465,9 @@ impl LabeledHistogram {
     pub fn observe(&self, label_values: &[&str], value_ms: f64) {
         let key: Vec<String> = label_values.iter().map(|s| (*s).to_string()).collect();
         let mut data = self.data.write().unwrap();
-        let entry = data.entry(key).or_insert((0, 0.0, vec![0; self.buckets.len()]));
+        let entry = data
+            .entry(key)
+            .or_insert((0, 0.0, vec![0; self.buckets.len()]));
         entry.0 += 1;
         entry.1 += value_ms;
 
@@ -688,7 +694,10 @@ fn write_labeled_histogram(
         let mut cumulative = 0;
         for (i, &bucket) in buckets.iter().enumerate() {
             cumulative += bucket_counts[i];
-            out.push_str(&format!("{name}_bucket{{le=\"{}\"{}}} {}\n", bucket, ls, cumulative));
+            out.push_str(&format!(
+                "{name}_bucket{{le=\"{}\"{}}} {}\n",
+                bucket, ls, cumulative
+            ));
         }
         // +Inf bucket (count all observations)
         out.push_str(&format!("{name}_bucket{{le=\"+Inf\"{}}} {}\n", ls, count));
@@ -870,9 +879,17 @@ impl Metrics {
         let mut unknown_event_budget = CardinalityBudget::new(&[0, 50]);
         // Allowlist common known event kinds
         for kind in &[
-            "stitch_created", "stitch_updated", "bead_created", "bead_closed",
-            "agent_turn", "tool_call", "heartbeat", "session_start", "session_end",
-            "error", "warning",
+            "stitch_created",
+            "stitch_updated",
+            "bead_created",
+            "bead_closed",
+            "agent_turn",
+            "tool_call",
+            "heartbeat",
+            "session_start",
+            "session_end",
+            "error",
+            "warning",
         ] {
             unknown_event_budget.allowlist_value(1, kind);
         }
@@ -1544,9 +1561,7 @@ mod tests {
         assert_eq!(counter.exceeded_count(1), 1);
 
         // Verify "other" bucket exists and has count 1
-        let other_entry = snapshot
-            .iter()
-            .find(|(labels, _)| labels[1] == "other");
+        let other_entry = snapshot.iter().find(|(labels, _)| labels[1] == "other");
         assert!(other_entry.is_some());
         assert_eq!(other_entry.unwrap().1, 1);
 
@@ -1647,7 +1662,7 @@ mod tests {
         // 100 unique adapters * 1 event kind = 100 entries
         assert_eq!(snapshot.len(), 100);
         assert_eq!(counter.unique_count(0), 100); // all 100 adapters tracked
-        assert_eq!(counter.unique_count(1), 1);  // only 1 event kind
+        assert_eq!(counter.unique_count(1), 1); // only 1 event kind
         assert_eq!(counter.exceeded_count(0), 0); // no budget exceeded on first label
         assert_eq!(counter.exceeded_count(1), 0); // no budget exceeded on second label
     }
