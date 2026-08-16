@@ -152,7 +152,7 @@ pub fn description_for(rule: &str) -> String {
 /// The MEMORY.md index line for an entry: `- [title](slug.md) — hook`.
 pub fn index_line(slug: &str, entry: &ReflectionLedgerEntry) -> String {
     format!(
-        "- [{}]({}.md) — {}",
+        "- [{}]({}.md) - {}",
         title_for(&entry.rule),
         slug,
         hook_for(&entry.reason)
@@ -610,7 +610,10 @@ mod tests {
     fn index_line_matches_workspace_format() {
         let e = fixture("abc", "Always run cargo fmt", "prevents drift", "h1");
         let line = index_line(&slug_for("abc"), &e);
-        assert_eq!(line, "- [Always run cargo fmt](reflection-abc.md) — prevents drift");
+        assert_eq!(
+            line,
+            "- [Always run cargo fmt](reflection-abc.md) - prevents drift"
+        );
     }
 
     #[test]
