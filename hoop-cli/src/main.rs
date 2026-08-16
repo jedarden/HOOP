@@ -1059,6 +1059,8 @@ WantedBy=default.target
 
 #[cfg(test)]
 mod tests {
+    use clap::CommandFactory;
+
     use super::*;
 
     /// Helper function to parse CLI arguments and extract the parsed Cli struct
@@ -1091,6 +1093,51 @@ mod tests {
         let no_interactive_after = cli_after.no_interactive;
 
         (no_interactive_before, no_interactive_after)
+    }
+
+    #[test]
+    fn global_no_interactive_flag_is_safe_to_access_and_propagates() {
+        let result = std::panic::catch_unwind(|| {
+            let mut command = Cli::command();
+            command.debug_assert();
+
+            let flag = command
+                .get_arguments()
+                .find(|arg| arg.get_id() == "no_interactive")
+                .expect("no_interactive must be present in the generated parser");
+            assert!(
+                flag.is_global_set(),
+                "no_interactive must be configured as a global argument"
+            );
+
+            let invocations: Vec<Vec<&str>> = vec![
+                vec!["hoop", "--no-interactive", "scan", "/tmp"],
+                vec!["hoop", "scan", "/tmp", "--no-interactive"],
+                vec!["hoop", "--no-interactive", "projects", "scan", "/tmp"],
+                vec!["hoop", "projects", "scan", "/tmp", "--no-interactive"],
+                vec![
+                    "hoop",
+                    "-y",
+                    "projects",
+                    "remove",
+                    "test-project",
+                    "--confirm",
+                ],
+            ];
+
+            for args in invocations {
+                let cli = Cli::try_parse_from(args).expect("global flag invocation must parse");
+                assert!(
+                    cli.no_interactive,
+                    "accessing no_interactive must yield true for {args:?}"
+                );
+            }
+        });
+
+        assert!(
+            result.is_ok(),
+            "accessing the global no_interactive flag must not panic"
+        );
     }
 
     // ── Add command tests ─────────────────────────────────────────────────
