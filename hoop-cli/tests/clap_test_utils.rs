@@ -918,25 +918,25 @@ mod tests {
     #[test]
     fn test_parse_scan_no_interactive_before() {
         let cli = parse_cli(&["hoop", "--no-interactive", "scan", "/tmp"]).unwrap();
-        assert_eq!(cli.no_interactive, true);
+        assert!(cli.no_interactive);
     }
 
     #[test]
     fn test_parse_scan_no_interactive_after() {
         let cli = parse_cli(&["hoop", "scan", "/tmp", "--no-interactive"]).unwrap();
-        assert_eq!(cli.no_interactive, true);
+        assert!(cli.no_interactive);
     }
 
     #[test]
     fn test_parse_scan_short_flag() {
         let cli = parse_cli(&["hoop", "-y", "scan", "/tmp"]).unwrap();
-        assert_eq!(cli.no_interactive, true);
+        assert!(cli.no_interactive);
     }
 
     #[test]
     fn test_parse_scan_no_flag() {
         let cli = parse_cli(&["hoop", "scan", "/tmp"]).unwrap();
-        assert_eq!(cli.no_interactive, false);
+        assert!(!cli.no_interactive);
     }
 
     // ── Position independence tests ─────────────────────────────────────────
@@ -1004,26 +1004,26 @@ mod tests {
     #[test]
     fn test_parse_flag_before_subcommand() {
         let cli = parse_flag_before_subcommand(&["scan", "/tmp"]).unwrap();
-        assert_eq!(cli.no_interactive, true);
+        assert!(cli.no_interactive);
     }
 
     #[test]
     fn test_parse_flag_after_subcommand() {
         let cli = parse_flag_after_subcommand(&["scan", "/tmp"]).unwrap();
-        assert_eq!(cli.no_interactive, true);
+        assert!(cli.no_interactive);
     }
 
     #[test]
     fn test_parse_with_short_flag() {
         let cli = parse_with_short_flag(&["scan", "/tmp"]).unwrap();
-        assert_eq!(cli.no_interactive, true);
+        assert!(cli.no_interactive);
     }
 
     #[test]
     fn test_parse_both_positions() {
         let (before, after) = parse_both_positions(&["--no-interactive"], &["scan", "/tmp"]);
-        assert_eq!(before, true);
-        assert_eq!(after, true);
+        assert!(before);
+        assert!(after);
     }
 
     // ── Command extraction tests ────────────────────────────────────────────
@@ -1116,7 +1116,7 @@ mod tests {
             &["scan", "/tmp"]
         ).unwrap();
 
-        assert_eq!(cli.no_interactive, true);
+        assert!(cli.no_interactive);
         match cli.command {
             Commands::Scan { root, .. } => {
                 assert_eq!(root, "/tmp");
@@ -1140,7 +1140,7 @@ mod tests {
         ).unwrap();
 
         assert_eq!(before.no_interactive, after.no_interactive);
-        assert_eq!(before.no_interactive, true);
+        assert!(before.no_interactive);
     }
 
     #[test]
@@ -1151,7 +1151,7 @@ mod tests {
             &["--no-interactive"]
         ).unwrap();
 
-        assert_eq!(cli.no_interactive, true);
+        assert!(cli.no_interactive);
         match cli.command {
             Commands::Scan { root, .. } => {
                 assert_eq!(root, "/tmp");
@@ -1168,11 +1168,11 @@ mod tests {
             &["--no-interactive", "--yes"]
         ).unwrap();
 
-        assert_eq!(cli.no_interactive, true);
+        assert!(cli.no_interactive);
         match cli.command {
             Commands::Scan { root, auto_confirm } => {
                 assert_eq!(root, "/tmp");
-                assert_eq!(auto_confirm, true);
+                assert!(auto_confirm);
             }
             _ => panic!("Expected Scan command"),
         }
@@ -1186,7 +1186,7 @@ mod tests {
         match command {
             Commands::Scan { root, auto_confirm } => {
                 assert_eq!(root, "/tmp");
-                assert_eq!(*auto_confirm, false);
+                assert!(!(*auto_confirm));
             }
             _ => panic!("Expected Scan command"),
         }
@@ -1200,7 +1200,7 @@ mod tests {
         match command {
             Commands::Remove { name, confirm } => {
                 assert_eq!(name, "test-project");
-                assert_eq!(*confirm, true);
+                assert!(*confirm);
             }
             _ => panic!("Expected Remove command"),
         }
@@ -1233,7 +1233,7 @@ mod tests {
         ).unwrap();
 
         assert_eq!(before.no_interactive, after.no_interactive);
-        assert_eq!(before.no_interactive, true);
+        assert!(before.no_interactive);
     }
 
     // ── Edge cases ─────────────────────────────────────────────────────────
@@ -1242,12 +1242,12 @@ mod tests {
     fn test_scan_with_local_yes_flag_and_global_no_interactive() {
         // When both flags are present, parse should succeed
         let cli = parse_cli(&["hoop", "--no-interactive", "scan", "/tmp", "--yes"]).unwrap();
-        assert_eq!(cli.no_interactive, true);
+        assert!(cli.no_interactive);
 
         match cli.command {
             Commands::Scan { root, auto_confirm } => {
                 assert_eq!(root, "/tmp");
-                assert_eq!(auto_confirm, true);
+                assert!(auto_confirm);
             }
             _ => panic!("Expected Scan command"),
         }
@@ -1256,7 +1256,7 @@ mod tests {
     #[test]
     fn test_projects_scan_subcommand_with_global_flag() {
         let cli = parse_cli(&["hoop", "--no-interactive", "projects", "scan", "/tmp"]).unwrap();
-        assert_eq!(cli.no_interactive, true);
+        assert!(cli.no_interactive);
 
         match cli.command {
             Commands::Projects(cmd) => match cmd {
@@ -1273,14 +1273,14 @@ mod tests {
     fn test_global_flag_persists_through_command_chain() {
         // Test that global flag is accessible even for nested subcommands
         let cli = parse_cli(&["hoop", "--no-interactive", "projects", "scan", "/tmp"]).unwrap();
-        assert_eq!(cli.no_interactive, true);
+        assert!(cli.no_interactive);
     }
 
     #[test]
     fn test_explicit_false_flag_parsing() {
         // Test that not specifying the flag yields false
         let cli = parse_cli(&["hoop", "scan", "/tmp"]).unwrap();
-        assert_eq!(cli.no_interactive, false);
+        assert!(!cli.no_interactive);
     }
 
     // ── New flag extraction and verification tests ─────────────────────────────
@@ -1289,28 +1289,28 @@ mod tests {
     fn test_extract_no_interactive_flag_true() {
         let cli = parse_cli(&["hoop", "--no-interactive", "scan", "/tmp"]).unwrap();
         let flag = extract_no_interactive_flag(&cli);
-        assert_eq!(flag, true);
+        assert!(flag);
     }
 
     #[test]
     fn test_extract_no_interactive_flag_false() {
         let cli = parse_cli(&["hoop", "scan", "/tmp"]).unwrap();
         let flag = extract_no_interactive_flag(&cli);
-        assert_eq!(flag, false);
+        assert!(!flag);
     }
 
     #[test]
     fn test_extract_no_interactive_flag_after_subcommand() {
         let cli = parse_cli(&["hoop", "scan", "/tmp", "--no-interactive"]).unwrap();
         let flag = extract_no_interactive_flag(&cli);
-        assert_eq!(flag, true);
+        assert!(flag);
     }
 
     #[test]
     fn test_extract_no_interactive_flag_nested_subcommand() {
         let cli = parse_cli(&["hoop", "--no-interactive", "projects", "scan", "/tmp"]).unwrap();
         let flag = extract_no_interactive_flag(&cli);
-        assert_eq!(flag, true);
+        assert!(flag);
     }
 
     #[test]
@@ -1364,8 +1364,8 @@ mod tests {
         let flag_after = extract_no_interactive_flag(&cli_after);
 
         // Verify both are true and equal
-        assert_eq!(flag_before, true);
-        assert_eq!(flag_after, true);
+        assert!(flag_before);
+        assert!(flag_after);
         assert_eq!(flag_before, flag_after);
     }
 

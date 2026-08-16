@@ -25,7 +25,7 @@ fn test_scan_parse_with_flag_before_subcommand() {
     assert!(result.is_ok(), "Should successfully parse flag before subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "no_interactive should be true");
+    assert!(parsed.no_interactive, "no_interactive should be true");
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
     assert!(
         parsed.args.contains(&"scan".to_string()),
@@ -45,7 +45,7 @@ fn test_scan_parse_with_flag_after_subcommand() {
     assert!(result.is_ok(), "Should successfully parse flag after subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "no_interactive should be true");
+    assert!(parsed.no_interactive, "no_interactive should be true");
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
     assert!(
         parsed.args.contains(&"scan".to_string()),
@@ -65,7 +65,7 @@ fn test_scan_parse_with_short_flag_before_subcommand() {
     assert!(result.is_ok(), "Should successfully parse short flag before subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "no_interactive should be true with -y");
+    assert!(parsed.no_interactive, "no_interactive should be true with -y");
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
 }
 
@@ -77,7 +77,7 @@ fn test_scan_parse_with_short_flag_after_subcommand() {
     assert!(result.is_ok(), "Should successfully parse short flag after subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "no_interactive should be true with -y");
+    assert!(parsed.no_interactive, "no_interactive should be true with -y");
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
 }
 
@@ -89,7 +89,7 @@ fn test_scan_parse_without_flag() {
     assert!(result.is_ok(), "Should successfully parse command without flag");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, false, "no_interactive should default to false");
+    assert!(!parsed.no_interactive, "no_interactive should default to false");
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
 }
 
@@ -102,7 +102,7 @@ fn test_scan_parse_with_local_yes_flag() {
     assert!(result.is_ok(), "Should successfully parse local --yes flag");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, false, "Global no_interactive should remain false with local --yes");
+    assert!(!parsed.no_interactive, "Global no_interactive should remain false with local --yes");
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
     assert!(
         parsed.args.contains(&"--yes".to_string()),
@@ -119,7 +119,7 @@ fn test_scan_parse_with_both_flags() {
     assert!(result.is_ok(), "Should successfully parse both flags");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Global no_interactive should be true");
+    assert!(parsed.no_interactive, "Global no_interactive should be true");
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
     assert!(
         parsed.args.contains(&"--yes".to_string()),
@@ -138,7 +138,7 @@ fn test_scan_flag_extraction_before_position() {
     assert!(verification_result.is_ok(), "Flag extraction should verify for 'before' position");
 
     // Additional assertions
-    assert_eq!(parsed.no_interactive, true);
+    assert!(parsed.no_interactive);
     assert_eq!(parsed.command, "scan");
 }
 
@@ -151,7 +151,7 @@ fn test_scan_flag_extraction_after_position() {
     assert!(verification_result.is_ok(), "Flag extraction should verify for 'after' position");
 
     // Additional assertions
-    assert_eq!(parsed.no_interactive, true);
+    assert!(parsed.no_interactive);
     assert_eq!(parsed.command, "scan");
 }
 
@@ -163,7 +163,7 @@ fn test_scan_no_flag_present_verification() {
     let verification_result = verify_no_flag_present(&parsed);
     assert!(verification_result.is_ok(), "Should verify no flag is present");
 
-    assert_eq!(parsed.no_interactive, false);
+    assert!(!parsed.no_interactive);
 }
 
 // ── Flag propagation to handler tests ────────────────────────────────────────────
@@ -664,7 +664,7 @@ fn test_scan_flag_position_yields_same_value() {
         "Flag position should not affect the extracted value"
     );
 
-    assert_eq!(
+    assert!(
         before_parsed.no_interactive,
         true,
         "Both positions should extract no_interactive as true"
@@ -815,7 +815,6 @@ fn test_scan_comprehensive_no_interactive_coverage() {
     );
 
     // All checks passed
-    assert!(true, "All Scan command no_interactive tests verified");
 }
 
 // ── Handler value extraction tests ─────────────────────────────────────────────────
@@ -828,7 +827,7 @@ fn test_scan_handler_receives_no_interactive_true_from_global_flag() {
 
     // Verify handler receives correct extraction
     let handler_value = extract_scan_handler_value(&parsed, None);
-    assert_eq!(
+    assert!(
         handler_value,
         true,
         "Handler should receive true when global --no-interactive is set"
@@ -843,7 +842,7 @@ fn test_scan_handler_receives_no_interactive_true_from_local_yes_flag() {
 
     // Verify handler receives correct extraction (local --yes = auto_confirm)
     let handler_value = extract_scan_handler_value(&parsed, Some(true));
-    assert_eq!(
+    assert!(
         handler_value,
         true,
         "Handler should receive true when local --yes is set (auto_confirm=true)"
@@ -858,7 +857,7 @@ fn test_scan_handler_receives_no_interactive_true_from_both_flags() {
 
     // Verify handler receives correct extraction (no_interactive || auto_confirm)
     let handler_value = extract_scan_handler_value(&parsed, Some(true));
-    assert_eq!(
+    assert!(
         handler_value,
         true,
         "Handler should receive true when both flags are set (true || true = true)"
@@ -873,9 +872,8 @@ fn test_scan_handler_receives_no_interactive_false_when_no_flags() {
 
     // Verify handler receives correct extraction
     let handler_value = extract_scan_handler_value(&parsed, None);
-    assert_eq!(
-        handler_value,
-        false,
+    assert!(
+        !handler_value,
         "Handler should receive false when neither flag is set (false || false = false)"
     );
 }
@@ -912,25 +910,25 @@ fn test_scan_handler_value_extraction_from_parsed_arguments() {
     let parsed_global = parse_cli_with_flag(&["hoop", "--no-interactive", "scan", "/tmp"])
         .expect("Parse with global flag");
     let value_global = simulate_handler_extraction(&parsed_global, false);
-    assert_eq!(value_global, true, "Global flag should produce true");
+    assert!(value_global, "Global flag should produce true");
 
     // Case 2: Local flag only
     let parsed_local = parse_cli_with_flag(&["hoop", "scan", "/tmp", "--yes"])
         .expect("Parse with local flag");
     let value_local = simulate_handler_extraction(&parsed_local, true);
-    assert_eq!(value_local, true, "Local flag should produce true");
+    assert!(value_local, "Local flag should produce true");
 
     // Case 3: Both flags
     let parsed_both = parse_cli_with_flag(&["hoop", "--no-interactive", "scan", "/tmp", "--yes"])
         .expect("Parse with both flags");
     let value_both = simulate_handler_extraction(&parsed_both, true);
-    assert_eq!(value_both, true, "Both flags should produce true");
+    assert!(value_both, "Both flags should produce true");
 
     // Case 4: Neither flag
     let parsed_neither = parse_cli_with_flag(&["hoop", "scan", "/tmp"])
         .expect("Parse without flags");
     let value_neither = simulate_handler_extraction(&parsed_neither, false);
-    assert_eq!(value_neither, false, "No flags should produce false");
+    assert!(!value_neither, "No flags should produce false");
 }
 
 #[test]
@@ -940,15 +938,15 @@ fn test_scan_handler_short_flag_y_extraction() {
         .expect("Should parse short -y flag");
 
     // Verify the global -y flag is recognized as no_interactive
-    assert_eq!(
-        parsed.no_interactive, true,
+    assert!(
+        parsed.no_interactive,
         "Short -y flag should set no_interactive to true"
     );
 
     // Simulate handler extraction with short flag
     let handler_value = simulate_handler_extraction(&parsed, false);
-    assert_eq!(
-        handler_value, true,
+    assert!(
+        handler_value,
         "Handler should receive true when short -y flag is used"
     );
 }
@@ -962,8 +960,8 @@ fn test_scan_handler_global_flag_overrides_local_false() {
 
     // Simulate: no_interactive=true, auto_confirm=false
     let handler_value = simulate_handler_extraction(&parsed, false);
-    assert_eq!(
-        handler_value, true,
+    assert!(
+        handler_value,
         "Global flag should cause non-interactive mode even without local flag (true || false = true)"
     );
 }
@@ -976,8 +974,8 @@ fn test_scan_handler_local_flag_works_without_global() {
 
     // Simulate: no_interactive=false, auto_confirm=true
     let handler_value = simulate_handler_extraction(&parsed, true);
-    assert_eq!(
-        handler_value, true,
+    assert!(
+        handler_value,
         "Local flag should work without global flag (false || true = true)"
     );
 }
@@ -1002,7 +1000,7 @@ fn test_scan_handler_flag_position_independence_for_value() {
         value_before, value_after,
         "Flag position should not affect the handler value"
     );
-    assert_eq!(value_before, true, "Both should produce true");
+    assert!(value_before, "Both should produce true");
 }
 
 // ── Helper functions for handler value extraction tests ─────────────────────

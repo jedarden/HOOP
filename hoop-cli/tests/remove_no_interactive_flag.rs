@@ -25,7 +25,7 @@ fn test_remove_parse_with_flag_before_subcommand() {
     assert!(result.is_ok(), "Should successfully parse flag before subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "no_interactive should be true");
+    assert!(parsed.no_interactive, "no_interactive should be true");
     assert_eq!(parsed.command, "remove", "Command should be 'remove'");
     assert!(
         parsed.args.contains(&"remove".to_string()),
@@ -45,7 +45,7 @@ fn test_remove_parse_with_flag_after_subcommand() {
     assert!(result.is_ok(), "Should successfully parse flag after subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "no_interactive should be true");
+    assert!(parsed.no_interactive, "no_interactive should be true");
     assert_eq!(parsed.command, "remove", "Command should be 'remove'");
     assert!(
         parsed.args.contains(&"remove".to_string()),
@@ -65,7 +65,7 @@ fn test_remove_parse_with_short_flag_before_subcommand() {
     assert!(result.is_ok(), "Should successfully parse short flag before subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "no_interactive should be true with -y");
+    assert!(parsed.no_interactive, "no_interactive should be true with -y");
     assert_eq!(parsed.command, "remove", "Command should be 'remove'");
 }
 
@@ -77,7 +77,7 @@ fn test_remove_parse_with_short_flag_after_subcommand() {
     assert!(result.is_ok(), "Should successfully parse short flag after subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "no_interactive should be true with -y");
+    assert!(parsed.no_interactive, "no_interactive should be true with -y");
     assert_eq!(parsed.command, "remove", "Command should be 'remove'");
 }
 
@@ -89,7 +89,7 @@ fn test_remove_parse_without_flag() {
     assert!(result.is_ok(), "Should successfully parse command without flag");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, false, "no_interactive should default to false");
+    assert!(!parsed.no_interactive, "no_interactive should default to false");
     assert_eq!(parsed.command, "remove", "Command should be 'remove'");
 }
 
@@ -105,7 +105,7 @@ fn test_remove_flag_extraction_before_position() {
     assert!(verification_result.is_ok(), "Flag extraction should verify for 'before' position");
 
     // Additional assertions
-    assert_eq!(parsed.no_interactive, true);
+    assert!(parsed.no_interactive);
     assert_eq!(parsed.command, "remove");
 }
 
@@ -119,7 +119,7 @@ fn test_remove_flag_extraction_after_position() {
     assert!(verification_result.is_ok(), "Flag extraction should verify for 'after' position");
 
     // Additional assertions
-    assert_eq!(parsed.no_interactive, true);
+    assert!(parsed.no_interactive);
     assert_eq!(parsed.command, "remove");
 }
 
@@ -132,7 +132,7 @@ fn test_remove_no_flag_present_verification() {
     let verification_result = verify_no_flag_present(&parsed);
     assert!(verification_result.is_ok(), "Should verify no flag is present");
 
-    assert_eq!(parsed.no_interactive, false);
+    assert!(!parsed.no_interactive);
 }
 
 // ── Flag propagation to handler tests ────────────────────────────────────────────
@@ -585,7 +585,7 @@ fn test_remove_flag_position_yields_same_value() {
         "Flag position should not affect the extracted value"
     );
 
-    assert_eq!(
+    assert!(
         before_parsed.no_interactive,
         true,
         "Both positions should extract no_interactive as true"
@@ -608,7 +608,7 @@ fn test_remove_handler_receives_no_interactive_true_from_global_flag() {
 
     // Verify handler receives correct extraction
     let handler_value = extract_remove_handler_value(&parsed);
-    assert_eq!(
+    assert!(
         handler_value,
         true,
         "Handler should receive true when global --no-interactive is set"
@@ -623,9 +623,8 @@ fn test_remove_handler_receives_no_interactive_false_when_no_flags() {
 
     // Verify handler receives correct extraction
     let handler_value = extract_remove_handler_value(&parsed);
-    assert_eq!(
-        handler_value,
-        false,
+    assert!(
+        !handler_value,
         "Handler should receive false when no flag is set"
     );
 }
@@ -639,13 +638,13 @@ fn test_remove_handler_value_extraction_from_parsed_arguments() {
     let parsed_global = parse_cli_with_flag(&["hoop", "--no-interactive", "remove", "my-project", "--confirm"])
         .expect("Parse with global flag");
     let value_global = simulate_remove_handler_extraction(&parsed_global);
-    assert_eq!(value_global, true, "Global flag should produce true");
+    assert!(value_global, "Global flag should produce true");
 
     // Case 2: No flag
     let parsed_none = parse_cli_with_flag(&["hoop", "remove", "my-project", "--confirm"])
         .expect("Parse without flags");
     let value_none = simulate_remove_handler_extraction(&parsed_none);
-    assert_eq!(value_none, false, "No flag should produce false");
+    assert!(!value_none, "No flag should produce false");
 }
 
 #[test]
@@ -655,15 +654,15 @@ fn test_remove_handler_short_flag_y_extraction() {
         .expect("Should parse short -y flag");
 
     // Verify the global -y flag is recognized as no_interactive
-    assert_eq!(
-        parsed.no_interactive, true,
+    assert!(
+        parsed.no_interactive,
         "Short -y flag should set no_interactive to true"
     );
 
     // Simulate handler extraction with short flag
     let handler_value = simulate_remove_handler_extraction(&parsed);
-    assert_eq!(
-        handler_value, true,
+    assert!(
+        handler_value,
         "Handler should receive true when short -y flag is used"
     );
 }
@@ -688,7 +687,7 @@ fn test_remove_handler_flag_position_independence_for_value() {
         value_before, value_after,
         "Flag position should not affect the handler value"
     );
-    assert_eq!(value_before, true, "Both should produce true");
+    assert!(value_before, "Both should produce true");
 }
 
 // ── Helper functions for handler value extraction tests ─────────────────────────────
@@ -1073,5 +1072,4 @@ fn test_remove_comprehensive_no_interactive_coverage() {
     );
 
     // All checks passed
-    assert!(true, "All Remove command no_interactive tests verified");
 }

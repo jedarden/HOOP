@@ -64,7 +64,6 @@ fn scan_without_no_interactive_prompts_for_confirmation() {
     // This behavior is verified by the code structure in projects.rs:670-730
     // where prompting only occurs when no_interactive is false
 
-    assert!(true, "Interactive scan requires prompts (verified by code review)");
 }
 
 #[test]
@@ -75,7 +74,6 @@ fn scan_combines_no_interactive_with_yes_flag() {
 
     // Verify the combination logic: main.rs:407 uses `no_interactive || yes`
     // This means either flag being true results in auto-registration
-    assert!(true, "Scan combines no_interactive || yes correctly");
 }
 
 // ── Remove command behavior tests ───────────────────────────────────────────────
@@ -115,7 +113,7 @@ fn test_remove_parse_flag_before_subcommand() {
     assert!(result.is_ok(), "Should successfully parse flag before subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Flag should be extracted as true");
+    assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "projects", "Should identify 'projects' as command");
     assert!(parsed.args.contains(&"remove".to_string()), "Should include 'remove' in args");
     assert!(parsed.args.contains(&"my-project".to_string()), "Should include project name");
@@ -131,7 +129,7 @@ fn test_remove_parse_flag_after_subcommand() {
     assert!(result.is_ok(), "Should successfully parse flag after subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Flag should be extracted as true");
+    assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "projects", "Should identify 'projects' as command");
     assert!(parsed.args.contains(&"remove".to_string()), "Should include 'remove' in args");
     assert!(parsed.args.contains(&"my-project".to_string()), "Should include project name");
@@ -261,7 +259,7 @@ fn test_remove_short_flag_variant() {
     assert!(result.is_ok(), "Should successfully parse short flag variant");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Short flag -y should set no_interactive to true");
+    assert!(parsed.no_interactive, "Short flag -y should set no_interactive to true");
 }
 
 /// Additional test: Verify error message when --confirm is missing in no-interactive mode
@@ -362,7 +360,7 @@ fn test_remove_flag_position_independence() {
         "Flag position should not affect the extracted value"
     );
 
-    assert_eq!(
+    assert!(
         before_parsed.no_interactive,
         true,
         "Both positions should extract no_interactive as true"
@@ -378,9 +376,8 @@ fn test_remove_default_no_interactive_value() {
     assert!(result.is_ok(), "Should successfully parse command without flag");
     let parsed = result.unwrap();
 
-    assert_eq!(
-        parsed.no_interactive,
-        false,
+    assert!(
+        !parsed.no_interactive,
         "no_interactive should default to false when flag is not provided"
     );
 }
@@ -516,7 +513,7 @@ fn test_restore_parse_flag_before_subcommand() {
     assert!(result.is_ok(), "Should successfully parse flag before subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Flag should be extracted as true");
+    assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "restore", "Should identify 'restore' as command");
     assert!(parsed.args.contains(&"restore".to_string()), "Should include 'restore' in args");
     assert!(parsed.args.contains(&"--from".to_string()), "Should include --from flag");
@@ -533,7 +530,7 @@ fn test_restore_parse_flag_after_subcommand() {
     assert!(result.is_ok(), "Should successfully parse flag after subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Flag should be extracted as true");
+    assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "restore", "Should identify 'restore' as command");
     assert!(parsed.args.contains(&"restore".to_string()), "Should include 'restore' in args");
     assert!(parsed.args.contains(&"--from".to_string()), "Should include --from flag");
@@ -671,7 +668,7 @@ fn test_restore_short_flag_variant() {
     assert!(result.is_ok(), "Should successfully parse short flag variant");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Short flag -y should set no_interactive to true");
+    assert!(parsed.no_interactive, "Short flag -y should set no_interactive to true");
     assert!(parsed.args.contains(&"--confirm".to_string()), "Should include --confirm flag");
 }
 
@@ -785,7 +782,7 @@ fn test_restore_flag_position_independence() {
         "Flag position should not affect the extracted value"
     );
 
-    assert_eq!(
+    assert!(
         before_parsed.no_interactive,
         true,
         "Both positions should extract no_interactive as true"
@@ -806,9 +803,8 @@ fn test_restore_default_no_interactive_value() {
     assert!(result.is_ok(), "Should successfully parse command without flag");
     let parsed = result.unwrap();
 
-    assert_eq!(
-        parsed.no_interactive,
-        false,
+    assert!(
+        !parsed.no_interactive,
         "no_interactive should default to false when flag is not provided"
     );
 }
@@ -913,9 +909,8 @@ fn test_init_default_no_interactive_value() {
     assert!(result.is_ok(), "Should successfully parse command without flag");
     let parsed = result.unwrap();
 
-    assert_eq!(
-        parsed.no_interactive,
-        false,
+    assert!(
+        !parsed.no_interactive,
         "no_interactive should default to false when flag is not provided"
     );
 }

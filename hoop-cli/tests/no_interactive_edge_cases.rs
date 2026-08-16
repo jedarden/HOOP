@@ -27,28 +27,28 @@ fn test_flag_specified_multiple_times_last_wins() {
     let parsed = parse_flag_after_subcommand(args_multiple);
     assert!(parsed.is_ok(), "Should parse multiple flag occurrences");
     let result = parsed.unwrap();
-    assert_eq!(result.no_interactive, true, "Multiple flags should result in true");
+    assert!(result.no_interactive, "Multiple flags should result in true");
 
     // Test 2: Multiple short form flags
     let args_multiple_short = &["-y", "scan", "/tmp", "-y"];
     let parsed_short = parse_flag_after_subcommand(args_multiple_short);
     assert!(parsed_short.is_ok(), "Should parse multiple short flag occurrences");
     let result_short = parsed_short.unwrap();
-    assert_eq!(result_short.no_interactive, true, "Multiple short flags should result in true");
+    assert!(result_short.no_interactive, "Multiple short flags should result in true");
 
     // Test 3: Mix of long and short forms
     let args_mixed = &["--no-interactive", "scan", "/tmp", "-y"];
     let parsed_mixed = parse_flag_after_subcommand(args_mixed);
     assert!(parsed_mixed.is_ok(), "Should parse mixed flag forms");
     let result_mixed = parsed_mixed.unwrap();
-    assert_eq!(result_mixed.no_interactive, true, "Mixed flags should result in true");
+    assert!(result_mixed.no_interactive, "Mixed flags should result in true");
 
     // Test 4: Flag at both positions (before and after subcommand)
     let args_both_positions = &["--no-interactive", "scan", "/tmp", "--no-interactive"];
     let parsed_both = parse_flag_after_subcommand(args_both_positions);
     assert!(parsed_both.is_ok(), "Should parse flag at both positions");
     let result_both = parsed_both.unwrap();
-    assert_eq!(result_both.no_interactive, true, "Flag at both positions should result in true");
+    assert!(result_both.no_interactive, "Flag at both positions should result in true");
 }
 
 #[test]
@@ -58,7 +58,7 @@ fn test_flag_multiple_times_with_nested_commands() {
     let parsed = parse_nested_subcommand(args);
     assert!(parsed.is_ok(), "Should parse multiple flags with nested commands");
     let result = parsed.unwrap();
-    assert_eq!(result.no_interactive, true, "Should detect flag presence");
+    assert!(result.no_interactive, "Should detect flag presence");
     assert_eq!(result.subcommand, Some("projects".to_string()));
     assert_eq!(result.nested_subcommand, Some("remove".to_string()));
 }
@@ -73,7 +73,7 @@ fn test_flag_in_complex_command_chain_projects_remove_confirm() {
     assert!(parsed.is_ok(), "Should parse complex command chain");
     let result = parsed.unwrap();
 
-    assert_eq!(result.no_interactive, true, "Flag should be true");
+    assert!(result.no_interactive, "Flag should be true");
     assert_eq!(result.subcommand, Some("projects".to_string()));
     assert_eq!(result.nested_subcommand, Some("remove".to_string()));
     assert!(result.args.contains(&"test-project".to_string()));
@@ -93,13 +93,13 @@ fn test_flag_at_different_positions_in_complex_chain() {
         .collect::<Vec<_>>();
     let parsed_1 = parse_nested_subcommand(&args_1);
     assert!(parsed_1.is_ok());
-    assert_eq!(parsed_1.unwrap().no_interactive, true);
+    assert!(parsed_1.unwrap().no_interactive);
 
     // Position 2: Between primary and nested subcommand
     let args_2 = &["projects", "--no-interactive", "remove", "test-project", "--confirm"];
     let parsed_2 = parse_nested_subcommand(args_2);
     assert!(parsed_2.is_ok());
-    assert_eq!(parsed_2.unwrap().no_interactive, true);
+    assert!(parsed_2.unwrap().no_interactive);
 
     // Position 3: After nested subcommand
     let args_3 = base_args
@@ -109,7 +109,7 @@ fn test_flag_at_different_positions_in_complex_chain() {
         .collect::<Vec<_>>();
     let parsed_3 = parse_nested_subcommand(&args_3);
     assert!(parsed_3.is_ok());
-    assert_eq!(parsed_3.unwrap().no_interactive, true);
+    assert!(parsed_3.unwrap().no_interactive);
 }
 
 #[test]
@@ -120,7 +120,7 @@ fn test_flag_with_restore_complex_command() {
     assert!(parsed.is_ok(), "Should parse restore with multiple flags");
     let result = parsed.unwrap();
 
-    assert_eq!(result.no_interactive, true);
+    assert!(result.no_interactive);
     assert_eq!(result.subcommand, Some("restore".to_string()));
     assert!(result.args.contains(&"--from".to_string()));
     assert!(result.args.contains(&"--confirm".to_string()));
@@ -145,7 +145,7 @@ fn test_flag_with_migrate_subcommands() {
         let parsed = parse_flag_before_subcommand(args);
         assert!(parsed.is_ok(), "Should parse migrate subcommands");
         let result = parsed.unwrap();
-        assert_eq!(result.no_interactive, true);
+        assert!(result.no_interactive);
     }
 }
 
@@ -159,7 +159,7 @@ fn test_flag_with_local_yes_flag_no_conflict() {
     let parsed = parse_flag_after_subcommand(args);
     assert!(parsed.is_ok(), "Global and local yes flags should not conflict");
     let result = parsed.unwrap();
-    assert_eq!(result.no_interactive, true);
+    assert!(result.no_interactive);
     assert!(result.args.contains(&"--yes".to_string()));
 }
 
@@ -190,7 +190,7 @@ fn test_flag_with_json_output_no_conflict() {
     let parsed = parse_flag_after_subcommand(args);
     assert!(parsed.is_ok(), "JSON output flag should not conflict");
     let result = parsed.unwrap();
-    assert_eq!(result.no_interactive, true);
+    assert!(result.no_interactive);
     assert!(result.args.contains(&"--json".to_string()));
 }
 
@@ -201,7 +201,7 @@ fn test_flag_with_dry_run_no_conflict() {
     let parsed = parse_flag_after_subcommand(args);
     assert!(parsed.is_ok(), "Dry run flag should not conflict");
     let result = parsed.unwrap();
-    assert_eq!(result.no_interactive, true);
+    assert!(result.no_interactive);
     assert!(result.args.contains(&"--dry-run".to_string()));
 }
 
@@ -222,7 +222,7 @@ fn test_default_behavior_is_interactive_mode() {
         let parsed = parse_flag_before_subcommand(args);
         assert!(parsed.is_ok(), "Should parse commands without flag");
         let result = parsed.unwrap();
-        assert_eq!(result.no_interactive, false,
+        assert!(!result.no_interactive,
                    "Default should be false (interactive mode) for {:?}", args);
     }
 }
@@ -244,7 +244,7 @@ fn test_explicit_vs_implicit_default() {
     assert!(parsed_implicit.is_ok());
     let result_implicit = parsed_implicit.unwrap();
 
-    assert_eq!(result_implicit.no_interactive, false,
+    assert!(!result_implicit.no_interactive,
                "Implicit default should be false (interactive mode)");
 }
 
@@ -268,7 +268,7 @@ fn test_position_independence_with_multiple_other_flags() {
         let parsed = parse_flag_after_subcommand(&args);
         assert!(parsed.is_ok(), "Should parse flag with multiple other flags");
         let result = parsed.unwrap();
-        assert_eq!(result.no_interactive, true,
+        assert!(result.no_interactive,
                    "Flag should be true regardless of position among other flags");
     }
 }
@@ -404,7 +404,6 @@ fn test_verification_utilities_no_panics() {
         let _ = compare_flag_values_at_levels(args);
 
         // If we got here without panicking, the test passes
-        assert!(true, "{}: verification utilities completed", description);
     }
 }
 
@@ -423,7 +422,7 @@ fn test_flag_with_special_characters_in_paths() {
         let parsed = parse_flag_after_subcommand(args);
         assert!(parsed.is_ok(), "Should parse paths with special characters");
         let result = parsed.unwrap();
-        assert_eq!(result.no_interactive, true);
+        assert!(result.no_interactive);
     }
 }
 
@@ -435,7 +434,7 @@ fn test_flag_with_very_long_arguments() {
     let parsed = parse_flag_after_subcommand(args);
     assert!(parsed.is_ok(), "Should handle long arguments");
     let result = parsed.unwrap();
-    assert_eq!(result.no_interactive, true);
+    assert!(result.no_interactive);
 }
 
 // ── Edge Case 8: Verify global=true attribute is properly set ─────────────────────
@@ -502,7 +501,7 @@ fn test_comprehensive_edge_case_scenario() {
     let result = parsed.unwrap();
 
     // Verify all aspects
-    assert_eq!(result.no_interactive, true, "Should detect flag");
+    assert!(result.no_interactive, "Should detect flag");
     assert_eq!(result.subcommand, Some("projects".to_string()));
     assert_eq!(result.nested_subcommand, Some("remove".to_string()));
     assert!(result.args.contains(&"test-project-with-dashes".to_string()));
@@ -516,7 +515,7 @@ fn test_comprehensive_edge_case_scenario() {
 
     // Verify extraction works
     let extracted = extract_flag_value(args);
-    assert_eq!(extracted, true);
+    assert!(extracted);
 
     // Verify position consistency
     let base_args = &["projects", "remove", "test-project-with-dashes", "--confirm"];

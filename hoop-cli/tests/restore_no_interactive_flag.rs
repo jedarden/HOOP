@@ -32,7 +32,7 @@ fn test_restore_parse_with_flag_before_subcommand() {
     assert!(result.is_ok(), "Should successfully parse flag before subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "no_interactive should be true");
+    assert!(parsed.no_interactive, "no_interactive should be true");
     assert_eq!(parsed.command, "restore", "Command should be 'restore'");
     assert!(
         parsed.args.contains(&"restore".to_string()),
@@ -63,7 +63,7 @@ fn test_restore_parse_with_flag_after_subcommand() {
     assert!(result.is_ok(), "Should successfully parse flag after subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "no_interactive should be true");
+    assert!(parsed.no_interactive, "no_interactive should be true");
     assert_eq!(parsed.command, "restore", "Command should be 'restore'");
     assert!(
         parsed.args.contains(&"restore".to_string()),
@@ -93,7 +93,7 @@ fn test_restore_parse_with_short_flag_before_subcommand() {
     );
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "no_interactive should be true with -y");
+    assert!(parsed.no_interactive, "no_interactive should be true with -y");
     assert_eq!(parsed.command, "restore", "Command should be 'restore'");
 }
 
@@ -115,7 +115,7 @@ fn test_restore_parse_with_short_flag_after_subcommand() {
     );
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "no_interactive should be true with -y");
+    assert!(parsed.no_interactive, "no_interactive should be true with -y");
     assert_eq!(parsed.command, "restore", "Command should be 'restore'");
 }
 
@@ -133,9 +133,8 @@ fn test_restore_parse_without_flag() {
     assert!(result.is_ok(), "Should successfully parse command without flag");
     let parsed = result.unwrap();
 
-    assert_eq!(
-        parsed.no_interactive,
-        false,
+    assert!(
+        !parsed.no_interactive,
         "no_interactive should default to false"
     );
     assert_eq!(parsed.command, "restore", "Command should be 'restore'");
@@ -156,7 +155,7 @@ fn test_restore_parse_with_dry_run_flag() {
     assert!(result.is_ok(), "Should successfully parse with --dry-run flag");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "no_interactive should be true");
+    assert!(parsed.no_interactive, "no_interactive should be true");
     assert_eq!(parsed.command, "restore", "Command should be 'restore'");
     assert!(
         parsed.args.contains(&"--dry-run".to_string()),
@@ -180,7 +179,7 @@ fn test_restore_flag_extraction_before_position() {
     );
 
     // Additional assertions
-    assert_eq!(parsed.no_interactive, true);
+    assert!(parsed.no_interactive);
     assert_eq!(parsed.command, "restore");
 }
 
@@ -198,7 +197,7 @@ fn test_restore_flag_extraction_after_position() {
     );
 
     // Additional assertions
-    assert_eq!(parsed.no_interactive, true);
+    assert!(parsed.no_interactive);
     assert_eq!(parsed.command, "restore");
 }
 
@@ -217,7 +216,7 @@ fn test_restore_no_flag_present_verification() {
     let verification_result = verify_no_flag_present(&parsed);
     assert!(verification_result.is_ok(), "Should verify no flag is present");
 
-    assert_eq!(parsed.no_interactive, false);
+    assert!(!parsed.no_interactive);
 }
 
 // ── Flag propagation to handler tests ────────────────────────────────────────────
@@ -674,7 +673,7 @@ fn test_restore_both_positions_extract_same_value() {
         "Flag position should not affect the extracted value"
     );
 
-    assert_eq!(
+    assert!(
         parsed_before.no_interactive,
         true,
         "Both positions should extract no_interactive as true"
@@ -694,8 +693,8 @@ fn test_restore_short_flag_y_works() {
         .expect("Should parse -y flag");
 
     // Verify the global -y flag is recognized as no_interactive
-    assert_eq!(
-        parsed.no_interactive, true,
+    assert!(
+        parsed.no_interactive,
         "Short -y flag should set no_interactive to true"
     );
 

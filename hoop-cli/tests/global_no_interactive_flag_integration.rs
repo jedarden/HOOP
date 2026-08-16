@@ -32,7 +32,7 @@ fn test_flag_before_subcommand_scan() {
     assert!(result.is_ok(), "Should successfully parse flag before subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Flag should be extracted as true");
+    assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
     assert!(parsed.args.contains(&"/tmp".to_string()), "Args should contain scan path");
 
@@ -48,7 +48,7 @@ fn test_flag_before_subcommand_remove() {
     assert!(result.is_ok(), "Should successfully parse flag before subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Flag should be extracted as true");
+    assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "remove", "Command should be 'remove'");
     assert!(parsed.args.contains(&"my-project".to_string()), "Args should contain project name");
     assert!(parsed.args.contains(&"--confirm".to_string()), "Args should contain --confirm");
@@ -67,7 +67,7 @@ fn test_flag_before_subcommand_restore() {
     assert!(result.is_ok(), "Should successfully parse flag before subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Flag should be extracted as true");
+    assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "restore", "Command should be 'restore'");
     assert!(parsed.args.contains(&"--from".to_string()), "Args should contain --from");
     assert!(parsed.args.contains(&"s3://bucket/key".to_string()), "Args should contain URI");
@@ -85,7 +85,7 @@ fn test_flag_before_subcommand_status() {
     assert!(result.is_ok(), "Should successfully parse flag before subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Flag should be extracted as true");
+    assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "status", "Command should be 'status'");
     assert!(parsed.args.contains(&"--json".to_string()), "Args should contain --json");
 
@@ -103,7 +103,7 @@ fn test_flag_after_subcommand_scan() {
     assert!(result.is_ok(), "Should successfully parse flag after subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Flag should be extracted as true");
+    assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
     assert!(parsed.args.contains(&"/tmp".to_string()), "Args should contain scan path");
 
@@ -119,7 +119,7 @@ fn test_flag_after_subcommand_remove() {
     assert!(result.is_ok(), "Should successfully parse flag after subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Flag should be extracted as true");
+    assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "remove", "Command should be 'remove'");
     assert!(parsed.args.contains(&"my-project".to_string()), "Args should contain project name");
     assert!(parsed.args.contains(&"--confirm".to_string()), "Args should contain --confirm");
@@ -138,7 +138,7 @@ fn test_flag_after_subcommand_restore() {
     assert!(result.is_ok(), "Should successfully parse flag after subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Flag should be extracted as true");
+    assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "restore", "Command should be 'restore'");
     assert!(parsed.args.contains(&"--from".to_string()), "Args should contain --from");
     assert!(parsed.args.contains(&"s3://bucket/key".to_string()), "Args should contain URI");
@@ -156,7 +156,7 @@ fn test_flag_after_subcommand_status() {
     assert!(result.is_ok(), "Should successfully parse flag after subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Flag should be extracted as true");
+    assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "status", "Command should be 'status'");
     assert!(parsed.args.contains(&"--json".to_string()), "Args should contain --json");
 
@@ -174,7 +174,7 @@ fn test_short_flag_y_scan() {
     assert!(result.is_ok(), "Should successfully parse short -y flag");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Short flag -y should set no_interactive to true");
+    assert!(parsed.no_interactive, "Short flag -y should set no_interactive to true");
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
     assert!(parsed.args.contains(&"/tmp".to_string()), "Args should contain scan path");
 }
@@ -187,7 +187,7 @@ fn test_short_flag_y_remove() {
     assert!(result.is_ok(), "Should successfully parse short -y flag");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Short flag -y should set no_interactive to true");
+    assert!(parsed.no_interactive, "Short flag -y should set no_interactive to true");
     assert_eq!(parsed.command, "remove", "Command should be 'remove'");
     assert!(parsed.args.contains(&"my-project".to_string()), "Args should contain project name");
     assert!(parsed.args.contains(&"--confirm".to_string()), "Args should contain --confirm");
@@ -201,7 +201,7 @@ fn test_short_flag_y_restore() {
     assert!(result.is_ok(), "Should successfully parse short -y flag");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Short flag -y should set no_interactive to true");
+    assert!(parsed.no_interactive, "Short flag -y should set no_interactive to true");
     assert_eq!(parsed.command, "restore", "Command should be 'restore'");
     assert!(parsed.args.contains(&"--from".to_string()), "Args should contain --from");
     assert!(parsed.args.contains(&"s3://bucket/key".to_string()), "Args should contain URI");
@@ -216,7 +216,7 @@ fn test_short_flag_y_status() {
     assert!(result.is_ok(), "Should successfully parse short -y flag");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Short flag -y should set no_interactive to true");
+    assert!(parsed.no_interactive, "Short flag -y should set no_interactive to true");
     assert_eq!(parsed.command, "status", "Command should be 'status'");
     assert!(parsed.args.contains(&"--json".to_string()), "Args should contain --json");
 }
@@ -232,7 +232,7 @@ fn test_combined_flags_scan_with_json() {
     assert!(result.is_ok(), "Should successfully parse combined flags");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Global no_interactive should be true");
+    assert!(parsed.no_interactive, "Global no_interactive should be true");
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
 }
 
@@ -244,7 +244,7 @@ fn test_combined_flags_status_with_json() {
     assert!(result.is_ok(), "Should successfully parse combined flags");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Global no_interactive should be true");
+    assert!(parsed.no_interactive, "Global no_interactive should be true");
     assert_eq!(parsed.command, "status", "Command should be 'status'");
     assert!(parsed.args.contains(&"--json".to_string()), "Args should contain --json");
 }
@@ -257,7 +257,7 @@ fn test_combined_flags_remove_with_confirm() {
     assert!(result.is_ok(), "Should successfully parse combined flags");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Global no_interactive should be true");
+    assert!(parsed.no_interactive, "Global no_interactive should be true");
     assert_eq!(parsed.command, "remove", "Command should be 'remove'");
     assert!(parsed.args.contains(&"my-project".to_string()), "Args should contain project name");
     assert!(parsed.args.contains(&"--confirm".to_string()), "Args should contain --confirm");
@@ -273,7 +273,7 @@ fn test_combined_flags_restore_with_dry_run() {
     assert!(result.is_ok(), "Should successfully parse combined flags");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Global no_interactive should be true");
+    assert!(parsed.no_interactive, "Global no_interactive should be true");
     assert_eq!(parsed.command, "restore", "Command should be 'restore'");
     assert!(parsed.args.contains(&"--dry-run".to_string()), "Args should contain --dry-run");
     assert!(parsed.args.contains(&"--from".to_string()), "Args should contain --from");
@@ -289,7 +289,7 @@ fn test_combined_flags_global_after_local_flags() {
     assert!(result.is_ok(), "Should successfully parse global flag after local flags");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "Global no_interactive should be true");
+    assert!(parsed.no_interactive, "Global no_interactive should be true");
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
     assert!(parsed.args.contains(&"/tmp".to_string()), "Args should contain scan path");
     // Note: --yes flag is in args since it's a local flag for scan command
@@ -315,7 +315,7 @@ fn test_flag_position_independence_scan() {
         "Flag position should not affect the extracted value"
     );
 
-    assert_eq!(before_parsed.no_interactive, true, "Both should extract no_interactive as true");
+    assert!(before_parsed.no_interactive, "Both should extract no_interactive as true");
 }
 
 #[test]
@@ -336,7 +336,7 @@ fn test_flag_position_independence_remove() {
         "Flag position should not affect the extracted value"
     );
 
-    assert_eq!(before_parsed.no_interactive, true, "Both should extract no_interactive as true");
+    assert!(before_parsed.no_interactive, "Both should extract no_interactive as true");
 }
 
 #[test]
@@ -361,7 +361,7 @@ fn test_flag_position_independence_restore() {
         "Flag position should not affect the extracted value"
     );
 
-    assert_eq!(before_parsed.no_interactive, true, "Both should extract no_interactive as true");
+    assert!(before_parsed.no_interactive, "Both should extract no_interactive as true");
 }
 
 // ── Default behavior tests (no flag) ─────────────────────────────────────────────────
@@ -374,7 +374,7 @@ fn test_default_behavior_scan() {
     assert!(result.is_ok(), "Should successfully parse command without flag");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, false, "no_interactive should default to false");
+    assert!(!parsed.no_interactive, "no_interactive should default to false");
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
 
     // Verify no flag is present
@@ -389,7 +389,7 @@ fn test_default_behavior_remove() {
     assert!(result.is_ok(), "Should successfully parse command without flag");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, false, "no_interactive should default to false");
+    assert!(!parsed.no_interactive, "no_interactive should default to false");
     assert_eq!(parsed.command, "remove", "Command should be 'remove'");
 
     // Verify no flag is present
@@ -404,7 +404,7 @@ fn test_default_behavior_restore() {
     assert!(result.is_ok(), "Should successfully parse command without flag");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, false, "no_interactive should default to false");
+    assert!(!parsed.no_interactive, "no_interactive should default to false");
     assert_eq!(parsed.command, "restore", "Command should be 'restore'");
 
     // Verify no flag is present
@@ -527,7 +527,6 @@ fn test_comprehensive_global_flag_coverage() {
     );
 
     // All checks passed
-    assert!(true, "All global flag integration tests verified");
 }
 
 // ── Command success/failure behavior tests ──────────────────────────────────────────

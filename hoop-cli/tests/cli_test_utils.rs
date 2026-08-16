@@ -755,14 +755,14 @@ mod integration_example {
         let args_before = &["hoop", "--no-interactive", "status", "--json"];
         let parsed_before = parse_cli_with_flag(args_before)
             .expect("Failed to parse with flag before subcommand");
-        assert_eq!(parsed_before.no_interactive, true);
+        assert!(parsed_before.no_interactive);
         assert_eq!(parsed_before.command, "status");
 
         // Test 1b: Flag after subcommand (manual)
         let args_after = &["hoop", "status", "--json", "--no-interactive"];
         let parsed_after = parse_cli_with_flag(args_after)
             .expect("Failed to parse with flag after subcommand");
-        assert_eq!(parsed_after.no_interactive, true);
+        assert!(parsed_after.no_interactive);
         assert_eq!(parsed_after.command, "status");
 
         // Test 1c: Verify consistency between positions (manual)
@@ -780,13 +780,13 @@ mod integration_example {
         let args_short = &["hoop", "-y", "status", "--json"];
         let parsed_short = parse_cli_with_flag(args_short)
             .expect("Failed to parse with -y flag");
-        assert_eq!(parsed_short.no_interactive, true);
+        assert!(parsed_short.no_interactive);
 
         // Test 1f: Test default behavior (no flag)
         let args_default = &["hoop", "status", "--json"];
         let parsed_default = parse_cli_with_flag(args_default)
             .expect("Failed to parse without flag");
-        assert_eq!(parsed_default.no_interactive, false);
+        assert!(!parsed_default.no_interactive);
         assert!(verify_no_flag_present(&parsed_default).is_ok());
     }
 
@@ -798,12 +798,12 @@ mod integration_example {
         // Parse with flag before subcommand (helper)
         let parsed_before = parse_flag_before_subcommand(&["scan", "/tmp"])
             .expect("Failed to parse with flag before subcommand");
-        assert_eq!(parsed_before.no_interactive, true);
+        assert!(parsed_before.no_interactive);
 
         // Parse with flag after subcommand (helper)
         let parsed_after = parse_flag_after_subcommand(&["scan", "/tmp"])
             .expect("Failed to parse with flag after subcommand");
-        assert_eq!(parsed_after.no_interactive, true);
+        assert!(parsed_after.no_interactive);
 
         // Verify both positions produce same result
         assert_eq!(
@@ -924,14 +924,14 @@ mod integration_example {
         // Parse and verify flag before subcommand
         let parsed_before = parse_flag_before_subcommand(remove_args)
             .expect("Failed to parse remove with flag before");
-        assert_eq!(parsed_before.no_interactive, true);
+        assert!(parsed_before.no_interactive);
         assert_eq!(parsed_before.command, "remove");
         assert!(verify_flag_extraction(&parsed_before, "before").is_ok());
 
         // Parse and verify flag after subcommand
         let parsed_after = parse_flag_after_subcommand(remove_args)
             .expect("Failed to parse remove with flag after");
-        assert_eq!(parsed_after.no_interactive, true);
+        assert!(parsed_after.no_interactive);
         assert_eq!(parsed_after.command, "remove");
         assert!(verify_flag_extraction(&parsed_after, "after").is_ok());
 
@@ -979,7 +979,7 @@ mod integration_example {
         let result = parse_cli_with_flag(&["hoop", "--no-interactive"]);
         assert!(result.is_ok()); // Parser accepts this as having command "--no-interactive"
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, true);
+        assert!(parsed.no_interactive);
         assert_eq!(parsed.command, "--no-interactive"); // Edge case: flag becomes command name
 
         // Only program name
@@ -990,7 +990,7 @@ mod integration_example {
         let result = parse_cli_with_flag(&["hoop", "--no-interactive", "--verbose", "status"]);
         assert!(result.is_ok());
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, true);
+        assert!(parsed.no_interactive);
         assert_eq!(parsed.command, "status");
 
         // Flag appears twice (last occurrence should win in real parser,
@@ -998,7 +998,7 @@ mod integration_example {
         let result = parse_cli_with_flag(&["hoop", "-y", "status", "-y"]);
         assert!(result.is_ok());
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, true);
+        assert!(parsed.no_interactive);
     }
 }
 
@@ -1020,7 +1020,7 @@ mod tests {
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, true);
+        assert!(parsed.no_interactive);
         assert_eq!(parsed.command, "scan");
         assert_eq!(parsed.args, vec!["scan", "/tmp"]);
     }
@@ -1031,7 +1031,7 @@ mod tests {
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, true);
+        assert!(parsed.no_interactive);
         assert_eq!(parsed.command, "scan");
         assert_eq!(parsed.args, vec!["scan", "/tmp"]);
     }
@@ -1042,7 +1042,7 @@ mod tests {
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, false);
+        assert!(!parsed.no_interactive);
         assert_eq!(parsed.command, "scan");
         assert_eq!(parsed.args, vec!["scan", "/tmp"]);
     }
@@ -1053,7 +1053,7 @@ mod tests {
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, true);
+        assert!(parsed.no_interactive);
         assert_eq!(parsed.command, "scan");
         assert_eq!(parsed.args, vec!["scan", "/tmp"]);
     }
@@ -1064,7 +1064,7 @@ mod tests {
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, true);
+        assert!(parsed.no_interactive);
         assert_eq!(parsed.command, "scan");
     }
 
@@ -1074,7 +1074,7 @@ mod tests {
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, true);
+        assert!(parsed.no_interactive);
         assert_eq!(parsed.command, "scan");
     }
 

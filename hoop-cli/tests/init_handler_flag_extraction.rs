@@ -88,7 +88,7 @@ fn test_init_flag_extraction_with_flag_present() {
     let (no_interactive, command) = parse_and_extract(&args);
 
     // Verify flag extraction
-    assert_eq!(no_interactive, true,
+    assert!(no_interactive,
         "no_interactive should be true when --no-interactive flag is present");
 
     // Verify command parsing
@@ -104,7 +104,7 @@ fn test_init_flag_extraction_with_flag_after_command() {
     let (no_interactive, command) = parse_and_extract(&args);
 
     // Verify flag extraction
-    assert_eq!(no_interactive, true,
+    assert!(no_interactive,
         "no_interactive should be true when flag appears after init command");
 
     // Verify command parsing
@@ -120,7 +120,7 @@ fn test_init_flag_extraction_with_short_flag() {
     let (no_interactive, command) = parse_and_extract(&args);
 
     // Verify flag extraction
-    assert_eq!(no_interactive, true,
+    assert!(no_interactive,
         "no_interactive should be true when -y short flag is present");
 
     // Verify command parsing
@@ -136,7 +136,7 @@ fn test_init_flag_extraction_without_flag() {
     let (no_interactive, command) = parse_and_extract(&args);
 
     // Verify flag extraction defaults to false
-    assert_eq!(no_interactive, false,
+    assert!(!no_interactive,
         "no_interactive should be false by default when flag is not present");
 
     // Verify command parsing
@@ -160,7 +160,7 @@ fn test_init_flag_extraction_consistency_across_positions() {
     assert_eq!(no_interactive_before, no_interactive_after,
         "Flag value should be consistent regardless of position");
 
-    assert_eq!(no_interactive_before, true,
+    assert!(no_interactive_before,
         "Both positions should extract no_interactive as true");
 
     // Both should parse as Init command
@@ -177,7 +177,7 @@ fn test_init_handler_pattern_with_flag_true() {
 
     let handler_flag = extract_init_handler_flag(&args);
 
-    assert_eq!(handler_flag, true,
+    assert!(handler_flag,
         "Handler should receive no_interactive=true when flag is present");
 }
 
@@ -188,7 +188,7 @@ fn test_init_handler_pattern_with_flag_false() {
 
     let handler_flag = extract_init_handler_flag(&args);
 
-    assert_eq!(handler_flag, false,
+    assert!(!handler_flag,
         "Handler should receive no_interactive=false when flag is absent");
 }
 
@@ -199,7 +199,7 @@ fn test_init_handler_pattern_with_flag_after_command() {
 
     let handler_flag = extract_init_handler_flag(&args);
 
-    assert_eq!(handler_flag, true,
+    assert!(handler_flag,
         "Handler should receive no_interactive=true regardless of flag position");
 }
 
@@ -210,7 +210,7 @@ fn test_init_handler_pattern_with_short_flag() {
 
     let handler_flag = extract_init_handler_flag(&args);
 
-    assert_eq!(handler_flag, true,
+    assert!(handler_flag,
         "Handler should receive no_interactive=true with -y short flag");
 }
 
@@ -224,7 +224,7 @@ fn test_init_full_flow_flag_present() {
     let result = simulate_init_handler_flow(&args);
 
     assert!(result.is_ok(), "Handler flow should succeed for valid init command");
-    assert_eq!(result.unwrap(), true,
+    assert!(result.unwrap(),
         "Handler flow should extract no_interactive=true");
 }
 
@@ -236,7 +236,7 @@ fn test_init_full_flow_flag_absent() {
     let result = simulate_init_handler_flow(&args);
 
     assert!(result.is_ok(), "Handler flow should succeed for init command without flag");
-    assert_eq!(result.unwrap(), false,
+    assert!(!result.unwrap(),
         "Handler flow should extract no_interactive=false by default");
 }
 
@@ -275,7 +275,7 @@ fn test_init_full_flow_multiple_variants() {
     let args_no_flag = ["hoop", "init"];
     let result_no_flag = simulate_init_handler_flow(&args_no_flag);
     assert!(result_no_flag.is_ok(), "Handler flow should succeed without flag");
-    assert_eq!(result_no_flag.unwrap(), false, "Handler flow should extract false without flag");
+    assert!(!result_no_flag.unwrap(), "Handler flow should extract false without flag");
 }
 
 // ── Boolean Value Retrieval Tests ──────────────────────────────────────────────
@@ -304,7 +304,7 @@ fn test_init_flag_presence_returns_true() {
     let no_interactive = cli.no_interactive;
 
     // Assert the extracted value is true
-    assert_eq!(no_interactive, true,
+    assert!(no_interactive,
         "no_interactive flag value should be true when --no-interactive flag is present");
 }
 
@@ -320,7 +320,7 @@ fn test_init_retrieves_true_when_flag_present() {
 
     for args in flag_variants {
         let (no_interactive, _) = parse_and_extract(&args);
-        assert_eq!(no_interactive, true,
+        assert!(no_interactive,
             "Should retrieve true when --no-interactive or -y is present");
     }
 }
@@ -332,7 +332,7 @@ fn test_init_retrieves_false_when_flag_absent() {
 
     let (no_interactive, _) = parse_and_extract(&args);
 
-    assert_eq!(no_interactive, false,
+    assert!(!no_interactive,
         "Should retrieve false when --no-interactive flag is absent");
 }
 
@@ -349,7 +349,7 @@ fn test_init_boolean_extraction_is_deterministic() {
     // All extractions should yield identical results (compare only the bool part since Commands doesn't impl PartialEq)
     assert_eq!(result1.0, result2.0, "Extraction should be deterministic (1 vs 2)");
     assert_eq!(result2.0, result3.0, "Extraction should be deterministic (2 vs 3)");
-    assert_eq!(result1.0, true, "All extractions should yield true");
+    assert!(result1.0, "All extractions should yield true");
 
     // Verify Commands::Init is the same for all
     assert!(matches!(result1.1, Commands::Init));
@@ -372,7 +372,6 @@ fn test_commands_init_is_unit_variant() {
         Commands::Init => {
             // Success - Init is a unit variant with no associated data
             // The no_interactive flag must come from cli.no_interactive, not from Commands::Init
-            assert!(true, "Commands::Init is a unit variant");
         }
         _ => panic!("Expected Commands::Init"),
     }
@@ -394,7 +393,7 @@ fn test_flag_comes_from_cli_not_from_commands_init() {
         Commands::Init => {
             // No field access possible here - the command doesn't carry the flag
             // The flag must be accessed from cli.no_interactive
-            assert_eq!(flag_from_cli, true,
+            assert!(flag_from_cli,
                 "Flag must be extracted from Cli.no_interactive, not from Commands::Init");
         }
         _ => panic!("Expected Commands::Init"),
@@ -420,7 +419,7 @@ fn test_init_flag_position_does_not_affect_extraction() {
     }
 
     // All positions should yield true
-    assert!(extracted_values.iter().all(|&v| v == true),
+    assert!(extracted_values.iter().all(|&v| v),
         "All flag positions should extract the same value (true)");
 
     // Verify all values are identical
@@ -443,7 +442,7 @@ fn test_init_default_value_is_consistent() {
     }
 
     // All should yield false
-    assert!(extracted_values.iter().all(|&v| v == false),
+    assert!(extracted_values.iter().all(|&v| !v),
         "Default value should consistently be false");
 }
 
@@ -483,7 +482,7 @@ fn test_init_handler_receives_correct_boolean() {
     let no_interactive_no_flag = cli_no_flag.no_interactive;
     match cli_no_flag.command {
         Commands::Init => {
-            assert_eq!(no_interactive_no_flag, false, "Handler should receive false without flag");
+            assert!(!no_interactive_no_flag, "Handler should receive false without flag");
         }
         _ => panic!("Expected Commands::Init"),
     }
@@ -499,7 +498,7 @@ fn test_init_with_no_other_arguments() {
     let result = simulate_init_handler_flow(&args);
 
     assert!(result.is_ok(), "Should parse successfully");
-    assert_eq!(result.unwrap(), false, "Default should be false");
+    assert!(!result.unwrap(), "Default should be false");
 }
 
 #[test]
@@ -529,33 +528,32 @@ fn test_init_handler_comprehensive_coverage() {
     // Test 1: Flag extraction with flag present
     let args_with_flag = ["hoop", "--no-interactive", "init"];
     let (flag_present, cmd_present) = parse_and_extract(&args_with_flag);
-    assert_eq!(flag_present, true, "1. Should extract true when flag present");
+    assert!(flag_present, "1. Should extract true when flag present");
     assert!(matches!(cmd_present, Commands::Init), "1. Should parse as Init");
 
     // Test 2: Flag extraction without flag
     let args_without_flag = ["hoop", "init"];
     let (flag_absent, cmd_absent) = parse_and_extract(&args_without_flag);
-    assert_eq!(flag_absent, false, "2. Should extract false when flag absent");
+    assert!(!flag_absent, "2. Should extract false when flag absent");
     assert!(matches!(cmd_absent, Commands::Init), "2. Should parse as Init");
 
     // Test 3: Handler pattern receives correct value
     let handler_flag_true = extract_init_handler_flag(&args_with_flag);
-    assert_eq!(handler_flag_true, true, "3. Handler should receive true");
+    assert!(handler_flag_true, "3. Handler should receive true");
 
     let handler_flag_false = extract_init_handler_flag(&args_without_flag);
-    assert_eq!(handler_flag_false, false, "3. Handler should receive false");
+    assert!(!handler_flag_false, "3. Handler should receive false");
 
     // Test 4: Full integration flow
     let flow_true = simulate_init_handler_flow(&args_with_flag);
     assert!(flow_true.is_ok(), "4. Flow should succeed with flag");
-    assert_eq!(flow_true.unwrap(), true, "4. Flow should extract true");
+    assert!(flow_true.unwrap(), "4. Flow should extract true");
 
     let flow_false = simulate_init_handler_flow(&args_without_flag);
     assert!(flow_false.is_ok(), "4. Flow should succeed without flag");
-    assert_eq!(flow_false.unwrap(), false, "4. Flow should extract false");
+    assert!(!flow_false.unwrap(), "4. Flow should extract false");
 
     // All checks passed
-    assert!(true, "All Init handler flag extraction tests verified");
 }
 
 #[test]
@@ -583,7 +581,7 @@ fn test_init_flag_absence_returns_false() {
     let no_interactive = cli.no_interactive;
 
     // Assert the extracted value is false (default value when flag is absent)
-    assert_eq!(no_interactive, false,
+    assert!(!no_interactive,
         "no_interactive flag value should be false (default) when --no-interactive flag is absent");
 
     // Additional verification: confirm this is the default behavior
@@ -618,7 +616,7 @@ fn test_commands_init_fixture_with_no_interactive_true() {
             // Successfully created Commands::Init fixture
             // The no_interactive flag is extracted from the Cli struct
             let no_interactive = cli.no_interactive;
-            assert_eq!(no_interactive, true,
+            assert!(no_interactive,
                 "Commands::Init fixture should have no_interactive=true");
         }
         _ => panic!("Expected Commands::Init, got {:?}", cli.command),
@@ -649,7 +647,7 @@ fn test_commands_init_fixture_with_no_interactive_false() {
             // Successfully created Commands::Init fixture
             // The no_interactive flag defaults to false when not specified
             let no_interactive = cli.no_interactive;
-            assert_eq!(no_interactive, false,
+            assert!(!no_interactive,
                 "Commands::Init fixture should have no_interactive=false (default)");
         }
         _ => panic!("Expected Commands::Init, got {:?}", cli.command),
@@ -672,7 +670,7 @@ fn test_commands_init_fixture_basic_structure() {
     // Assert: Verify Commands::Init is created with correct flag
     assert!(matches!(cli.command, Commands::Init),
         "Should create Commands::Init command");
-    assert_eq!(cli.no_interactive, true,
+    assert!(cli.no_interactive,
         "Should have no_interactive=true flag set");
 }
 

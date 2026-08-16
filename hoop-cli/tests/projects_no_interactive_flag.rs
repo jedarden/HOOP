@@ -138,8 +138,8 @@ fn scan_flag_accessible_in_nested_projects_command() {
     // Verify that the global no_interactive flag is accessible when parsed
     // with the flag specified at the global position (before projects subcommand)
     let fixture = ProjectsScanFixture::new_flag_before_projects();
-    assert_eq!(
-        fixture.no_interactive, true,
+    assert!(
+        fixture.no_interactive,
         "no_interactive flag should be accessible and set to true"
     );
 
@@ -167,15 +167,15 @@ fn scan_flag_value_consistent_across_positions() {
         before.no_interactive, short.no_interactive,
         "Long and short forms should produce same value"
     );
-    assert_eq!(before.no_interactive, true, "Flag should be true");
+    assert!(before.no_interactive, "Flag should be true");
 }
 
 #[test]
 fn scan_flag_default_value_when_not_specified() {
     // Verify the default value when flag is not specified
     let fixture = ProjectsScanFixture::new_without_flag();
-    assert_eq!(
-        fixture.no_interactive, false,
+    assert!(
+        !fixture.no_interactive,
         "no_interactive should default to false when not specified"
     );
 }
@@ -190,7 +190,7 @@ fn scan_propagates_through_call_chain() {
     let fixture = ProjectsScanFixture::new_flag_before_projects();
 
     // Step 1: Verify global flag is accessible
-    assert_eq!(fixture.no_interactive, true, "Global flag should be accessible");
+    assert!(fixture.no_interactive, "Global flag should be accessible");
 
     // Step 2: Verify command routing through ProjectsCommands
     match fixture.command {
@@ -199,7 +199,7 @@ fn scan_propagates_through_call_chain() {
             match projects_cmd {
                 hoop::ProjectsCommands::Scan { root, yes } => {
                     assert_eq!(root, "/tmp/test", "Root path should be preserved");
-                    assert_eq!(yes, false, "Local yes flag should not be set with global flag");
+                    assert!(!yes, "Local yes flag should not be set with global flag");
                     // The handler would receive: no_interactive || yes
                     // In this case: true || false = true
                 }
@@ -215,7 +215,7 @@ fn scan_short_form_flag_propagates_correctly() {
     // Verify the short -y form works the same as --no-interactive
     let fixture = ProjectsScanFixture::new_short_flag();
 
-    assert_eq!(fixture.no_interactive, true, "-y should set no_interactive to true");
+    assert!(fixture.no_interactive, "-y should set no_interactive to true");
 
     match fixture.command {
         Commands::Projects(hoop::ProjectsCommands::Scan { .. }) => {
@@ -232,8 +232,8 @@ fn remove_flag_accessible_in_nested_projects_command() {
     // Verify that the global no_interactive flag is accessible when parsed
     // with the flag specified at the global position
     let fixture = ProjectsRemoveFixture::new_flag_before_projects();
-    assert_eq!(
-        fixture.no_interactive, true,
+    assert!(
+        fixture.no_interactive,
         "no_interactive flag should be accessible and set to true"
     );
 
@@ -261,15 +261,15 @@ fn remove_flag_value_consistent_across_positions() {
         before.no_interactive, short.no_interactive,
         "Long and short forms should produce same value"
     );
-    assert_eq!(before.no_interactive, true, "Flag should be true");
+    assert!(before.no_interactive, "Flag should be true");
 }
 
 #[test]
 fn remove_flag_default_value_when_not_specified() {
     // Verify the default value when flag is not specified
     let fixture = ProjectsRemoveFixture::new_without_flag();
-    assert_eq!(
-        fixture.no_interactive, false,
+    assert!(
+        !fixture.no_interactive,
         "no_interactive should default to false when not specified"
     );
 }
@@ -284,7 +284,7 @@ fn remove_propagates_through_call_chain() {
     let fixture = ProjectsRemoveFixture::new_flag_before_projects();
 
     // Step 1: Verify global flag is accessible
-    assert_eq!(fixture.no_interactive, true, "Global flag should be accessible");
+    assert!(fixture.no_interactive, "Global flag should be accessible");
 
     // Step 2: Verify command routing through ProjectsCommands
     match fixture.command {
@@ -293,7 +293,7 @@ fn remove_propagates_through_call_chain() {
             match projects_cmd {
                 hoop::ProjectsCommands::Remove { name, confirm } => {
                     assert_eq!(name, "test-project", "Project name should be preserved");
-                    assert_eq!(confirm, true, "Confirm flag should be set");
+                    assert!(confirm, "Confirm flag should be set");
                     // The handler would receive no_interactive as a parameter
                     // In this case: true
                 }
@@ -312,14 +312,14 @@ fn remove_requires_confirm_with_no_interactive() {
     let args = ["hoop", "--no-interactive", "projects", "remove", "test-project"];
     let cli = Cli::try_parse_from(args).expect("parse should succeed");
 
-    assert_eq!(cli.no_interactive, true, "no_interactive should be true");
+    assert!(cli.no_interactive, "no_interactive should be true");
 
     match cli.command {
         Commands::Projects(hoop::ProjectsCommands::Remove { name, confirm }) => {
             assert_eq!(name, "test-project");
             // confirm should be false when not specified
             // The handler will check: if no_interactive && !confirm -> error
-            assert_eq!(confirm, false, "confirm should be false when not specified");
+            assert!(!confirm, "confirm should be false when not specified");
         }
         _ => panic!("Expected ProjectsCommands::Remove"),
     }
@@ -330,7 +330,7 @@ fn remove_short_form_flag_propagates_correctly() {
     // Verify the short -y form works the same as --no-interactive
     let fixture = ProjectsRemoveFixture::new_short_flag();
 
-    assert_eq!(fixture.no_interactive, true, "-y should set no_interactive to true");
+    assert!(fixture.no_interactive, "-y should set no_interactive to true");
 
     match fixture.command {
         Commands::Projects(hoop::ProjectsCommands::Remove { .. }) => {
@@ -349,11 +349,11 @@ fn flag_propagation_consistent_across_projects_subcommands() {
 
     // Test scan command
     let scan_fixture = ProjectsScanFixture::new_flag_before_projects();
-    assert_eq!(scan_fixture.no_interactive, true);
+    assert!(scan_fixture.no_interactive);
 
     // Test remove command
     let remove_fixture = ProjectsRemoveFixture::new_flag_before_projects();
-    assert_eq!(remove_fixture.no_interactive, true);
+    assert!(remove_fixture.no_interactive);
 
     // Both should have the same flag value when specified the same way
     assert_eq!(
@@ -371,7 +371,7 @@ fn global_flag_persists_through_nesting_levels() {
     // Test with scan
     let scan_args = ["hoop", "--no-interactive", "projects", "scan", "/tmp"];
     let scan_cli = Cli::try_parse_from(scan_args).expect("parse should succeed");
-    assert_eq!(scan_cli.no_interactive, true);
+    assert!(scan_cli.no_interactive);
 
     match scan_cli.command {
         Commands::Projects(hoop::ProjectsCommands::Scan { .. }) => {
@@ -383,7 +383,7 @@ fn global_flag_persists_through_nesting_levels() {
     // Test with remove
     let remove_args = ["hoop", "--no-interactive", "projects", "remove", "proj", "--confirm"];
     let remove_cli = Cli::try_parse_from(remove_args).expect("parse should succeed");
-    assert_eq!(remove_cli.no_interactive, true);
+    assert!(remove_cli.no_interactive);
 
     match remove_cli.command {
         Commands::Projects(hoop::ProjectsCommands::Remove { .. }) => {
@@ -401,12 +401,12 @@ fn scan_with_local_yes_and_global_no_interactive() {
     let args = ["hoop", "--no-interactive", "projects", "scan", "/tmp", "--yes"];
     let cli = Cli::try_parse_from(args).expect("parse should succeed");
 
-    assert_eq!(cli.no_interactive, true, "global flag should be true");
+    assert!(cli.no_interactive, "global flag should be true");
 
     match cli.command {
         Commands::Projects(hoop::ProjectsCommands::Scan { root, yes }) => {
             assert_eq!(root, "/tmp");
-            assert_eq!(yes, true, "local yes flag should be set");
+            assert!(yes, "local yes flag should be set");
             // Handler receives: no_interactive || yes = true || true = true
         }
         _ => panic!("Expected ProjectsCommands::Scan"),
@@ -427,8 +427,8 @@ fn projects_command_extracts_global_flag_correctly() {
 
     for args in positions {
         let cli = Cli::try_parse_from(args.iter()).expect("parse should succeed");
-        assert_eq!(
-            cli.no_interactive, true,
+        assert!(
+            cli.no_interactive,
             "Flag should be true regardless of position: {:?}",
             args
         );

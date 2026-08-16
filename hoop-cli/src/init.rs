@@ -701,7 +701,7 @@ mod tests {
         let args = ["hoop", "--no-interactive", "init"];
         let cli = crate::Cli::parse_from(args);
 
-        assert_eq!(cli.no_interactive, true, "Flag should be true when present before init");
+        assert!(cli.no_interactive, "Flag should be true when present before init");
 
         match cli.command {
             crate::Commands::Init => {}, // Correct command
@@ -716,7 +716,7 @@ mod tests {
         let args = ["hoop", "init", "--no-interactive"];
         let cli = crate::Cli::parse_from(args);
 
-        assert_eq!(cli.no_interactive, true, "Flag should be true when present after init");
+        assert!(cli.no_interactive, "Flag should be true when present after init");
 
         match cli.command {
             crate::Commands::Init => {}, // Correct command
@@ -730,7 +730,7 @@ mod tests {
         let args = ["hoop", "-y", "init"];
         let cli = crate::Cli::parse_from(args);
 
-        assert_eq!(cli.no_interactive, true, "Flag should be true with -y short form");
+        assert!(cli.no_interactive, "Flag should be true with -y short form");
 
         match cli.command {
             crate::Commands::Init => {}, // Correct command
@@ -755,7 +755,7 @@ mod tests {
             no_interactive_before, no_interactive_after,
             "Flag value must be consistent regardless of position"
         );
-        assert_eq!(no_interactive_before, true, "Flag should be true");
+        assert!(no_interactive_before, "Flag should be true");
     }
 
     /// Test: Verify default behavior (no flag = false)
@@ -764,7 +764,7 @@ mod tests {
         let args = ["hoop", "init"];
         let cli = crate::Cli::parse_from(args);
 
-        assert_eq!(cli.no_interactive, false, "Flag should be false when not specified");
+        assert!(!cli.no_interactive, "Flag should be false when not specified");
 
         match cli.command {
             crate::Commands::Init => {}, // Correct command
@@ -1087,8 +1087,8 @@ mod tests {
         let extracted_flag_before = cli_flag_before.no_interactive;
 
         // Assert the extracted value is true
-        assert_eq!(
-            extracted_flag_before, true,
+        assert!(
+            extracted_flag_before,
             "no_interactive flag must be true when --no-interactive is present before init command.\n\
              Expected: true, Got: {}",
             extracted_flag_before
@@ -1110,8 +1110,8 @@ mod tests {
         let extracted_flag_after = cli_flag_after.no_interactive;
 
         // Assert the extracted value is true
-        assert_eq!(
-            extracted_flag_after, true,
+        assert!(
+            extracted_flag_after,
             "no_interactive flag must be true when --no-interactive is present after init command.\n\
              Expected: true, Got: {}",
             extracted_flag_after
@@ -1138,8 +1138,8 @@ mod tests {
         let cli_no_flag = crate::Cli::parse_from(args_no_flag);
         let extracted_no_flag = cli_no_flag.no_interactive;
 
-        assert_eq!(
-            extracted_no_flag, false,
+        assert!(
+            !extracted_no_flag,
             "no_interactive flag must be false when --no-interactive is not present.\n\
              Expected: false, Got: {}",
             extracted_no_flag
@@ -1299,8 +1299,8 @@ mod tests {
 
         // Verify flag extraction
         let extracted_flag = cli_with_flag.no_interactive;
-        assert_eq!(
-            extracted_flag, true,
+        assert!(
+            extracted_flag,
             "Integration test: Extracted flag must be true when --no-interactive is present.\n\
              This verifies the complete CLI parsing → flag extraction flow."
         );
@@ -1310,8 +1310,8 @@ mod tests {
         let cli_without_flag = crate::Cli::parse_from(args_without_flag);
 
         let extracted_flag_no_flag = cli_without_flag.no_interactive;
-        assert_eq!(
-            extracted_flag_no_flag, false,
+        assert!(
+            !extracted_flag_no_flag,
             "Integration test: Extracted flag must be false when --no-interactive is absent.\n\
              This verifies the default behavior when flag is not provided."
         );
@@ -1420,8 +1420,8 @@ mod tests {
         let args = ["hoop", "--no-interactive", "init"];
         let cli = crate::Cli::parse_from(args);
 
-        assert_eq!(
-            cli.no_interactive, true,
+        assert!(
+            cli.no_interactive,
             "Step 1: CLI parsing must extract no_interactive flag correctly.\n\
              clap Parser stores the flag in Cli.no_interactive field."
         );
@@ -1481,8 +1481,8 @@ mod tests {
         // Simulate main() extraction
         let simulated_extracted_flag = test_cli.no_interactive;
 
-        assert_eq!(
-            simulated_extracted_flag, true,
+        assert!(
+            simulated_extracted_flag,
             "Step 5: End-to-end flow verification failed.\n\
              CLI args → Clap parsing → main() extraction → handler parameter.\n\
              Expected: true, Got: {}",
@@ -1521,8 +1521,8 @@ mod tests {
 
         // Verify runtime extraction
         let extracted_flag_true_before = cli_flag_true_before.no_interactive;
-        assert_eq!(
-            extracted_flag_true_before, true,
+        assert!(
+            extracted_flag_true_before,
             "Runtime: Extracted flag must be true when --no-interactive present before command.\n\
              This verifies the clap Parser stores the flag correctly at runtime."
         );
@@ -1540,8 +1540,8 @@ mod tests {
         let cli_flag_true_after = crate::Cli::parse_from(args_flag_true_after);
 
         let extracted_flag_true_after = cli_flag_true_after.no_interactive;
-        assert_eq!(
-            extracted_flag_true_after, true,
+        assert!(
+            extracted_flag_true_after,
             "Runtime: Extracted flag must be true when --no-interactive present after command.\n\
              This verifies global flag works in any position."
         );
@@ -1559,8 +1559,8 @@ mod tests {
         let cli_short_form = crate::Cli::parse_from(args_short_form);
 
         let extracted_flag_short = cli_short_form.no_interactive;
-        assert_eq!(
-            extracted_flag_short, true,
+        assert!(
+            extracted_flag_short,
             "Runtime: Short form -y must also set flag to true.\n\
              This verifies the short alias works correctly."
         );
@@ -1570,8 +1570,8 @@ mod tests {
         let cli_no_flag = crate::Cli::parse_from(args_no_flag);
 
         let extracted_flag_false = cli_no_flag.no_interactive;
-        assert_eq!(
-            extracted_flag_false, false,
+        assert!(
+            !extracted_flag_false,
             "Runtime: Extracted flag must be false when --no-interactive is absent.\n\
              This verifies the default value is false."
         );
@@ -1625,8 +1625,8 @@ mod tests {
         for (args, description) in test_cases {
             let cli = crate::Cli::parse_from(args);
 
-            assert_eq!(
-                cli.no_interactive, true,
+            assert!(
+                cli.no_interactive,
                 "Runtime: Flag must be true when {}: {:?}\n\
                  This verifies global flag works in any position.",
                 description, args

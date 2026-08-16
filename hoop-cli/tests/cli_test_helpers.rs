@@ -2421,7 +2421,7 @@ mod tests {
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, true);
+        assert!(parsed.no_interactive);
         assert_eq!(parsed.subcommand, Some("scan".to_string()));
         assert_eq!(parsed.nested_subcommand, None);
         assert_eq!(parsed.args.len(), 3);
@@ -2439,7 +2439,7 @@ mod tests {
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, true);
+        assert!(parsed.no_interactive);
         assert_eq!(parsed.subcommand, Some("projects".to_string()));
         assert_eq!(parsed.nested_subcommand, Some("remove".to_string()));
     }
@@ -2450,7 +2450,7 @@ mod tests {
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, true);
+        assert!(parsed.no_interactive);
         assert_eq!(parsed.subcommand, Some("status".to_string()));
     }
 
@@ -2460,7 +2460,7 @@ mod tests {
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, false);
+        assert!(!parsed.no_interactive);
         assert_eq!(parsed.subcommand, Some("scan".to_string()));
     }
 
@@ -2470,7 +2470,7 @@ mod tests {
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, true);
+        assert!(parsed.no_interactive);
         assert_eq!(parsed.subcommand, Some("scan".to_string()));
         assert_eq!(parsed.nested_subcommand, None);
     }
@@ -2487,7 +2487,7 @@ mod tests {
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, true);
+        assert!(parsed.no_interactive);
         assert_eq!(parsed.subcommand, Some("projects".to_string()));
         assert_eq!(parsed.nested_subcommand, Some("remove".to_string()));
     }
@@ -2498,7 +2498,7 @@ mod tests {
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, true);
+        assert!(parsed.no_interactive);
         assert_eq!(parsed.subcommand, Some("status".to_string()));
     }
 
@@ -2508,7 +2508,7 @@ mod tests {
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, false);
+        assert!(!parsed.no_interactive);
         assert_eq!(parsed.subcommand, Some("scan".to_string()));
     }
 
@@ -2524,7 +2524,7 @@ mod tests {
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, true);
+        assert!(parsed.no_interactive);
         assert_eq!(parsed.subcommand, Some("projects".to_string()));
         assert_eq!(parsed.nested_subcommand, Some("remove".to_string()));
     }
@@ -2535,7 +2535,7 @@ mod tests {
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, true);
+        assert!(parsed.no_interactive);
         assert_eq!(parsed.subcommand, Some("patterns".to_string()));
         assert_eq!(parsed.nested_subcommand, Some("add".to_string()));
     }
@@ -2546,7 +2546,7 @@ mod tests {
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, true);
+        assert!(parsed.no_interactive);
         assert_eq!(parsed.subcommand, Some("scan".to_string()));
         assert_eq!(parsed.nested_subcommand, None);
     }
@@ -2557,23 +2557,23 @@ mod tests {
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
-        assert_eq!(parsed.no_interactive, false);
+        assert!(!parsed.no_interactive);
         assert_eq!(parsed.subcommand, Some("status".to_string()));
         assert_eq!(parsed.nested_subcommand, None);
     }
 
     #[test]
     fn test_extract_flag_value_present() {
-        assert_eq!(extract_flag_value(&["scan", "/tmp", "--no-interactive"]), true);
-        assert_eq!(extract_flag_value(&["-y", "scan", "/tmp"]), true);
-        assert_eq!(extract_flag_value(&["scan", "--no-interactive", "/tmp"]), true);
+        assert!(extract_flag_value(&["scan", "/tmp", "--no-interactive"]));
+        assert!(extract_flag_value(&["-y", "scan", "/tmp"]));
+        assert!(extract_flag_value(&["scan", "--no-interactive", "/tmp"]));
     }
 
     #[test]
     fn test_extract_flag_value_absent() {
-        assert_eq!(extract_flag_value(&["scan", "/tmp"]), false);
-        assert_eq!(extract_flag_value(&["status", "--json"]), false);
-        assert_eq!(extract_flag_value(&[]), false);
+        assert!(!extract_flag_value(&["scan", "/tmp"]));
+        assert!(!extract_flag_value(&["status", "--json"]));
+        assert!(!extract_flag_value(&[]));
     }
 
     #[test]
@@ -2790,7 +2790,7 @@ mod tests {
 
         // Verify the flag is actually detected
         let direct = extract_flag_value(args_with_flag);
-        assert_eq!(direct, true);
+        assert!(direct);
     }
 
     #[test]
@@ -2798,7 +2798,7 @@ mod tests {
         // Extract flag value directly
         let args = &["scan", "/tmp", "--no-interactive"];
         let extracted = extract_flag_value(args);
-        assert_eq!(extracted, true);
+        assert!(extracted);
 
         // Parse and assert the same value
         let parsed = parse_flag_after_subcommand(args).unwrap();
@@ -2843,7 +2843,7 @@ mod tests {
         let args_before = &["--no-interactive", "scan", "/tmp"];
         let parsed_before = parse_flag_before_subcommand(args_before)
             .expect("Should parse flag before subcommand");
-        assert_eq!(parsed_before.no_interactive, true);
+        assert!(parsed_before.no_interactive);
         assert_eq!(parsed_before.subcommand, Some("scan".to_string()));
         assert!(assert_flag_is_true(&parsed_before).is_ok());
 
@@ -2851,7 +2851,7 @@ mod tests {
         let args_after = &["scan", "/tmp", "--no-interactive"];
         let parsed_after = parse_flag_after_subcommand(args_after)
             .expect("Should parse flag after subcommand");
-        assert_eq!(parsed_after.no_interactive, true);
+        assert!(parsed_after.no_interactive);
         assert_eq!(parsed_after.subcommand, Some("scan".to_string()));
         assert!(assert_flag_is_true(&parsed_after).is_ok());
 
@@ -2859,8 +2859,8 @@ mod tests {
         let args_short = &["-y", "status", "--json"];
         let parsed_short = parse_flag_before_subcommand(args_short)
             .expect("Should parse short flag");
-        assert_eq!(parsed_short.no_interactive, true);
-        assert_eq!(extract_flag_value(args_short), true);
+        assert!(parsed_short.no_interactive);
+        assert!(extract_flag_value(args_short));
 
         // ── Part 2: Flag Propagation Patterns ───────────────────────────────────────
 
@@ -2879,7 +2879,7 @@ mod tests {
             .collect::<Vec<_>>();
         let parsed_nested_flag = parse_nested_subcommand(nested_with_flag)
             .expect("Should parse nested command with flag");
-        assert_eq!(parsed_nested_flag.no_interactive, true);
+        assert!(parsed_nested_flag.no_interactive);
 
         // Pattern 5: Position independence verification
         assert!(verify_flag_position_consistency(nested_args).is_ok(),
@@ -2895,7 +2895,7 @@ mod tests {
         let multi_flags = &["scan", "/tmp", "--verbose", "--json", "--no-interactive"];
         let parsed_multi = parse_flag_after_subcommand(multi_flags)
             .expect("Should parse command with multiple flags");
-        assert_eq!(parsed_multi.no_interactive, true);
+        assert!(parsed_multi.no_interactive);
         assert!(parsed_multi.args.contains(&"--verbose".to_string()));
         assert!(parsed_multi.args.contains(&"--json".to_string()));
 
@@ -2903,7 +2903,7 @@ mod tests {
         let no_flag_args = &["list"];
         let parsed_default = parse_flag_before_subcommand(no_flag_args)
             .expect("Should parse command without flag");
-        assert_eq!(parsed_default.no_interactive, false);
+        assert!(!parsed_default.no_interactive);
         assert!(verify_default_flag_value(no_flag_args).is_ok());
 
         // Scenario 3: All parsing levels consistency
@@ -2915,7 +2915,7 @@ mod tests {
 
         // Verify 1: Flag extraction works correctly
         let extracted = extract_flag_value(&["scan", "/tmp", "-y"]);
-        assert_eq!(extracted, true, "Direct extraction should work");
+        assert!(extracted, "Direct extraction should work");
 
         // Verify 2: Subcommand extraction works correctly
         let subcmd = extract_subcommand(&["projects", "remove", "test"]);
@@ -2937,11 +2937,11 @@ mod tests {
         let flag_only = parse_flag_before_subcommand(&["--no-interactive"])
             .expect("Should parse flag-only args");
         assert_eq!(flag_only.subcommand, None);
-        assert_eq!(flag_only.no_interactive, true);
+        assert!(flag_only.no_interactive);
 
         // Edge case 3: Multiple occurrences of flag (last wins in practice)
         let multi_flag = &["-y", "scan", "/tmp", "-y"];
-        assert_eq!(extract_flag_value(multi_flag), true,
+        assert!(extract_flag_value(multi_flag),
             "Should detect flag presence regardless of count");
 
         // ── Summary ─────────────────────────────────────────────────────────────────

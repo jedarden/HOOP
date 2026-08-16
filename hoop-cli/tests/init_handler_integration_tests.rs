@@ -146,8 +146,8 @@ fn test_init_flag_reading_no_interactive_true_before_command() {
     let fixture = InitFixtureNoInteractive::new_flag_before();
 
     // Assert: Verify flag extraction
-    assert_eq!(
-        fixture.no_interactive, true,
+    assert!(
+        fixture.no_interactive,
         "no_interactive should be true when --no-interactive flag present before command"
     );
 
@@ -175,8 +175,8 @@ fn test_init_flag_reading_no_interactive_true_after_command() {
     let fixture = InitFixtureNoInteractive::new_flag_after();
 
     // Assert: Verify flag extraction
-    assert_eq!(
-        fixture.no_interactive, true,
+    assert!(
+        fixture.no_interactive,
         "no_interactive should be true when --no-interactive flag present after command"
     );
 
@@ -199,8 +199,8 @@ fn test_init_flag_reading_no_interactive_true_short_flag() {
     let fixture = InitFixtureNoInteractive::new_short_flag();
 
     // Assert: Verify flag extraction
-    assert_eq!(
-        fixture.no_interactive, true,
+    assert!(
+        fixture.no_interactive,
         "no_interactive should be true when -y short flag present"
     );
 
@@ -223,8 +223,8 @@ fn test_init_flag_reading_no_interactive_false_default() {
     let fixture = InitFixtureInteractive::new();
 
     // Assert: Verify flag extraction
-    assert_eq!(
-        fixture.no_interactive, false,
+    assert!(
+        !fixture.no_interactive,
         "no_interactive should be false when flag is absent (default)"
     );
 
@@ -254,8 +254,8 @@ fn test_init_flag_reading_position_independence() {
         "Flag value must be consistent regardless of position"
     );
 
-    assert_eq!(
-        fixture_before.no_interactive, true,
+    assert!(
+        fixture_before.no_interactive,
         "Both positions should extract no_interactive as true"
     );
 
@@ -587,7 +587,7 @@ fn test_init_handler_receives_flag_from_main() {
     let args = ["hoop", "--no-interactive", "init"];
     let cli = Cli::parse_from(args);
 
-    assert_eq!(cli.no_interactive, true, "Runtime: Flag should be true");
+    assert!(cli.no_interactive, "Runtime: Flag should be true");
 
     match cli.command {
         Commands::Init => {
@@ -607,7 +607,7 @@ fn test_init_flag_value_flow_to_handler() {
     let args_true = ["hoop", "--no-interactive", "init"];
     let cli_true = Cli::parse_from(args_true);
 
-    assert_eq!(cli_true.no_interactive, true, "CLI should parse flag as true");
+    assert!(cli_true.no_interactive, "CLI should parse flag as true");
 
     match cli_true.command {
         Commands::Init => {
@@ -615,7 +615,7 @@ fn test_init_flag_value_flow_to_handler() {
             // init::run_init_wizard(cli_true.no_interactive)
             // which would be: init::run_init_wizard(true)
             let flag_value = cli_true.no_interactive;
-            assert_eq!(flag_value, true, "Handler would receive true");
+            assert!(flag_value, "Handler would receive true");
         }
         _ => panic!("Expected Commands::Init"),
     }
@@ -624,7 +624,7 @@ fn test_init_flag_value_flow_to_handler() {
     let args_false = ["hoop", "init"];
     let cli_false = Cli::parse_from(args_false);
 
-    assert_eq!(cli_false.no_interactive, false, "CLI should default flag to false");
+    assert!(!cli_false.no_interactive, "CLI should default flag to false");
 
     match cli_false.command {
         Commands::Init => {
@@ -632,7 +632,7 @@ fn test_init_flag_value_flow_to_handler() {
             // init::run_init_wizard(cli_false.no_interactive)
             // which would be: init::run_init_wizard(false)
             let flag_value = cli_false.no_interactive;
-            assert_eq!(flag_value, false, "Handler would receive false");
+            assert!(!flag_value, "Handler would receive false");
         }
         _ => panic!("Expected Commands::Init"),
     }
@@ -641,12 +641,12 @@ fn test_init_flag_value_flow_to_handler() {
     let args_short = ["hoop", "-y", "init"];
     let cli_short = Cli::parse_from(args_short);
 
-    assert_eq!(cli_short.no_interactive, true, "CLI should parse -y as true");
+    assert!(cli_short.no_interactive, "CLI should parse -y as true");
 
     match cli_short.command {
         Commands::Init => {
             let flag_value = cli_short.no_interactive;
-            assert_eq!(flag_value, true, "Handler would receive true for -y flag");
+            assert!(flag_value, "Handler would receive true for -y flag");
         }
         _ => panic!("Expected Commands::Init"),
     }
@@ -724,7 +724,7 @@ fn test_init_flag_reading_all_scenarios() {
     let args_1 = ["hoop", "--no-interactive", "init"];
     let cli_1 = Cli::parse_from(args_1);
 
-    assert_eq!(cli_1.no_interactive, true, "Scenario 1: Flag should be true");
+    assert!(cli_1.no_interactive, "Scenario 1: Flag should be true");
     match cli_1.command {
         Commands::Init => {}
         _ => panic!("Scenario 1: Expected Commands::Init"),
@@ -734,7 +734,7 @@ fn test_init_flag_reading_all_scenarios() {
     let args_2 = ["hoop", "init", "--no-interactive"];
     let cli_2 = Cli::parse_from(args_2);
 
-    assert_eq!(cli_2.no_interactive, true, "Scenario 2: Flag should be true");
+    assert!(cli_2.no_interactive, "Scenario 2: Flag should be true");
     match cli_2.command {
         Commands::Init => {}
         _ => panic!("Scenario 2: Expected Commands::Init"),
@@ -744,7 +744,7 @@ fn test_init_flag_reading_all_scenarios() {
     let args_3 = ["hoop", "-y", "init"];
     let cli_3 = Cli::parse_from(args_3);
 
-    assert_eq!(cli_3.no_interactive, true, "Scenario 3: Flag should be true");
+    assert!(cli_3.no_interactive, "Scenario 3: Flag should be true");
     match cli_3.command {
         Commands::Init => {}
         _ => panic!("Scenario 3: Expected Commands::Init"),
@@ -754,7 +754,7 @@ fn test_init_flag_reading_all_scenarios() {
     let args_4 = ["hoop", "init", "-y"];
     let cli_4 = Cli::parse_from(args_4);
 
-    assert_eq!(cli_4.no_interactive, true, "Scenario 4: Flag should be true");
+    assert!(cli_4.no_interactive, "Scenario 4: Flag should be true");
     match cli_4.command {
         Commands::Init => {}
         _ => panic!("Scenario 4: Expected Commands::Init"),
@@ -764,7 +764,7 @@ fn test_init_flag_reading_all_scenarios() {
     let args_5 = ["hoop", "init"];
     let cli_5 = Cli::parse_from(args_5);
 
-    assert_eq!(cli_5.no_interactive, false, "Scenario 5: Flag should default to false");
+    assert!(!cli_5.no_interactive, "Scenario 5: Flag should default to false");
     match cli_5.command {
         Commands::Init => {}
         _ => panic!("Scenario 5: Expected Commands::Init"),
@@ -774,7 +774,7 @@ fn test_init_flag_reading_all_scenarios() {
     assert_eq!(cli_1.no_interactive, cli_2.no_interactive);
     assert_eq!(cli_2.no_interactive, cli_3.no_interactive);
     assert_eq!(cli_3.no_interactive, cli_4.no_interactive);
-    assert_eq!(cli_4.no_interactive, true);
+    assert!(cli_4.no_interactive);
 
     // Verify default is different from flag set
     assert_ne!(cli_5.no_interactive, cli_1.no_interactive);
@@ -793,13 +793,13 @@ fn test_init_integration_scaffold_comprehensive() {
     let fixture_after = InitFixtureNoInteractive::new_flag_after();
     let fixture_short = InitFixtureNoInteractive::new_short_flag();
 
-    assert_eq!(fixture_before.no_interactive, true);
-    assert_eq!(fixture_after.no_interactive, true);
-    assert_eq!(fixture_short.no_interactive, true);
+    assert!(fixture_before.no_interactive);
+    assert!(fixture_after.no_interactive);
+    assert!(fixture_short.no_interactive);
 
     // Test 2: Verify no_interactive=false fixture compiles and parses correctly
     let fixture_default = InitFixtureInteractive::new();
-    assert_eq!(fixture_default.no_interactive, false);
+    assert!(!fixture_default.no_interactive);
 
     // Test 3: Verify all fixtures parse as Commands::Init
     match (
@@ -829,7 +829,6 @@ fn test_init_integration_scaffold_comprehensive() {
     );
 
     // All scaffold tests passed
-    assert!(true, "Integration test scaffold structure verified");
 }
 
 // ── Section 5: End-to-End Integration Test ─────────────────────────────────────────────
@@ -849,13 +848,13 @@ fn test_init_handler_end_to_end_flag_usage() {
     let args_with_flag = ["hoop", "--no-interactive", "init"];
     let cli_with_flag = Cli::parse_from(args_with_flag);
 
-    assert_eq!(cli_with_flag.no_interactive, true,
+    assert!(cli_with_flag.no_interactive,
         "Part 1a: CLI should parse --no-interactive as true");
 
     let args_without_flag = ["hoop", "init"];
     let cli_without_flag = Cli::parse_from(args_without_flag);
 
-    assert_eq!(cli_without_flag.no_interactive, false,
+    assert!(!cli_without_flag.no_interactive,
         "Part 1b: CLI should default to false when flag absent");
 
     // Part 2: Verify handler signature accepts the flag parameter
@@ -949,7 +948,7 @@ fn test_init_handler_end_to_end_flag_usage() {
             // This is what gets called: init::run_init_wizard(no_interactive_from_main)
             // Which becomes: init::run_init_wizard(true)
             // Based on code inspection, this will take early exit path
-            assert_eq!(no_interactive_from_main, true,
+            assert!(no_interactive_from_main,
                 "Part 8: Handler receives true when --no-interactive flag present");
         }
         _ => panic!("Part 8: Expected Commands::Init"),
@@ -962,14 +961,13 @@ fn test_init_handler_end_to_end_flag_usage() {
             // This is what gets called: init::run_init_wizard(no_interactive_default)
             // Which becomes: init::run_init_wizard(false)
             // Based on code inspection, this will execute full wizard
-            assert_eq!(no_interactive_default, false,
+            assert!(!no_interactive_default,
                 "Part 9: Handler receives false when flag absent (default)");
         }
         _ => panic!("Part 9: Expected Commands::Init"),
     }
 
     // All integration flow tests passed
-    assert!(true, "End-to-end integration test: complete flow verified");
 }
 
 /// Integration test: Verify handler behavior differs based on flag value
@@ -1123,7 +1121,6 @@ fn test_init_handler_behavior_differ_by_flag_value() {
     );
 
     // Both paths verified - handler behavior differs based on flag value
-    assert!(true, "Handler behavior differentiation verified");
 }
 
 /// Integration test: Complete end-to-end flow from parsed command to handler action
@@ -1174,7 +1171,7 @@ fn test_init_complete_flow_parsed_command_to_handler_action() {
             );
 
             // Verify extracted value matches what handler expects
-            assert_eq!(no_interactive_extracted, true,
+            assert!(no_interactive_extracted,
                 "Step 5d: Extracted flag value is true, triggering early exit path");
         }
         _ => panic!("Expected Commands::Init"),
@@ -1208,14 +1205,13 @@ fn test_init_complete_flow_parsed_command_to_handler_action() {
                 "Step 5e: Handler action: execute full wizard when flag is false"
             );
 
-            assert_eq!(no_interactive_default, false,
+            assert!(!no_interactive_default,
                 "Step 5f: Extracted flag value is false, triggering wizard path");
         }
         _ => panic!("Expected Commands::Init"),
     }
 
     // Complete flow verified
-    assert!(true, "Complete flow from parsed command to handler action verified");
 }
 
 // ── Section 6: Documentation and References ───────────────────────────────────────

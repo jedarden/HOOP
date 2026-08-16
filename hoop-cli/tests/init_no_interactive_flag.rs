@@ -24,7 +24,7 @@ fn test_init_parse_with_flag_before_subcommand() {
     assert!(result.is_ok(), "Should successfully parse flag before subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "no_interactive should be true");
+    assert!(parsed.no_interactive, "no_interactive should be true");
     assert_eq!(parsed.command, "init", "Command should be 'init'");
     assert!(
         parsed.args.contains(&"init".to_string()),
@@ -40,7 +40,7 @@ fn test_init_parse_with_flag_after_subcommand() {
     assert!(result.is_ok(), "Should successfully parse flag after subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "no_interactive should be true");
+    assert!(parsed.no_interactive, "no_interactive should be true");
     assert_eq!(parsed.command, "init", "Command should be 'init'");
     assert!(
         parsed.args.contains(&"init".to_string()),
@@ -56,7 +56,7 @@ fn test_init_parse_with_short_flag_before_subcommand() {
     assert!(result.is_ok(), "Should successfully parse short flag before subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "no_interactive should be true with -y");
+    assert!(parsed.no_interactive, "no_interactive should be true with -y");
     assert_eq!(parsed.command, "init", "Command should be 'init'");
 }
 
@@ -68,7 +68,7 @@ fn test_init_parse_with_short_flag_after_subcommand() {
     assert!(result.is_ok(), "Should successfully parse short flag after subcommand");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, true, "no_interactive should be true with -y");
+    assert!(parsed.no_interactive, "no_interactive should be true with -y");
     assert_eq!(parsed.command, "init", "Command should be 'init'");
 }
 
@@ -80,7 +80,7 @@ fn test_init_parse_without_flag() {
     assert!(result.is_ok(), "Should successfully parse command without flag");
     let parsed = result.unwrap();
 
-    assert_eq!(parsed.no_interactive, false, "no_interactive should default to false");
+    assert!(!parsed.no_interactive, "no_interactive should default to false");
     assert_eq!(parsed.command, "init", "Command should be 'init'");
 }
 
@@ -95,7 +95,7 @@ fn test_init_flag_extraction_before_position() {
     assert!(verification_result.is_ok(), "Flag extraction should verify for 'before' position");
 
     // Additional assertions
-    assert_eq!(parsed.no_interactive, true);
+    assert!(parsed.no_interactive);
     assert_eq!(parsed.command, "init");
 }
 
@@ -108,7 +108,7 @@ fn test_init_flag_extraction_after_position() {
     assert!(verification_result.is_ok(), "Flag extraction should verify for 'after' position");
 
     // Additional assertions
-    assert_eq!(parsed.no_interactive, true);
+    assert!(parsed.no_interactive);
     assert_eq!(parsed.command, "init");
 }
 
@@ -120,7 +120,7 @@ fn test_init_no_flag_present_verification() {
     let verification_result = verify_no_flag_present(&parsed);
     assert!(verification_result.is_ok(), "Should verify no flag is present");
 
-    assert_eq!(parsed.no_interactive, false);
+    assert!(!parsed.no_interactive);
 }
 
 // ── Flag propagation to handler tests ────────────────────────────────────────────
@@ -393,7 +393,7 @@ fn test_init_flag_position_yields_same_value() {
         "Flag position should not affect the extracted value"
     );
 
-    assert_eq!(
+    assert!(
         before_parsed.no_interactive,
         true,
         "Both positions should extract no_interactive as true"
@@ -458,5 +458,4 @@ fn test_init_comprehensive_no_interactive_coverage() {
     );
 
     // All checks passed
-    assert!(true, "All Init command no_interactive tests verified");
 }

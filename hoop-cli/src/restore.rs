@@ -1085,12 +1085,12 @@ mod tests {
         let args = ["hoop", "--no-interactive", "restore", "--from", "s3://bucket/key", "--confirm"];
         let cli = crate::Cli::parse_from(args);
 
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true");
+        assert!(cli.no_interactive, "no_interactive should be true");
 
         match cli.command {
             crate::Commands::Restore { from, dry_run, .. } => {
                 assert_eq!(from, "s3://bucket/key");
-                assert_eq!(dry_run, false);
+                assert!(!dry_run);
             }
             _ => panic!("Expected Restore command"),
         }
@@ -1104,12 +1104,12 @@ mod tests {
         let args = ["hoop", "restore", "--from", "s3://bucket/key", "--no-interactive", "--confirm"];
         let cli = crate::Cli::parse_from(args);
 
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true");
+        assert!(cli.no_interactive, "no_interactive should be true");
 
         match cli.command {
             crate::Commands::Restore { from, dry_run, .. } => {
                 assert_eq!(from, "s3://bucket/key");
-                assert_eq!(dry_run, false);
+                assert!(!dry_run);
             }
             _ => panic!("Expected Restore command"),
         }
@@ -1123,7 +1123,7 @@ mod tests {
         let args = ["hoop", "-y", "restore", "--from", "s3://bucket/key", "--confirm"];
         let cli = crate::Cli::parse_from(args);
 
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y");
+        assert!(cli.no_interactive, "no_interactive should be true with -y");
 
         match cli.command {
             crate::Commands::Restore { from, .. } => {
@@ -1151,7 +1151,7 @@ mod tests {
             no_interactive_before, no_interactive_after,
             "no_interactive value must be consistent regardless of flag position"
         );
-        assert_eq!(no_interactive_before, true, "no_interactive should be true");
+        assert!(no_interactive_before, "no_interactive should be true");
     }
 
     #[test]
@@ -1162,8 +1162,8 @@ mod tests {
         let args = ["hoop", "restore", "--from", "s3://bucket/key", "--confirm"];
         let cli = crate::Cli::parse_from(args);
 
-        assert_eq!(
-            cli.no_interactive, false,
+        assert!(
+            !cli.no_interactive,
             "no_interactive should be false when not specified"
         );
 

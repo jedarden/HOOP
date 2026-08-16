@@ -25,7 +25,7 @@ fn test_init_handler_reads_flag_absent_as_false() {
         .expect("Should successfully parse command without --no-interactive flag");
 
     // Step 2: Verify flag is absent and extracted as false (default value)
-    assert_eq!(parsed.no_interactive, false,
+    assert!(!parsed.no_interactive,
         "Handler should read no_interactive flag as false (default) when --no-interactive is absent");
 
     // Step 3: Verify command was correctly identified
@@ -87,7 +87,7 @@ fn test_init_handler_flag_absent_flow_integration() {
     let parsed = result.unwrap();
 
     // Verify the complete extraction chain
-    assert_eq!(parsed.no_interactive, false,
+    assert!(!parsed.no_interactive,
         "Parsed result should have no_interactive=false (default)");
     assert_eq!(parsed.command, "init",
         "Parsed result should identify 'init' command");
@@ -132,13 +132,13 @@ fn test_init_handler_flag_absent_vs_present_behavior() {
     // Case 1: Flag absent -> handler receives false (default)
     let without_flag = parse_cli_with_flag(&["hoop", "init"])
         .expect("Should parse without flag");
-    assert_eq!(without_flag.no_interactive, false,
+    assert!(!without_flag.no_interactive,
         "Without flag: handler should receive no_interactive=false (default)");
 
     // Case 2: Flag present -> handler receives true
     let with_flag = parse_cli_with_flag(&["hoop", "--no-interactive", "init"])
         .expect("Should parse with flag");
-    assert_eq!(with_flag.no_interactive, true,
+    assert!(with_flag.no_interactive,
         "With flag present: handler should receive no_interactive=true");
 
     // Verify the handler code handles both cases correctly
@@ -177,7 +177,7 @@ fn test_init_handler_default_value_consistency() {
         let result = parse_cli_with_flag(&args)
             .expect(&format!("Should parse {}: {:?}", description, args));
 
-        assert_eq!(result.no_interactive, false,
+        assert!(!result.no_interactive,
             "Handler should read no_interactive=false (default) for {} (command: {:?})",
             description, args);
         assert_eq!(result.command, "init",
@@ -211,7 +211,7 @@ fn test_init_handler_flag_absent_complete_flow() {
         .expect("Should parse command without --no-interactive flag");
 
     // Step 2: Verify all parsed values
-    assert_eq!(parsed.no_interactive, false,
+    assert!(!parsed.no_interactive,
         "Parsed result should have no_interactive=false (default)");
     assert_eq!(parsed.command, "init",
         "Parsed result should identify 'init' command");
@@ -265,13 +265,13 @@ fn test_init_handler_default_value_extraction_accuracy() {
     // Test without flag (default behavior)
     let without_flag = parse_cli_with_flag(&["hoop", "init"])
         .expect("Should parse without flag");
-    assert_eq!(without_flag.no_interactive, false,
+    assert!(!without_flag.no_interactive,
         "Handler must receive exact value: no_interactive=false when flag absent");
 
     // Test with flag for comparison
     let with_flag = parse_cli_with_flag(&["hoop", "--no-interactive", "init"])
         .expect("Should parse with flag");
-    assert_eq!(with_flag.no_interactive, true,
+    assert!(with_flag.no_interactive,
         "Handler must receive exact value: no_interactive=true when flag present");
 
     // Verify handler logic is based on this exact boolean value
@@ -300,7 +300,7 @@ fn test_init_handler_flag_absent_wizard_proceeds() {
     let parsed = parse_cli_with_flag(args)
         .expect("Should parse without flag");
 
-    assert_eq!(parsed.no_interactive, false,
+    assert!(!parsed.no_interactive,
         "Flag should be false when absent");
 
     // Verify wizard stages are present in the code

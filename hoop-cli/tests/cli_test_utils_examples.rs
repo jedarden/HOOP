@@ -17,7 +17,7 @@ fn example_parse_scan_with_flag_before_command() {
     assert!(result.is_ok());
 
     let parsed = result.unwrap();
-    assert_eq!(parsed.no_interactive, true);
+    assert!(parsed.no_interactive);
     assert_eq!(parsed.command, "scan");
     assert!(parsed.args.contains(&"/tmp".to_string()));
 }
@@ -29,7 +29,7 @@ fn example_parse_scan_with_flag_after_command() {
     assert!(result.is_ok());
 
     let parsed = result.unwrap();
-    assert_eq!(parsed.no_interactive, true);
+    assert!(parsed.no_interactive);
     assert_eq!(parsed.command, "scan");
     assert!(parsed.args.contains(&"/tmp".to_string()));
 }
@@ -48,7 +48,7 @@ fn example_parse_remove_with_confirm() {
     assert!(result.is_ok());
 
     let parsed = result.unwrap();
-    assert_eq!(parsed.no_interactive, true);
+    assert!(parsed.no_interactive);
     assert_eq!(parsed.command, "projects");
     assert!(parsed.args.contains(&"test-project".to_string()));
     assert!(parsed.args.contains(&"--confirm".to_string()));
@@ -63,7 +63,7 @@ fn example_use_flag_before_subcommand_helper() {
     assert!(result.is_ok());
 
     let parsed = result.unwrap();
-    assert_eq!(parsed.no_interactive, true);
+    assert!(parsed.no_interactive);
     assert_eq!(parsed.command, "scan");
 }
 
@@ -74,7 +74,7 @@ fn example_use_flag_after_subcommand_helper() {
     assert!(result.is_ok());
 
     let parsed = result.unwrap();
-    assert_eq!(parsed.no_interactive, true);
+    assert!(parsed.no_interactive);
     assert_eq!(parsed.command, "restore");
 }
 
@@ -285,7 +285,7 @@ fn example_integration_test_scan_command() {
     assert!(result.is_ok(), "Should parse scan command successfully");
 
     let parsed = result.unwrap();
-    assert_eq!(parsed.no_interactive, true);
+    assert!(parsed.no_interactive);
     assert_eq!(parsed.command, "scan");
 
     // Verify the workspace exists for the scan to discover
@@ -312,7 +312,7 @@ fn example_integration_test_remove_command_with_confirm() {
     ])
     .expect("Should parse remove command successfully");
 
-    assert_eq!(parsed.no_interactive, true);
+    assert!(parsed.no_interactive);
     assert!(parsed.args.contains(&"--confirm".to_string()));
 
     // Verify that the prompt requires confirm in no_interactive mode
@@ -438,13 +438,13 @@ fn example_comprehensive_end_to_end_test() {
     let parsed_before =
         parse_flag_before_subcommand(&["scan", tmp_dir.path().to_str().unwrap()])
             .expect("Parse with flag before should succeed");
-    assert_eq!(parsed_before.no_interactive, true);
+    assert!(parsed_before.no_interactive);
 
     // Test 2: Parse with flag after subcommand
     let parsed_after =
         parse_flag_after_subcommand(&["scan", tmp_dir.path().to_str().unwrap()])
             .expect("Parse with flag after should succeed");
-    assert_eq!(parsed_after.no_interactive, true);
+    assert!(parsed_after.no_interactive);
 
     // Test 3: Verify flag extraction
     assert!(verify_flag_extraction(&parsed_before, "before").is_ok());

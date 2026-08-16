@@ -121,7 +121,7 @@ fn test_projects_scan_flag_extraction_with_flag_present() {
     let (no_interactive, projects_cmd) = parse_and_extract_projects(&args);
 
     // Verify flag extraction
-    assert_eq!(no_interactive, true,
+    assert!(no_interactive,
         "no_interactive should be true when --no-interactive flag is present");
 
     // Verify command parsing
@@ -141,7 +141,7 @@ fn test_projects_scan_flag_extraction_with_flag_after_subcommand() {
     let (no_interactive, projects_cmd) = parse_and_extract_projects(&args);
 
     // Verify flag extraction
-    assert_eq!(no_interactive, true,
+    assert!(no_interactive,
         "no_interactive should be true when flag appears after subcommand");
 
     // Verify command parsing
@@ -161,7 +161,7 @@ fn test_projects_scan_flag_extraction_with_short_flag() {
     let (no_interactive, projects_cmd) = parse_and_extract_projects(&args);
 
     // Verify flag extraction
-    assert_eq!(no_interactive, true,
+    assert!(no_interactive,
         "no_interactive should be true when -y short flag is present");
 
     // Verify command parsing
@@ -181,7 +181,7 @@ fn test_projects_scan_flag_extraction_without_flag() {
     let (no_interactive, projects_cmd) = parse_and_extract_projects(&args);
 
     // Verify flag extraction defaults to false
-    assert_eq!(no_interactive, false,
+    assert!(!no_interactive,
         "no_interactive should be false by default when flag is not present");
 
     // Verify command parsing
@@ -209,7 +209,7 @@ fn test_projects_scan_flag_extraction_consistency_across_positions() {
     assert_eq!(no_interactive_before, no_interactive_after,
         "Flag value should be consistent regardless of position");
 
-    assert_eq!(no_interactive_before, true,
+    assert!(no_interactive_before,
         "Both positions should extract no_interactive as true");
 
     // Both should parse as Scan command with same root
@@ -233,7 +233,7 @@ fn test_projects_remove_flag_extraction_with_flag_present() {
     let (no_interactive, projects_cmd) = parse_and_extract_projects(&args);
 
     // Verify flag extraction
-    assert_eq!(no_interactive, true,
+    assert!(no_interactive,
         "no_interactive should be true when --no-interactive flag is present");
 
     // Verify command parsing
@@ -253,14 +253,14 @@ fn test_projects_remove_flag_extraction_with_flag_after_subcommand() {
     let (no_interactive, projects_cmd) = parse_and_extract_projects(&args);
 
     // Verify flag extraction
-    assert_eq!(no_interactive, true,
+    assert!(no_interactive,
         "no_interactive should be true when flag appears after subcommand");
 
     // Verify command parsing
     match projects_cmd {
         ProjectsCommands::Remove { name, confirm } => {
             assert_eq!(name, "my-project", "Remove project name should be my-project");
-            assert_eq!(confirm, true, "Remove confirm flag should be true");
+            assert!(confirm, "Remove confirm flag should be true");
         }
         _ => panic!("Expected ProjectsCommands::Remove, got {:?}", projects_cmd),
     }
@@ -274,7 +274,7 @@ fn test_projects_remove_flag_extraction_without_flag() {
     let (no_interactive, projects_cmd) = parse_and_extract_projects(&args);
 
     // Verify flag extraction defaults to false
-    assert_eq!(no_interactive, false,
+    assert!(!no_interactive,
         "no_interactive should be false by default when flag is not present");
 
     // Verify command parsing
@@ -302,7 +302,7 @@ fn test_projects_remove_flag_extraction_consistency_across_positions() {
     assert_eq!(no_interactive_before, no_interactive_after,
         "Flag value should be consistent regardless of position");
 
-    assert_eq!(no_interactive_before, true,
+    assert!(no_interactive_before,
         "Both positions should extract no_interactive as true");
 
     // Both should parse as Remove command with same project name
@@ -325,7 +325,7 @@ fn test_projects_scan_handler_pattern_with_flag_true() {
 
     let (no_interactive, projects_cmd) = extract_projects_handler_flag(&args);
 
-    assert_eq!(no_interactive, true,
+    assert!(no_interactive,
         "Handler should receive no_interactive=true when flag is present");
 
     match projects_cmd {
@@ -343,7 +343,7 @@ fn test_projects_scan_handler_pattern_with_flag_false() {
 
     let (no_interactive, projects_cmd) = extract_projects_handler_flag(&args);
 
-    assert_eq!(no_interactive, false,
+    assert!(!no_interactive,
         "Handler should receive no_interactive=false when flag is absent");
 
     match projects_cmd {
@@ -361,7 +361,7 @@ fn test_projects_remove_handler_pattern_with_flag_true() {
 
     let (no_interactive, projects_cmd) = extract_projects_handler_flag(&args);
 
-    assert_eq!(no_interactive, true,
+    assert!(no_interactive,
         "Handler should receive no_interactive=true when flag is present");
 
     match projects_cmd {
@@ -379,7 +379,7 @@ fn test_projects_remove_handler_pattern_with_flag_false() {
 
     let (no_interactive, projects_cmd) = extract_projects_handler_flag(&args);
 
-    assert_eq!(no_interactive, false,
+    assert!(!no_interactive,
         "Handler should receive no_interactive=false when flag is absent");
 
     match projects_cmd {
@@ -401,7 +401,7 @@ fn test_projects_scan_full_flow_flag_present() {
 
     assert!(result.is_ok(), "Handler flow should succeed for valid projects scan command");
     let (no_interactive, root) = result.unwrap();
-    assert_eq!(no_interactive, true,
+    assert!(no_interactive,
         "Handler flow should extract no_interactive=true");
     assert_eq!(root, "/tmp", "Handler flow should extract root=/tmp");
 }
@@ -415,7 +415,7 @@ fn test_projects_scan_full_flow_flag_absent() {
 
     assert!(result.is_ok(), "Handler flow should succeed for scan command without flag");
     let (no_interactive, root) = result.unwrap();
-    assert_eq!(no_interactive, false,
+    assert!(!no_interactive,
         "Handler flow should extract no_interactive=false by default");
     assert_eq!(root, "/tmp", "Handler flow should extract root=/tmp");
 }
@@ -429,7 +429,7 @@ fn test_projects_remove_full_flow_flag_present() {
 
     assert!(result.is_ok(), "Handler flow should succeed for valid projects remove command");
     let (no_interactive, name) = result.unwrap();
-    assert_eq!(no_interactive, true,
+    assert!(no_interactive,
         "Handler flow should extract no_interactive=true");
     assert_eq!(name, "test-project", "Handler flow should extract project name");
 }
@@ -443,7 +443,7 @@ fn test_projects_remove_full_flow_flag_absent() {
 
     assert!(result.is_ok(), "Handler flow should succeed for remove command without flag");
     let (no_interactive, name) = result.unwrap();
-    assert_eq!(no_interactive, false,
+    assert!(!no_interactive,
         "Handler flow should extract no_interactive=false by default");
     assert_eq!(name, "test-project", "Handler flow should extract project name");
 }
@@ -485,7 +485,7 @@ fn test_projects_scan_full_flow_multiple_variants() {
     let result_no_flag = simulate_scan_handler_flow(&args_no_flag);
     assert!(result_no_flag.is_ok(), "Handler flow should succeed without flag");
     let (flag_value, _root) = result_no_flag.unwrap();
-    assert_eq!(flag_value, false, "Handler flow should extract false without flag");
+    assert!(!flag_value, "Handler flow should extract false without flag");
 }
 
 // ── Boolean Value Retrieval Tests for ProjectsCommands ─────────────────────────
@@ -521,7 +521,7 @@ fn test_projects_scan_flag_presence_returns_true() {
     }
 
     // Assert the extracted value is true
-    assert_eq!(no_interactive, true,
+    assert!(no_interactive,
         "no_interactive flag value should be true when --no-interactive flag is present");
 }
 
@@ -548,7 +548,7 @@ fn test_projects_scan_flag_absence_returns_false() {
     };
 
     // Assert the extracted value is false (default value when flag is absent)
-    assert_eq!(no_interactive, false,
+    assert!(!no_interactive,
         "no_interactive flag value should be false (default) when --no-interactive flag is absent");
 
     // Additional verification: confirm this is the default behavior
@@ -579,7 +579,7 @@ fn test_projects_remove_flag_presence_returns_true() {
     };
 
     // Assert the extracted value is true
-    assert_eq!(no_interactive, true,
+    assert!(no_interactive,
         "no_interactive flag value should be true when --no-interactive flag is present");
 }
 
@@ -605,7 +605,7 @@ fn test_projects_remove_flag_absence_returns_false() {
     };
 
     // Assert the extracted value is false (default)
-    assert_eq!(no_interactive, false,
+    assert!(!no_interactive,
         "no_interactive flag value should be false (default) when --no-interactive flag is absent");
 }
 
@@ -646,7 +646,7 @@ fn test_projects_scan_handler_receives_correct_boolean() {
     let no_interactive_no_flag = cli_no_flag.no_interactive;
     match cli_no_flag.command {
         Commands::Projects(ProjectsCommands::Scan { root, .. }) => {
-            assert_eq!(no_interactive_no_flag, false, "Handler should receive false without flag");
+            assert!(!no_interactive_no_flag, "Handler should receive false without flag");
             assert_eq!(root, "/tmp", "Scan root should be /tmp");
         }
         _ => panic!("Expected Projects::Scan"),
@@ -688,7 +688,7 @@ fn test_projects_remove_handler_receives_correct_boolean() {
     let no_interactive_no_flag = cli_no_flag.no_interactive;
     match cli_no_flag.command {
         Commands::Projects(ProjectsCommands::Remove { name, .. }) => {
-            assert_eq!(no_interactive_no_flag, false, "Handler should receive false without flag");
+            assert!(!no_interactive_no_flag, "Handler should receive false without flag");
             assert_eq!(name, "proj", "Remove project name should be proj");
         }
         _ => panic!("Expected Projects::Remove"),
@@ -712,7 +712,7 @@ fn test_global_flag_accessible_in_nested_projects_scan() {
 
     // Step 1: main() extracts flag (line 366)
     let no_interactive = cli.no_interactive;
-    assert_eq!(no_interactive, true, "Step 1: Flag should be accessible at main level");
+    assert!(no_interactive, "Step 1: Flag should be accessible at main level");
 
     // Step 2: Extract the command that would be passed to handle_projects
     let projects_cmd = match cli.command {
@@ -725,7 +725,7 @@ fn test_global_flag_accessible_in_nested_projects_scan() {
         ProjectsCommands::Scan { root, yes } => {
             // This is line 564: projects::scan_projects(&root, no_interactive || yes)
             let effective_no_interactive = no_interactive || yes;
-            assert_eq!(effective_no_interactive, true,
+            assert!(effective_no_interactive,
                 "Step 3: Flag should be accessible in scan_projects handler");
             assert_eq!(root, "/tmp", "Scan root should be /tmp");
         }
@@ -748,7 +748,7 @@ fn test_global_flag_accessible_in_nested_projects_remove() {
 
     // Step 1: main() extracts flag (line 366)
     let no_interactive = cli.no_interactive;
-    assert_eq!(no_interactive, true, "Step 1: Flag should be accessible at main level");
+    assert!(no_interactive, "Step 1: Flag should be accessible at main level");
 
     // Step 2: Extract the command that would be passed to handle_projects
     let projects_cmd = match cli.command {
@@ -760,10 +760,10 @@ fn test_global_flag_accessible_in_nested_projects_remove() {
     match projects_cmd {
         ProjectsCommands::Remove { name, confirm } => {
             // This is line 588: projects::remove_project(&name, no_interactive, confirm)
-            assert_eq!(no_interactive, true,
+            assert!(no_interactive,
                 "Step 3: Flag should be accessible in remove_project handler");
             assert_eq!(name, "test-project", "Remove project name should be test-project");
-            assert_eq!(confirm, true, "Remove confirm flag should be true");
+            assert!(confirm, "Remove confirm flag should be true");
         }
         _ => panic!("Expected Remove command"),
     }
@@ -798,8 +798,8 @@ fn test_flag_value_propagation_through_call_chain_scan() {
     };
 
     // Verify the flag value is correctly propagated
-    assert_eq!(main_flag, true, "main() extracts true");
-    assert_eq!(scan_flag, true, "scan_projects() receives true");
+    assert!(main_flag, "main() extracts true");
+    assert!(scan_flag, "scan_projects() receives true");
     assert_eq!(main_flag, scan_flag, "Flag value is preserved through call chain");
 }
 
@@ -832,8 +832,8 @@ fn test_flag_value_propagation_through_call_chain_remove() {
     };
 
     // Verify the flag value is correctly propagated
-    assert_eq!(main_flag, true, "main() extracts true");
-    assert_eq!(remove_flag, true, "remove_project() receives true");
+    assert!(main_flag, "main() extracts true");
+    assert!(remove_flag, "remove_project() receives true");
     assert_eq!(main_flag, remove_flag, "Flag value is preserved through call chain");
 }
 
@@ -858,9 +858,9 @@ fn test_projects_scan_with_local_yes_flag_and_global_no_interactive() {
         ProjectsCommands::Scan { root: _, yes } => {
             // This is line 564: no_interactive || yes
             let effective = no_interactive || yes;
-            assert_eq!(effective, true, "Either flag should trigger non-interactive mode");
-            assert_eq!(no_interactive, true, "Global flag should be true");
-            assert_eq!(yes, true, "Local yes flag should be true");
+            assert!(effective, "Either flag should trigger non-interactive mode");
+            assert!(no_interactive, "Global flag should be true");
+            assert!(yes, "Local yes flag should be true");
         }
         _ => panic!("Expected Scan command"),
     }
@@ -884,9 +884,9 @@ fn test_projects_scan_with_only_local_yes_flag() {
         ProjectsCommands::Scan { root, yes } => {
             // This is line 564: no_interactive || yes
             let effective = no_interactive || yes;
-            assert_eq!(effective, true, "Local yes flag alone should trigger non-interactive mode");
-            assert_eq!(no_interactive, false, "Global flag should be false when not set");
-            assert_eq!(yes, true, "Local yes flag should be true");
+            assert!(effective, "Local yes flag alone should trigger non-interactive mode");
+            assert!(!no_interactive, "Global flag should be false when not set");
+            assert!(yes, "Local yes flag should be true");
             assert_eq!(root, "/tmp", "Scan root should be /tmp");
         }
         _ => panic!("Expected Scan command"),
