@@ -409,10 +409,10 @@ fn cli_to_handler_propagation_complete_example() {
 
     // Step 5: Verify main.rs passes the flag
     let main_code = std::fs::read_to_string("src/main.rs")
-        .expect("main.rs must exist");
+        .expect("Main.rs must exist");
     assert!(
         main_code.contains("projects::remove_project(&name, no_interactive)"),
-        "main() must pass extracted flag to handler"
+        "Main() must pass extracted flag to handler"
     );
 }
 ```
