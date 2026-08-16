@@ -15,6 +15,7 @@ use std::net::SocketAddr;
 #[derive(Parser, Debug)]
 #[command(name = "hoop")]
 #[command(about = "HOOP - The operator's pane of glass", long_about = None)]
+#[command(args_override_self = true)]
 pub struct Cli {
     /// Global flag to suppress all interactive prompts (alias: -y)
     ///
@@ -319,9 +320,18 @@ mod tests {
 
     #[test]
     fn test_remove_no_interactive_flag_before_command() {
-        let args = ["hoop", "--no-interactive", "remove", "my-project", "--confirm"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "remove",
+            "my-project",
+            "--confirm",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears before command");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true when flag appears before command"
+        );
 
         // Verify the command was parsed correctly
         match cli.command {
@@ -335,9 +345,18 @@ mod tests {
 
     #[test]
     fn test_remove_no_interactive_flag_after_command() {
-        let args = ["hoop", "remove", "my-project", "--no-interactive", "--confirm"];
+        let args = [
+            "hoop",
+            "remove",
+            "my-project",
+            "--no-interactive",
+            "--confirm",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears after command");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true when flag appears after command"
+        );
 
         match cli.command {
             Commands::Remove { name, confirm } => {
@@ -352,7 +371,10 @@ mod tests {
     fn test_remove_short_flag_y_before_command() {
         let args = ["hoop", "-y", "remove", "my-project", "--confirm"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y short flag");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y short flag"
+        );
 
         match cli.command {
             Commands::Remove { name, confirm } => {
@@ -367,7 +389,10 @@ mod tests {
     fn test_remove_short_flag_y_after_command() {
         let args = ["hoop", "remove", "my-project", "-y", "--confirm"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y short flag after command");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y short flag after command"
+        );
 
         match cli.command {
             Commands::Remove { name, confirm } => {
@@ -382,7 +407,10 @@ mod tests {
     fn test_remove_without_no_interactive_flag_is_false() {
         let args = ["hoop", "remove", "my-project", "--confirm"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, false, "no_interactive should be false when flag is not provided");
+        assert_eq!(
+            cli.no_interactive, false,
+            "no_interactive should be false when flag is not provided"
+        );
 
         match cli.command {
             Commands::Remove { name, confirm } => {
@@ -396,20 +424,43 @@ mod tests {
     #[test]
     fn test_remove_no_interactive_flag_extraction_consistency() {
         // Test that flag parsing is consistent regardless of position
-        let args_before = ["hoop", "--no-interactive", "remove", "test-project", "--confirm"];
-        let args_after = ["hoop", "remove", "test-project", "--no-interactive", "--confirm"];
+        let args_before = [
+            "hoop",
+            "--no-interactive",
+            "remove",
+            "test-project",
+            "--confirm",
+        ];
+        let args_after = [
+            "hoop",
+            "remove",
+            "test-project",
+            "--no-interactive",
+            "--confirm",
+        ];
 
         let cli_before = parse_args(&args_before).expect("should parse successfully");
         let cli_after = parse_args(&args_after).expect("should parse successfully");
 
-        assert_eq!(cli_before.no_interactive, cli_after.no_interactive,
-                   "no_interactive value must be consistent regardless of flag position");
-        assert_eq!(cli_before.no_interactive, true, "no_interactive should be true");
+        assert_eq!(
+            cli_before.no_interactive, cli_after.no_interactive,
+            "no_interactive value must be consistent regardless of flag position"
+        );
+        assert_eq!(
+            cli_before.no_interactive, true,
+            "no_interactive should be true"
+        );
     }
 
     #[test]
     fn test_remove_command_with_all_flags() {
-        let args = ["hoop", "--no-interactive", "remove", "my-project", "--confirm"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "remove",
+            "my-project",
+            "--confirm",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
 
         assert_eq!(cli.no_interactive, true);
@@ -427,9 +478,19 @@ mod tests {
 
     #[test]
     fn test_projects_remove_no_interactive_flag_before_subcommand() {
-        let args = ["hoop", "--no-interactive", "projects", "remove", "my-project", "--confirm"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "projects",
+            "remove",
+            "my-project",
+            "--confirm",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears before projects subcommand");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true when flag appears before projects subcommand"
+        );
 
         match cli.command {
             Commands::Projects(ProjectsCommands::Remove { name, confirm }) => {
@@ -442,9 +503,19 @@ mod tests {
 
     #[test]
     fn test_projects_remove_no_interactive_flag_after_subcommand() {
-        let args = ["hoop", "projects", "remove", "my-project", "--no-interactive", "--confirm"];
+        let args = [
+            "hoop",
+            "projects",
+            "remove",
+            "my-project",
+            "--no-interactive",
+            "--confirm",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears after projects remove subcommand");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true when flag appears after projects remove subcommand"
+        );
 
         match cli.command {
             Commands::Projects(ProjectsCommands::Remove { name, confirm }) => {
@@ -457,9 +528,19 @@ mod tests {
 
     #[test]
     fn test_projects_remove_short_flag_y_before_subcommand() {
-        let args = ["hoop", "-y", "projects", "remove", "my-project", "--confirm"];
+        let args = [
+            "hoop",
+            "-y",
+            "projects",
+            "remove",
+            "my-project",
+            "--confirm",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y short flag before projects subcommand");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y short flag before projects subcommand"
+        );
 
         match cli.command {
             Commands::Projects(ProjectsCommands::Remove { name, confirm }) => {
@@ -474,7 +555,10 @@ mod tests {
     fn test_projects_remove_without_no_interactive_flag_is_false() {
         let args = ["hoop", "projects", "remove", "my-project", "--confirm"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, false, "no_interactive should be false when flag is not provided");
+        assert_eq!(
+            cli.no_interactive, false,
+            "no_interactive should be false when flag is not provided"
+        );
 
         match cli.command {
             Commands::Projects(ProjectsCommands::Remove { name, confirm }) => {
@@ -488,25 +572,52 @@ mod tests {
     #[test]
     fn test_projects_remove_no_interactive_flag_extraction_consistency() {
         // Test that flag parsing is consistent for projects remove regardless of position
-        let args_before = ["hoop", "--no-interactive", "projects", "remove", "test-project", "--confirm"];
-        let args_after = ["hoop", "projects", "remove", "test-project", "--no-interactive", "--confirm"];
+        let args_before = [
+            "hoop",
+            "--no-interactive",
+            "projects",
+            "remove",
+            "test-project",
+            "--confirm",
+        ];
+        let args_after = [
+            "hoop",
+            "projects",
+            "remove",
+            "test-project",
+            "--no-interactive",
+            "--confirm",
+        ];
 
         let cli_before = parse_args(&args_before).expect("should parse successfully");
         let cli_after = parse_args(&args_after).expect("should parse successfully");
 
         assert_eq!(cli_before.no_interactive, cli_after.no_interactive,
                    "no_interactive value must be consistent for projects remove regardless of flag position");
-        assert_eq!(cli_before.no_interactive, true, "no_interactive should be true");
+        assert_eq!(
+            cli_before.no_interactive, true,
+            "no_interactive should be true"
+        );
     }
 
     #[test]
     fn test_projects_remove_confirm_flag_extraction() {
-        let args = ["hoop", "--no-interactive", "projects", "remove", "my-project", "--confirm"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "projects",
+            "remove",
+            "my-project",
+            "--confirm",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
 
         match cli.command {
             Commands::Projects(ProjectsCommands::Remove { name, confirm }) => {
-                assert_eq!(name, "my-project", "project name should be extracted correctly");
+                assert_eq!(
+                    name, "my-project",
+                    "project name should be extracted correctly"
+                );
                 assert_eq!(confirm, true, "confirm flag should be extracted correctly");
             }
             _ => panic!("expected Projects::Remove command"),
@@ -515,13 +626,25 @@ mod tests {
 
     #[test]
     fn test_projects_remove_without_confirm_flag() {
-        let args = ["hoop", "--no-interactive", "projects", "remove", "my-project"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "projects",
+            "remove",
+            "my-project",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
 
         match cli.command {
             Commands::Projects(ProjectsCommands::Remove { name, confirm }) => {
-                assert_eq!(name, "my-project", "project name should be extracted correctly");
-                assert_eq!(confirm, false, "confirm flag should be false when not provided");
+                assert_eq!(
+                    name, "my-project",
+                    "project name should be extracted correctly"
+                );
+                assert_eq!(
+                    confirm, false,
+                    "confirm flag should be false when not provided"
+                );
             }
             _ => panic!("expected Projects::Remove command"),
         }
@@ -531,15 +654,31 @@ mod tests {
 
     #[test]
     fn test_no_interactive_persists_through_projects_command_chain() {
-        let args = ["hoop", "--no-interactive", "projects", "remove", "test-project", "--confirm"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "projects",
+            "remove",
+            "test-project",
+            "--confirm",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true,
-                   "global no_interactive flag should persist through the entire command chain");
+        assert_eq!(
+            cli.no_interactive, true,
+            "global no_interactive flag should persist through the entire command chain"
+        );
     }
 
     #[test]
     fn test_global_flag_works_with_nested_subcommands() {
-        let args = ["hoop", "--no-interactive", "projects", "remove", "test-project", "--confirm"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "projects",
+            "remove",
+            "test-project",
+            "--confirm",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
 
         // Verify the flag is accessible at the top level
@@ -567,12 +706,21 @@ mod tests {
     fn test_projects_remove_command_requires_project_name() {
         let args = ["hoop", "--no-interactive", "projects", "remove"];
         let result = parse_args(&args);
-        assert!(result.is_err(), "should fail when project name is missing for projects remove");
+        assert!(
+            result.is_err(),
+            "should fail when project name is missing for projects remove"
+        );
     }
 
     #[test]
     fn test_remove_command_parsing_with_invalid_flag() {
-        let args = ["hoop", "--no-interactive", "remove", "my-project", "--invalid-flag"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "remove",
+            "my-project",
+            "--invalid-flag",
+        ];
         let result = parse_args(&args);
         assert!(result.is_err(), "should fail with invalid flag");
     }
@@ -582,12 +730,21 @@ mod tests {
     #[test]
     fn test_remove_with_special_characters_in_project_name() {
         let project_name = "my-project-123";
-        let args = ["hoop", "--no-interactive", "remove", project_name, "--confirm"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "remove",
+            project_name,
+            "--confirm",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
 
         match cli.command {
             Commands::Remove { name, .. } => {
-                assert_eq!(name, project_name, "project name with special characters should be parsed correctly");
+                assert_eq!(
+                    name, project_name,
+                    "project name with special characters should be parsed correctly"
+                );
             }
             _ => panic!("expected Remove command"),
         }
@@ -596,7 +753,14 @@ mod tests {
     #[test]
     fn test_projects_remove_with_special_characters_in_project_name() {
         let project_name = "test-project_456";
-        let args = ["hoop", "--no-interactive", "projects", "remove", project_name, "--confirm"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "projects",
+            "remove",
+            project_name,
+            "--confirm",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
 
         match cli.command {
@@ -619,7 +783,10 @@ mod tests {
 
         for args in test_cases {
             let cli = parse_args(&args).expect("should parse successfully with any flag ordering");
-            assert_eq!(cli.no_interactive, true, "no_interactive should be true regardless of flag order");
+            assert_eq!(
+                cli.no_interactive, true,
+                "no_interactive should be true regardless of flag order"
+            );
 
             match &cli.command {
                 Commands::Remove { name, confirm } => {
@@ -635,15 +802,46 @@ mod tests {
     fn test_projects_remove_command_flag_order_independence() {
         // Test different flag orderings for projects remove
         let test_cases = vec![
-            ["hoop", "--no-interactive", "projects", "remove", "proj", "--confirm"],
-            ["hoop", "projects", "--no-interactive", "remove", "proj", "--confirm"],
-            ["hoop", "projects", "remove", "proj", "--no-interactive", "--confirm"],
-            ["hoop", "projects", "remove", "proj", "--confirm", "--no-interactive"],
+            [
+                "hoop",
+                "--no-interactive",
+                "projects",
+                "remove",
+                "proj",
+                "--confirm",
+            ],
+            [
+                "hoop",
+                "projects",
+                "--no-interactive",
+                "remove",
+                "proj",
+                "--confirm",
+            ],
+            [
+                "hoop",
+                "projects",
+                "remove",
+                "proj",
+                "--no-interactive",
+                "--confirm",
+            ],
+            [
+                "hoop",
+                "projects",
+                "remove",
+                "proj",
+                "--confirm",
+                "--no-interactive",
+            ],
         ];
 
         for args in test_cases {
             let cli = parse_args(&args).expect("should parse successfully with any flag ordering");
-            assert_eq!(cli.no_interactive, true, "no_interactive should be true regardless of flag order");
+            assert_eq!(
+                cli.no_interactive, true,
+                "no_interactive should be true regardless of flag order"
+            );
 
             match &cli.command {
                 Commands::Projects(ProjectsCommands::Remove { name, confirm }) => {
@@ -659,26 +857,46 @@ mod tests {
     fn test_remove_default_no_interactive_value() {
         let args = ["hoop", "remove", "my-project", "--confirm"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, false, "no_interactive should default to false");
+        assert_eq!(
+            cli.no_interactive, false,
+            "no_interactive should default to false"
+        );
     }
 
     #[test]
     fn test_projects_remove_default_no_interactive_value() {
         let args = ["hoop", "projects", "remove", "my-project", "--confirm"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, false, "no_interactive should default to false for projects remove");
+        assert_eq!(
+            cli.no_interactive, false,
+            "no_interactive should default to false for projects remove"
+        );
     }
 
     // ── Restore command tests ───────────────────────────────────────────────────
 
     #[test]
     fn test_restore_no_interactive_flag_before_command() {
-        let args = ["hoop", "--no-interactive", "restore", "--from", "s3://bucket/path/snap", "--confirm"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "restore",
+            "--from",
+            "s3://bucket/path/snap",
+            "--confirm",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears before restore command");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true when flag appears before restore command"
+        );
 
         match cli.command {
-            Commands::Restore { from, dry_run, confirm } => {
+            Commands::Restore {
+                from,
+                dry_run,
+                confirm,
+            } => {
                 assert_eq!(from, "s3://bucket/path/snap");
                 assert_eq!(dry_run, false);
                 assert_eq!(confirm, true);
@@ -689,12 +907,26 @@ mod tests {
 
     #[test]
     fn test_restore_no_interactive_flag_after_command() {
-        let args = ["hoop", "restore", "--from", "s3://bucket/path/snap", "--no-interactive", "--confirm"];
+        let args = [
+            "hoop",
+            "restore",
+            "--from",
+            "s3://bucket/path/snap",
+            "--no-interactive",
+            "--confirm",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears after restore command");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true when flag appears after restore command"
+        );
 
         match cli.command {
-            Commands::Restore { from, dry_run, confirm } => {
+            Commands::Restore {
+                from,
+                dry_run,
+                confirm,
+            } => {
                 assert_eq!(from, "s3://bucket/path/snap");
                 assert_eq!(dry_run, false);
                 assert_eq!(confirm, true);
@@ -705,12 +937,26 @@ mod tests {
 
     #[test]
     fn test_restore_short_flag_y_before_command() {
-        let args = ["hoop", "-y", "restore", "--from", "s3://bucket/path/snap", "--confirm"];
+        let args = [
+            "hoop",
+            "-y",
+            "restore",
+            "--from",
+            "s3://bucket/path/snap",
+            "--confirm",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y short flag");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y short flag"
+        );
 
         match cli.command {
-            Commands::Restore { from, dry_run, confirm } => {
+            Commands::Restore {
+                from,
+                dry_run,
+                confirm,
+            } => {
                 assert_eq!(from, "s3://bucket/path/snap");
                 assert_eq!(dry_run, false);
                 assert_eq!(confirm, true);
@@ -721,12 +967,26 @@ mod tests {
 
     #[test]
     fn test_restore_short_flag_y_after_command() {
-        let args = ["hoop", "restore", "-y", "--from", "s3://bucket/path/snap", "--confirm"];
+        let args = [
+            "hoop",
+            "restore",
+            "-y",
+            "--from",
+            "s3://bucket/path/snap",
+            "--confirm",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y short flag after restore command");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y short flag after restore command"
+        );
 
         match cli.command {
-            Commands::Restore { from, dry_run, confirm } => {
+            Commands::Restore {
+                from,
+                dry_run,
+                confirm,
+            } => {
                 assert_eq!(from, "s3://bucket/path/snap");
                 assert_eq!(dry_run, false);
                 assert_eq!(confirm, true);
@@ -737,12 +997,25 @@ mod tests {
 
     #[test]
     fn test_restore_without_no_interactive_flag_is_false() {
-        let args = ["hoop", "restore", "--from", "s3://bucket/path/snap", "--confirm"];
+        let args = [
+            "hoop",
+            "restore",
+            "--from",
+            "s3://bucket/path/snap",
+            "--confirm",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, false, "no_interactive should be false when flag is not provided");
+        assert_eq!(
+            cli.no_interactive, false,
+            "no_interactive should be false when flag is not provided"
+        );
 
         match cli.command {
-            Commands::Restore { from, dry_run, confirm } => {
+            Commands::Restore {
+                from,
+                dry_run,
+                confirm,
+            } => {
                 assert_eq!(from, "s3://bucket/path/snap");
                 assert_eq!(dry_run, false);
                 assert_eq!(confirm, true);
@@ -754,26 +1027,57 @@ mod tests {
     #[test]
     fn test_restore_no_interactive_flag_extraction_consistency() {
         // Test that flag parsing is consistent regardless of position
-        let args_before = ["hoop", "--no-interactive", "restore", "--from", "s3://bucket/snap", "--confirm"];
-        let args_after = ["hoop", "restore", "--from", "s3://bucket/snap", "--no-interactive", "--confirm"];
+        let args_before = [
+            "hoop",
+            "--no-interactive",
+            "restore",
+            "--from",
+            "s3://bucket/snap",
+            "--confirm",
+        ];
+        let args_after = [
+            "hoop",
+            "restore",
+            "--from",
+            "s3://bucket/snap",
+            "--no-interactive",
+            "--confirm",
+        ];
 
         let cli_before = parse_args(&args_before).expect("should parse successfully");
         let cli_after = parse_args(&args_after).expect("should parse successfully");
 
-        assert_eq!(cli_before.no_interactive, cli_after.no_interactive,
-                   "no_interactive value must be consistent regardless of flag position");
-        assert_eq!(cli_before.no_interactive, true, "no_interactive should be true");
+        assert_eq!(
+            cli_before.no_interactive, cli_after.no_interactive,
+            "no_interactive value must be consistent regardless of flag position"
+        );
+        assert_eq!(
+            cli_before.no_interactive, true,
+            "no_interactive should be true"
+        );
     }
 
     #[test]
     fn test_restore_command_with_all_flags() {
-        let args = ["hoop", "--no-interactive", "restore", "--from", "s3://bucket/path/snap", "--dry-run", "--confirm"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "restore",
+            "--from",
+            "s3://bucket/path/snap",
+            "--dry-run",
+            "--confirm",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
 
         assert_eq!(cli.no_interactive, true);
 
         match cli.command {
-            Commands::Restore { from, dry_run, confirm } => {
+            Commands::Restore {
+                from,
+                dry_run,
+                confirm,
+            } => {
                 assert_eq!(from, "s3://bucket/path/snap");
                 assert_eq!(dry_run, true);
                 assert_eq!(confirm, true);
@@ -784,13 +1088,26 @@ mod tests {
 
     #[test]
     fn test_restore_with_dry_run_flag() {
-        let args = ["hoop", "restore", "--from", "s3://bucket/path/snap", "--dry-run"];
+        let args = [
+            "hoop",
+            "restore",
+            "--from",
+            "s3://bucket/path/snap",
+            "--dry-run",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
 
-        assert_eq!(cli.no_interactive, false, "no_interactive should be false when not provided");
+        assert_eq!(
+            cli.no_interactive, false,
+            "no_interactive should be false when not provided"
+        );
 
         match cli.command {
-            Commands::Restore { from, dry_run, confirm } => {
+            Commands::Restore {
+                from,
+                dry_run,
+                confirm,
+            } => {
                 assert_eq!(from, "s3://bucket/path/snap");
                 assert_eq!(dry_run, true);
                 assert_eq!(confirm, false);
@@ -803,15 +1120,46 @@ mod tests {
     fn test_restore_command_flag_order_independence() {
         // Test different flag orderings
         let test_cases = vec![
-            ["hoop", "--no-interactive", "restore", "--from", "s3://b/s", "--confirm"],
-            ["hoop", "restore", "--no-interactive", "--from", "s3://b/s", "--confirm"],
-            ["hoop", "restore", "--from", "s3://b/s", "--no-interactive", "--confirm"],
-            ["hoop", "restore", "--from", "s3://b/s", "--confirm", "--no-interactive"],
+            [
+                "hoop",
+                "--no-interactive",
+                "restore",
+                "--from",
+                "s3://b/s",
+                "--confirm",
+            ],
+            [
+                "hoop",
+                "restore",
+                "--no-interactive",
+                "--from",
+                "s3://b/s",
+                "--confirm",
+            ],
+            [
+                "hoop",
+                "restore",
+                "--from",
+                "s3://b/s",
+                "--no-interactive",
+                "--confirm",
+            ],
+            [
+                "hoop",
+                "restore",
+                "--from",
+                "s3://b/s",
+                "--confirm",
+                "--no-interactive",
+            ],
         ];
 
         for args in test_cases {
             let cli = parse_args(&args).expect("should parse successfully with any flag ordering");
-            assert_eq!(cli.no_interactive, true, "no_interactive should be true regardless of flag order");
+            assert_eq!(
+                cli.no_interactive, true,
+                "no_interactive should be true regardless of flag order"
+            );
 
             match &cli.command {
                 Commands::Restore { from, confirm, .. } => {
@@ -825,9 +1173,18 @@ mod tests {
 
     #[test]
     fn test_restore_default_no_interactive_value() {
-        let args = ["hoop", "restore", "--from", "s3://bucket/path/snap", "--confirm"];
+        let args = [
+            "hoop",
+            "restore",
+            "--from",
+            "s3://bucket/path/snap",
+            "--confirm",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, false, "no_interactive should default to false");
+        assert_eq!(
+            cli.no_interactive, false,
+            "no_interactive should default to false"
+        );
     }
 
     #[test]
@@ -839,7 +1196,14 @@ mod tests {
 
     #[test]
     fn test_restore_command_parsing_with_invalid_flag() {
-        let args = ["hoop", "--no-interactive", "restore", "--from", "s3://bucket/snap", "--invalid-flag"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "restore",
+            "--from",
+            "s3://bucket/snap",
+            "--invalid-flag",
+        ];
         let result = parse_args(&args);
         assert!(result.is_err(), "should fail with invalid flag");
     }
@@ -847,7 +1211,14 @@ mod tests {
     #[test]
     fn test_restore_with_complex_s3_uri() {
         let s3_uri = "s3://my-bucket/backups/snapshot-2024-01-15T10:30:00Z";
-        let args = ["hoop", "--no-interactive", "restore", "--from", s3_uri, "--confirm"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "restore",
+            "--from",
+            s3_uri,
+            "--confirm",
+        ];
         let cli = parse_args(&args).expect("should parse successfully");
 
         match cli.command {
@@ -864,7 +1235,10 @@ mod tests {
     fn test_init_no_interactive_flag_before_command() {
         let args = ["hoop", "--no-interactive", "init"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears before init");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true when flag appears before init"
+        );
 
         match cli.command {
             Commands::Init => {
@@ -878,7 +1252,10 @@ mod tests {
     fn test_init_no_interactive_flag_after_command() {
         let args = ["hoop", "init", "--no-interactive"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears after init");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true when flag appears after init"
+        );
 
         match cli.command {
             Commands::Init => {
@@ -892,7 +1269,10 @@ mod tests {
     fn test_init_short_flag_y_before_command() {
         let args = ["hoop", "-y", "init"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y short flag");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y short flag"
+        );
 
         match cli.command {
             Commands::Init => {
@@ -906,7 +1286,10 @@ mod tests {
     fn test_init_short_flag_y_after_command() {
         let args = ["hoop", "init", "-y"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y short flag after init");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y short flag after init"
+        );
 
         match cli.command {
             Commands::Init => {
@@ -920,7 +1303,10 @@ mod tests {
     fn test_init_without_no_interactive_flag_is_false() {
         let args = ["hoop", "init"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, false, "no_interactive should be false when flag is not provided");
+        assert_eq!(
+            cli.no_interactive, false,
+            "no_interactive should be false when flag is not provided"
+        );
 
         match cli.command {
             Commands::Init => {
@@ -939,9 +1325,14 @@ mod tests {
         let cli_before = parse_args(&args_before).expect("should parse successfully");
         let cli_after = parse_args(&args_after).expect("should parse successfully");
 
-        assert_eq!(cli_before.no_interactive, cli_after.no_interactive,
-                   "no_interactive value must be consistent regardless of flag position");
-        assert_eq!(cli_before.no_interactive, true, "no_interactive should be true");
+        assert_eq!(
+            cli_before.no_interactive, cli_after.no_interactive,
+            "no_interactive value must be consistent regardless of flag position"
+        );
+        assert_eq!(
+            cli_before.no_interactive, true,
+            "no_interactive should be true"
+        );
     }
 
     #[test]
@@ -954,14 +1345,14 @@ mod tests {
     #[test]
     fn test_init_command_flag_order_independence() {
         // Test different flag orderings
-        let test_cases = vec![
-            ["hoop", "--no-interactive", "init"],
-            ["hoop", "-y", "init"],
-        ];
+        let test_cases = vec![["hoop", "--no-interactive", "init"], ["hoop", "-y", "init"]];
 
         for args in test_cases {
             let cli = parse_args(&args).expect("should parse successfully with any flag ordering");
-            assert_eq!(cli.no_interactive, true, "no_interactive should be true regardless of flag order");
+            assert_eq!(
+                cli.no_interactive, true,
+                "no_interactive should be true regardless of flag order"
+            );
 
             match cli.command {
                 Commands::Init => {
@@ -976,14 +1367,20 @@ mod tests {
     fn test_init_default_no_interactive_value() {
         let args = ["hoop", "init"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, false, "no_interactive should default to false");
+        assert_eq!(
+            cli.no_interactive, false,
+            "no_interactive should default to false"
+        );
     }
 
     #[test]
     fn test_init_command_takes_no_arguments() {
         let args = ["hoop", "init", "extra-argument"];
         let result = parse_args(&args);
-        assert!(result.is_err(), "should fail when extra arguments are provided");
+        assert!(
+            result.is_err(),
+            "should fail when extra arguments are provided"
+        );
     }
 
     // ── Helper function tests for Init command parsing ─────────────────────────
@@ -1010,8 +1407,8 @@ mod tests {
         assert!(matches!(command, Commands::Init));
 
         // Test 3: No flag
-        let (no_interactive, command) = parse_init_command(&["hoop", "init"])
-            .expect("should parse successfully");
+        let (no_interactive, command) =
+            parse_init_command(&["hoop", "init"]).expect("should parse successfully");
         assert_eq!(no_interactive, false);
         assert!(matches!(command, Commands::Init));
     }
@@ -1048,7 +1445,10 @@ mod tests {
     fn test_scan_no_interactive_flag_before_command() {
         let args = ["hoop", "--no-interactive", "scan", "/tmp/projects"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears before scan command");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true when flag appears before scan command"
+        );
 
         match cli.command {
             Commands::Scan { root, auto_confirm } => {
@@ -1063,7 +1463,10 @@ mod tests {
     fn test_scan_no_interactive_flag_after_command() {
         let args = ["hoop", "scan", "/tmp/projects", "--no-interactive"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true when flag appears after scan command");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true when flag appears after scan command"
+        );
 
         match cli.command {
             Commands::Scan { root, auto_confirm } => {
@@ -1078,7 +1481,10 @@ mod tests {
     fn test_scan_short_flag_y_before_command() {
         let args = ["hoop", "-y", "scan", "/tmp/projects"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y short flag");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y short flag"
+        );
 
         match cli.command {
             Commands::Scan { root, auto_confirm } => {
@@ -1093,7 +1499,10 @@ mod tests {
     fn test_scan_short_flag_y_after_command() {
         let args = ["hoop", "scan", "/tmp/projects", "-y"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y short flag after scan command");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y short flag after scan command"
+        );
 
         match cli.command {
             Commands::Scan { root, auto_confirm } => {
@@ -1108,7 +1517,10 @@ mod tests {
     fn test_scan_without_no_interactive_flag_is_false() {
         let args = ["hoop", "scan", "/tmp/projects"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, false, "no_interactive should be false when flag is not provided");
+        assert_eq!(
+            cli.no_interactive, false,
+            "no_interactive should be false when flag is not provided"
+        );
 
         match cli.command {
             Commands::Scan { root, auto_confirm } => {
@@ -1123,12 +1535,18 @@ mod tests {
     fn test_scan_with_local_yes_flag() {
         let args = ["hoop", "scan", "/tmp/projects", "--yes"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, false, "Global no_interactive should be false with local --yes");
+        assert_eq!(
+            cli.no_interactive, false,
+            "Global no_interactive should be false with local --yes"
+        );
 
         match cli.command {
             Commands::Scan { root, auto_confirm } => {
                 assert_eq!(root, "/tmp/projects");
-                assert_eq!(auto_confirm, true, "local --yes flag should set auto_confirm to true");
+                assert_eq!(
+                    auto_confirm, true,
+                    "local --yes flag should set auto_confirm to true"
+                );
             }
             _ => panic!("expected Scan command"),
         }
@@ -1138,7 +1556,10 @@ mod tests {
     fn test_scan_with_both_global_and_local_flags() {
         let args = ["hoop", "--no-interactive", "scan", "/tmp/projects", "--yes"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, true, "Global no_interactive should be true");
+        assert_eq!(
+            cli.no_interactive, true,
+            "Global no_interactive should be true"
+        );
 
         match cli.command {
             Commands::Scan { root, auto_confirm } => {
@@ -1158,9 +1579,14 @@ mod tests {
         let cli_before = parse_args(&args_before).expect("should parse successfully");
         let cli_after = parse_args(&args_after).expect("should parse successfully");
 
-        assert_eq!(cli_before.no_interactive, cli_after.no_interactive,
-                   "no_interactive value must be consistent regardless of flag position");
-        assert_eq!(cli_before.no_interactive, true, "no_interactive should be true");
+        assert_eq!(
+            cli_before.no_interactive, cli_after.no_interactive,
+            "no_interactive value must be consistent regardless of flag position"
+        );
+        assert_eq!(
+            cli_before.no_interactive, true,
+            "no_interactive should be true"
+        );
     }
 
     #[test]
@@ -1175,7 +1601,10 @@ mod tests {
 
         for args in test_cases {
             let cli = parse_args(&args).expect("should parse successfully with any flag ordering");
-            assert_eq!(cli.no_interactive, true, "no_interactive should be true regardless of flag order");
+            assert_eq!(
+                cli.no_interactive, true,
+                "no_interactive should be true regardless of flag order"
+            );
 
             match &cli.command {
                 Commands::Scan { root, .. } => {
@@ -1190,7 +1619,10 @@ mod tests {
     fn test_scan_default_no_interactive_value() {
         let args = ["hoop", "scan", "/tmp/projects"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert_eq!(cli.no_interactive, false, "no_interactive should default to false");
+        assert_eq!(
+            cli.no_interactive, false,
+            "no_interactive should default to false"
+        );
     }
 
     #[test]
@@ -1202,7 +1634,13 @@ mod tests {
 
     #[test]
     fn test_scan_command_parsing_with_invalid_flag() {
-        let args = ["hoop", "--no-interactive", "scan", "/tmp/projects", "--invalid-flag"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "scan",
+            "/tmp/projects",
+            "--invalid-flag",
+        ];
         let result = parse_args(&args);
         assert!(result.is_err(), "should fail with invalid flag");
     }
@@ -1215,7 +1653,10 @@ mod tests {
 
         match cli.command {
             Commands::Scan { root, .. } => {
-                assert_eq!(root, root_path, "complex root path should be parsed correctly");
+                assert_eq!(
+                    root, root_path,
+                    "complex root path should be parsed correctly"
+                );
             }
             _ => panic!("expected Scan command"),
         }
@@ -1231,7 +1672,10 @@ mod tests {
             .expect("should parse with global flag only");
         assert_eq!(cli_global.no_interactive, true);
         if let Commands::Scan { auto_confirm, .. } = cli_global.command {
-            assert_eq!(auto_confirm, false, "local auto_confirm should be false with only global flag");
+            assert_eq!(
+                auto_confirm, false,
+                "local auto_confirm should be false with only global flag"
+            );
         } else {
             panic!("Expected Scan command");
         }
@@ -1241,7 +1685,10 @@ mod tests {
             .expect("should parse with local flag only");
         assert_eq!(cli_local.no_interactive, false);
         if let Commands::Scan { auto_confirm, .. } = cli_local.command {
-            assert_eq!(auto_confirm, true, "local auto_confirm should be true with --yes flag");
+            assert_eq!(
+                auto_confirm, true,
+                "local auto_confirm should be true with --yes flag"
+            );
         } else {
             panic!("Expected Scan command");
         }
@@ -1251,7 +1698,10 @@ mod tests {
             .expect("should parse with both flags");
         assert_eq!(cli_both.no_interactive, true);
         if let Commands::Scan { auto_confirm, .. } = cli_both.command {
-            assert_eq!(auto_confirm, true, "local auto_confirm should be true with --yes flag");
+            assert_eq!(
+                auto_confirm, true,
+                "local auto_confirm should be true with --yes flag"
+            );
         } else {
             panic!("Expected Scan command");
         }

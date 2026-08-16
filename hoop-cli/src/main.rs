@@ -24,6 +24,7 @@ use std::{fs, net::SocketAddr, path::PathBuf};
 #[derive(Parser, Debug)]
 #[command(name = "hoop")]
 #[command(about = "HOOP - The operator's pane of glass", long_about = None)]
+#[command(args_override_self = true)]
 struct Cli {
     /// Global flag to suppress all interactive prompts (alias: -y)
     ///
@@ -373,7 +374,8 @@ async fn main() -> anyhow::Result<()> {
             allow_br_mismatch,
         } => {
             let bind_addr = addr.unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 3000)));
-            let primary_addr = primary_addr.unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 3000)));
+            let primary_addr =
+                primary_addr.unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 3000)));
 
             // In observer mode, default bind to a different port to avoid conflict
             let bind_addr = if observer && addr.is_none() {
@@ -475,7 +477,11 @@ async fn main() -> anyhow::Result<()> {
                 std::process::exit(exit_code_for_error(&e));
             }
         }
-        Commands::Restore { from, dry_run, confirm } => {
+        Commands::Restore {
+            from,
+            dry_run,
+            confirm,
+        } => {
             if let Err(e) = restore::run_restore(&from, dry_run, no_interactive, confirm).await {
                 eprintln!("hoop restore: {}", e);
                 std::process::exit(exit_code_for_error(&e));
@@ -695,7 +701,9 @@ fn handle_migrate(cmd: MigrateCommands) -> anyhow::Result<()> {
             if !confirm {
                 eprintln!("hoop migrate run: --confirm is required.");
                 eprintln!("  This will apply pending minor version migrations.");
-                eprintln!("  Re-run with --confirm once you have verified you have a current backup.");
+                eprintln!(
+                    "  Re-run with --confirm once you have verified you have a current backup."
+                );
                 std::process::exit(2);
             }
 
@@ -707,16 +715,24 @@ fn handle_migrate(cmd: MigrateCommands) -> anyhow::Result<()> {
             let current_version = fleet::get_schema_version(conn)?;
 
             // Check if this is a major version gate
-            if let Err(e) = fleet::check_schema_major_gate(&current_version, fleet::SCHEMA_VERSION) {
+            if let Err(e) = fleet::check_schema_major_gate(&current_version, fleet::SCHEMA_VERSION)
+            {
                 eprintln!("Major upgrade required: {}", e);
                 eprintln!("  Run: hoop migrate major-upgrade --confirm");
                 std::process::exit(2);
             }
 
             // Run pending migrations
-            migrations::run_pending_migrations(conn, &migrations::get_migration_registry(), &current_version)?;
+            migrations::run_pending_migrations(
+                conn,
+                &migrations::get_migration_registry(),
+                &current_version,
+            )?;
 
-            println!("Migration complete. Schema version is now {}.", fleet::SCHEMA_VERSION);
+            println!(
+                "Migration complete. Schema version is now {}.",
+                fleet::SCHEMA_VERSION
+            );
             println!("You can now start the daemon with `hoop serve`.");
         }
         MigrateCommands::Status { json } => {
@@ -736,8 +752,15 @@ fn handle_migrate(cmd: MigrateCommands) -> anyhow::Result<()> {
                 } else {
                     println!("\nPending migrations:");
                     for pending in &status.pending_migrations {
-                        let rollback = if pending.can_rollback { " (rollbackable)" } else { "" };
-                        println!("  {} → {}{}", status.current_version, pending.version, rollback);
+                        let rollback = if pending.can_rollback {
+                            " (rollbackable)"
+                        } else {
+                            ""
+                        };
+                        println!(
+                            "  {} → {}{}",
+                            status.current_version, pending.version, rollback
+                        );
                         println!("    {}", pending.description);
                     }
                 }
@@ -751,7 +774,9 @@ fn handle_migrate(cmd: MigrateCommands) -> anyhow::Result<()> {
             if !confirm {
                 eprintln!("hoop migrate major-upgrade: --confirm is required.");
                 eprintln!("  This will perform a major version upgrade (e.g., 1.x → 2.x).");
-                eprintln!("  Re-run with --confirm once you have verified you have a current backup.");
+                eprintln!(
+                    "  Re-run with --confirm once you have verified you have a current backup."
+                );
                 std::process::exit(2);
             }
 
@@ -768,7 +793,9 @@ fn handle_migrate(cmd: MigrateCommands) -> anyhow::Result<()> {
                 if current_major != Some(expected_major) {
                     eprintln!("hoop migrate major-upgrade: --from {} does not match current schema version {}",
                         expected_major, current_version);
-                    eprintln!("  This safety check prevents accidental upgrades on the wrong database.");
+                    eprintln!(
+                        "  This safety check prevents accidental upgrades on the wrong database."
+                    );
                     eprintln!("  Omit --from to skip this check, or verify you're targeting the correct database.");
                     std::process::exit(2);
                 }
@@ -779,14 +806,19 @@ fn handle_migrate(cmd: MigrateCommands) -> anyhow::Result<()> {
                 std::process::exit(1);
             }
 
-            println!("Major upgrade complete. Schema version is now {}.", fleet::SCHEMA_VERSION);
+            println!(
+                "Major upgrade complete. Schema version is now {}.",
+                fleet::SCHEMA_VERSION
+            );
             println!("You can now start the daemon with `hoop serve`.");
         }
         MigrateCommands::Rollback { version, confirm } => {
             if !confirm {
                 eprintln!("hoop migrate rollback: --confirm is required.");
                 eprintln!("  This will rollback schema to version {}.", version);
-                eprintln!("  Re-run with --confirm once you have verified you have a current backup.");
+                eprintln!(
+                    "  Re-run with --confirm once you have verified you have a current backup."
+                );
                 std::process::exit(2);
             }
 
@@ -818,7 +850,9 @@ fn handle_migrate(cmd: MigrateCommands) -> anyhow::Result<()> {
             ).unwrap_or(0) > 0;
 
             if !table_exists {
-                eprintln!("hoop migrate rebuild-percentile-index: percentile index table does not exist.");
+                eprintln!(
+                    "hoop migrate rebuild-percentile-index: percentile index table does not exist."
+                );
                 eprintln!("  Run pending migrations first: hoop migrate run --confirm");
                 std::process::exit(1);
             }
@@ -829,11 +863,11 @@ fn handle_migrate(cmd: MigrateCommands) -> anyhow::Result<()> {
                 std::process::exit(1);
             }
 
-            let bucket_count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM stitch_percentile_index",
-                [],
-                |row| row.get(0),
-            ).unwrap_or(0);
+            let bucket_count: i64 = conn
+                .query_row("SELECT COUNT(*) FROM stitch_percentile_index", [], |row| {
+                    row.get(0)
+                })
+                .unwrap_or(0);
 
             println!("Percentile index rebuilt successfully.");
             println!("Total buckets: {}", bucket_count);
@@ -1059,6 +1093,61 @@ mod tests {
         (no_interactive_before, no_interactive_after)
     }
 
+    // ── Add command tests ─────────────────────────────────────────────────
+
+    #[test]
+    fn add_no_interactive_flag_before_command() {
+        let args = ["hoop", "--no-interactive", "add", "/tmp/test"];
+        let cli = parse_args(&args).unwrap();
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true");
+    }
+
+    #[test]
+    fn add_no_interactive_flag_after_command() {
+        let args = ["hoop", "add", "/tmp/test", "--no-interactive"];
+        let cli = parse_args(&args).unwrap();
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true");
+    }
+
+    #[test]
+    fn add_short_flag_y_before_command() {
+        let args = ["hoop", "-y", "add", "/tmp/test"];
+        let cli = parse_args(&args).unwrap();
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y"
+        );
+    }
+
+    #[test]
+    fn add_short_flag_y_after_command() {
+        let args = ["hoop", "add", "/tmp/test", "-y"];
+        let cli = parse_args(&args).unwrap();
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y"
+        );
+    }
+
+    #[test]
+    fn add_both_positions_extract_same_value() {
+        let flag_args = ["--no-interactive"];
+        let cmd_args = ["add", "/tmp/test"];
+        let (before, after) = parse_both_positions(&flag_args, &cmd_args);
+        assert_eq!(before, after, "no_interactive value must be consistent");
+        assert_eq!(before, true, "no_interactive should be true");
+    }
+
+    #[test]
+    fn add_without_flag_is_false() {
+        let args = ["hoop", "add", "/tmp/test"];
+        let cli = parse_args(&args).unwrap();
+        assert_eq!(
+            cli.no_interactive, false,
+            "no_interactive should be false by default"
+        );
+    }
+
     // ── Scan command tests ────────────────────────────────────────────────
 
     #[test]
@@ -1079,14 +1168,20 @@ mod tests {
     fn scan_short_flag_y_before_command() {
         let args = ["hoop", "-y", "scan", "/tmp"];
         let cli = parse_args(&args).unwrap();
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y"
+        );
     }
 
     #[test]
     fn scan_short_flag_y_after_command() {
         let args = ["hoop", "scan", "/tmp", "-y"];
         let cli = parse_args(&args).unwrap();
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y"
+        );
     }
 
     #[test]
@@ -1102,21 +1197,91 @@ mod tests {
     fn scan_without_flag_is_false() {
         let args = ["hoop", "scan", "/tmp"];
         let cli = parse_args(&args).unwrap();
-        assert_eq!(cli.no_interactive, false, "no_interactive should be false by default");
+        assert_eq!(
+            cli.no_interactive, false,
+            "no_interactive should be false by default"
+        );
+    }
+
+    // ── List command tests ────────────────────────────────────────────────
+
+    #[test]
+    fn list_no_interactive_flag_before_command() {
+        let args = ["hoop", "--no-interactive", "list"];
+        let cli = parse_args(&args).unwrap();
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true");
+    }
+
+    #[test]
+    fn list_no_interactive_flag_after_command() {
+        let args = ["hoop", "list", "--no-interactive"];
+        let cli = parse_args(&args).unwrap();
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true");
+    }
+
+    #[test]
+    fn list_short_flag_y_before_command() {
+        let args = ["hoop", "-y", "list"];
+        let cli = parse_args(&args).unwrap();
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y"
+        );
+    }
+
+    #[test]
+    fn list_short_flag_y_after_command() {
+        let args = ["hoop", "list", "-y"];
+        let cli = parse_args(&args).unwrap();
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y"
+        );
+    }
+
+    #[test]
+    fn list_both_positions_extract_same_value() {
+        let flag_args = ["--no-interactive"];
+        let cmd_args = ["list"];
+        let (before, after) = parse_both_positions(&flag_args, &cmd_args);
+        assert_eq!(before, after, "no_interactive value must be consistent");
+        assert_eq!(before, true, "no_interactive should be true");
+    }
+
+    #[test]
+    fn list_without_flag_is_false() {
+        let args = ["hoop", "list"];
+        let cli = parse_args(&args).unwrap();
+        assert_eq!(
+            cli.no_interactive, false,
+            "no_interactive should be false by default"
+        );
     }
 
     // ── Remove command tests ─────────────────────────────────────────────
 
     #[test]
     fn remove_no_interactive_flag_before_command() {
-        let args = ["hoop", "--no-interactive", "remove", "my-project", "--confirm"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "remove",
+            "my-project",
+            "--confirm",
+        ];
         let cli = parse_args(&args).unwrap();
         assert_eq!(cli.no_interactive, true, "no_interactive should be true");
     }
 
     #[test]
     fn remove_no_interactive_flag_after_command() {
-        let args = ["hoop", "remove", "my-project", "--no-interactive", "--confirm"];
+        let args = [
+            "hoop",
+            "remove",
+            "my-project",
+            "--no-interactive",
+            "--confirm",
+        ];
         let cli = parse_args(&args).unwrap();
         assert_eq!(cli.no_interactive, true, "no_interactive should be true");
     }
@@ -1125,7 +1290,10 @@ mod tests {
     fn remove_short_flag_y_before_command() {
         let args = ["hoop", "-y", "remove", "my-project", "--confirm"];
         let cli = parse_args(&args).unwrap();
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y"
+        );
     }
 
     #[test]
@@ -1141,30 +1309,126 @@ mod tests {
     fn remove_without_flag_is_false() {
         let args = ["hoop", "remove", "my-project", "--confirm"];
         let cli = parse_args(&args).unwrap();
-        assert_eq!(cli.no_interactive, false, "no_interactive should be false by default");
+        assert_eq!(
+            cli.no_interactive, false,
+            "no_interactive should be false by default"
+        );
+    }
+
+    // ── Status command tests ─────────────────────────────────────────────
+
+    #[test]
+    fn status_no_interactive_flag_before_command() {
+        let args = ["hoop", "--no-interactive", "status"];
+        let cli = parse_args(&args).unwrap();
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true");
+    }
+
+    #[test]
+    fn status_no_interactive_flag_after_command() {
+        let args = ["hoop", "status", "--no-interactive"];
+        let cli = parse_args(&args).unwrap();
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true");
+    }
+
+    #[test]
+    fn status_short_flag_y_before_command() {
+        let args = ["hoop", "-y", "status"];
+        let cli = parse_args(&args).unwrap();
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y"
+        );
+    }
+
+    #[test]
+    fn status_short_flag_y_after_command() {
+        let args = ["hoop", "status", "-y"];
+        let cli = parse_args(&args).unwrap();
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y"
+        );
+    }
+
+    #[test]
+    fn status_with_project_filter_no_interactive_before() {
+        let args = ["hoop", "--no-interactive", "status", "--project", "my-project"];
+        let cli = parse_args(&args).unwrap();
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true");
+    }
+
+    #[test]
+    fn status_with_json_output_no_interactive_after() {
+        let args = ["hoop", "status", "--json", "--no-interactive"];
+        let cli = parse_args(&args).unwrap();
+        assert_eq!(cli.no_interactive, true, "no_interactive should be true");
+    }
+
+    #[test]
+    fn status_both_positions_extract_same_value() {
+        let flag_args = ["--no-interactive"];
+        let cmd_args = ["status"];
+        let (before, after) = parse_both_positions(&flag_args, &cmd_args);
+        assert_eq!(before, after, "no_interactive value must be consistent");
+        assert_eq!(before, true, "no_interactive should be true");
+    }
+
+    #[test]
+    fn status_without_flag_is_false() {
+        let args = ["hoop", "status"];
+        let cli = parse_args(&args).unwrap();
+        assert_eq!(
+            cli.no_interactive, false,
+            "no_interactive should be false by default"
+        );
     }
 
     // ── Restore command tests ────────────────────────────────────────────
 
     #[test]
     fn restore_no_interactive_flag_before_command() {
-        let args = ["hoop", "--no-interactive", "restore", "--from", "s3://bucket/key", "--confirm"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "restore",
+            "--from",
+            "s3://bucket/key",
+            "--confirm",
+        ];
         let cli = parse_args(&args).unwrap();
         assert_eq!(cli.no_interactive, true, "no_interactive should be true");
     }
 
     #[test]
     fn restore_no_interactive_flag_after_command() {
-        let args = ["hoop", "restore", "--from", "s3://bucket/key", "--no-interactive", "--confirm"];
+        let args = [
+            "hoop",
+            "restore",
+            "--from",
+            "s3://bucket/key",
+            "--no-interactive",
+            "--confirm",
+        ];
         let cli = parse_args(&args).unwrap();
         assert_eq!(cli.no_interactive, true, "no_interactive should be true");
     }
 
     #[test]
     fn restore_short_flag_y_before_command() {
-        let args = ["hoop", "-y", "restore", "--from", "s3://bucket/key", "--confirm"];
+        let args = [
+            "hoop",
+            "-y",
+            "restore",
+            "--from",
+            "s3://bucket/key",
+            "--confirm",
+        ];
         let cli = parse_args(&args).unwrap();
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y"
+        );
     }
 
     #[test]
@@ -1180,7 +1444,10 @@ mod tests {
     fn restore_without_flag_is_false() {
         let args = ["hoop", "restore", "--from", "s3://bucket/key", "--confirm"];
         let cli = parse_args(&args).unwrap();
-        assert_eq!(cli.no_interactive, false, "no_interactive should be false by default");
+        assert_eq!(
+            cli.no_interactive, false,
+            "no_interactive should be false by default"
+        );
     }
 
     // ── Init command tests ───────────────────────────────────────────────
@@ -1203,7 +1470,10 @@ mod tests {
     fn init_short_flag_y_before_command() {
         let args = ["hoop", "-y", "init"];
         let cli = parse_args(&args).unwrap();
-        assert_eq!(cli.no_interactive, true, "no_interactive should be true with -y");
+        assert_eq!(
+            cli.no_interactive, true,
+            "no_interactive should be true with -y"
+        );
     }
 
     #[test]
@@ -1219,7 +1489,10 @@ mod tests {
     fn init_without_flag_is_false() {
         let args = ["hoop", "init"];
         let cli = parse_args(&args).unwrap();
-        assert_eq!(cli.no_interactive, false, "no_interactive should be false by default");
+        assert_eq!(
+            cli.no_interactive, false,
+            "no_interactive should be false by default"
+        );
     }
 
     // ── Projects subcommand tests ────────────────────────────────────────
@@ -1249,7 +1522,14 @@ mod tests {
 
     #[test]
     fn projects_remove_no_interactive_with_confirm() {
-        let args = ["hoop", "--no-interactive", "projects", "remove", "proj", "--confirm"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "projects",
+            "remove",
+            "proj",
+            "--confirm",
+        ];
         let cli = parse_args(&args).unwrap();
         assert_eq!(cli.no_interactive, true, "no_interactive should be true");
     }
@@ -1293,7 +1573,10 @@ mod tests {
         // both should be parseable
         let args = ["hoop", "--no-interactive", "scan", "/tmp", "--yes"];
         let cli = parse_args(&args).unwrap();
-        assert_eq!(cli.no_interactive, true, "global no_interactive should be true");
+        assert_eq!(
+            cli.no_interactive, true,
+            "global no_interactive should be true"
+        );
 
         // Verify the command was parsed correctly
         match cli.command {
@@ -1310,7 +1593,10 @@ mod tests {
         // Test the local --yes flag works independently
         let args = ["hoop", "scan", "/tmp", "--yes"];
         let cli = parse_args(&args).unwrap();
-        assert_eq!(cli.no_interactive, false, "global flag should be false when not set");
+        assert_eq!(
+            cli.no_interactive, false,
+            "global flag should be false when not set"
+        );
 
         match cli.command {
             Commands::Scan { root, auto_confirm } => {
