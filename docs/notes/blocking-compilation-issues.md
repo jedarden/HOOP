@@ -24,6 +24,61 @@ records to add to the 89-error historical total.
 | Build-status artifact | **0 errors / 102 warnings** | `bf-2sih1` reports no compile blocker in that snapshot. |
 | Phase 1 verification gate | **Open** | The guide reports test compilation and `clippy -- -D warnings` still need resolution; `hoop status --json` passes. |
 
+## Current checkout verification (2026-08-16)
+
+The current working tree is not a clean historical baseline: it contains
+uncommitted changes from other work. Against that checkout,
+`cargo test --workspace --no-run` exited **101** and found **one current
+compilation blocker**. The command reached test-target compilation far enough
+to build `hoop-daemon`, then stopped on this error; the two `hoop-mcp` warnings
+shown in the same run are non-blocking.
+
+### P0-CURRENT-1 — `notify::Watcher` trait is not in scope
+
+| Field | Detail |
+|---|---|
+| File and line | [`hoop-daemon/src/api_skills.rs:1148`](../../hoop-daemon/src/api_skills.rs:1148) (the `.watch(...)` call); the import is at line 36 |
+| Command | `cargo test --workspace --no-run` |
+| Exit status | `101` |
+| Error code | `E0599` |
+| Root cause | The current uncommitted edit changed `use notify::{RecursiveMode, Watcher};` at line 36 to `use notify::RecursiveMode;`. `RecommendedWatcher` implements the `notify::Watcher` trait, but Rust does not make trait methods available until the trait is imported or the call is fully qualified. |
+| Suggested fix | Restore the trait import, preferably as `use notify::{RecursiveMode, Watcher};`, then rerun `cargo test --workspace --no-run`. An equivalent fix is a fully-qualified `notify::Watcher::watch(&mut watcher, ...)` call, but the import is consistent with the existing method-call style. |
+
+Full compiler diagnostic captured from the verification run:
+
+```text
+error[E0599]: no method named `watch` found for struct `INotifyWatcher` in the current scope
+    --> hoop-daemon/src/api_skills.rs:1148:14
+     |
+1147 | /         watcher
+1148 | |             .watch(&skills_dir, RecursiveMode::NonRecursive)
+     | |_____________-^^^^^
+     |
+     ::: /home/coding/.cargo/registry/src/index.crates.io-1949da8c6fb5b557f/notify-6.1.1/src/lib.rs:340:8
+     |
+ 340 |       fn watch(&mut self, path: &Path, recursive_mode: RecursiveMode) -> Result<()>;
+     |          ---- the method is available for `INotifyWatcher` here
+     |
+     = help: items from traits can only be used if the trait is in scope
+help: there is a method `unwatch` with a similar name, but with different arguments
+    --> /home/coding/.cargo/registry/src/index.crates.io-1949da8c6fb5b557f/notify-6.1.1/src/lib.rs:348:5
+     |
+ 348 |     fn unwatch(&mut self, path: &Path) -> Result<()>;
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+     |
+help: trait `Watcher` which provides `watch` is implemented but not in scope; perhaps you want to import it
+     |
+  36 + use notify::Watcher;
+     |
+
+For more information about this error, try `rustc --explain E0599`.
+error: could not compile `hoop-daemon` (lib) due to 1 previous error
+```
+
+This P0 entry is a **current** blocker and is intentionally kept separate
+from the 89-record historical catalog below. If another worker changes
+`api_skills.rs`, rerun the command before relying on this snapshot.
+
 ### Highest-priority items
 
 1. **Repair the `api_stitch_decompose.rs` test-state factory.** Forty-four records
