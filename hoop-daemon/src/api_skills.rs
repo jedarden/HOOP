@@ -533,7 +533,6 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::fs::{self, File};
-    use std::os::unix::fs::PermissionsExt as UnixPermissionsExt;
     use tempfile::TempDir;
 
     #[test]
