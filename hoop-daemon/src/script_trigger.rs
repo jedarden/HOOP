@@ -9,11 +9,12 @@
 //! - Exact matching on kind, adapter, and result filters
 
 use glob::Pattern;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
 use crate::api_scripts::{discover_scripts, EventSubscription, ScriptEntry};
 use crate::events::NeedleEvent;
+use crate::fleet_notifications::{FleetNotification, FleetNotificationKind};
 
 /// Context for event matching - extracted from NeedleEvent for subscription filtering
 #[derive(Debug, Clone)]
@@ -71,6 +72,81 @@ impl EventContext {
             bead_id,
         }
     }
+
+    /// Extract event context from a fleet-level notification.
+    ///
+    /// Fleet notifications use their serialized snake_case kind as the event
+    /// type. The full notification is passed to the script after applying the
+    /// same read-side redaction used for other HOOP-owned JSON projections.
+    pub fn from_fleet_notification(notification: &FleetNotification) -> Self {
+        let event_type = fleet_notification_event_type(&notification.kind);
+        let payload = crate::redaction::redact_json_value(
+            serde_json::to_value(notification).expect("FleetNotification must serialize"),
+        );
+
+        Self {
+            event_type: event_type.to_string(),
+            project: notification.project.clone(),
+            kind: None,
+            adapter: None,
+            result: None,
+            event_json: serde_json::to_string(&payload)
+                .expect("redacted FleetNotification must serialize"),
+            bead_id: String::new(),
+        }
+    }
+}
+
+/// Return the manifest event name for a fleet notification kind.
+fn fleet_notification_event_type(kind: &FleetNotificationKind) -> &'static str {
+    match kind {
+        FleetNotificationKind::CapacityAlert => "capacity_alert",
+        FleetNotificationKind::ConvoyComplete => "convoy_complete",
+        FleetNotificationKind::StitchBeadsClosed => "stitch_beads_closed",
+        FleetNotificationKind::BeadCreatedByHoop => "bead_created_by_hoop",
+    }
+}
+
+/// Return the canonical operator-script directory used by the daemon.
+pub fn default_scripts_dir() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".hoop")
+        .join("scripts")
+}
+
+/// Trigger scripts for a fleet notification without blocking its producer.
+///
+/// Fleet notification producers include synchronous database helpers, so this
+/// small adapter keeps their push paths synchronous while still using the
+/// async script runner. The notification is already in the ring before this
+/// function is called, preserving the ring's existing delivery semantics.
+pub fn spawn_fleet_notification_script_trigger(
+    scripts_dir: PathBuf,
+    notification: FleetNotification,
+) {
+    if tokio::runtime::Handle::try_current().is_err() {
+        warn!(
+            event = %fleet_notification_event_type(&notification.kind),
+            "Cannot trigger fleet notification script: no Tokio runtime"
+        );
+        return;
+    }
+
+    tokio::spawn(async move {
+        let ctx = EventContext::from_fleet_notification(&notification);
+        let results = trigger_matching_scripts(&scripts_dir, &ctx).await;
+        for result in results {
+            if result.attempted && !result.succeeded {
+                warn!(
+                    script = %result.script_name,
+                    error = %result.error.unwrap_or_default(),
+                    event = %ctx.event_type,
+                    "Fleet notification script failed"
+                );
+            }
+        }
+    });
 }
 
 /// Check if a glob pattern matches a value
@@ -520,5 +596,39 @@ mod tests {
         assert_eq!(ctx.bead_id, "bd-abc123");
         assert_eq!(ctx.adapter, None);
         assert_eq!(ctx.result, Some("failure".to_string()));
+    }
+
+    #[test]
+    fn test_event_context_from_fleet_notification() {
+        let cases = [
+            (FleetNotificationKind::CapacityAlert, "capacity_alert"),
+            (FleetNotificationKind::ConvoyComplete, "convoy_complete"),
+            (
+                FleetNotificationKind::StitchBeadsClosed,
+                "stitch_beads_closed",
+            ),
+            (
+                FleetNotificationKind::BeadCreatedByHoop,
+                "bead_created_by_hoop",
+            ),
+        ];
+
+        for (kind, expected_event_type) in cases {
+            let notification = FleetNotification::new(
+                kind,
+                Some("test-project".to_string()),
+                "safe summary",
+                serde_json::json!({"safe": "detail"}),
+            );
+            let ctx = EventContext::from_fleet_notification(&notification);
+            let payload: serde_json::Value = serde_json::from_str(&ctx.event_json).unwrap();
+
+            assert_eq!(ctx.event_type, expected_event_type);
+            assert_eq!(ctx.project, Some("test-project".to_string()));
+            assert_eq!(payload["kind"], expected_event_type);
+            assert_eq!(payload["project"], "test-project");
+            assert_eq!(payload["summary"], "safe summary");
+            assert_eq!(payload["details"]["safe"], "detail");
+        }
     }
 }

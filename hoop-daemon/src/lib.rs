@@ -3149,7 +3149,11 @@ Note: This is an automated synthesis from voice dictation."#,
                                 "ts": data.ts,
                             }),
                         );
-                        fleet_notifications::notifications().push(notification);
+                        fleet_notifications::notifications().push(notification.clone());
+                        crate::script_trigger::spawn_fleet_notification_script_trigger(
+                            crate::script_trigger::default_scripts_dir(),
+                            notification,
+                        );
                     }
                     Err(broadcast::error::RecvError::Lagged(n)) => {
                         info!("Bead created by hoop broadcast lagged by {}, continuing", n);
@@ -3445,7 +3449,11 @@ Note: This is an automated synthesis from voice dictation."#,
                                 "threshold_pct": CAPACITY_ALERT_THRESHOLD_PCT,
                             }),
                         );
-                        fleet_notifications::notifications().push(notification);
+                        fleet_notifications::notifications().push(notification.clone());
+                        crate::script_trigger::spawn_fleet_notification_script_trigger(
+                            crate::script_trigger::default_scripts_dir(),
+                            notification,
+                        );
                     }
                 }
             }
@@ -3976,7 +3984,11 @@ fn check_and_emit_stitch_beads_closed(
     );
 
     // Push notification to the ring
-    crate::fleet_notifications::notifications().push(notification);
+    crate::fleet_notifications::notifications().push(notification.clone());
+    crate::script_trigger::spawn_fleet_notification_script_trigger(
+        crate::script_trigger::default_scripts_dir(),
+        notification,
+    );
 
     Ok(())
 }
@@ -4082,7 +4094,11 @@ fn check_and_emit_convoy_complete(
     );
 
     // Push notification to the ring
-    crate::fleet_notifications::notifications().push(notification);
+    crate::fleet_notifications::notifications().push(notification.clone());
+    crate::script_trigger::spawn_fleet_notification_script_trigger(
+        crate::script_trigger::default_scripts_dir(),
+        notification,
+    );
 
     Ok(())
 }
@@ -4147,7 +4163,11 @@ fn check_and_emit_capacity_alert() -> anyhow::Result<()> {
     );
 
     // Push notification to the ring
-    crate::fleet_notifications::notifications().push(notification);
+    crate::fleet_notifications::notifications().push(notification.clone());
+    crate::script_trigger::spawn_fleet_notification_script_trigger(
+        crate::script_trigger::default_scripts_dir(),
+        notification,
+    );
 
     Ok(())
 }
