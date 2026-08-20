@@ -16,13 +16,15 @@
 //! - Any NEEDLE worker process is disrupted
 //! - Any bead disappears or duplicates in the UI post-restart
 
+mod integration_harness;
+
+use integration_harness::spawn_test_daemon_with_config;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 use tempfile::TempDir;
-use hoop_daemon::integration_harness::spawn_test_daemon_with_config;
 
 /// Serialize test setup
 static LOCK: Mutex<()> = Mutex::new(());
@@ -98,7 +100,10 @@ fn count_events_in_file() -> usize {
     }
 
     let content = fs::read_to_string(&path).unwrap_or_default();
-    content.lines().filter(|line| !line.trim().is_empty()).count()
+    content
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .count()
 }
 
 fn setup_test_hoop_home() -> TempDir {
@@ -120,8 +125,7 @@ fn setup_test_hoop_home() -> TempDir {
         testrepo_root().display()
     );
 
-    fs::write(hoop_dir.join("projects.yaml"), projects_yaml)
-        .expect("write projects.yaml");
+    fs::write(hoop_dir.join("projects.yaml"), projects_yaml).expect("write projects.yaml");
 
     let config_yaml = r#"schema_version: 1
 agent:
@@ -129,8 +133,7 @@ agent:
   model: claude-sonnet-4-6
 "#;
 
-    fs::write(hoop_dir.join("config.yml"), config_yaml)
-        .expect("write config.yml");
+    fs::write(hoop_dir.join("config.yml"), config_yaml).expect("write config.yml");
 
     fs::create_dir_all(hoop_dir.join("data")).expect("create data dir");
     std::env::set_var("HOME", temp_dir.path());
@@ -163,7 +166,9 @@ async fn s4_daemon_restart_no_bead_loss() {
     let initial_event_count = count_events_in_file();
 
     // Spawn first daemon
-    let (base_url1, _daemon1) = crate::integration_harness::spawn_test_daemon_with_config::<fn(&mut hoop_daemon::Config)>(Some(|config| {
+    let (base_url1, _daemon1) = crate::integration_harness::spawn_test_daemon_with_config::<
+        fn(&mut hoop_daemon::Config),
+    >(Some(|config| {
         config.observer_mode = false;
     }))
     .await
@@ -194,17 +199,10 @@ async fn s4_daemon_restart_no_bead_loss() {
         .await
         .expect("Failed to fetch beads from first daemon");
 
-    assert_eq!(
-        resp1.status(),
-        200,
-        "First daemon should return beads"
-    );
+    assert_eq!(resp1.status(), 200, "First daemon should return beads");
 
     let beads1: serde_json::Value = resp1.json().await.expect("Failed to parse beads");
-    let initial_bead_count = beads1
-        .as_array()
-        .map(|arr| arr.len())
-        .unwrap_or(0);
+    let initial_bead_count = beads1.as_array().map(|arr| arr.len()).unwrap_or(0);
 
     // First daemon shuts down when dropped
 
@@ -219,7 +217,9 @@ async fn s4_daemon_restart_no_bead_loss() {
     );
 
     // Spawn second daemon (simulating restart)
-    let (base_url2, _daemon2) = crate::integration_harness::spawn_test_daemon_with_config::<fn(&mut hoop_daemon::Config)>(Some(|config| {
+    let (base_url2, _daemon2) = crate::integration_harness::spawn_test_daemon_with_config::<
+        fn(&mut hoop_daemon::Config),
+    >(Some(|config| {
         config.observer_mode = false;
     }))
     .await
@@ -248,17 +248,10 @@ async fn s4_daemon_restart_no_bead_loss() {
         .await
         .expect("Failed to fetch beads from second daemon");
 
-    assert_eq!(
-        resp2.status(),
-        200,
-        "Second daemon should return beads"
-    );
+    assert_eq!(resp2.status(), 200, "Second daemon should return beads");
 
     let beads2: serde_json::Value = resp2.json().await.expect("Failed to parse beads");
-    let final_bead_count = beads2
-        .as_array()
-        .map(|arr| arr.len())
-        .unwrap_or(0);
+    let final_bead_count = beads2.as_array().map(|arr| arr.len()).unwrap_or(0);
 
     // Bead count should not decrease (no loss) or wildly increase (no duplication)
     // Allow for small differences due to test timing
@@ -363,7 +356,11 @@ async fn s4_daemon_quick_rebuild() {
         .await
         .expect("Failed to fetch beads");
 
-    assert_eq!(resp.status(), 200, "Should be able to fetch beads after rebuild");
+    assert_eq!(
+        resp.status(),
+        200,
+        "Should be able to fetch beads after rebuild"
+    );
 
     println!("S4 PASS: UI state rebuilt in {:?}", rebuild_time);
 }
@@ -416,7 +413,9 @@ async fn s4_fleet_unaffected_by_restart() {
     // Simulate worker continuing during HOOP downtime
     let mut worker = SimulatedWorker::new("test-worker");
     worker.write_claim("bd-restart-1").expect("write claim");
-    worker.write_complete("bd-restart-1").expect("write complete");
+    worker
+        .write_complete("bd-restart-1")
+        .expect("write complete");
     worker.write_claim("bd-restart-2").expect("write claim");
 
     let events_downtime = count_events_in_file();
@@ -448,7 +447,9 @@ async fn s4_fleet_unaffected_by_restart() {
     }
 
     // Simulate more work after restart
-    worker.write_complete("bd-restart-2").expect("write complete");
+    worker
+        .write_complete("bd-restart-2")
+        .expect("write complete");
     worker.write_claim("bd-restart-3").expect("write claim");
 
     let events_after = count_events_in_file();
@@ -465,10 +466,16 @@ async fn s4_fleet_unaffected_by_restart() {
         .await
         .expect("Failed to fetch beads");
 
-    assert_eq!(resp.status(), 200, "Should see all beads including those created during restart");
+    assert_eq!(
+        resp.status(),
+        200,
+        "Should see all beads including those created during restart"
+    );
 
-    println!("S4 PASS: Fleet unaffected by HOOP restart (worker continued: {} -> {} -> {} events)",
-        events_before, events_downtime, events_after);
+    println!(
+        "S4 PASS: Fleet unaffected by HOOP restart (worker continued: {} -> {} -> {} events)",
+        events_before, events_downtime, events_after
+    );
 }
 
 #[tokio::test]
@@ -531,7 +538,11 @@ async fn s4_state_consistency_across_restarts() {
         if let Some(bead_array) = beads.as_array() {
             let current_ids: std::collections::HashSet<String> = bead_array
                 .iter()
-                .filter_map(|b| b.get("id").and_then(|id| id.as_str()).map(|s| s.to_string()))
+                .filter_map(|b| {
+                    b.get("id")
+                        .and_then(|id| id.as_str())
+                        .map(|s| s.to_string())
+                })
                 .collect();
 
             // State should be stable (no beads disappearing)
@@ -549,7 +560,9 @@ async fn s4_state_consistency_across_restarts() {
         // Daemon shuts down when dropped
 
         // Add more events between cycles
-        worker.write_claim(&format!("bd-s4-{}", cycle * 10 + 2)).expect("write claim");
+        worker
+            .write_claim(&format!("bd-s4-{}", cycle * 10 + 2))
+            .expect("write claim");
     }
 
     println!("S4 PASS: State consistent across multiple restarts");

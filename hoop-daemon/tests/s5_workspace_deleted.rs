@@ -18,12 +18,14 @@
 //! - Other projects' state is corrupted
 //! - Recovery requires a manual restart
 
+mod integration_harness;
+
+use integration_harness::setup_test_hoop_home;
+use hoop_schema::ReadinessResponse;
+use serde_json::Value as JsonValue;
 use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
-use hoop_schema::ReadinessResponse;
-use serde_json::Value as JsonValue;
-use hoop_daemon::integration_harness::setup_test_hoop_home;
 
 fn create_beads_dir(path: &std::path::Path) {
     let beads_dir = path.join(".beads");
@@ -85,10 +87,7 @@ agent:
 
 async fn get_readyz_status(base_url: &str) -> anyhow::Result<(u16, ReadinessResponse)> {
     let client = reqwest::Client::new();
-    let resp = client
-        .get(&format!("{}/readyz", base_url))
-        .send()
-        .await?;
+    let resp = client.get(&format!("{}/readyz", base_url)).send().await?;
 
     let status = resp.status().as_u16();
     let body = resp.json().await?;
@@ -195,7 +194,10 @@ async fn s5_workspace_deleted_error_within_10s() {
         "Error card should appear within 10s of workspace deletion"
     );
 
-    println!("S5 PASS: Error card appeared within {:?}", start_detection.elapsed());
+    println!(
+        "S5 PASS: Error card appeared within {:?}",
+        start_detection.elapsed()
+    );
 }
 
 #[tokio::test]
@@ -291,10 +293,7 @@ async fn s5_other_projects_unaffected() {
         .await
         .expect("Failed to check health");
 
-    assert!(
-        resp.status().is_success(),
-        "Daemon should still be healthy"
-    );
+    assert!(resp.status().is_success(), "Daemon should still be healthy");
 
     println!("S5 PASS: Other projects unaffected when one project fails");
 }
@@ -408,7 +407,10 @@ async fn s5_auto_recovery_on_restore() {
         "Auto-recovery should occur within 10s of workspace restore"
     );
 
-    println!("S5 PASS: Auto-recovery completed within {:?}", start_recovery.elapsed());
+    println!(
+        "S5 PASS: Auto-recovery completed within {:?}",
+        start_recovery.elapsed()
+    );
 }
 
 #[tokio::test]

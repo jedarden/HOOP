@@ -48,7 +48,7 @@ fn create_beads_dir(path: &std::path::Path) -> tempfile::TempDir {
 async fn create_test_supervisor() -> ProjectSupervisor {
     let (bead_tx, _) = tokio::sync::broadcast::channel(64);
     let (session_tx, _) = tokio::sync::broadcast::channel(64);
-    let (monitor_tx, _) = tokio::sync::broadcast::channel::<hoop_daemon::ws::MonitorEvent>(64);
+    let (monitor_tx, _) = tokio::sync::broadcast::channel::<hoop_daemon::heartbeats::MonitorEvent>(64);
     let worker_registry = Arc::new(WorkerRegistry::new(monitor_tx, session_tx.clone()));
     let beads = Arc::new(std::sync::RwLock::new(Vec::<Bead>::new()));
     let shutdown = Arc::new(ShutdownCoordinator::new());
@@ -228,7 +228,10 @@ async fn test_runtime_state_error_extraction() {
 #[tokio::test]
 async fn test_runtime_state_display_string() {
     // Verify display strings for frontend consumption
-    assert_eq!(ProjectRuntimeState::Starting.to_display_string(), "starting");
+    assert_eq!(
+        ProjectRuntimeState::Starting.to_display_string(),
+        "starting"
+    );
     assert_eq!(ProjectRuntimeState::Healthy.to_display_string(), "healthy");
 
     assert_eq!(

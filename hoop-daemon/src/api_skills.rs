@@ -176,7 +176,11 @@ pub fn discover_skills(skills_dir: &StdPath) -> Vec<SkillEntry> {
         let path = entry.path();
 
         // Skip non-directories and hidden
-        if !path.is_dir() || path.file_name().is_none_or(|n| n.to_string_lossy().starts_with('.')) {
+        if !path.is_dir()
+            || path
+                .file_name()
+                .is_none_or(|n| n.to_string_lossy().starts_with('.'))
+        {
             continue;
         }
 
@@ -197,11 +201,7 @@ pub fn discover_skills(skills_dir: &StdPath) -> Vec<SkillEntry> {
                 }
             },
             Err(e) => {
-                debug!(
-                    "No manifest.yml found for skill '{}': {}",
-                    name,
-                    e
-                );
+                debug!("No manifest.yml found for skill '{}': {}", name, e);
                 continue;
             }
         };
@@ -298,8 +298,8 @@ pub fn execute_skill(
 
     // Write args JSON to stdin
     if let Some(mut stdin) = child.stdin.take() {
-        let args_json = serde_json::to_string(args)
-            .map_err(|e| format!("Failed to serialize args: {}", e))?;
+        let args_json =
+            serde_json::to_string(args).map_err(|e| format!("Failed to serialize args: {}", e))?;
         stdin
             .write_all(args_json.as_bytes())
             .map_err(|e| format!("Failed to write to stdin: {}", e))?;
@@ -365,9 +365,12 @@ pub fn execute_skill(
                         }
                         Err(_) => false,
                     };
-                    let _ = stderr_rx.recv_timeout(Duration::from_millis(50)).ok().map(|l| {
-                        stderr_lines.push(l);
-                    });
+                    let _ = stderr_rx
+                        .recv_timeout(Duration::from_millis(50))
+                        .ok()
+                        .map(|l| {
+                            stderr_lines.push(l);
+                        });
                     if !received {
                         break;
                     }
@@ -474,8 +477,7 @@ fn hash_args(args: &Value) -> String {
 
 /// Get skills directory path
 pub fn skills_dir() -> Result<PathBuf> {
-    let mut path = dirs::home_dir()
-        .ok_or_else(|| anyhow!("Cannot determine home directory"))?;
+    let mut path = dirs::home_dir().ok_or_else(|| anyhow!("Cannot determine home directory"))?;
     path.push(".hoop");
     path.push("skills");
     Ok(path)
@@ -502,7 +504,8 @@ impl SchemaCache {
             .map_err(|e| anyhow!("Failed to compile schema for skill '{}': {}", skill_name, e))?;
 
         let compiled = Arc::new(compiled);
-        self.cache.insert(skill_name.to_string(), Arc::clone(&compiled));
+        self.cache
+            .insert(skill_name.to_string(), Arc::clone(&compiled));
         Ok(compiled)
     }
 }
@@ -664,7 +667,8 @@ scope: global
 args_schema:
   type: object
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         let run_path = skill_dir.join("run");
         File::create(&run_path).unwrap();
@@ -701,7 +705,8 @@ scope: global
 args_schema:
   type: object
 "#,
-        ).unwrap();
+        )
+        .unwrap();
 
         let skills = discover_skills(temp_dir.path());
         // Skill should be ignored due to name mismatch
@@ -868,7 +873,11 @@ impl SkillLibrary {
 
     /// Return only executable skills.
     pub fn executable(&self) -> Vec<SkillEntry> {
-        self.skills.iter().filter(|s| s.executable).cloned().collect()
+        self.skills
+            .iter()
+            .filter(|s| s.executable)
+            .cloned()
+            .collect()
     }
 }
 
@@ -1117,24 +1126,19 @@ A practical skill for querying git commit history with filtering options.
 
 /// Start file watcher for the skills directory.
 /// Returns the watcher (must be kept alive for watching to work).
-pub fn start_watcher(
-    skills_dir: PathBuf,
-    store: SkillStore,
-) -> notify::RecommendedWatcher {
+pub fn start_watcher(skills_dir: PathBuf, store: SkillStore) -> notify::RecommendedWatcher {
     let watcher_skills_dir = skills_dir.clone();
     let mut watcher =
-        notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
-            match res {
-                Ok(_event) => {
-                    debug!("Skills directory changed, reloading");
-                    let mut lib = store.write().unwrap();
-                    if let Err(e) = lib.load(&watcher_skills_dir) {
-                        warn!("Skills reload failed: {}", e);
-                    }
+        notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| match res {
+            Ok(_event) => {
+                debug!("Skills directory changed, reloading");
+                let mut lib = store.write().unwrap();
+                if let Err(e) = lib.load(&watcher_skills_dir) {
+                    warn!("Skills reload failed: {}", e);
                 }
-                Err(e) => {
-                    warn!("Skills watch error: {}", e);
-                }
+            }
+            Err(e) => {
+                warn!("Skills watch error: {}", e);
             }
         })
         .expect("failed to create skills file watcher");
@@ -1154,9 +1158,7 @@ pub fn start_watcher(
 // ---------------------------------------------------------------------------
 
 /// GET /api/skills — list all skills
-async fn list_skills(
-    State(state): State<crate::DaemonState>,
-) -> Json<Vec<SkillEntry>> {
+async fn list_skills(State(state): State<crate::DaemonState>) -> Json<Vec<SkillEntry>> {
     let lib = state.skill_library.read().unwrap();
     Json(lib.list())
 }
@@ -1183,7 +1185,8 @@ async fn run_skill(
     // Clone needed data from skill library before any await points
     let (skill_run_path, skill_timeout, args_schema) = {
         let lib = state.skill_library.read().unwrap();
-        let skill = lib.get(&name)
+        let skill = lib
+            .get(&name)
             .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Skill '{}' not found", name)))?;
 
         if !skill.executable {
@@ -1215,20 +1218,21 @@ async fn run_skill(
 
     // Execute the skill (blocking call in spawn_blocking)
     let args = req.args.clone();
-    let result = tokio::task::spawn_blocking(move || execute_skill(&skill_run_path, &args, skill_timeout))
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to join skill execution task: {}", e),
-            )
-        })?
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Skill execution failed: {}", e),
-            )
-        })?;
+    let result =
+        tokio::task::spawn_blocking(move || execute_skill(&skill_run_path, &args, skill_timeout))
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to join skill execution task: {}", e),
+                )
+            })?
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Skill execution failed: {}", e),
+                )
+            })?;
 
     // Write audit row for skill execution
     let actor = resolve_actor(connect_info.map(|ci| ci.0));
