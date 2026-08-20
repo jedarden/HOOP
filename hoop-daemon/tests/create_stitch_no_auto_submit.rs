@@ -17,7 +17,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 /// Serialize test setup so parallel tests don't fight over resources.
-static LOCK: Mutex<()> = Mutex::new>();
+static LOCK: Mutex<()> = Mutex::new(());
 
 /// Test configuration for flag combinations
 #[derive(Debug, Clone)]
@@ -56,7 +56,7 @@ fn generate_flag_combinations() -> Vec<FlagCombo> {
                                 },
                                 source: source.to_string(),
                                 priority,
-                                labels,
+                                labels: labels.clone(),
                                 has_acceptance_criteria,
                                 description: format!(
                                     "force_create={}, agent={}, source={}, priority={:?}, labels={:?}, has_acceptance_criteria={:?}",
@@ -162,7 +162,10 @@ fn count_beads_in_queue(project_dir: &PathBuf) -> usize {
     }
 
     let content = fs::read_to_string(&issues_path).unwrap_or_default();
-    content.lines().filter(|line| !line.trim().is_empty()).count()
+    content
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .count()
 }
 
 /// Check if a bead with the given title exists in the queue
@@ -203,8 +206,7 @@ projects:
         role: primary
 "#;
         // Note: The actual path will be different, but this is for testing the invariant
-        fs::write(hoop_dir.join("projects.yaml"), projects_yaml)
-            .expect("write projects.yaml");
+        fs::write(hoop_dir.join("projects.yaml"), projects_yaml).expect("write projects.yaml");
 
         // Create minimal config.yml
         let config_yaml = r#"
@@ -213,8 +215,7 @@ agent:
   adapter: claude
   model: claude-sonnet-4-6
 "#;
-        fs::write(hoop_dir.join("config.yml"), config_yaml)
-            .expect("write config.yml");
+        fs::write(hoop_dir.join("config.yml"), config_yaml).expect("write config.yml");
 
         // Set HOME to point to temp dir
         std::env::set_var("HOME", tmp.path());
@@ -222,11 +223,14 @@ agent:
         // For this test, we'll use the fleet module directly instead of spawning a daemon
         // This is faster and more focused on testing the invariant
         let hoop_dir_inner = hoop_dir.clone();
-        std::env::set_var("_HOOP_FLEET_DB_PATH", hoop_dir_inner.join("data").join("fleet.db"));
+        std::env::set_var(
+            "_HOOP_FLEET_DB_PATH",
+            hoop_dir_inner.join("data").join("fleet.db"),
+        );
 
         hoop_daemon::fleet::init_fleet_db().expect("init fleet.db");
 
-        (tmp, "http://localhost:8080".to_string(), None)
+        (tmp, "http://localhost:8080".to_string(), None::<()>)
     };
 
     let combos = generate_flag_combinations();
@@ -271,7 +275,10 @@ agent:
         // Verify draft was created
         let fetched = hoop_daemon::fleet::get_draft(&draft_id)
             .expect(&format!("get draft for combo: {}", combo.description))
-            .expect(&format!("draft should exist for combo: {}", combo.description));
+            .expect(&format!(
+                "draft should exist for combo: {}",
+                combo.description
+            ));
 
         assert_eq!(fetched.id, draft_id, "draft ID should match");
         assert_eq!(fetched.status, "pending", "draft status should be pending");
@@ -286,7 +293,8 @@ agent:
             "priority should match combo"
         );
         assert_eq!(
-            fetched.labels, combo.labels.clone().unwrap_or_default(),
+            fetched.labels,
+            combo.labels.clone().unwrap_or_default(),
             "labels should match combo"
         );
         assert_eq!(
@@ -376,7 +384,10 @@ fn test_draft_to_approval_flow_creates_single_bead() {
         .expect("draft exists");
 
     assert_eq!(fetched.status, "pending");
-    assert!(fetched.stitch_id.is_none(), "stitch_id must be None before approval");
+    assert!(
+        fetched.stitch_id.is_none(),
+        "stitch_id must be None before approval"
+    );
 
     // Simulate approval by updating status to "submitted" with a stitch_id
     let stitch_id = "stitch-test-001";
@@ -397,7 +408,10 @@ fn test_draft_to_approval_flow_creates_single_bead() {
         .expect("get approved draft")
         .expect("approved draft exists");
 
-    assert_eq!(approved.status, "submitted", "status should be submitted after approval");
+    assert_eq!(
+        approved.status, "submitted",
+        "status should be submitted after approval"
+    );
     assert_eq!(
         approved.stitch_id,
         Some(stitch_id.to_string()),
@@ -489,7 +503,8 @@ fn test_force_create_flag_bypasses_dedup_not_preview() {
 
     // This should succeed because force_create bypasses dedup at the API layer
     // (The dedup check happens in api_draft_queue.rs before calling insert_draft)
-    hoop_daemon::fleet::insert_draft(&draft_2).expect("insert second draft with force_create bypass");
+    hoop_daemon::fleet::insert_draft(&draft_2)
+        .expect("insert second draft with force_create bypass");
 
     // Verify both drafts exist
     let fetched_1 = hoop_daemon::fleet::get_draft(draft_id_1)
@@ -634,12 +649,20 @@ fn test_property_all_flag_combinations_maintain_invariant() {
             abandoned_at: None,
         };
 
-        hoop_daemon::fleet::insert_draft(&draft)
-            .expect(&format!("insert draft for property test: {}", combo.description));
+        hoop_daemon::fleet::insert_draft(&draft).expect(&format!(
+            "insert draft for property test: {}",
+            combo.description
+        ));
 
         let fetched = hoop_daemon::fleet::get_draft(&draft_id)
-            .expect(&format!("get draft for property test: {}", combo.description))
-            .expect(&format!("draft should exist for property test: {}", combo.description));
+            .expect(&format!(
+                "get draft for property test: {}",
+                combo.description
+            ))
+            .expect(&format!(
+                "draft should exist for property test: {}",
+                combo.description
+            ));
 
         // CRITICAL INVARIANT CHECK
         assert_eq!(
@@ -651,7 +674,8 @@ fn test_property_all_flag_combinations_maintain_invariant() {
         assert!(
             fetched.stitch_id.is_none(),
             "Property violation for combo '{}': stitch_id must be None after creation, got {:?}",
-            combo.description, fetched.stitch_id
+            combo.description,
+            fetched.stitch_id
         );
 
         // Cleanup
