@@ -235,9 +235,11 @@ fn parse_fail_event(
                     ..
                 } if bead == bead_id => {
                     debug!("Found Dispatch event for bead {}", bead_id);
-                    dispatch_time = Some(DateTime::parse_from_rfc3339(&ts)
-                        .context("Failed to parse dispatch timestamp")?
-                        .with_timezone(&Utc));
+                    dispatch_time = Some(
+                        DateTime::parse_from_rfc3339(&ts)
+                            .context("Failed to parse dispatch timestamp")?
+                            .with_timezone(&Utc),
+                    );
                     worker = Some(w);
                 }
                 NeedleEvent::Fail {
@@ -286,26 +288,32 @@ fn parse_fail_event(
 
     // Work started at dispatch time, or fail_time - duration if dispatch not found
     let work_started_at = dispatch_time.unwrap_or_else(|| {
-        fail_event.timestamp - chrono::Duration::milliseconds(fail_event.duration_ms.unwrap_or(0) as i64)
+        fail_event.timestamp
+            - chrono::Duration::milliseconds(fail_event.duration_ms.unwrap_or(0) as i64)
     });
 
     Ok((fail_event, work_started_at, stitch_id, worker))
 }
 
 /// Load conversation history from stitch_messages table
-fn load_conversation_history(stitch_id: &str, _workspace: &Path) -> Result<Vec<ConversationMessage>> {
+fn load_conversation_history(
+    stitch_id: &str,
+    _workspace: &Path,
+) -> Result<Vec<ConversationMessage>> {
     use rusqlite::Connection;
 
     let fleet_db = crate::fleet::db_path();
     let conn = Connection::open(&fleet_db)
         .with_context(|| format!("Failed to open fleet.db at {}", fleet_db.display()))?;
 
-    let mut stmt = conn.prepare(
-        "SELECT ts, role, content, tokens
+    let mut stmt = conn
+        .prepare(
+            "SELECT ts, role, content, tokens
          FROM stitch_messages
          WHERE stitch_id = ?1
-         ORDER BY ts ASC"
-    ).context("Failed to prepare stitch_messages query")?;
+         ORDER BY ts ASC",
+        )
+        .context("Failed to prepare stitch_messages query")?;
 
     let messages = stmt
         .query_map(rusqlite::params![stitch_id], |row| {
@@ -325,7 +333,11 @@ fn load_conversation_history(stitch_id: &str, _workspace: &Path) -> Result<Vec<C
         .collect::<Result<Vec<_>, _>>()
         .context("Failed to collect conversation messages")?;
 
-    debug!("Loaded {} messages from stitch_messages for stitch {}", messages.len(), stitch_id);
+    debug!(
+        "Loaded {} messages from stitch_messages for stitch {}",
+        messages.len(),
+        stitch_id
+    );
 
     Ok(messages)
 }
@@ -403,7 +415,10 @@ fn load_cli_session(
                             commands.push(SessionCommand {
                                 command: cmd.to_string(),
                                 timestamp: timestamp.with_timezone(&Utc),
-                                exit_code: value.get("exit_code").and_then(|v| v.as_i64()).map(|v| v as i32),
+                                exit_code: value
+                                    .get("exit_code")
+                                    .and_then(|v| v.as_i64())
+                                    .map(|v| v as i32),
                             });
                         }
                     }
@@ -413,7 +428,11 @@ fn load_cli_session(
     }
 
     if session_id.is_some() || !commands.is_empty() {
-        debug!("Loaded CLI session with {} commands for worker {}", commands.len(), worker);
+        debug!(
+            "Loaded CLI session with {} commands for worker {}",
+            commands.len(),
+            worker
+        );
         Ok(Some(SessionData {
             session_id: session_id.unwrap_or_else(|| format!("session-{}", worker)),
             adapter: adapter.unwrap_or_else(|| "claude".to_string()),
@@ -527,8 +546,15 @@ pub fn generate_replay_options(failure_state: &FailureState) -> ReplayOptions {
          {}\n\
          ```\n\n",
         original_bead_id,
-        failure_state.fail_event.timestamp.format("%Y-%m-%d %H:%M:%S UTC"),
-        failure_state.fail_event.error.as_deref().unwrap_or("unknown error")
+        failure_state
+            .fail_event
+            .timestamp
+            .format("%Y-%m-%d %H:%M:%S UTC"),
+        failure_state
+            .fail_event
+            .error
+            .as_deref()
+            .unwrap_or("unknown error")
     );
 
     // Add work context
@@ -715,7 +741,11 @@ mod tests {
         if let Err(e) = result {
             let msg = e.to_string();
             // Should have parsed the events successfully before failing at DB
-            assert!(msg.contains("fleet.db") || msg.contains("stitch_messages") || msg.contains("no such table"));
+            assert!(
+                msg.contains("fleet.db")
+                    || msg.contains("stitch_messages")
+                    || msg.contains("no such table")
+            );
         }
     }
 }

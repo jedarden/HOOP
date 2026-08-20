@@ -24,8 +24,8 @@
 //! - hoop-cli/src/projects.rs (lines 1439-1820) - Behavioral tests
 //! - hoop-cli/src/main.rs (lines 1026-1323) - Flag parsing tests
 
-use hoop::{Cli, Commands};
 use clap::Parser;
+use hoop::{Cli, Commands};
 
 // ── Test Fixtures ─────────────────────────────────────────────────────────────
 
@@ -92,7 +92,14 @@ pub struct ProjectsRemoveFixture {
 impl ProjectsRemoveFixture {
     /// Create fixture with --no-interactive flag before projects subcommand
     pub fn new_flag_before_projects() -> Self {
-        let args = ["hoop", "--no-interactive", "projects", "remove", "test-project", "--confirm"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "projects",
+            "remove",
+            "test-project",
+            "--confirm",
+        ];
         let cli = Cli::try_parse_from(args).expect("parse should succeed");
         Self {
             no_interactive: cli.no_interactive,
@@ -102,7 +109,14 @@ impl ProjectsRemoveFixture {
 
     /// Create fixture with --no-interactive flag after remove subcommand
     pub fn new_flag_after_remove() -> Self {
-        let args = ["hoop", "projects", "remove", "test-project", "--no-interactive", "--confirm"];
+        let args = [
+            "hoop",
+            "projects",
+            "remove",
+            "test-project",
+            "--no-interactive",
+            "--confirm",
+        ];
         let cli = Cli::try_parse_from(args).expect("parse should succeed");
         Self {
             no_interactive: cli.no_interactive,
@@ -112,7 +126,14 @@ impl ProjectsRemoveFixture {
 
     /// Create fixture with short -y flag
     pub fn new_short_flag() -> Self {
-        let args = ["hoop", "-y", "projects", "remove", "test-project", "--confirm"];
+        let args = [
+            "hoop",
+            "-y",
+            "projects",
+            "remove",
+            "test-project",
+            "--confirm",
+        ];
         let cli = Cli::try_parse_from(args).expect("parse should succeed");
         Self {
             no_interactive: cli.no_interactive,
@@ -215,7 +236,10 @@ fn scan_short_form_flag_propagates_correctly() {
     // Verify the short -y form works the same as --no-interactive
     let fixture = ProjectsScanFixture::new_short_flag();
 
-    assert!(fixture.no_interactive, "-y should set no_interactive to true");
+    assert!(
+        fixture.no_interactive,
+        "-y should set no_interactive to true"
+    );
 
     match fixture.command {
         Commands::Projects(hoop::ProjectsCommands::Scan { .. }) => {
@@ -309,7 +333,13 @@ fn remove_requires_confirm_with_no_interactive() {
     // Verify that --confirm is required with --no-interactive
     // This is a safety requirement for destructive operations
 
-    let args = ["hoop", "--no-interactive", "projects", "remove", "test-project"];
+    let args = [
+        "hoop",
+        "--no-interactive",
+        "projects",
+        "remove",
+        "test-project",
+    ];
     let cli = Cli::try_parse_from(args).expect("parse should succeed");
 
     assert!(cli.no_interactive, "no_interactive should be true");
@@ -330,7 +360,10 @@ fn remove_short_form_flag_propagates_correctly() {
     // Verify the short -y form works the same as --no-interactive
     let fixture = ProjectsRemoveFixture::new_short_flag();
 
-    assert!(fixture.no_interactive, "-y should set no_interactive to true");
+    assert!(
+        fixture.no_interactive,
+        "-y should set no_interactive to true"
+    );
 
     match fixture.command {
         Commands::Projects(hoop::ProjectsCommands::Remove { .. }) => {
@@ -381,7 +414,14 @@ fn global_flag_persists_through_nesting_levels() {
     }
 
     // Test with remove
-    let remove_args = ["hoop", "--no-interactive", "projects", "remove", "proj", "--confirm"];
+    let remove_args = [
+        "hoop",
+        "--no-interactive",
+        "projects",
+        "remove",
+        "proj",
+        "--confirm",
+    ];
     let remove_cli = Cli::try_parse_from(remove_args).expect("parse should succeed");
     assert!(remove_cli.no_interactive);
 
@@ -398,7 +438,14 @@ fn global_flag_persists_through_nesting_levels() {
 #[test]
 fn scan_with_local_yes_and_global_no_interactive() {
     // Test interaction between local --yes flag and global --no-interactive
-    let args = ["hoop", "--no-interactive", "projects", "scan", "/tmp", "--yes"];
+    let args = [
+        "hoop",
+        "--no-interactive",
+        "projects",
+        "scan",
+        "/tmp",
+        "--yes",
+    ];
     let cli = Cli::try_parse_from(args).expect("parse should succeed");
 
     assert!(cli.no_interactive, "global flag should be true");

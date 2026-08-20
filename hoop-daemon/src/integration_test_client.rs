@@ -119,12 +119,9 @@ impl TestClient {
     }
 
     /// POST /api/p/:project/beads - create a new bead
-    pub async fn create_bead(
-        &self,
-        project: &str,
-        title: &str,
-    ) -> Result<JsonValue> {
-        self.create_bead_with_details(project, title, "task", None).await
+    pub async fn create_bead(&self, project: &str, title: &str) -> Result<JsonValue> {
+        self.create_bead_with_details(project, title, "task", None)
+            .await
     }
 
     /// POST /api/p/:project/beads - create a new bead with full details
@@ -368,7 +365,8 @@ impl WsConnection {
                 .and_then(|v| v.as_str())
                 .map(|id| id == bead_id)
                 .unwrap_or(false)
-                && data.get("status")
+                && data
+                    .get("status")
                     .and_then(|v| v.as_str())
                     .map(|s| s == status)
                     .unwrap_or(false)
@@ -395,10 +393,7 @@ impl TestClient {
     pub async fn assert_worker_count(&self, expected_min: usize) -> Result<()> {
         let timeline = self.get_worker_timeline().await?;
 
-        let worker_count = timeline
-            .as_array()
-            .map(|arr| arr.len())
-            .unwrap_or(0);
+        let worker_count = timeline.as_array().map(|arr| arr.len()).unwrap_or(0);
 
         if worker_count < expected_min {
             anyhow::bail!(

@@ -120,8 +120,12 @@ async fn create_pattern(
     Json(req): Json<CreatePatternRequest>,
 ) -> Result<Json<PatternResponse>, (StatusCode, String)> {
     let db_path = fleet::db_path();
-    let conn = Connection::open(&db_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("open fleet.db: {e}")))?;
+    let conn = Connection::open(&db_path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("open fleet.db: {e}"),
+        )
+    })?;
 
     // Validate status
     let status = req.status.unwrap_or_else(|| "planned".to_string());
@@ -191,14 +195,20 @@ async fn update_pattern(
     Json(req): Json<UpdatePatternRequest>,
 ) -> Result<Json<PatternResponse>, (StatusCode, String)> {
     let db_path = fleet::db_path();
-    let conn = Connection::open(&db_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("open fleet.db: {e}")))?;
+    let conn = Connection::open(&db_path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("open fleet.db: {e}"),
+        )
+    })?;
 
     // Check pattern exists
     let current_status: String = conn
-        .query_row("SELECT status FROM patterns WHERE id = ?1", params![&pattern_id], |row| {
-            row.get(0)
-        })
+        .query_row(
+            "SELECT status FROM patterns WHERE id = ?1",
+            params![&pattern_id],
+            |row| row.get(0),
+        )
         .map_err(|e| {
             if e == rusqlite::Error::QueryReturnedNoRows {
                 (
@@ -282,10 +292,7 @@ async fn update_pattern(
     values.push(&now);
     values.push(&pattern_id);
 
-    let query = format!(
-        "UPDATE patterns SET {} WHERE id = ?",
-        updates.join(", ")
-    );
+    let query = format!("UPDATE patterns SET {} WHERE id = ?", updates.join(", "));
 
     conn.execute(&query, params_from_slice(&values))
         .map_err(|e| {
@@ -294,7 +301,10 @@ async fn update_pattern(
             {
                 (StatusCode::BAD_REQUEST, e.to_string())
             } else {
-                (StatusCode::INTERNAL_SERVER_ERROR, format!("update pattern: {e}"))
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("update pattern: {e}"),
+                )
             }
         })?;
 
@@ -328,8 +338,12 @@ async fn delete_pattern(
     Path(pattern_id): Path<String>,
 ) -> Result<Json<MessageResponse>, (StatusCode, String)> {
     let db_path = fleet::db_path();
-    let conn = Connection::open(&db_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("open fleet.db: {e}")))?;
+    let conn = Connection::open(&db_path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("open fleet.db: {e}"),
+        )
+    })?;
 
     // Check pattern exists
     let exists: bool = conn
@@ -349,7 +363,12 @@ async fn delete_pattern(
 
     // Delete will cascade to pattern_members and pattern_queries
     conn.execute("DELETE FROM patterns WHERE id = ?1", params![&pattern_id])
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("delete pattern: {e}")))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("delete pattern: {e}"),
+            )
+        })?;
 
     Ok(Json(MessageResponse {
         message: format!("Pattern '{}' deleted", pattern_id),
@@ -361,8 +380,12 @@ async fn add_member(
     Json(req): Json<AddMemberRequest>,
 ) -> Result<Json<MessageResponse>, (StatusCode, String)> {
     let db_path = fleet::db_path();
-    let conn = Connection::open(&db_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("open fleet.db: {e}")))?;
+    let conn = Connection::open(&db_path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("open fleet.db: {e}"),
+        )
+    })?;
 
     // Check pattern exists
     if !pattern_exists(&conn, &pattern_id)? {
@@ -393,7 +416,12 @@ async fn add_member(
         "INSERT OR IGNORE INTO pattern_members (pattern_id, stitch_id) VALUES (?1, ?2)",
         params![&pattern_id, &req.stitch_id],
     )
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("add member: {e}")))?;
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("add member: {e}"),
+        )
+    })?;
 
     Ok(Json(MessageResponse {
         message: format!(
@@ -407,15 +435,24 @@ async fn remove_member(
     Path((pattern_id, stitch_id)): Path<(String, String)>,
 ) -> Result<Json<MessageResponse>, (StatusCode, String)> {
     let db_path = fleet::db_path();
-    let conn = Connection::open(&db_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("open fleet.db: {e}")))?;
+    let conn = Connection::open(&db_path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("open fleet.db: {e}"),
+        )
+    })?;
 
     let rows_affected = conn
         .execute(
             "DELETE FROM pattern_members WHERE pattern_id = ?1 AND stitch_id = ?2",
             params![&pattern_id, &stitch_id],
         )
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("remove member: {e}")))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("remove member: {e}"),
+            )
+        })?;
 
     if rows_affected == 0 {
         return Err((
@@ -440,8 +477,12 @@ async fn add_query(
     Json(req): Json<AddQueryRequest>,
 ) -> Result<Json<MessageResponse>, (StatusCode, String)> {
     let db_path = fleet::db_path();
-    let conn = Connection::open(&db_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("open fleet.db: {e}")))?;
+    let conn = Connection::open(&db_path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("open fleet.db: {e}"),
+        )
+    })?;
 
     // Check pattern exists
     if !pattern_exists(&conn, &pattern_id)? {
@@ -467,8 +508,12 @@ async fn remove_query(
     Path((pattern_id, query)): Path<(String, String)>,
 ) -> Result<Json<MessageResponse>, (StatusCode, String)> {
     let db_path = fleet::db_path();
-    let conn = Connection::open(&db_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("open fleet.db: {e}")))?;
+    let conn = Connection::open(&db_path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("open fleet.db: {e}"),
+        )
+    })?;
 
     // URL decode the query parameter
     let query = urlencoding::decode(&query)
@@ -480,7 +525,12 @@ async fn remove_query(
             "DELETE FROM pattern_queries WHERE pattern_id = ?1 AND saved_query = ?2",
             params![&pattern_id, &query],
         )
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("remove query: {e}")))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("remove query: {e}"),
+            )
+        })?;
 
     if rows_affected == 0 {
         return Err((
@@ -506,13 +556,21 @@ fn pattern_exists(conn: &Connection, pattern_id: &str) -> Result<bool, (StatusCo
             params![pattern_id],
             |row| row.get(0),
         )
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("check pattern exists: {e}")))?;
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("check pattern exists: {e}"),
+            )
+        })?;
     Ok(count > 0)
 }
 
 /// Check if a status string is valid
 fn is_valid_status(status: &str) -> bool {
-    matches!(status, "planned" | "active" | "blocked" | "done" | "abandoned")
+    matches!(
+        status,
+        "planned" | "active" | "blocked" | "done" | "abandoned"
+    )
 }
 
 /// Valid status transitions

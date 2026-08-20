@@ -111,8 +111,7 @@ pub struct ValidationError {
 
 /// Get skills directory path
 pub fn skills_dir() -> Result<PathBuf> {
-    let mut path = dirs::home_dir()
-        .ok_or_else(|| anyhow!("Cannot determine home directory"))?;
+    let mut path = dirs::home_dir().ok_or_else(|| anyhow!("Cannot determine home directory"))?;
     path.push(".hoop");
     path.push("skills");
     Ok(path)
@@ -139,7 +138,11 @@ pub fn discover_skills() -> Vec<SkillEntry> {
         let path = entry.path();
 
         // Skip non-directories and hidden
-        if !path.is_dir() || path.file_name().is_none_or(|n| n.to_string_lossy().starts_with('.')) {
+        if !path.is_dir()
+            || path
+                .file_name()
+                .is_none_or(|n| n.to_string_lossy().starts_with('.'))
+        {
             continue;
         }
 
@@ -160,11 +163,7 @@ pub fn discover_skills() -> Vec<SkillEntry> {
                 }
             },
             Err(e) => {
-                debug!(
-                    "No manifest.yml found for skill '{}': {}",
-                    name,
-                    e
-                );
+                debug!("No manifest.yml found for skill '{}': {}", name, e);
                 continue;
             }
         };
@@ -218,7 +217,8 @@ impl SchemaCache {
             .map_err(|e| anyhow!("Failed to compile schema for skill '{}': {}", skill_name, e))?;
 
         let compiled = Arc::new(compiled);
-        self.cache.insert(skill_name.to_string(), Arc::clone(&compiled));
+        self.cache
+            .insert(skill_name.to_string(), Arc::clone(&compiled));
         Ok(compiled)
     }
 }
@@ -258,11 +258,7 @@ pub fn execute_skill(skill: &SkillEntry, args: &Value) -> Result<SkillResult> {
 
     let _start = Instant::now();
 
-    debug!(
-        "Executing skill: {} with args: {}",
-        skill.name,
-        args
-    );
+    debug!("Executing skill: {} with args: {}", skill.name, args);
 
     let mut child = Command::new(&skill.run_path)
         .stdin(Stdio::piped())
@@ -273,8 +269,8 @@ pub fn execute_skill(skill: &SkillEntry, args: &Value) -> Result<SkillResult> {
 
     // Write args JSON to stdin
     if let Some(mut stdin) = child.stdin.take() {
-        let args_json = serde_json::to_string(args)
-            .map_err(|e| anyhow!("Failed to serialize args: {}", e))?;
+        let args_json =
+            serde_json::to_string(args).map_err(|e| anyhow!("Failed to serialize args: {}", e))?;
         stdin
             .write_all(args_json.as_bytes())
             .map_err(|e| anyhow!("Failed to write to stdin: {}", e))?;
@@ -286,8 +282,14 @@ pub fn execute_skill(skill: &SkillEntry, args: &Value) -> Result<SkillResult> {
     let timeout = Duration::from_secs(skill.manifest.timeout_secs);
 
     // Take stdout and stderr once
-    let stdout = child.stdout.take().ok_or_else(|| anyhow!("Failed to capture stdout"))?;
-    let stderr = child.stderr.take().ok_or_else(|| anyhow!("Failed to capture stderr"))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow!("Failed to capture stdout"))?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| anyhow!("Failed to capture stderr"))?;
 
     use std::sync::mpsc;
 
@@ -341,9 +343,12 @@ pub fn execute_skill(skill: &SkillEntry, args: &Value) -> Result<SkillResult> {
                         }
                         Err(_) => false,
                     };
-                    let _ = stderr_rx.recv_timeout(Duration::from_millis(50)).ok().map(|l| {
-                        stderr_lines.push(l);
-                    });
+                    let _ = stderr_rx
+                        .recv_timeout(Duration::from_millis(50))
+                        .ok()
+                        .map(|l| {
+                            stderr_lines.push(l);
+                        });
                     if !received {
                         break;
                     }
@@ -396,7 +401,10 @@ pub fn execute_skill(skill: &SkillEntry, args: &Value) -> Result<SkillResult> {
         stderr: stderr_lines.join("\n"),
         exit_code: None,
         timed_out: true,
-        status: format!("Skill timed out after {} seconds", skill.manifest.timeout_secs),
+        status: format!(
+            "Skill timed out after {} seconds",
+            skill.manifest.timeout_secs
+        ),
         duration_ms,
     })
 }
@@ -419,7 +427,10 @@ pub fn skills_to_mcp_tools(skills: &[SkillEntry]) -> Vec<Value> {
 
 /// Find a skill by tool name (e.g., "skill_fetch" -> "fetch")
 #[cfg(test)]
-pub fn find_skill_by_tool_name<'a>(skills: &'a [SkillEntry], tool_name: &str) -> Option<&'a SkillEntry> {
+pub fn find_skill_by_tool_name<'a>(
+    skills: &'a [SkillEntry],
+    tool_name: &str,
+) -> Option<&'a SkillEntry> {
     let skill_name = tool_name.strip_prefix("skill_")?;
     skills.iter().find(|s| s.name == skill_name)
 }
@@ -453,7 +464,9 @@ pub fn write_skill_audit(
             [],
             |row| row.get(0),
         )
-        .unwrap_or_else(|_| "0000000000000000000000000000000000000000000000000000000000000000".to_string());
+        .unwrap_or_else(|_| {
+            "0000000000000000000000000000000000000000000000000000000000000000".to_string()
+        });
 
     // Generate audit row ID and timestamp
     let id = Uuid::new_v4().to_string();
@@ -478,13 +491,7 @@ pub fn write_skill_audit(
     let project: Option<String> = None;
     let hash_input = format!(
         "{}{}{}{}{}{:?}{}",
-        id,
-        ts,
-        invoked_by,
-        "skill_invoked",
-        skill_name,
-        project,
-        args_json_str
+        id, ts, invoked_by, "skill_invoked", skill_name, project, args_json_str
     );
     let mut hasher = Sha256::new();
     hasher.update(hash_input.as_bytes());
@@ -552,7 +559,8 @@ mod tests {
                 "count": {"type": "number"}
             },
             "required": ["url"]
-        })).unwrap();
+        }))
+        .unwrap();
 
         let args = json!({
             "url": "https://example.com",
@@ -570,7 +578,8 @@ mod tests {
                 "url": {"type": "string"}
             },
             "required": ["url"]
-        })).unwrap();
+        }))
+        .unwrap();
 
         let args = json!({
             "count": 42
@@ -585,23 +594,21 @@ mod tests {
 
     #[test]
     fn test_find_skill_by_tool_name() {
-        let skills = vec![
-            SkillEntry {
+        let skills = vec![SkillEntry {
+            name: "fetch".to_string(),
+            run_path: PathBuf::from("/skills/fetch/run"),
+            manifest: SkillManifest {
                 name: "fetch".to_string(),
-                run_path: PathBuf::from("/skills/fetch/run"),
-                manifest: SkillManifest {
-                    name: "fetch".to_string(),
-                    description: "Fetch a URL".to_string(),
-                    summary: "URL fetcher".to_string(),
-                    scope: SkillScope::Global,
-                    projects: Vec::new(),
-                    pattern: None,
-                    args_schema: json!({}),
-                    timeout_secs: 60,
-                },
-                executable: true,
+                description: "Fetch a URL".to_string(),
+                summary: "URL fetcher".to_string(),
+                scope: SkillScope::Global,
+                projects: Vec::new(),
+                pattern: None,
+                args_schema: json!({}),
+                timeout_secs: 60,
             },
-        ];
+            executable: true,
+        }];
 
         assert_eq!(
             find_skill_by_tool_name(&skills, "skill_fetch").map(|s| s.name.as_str()),
@@ -686,7 +693,8 @@ mod tests {
                 "url": {"type": "string"}
             },
             "required": ["url"]
-        })).unwrap();
+        }))
+        .unwrap();
 
         // Missing required 'url' argument
         let args = json!({"count": 42});
@@ -696,7 +704,11 @@ mod tests {
         let errors = result.unwrap_err();
         assert!(!errors.is_empty());
         // Error should mention the missing required property
-        let error_msg = errors.iter().map(|e| e.message.as_str()).collect::<Vec<_>>().join(" ");
+        let error_msg = errors
+            .iter()
+            .map(|e| e.message.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
         assert!(error_msg.contains("url") || error_msg.contains("required"));
     }
 
@@ -707,7 +719,8 @@ mod tests {
             "properties": {
                 "count": {"type": "number"}
             }
-        })).unwrap();
+        }))
+        .unwrap();
 
         // 'count' should be a number, not a string
         let args = json!({"count": "not a number"});
@@ -718,7 +731,11 @@ mod tests {
         assert!(!errors.is_empty());
         // Error should mention the type mismatch
         let error_msg = errors[0].message.to_lowercase();
-        assert!(error_msg.contains("type") || error_msg.contains("number") || error_msg.contains("integer"));
+        assert!(
+            error_msg.contains("type")
+                || error_msg.contains("number")
+                || error_msg.contains("integer")
+        );
     }
 
     #[test]
@@ -730,7 +747,8 @@ mod tests {
                 "count": {"type": "number"}
             },
             "required": ["url"]
-        })).unwrap();
+        }))
+        .unwrap();
 
         // Valid arguments
         let args = json!({

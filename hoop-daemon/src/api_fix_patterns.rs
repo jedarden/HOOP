@@ -453,7 +453,12 @@ async fn import_patterns(
         let db_path = crate::fleet::db_path();
         let conn = match rusqlite::Connection::open(&db_path) {
             Ok(c) => c,
-            Err(e) => return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("db open failed: {e}"))),
+            Err(e) => {
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("db open failed: {e}"),
+                ))
+            }
         };
 
         let signature_json = match serde_json::to_string(&pattern.signature_vector) {

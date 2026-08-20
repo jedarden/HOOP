@@ -100,8 +100,14 @@ fn default_theme() -> String {
 pub fn router() -> Router<crate::DaemonState> {
     Router::new()
         .route("/api/projects/:project/files", get(list_directory))
-        .route("/api/projects/:project/files/content", get(get_file_content))
-        .route("/api/projects/:project/files/preview", get(get_file_preview))
+        .route(
+            "/api/projects/:project/files/content",
+            get(get_file_content),
+        )
+        .route(
+            "/api/projects/:project/files/preview",
+            get(get_file_preview),
+        )
         .route("/api/projects/:project/files/search", get(search_files))
 }
 
@@ -131,8 +137,7 @@ async fn list_directory(
     Query(params): Query<ListQuery>,
     State(state): State<crate::DaemonState>,
 ) -> Result<Json<Vec<FileEntry>>, (StatusCode, String)> {
-    id_validators::validate_project_name(&project)
-        .map_err(id_validators::rejection)?;
+    id_validators::validate_project_name(&project).map_err(id_validators::rejection)?;
 
     let project_root = {
         let projects = state.projects.read().unwrap();
@@ -176,8 +181,7 @@ async fn get_file_content(
     Query(params): Query<ContentQuery>,
     State(state): State<crate::DaemonState>,
 ) -> Result<Json<HighlightResult>, (StatusCode, String)> {
-    id_validators::validate_project_name(&project)
-        .map_err(id_validators::rejection)?;
+    id_validators::validate_project_name(&project).map_err(id_validators::rejection)?;
 
     let project_root = {
         let projects = state.projects.read().unwrap();
@@ -224,8 +228,7 @@ async fn search_files(
     Query(params): Query<SearchQuery>,
     State(state): State<crate::DaemonState>,
 ) -> Result<Json<Vec<FileSearchResult>>, (StatusCode, String)> {
-    id_validators::validate_project_name(&project)
-        .map_err(id_validators::rejection)?;
+    id_validators::validate_project_name(&project).map_err(id_validators::rejection)?;
 
     let project_root = {
         let projects = state.projects.read().unwrap();
@@ -281,7 +284,10 @@ fn highlight_file(
         if e.kind() == std::io::ErrorKind::NotFound {
             (StatusCode::NOT_FOUND, "file not found".into())
         } else {
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("read error: {}", e))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("read error: {}", e),
+            )
         }
     })?;
 
@@ -295,7 +301,12 @@ fn highlight_file(
     let ps = SyntaxSet::load_defaults_newlines();
     let syntax: &SyntaxReference = ps
         .find_syntax_for_file(&abs_path)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("syntax detection: {}", e)))?
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("syntax detection: {}", e),
+            )
+        })?
         .unwrap_or_else(|| ps.find_syntax_plain_text());
 
     let language = syntax.name.clone();
@@ -305,8 +316,18 @@ fn highlight_file(
     let theme: &Theme = resolve_theme(&ts, theme_name);
 
     // Generate CSS colors for the theme
-    let theme_bg = format_color(theme.settings.background.unwrap_or(syntect::highlighting::Color::WHITE));
-    let theme_fg = format_color(theme.settings.foreground.unwrap_or(syntect::highlighting::Color::BLACK));
+    let theme_bg = format_color(
+        theme
+            .settings
+            .background
+            .unwrap_or(syntect::highlighting::Color::WHITE),
+    );
+    let theme_fg = format_color(
+        theme
+            .settings
+            .foreground
+            .unwrap_or(syntect::highlighting::Color::BLACK),
+    );
 
     // Highlight the content
     let mut html_lines = Vec::new();
@@ -329,12 +350,20 @@ fn highlight_file(
     let mut h = HighlightLines::new(syntax, theme);
 
     for line in LinesWithEndings::from(&lines_to_highlight) {
-        let ranges = h
-            .highlight_line(line, &ps)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("highlight error: {}", e)))?;
+        let ranges = h.highlight_line(line, &ps).map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("highlight error: {}", e),
+            )
+        })?;
 
-        let html = styled_line_to_highlighted_html(&ranges, IncludeBackground::Yes)
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("html error: {}", e)))?;
+        let html =
+            styled_line_to_highlighted_html(&ranges, IncludeBackground::Yes).map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("html error: {}", e),
+                )
+            })?;
         html_lines.push(html);
     }
 
@@ -376,7 +405,10 @@ async fn get_file_preview(
         if e.kind() == std::io::ErrorKind::NotFound {
             (StatusCode::NOT_FOUND, "file not found".into())
         } else {
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("read error: {}", e))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("read error: {}", e),
+            )
         }
     })?;
 
@@ -395,12 +427,10 @@ async fn get_file_preview(
         Ok(Json(FilePreviewResult::Text(result)))
     } else {
         // Use hex dump for binary files
-        let result = tokio::task::spawn_blocking(move || {
-            hex_dump_preview(&content)
-        })
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{:?}", e)))?
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{:?}", e)))?;
+        let result = tokio::task::spawn_blocking(move || hex_dump_preview(&content))
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{:?}", e)))?
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("{:?}", e)))?;
 
         Ok(Json(FilePreviewResult::Binary(result)))
     }
@@ -435,10 +465,7 @@ fn hex_dump_preview(content: &[u8]) -> Result<BinaryPreviewResult, (StatusCode, 
         let offset_hex = format!("{:08x}", offset);
 
         // Hex bytes
-        let hex_bytes: Vec<String> = chunk
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect();
+        let hex_bytes: Vec<String> = chunk.iter().map(|b| format!("{:02x}", b)).collect();
 
         // Pad to 16 bytes for alignment
         let hex_display = if chunk.len() < 16 {
@@ -495,10 +522,7 @@ fn is_text_content(content: &[u8]) -> bool {
     };
 
     // Count printable characters (excluding whitespace)
-    let printable_count = text
-        .chars()
-        .filter(|&c| c.is_ascii_graphic())
-        .count();
+    let printable_count = text.chars().filter(|&c| c.is_ascii_graphic()).count();
 
     // If more than 90% of characters are printable, consider it text
     let total_chars = text.chars().count().max(1);
@@ -539,9 +563,33 @@ mod tests {
 
     #[test]
     fn test_format_color() {
-        assert_eq!(format_color(syntect::highlighting::Color { r: 255, g: 0, b: 0, a: 255 }), "#ff0000");
-        assert_eq!(format_color(syntect::highlighting::Color { r: 0, g: 255, b: 0, a: 255 }), "#00ff00");
-        assert_eq!(format_color(syntect::highlighting::Color { r: 0, g: 0, b: 255, a: 255 }), "#0000ff");
+        assert_eq!(
+            format_color(syntect::highlighting::Color {
+                r: 255,
+                g: 0,
+                b: 0,
+                a: 255
+            }),
+            "#ff0000"
+        );
+        assert_eq!(
+            format_color(syntect::highlighting::Color {
+                r: 0,
+                g: 255,
+                b: 0,
+                a: 255
+            }),
+            "#00ff00"
+        );
+        assert_eq!(
+            format_color(syntect::highlighting::Color {
+                r: 0,
+                g: 0,
+                b: 255,
+                a: 255
+            }),
+            "#0000ff"
+        );
     }
 
     #[test]

@@ -172,8 +172,7 @@ fn test_same_attachment_different_outcomes() {
     let rt = tokio::runtime::Runtime::new().unwrap();
 
     // Same content with Anthropic API key
-    let content_with_secret =
-        "ANTHROPIC_API_KEY=sk-ant-FAKE-KEY-TESTING-ONLY-XYZ";
+    let content_with_secret = "ANTHROPIC_API_KEY=sk-ant-FAKE-KEY-TESTING-ONLY-XYZ";
 
     // customer-data (reject): should fail
     let result = rt.block_on(redaction_policy::check_reject_policy(
@@ -297,8 +296,7 @@ fn test_pattern_filtering_in_project_override() {
     let rt = tokio::runtime::Runtime::new().unwrap();
 
     // Anthropic key should be blocked
-    let anthropic_content =
-        "ANTHROPIC_API_KEY=sk-ant-FAKE-KEY-TESTING-ONLY-XYZ";
+    let anthropic_content = "ANTHROPIC_API_KEY=sk-ant-FAKE-KEY-TESTING-ONLY-XYZ";
     let result = rt.block_on(redaction_policy::check_reject_policy(
         &state,
         "customer-data",
@@ -374,8 +372,7 @@ fn test_hot_reload_policy_changes() {
     let rt = tokio::runtime::Runtime::new().unwrap();
 
     // Initial state: customer-data has reject policy
-    let content_with_secret =
-        "ANTHROPIC_API_KEY=sk-ant-FAKE-KEY-TESTING-ONLY-XYZ";
+    let content_with_secret = "ANTHROPIC_API_KEY=sk-ant-FAKE-KEY-TESTING-ONLY-XYZ";
     let result = rt.block_on(redaction_policy::check_reject_policy(
         &state,
         "customer-data",

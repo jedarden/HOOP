@@ -46,8 +46,8 @@
 //! cannot execute run_init_wizard directly without killing the test process.
 //! The existing tests use code inspection to verify logic structure instead.
 
-use hoop::{Cli, Commands};
 use clap::Parser;
+use hoop::{Cli, Commands};
 
 // ── Section 1: Mock Init Fixtures ────────────────────────────────────────────────
 
@@ -249,8 +249,7 @@ fn test_init_flag_reading_position_independence() {
 
     // Assert: Both positions should yield the same flag value
     assert_eq!(
-        fixture_before.no_interactive,
-        fixture_after.no_interactive,
+        fixture_before.no_interactive, fixture_after.no_interactive,
         "Flag value must be consistent regardless of position"
     );
 
@@ -292,19 +291,21 @@ fn test_init_flag_reading_position_independence() {
 #[test]
 fn test_init_behavior_with_no_interactive_true() {
     // Step 1: Verify early exit logic exists in the code structure
-    let init_code = std::fs::read_to_string("src/init.rs")
-        .expect("Failed to read init.rs");
+    let init_code = std::fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
     // Step 2: Find the run_init_wizard function
-    let func_start = init_code.find("pub fn run_init_wizard(no_interactive: bool)")
+    let func_start = init_code
+        .find("pub fn run_init_wizard(no_interactive: bool)")
         .expect("Should have run_init_wizard function");
 
     // Step 3: Verify early exit check happens immediately at function start
-    let early_exit_check = init_code[func_start..].find("if no_interactive {")
+    let early_exit_check = init_code[func_start..]
+        .find("if no_interactive {")
         .expect("Handler must check no_interactive at the very start");
 
     // Extract the early exit section (first 600 chars should cover the entire block)
-    let early_exit_section = &init_code[func_start + early_exit_check..func_start + early_exit_check + 600];
+    let early_exit_section =
+        &init_code[func_start + early_exit_check..func_start + early_exit_check + 600];
 
     // Step 4: Verify all expected behavior elements exist
     assert!(
@@ -323,7 +324,8 @@ fn test_init_behavior_with_no_interactive_true() {
     );
 
     assert!(
-        early_exit_section.contains("std::process::exit(2)") || early_exit_section.contains("std::process::exit(2);"),
+        early_exit_section.contains("std::process::exit(2)")
+            || early_exit_section.contains("std::process::exit(2);"),
         "Handler must exit with code 2 when no_interactive=true"
     );
 
@@ -338,7 +340,9 @@ fn test_init_behavior_with_no_interactive_true() {
     for i in (func_start + early_exit_check)..init_code.len() {
         match chars[i] {
             '{' => {
-                if found_start { brace_count += 1; }
+                if found_start {
+                    brace_count += 1;
+                }
             }
             '}' => {
                 if found_start {
@@ -357,7 +361,8 @@ fn test_init_behavior_with_no_interactive_true() {
         }
     }
 
-    let banner_call = init_code.find("print_wizard_banner();")
+    let banner_call = init_code
+        .find("print_wizard_banner();")
         .expect("Should call banner");
 
     assert!(
@@ -365,7 +370,8 @@ fn test_init_behavior_with_no_interactive_true() {
         "Wizard banner must NOT be called when no_interactive=true (only after early exit check)"
     );
 
-    let stage_1_call = init_code.find("stage_1_dependency_check()?")
+    let stage_1_call = init_code
+        .find("stage_1_dependency_check()?")
         .expect("Should call stage 1");
 
     assert!(
@@ -428,22 +434,27 @@ fn test_init_behavior_with_no_interactive_true() {
 #[test]
 fn test_init_behavior_with_no_interactive_false() {
     // Step 1: Read the handler code
-    let init_code = std::fs::read_to_string("src/init.rs")
-        .expect("Failed to read init.rs");
+    let init_code = std::fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
     // Step 2: Find the run_init_wizard function
-    let func_start = init_code.find("pub fn run_init_wizard(no_interactive: bool)")
+    let func_start = init_code
+        .find("pub fn run_init_wizard(no_interactive: bool)")
         .expect("Should have run_init_wizard function");
 
     // Step 3: Find the early exit block boundaries
-    let early_exit_start = init_code[func_start..].find("if no_interactive {")
+    let early_exit_start = init_code[func_start..]
+        .find("if no_interactive {")
         .expect("Should have early exit check");
     let early_exit_end = init_code[func_start + early_exit_start..]
         .find('}')
-        .expect("Should close early exit block") + func_start + early_exit_start + 1;
+        .expect("Should close early exit block")
+        + func_start
+        + early_exit_start
+        + 1;
 
     // Step 4: Verify wizard banner is called AFTER early exit (only when interactive)
-    let banner_call = init_code.find("print_wizard_banner();")
+    let banner_call = init_code
+        .find("print_wizard_banner();")
         .expect("Should call wizard banner");
 
     assert!(
@@ -452,15 +463,20 @@ fn test_init_behavior_with_no_interactive_false() {
     );
 
     // Step 5: Verify all 5 stages are called and in correct order
-    let stage_1_call = init_code.find("stage_1_dependency_check()?")
+    let stage_1_call = init_code
+        .find("stage_1_dependency_check()?")
         .expect("Should call stage 1");
-    let stage_2_call = init_code.find("stage_2_project_registration()?")
+    let stage_2_call = init_code
+        .find("stage_2_project_registration()?")
         .expect("Should call stage 2");
-    let stage_3_call = init_code.find("stage_3_agent_setup()?")
+    let stage_3_call = init_code
+        .find("stage_3_agent_setup()?")
         .expect("Should call stage 3");
-    let stage_4_call = init_code.find("stage_4_systemd_install()?")
+    let stage_4_call = init_code
+        .find("stage_4_systemd_install()?")
         .expect("Should call stage 4");
-    let stage_5_call = init_code.find("stage_5_health_check()?")
+    let stage_5_call = init_code
+        .find("stage_5_health_check()?")
         .expect("Should call stage 5");
 
     // All stages must come after early exit (interactive path only)
@@ -487,10 +503,10 @@ fn test_init_behavior_with_no_interactive_false() {
 
     // Step 6: Verify stages execute in correct order
     assert!(
-        stage_1_call < stage_2_call &&
-        stage_2_call < stage_3_call &&
-        stage_3_call < stage_4_call &&
-        stage_4_call < stage_5_call,
+        stage_1_call < stage_2_call
+            && stage_2_call < stage_3_call
+            && stage_3_call < stage_4_call
+            && stage_4_call < stage_5_call,
         "Stages must execute in order: 1, 2, 3, 4, 5"
     );
 
@@ -501,8 +517,11 @@ fn test_init_behavior_with_no_interactive_false() {
     );
 
     // Step 8: Verify error handling for audit failure exists
-    let audit_check_end = init_code[stage_1_call..].find('?')
-        .expect("Stage 1 should propagate errors") + stage_1_call + 1;
+    let audit_check_end = init_code[stage_1_call..]
+        .find('?')
+        .expect("Stage 1 should propagate errors")
+        + stage_1_call
+        + 1;
 
     let audit_failure_section = &init_code[stage_1_call..audit_check_end + 300];
 
@@ -562,8 +581,7 @@ fn test_init_behavior_with_no_interactive_false() {
 #[test]
 fn test_init_handler_receives_flag_from_main() {
     // Verify flag extraction pattern in main.rs
-    let main_code = std::fs::read_to_string("src/main.rs")
-        .expect("Failed to read main.rs");
+    let main_code = std::fs::read_to_string("src/main.rs").expect("Failed to read main.rs");
 
     // Verify flag is extracted from CLI
     assert!(
@@ -624,7 +642,10 @@ fn test_init_flag_value_flow_to_handler() {
     let args_false = ["hoop", "init"];
     let cli_false = Cli::parse_from(args_false);
 
-    assert!(!cli_false.no_interactive, "CLI should default flag to false");
+    assert!(
+        !cli_false.no_interactive,
+        "CLI should default flag to false"
+    );
 
     match cli_false.command {
         Commands::Init => {
@@ -658,8 +679,7 @@ fn test_init_flag_value_flow_to_handler() {
 /// signature and that the parameter is actually used in the function body.
 #[test]
 fn test_init_handler_signature_and_parameter_usage() {
-    let init_code = std::fs::read_to_string("src/init.rs")
-        .expect("Failed to read init.rs");
+    let init_code = std::fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
     // Test 1: Verify function signature
     assert!(
@@ -668,7 +688,8 @@ fn test_init_handler_signature_and_parameter_usage() {
     );
 
     // Test 2: Verify parameter is used (not ignored)
-    let func_start = init_code.find("pub fn run_init_wizard(no_interactive: bool)")
+    let func_start = init_code
+        .find("pub fn run_init_wizard(no_interactive: bool)")
         .expect("Should have run_init_wizard function");
 
     // Find the first 1000 chars which should cover the parameter usage
@@ -699,11 +720,15 @@ fn test_init_handler_signature_and_parameter_usage() {
     );
 
     // Test 5: Verify wizard stages execute only when parameter is false
-    let banner_call = init_code.find("print_wizard_banner();")
+    let banner_call = init_code
+        .find("print_wizard_banner();")
         .expect("Should call wizard banner");
 
-    let early_exit_end = init_code[func_start..].find('}')
-        .expect("Should close early exit") + func_start + 1;
+    let early_exit_end = init_code[func_start..]
+        .find('}')
+        .expect("Should close early exit")
+        + func_start
+        + 1;
 
     assert!(
         banner_call > early_exit_end,
@@ -764,7 +789,10 @@ fn test_init_flag_reading_all_scenarios() {
     let args_5 = ["hoop", "init"];
     let cli_5 = Cli::parse_from(args_5);
 
-    assert!(!cli_5.no_interactive, "Scenario 5: Flag should default to false");
+    assert!(
+        !cli_5.no_interactive,
+        "Scenario 5: Flag should default to false"
+    );
     match cli_5.command {
         Commands::Init => {}
         _ => panic!("Scenario 5: Expected Commands::Init"),
@@ -815,8 +843,7 @@ fn test_init_integration_scaffold_comprehensive() {
     }
 
     // Test 4: Verify code structure (handler signature exists)
-    let init_code = std::fs::read_to_string("src/init.rs")
-        .expect("Failed to read init.rs");
+    let init_code = std::fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
     assert!(
         init_code.contains("pub fn run_init_wizard(no_interactive: bool)"),
@@ -848,18 +875,21 @@ fn test_init_handler_end_to_end_flag_usage() {
     let args_with_flag = ["hoop", "--no-interactive", "init"];
     let cli_with_flag = Cli::parse_from(args_with_flag);
 
-    assert!(cli_with_flag.no_interactive,
-        "Part 1a: CLI should parse --no-interactive as true");
+    assert!(
+        cli_with_flag.no_interactive,
+        "Part 1a: CLI should parse --no-interactive as true"
+    );
 
     let args_without_flag = ["hoop", "init"];
     let cli_without_flag = Cli::parse_from(args_without_flag);
 
-    assert!(!cli_without_flag.no_interactive,
-        "Part 1b: CLI should default to false when flag absent");
+    assert!(
+        !cli_without_flag.no_interactive,
+        "Part 1b: CLI should default to false when flag absent"
+    );
 
     // Part 2: Verify handler signature accepts the flag parameter
-    let init_code = std::fs::read_to_string("src/init.rs")
-        .expect("Failed to read init.rs");
+    let init_code = std::fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
     assert!(
         init_code.contains("pub fn run_init_wizard(no_interactive: bool)"),
@@ -867,7 +897,8 @@ fn test_init_handler_end_to_end_flag_usage() {
     );
 
     // Part 3: Verify handler uses the flag in conditional logic
-    let func_start = init_code.find("pub fn run_init_wizard(no_interactive: bool)")
+    let func_start = init_code
+        .find("pub fn run_init_wizard(no_interactive: bool)")
         .expect("Part 3a: Handler function must exist");
 
     let func_body = &init_code[func_start..func_start + 1000];
@@ -879,10 +910,12 @@ fn test_init_handler_end_to_end_flag_usage() {
 
     // Part 4: Verify handler behavior differs based on flag value
     // When no_interactive=true: early exit with error message
-    let early_exit_start = init_code[func_start..].find("if no_interactive {")
+    let early_exit_start = init_code[func_start..]
+        .find("if no_interactive {")
         .expect("Part 4a: Must have early exit check");
 
-    let early_exit_section = &init_code[func_start + early_exit_start..func_start + early_exit_start + 600];
+    let early_exit_section =
+        &init_code[func_start + early_exit_start..func_start + early_exit_start + 600];
 
     assert!(
         early_exit_section.contains("cannot run in non-interactive mode"),
@@ -897,9 +930,13 @@ fn test_init_handler_end_to_end_flag_usage() {
     // Part 5: Verify wizard stages execute only when no_interactive=false
     let early_exit_end = init_code[func_start + early_exit_start..]
         .find('}')
-        .expect("Part 5a: Early exit block must close") + func_start + early_exit_start + 1;
+        .expect("Part 5a: Early exit block must close")
+        + func_start
+        + early_exit_start
+        + 1;
 
-    let banner_call = init_code.find("print_wizard_banner();")
+    let banner_call = init_code
+        .find("print_wizard_banner();")
         .expect("Part 5b: Should call wizard banner");
 
     assert!(
@@ -908,33 +945,38 @@ fn test_init_handler_end_to_end_flag_usage() {
     );
 
     // Part 6: Verify all wizard stages come after early exit
-    let stage_1_call = init_code.find("stage_1_dependency_check()?")
+    let stage_1_call = init_code
+        .find("stage_1_dependency_check()?")
         .expect("Part 6a: Should call stage 1");
-    let stage_2_call = init_code.find("stage_2_project_registration()?")
+    let stage_2_call = init_code
+        .find("stage_2_project_registration()?")
         .expect("Part 6b: Should call stage 2");
-    let stage_3_call = init_code.find("stage_3_agent_setup()?")
+    let stage_3_call = init_code
+        .find("stage_3_agent_setup()?")
         .expect("Part 6c: Should call stage 3");
-    let stage_4_call = init_code.find("stage_4_systemd_install()?")
+    let stage_4_call = init_code
+        .find("stage_4_systemd_install()?")
         .expect("Part 6d: Should call stage 4");
-    let stage_5_call = init_code.find("stage_5_health_check()?")
+    let stage_5_call = init_code
+        .find("stage_5_health_check()?")
         .expect("Part 6e: Should call stage 5");
 
     assert!(
-        stage_1_call > early_exit_end &&
-        stage_2_call > early_exit_end &&
-        stage_3_call > early_exit_end &&
-        stage_4_call > early_exit_end &&
-        stage_5_call > early_exit_end,
+        stage_1_call > early_exit_end
+            && stage_2_call > early_exit_end
+            && stage_3_call > early_exit_end
+            && stage_4_call > early_exit_end
+            && stage_5_call > early_exit_end,
         "Part 6f: All wizard stages must execute only when no_interactive=false"
     );
 
     // Part 7: Verify stages execute in correct order
     assert!(
-        banner_call < stage_1_call &&
-        stage_1_call < stage_2_call &&
-        stage_2_call < stage_3_call &&
-        stage_3_call < stage_4_call &&
-        stage_4_call < stage_5_call,
+        banner_call < stage_1_call
+            && stage_1_call < stage_2_call
+            && stage_2_call < stage_3_call
+            && stage_3_call < stage_4_call
+            && stage_4_call < stage_5_call,
         "Part 7: Stages must execute in order: banner, 1, 2, 3, 4, 5"
     );
 
@@ -948,8 +990,10 @@ fn test_init_handler_end_to_end_flag_usage() {
             // This is what gets called: init::run_init_wizard(no_interactive_from_main)
             // Which becomes: init::run_init_wizard(true)
             // Based on code inspection, this will take early exit path
-            assert!(no_interactive_from_main,
-                "Part 8: Handler receives true when --no-interactive flag present");
+            assert!(
+                no_interactive_from_main,
+                "Part 8: Handler receives true when --no-interactive flag present"
+            );
         }
         _ => panic!("Part 8: Expected Commands::Init"),
     }
@@ -961,8 +1005,10 @@ fn test_init_handler_end_to_end_flag_usage() {
             // This is what gets called: init::run_init_wizard(no_interactive_default)
             // Which becomes: init::run_init_wizard(false)
             // Based on code inspection, this will execute full wizard
-            assert!(!no_interactive_default,
-                "Part 9: Handler receives false when flag absent (default)");
+            assert!(
+                !no_interactive_default,
+                "Part 9: Handler receives false when flag absent (default)"
+            );
         }
         _ => panic!("Part 9: Expected Commands::Init"),
     }
@@ -977,14 +1023,15 @@ fn test_init_handler_end_to_end_flag_usage() {
 #[test]
 fn test_init_handler_behavior_differ_by_flag_value() {
     // Read handler code
-    let init_code = std::fs::read_to_string("src/init.rs")
-        .expect("Failed to read init.rs");
+    let init_code = std::fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
-    let func_start = init_code.find("pub fn run_init_wizard(no_interactive: bool)")
+    let func_start = init_code
+        .find("pub fn run_init_wizard(no_interactive: bool)")
         .expect("Handler function must exist");
 
     // Find the early exit block boundaries
-    let early_exit_start = init_code[func_start..].find("if no_interactive {")
+    let early_exit_start = init_code[func_start..]
+        .find("if no_interactive {")
         .expect("Must have early exit check");
 
     let mut brace_count = 0;
@@ -995,7 +1042,9 @@ fn test_init_handler_behavior_differ_by_flag_value() {
     for i in (func_start + early_exit_start)..init_code.len() {
         match chars[i] {
             '{' => {
-                if found_start { brace_count += 1; }
+                if found_start {
+                    brace_count += 1;
+                }
             }
             '}' => {
                 if found_start {
@@ -1066,17 +1115,23 @@ fn test_init_handler_behavior_differ_by_flag_value() {
 
     // Path 2: When no_interactive=false
     // Behavior: execute full wizard with all stages
-    let banner_call = init_code.find("print_wizard_banner();")
+    let banner_call = init_code
+        .find("print_wizard_banner();")
         .expect("Path 2a: Should call wizard banner");
-    let stage_1_call = init_code.find("stage_1_dependency_check()?")
+    let stage_1_call = init_code
+        .find("stage_1_dependency_check()?")
         .expect("Path 2b: Should call stage 1");
-    let stage_2_call = init_code.find("stage_2_project_registration()?")
+    let stage_2_call = init_code
+        .find("stage_2_project_registration()?")
         .expect("Path 2c: Should call stage 2");
-    let stage_3_call = init_code.find("stage_3_agent_setup()?")
+    let stage_3_call = init_code
+        .find("stage_3_agent_setup()?")
         .expect("Path 2d: Should call stage 3");
-    let stage_4_call = init_code.find("stage_4_systemd_install()?")
+    let stage_4_call = init_code
+        .find("stage_4_systemd_install()?")
         .expect("Path 2e: Should call stage 4");
-    let stage_5_call = init_code.find("stage_5_health_check()?")
+    let stage_5_call = init_code
+        .find("stage_5_health_check()?")
         .expect("Path 2f: Should call stage 5");
 
     // Verify all stages come AFTER early exit
@@ -1112,11 +1167,11 @@ fn test_init_handler_behavior_differ_by_flag_value() {
 
     // Verify stages execute in correct order
     assert!(
-        banner_call < stage_1_call &&
-        stage_1_call < stage_2_call &&
-        stage_2_call < stage_3_call &&
-        stage_3_call < stage_4_call &&
-        stage_4_call < stage_5_call,
+        banner_call < stage_1_call
+            && stage_1_call < stage_2_call
+            && stage_2_call < stage_3_call
+            && stage_3_call < stage_4_call
+            && stage_4_call < stage_5_call,
         "Path 2m: Wizard stages must execute in correct order"
     );
 
@@ -1143,16 +1198,18 @@ fn test_init_complete_flow_parsed_command_to_handler_action() {
             // Which becomes: init::run_init_wizard(true)
 
             // Step 5: Verify handler action via code inspection
-            let init_code = std::fs::read_to_string("src/init.rs")
-                .expect("Failed to read init.rs");
+            let init_code = std::fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
-            let func_start = init_code.find("pub fn run_init_wizard(no_interactive: bool)")
+            let func_start = init_code
+                .find("pub fn run_init_wizard(no_interactive: bool)")
                 .expect("Handler must exist");
 
-            let early_exit_check = init_code[func_start..].find("if no_interactive {")
+            let early_exit_check = init_code[func_start..]
+                .find("if no_interactive {")
                 .expect("Handler must check flag");
 
-            let early_exit_section = &init_code[func_start + early_exit_check..func_start + early_exit_check + 600];
+            let early_exit_section =
+                &init_code[func_start + early_exit_check..func_start + early_exit_check + 600];
 
             // Verify handler action: early exit with error
             assert!(
@@ -1171,8 +1228,10 @@ fn test_init_complete_flow_parsed_command_to_handler_action() {
             );
 
             // Verify extracted value matches what handler expects
-            assert!(no_interactive_extracted,
-                "Step 5d: Extracted flag value is true, triggering early exit path");
+            assert!(
+                no_interactive_extracted,
+                "Step 5d: Extracted flag value is true, triggering early exit path"
+            );
         }
         _ => panic!("Expected Commands::Init"),
     }
@@ -1187,16 +1246,20 @@ fn test_init_complete_flow_parsed_command_to_handler_action() {
             // Handler invocation: init::run_init_wizard(no_interactive_default)
             // Which becomes: init::run_init_wizard(false)
 
-            let init_code = std::fs::read_to_string("src/init.rs")
-                .expect("Failed to read init.rs");
+            let init_code = std::fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
-            let func_start = init_code.find("pub fn run_init_wizard(no_interactive: bool)")
+            let func_start = init_code
+                .find("pub fn run_init_wizard(no_interactive: bool)")
                 .expect("Handler must exist");
 
-            let early_exit_end = init_code[func_start..].find('}')
-                .expect("Early exit must end") + func_start + 1;
+            let early_exit_end = init_code[func_start..]
+                .find('}')
+                .expect("Early exit must end")
+                + func_start
+                + 1;
 
-            let banner_call = init_code.find("print_wizard_banner();")
+            let banner_call = init_code
+                .find("print_wizard_banner();")
                 .expect("Should call banner");
 
             // Verify handler action: execute wizard
@@ -1205,8 +1268,10 @@ fn test_init_complete_flow_parsed_command_to_handler_action() {
                 "Step 5e: Handler action: execute full wizard when flag is false"
             );
 
-            assert!(!no_interactive_default,
-                "Step 5f: Extracted flag value is false, triggering wizard path");
+            assert!(
+                !no_interactive_default,
+                "Step 5f: Extracted flag value is false, triggering wizard path"
+            );
         }
         _ => panic!("Expected Commands::Init"),
     }

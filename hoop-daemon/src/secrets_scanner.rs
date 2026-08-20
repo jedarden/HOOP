@@ -12,7 +12,7 @@
 //! Pattern source: Single source of truth from config.yml via config_resolver.
 //! Client fetches patterns from /api/config/secrets-patterns for pre-upload warning.
 
-use crate::config_resolver::{SecretPattern, default_secret_patterns};
+use crate::config_resolver::{default_secret_patterns, SecretPattern};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -80,17 +80,18 @@ fn is_high_entropy_exclusion(match_str: &str, context: &str) -> bool {
 
     // Hex-encoded colors (6 or 8 hex chars, often preceded by #)
     if (match_str.len() == 6 || match_str.len() == 8)
-        && match_str.chars().all(|c| c.is_ascii_hexdigit()) {
-            // Check if preceded by # or color-related keywords
-            let context_lower = context.to_lowercase();
-            if context_lower.contains('#')
-                || context_lower.contains("color")
-                || context_lower.contains("background")
-                || context_lower.contains("foreground")
-            {
-                return true;
-            }
+        && match_str.chars().all(|c| c.is_ascii_hexdigit())
+    {
+        // Check if preceded by # or color-related keywords
+        let context_lower = context.to_lowercase();
+        if context_lower.contains('#')
+            || context_lower.contains("color")
+            || context_lower.contains("background")
+            || context_lower.contains("foreground")
+        {
+            return true;
         }
+    }
 
     // Base64-encoded data that's actually a known format (e.g., PEM headers)
     if match_str.contains("BEGIN") || match_str.contains("END") {
@@ -103,9 +104,8 @@ fn is_high_entropy_exclusion(match_str: &str, context: &str) -> bool {
 /// Regex for UUID detection
 fn uuid_regex() -> &'static Regex {
     static UUID_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(
-            r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-        ).unwrap()
+        Regex::new(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+            .unwrap()
     });
     &UUID_REGEX
 }
@@ -119,9 +119,7 @@ fn email_regex() -> &'static Regex {
         // Local part: alphanumeric + . _ % + -
         // Domain: alphanumeric + . -
         // TLD: at least 2 chars
-        Regex::new(
-            r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b"
-        ).unwrap()
+        Regex::new(r"\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b").unwrap()
     });
     &EMAIL_REGEX
 }
@@ -188,7 +186,8 @@ impl ScannerState {
     }
 }
 
-static SCANNER_STATE: LazyLock<Mutex<ScannerState>> = LazyLock::new(|| Mutex::new(ScannerState::new()));
+static SCANNER_STATE: LazyLock<Mutex<ScannerState>> =
+    LazyLock::new(|| Mutex::new(ScannerState::new()));
 
 // ── Scan result ────────────────────────────────────────────────────────────────
 
@@ -299,9 +298,7 @@ fn extract_candidate_tokens(text: &str) -> Vec<Token> {
     // - Base64-like: [A-Za-z0-9+/=_-]{20,}
     // - Hex strings: [0-9a-fA-F]{20,}
     // - Mixed alphanumeric with special chars
-    let candidate_re = regex::Regex::new(
-        r#"[A-Za-z0-9+/=_-]{20,}"#
-    ).unwrap();
+    let candidate_re = regex::Regex::new(r#"[A-Za-z0-9+/=_-]{20,}"#).unwrap();
 
     for m in candidate_re.find_iter(text) {
         let s = m.as_str();
@@ -397,13 +394,18 @@ pub fn init() {
 pub fn update_patterns(secret_patterns: &[SecretPattern]) {
     let mut state = SCANNER_STATE.lock().unwrap();
     state.update_patterns(secret_patterns);
-    tracing::info!("Secrets scanner updated: {} patterns loaded", state.patterns.len());
+    tracing::info!(
+        "Secrets scanner updated: {} patterns loaded",
+        state.patterns.len()
+    );
 }
 
 /// Add a custom PII pattern.
 pub fn add_pii_pattern(id: String, pattern: String) -> Result<(), String> {
     let mut state = SCANNER_STATE.lock().unwrap();
-    state.add_pii_pattern(id, pattern).map_err(|e| e.to_string())
+    state
+        .add_pii_pattern(id, pattern)
+        .map_err(|e| e.to_string())
 }
 
 /// Enable email detection for a project.
@@ -446,7 +448,10 @@ mod tests {
         let text = "My Stripe key is sk_live_51AbCdEf1234567890AbCdEf please keep it safe";
         let findings = scan_text(text, None);
         assert!(!findings.is_empty(), "should detect Stripe key");
-        assert!(findings.iter().any(|f| f.pattern_id == "stripe_api_key"), "should match stripe_api_key pattern");
+        assert!(
+            findings.iter().any(|f| f.pattern_id == "stripe_api_key"),
+            "should match stripe_api_key pattern"
+        );
     }
 
     #[test]
@@ -455,13 +460,16 @@ mod tests {
         let text = "OPENAI_API_KEY=sk-proj-AbCdEf1234567890AbCdEf1234567890AbCdEf";
         let findings = scan_text(text, None);
         assert!(!findings.is_empty(), "should detect OpenAI key");
-        assert!(findings.iter().any(|f| f.pattern_id == "openai_api_key" || f.pattern_id == "env_var_secret"));
+        assert!(findings
+            .iter()
+            .any(|f| f.pattern_id == "openai_api_key" || f.pattern_id == "env_var_secret"));
     }
 
     #[test]
     fn test_scan_text_anthropic_key() {
         init();
-        let text = "ANTHROPIC_API_KEY=sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666";
+        let text =
+            "ANTHROPIC_API_KEY=sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666";
         let findings = scan_text(text, None);
         assert!(!findings.is_empty(), "should detect Anthropic key");
     }
@@ -490,7 +498,9 @@ mod tests {
         let text = "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
         let findings = scan_text(text, None);
         assert!(!findings.is_empty(), "should detect JWT");
-        assert!(findings.iter().any(|f| f.pattern_id == "jwt" || f.pattern_id == "bearer_token"));
+        assert!(findings
+            .iter()
+            .any(|f| f.pattern_id == "jwt" || f.pattern_id == "bearer_token"));
     }
 
     #[test]
@@ -537,8 +547,13 @@ mod tests {
         let text = "commit abc123def456789abcdef0123456789abcdef01 pushed by john";
         let findings = scan_text(text, None);
         // Git SHA should be excluded from high-entropy detection
-        let has_entropy_flag = findings.iter().any(|f| f.pattern_id == "high_entropy" && f.matched_text.len() == 40);
-        assert!(!has_entropy_flag, "git SHA should not be flagged as high entropy");
+        let has_entropy_flag = findings
+            .iter()
+            .any(|f| f.pattern_id == "high_entropy" && f.matched_text.len() == 40);
+        assert!(
+            !has_entropy_flag,
+            "git SHA should not be flagged as high entropy"
+        );
     }
 
     #[test]
@@ -548,7 +563,10 @@ mod tests {
         let findings = scan_text(text, None);
         // UUID should be excluded from high-entropy detection
         let has_entropy_flag = findings.iter().any(|f| f.pattern_id == "high_entropy");
-        assert!(!has_entropy_flag, "UUID should not be flagged as high entropy");
+        assert!(
+            !has_entropy_flag,
+            "UUID should not be flagged as high entropy"
+        );
     }
 
     #[test]
@@ -701,7 +719,9 @@ AWS: AKIA1234567890ABCDEF
         init();
         let findings = scan_text(FIXTURE_SECRETS[0].1, None);
         assert!(!findings.is_empty(), "Stripe live key should be detected");
-        assert!(findings.iter().any(|f| f.pattern_id == "stripe_api_key" || f.pattern_id == "generic_sk_key"));
+        assert!(findings
+            .iter()
+            .any(|f| f.pattern_id == "stripe_api_key" || f.pattern_id == "generic_sk_key"));
     }
 
     #[test]
@@ -709,7 +729,9 @@ AWS: AKIA1234567890ABCDEF
         init();
         let findings = scan_text(FIXTURE_SECRETS[4].1, None);
         assert!(!findings.is_empty(), "OpenAI key should be detected");
-        assert!(findings.iter().any(|f| f.pattern_id == "openai_api_key" || f.pattern_id == "generic_sk_key"));
+        assert!(findings
+            .iter()
+            .any(|f| f.pattern_id == "openai_api_key" || f.pattern_id == "generic_sk_key"));
     }
 
     #[test]
@@ -741,7 +763,9 @@ AWS: AKIA1234567890ABCDEF
         init();
         let findings = scan_text(FIXTURE_SECRETS[14].1, None);
         assert!(!findings.is_empty(), "JWT should be detected");
-        assert!(findings.iter().any(|f| f.pattern_id == "jwt" || f.pattern_id == "bearer_token"));
+        assert!(findings
+            .iter()
+            .any(|f| f.pattern_id == "jwt" || f.pattern_id == "bearer_token"));
     }
 
     #[test]
@@ -756,7 +780,10 @@ AWS: AKIA1234567890ABCDEF
     fn test_synthetic_secrets_env_var() {
         init();
         let findings = scan_text(FIXTURE_SECRETS[19].1, None);
-        assert!(!findings.is_empty(), "Environment variable secret should be detected");
+        assert!(
+            !findings.is_empty(),
+            "Environment variable secret should be detected"
+        );
         assert!(findings.iter().any(|f| f.pattern_id == "env_var_secret"));
     }
 

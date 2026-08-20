@@ -5,7 +5,7 @@
 //! - Patterns served by /api/config/secrets-patterns match what backend uses
 //! - Client and backend detect the same secrets
 
-use hoop_daemon::config_resolver::{SecretPattern, default_secret_patterns};
+use hoop_daemon::config_resolver::{default_secret_patterns, SecretPattern};
 use hoop_daemon::secrets_scanner;
 
 /// Test fixture for a secret that should be detected
@@ -221,10 +221,16 @@ fn test_default_patterns_valid() {
             pattern.id,
             pattern.severity
         );
-        assert!(!pattern.patterns.is_empty(), "Pattern '{}' should have at least one regex", pattern.id);
+        assert!(
+            !pattern.patterns.is_empty(),
+            "Pattern '{}' should have at least one regex",
+            pattern.id
+        );
 
         // Verify all regex patterns compile
-        pattern.validate().expect(&format!("Pattern '{}' should have valid regex", pattern.id));
+        pattern
+            .validate()
+            .expect(&format!("Pattern '{}' should have valid regex", pattern.id));
     }
 }
 
@@ -236,7 +242,8 @@ fn test_patterns_match_api_format() {
     // Verify each pattern can be serialized to JSON (as the API would)
     for pattern in &patterns {
         let json = serde_json::to_string(pattern).expect("Pattern should serialize to JSON");
-        let parsed: SecretPattern = serde_json::from_str(&json).expect("Serialized pattern should deserialize");
+        let parsed: SecretPattern =
+            serde_json::from_str(&json).expect("Serialized pattern should deserialize");
 
         assert_eq!(parsed.id, pattern.id);
         assert_eq!(parsed.name, pattern.name);
@@ -249,7 +256,8 @@ fn test_patterns_match_api_format() {
 #[test]
 fn test_all_fixture_patterns_exist() {
     let patterns = default_secret_patterns();
-    let pattern_ids: std::collections::HashSet<_> = patterns.iter().map(|p| p.id.as_str()).collect();
+    let pattern_ids: std::collections::HashSet<_> =
+        patterns.iter().map(|p| p.id.as_str()).collect();
 
     for fixture in SECRET_FIXTURES {
         if fixture.pattern_id != "none" {
@@ -305,9 +313,14 @@ fn test_custom_patterns_override_defaults() {
     let test_content = "My test secret is TEST_SECRET_ABC1234567";
     let findings = secrets_scanner::scan_text(test_content, None);
 
-    assert!(!findings.is_empty(), "Custom pattern should detect test secret");
     assert!(
-        findings.iter().any(|f| f.pattern_id == "test_custom_pattern"),
+        !findings.is_empty(),
+        "Custom pattern should detect test secret"
+    );
+    assert!(
+        findings
+            .iter()
+            .any(|f| f.pattern_id == "test_custom_pattern"),
         "Should match custom pattern"
     );
 

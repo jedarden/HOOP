@@ -205,7 +205,8 @@ impl EmbeddingService {
 
     /// Create from the global config resolver.
     pub fn from_config() -> Result<Self> {
-        let config = crate::config_resolver::resolve(crate::config_resolver::CliOverrides::default());
+        let config =
+            crate::config_resolver::resolve(crate::config_resolver::CliOverrides::default());
         let _adapter_kind = AdapterKind::from_str(&config.embedding_adapter.value)
             .ok()
             .unwrap_or(AdapterKind::Local);
@@ -331,7 +332,10 @@ impl EmbeddingService {
         }
 
         self.config = new_config;
-        tracing::info!("Embedding service config updated: adapter={}", self.config.adapter);
+        tracing::info!(
+            "Embedding service config updated: adapter={}",
+            self.config.adapter
+        );
         Ok(())
     }
 
@@ -362,7 +366,10 @@ impl EmbeddingService {
     /// Generate embeddings for multiple texts using local model.
     fn embed_batch_local(&self, texts: &[&str]) -> Result<Vec<EmbeddingVec>> {
         // Fallback to individual embedding
-        texts.iter().map(|text| Ok(self.local_embedder.embed(text))).collect()
+        texts
+            .iter()
+            .map(|text| Ok(self.local_embedder.embed(text)))
+            .collect()
     }
 
     /// Generate embedding using remote API with fallback to local.
@@ -479,7 +486,9 @@ impl EmbeddingService {
         // Parse response - note: Anthropic doesn't have a native embedding API
         // This is a placeholder for the actual implementation
         // In production, you'd use a dedicated embedding service
-        tracing::warn!("Remote embedding API called but not fully implemented - using local fallback");
+        tracing::warn!(
+            "Remote embedding API called but not fully implemented - using local fallback"
+        );
         Err(anyhow::anyhow!("Remote embedding not implemented"))
     }
 
@@ -547,9 +556,10 @@ impl EmbeddingService {
         if let Some(ref semaphore) = self.rate_limiter {
             // === PHASE 1: Acquire semaphore permit (no RwLock yet) ===
             // This await is safe because we haven't acquired request_timestamps lock yet
-            let _permit = semaphore.acquire().await.map_err(|e| {
-                anyhow::anyhow!("Failed to acquire rate limit permit: {}", e)
-            })?;
+            let _permit = semaphore
+                .acquire()
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to acquire rate limit permit: {}", e))?;
 
             // === PHASE 2: Check rate limit state in minimal lock scope ===
             // Compute wait duration and return it. NO await inside this scope.

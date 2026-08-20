@@ -86,8 +86,14 @@ fn default_window_days() -> i64 {
 
 pub fn router() -> Router<crate::DaemonState> {
     Router::new()
-        .route("/api/cost/stitch-trends", axum::routing::get(get_stitch_trends))
-        .route("/api/stitches/{id}/cost", axum::routing::get(get_stitch_cost))
+        .route(
+            "/api/cost/stitch-trends",
+            axum::routing::get(get_stitch_trends),
+        )
+        .route(
+            "/api/stitches/{id}/cost",
+            axum::routing::get(get_stitch_cost),
+        )
 }
 
 /// Get cost trends for all stitches over a time window
@@ -153,28 +159,31 @@ async fn get_stitch_trends(
     let mut total_stitches: i64 = 0;
 
     let rows = by_adapter_stmt
-        .query_map([start_date.format("%Y-%m-%dT%H:%M:%S").to_string()], |row| {
-            let adapter: String = row.get(0)?;
-            let model: String = row.get(1)?;
-            let date_str: String = row.get(2)?;
-            let cost_usd: f64 = row.get(3)?;
-            let total_tokens: i64 = row.get(4)?;
-            let stitch_count: i64 = row.get(5)?;
+        .query_map(
+            [start_date.format("%Y-%m-%dT%H:%M:%S").to_string()],
+            |row| {
+                let adapter: String = row.get(0)?;
+                let model: String = row.get(1)?;
+                let date_str: String = row.get(2)?;
+                let cost_usd: f64 = row.get(3)?;
+                let total_tokens: i64 = row.get(4)?;
+                let stitch_count: i64 = row.get(5)?;
 
-            total_cost_all += cost_usd;
-            total_tokens_all += total_tokens;
-            total_stitches += stitch_count;
+                total_cost_all += cost_usd;
+                total_tokens_all += total_tokens;
+                total_stitches += stitch_count;
 
-            Ok((
-                (adapter, model),
-                CostTrendPoint {
-                    date: date_str,
-                    cost_usd,
-                    total_tokens,
-                    stitch_count,
-                },
-            ))
-        })
+                Ok((
+                    (adapter, model),
+                    CostTrendPoint {
+                        date: date_str,
+                        cost_usd,
+                        total_tokens,
+                        stitch_count,
+                    },
+                ))
+            },
+        )
         .map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -189,10 +198,7 @@ async fn get_stitch_trends(
                 format!("Failed to read adapter row: {}", e),
             )
         })?;
-        adapter_map
-            .entry((adapter, model))
-            .or_default()
-            .push(point);
+        adapter_map.entry((adapter, model)).or_default().push(point);
     }
 
     let by_adapter: Vec<AdapterCostTrend> = adapter_map
@@ -241,23 +247,26 @@ async fn get_stitch_trends(
     let mut project_map: HashMap<String, Vec<CostTrendPoint>> = HashMap::new();
 
     let rows = by_project_stmt
-        .query_map([start_date.format("%Y-%m-%dT%H:%M:%S").to_string()], |row| {
-            let project: String = row.get(0)?;
-            let date_str: String = row.get(1)?;
-            let cost_usd: f64 = row.get(2)?;
-            let total_tokens: i64 = row.get(3)?;
-            let stitch_count: i64 = row.get(4)?;
+        .query_map(
+            [start_date.format("%Y-%m-%dT%H:%M:%S").to_string()],
+            |row| {
+                let project: String = row.get(0)?;
+                let date_str: String = row.get(1)?;
+                let cost_usd: f64 = row.get(2)?;
+                let total_tokens: i64 = row.get(3)?;
+                let stitch_count: i64 = row.get(4)?;
 
-            Ok((
-                project,
-                CostTrendPoint {
-                    date: date_str,
-                    cost_usd,
-                    total_tokens,
-                    stitch_count,
-                },
-            ))
-        })
+                Ok((
+                    project,
+                    CostTrendPoint {
+                        date: date_str,
+                        cost_usd,
+                        total_tokens,
+                        stitch_count,
+                    },
+                ))
+            },
+        )
         .map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,

@@ -32,7 +32,8 @@ static REDACTOR: LazyLock<Mutex<Redactor>> = LazyLock::new(|| Mutex::new(Redacto
 ///
 /// This is the single source of truth for scanning. Each entry is `(id, Regex)`.
 /// The ids match the `id` field from `config_resolver::SecretPattern`.
-static NAMED_PATTERNS: LazyLock<Mutex<Vec<(&'static str, Regex)>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+static NAMED_PATTERNS: LazyLock<Mutex<Vec<(&'static str, Regex)>>> =
+    LazyLock::new(|| Mutex::new(Vec::new()));
 
 /// Redact a text string, returning a new string with secrets replaced.
 /// Uses the process-wide cache; safe to call from multiple threads.
@@ -93,7 +94,10 @@ pub fn update_patterns(pattern_strings: &[String]) {
     if let Ok(mut r) = REDACTOR.lock() {
         r.patterns = new_patterns;
         r.cache.clear(); // Clear cache to avoid stale matches
-        tracing::info!("Redaction patterns updated: {} patterns loaded", r.patterns.len());
+        tracing::info!(
+            "Redaction patterns updated: {} patterns loaded",
+            r.patterns.len()
+        );
     }
 }
 
@@ -135,7 +139,10 @@ pub fn update_patterns_with_names(patterns: &[(&str, String)]) {
     if let Ok(mut r) = REDACTOR.lock() {
         r.patterns = redaction_patterns;
         r.cache.clear(); // Clear cache to avoid stale matches
-        tracing::info!("Redaction patterns updated: {} patterns loaded", r.patterns.len());
+        tracing::info!(
+            "Redaction patterns updated: {} patterns loaded",
+            r.patterns.len()
+        );
     }
 
     if let Ok(mut np) = NAMED_PATTERNS.lock() {
@@ -298,19 +305,47 @@ pub fn scan_propagation_draft(title: &str, body: &str) -> Vec<SecretFinding> {
 /// Returns findings if the file could be read and scanned, or an error.
 pub fn scan_attachment(path: &std::path::Path) -> Result<Vec<SecretFinding>, std::io::Error> {
     // Only scan text-based file extensions
-    let extension = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
+    let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
     let is_text_file = matches!(
         extension.to_lowercase().as_str(),
-        "txt" | "md" | "markdown" | "json" | "yaml" | "yml" |
-        "toml" | "ini" | "cfg" | "conf" | "sh" | "bash" |
-        "zsh" | "fish" | "ps1" | "py" | "rs" | "js" | "ts" |
-        "jsx" | "tsx" | "go" | "java" | "c" | "cpp" | "h" |
-        "hpp" | "cs" | "php" | "rb" | "lua" | "pl" | "sql" |
-        "env" | "dockerenv" | "gitignore" | "gitattributes"
+        "txt"
+            | "md"
+            | "markdown"
+            | "json"
+            | "yaml"
+            | "yml"
+            | "toml"
+            | "ini"
+            | "cfg"
+            | "conf"
+            | "sh"
+            | "bash"
+            | "zsh"
+            | "fish"
+            | "ps1"
+            | "py"
+            | "rs"
+            | "js"
+            | "ts"
+            | "jsx"
+            | "tsx"
+            | "go"
+            | "java"
+            | "c"
+            | "cpp"
+            | "h"
+            | "hpp"
+            | "cs"
+            | "php"
+            | "rb"
+            | "lua"
+            | "pl"
+            | "sql"
+            | "env"
+            | "dockerenv"
+            | "gitignore"
+            | "gitattributes"
     );
 
     if !is_text_file {
@@ -655,7 +690,9 @@ mod tests {
         let findings = scan_text_for_secrets(input);
         assert!(!findings.is_empty(), "should detect Anthropic API key");
         assert!(
-            findings.iter().any(|f| f.pattern_name == "anthropic_api_key"),
+            findings
+                .iter()
+                .any(|f| f.pattern_name == "anthropic_api_key"),
             "should detect anthropic_api_key pattern"
         );
     }
@@ -720,10 +757,13 @@ mod tests {
         let findings = scan_text_for_secrets(input);
         // JWT is detected either by JWT pattern or Bearer Token pattern
         assert!(!findings.is_empty(), "should detect JWT or Bearer token");
-        let has_jwt_or_bearer = findings.iter().any(|f| {
-            f.pattern_name == "jwt" || f.pattern_name == "bearer_token"
-        });
-        assert!(has_jwt_or_bearer, "should detect jwt or bearer_token pattern");
+        let has_jwt_or_bearer = findings
+            .iter()
+            .any(|f| f.pattern_name == "jwt" || f.pattern_name == "bearer_token");
+        assert!(
+            has_jwt_or_bearer,
+            "should detect jwt or bearer_token pattern"
+        );
     }
 
     #[test]
@@ -732,7 +772,10 @@ mod tests {
         // Fixture from client test: envVarSecret
         let input = "export openai_api_key=sk-proj-AbCdEf1234567890";
         let findings = scan_text_for_secrets(input);
-        assert!(!findings.is_empty(), "should detect environment variable secret");
+        assert!(
+            !findings.is_empty(),
+            "should detect environment variable secret"
+        );
         assert!(
             findings.iter().any(|f| f.pattern_name == "env_var_secret"),
             "should detect env_var_secret pattern"
@@ -747,7 +790,9 @@ mod tests {
         let findings = scan_text_for_secrets(input);
         assert!(!findings.is_empty(), "should detect JSON secret field");
         assert!(
-            findings.iter().any(|f| f.pattern_name == "json_secret_field"),
+            findings
+                .iter()
+                .any(|f| f.pattern_name == "json_secret_field"),
             "should detect json_secret_field pattern"
         );
     }
@@ -764,11 +809,24 @@ mod tests {
   "#;
         let findings = scan_text_for_secrets(input);
         // Should detect at least 3 secrets (Anthropic, GitHub, AWS)
-        assert!(findings.len() >= 3, "should detect at least 3 secrets, got {}", findings.len());
+        assert!(
+            findings.len() >= 3,
+            "should detect at least 3 secrets, got {}",
+            findings.len()
+        );
         let pattern_names: Vec<_> = findings.iter().map(|f| f.pattern_name).collect();
-        assert!(pattern_names.contains(&"anthropic_api_key"), "should detect anthropic_api_key");
-        assert!(pattern_names.contains(&"github_token"), "should detect github_token");
-        assert!(pattern_names.contains(&"aws_access_key"), "should detect aws_access_key");
+        assert!(
+            pattern_names.contains(&"anthropic_api_key"),
+            "should detect anthropic_api_key"
+        );
+        assert!(
+            pattern_names.contains(&"github_token"),
+            "should detect github_token"
+        );
+        assert!(
+            pattern_names.contains(&"aws_access_key"),
+            "should detect aws_access_key"
+        );
     }
 
     #[test]
@@ -788,8 +846,14 @@ mod tests {
         let findings = scan_text_for_secrets(input);
         assert!(!findings.is_empty(), "should detect secret");
         let finding = &findings[0];
-        assert!(finding.match_start < input.len(), "match start should be within text");
-        assert!(finding.match_start + finding.match_len <= input.len(), "match end should be within text");
+        assert!(
+            finding.match_start < input.len(),
+            "match start should be within text"
+        );
+        assert!(
+            finding.match_start + finding.match_len <= input.len(),
+            "match end should be within text"
+        );
     }
 
     #[test]
@@ -802,8 +866,14 @@ mod tests {
 
         // If scanning finds something, redaction should remove it
         if !findings.is_empty() {
-            assert!(redacted.contains("[REDACTED]"), "redaction should replace detected secrets");
-            assert!(!redacted.contains("sk-ant-"), "redacted text should not contain raw secret");
+            assert!(
+                redacted.contains("[REDACTED]"),
+                "redaction should replace detected secrets"
+            );
+            assert!(
+                !redacted.contains("sk-ant-"),
+                "redacted text should not contain raw secret"
+            );
         }
     }
 }

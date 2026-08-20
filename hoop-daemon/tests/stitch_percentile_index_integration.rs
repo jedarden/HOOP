@@ -9,8 +9,7 @@
 
 use chrono::Utc;
 use hoop_daemon::stitch_percentile_index::{
-    BucketId, BodyLengthBucket, MIN_SAMPLES_FOR_PREDICTION,
-    TITLE_TOKEN_BUCKET_SIZE,
+    BodyLengthBucket, BucketId, MIN_SAMPLES_FOR_PREDICTION, TITLE_TOKEN_BUCKET_SIZE,
 };
 use rusqlite::Connection;
 use std::time::Instant;
@@ -176,7 +175,10 @@ fn test_index_initialization() {
         )
         .expect("Failed to check metadata table existence");
 
-    assert!(meta_exists, "stitch_percentile_index_meta table should exist");
+    assert!(
+        meta_exists,
+        "stitch_percentile_index_meta table should exist"
+    );
 
     // Check schema version
     let schema_version: String = conn
@@ -187,10 +189,7 @@ fn test_index_initialization() {
         )
         .expect("Failed to get schema version");
 
-    assert_eq!(
-        schema_version, "1.0.0",
-        "Schema version should be 1.0.0"
-    );
+    assert_eq!(schema_version, "1.0.0", "Schema version should be 1.0.0");
 }
 
 #[test]
@@ -203,10 +202,8 @@ fn test_schema_version_checking() {
         hoop_daemon::stitch_percentile_index::check_schema_version(&conn)
             .expect("Failed to check schema version")
     );
-    assert!(
-        !hoop_daemon::stitch_percentile_index::needs_rebuild(&conn)
-            .expect("Failed to check rebuild needed")
-    );
+    assert!(!hoop_daemon::stitch_percentile_index::needs_rebuild(&conn)
+        .expect("Failed to check rebuild needed"));
 
     // Corrupt the schema version
     conn.execute(
@@ -224,10 +221,8 @@ fn test_schema_version_checking() {
         !hoop_daemon::stitch_percentile_index::check_schema_version(&conn)
             .expect("Failed to check schema version")
     );
-    assert!(
-        hoop_daemon::stitch_percentile_index::needs_rebuild(&conn)
-            .expect("Failed to check rebuild needed")
-    );
+    assert!(hoop_daemon::stitch_percentile_index::needs_rebuild(&conn)
+        .expect("Failed to check rebuild needed"));
 }
 
 #[test]
@@ -285,34 +280,13 @@ fn test_bucket_id_from_features() {
 #[test]
 fn test_body_length_bucket_boundaries() {
     // Test each bucket boundary
-    assert_eq!(
-        BodyLengthBucket::from_length(0),
-        BodyLengthBucket::Empty
-    );
-    assert_eq!(
-        BodyLengthBucket::from_length(1),
-        BodyLengthBucket::Short
-    );
-    assert_eq!(
-        BodyLengthBucket::from_length(100),
-        BodyLengthBucket::Short
-    );
-    assert_eq!(
-        BodyLengthBucket::from_length(101),
-        BodyLengthBucket::Medium
-    );
-    assert_eq!(
-        BodyLengthBucket::from_length(500),
-        BodyLengthBucket::Medium
-    );
-    assert_eq!(
-        BodyLengthBucket::from_length(501),
-        BodyLengthBucket::Long
-    );
-    assert_eq!(
-        BodyLengthBucket::from_length(2000),
-        BodyLengthBucket::Long
-    );
+    assert_eq!(BodyLengthBucket::from_length(0), BodyLengthBucket::Empty);
+    assert_eq!(BodyLengthBucket::from_length(1), BodyLengthBucket::Short);
+    assert_eq!(BodyLengthBucket::from_length(100), BodyLengthBucket::Short);
+    assert_eq!(BodyLengthBucket::from_length(101), BodyLengthBucket::Medium);
+    assert_eq!(BodyLengthBucket::from_length(500), BodyLengthBucket::Medium);
+    assert_eq!(BodyLengthBucket::from_length(501), BodyLengthBucket::Long);
+    assert_eq!(BodyLengthBucket::from_length(2000), BodyLengthBucket::Long);
     assert_eq!(
         BodyLengthBucket::from_length(2001),
         BodyLengthBucket::VeryLong
@@ -361,11 +335,9 @@ fn test_index_update_on_stitch_features() {
 
     // Check that index has entries
     let count: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM stitch_percentile_index",
-            [],
-            |row| row.get(0),
-        )
+        .query_row("SELECT COUNT(*) FROM stitch_percentile_index", [], |row| {
+            row.get(0)
+        })
         .expect("Failed to count index entries");
 
     assert_eq!(count, 1, "Should have one bucket for 3 similar stitches");
@@ -422,11 +394,9 @@ fn test_query_performance_under_50ms() {
 
     // Verify we have multiple buckets
     let bucket_count: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM stitch_percentile_index",
-            [],
-            |row| row.get(0),
-        )
+        .query_row("SELECT COUNT(*) FROM stitch_percentile_index", [], |row| {
+            row.get(0)
+        })
         .expect("Failed to count buckets");
 
     assert!(
@@ -447,10 +417,7 @@ fn test_query_performance_under_50ms() {
     let elapsed = start.elapsed();
 
     // Query should succeed quickly
-    assert!(
-        result.is_some(),
-        "Query should find a matching bucket"
-    );
+    assert!(result.is_some(), "Query should find a matching bucket");
 
     // Verify performance target
     assert!(
@@ -507,20 +474,31 @@ fn test_minimum_samples_for_prediction() {
     let mut conn = setup_test_db(&temp_dir);
 
     // Insert only 2 similar stitches (below threshold)
-    insert_test_stitch(&mut conn, "stitch_1", "Fix bug", Some("Body"), &[], 100_000, 24);
-    insert_test_stitch(&mut conn, "stitch_2", "Fix bug", Some("Body"), &[], 150_000, 23);
+    insert_test_stitch(
+        &mut conn,
+        "stitch_1",
+        "Fix bug",
+        Some("Body"),
+        &[],
+        100_000,
+        24,
+    );
+    insert_test_stitch(
+        &mut conn,
+        "stitch_2",
+        "Fix bug",
+        Some("Body"),
+        &[],
+        150_000,
+        23,
+    );
 
     hoop_daemon::stitch_percentile_index::rebuild_index(&mut conn)
         .expect("Failed to rebuild index");
 
-    let result = hoop_daemon::stitch_percentile_index::query_percentiles(
-        &conn,
-        "Fix bug",
-        4,
-        &[],
-        0,
-    )
-    .expect("Query should succeed");
+    let result =
+        hoop_daemon::stitch_percentile_index::query_percentiles(&conn, "Fix bug", 4, &[], 0)
+            .expect("Query should succeed");
 
     // Query should return a result, but the sample_count should be <3
     if let Some(query) = result {
@@ -610,18 +588,32 @@ fn test_index_rebuild_clears_old_data() {
     let mut conn = setup_test_db(&temp_dir);
 
     // Insert and index some stitches
-    insert_test_stitch(&mut conn, "stitch_1", "Fix bug", Some("Body"), &[], 100_000, 24);
-    insert_test_stitch(&mut conn, "stitch_2", "Fix bug", Some("Body"), &[], 150_000, 23);
+    insert_test_stitch(
+        &mut conn,
+        "stitch_1",
+        "Fix bug",
+        Some("Body"),
+        &[],
+        100_000,
+        24,
+    );
+    insert_test_stitch(
+        &mut conn,
+        "stitch_2",
+        "Fix bug",
+        Some("Body"),
+        &[],
+        150_000,
+        23,
+    );
 
     hoop_daemon::stitch_percentile_index::rebuild_index(&mut conn)
         .expect("Failed to rebuild index");
 
     let count_before: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM stitch_percentile_index",
-            [],
-            |row| row.get(0),
-        )
+        .query_row("SELECT COUNT(*) FROM stitch_percentile_index", [], |row| {
+            row.get(0)
+        })
         .expect("Failed to count");
 
     assert_eq!(count_before, 1, "Should have one bucket");
@@ -642,11 +634,9 @@ fn test_index_rebuild_clears_old_data() {
         .expect("Failed to rebuild index");
 
     let count_after: i64 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM stitch_percentile_index",
-            [],
-            |row| row.get(0),
-        )
+        .query_row("SELECT COUNT(*) FROM stitch_percentile_index", [], |row| {
+            row.get(0)
+        })
         .expect("Failed to count");
 
     // Should now have 2 buckets

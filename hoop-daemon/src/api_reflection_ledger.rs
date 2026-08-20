@@ -125,10 +125,7 @@ async fn list_reflections(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let count = reflections.len();
-    Ok(Json(ReflectionsResponse {
-        reflections,
-        count,
-    }))
+    Ok(Json(ReflectionsResponse { reflections, count }))
 }
 
 /// POST /api/reflections/{id}/approve — approve a proposal (§19.2)
@@ -164,10 +161,7 @@ async fn approve_proposal(
     if !approved {
         return Err((
             StatusCode::CONFLICT,
-            format!(
-                "Proposal '{}' not found or not in 'proposed' status",
-                id
-            ),
+            format!("Proposal '{}' not found or not in 'proposed' status", id),
         ));
     }
 
@@ -225,10 +219,7 @@ async fn reject_proposal(
     if !rejected {
         return Err((
             StatusCode::CONFLICT,
-            format!(
-                "Proposal '{}' not found or not in 'proposed' status",
-                id
-            ),
+            format!("Proposal '{}' not found or not in 'proposed' status", id),
         ));
     }
 

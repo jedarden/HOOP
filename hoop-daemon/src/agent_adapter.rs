@@ -760,10 +760,7 @@ impl AgentAdapter for AnthropicApiAdapter {
         }
 
         let client = reqwest_like_client();
-        let url = format!(
-            "{}/v1/messages",
-            self.base_url.trim_end_matches('/')
-        );
+        let url = format!("{}/v1/messages", self.base_url.trim_end_matches('/'));
         let response = client
             .post(&url)
             .header("x-api-key", api_key)
@@ -1583,7 +1580,11 @@ fn parse_openai_sse_response_with_adapter(
 /// Parse a single Anthropic SSE event into an AgentEvent.
 ///
 /// Unknown event types are recorded via the global unknown event sink.
-fn anthropic_sse_to_event(val: &serde_json::Value, adapter_name: &str, raw_line: &str) -> Result<AgentEvent> {
+fn anthropic_sse_to_event(
+    val: &serde_json::Value,
+    adapter_name: &str,
+    raw_line: &str,
+) -> Result<AgentEvent> {
     let event_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
     match event_type {
@@ -1665,7 +1666,11 @@ fn anthropic_sse_to_event(val: &serde_json::Value, adapter_name: &str, raw_line:
 /// Parse a single OpenAI-compatible SSE event into an AgentEvent.
 ///
 /// Unknown event types are recorded via the global unknown event sink.
-fn openai_sse_to_event(val: &serde_json::Value, adapter_name: &str, raw_line: &str) -> Result<AgentEvent> {
+fn openai_sse_to_event(
+    val: &serde_json::Value,
+    adapter_name: &str,
+    raw_line: &str,
+) -> Result<AgentEvent> {
     let choices = val.get("choices").and_then(|c| c.as_array());
     let choice = choices.and_then(|c| c.first());
 
@@ -1730,7 +1735,8 @@ fn openai_sse_to_event(val: &serde_json::Value, adapter_name: &str, raw_line: &s
     }
 
     // Unknown event type - record via UnknownEventSink
-    let event_kind = val.get("type")
+    let event_kind = val
+        .get("type")
         .and_then(|v| v.as_str())
         .or_else(|| val.get("object").and_then(|v| v.as_str()))
         .unwrap_or("unknown");

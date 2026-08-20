@@ -1,5 +1,5 @@
-use serde_yaml;
 use serde::Deserialize;
+use serde_yaml;
 
 #[derive(Deserialize, Debug)]
 struct Test {

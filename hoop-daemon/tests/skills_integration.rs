@@ -40,13 +40,15 @@ args_schema:
 timeout_secs: 60
 "#;
 
-    fs::write(skill_dir.join("manifest.yml"), manifest_content)
-        .expect("Failed to write manifest");
+    fs::write(skill_dir.join("manifest.yml"), manifest_content).expect("Failed to write manifest");
 
     let skills = api_skills::discover_skills(temp_dir.path());
     assert_eq!(skills.len(), 1);
     assert_eq!(skills[0].name, "test-skill");
-    assert_eq!(skills[0].manifest.description, "A test skill for manifest parsing");
+    assert_eq!(
+        skills[0].manifest.description,
+        "A test skill for manifest parsing"
+    );
     assert_eq!(skills[0].manifest.timeout_secs, 60);
     assert!(!skills[0].executable); // No run file
 }
@@ -73,8 +75,7 @@ args_schema:
 timeout_secs: 30
 "#;
 
-    fs::write(skill_dir.join("manifest.yml"), manifest_content)
-        .expect("Failed to write manifest");
+    fs::write(skill_dir.join("manifest.yml"), manifest_content).expect("Failed to write manifest");
 
     // Create executable run script
     let run_content = r#"#!/usr/bin/env python3
@@ -82,16 +83,14 @@ import sys, json
 args = json.loads(sys.stdin.read())
 print(json.dumps({"received": args}))
 "#;
-    fs::write(skill_dir.join("run"), run_content)
-        .expect("Failed to write run script");
+    fs::write(skill_dir.join("run"), run_content).expect("Failed to write run script");
 
     // Make executable
     let mut perms = fs::metadata(skill_dir.join("run"))
         .expect("Failed to get metadata")
         .permissions();
     perms.set_mode(perms.mode() | 0o111);
-    fs::set_permissions(skill_dir.join("run"), perms)
-        .expect("Failed to set permissions");
+    fs::set_permissions(skill_dir.join("run"), perms).expect("Failed to set permissions");
 
     let skills = api_skills::discover_skills(temp_dir.path());
     assert_eq!(skills.len(), 1);
@@ -99,11 +98,8 @@ print(json.dumps({"received": args}))
 
     // Test valid args
     let args = json!({"message": "hello world"});
-    let result = api_skills::execute_skill(
-        &skills[0].run_path,
-        &args,
-        skills[0].manifest.timeout_secs,
-    );
+    let result =
+        api_skills::execute_skill(&skills[0].run_path, &args, skills[0].manifest.timeout_secs);
 
     assert!(result.is_ok());
     let response = result.unwrap();
@@ -136,24 +132,24 @@ args_schema:
 timeout_secs: 30
 "#;
 
-    fs::write(skill_dir.join("manifest.yml"), manifest_content)
-        .expect("Failed to write manifest");
+    fs::write(skill_dir.join("manifest.yml"), manifest_content).expect("Failed to write manifest");
 
     let skills = api_skills::discover_skills(temp_dir.path());
     assert_eq!(skills.len(), 1);
 
     // Test missing required 'url' argument
     let args = json!({"count": 42}); // Missing 'url'
-    let result = api_skills::validate_args_against_schema(
-        &args,
-        &skills[0].manifest.args_schema,
-    );
+    let result = api_skills::validate_args_against_schema(&args, &skills[0].manifest.args_schema);
 
     assert!(result.is_err());
     let errors = result.unwrap_err();
     assert!(!errors.is_empty());
     // Error should mention the missing required property
-    let error_msg = errors.iter().map(|e| e.message.as_str()).collect::<Vec<_>>().join(" ");
+    let error_msg = errors
+        .iter()
+        .map(|e| e.message.as_str())
+        .collect::<Vec<_>>()
+        .join(" ");
     assert!(error_msg.contains("url") || error_msg.contains("required"));
 }
 
@@ -183,18 +179,14 @@ args_schema:
 timeout_secs: 30
 "#;
 
-    fs::write(skill_dir.join("manifest.yml"), manifest_content)
-        .expect("Failed to write manifest");
+    fs::write(skill_dir.join("manifest.yml"), manifest_content).expect("Failed to write manifest");
 
     let skills = api_skills::discover_skills(temp_dir.path());
     assert_eq!(skills.len(), 1);
 
     // Test wrong type for 'count' (string instead of number)
     let args = json!({"count": "not a number"});
-    let result = api_skills::validate_args_against_schema(
-        &args,
-        &skills[0].manifest.args_schema,
-    );
+    let result = api_skills::validate_args_against_schema(&args, &skills[0].manifest.args_schema);
 
     assert!(result.is_err());
     let errors = result.unwrap_err();
@@ -229,18 +221,14 @@ args_schema:
 timeout_secs: 30
 "#;
 
-    fs::write(skill_dir.join("manifest.yml"), manifest_content)
-        .expect("Failed to write manifest");
+    fs::write(skill_dir.join("manifest.yml"), manifest_content).expect("Failed to write manifest");
 
     let skills = api_skills::discover_skills(temp_dir.path());
     assert_eq!(skills.len(), 1);
 
     // Test invalid URI format
     let args = json!({"url": "not-a-valid-uri"});
-    let result = api_skills::validate_args_against_schema(
-        &args,
-        &skills[0].manifest.args_schema,
-    );
+    let result = api_skills::validate_args_against_schema(&args, &skills[0].manifest.args_schema);
 
     assert!(result.is_err());
     let errors = result.unwrap_err();
@@ -271,26 +259,19 @@ args_schema:
 timeout_secs: 30
 "#;
 
-    fs::write(skill_dir.join("manifest.yml"), manifest_content)
-        .expect("Failed to write manifest");
+    fs::write(skill_dir.join("manifest.yml"), manifest_content).expect("Failed to write manifest");
 
     let skills = api_skills::discover_skills(temp_dir.path());
     assert_eq!(skills.len(), 1);
 
     // Test value below minimum
     let args = json!({"count": 0});
-    let result = api_skills::validate_args_against_schema(
-        &args,
-        &skills[0].manifest.args_schema,
-    );
+    let result = api_skills::validate_args_against_schema(&args, &skills[0].manifest.args_schema);
     assert!(result.is_err());
 
     // Test value above maximum
     let args = json!({"count": 101});
-    let result = api_skills::validate_args_against_schema(
-        &args,
-        &skills[0].manifest.args_schema,
-    );
+    let result = api_skills::validate_args_against_schema(&args, &skills[0].manifest.args_schema);
     assert!(result.is_err());
 }
 
@@ -365,8 +346,7 @@ args_schema:
 timeout_secs: 30
 "#;
 
-    fs::write(skill_dir.join("manifest.yml"), manifest_content)
-        .expect("Failed to write manifest");
+    fs::write(skill_dir.join("manifest.yml"), manifest_content).expect("Failed to write manifest");
 
     let skills = api_skills::discover_skills(temp_dir.path());
     assert_eq!(skills.len(), 1);
@@ -392,8 +372,7 @@ args_schema:
 timeout_secs: 30
 "#;
 
-    fs::write(skill_dir.join("manifest.yml"), manifest_content)
-        .expect("Failed to write manifest");
+    fs::write(skill_dir.join("manifest.yml"), manifest_content).expect("Failed to write manifest");
 
     let skills = api_skills::discover_skills(temp_dir.path());
     assert_eq!(skills.len(), 1);
@@ -418,8 +397,7 @@ args_schema:
   type: object
 "#;
 
-    fs::write(skill_dir.join("manifest.yml"), manifest_content)
-        .expect("Failed to write manifest");
+    fs::write(skill_dir.join("manifest.yml"), manifest_content).expect("Failed to write manifest");
 
     let skills = api_skills::discover_skills(temp_dir.path());
     // Skill should be ignored due to name mismatch

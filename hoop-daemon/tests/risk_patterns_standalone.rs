@@ -18,11 +18,18 @@ fn test_library_from_patterns() {
     let expected_count = patterns.len();
     let lib = FixLineageLibrary::from_patterns(patterns);
 
-    assert_eq!(lib.patterns().len(), expected_count,
-               "Library should contain all patterns passed to from_patterns()");
+    assert_eq!(
+        lib.patterns().len(),
+        expected_count,
+        "Library should contain all patterns passed to from_patterns()"
+    );
 
-    assert!(lib.patterns().iter().any(|p| p.id == "large_codegen_stack_overflow"),
-            "Library should contain expected pattern IDs");
+    assert!(
+        lib.patterns()
+            .iter()
+            .any(|p| p.id == "large_codegen_stack_overflow"),
+        "Library should contain expected pattern IDs"
+    );
 }
 
 #[test]
@@ -81,8 +88,15 @@ fn test_add_pattern() {
 
     let matches = lib.match_draft("Test this", None, &[]);
 
-    assert_eq!(matches.len(), 1, "Should find exactly one match for 'test' keyword");
-    assert_eq!(matches[0].pattern.id, "test_pattern", "Matched pattern should have the expected ID");
+    assert_eq!(
+        matches.len(),
+        1,
+        "Should find exactly one match for 'test' keyword"
+    );
+    assert_eq!(
+        matches[0].pattern.id, "test_pattern",
+        "Matched pattern should have the expected ID"
+    );
 }
 
 #[test]
@@ -105,9 +119,7 @@ fn test_default_patterns_exist() {
     assert!(patterns
         .iter()
         .any(|p| p.id == "large_codegen_stack_overflow"));
-    assert!(patterns
-        .iter()
-        .any(|p| p.id == "missing_test_coverage"));
+    assert!(patterns.iter().any(|p| p.id == "missing_test_coverage"));
 }
 
 #[test]
@@ -136,14 +148,26 @@ fn test_add_multiple_patterns() {
         category: RiskCategory::Integration,
     });
 
-    assert_eq!(lib.patterns().len(), 2, "Library should contain exactly 2 patterns");
+    assert_eq!(
+        lib.patterns().len(),
+        2,
+        "Library should contain exactly 2 patterns"
+    );
 
     let matches1 = lib.match_draft("Test keyword1", None, &[]);
-    assert_eq!(matches1.len(), 1, "Should find exactly one match for keyword1");
+    assert_eq!(
+        matches1.len(),
+        1,
+        "Should find exactly one match for keyword1"
+    );
     assert_eq!(matches1[0].pattern.id, "pattern1");
 
     let matches2 = lib.match_draft("Test keyword2", None, &[]);
-    assert_eq!(matches2.len(), 1, "Should find exactly one match for keyword2");
+    assert_eq!(
+        matches2.len(),
+        1,
+        "Should find exactly one match for keyword2"
+    );
     assert_eq!(matches2[0].pattern.id, "pattern2");
 }
 
@@ -185,15 +209,29 @@ fn test_add_pattern_with_mixed_keywords() {
 
     // Should match via title keyword
     let matches_title = lib.match_draft("Large refactor needed", None, &[]);
-    assert_eq!(matches_title.len(), 1, "Should find match via title keyword");
+    assert_eq!(
+        matches_title.len(),
+        1,
+        "Should find match via title keyword"
+    );
 
     // Should match via label keyword
     let matches_label = lib.match_draft("Test issue", None, &["feature".to_string()]);
-    assert_eq!(matches_label.len(), 1, "Should find match via label keyword");
+    assert_eq!(
+        matches_label.len(),
+        1,
+        "Should find match via label keyword"
+    );
 
     // Should have higher confidence when both match
     let matches_both = lib.match_draft("Large refactor", None, &["feature".to_string()]);
-    assert_eq!(matches_both.len(), 1, "Should find match with both keywords");
-    assert!(matches_both[0].confidence > matches_title[0].confidence,
-            "Combined match should have higher confidence");
+    assert_eq!(
+        matches_both.len(),
+        1,
+        "Should find match with both keywords"
+    );
+    assert!(
+        matches_both[0].confidence > matches_title[0].confidence,
+        "Combined match should have higher confidence"
+    );
 }

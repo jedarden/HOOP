@@ -57,8 +57,14 @@ mod pure_function_tests {
 
     #[test]
     fn test_preserve_normal_text() {
-        assert_eq!(ansi_strip::strip_ansi("Just normal text"), "Just normal text");
-        assert_eq!(ansi_strip::strip_ansi("Text with 🎉 emoji"), "Text with 🎉 emoji");
+        assert_eq!(
+            ansi_strip::strip_ansi("Just normal text"),
+            "Just normal text"
+        );
+        assert_eq!(
+            ansi_strip::strip_ansi("Text with 🎉 emoji"),
+            "Text with 🎉 emoji"
+        );
     }
 
     // ============================================================================
@@ -174,7 +180,10 @@ mod pure_function_tests {
     fn test_canonical_tokens() {
         let embedder = NgramEmbedder::new();
         assert_eq!(embedder.canonical_tokens("auth"), vec!["auth"]);
-        assert_eq!(embedder.canonical_tokens("authentication"), vec!["authentication"]);
+        assert_eq!(
+            embedder.canonical_tokens("authentication"),
+            vec!["authentication"]
+        );
     }
 
     #[test]
@@ -234,7 +243,8 @@ mod pure_function_tests {
 
     #[test]
     fn test_strips_script_element() {
-        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><rect/></svg>"#;
+        let svg =
+            r#"<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script><rect/></svg>"#;
         let result = svg_sanitize::sanitize(svg.as_bytes()).expect("sanitize should not fail");
         assert!(result.record.was_modified);
         let out = String::from_utf8(result.safe_bytes).unwrap();
@@ -322,7 +332,7 @@ mod pure_function_tests {
 
     #[test]
     fn test_parse_line_valid_json() {
-        use hoop_daemon::parse_jsonl_safe::{LineSource, parse_line, ParseResult};
+        use hoop_daemon::parse_jsonl_safe::{parse_line, LineSource, ParseResult};
 
         let source = LineSource {
             tag: "test",
@@ -348,15 +358,26 @@ mod pure_function_tests {
             ansi_strip::strip_ansi("\x1b[31m\x1b[1mError\x1b[0m: file not found");
         }
         let ansi_time = start.elapsed();
-        assert!(ansi_time.as_millis() < 100, "ANSI strip too slow: {:?}", ansi_time);
+        assert!(
+            ansi_time.as_millis() < 100,
+            "ANSI strip too slow: {:?}",
+            ansi_time
+        );
 
         // Cost aggregation performance
         let start = Instant::now();
         for _ in 0..1000 {
-            let _ = cost::CostAggregator::extract_account_id("/home/user/.codex/sessions/abc.json", "codex");
+            let _ = cost::CostAggregator::extract_account_id(
+                "/home/user/.codex/sessions/abc.json",
+                "codex",
+            );
         }
         let cost_time = start.elapsed();
-        assert!(cost_time.as_millis() < 10, "Cost functions too slow: {:?}", cost_time);
+        assert!(
+            cost_time.as_millis() < 10,
+            "Cost functions too slow: {:?}",
+            cost_time
+        );
 
         // Embedding performance - use canonical_tokens as embed is stubbed
         let embedder = NgramEmbedder::new();
@@ -365,7 +386,11 @@ mod pure_function_tests {
             let _ = embedder.canonical_tokens("Fix authentication bug in login flow");
         }
         let embed_time = start.elapsed();
-        assert!(embed_time.as_millis() < 500, "Embedding too slow: {:?}", embed_time);
+        assert!(
+            embed_time.as_millis() < 500,
+            "Embedding too slow: {:?}",
+            embed_time
+        );
 
         // Similarity performance
         let start = Instant::now();
@@ -373,18 +398,28 @@ mod pure_function_tests {
             let _ = similarity::text_similarity("fix bug", "fix crash");
         }
         let similarity_time = start.elapsed();
-        assert!(similarity_time.as_millis() < 50, "Similarity too slow: {:?}", similarity_time);
+        assert!(
+            similarity_time.as_millis() < 50,
+            "Similarity too slow: {:?}",
+            similarity_time
+        );
 
         // Status derivation performance (20 beads must be < 10ms per §4.7)
         let start = Instant::now();
         let ctx = hoop_daemon::stitch_status::StitchContext {
-            linked_beads: (0..20).map(|i| hoop_daemon::stitch_status::LinkedBead {
-                id: format!("bd-{}", i),
-                status: hoop_daemon::stitch_status::BeadStatus::Open,
-                issue_type: hoop_daemon::stitch_status::BeadType::Task,
-                claimed_by: if i % 5 == 0 { Some(format!("worker-{}", i)) } else { None },
-                updated_at: chrono::Utc::now() - chrono::Duration::days(i),
-            }).collect(),
+            linked_beads: (0..20)
+                .map(|i| hoop_daemon::stitch_status::LinkedBead {
+                    id: format!("bd-{}", i),
+                    status: hoop_daemon::stitch_status::BeadStatus::Open,
+                    issue_type: hoop_daemon::stitch_status::BeadType::Task,
+                    claimed_by: if i % 5 == 0 {
+                        Some(format!("worker-{}", i))
+                    } else {
+                        None
+                    },
+                    updated_at: chrono::Utc::now() - chrono::Duration::days(i),
+                })
+                .collect(),
             activity: hoop_daemon::stitch_status::StitchActivity {
                 last_message_at: Some(chrono::Utc::now() - chrono::Duration::days(3)),
                 last_streaming_at: None,
@@ -395,7 +430,11 @@ mod pure_function_tests {
             let _ = ctx.derive_status();
         }
         let status_time = start.elapsed();
-        assert!(status_time.as_millis() < 1000, "Status derivation too slow: {:?}", status_time);
+        assert!(
+            status_time.as_millis() < 1000,
+            "Status derivation too slow: {:?}",
+            status_time
+        );
 
         // Tag join performance
         let start = Instant::now();
@@ -403,7 +442,11 @@ mod pure_function_tests {
             let _ = tag_join::resolve("[needle:alpha:bd-abc123:pluck] Fix bug", None);
         }
         let tag_time = start.elapsed();
-        assert!(tag_time.as_millis() < 100, "Tag join too slow: {:?}", tag_time);
+        assert!(
+            tag_time.as_millis() < 100,
+            "Tag join too slow: {:?}",
+            tag_time
+        );
 
         // Prompt substitute performance
         let ctx = prompt_substitute::SubstitutionContext::new().project("test".to_string());
@@ -412,7 +455,11 @@ mod pure_function_tests {
             let _ = prompt_substitute::substitute("Working on {{project}}", &ctx);
         }
         let sub_time = start.elapsed();
-        assert!(sub_time.as_millis() < 100, "Prompt substitute too slow: {:?}", sub_time);
+        assert!(
+            sub_time.as_millis() < 100,
+            "Prompt substitute too slow: {:?}",
+            sub_time
+        );
 
         println!("All pure function performance tests passed:");
         println!("  ANSI strip: {:?} (10k ops)", ansi_time);
@@ -475,8 +522,8 @@ mod pure_function_tests {
 
     #[test]
     fn test_path_security_edge_cases() {
-        use std::path::PathBuf;
         use hoop_schema::path_security::PathAllowlist;
+        use std::path::PathBuf;
 
         // Empty allowlist
         let al = PathAllowlist::from_roots(vec![]);
@@ -507,7 +554,9 @@ mod pure_function_tests {
         let svg = b"<svg><rect ONCLICK=\"alert(1)\"/></svg>";
         let result = svg_sanitize::sanitize(svg).unwrap();
         assert!(result.record.was_modified);
-        assert!(!String::from_utf8_lossy(&result.safe_bytes).to_ascii_lowercase().contains("onclick"));
+        assert!(!String::from_utf8_lossy(&result.safe_bytes)
+            .to_ascii_lowercase()
+            .contains("onclick"));
     }
 
     #[test]
@@ -525,7 +574,9 @@ mod pure_function_tests {
     #[test]
     fn test_stitch_status_edge_cases() {
         use chrono::Utc;
-        use hoop_daemon::stitch_status::{BeadStatus, BeadType, LinkedBead, StitchActivity, StitchContext};
+        use hoop_daemon::stitch_status::{
+            BeadStatus, BeadType, LinkedBead, StitchActivity, StitchContext,
+        };
 
         // No linked beads, no activity
         let ctx = StitchContext {
@@ -568,6 +619,9 @@ mod pure_function_tests {
             },
             config: Default::default(),
         };
-        assert_eq!(ctx.derive_status(), hoop_daemon::stitch_status::StitchStatus::InProgress);
+        assert_eq!(
+            ctx.derive_status(),
+            hoop_daemon::stitch_status::StitchStatus::InProgress
+        );
     }
 }

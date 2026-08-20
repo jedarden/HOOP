@@ -90,7 +90,10 @@ pub struct CollisionDetector {
 }
 
 impl CollisionDetector {
-    pub fn new(registry: Arc<WorkerRegistry>, alert_tx: broadcast::Sender<CollisionAlertData>) -> Self {
+    pub fn new(
+        registry: Arc<WorkerRegistry>,
+        alert_tx: broadcast::Sender<CollisionAlertData>,
+    ) -> Self {
         Self {
             registry,
             alert_tx,
@@ -132,8 +135,9 @@ impl CollisionDetector {
             if *expected_bead != meta.bead {
                 continue; // stale conversation — worker moved on to another bead
             }
-            let paths: HashSet<String> =
-                extract_touched_files(&conv.messages, &conv.cwd).into_iter().collect();
+            let paths: HashSet<String> = extract_touched_files(&conv.messages, &conv.cwd)
+                .into_iter()
+                .collect();
             if !paths.is_empty() {
                 snapshots.push(WorkerSnapshot {
                     worker: meta.worker.clone(),
@@ -162,9 +166,19 @@ impl CollisionDetector {
 
                 // Canonical ordering: alphabetically earlier worker is "a"
                 let (w_a, b_a, w_b, b_b) = if a.worker <= b.worker {
-                    (a.worker.as_str(), a.bead.as_str(), b.worker.as_str(), b.bead.as_str())
+                    (
+                        a.worker.as_str(),
+                        a.bead.as_str(),
+                        b.worker.as_str(),
+                        b.bead.as_str(),
+                    )
                 } else {
-                    (b.worker.as_str(), b.bead.as_str(), a.worker.as_str(), a.bead.as_str())
+                    (
+                        b.worker.as_str(),
+                        b.bead.as_str(),
+                        a.worker.as_str(),
+                        a.bead.as_str(),
+                    )
                 };
 
                 // Dedup key: (worker_a, worker_b, sorted_files)
@@ -205,8 +219,7 @@ impl CollisionDetector {
         mut shutdown: broadcast::Receiver<crate::shutdown::ShutdownPhase>,
     ) {
         tokio::spawn(async move {
-            let mut ticker =
-                tokio::time::interval(tokio::time::Duration::from_secs(interval_secs));
+            let mut ticker = tokio::time::interval(tokio::time::Duration::from_secs(interval_secs));
             ticker.tick().await; // consume the immediate first tick
             loop {
                 tokio::select! {
@@ -283,108 +296,105 @@ mod tests {
 
     #[test]
     fn test_extract_touched_files_write_file() {
-        let messages = vec![
-            make_tool_use_message("write_file", "/home/test/src/main.rs"),
-        ];
+        let messages = vec![make_tool_use_message(
+            "write_file",
+            "/home/test/src/main.rs",
+        )];
         let paths = extract_touched_files(&messages, "/home/test");
         assert_eq!(paths, vec!["/home/test/src/main.rs"]);
     }
 
     #[test]
     fn test_extract_touched_files_write() {
-        let messages = vec![
-            make_tool_use_message("Write", "/home/test/README.md"),
-        ];
+        let messages = vec![make_tool_use_message("Write", "/home/test/README.md")];
         let paths = extract_touched_files(&messages, "/home/test");
         assert_eq!(paths, vec!["/home/test/README.md"]);
     }
 
     #[test]
     fn test_extract_touched_files_edit() {
-        let messages = vec![
-            make_tool_use_message("edit", "/home/test/src/lib.rs"),
-        ];
+        let messages = vec![make_tool_use_message("edit", "/home/test/src/lib.rs")];
         let paths = extract_touched_files(&messages, "/home/test");
         assert_eq!(paths, vec!["/home/test/src/lib.rs"]);
     }
 
     #[test]
     fn test_extract_touched_files_create_file() {
-        let messages = vec![
-            make_tool_use_message("create_file", "/home/test/new_file.rs"),
-        ];
+        let messages = vec![make_tool_use_message(
+            "create_file",
+            "/home/test/new_file.rs",
+        )];
         let paths = extract_touched_files(&messages, "/home/test");
         assert_eq!(paths, vec!["/home/test/new_file.rs"]);
     }
 
     #[test]
     fn test_extract_touched_files_str_replace_editor() {
-        let messages = vec![
-            make_tool_use_message_file_path("str_replace_editor", "/home/test/config.yml"),
-        ];
+        let messages = vec![make_tool_use_message_file_path(
+            "str_replace_editor",
+            "/home/test/config.yml",
+        )];
         let paths = extract_touched_files(&messages, "/home/test");
         assert_eq!(paths, vec!["/home/test/config.yml"]);
     }
 
     #[test]
     fn test_extract_touched_files_replace_in_file() {
-        let messages = vec![
-            make_tool_use_message("replace_in_file", "/home/test/src/main.rs"),
-        ];
+        let messages = vec![make_tool_use_message(
+            "replace_in_file",
+            "/home/test/src/main.rs",
+        )];
         let paths = extract_touched_files(&messages, "/home/test");
         assert_eq!(paths, vec!["/home/test/src/main.rs"]);
     }
 
     #[test]
     fn test_extract_touched_files_multi_edit() {
-        let messages = vec![
-            make_tool_use_message("MultiEdit", "/home/test/src/lib.rs"),
-        ];
+        let messages = vec![make_tool_use_message("MultiEdit", "/home/test/src/lib.rs")];
         let paths = extract_touched_files(&messages, "/home/test");
         assert_eq!(paths, vec!["/home/test/src/lib.rs"]);
     }
 
     #[test]
     fn test_extract_touched_files_str_replace_based_edit_tool() {
-        let messages = vec![
-            make_tool_use_message_file_path("str_replace_based_edit_tool", "/home/test/file.py"),
-        ];
+        let messages = vec![make_tool_use_message_file_path(
+            "str_replace_based_edit_tool",
+            "/home/test/file.py",
+        )];
         let paths = extract_touched_files(&messages, "/home/test");
         assert_eq!(paths, vec!["/home/test/file.py"]);
     }
 
     #[test]
     fn test_extract_touched_files_create_or_overwrite_file() {
-        let messages = vec![
-            make_tool_use_message("create_or_overwrite_file", "/home/test/data.json"),
-        ];
+        let messages = vec![make_tool_use_message(
+            "create_or_overwrite_file",
+            "/home/test/data.json",
+        )];
         let paths = extract_touched_files(&messages, "/home/test");
         assert_eq!(paths, vec!["/home/test/data.json"]);
     }
 
     #[test]
     fn test_extract_touched_files_overwrite_file() {
-        let messages = vec![
-            make_tool_use_message("overwrite_file", "/home/test/config.toml"),
-        ];
+        let messages = vec![make_tool_use_message(
+            "overwrite_file",
+            "/home/test/config.toml",
+        )];
         let paths = extract_touched_files(&messages, "/home/test");
         assert_eq!(paths, vec!["/home/test/config.toml"]);
     }
 
     #[test]
     fn test_extract_touched_files_relative_path() {
-        let messages = vec![
-            make_tool_use_message("edit", "src/utils.rs"),
-        ];
+        let messages = vec![make_tool_use_message("edit", "src/utils.rs")];
         let paths = extract_touched_files(&messages, "/home/myproject");
         assert_eq!(paths, vec!["/home/myproject/src/utils.rs"]);
     }
 
     #[test]
     fn test_extract_touched_files_absolute_path() {
-        let messages = vec![
-            make_tool_use_message("write_file", "/tmp/test.txt"),
-        ];
+        let messages = vec![make_tool_use_message("write_file", "/tmp/test.txt")];
         let paths = extract_touched_files(&messages, "/home/project");
         // Absolute paths should remain absolute
         assert_eq!(paths, vec!["/tmp/test.txt"]);
@@ -427,16 +437,14 @@ mod tests {
 
     #[test]
     fn test_extract_touched_files_ignores_non_write_tools() {
-        let messages = vec![
-            SessionMessageData {
-                role: "assistant".to_string(),
-                content: serde_json::json!([
-                    {"type": "tool_use", "name": "read_file", "input": {"path": "/home/test/file.rs"}}
-                ]),
-                usage: None,
-                timestamp: None,
-            },
-        ];
+        let messages = vec![SessionMessageData {
+            role: "assistant".to_string(),
+            content: serde_json::json!([
+                {"type": "tool_use", "name": "read_file", "input": {"path": "/home/test/file.rs"}}
+            ]),
+            usage: None,
+            timestamp: None,
+        }];
         let paths = extract_touched_files(&messages, "/home/test");
         // read_file is not in FILE_WRITE_TOOLS, so it should be ignored
         assert!(paths.is_empty());
@@ -451,9 +459,10 @@ mod tests {
 
     #[test]
     fn test_extract_touched_files_target_file_variant() {
-        let messages = vec![
-            make_tool_use_message_target_file("create_or_overwrite_file", "/home/test/target.txt"),
-        ];
+        let messages = vec![make_tool_use_message_target_file(
+            "create_or_overwrite_file",
+            "/home/test/target.txt",
+        )];
         let paths = extract_touched_files(&messages, "/home/test");
         assert_eq!(paths, vec!["/home/test/target.txt"]);
     }
@@ -492,9 +501,7 @@ mod tests {
 
     #[test]
     fn test_extract_touched_files_cwd_trailing_slash() {
-        let messages = vec![
-            make_tool_use_message("edit", "src/main.rs"),
-        ];
+        let messages = vec![make_tool_use_message("edit", "src/main.rs")];
         // Trailing slash should be handled correctly
         let paths = extract_touched_files(&messages, "/home/test/");
         assert_eq!(paths, vec!["/home/test/src/main.rs"]);
@@ -502,9 +509,7 @@ mod tests {
 
     #[test]
     fn test_extract_touched_files_empty_path() {
-        let messages = vec![
-            make_tool_use_message("edit", ""),
-        ];
+        let messages = vec![make_tool_use_message("edit", "")];
         let paths = extract_touched_files(&messages, "/home/test");
         // Empty path should still be included
         assert_eq!(paths, vec!["/home/test"]);

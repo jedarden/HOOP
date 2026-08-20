@@ -12,8 +12,7 @@ use std::path::{Path, PathBuf};
 
 /// Notes directory path
 pub fn notes_dir() -> Result<PathBuf> {
-    let mut path = dirs::home_dir()
-        .ok_or_else(|| anyhow!("Cannot determine home directory"))?;
+    let mut path = dirs::home_dir().ok_or_else(|| anyhow!("Cannot determine home directory"))?;
     path.push(".hoop");
     path.push("notes");
     Ok(path)
@@ -64,11 +63,7 @@ struct NoteFrontmatter {
 }
 
 /// Parse a single note markdown file with optional YAML frontmatter.
-fn parse_note_file(
-    path: &Path,
-    scope: NoteScope,
-    project: Option<String>,
-) -> Result<Note> {
+fn parse_note_file(path: &Path, scope: NoteScope, project: Option<String>) -> Result<Note> {
     let content = fs::read_to_string(path)?;
     let metadata = fs::metadata(path)?;
 
@@ -141,7 +136,10 @@ pub fn discover_global_notes() -> Vec<Note> {
     };
 
     let Ok(entries) = fs::read_dir(&notes_dir) else {
-        tracing::debug!("Global notes directory not readable: {}", notes_dir.display());
+        tracing::debug!(
+            "Global notes directory not readable: {}",
+            notes_dir.display()
+        );
         return notes;
     };
 
@@ -179,7 +177,10 @@ pub fn discover_project_notes(project: &str, workspace: &Path) -> Vec<Note> {
     }
 
     let Ok(entries) = fs::read_dir(&project_notes_dir) else {
-        tracing::debug!("Project notes directory not readable: {}", project_notes_dir.display());
+        tracing::debug!(
+            "Project notes directory not readable: {}",
+            project_notes_dir.display()
+        );
         return notes;
     };
 
@@ -206,10 +207,7 @@ pub fn discover_project_notes(project: &str, workspace: &Path) -> Vec<Note> {
 }
 
 /// Read a note by name (global first, then all projects)
-pub fn read_note_by_name(
-    name: &str,
-    projects: &HashMap<String, String>,
-) -> Option<Note> {
+pub fn read_note_by_name(name: &str, projects: &HashMap<String, String>) -> Option<Note> {
     // Check global notes first
     for note in discover_global_notes() {
         if note.name == name {

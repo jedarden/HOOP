@@ -289,7 +289,12 @@ async fn create_draft(
         connect_info.map(|ci| ci.0),
         crate::auth::Role::Drafter,
     )
-    .map_err(|e| (e.0, serde_json::to_string(&e.1 .0).unwrap_or_else(|_| e.0.to_string())))?;
+    .map_err(|e| {
+        (
+            e.0,
+            serde_json::to_string(&e.1 .0).unwrap_or_else(|_| e.0.to_string()),
+        )
+    })?;
 
     // Validate project name from request body
     crate::id_validators::validate_project_name(&req.project)
@@ -343,10 +348,10 @@ async fn create_draft(
             crate::redaction::audit_findings(
                 "draft",
                 &findings,
-                crate::redaction_policy::RedactionAction::FlaggedOnly,  // Just flag, no automatic action
+                crate::redaction_policy::RedactionAction::FlaggedOnly, // Just flag, no automatic action
                 &draft_id,
                 Some(&req.project),
-                &actor,  // Use the actor who created the draft
+                &actor, // Use the actor who created the draft
             );
         }
     }
@@ -391,7 +396,11 @@ async fn create_draft(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // Audit: draft created
-    let audit_source = if req.source.is_empty() { "agent" } else { &req.source };
+    let audit_source = if req.source.is_empty() {
+        "agent"
+    } else {
+        &req.source
+    };
 
     // Build audit args with agent metadata for traceability
     let audit_args_json = if let Some(ref session_id) = req.agent_session_id {
@@ -486,7 +495,12 @@ async fn approve_draft(
         connect_info.map(|ci| ci.0),
         crate::auth::Role::Drafter,
     )
-    .map_err(|e| (e.0, serde_json::to_string(&e.1 .0).unwrap_or_else(|_| e.0.to_string())))?;
+    .map_err(|e| {
+        (
+            e.0,
+            serde_json::to_string(&e.1 .0).unwrap_or_else(|_| e.0.to_string()),
+        )
+    })?;
 
     crate::id_validators::validate_draft_id(&draft_id).map_err(crate::id_validators::rejection)?;
 
@@ -630,21 +644,35 @@ async fn approve_draft(
 
     // Create bidirectional link from new stitch to original dictated note (if applicable)
     if draft.source.starts_with("dictated-note:") {
-        let original_note_stitch_id = draft.source.strip_prefix("dictated-note:").unwrap_or_default();
+        let original_note_stitch_id = draft
+            .source
+            .strip_prefix("dictated-note:")
+            .unwrap_or_default();
         if !original_note_stitch_id.is_empty() {
             let db_path = fleet::db_path();
             if let Ok(conn) = rusqlite::Connection::open_with_flags(
                 &db_path,
-                rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+                rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE
+                    | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
             ) {
                 // Create link from new stitch back to dictated note
                 if let Err(e) = conn.execute(
                     "INSERT INTO stitch_links (from_stitch, to_stitch, kind) VALUES (?1, ?2, ?3)",
-                    [&submit_result.stitch_id, original_note_stitch_id, "references"],
+                    [
+                        &submit_result.stitch_id,
+                        original_note_stitch_id,
+                        "references",
+                    ],
                 ) {
-                    warn!("Failed to create bidirectional link from {} to {}: {}", submit_result.stitch_id, original_note_stitch_id, e);
+                    warn!(
+                        "Failed to create bidirectional link from {} to {}: {}",
+                        submit_result.stitch_id, original_note_stitch_id, e
+                    );
                 } else {
-                    info!("Created bidirectional link: {} -> {}", submit_result.stitch_id, original_note_stitch_id);
+                    info!(
+                        "Created bidirectional link: {} -> {}",
+                        submit_result.stitch_id, original_note_stitch_id
+                    );
                 }
             }
         }

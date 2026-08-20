@@ -18,7 +18,7 @@ fn parse_and_get_error(yaml: &str) -> Option<ConfigError> {
     let result: Result<Value, _> = serde_yaml::from_str(yaml);
     match result {
         Ok(_) => None,
-        Err(yaml_err) => Some(ConfigError::from(yaml_err)),
+        Err(yaml_err) => Some(ConfigError::from_yaml(&yaml_err)),
     }
 }
 
@@ -75,7 +75,8 @@ schema_version: "1.0"
     assert!(err.is_some(), "invalid schema_version format should fail");
     let err = err.unwrap();
     assert!(
-        err.message.to_lowercase().contains("pattern") || err.message.to_lowercase().contains("format"),
+        err.message.to_lowercase().contains("pattern")
+            || err.message.to_lowercase().contains("format"),
         "error should mention pattern/format: {:?}",
         err.message
     );
@@ -90,7 +91,8 @@ schema_version: "latest"
     assert!(err.is_some(), "invalid schema_version text should fail");
     let err = err.unwrap();
     assert!(
-        err.message.to_lowercase().contains("pattern") || err.message.to_lowercase().contains("format"),
+        err.message.to_lowercase().contains("pattern")
+            || err.message.to_lowercase().contains("format"),
         "error should mention pattern/format: {:?}",
         err.message
     );
@@ -109,7 +111,8 @@ agent:
     assert!(err.is_some(), "missing agent.adapter should fail");
     let err = err.unwrap();
     assert!(
-        err.field.as_ref().unwrap().contains("adapter") || err.message.to_lowercase().contains("adapter"),
+        err.field.as_ref().unwrap().contains("adapter")
+            || err.message.to_lowercase().contains("adapter"),
         "error should mention adapter: {:?}",
         err.field
     );
@@ -148,7 +151,9 @@ agent:
     assert!(err.is_some(), "invalid adapter value should fail");
     let err = err.unwrap();
     assert!(
-        err.message.to_lowercase().contains("adapter") || err.message.to_lowercase().contains("variant") || err.message.to_lowercase().contains("unknown"),
+        err.message.to_lowercase().contains("adapter")
+            || err.message.to_lowercase().contains("variant")
+            || err.message.to_lowercase().contains("unknown"),
         "error should mention adapter/variant: {:?}",
         err.message
     );
@@ -335,7 +340,9 @@ metrics:
     // If it passes, at least document the behavior
     if let Some(err) = err {
         assert!(
-            err.message.to_lowercase().contains("port") || err.message.to_lowercase().contains("range") || err.message.to_lowercase().contains("minimum"),
+            err.message.to_lowercase().contains("port")
+                || err.message.to_lowercase().contains("range")
+                || err.message.to_lowercase().contains("minimum"),
             "error should mention port/range: {:?}",
             err.message
         );
@@ -449,7 +456,9 @@ ui:
     assert!(err.is_some(), "invalid ui.theme value should fail");
     let err = err.unwrap();
     assert!(
-        err.message.to_lowercase().contains("theme") || err.message.to_lowercase().contains("variant") || err.message.to_lowercase().contains("unknown"),
+        err.message.to_lowercase().contains("theme")
+            || err.message.to_lowercase().contains("variant")
+            || err.message.to_lowercase().contains("unknown"),
         "error should mention theme/variant: {:?}",
         err.message
     );
@@ -592,7 +601,10 @@ roles:
   viewers: "user@example.com"
 "#;
     let err = parse_and_get_error(yaml);
-    assert!(err.is_some(), "string roles.viewers should fail (must be array)");
+    assert!(
+        err.is_some(),
+        "string roles.viewers should fail (must be array)"
+    );
     let err = err.unwrap();
     assert!(
         err.expected.as_deref() == Some("array"),
@@ -630,7 +642,10 @@ roles:
   drafters: "user@example.com"
 "#;
     let err = parse_and_get_error(yaml);
-    assert!(err.is_some(), "string roles.drafters should fail (must be array)");
+    assert!(
+        err.is_some(),
+        "string roles.drafters should fail (must be array)"
+    );
     let err = err.unwrap();
     assert!(
         err.expected.as_deref() == Some("array"),
@@ -826,7 +841,9 @@ projects: "not-an-array"
     assert!(err.is_some(), "non-array projects should fail");
     let err = err.unwrap();
     assert!(
-        err.expected.as_deref() == Some("array") || err.message.to_lowercase().contains("array") || err.message.to_lowercase().contains("sequence"),
+        err.expected.as_deref() == Some("array")
+            || err.message.to_lowercase().contains("array")
+            || err.message.to_lowercase().contains("sequence"),
         "error should mention array: expected={:?}, message={:?}",
         err.expected,
         err.message
@@ -843,7 +860,9 @@ projects:
     assert!(err.is_some(), "string in projects array should fail");
     let err = err.unwrap();
     assert!(
-        err.expected.as_deref() == Some("object") || err.message.to_lowercase().contains("object") || err.message.to_lowercase().contains("map"),
+        err.expected.as_deref() == Some("object")
+            || err.message.to_lowercase().contains("object")
+            || err.message.to_lowercase().contains("map"),
         "error should mention object: expected={:?}, message={:?}",
         err.expected,
         err.message
@@ -862,7 +881,8 @@ unknown_field: "should be rejected"
     assert!(err.is_some(), "unknown field should be rejected");
     let err = err.unwrap();
     assert!(
-        err.message.to_lowercase().contains("unknown") || err.message.to_lowercase().contains("field"),
+        err.message.to_lowercase().contains("unknown")
+            || err.message.to_lowercase().contains("field"),
         "error should mention unknown field: {:?}",
         err.message
     );
@@ -880,7 +900,8 @@ agent:
     assert!(err.is_some(), "unknown nested field should be rejected");
     let err = err.unwrap();
     assert!(
-        err.message.to_lowercase().contains("unknown") || err.message.to_lowercase().contains("field"),
+        err.message.to_lowercase().contains("unknown")
+            || err.message.to_lowercase().contains("field"),
         "error should mention unknown field: {:?}",
         err.message
     );
@@ -895,10 +916,14 @@ ui:
   unknown_field: "should be rejected"
 "#;
     let err = parse_and_get_error(yaml);
-    assert!(err.is_some(), "unknown nested field in ui should be rejected");
+    assert!(
+        err.is_some(),
+        "unknown nested field in ui should be rejected"
+    );
     let err = err.unwrap();
     assert!(
-        err.message.to_lowercase().contains("unknown") || err.message.to_lowercase().contains("field"),
+        err.message.to_lowercase().contains("unknown")
+            || err.message.to_lowercase().contains("field"),
         "error should mention unknown field: {:?}",
         err.message
     );
@@ -913,10 +938,14 @@ projects:
     unknown_field: "should be rejected"
 "#;
     let err = parse_projects_and_get_error(yaml);
-    assert!(err.is_some(), "unknown field in project entry should be rejected");
+    assert!(
+        err.is_some(),
+        "unknown field in project entry should be rejected"
+    );
     let err = err.unwrap();
     assert!(
-        err.message.to_lowercase().contains("unknown") || err.message.to_lowercase().contains("field"),
+        err.message.to_lowercase().contains("unknown")
+            || err.message.to_lowercase().contains("field"),
         "error should mention unknown field: {:?}",
         err.message
     );
@@ -1063,10 +1092,7 @@ agent:
   adapter: 42
 "#;
     let err = parse_and_get_error(yaml).unwrap();
-    assert!(
-        !err.message.is_empty(),
-        "error message should not be empty"
-    );
+    assert!(!err.message.is_empty(), "error message should not be empty");
     assert!(
         err.message.len() < 500,
         "error message should be concise (got {} chars)",

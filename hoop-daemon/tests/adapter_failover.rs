@@ -99,7 +99,10 @@ fn test_anthropic_5xx_doesnt_crash_daemon() {
     assert!(adapter_result.is_ok(), "Adapter build should succeed");
 
     let adapter = adapter_result.unwrap();
-    assert_eq!(adapter.kind(), hoop_daemon::agent_adapter::AdapterKind::Anthropic);
+    assert_eq!(
+        adapter.kind(),
+        hoop_daemon::agent_adapter::AdapterKind::Anthropic
+    );
 
     // The adapter's send_turn would handle HTTP errors internally.
     // The daemon's AgentSessionManager would log the error but remain running.
@@ -117,10 +120,16 @@ fn test_anthropic_5xx_doesnt_crash_daemon() {
     };
 
     let adapter_result2 = hoop_daemon::agent_adapter::build_adapter(&config2);
-    assert!(adapter_result2.is_ok(), "ZAI adapter build should succeed after Anthropic");
+    assert!(
+        adapter_result2.is_ok(),
+        "ZAI adapter build should succeed after Anthropic"
+    );
 
     let adapter2 = adapter_result2.unwrap();
-    assert_eq!(adapter2.kind(), hoop_daemon::agent_adapter::AdapterKind::Zai);
+    assert_eq!(
+        adapter2.kind(),
+        hoop_daemon::agent_adapter::AdapterKind::Zai
+    );
 
     teardown_test_db();
 }
@@ -157,7 +166,10 @@ fn test_adapter_switch_archives_session_as_stitch() {
 
     // Create some conversation history
     let history = vec![
-        ("user".to_string(), "What is the project structure?".to_string()),
+        (
+            "user".to_string(),
+            "What is the project structure?".to_string(),
+        ),
         (
             "assistant".to_string(),
             "The project has three main crates: hoop-daemon, hoop-cli, and hoop-mcp.".to_string(),
@@ -184,7 +196,10 @@ fn test_adapter_switch_archives_session_as_stitch() {
         )
         .expect("query stitch");
 
-    assert_eq!(stitch_project, "hoop-agent", "Stitch should be in hoop-agent project");
+    assert_eq!(
+        stitch_project, "hoop-agent",
+        "Stitch should be in hoop-agent project"
+    );
     assert_eq!(stitch_kind, "operator", "Stitch should be kind=operator");
     assert!(
         stitch_title.contains("anthropic"),
@@ -212,7 +227,8 @@ fn test_adapter_switch_archives_session_as_stitch() {
         .expect("query linked stitch");
 
     assert_eq!(
-        linked_stitch_id, Some(stitch_id),
+        linked_stitch_id,
+        Some(stitch_id),
         "Agent session should be linked to the archived stitch"
     );
 
@@ -249,8 +265,7 @@ fn test_adapter_switch_archives_session_row() {
     hoop_daemon::fleet::insert_agent_session(&session_row).expect("insert session");
 
     // Archive the session (simulating adapter switch)
-    hoop_daemon::fleet::archive_agent_session(&session_id, "switched")
-        .expect("archive session");
+    hoop_daemon::fleet::archive_agent_session(&session_id, "switched").expect("archive session");
 
     // Verify the session was archived
     let conn = rusqlite::Connection::open(hoop_daemon::fleet::db_path()).expect("open db");
@@ -265,13 +280,11 @@ fn test_adapter_switch_archives_session_row() {
 
     assert_eq!(status, "switched", "Session should be marked as switched");
     assert_eq!(
-        archived_reason, Some("switched".to_string()),
+        archived_reason,
+        Some("switched".to_string()),
         "Archived reason should be 'switched'"
     );
-    assert!(
-        archived_at.is_some(),
-        "Archived timestamp should be set"
-    );
+    assert!(archived_at.is_some(), "Archived timestamp should be set");
 
     teardown_test_db();
 }
@@ -413,8 +426,7 @@ fn test_reflection_ledger_preserved_across_switch() {
     };
 
     hoop_daemon::fleet::insert_agent_session(&session_row).expect("insert session");
-    hoop_daemon::fleet::archive_agent_session(&session_id, "switched")
-        .expect("archive session");
+    hoop_daemon::fleet::archive_agent_session(&session_id, "switched").expect("archive session");
 
     // Create a new ZAI session
     let new_session_id = uuid::Uuid::new_v4().to_string();
@@ -439,13 +451,20 @@ fn test_reflection_ledger_preserved_across_switch() {
     hoop_daemon::fleet::insert_agent_session(&new_session_row).expect("insert new session");
 
     // Verify Reflection Ledger entries are still present
-    let entries = hoop_daemon::fleet::list_approved_reflection_entries(None)
-        .expect("list approved entries");
+    let entries =
+        hoop_daemon::fleet::list_approved_reflection_entries(None).expect("list approved entries");
 
-    assert_eq!(entries.len(), 2, "Both Reflection Ledger entries should be preserved");
+    assert_eq!(
+        entries.len(),
+        2,
+        "Both Reflection Ledger entries should be preserved"
+    );
 
     let scopes: Vec<&str> = entries.iter().map(|e| e.scope.as_str()).collect();
-    assert!(scopes.contains(&"global"), "Global rule should be preserved");
+    assert!(
+        scopes.contains(&"global"),
+        "Global rule should be preserved"
+    );
     assert!(
         scopes.contains(&"project:hoop"),
         "Project rule should be preserved"
@@ -510,8 +529,7 @@ fn test_session_status_shows_new_adapter_after_switch() {
     hoop_daemon::fleet::insert_agent_session(&new_session).expect("insert new session");
 
     // Query active sessions
-    let active_sessions = hoop_daemon::fleet::list_agent_sessions(10)
-        .expect("list sessions");
+    let active_sessions = hoop_daemon::fleet::list_agent_sessions(10).expect("list sessions");
 
     let active: Vec<_> = active_sessions
         .into_iter()
@@ -521,9 +539,18 @@ fn test_session_status_shows_new_adapter_after_switch() {
     assert_eq!(active.len(), 1, "Should have exactly one active session");
 
     let active_session = &active[0];
-    assert_eq!(active_session.adapter, "zai", "Active adapter should be zai");
-    assert_eq!(active_session.model, "glm-5", "Active model should be glm-5");
-    assert_eq!(active_session.turn_count, 0, "New session should have 0 turns");
+    assert_eq!(
+        active_session.adapter, "zai",
+        "Active adapter should be zai"
+    );
+    assert_eq!(
+        active_session.model, "glm-5",
+        "Active model should be glm-5"
+    );
+    assert_eq!(
+        active_session.turn_count, 0,
+        "New session should have 0 turns"
+    );
 
     // The old session should be archived
     let archived_sessions: Vec<_> = hoop_daemon::fleet::list_agent_sessions(10)
@@ -532,7 +559,11 @@ fn test_session_status_shows_new_adapter_after_switch() {
         .filter(|s| s.status == "switched")
         .collect();
 
-    assert_eq!(archived_sessions.len(), 1, "Should have one archived session");
+    assert_eq!(
+        archived_sessions.len(),
+        1,
+        "Should have one archived session"
+    );
     assert_eq!(
         archived_sessions[0].adapter, "anthropic",
         "Archived adapter should be anthropic"
@@ -632,10 +663,7 @@ fn test_archived_stitch_metadata() {
     assert_eq!(messages.len(), 4, "All 4 messages should be stored");
 
     // Verify tool message is preserved
-    let tool_messages: Vec<_> = messages
-        .iter()
-        .filter(|(role, _)| role == "tool")
-        .collect();
+    let tool_messages: Vec<_> = messages.iter().filter(|(role, _)| role == "tool").collect();
 
     assert_eq!(tool_messages.len(), 1, "Tool message should be preserved");
     assert!(
@@ -713,9 +741,15 @@ fn test_session_history_round_trip() {
     }
 
     // Special verification for multi-line and special characters
-    assert!(messages[1].1.contains('\n'), "Multi-line content should be preserved");
+    assert!(
+        messages[1].1.contains('\n'),
+        "Multi-line content should be preserved"
+    );
     assert!(messages[1].1.contains('"'), "Quotes should be preserved");
-    assert!(messages[3].1.contains("```rust"), "Code blocks should be preserved");
+    assert!(
+        messages[3].1.contains("```rust"),
+        "Code blocks should be preserved"
+    );
 
     teardown_test_db();
 }
@@ -786,8 +820,8 @@ fn test_handoff_context_includes_reflection_ledger() {
     hoop_daemon::fleet::insert_reflection_entry(&rejected).expect("insert rejected");
 
     // Load approved entries (same logic as build_handoff_context in agent_session.rs)
-    let approved = hoop_daemon::fleet::list_approved_reflection_entries(None)
-        .expect("list approved");
+    let approved =
+        hoop_daemon::fleet::list_approved_reflection_entries(None).expect("list approved");
 
     assert_eq!(approved.len(), 2, "Only approved entries should appear");
 

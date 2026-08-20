@@ -226,6 +226,8 @@ fn test_edit_invalid_then_fix_cycle_preserves_state() {
         None,
         None,
         Some(fleet::ActionKind::ConfigReloadRejected),
+        None,
+        None,
     )
     .expect("query rejected");
     assert_eq!(rejected_rows.len(), 1, "one rejected audit row");
@@ -234,9 +236,15 @@ fn test_edit_invalid_then_fix_cycle_preserves_state() {
         fleet::ActionResult::Failure
     ));
 
-    let success_rows =
-        fleet::query_audit_rows(None, None, None, Some(fleet::ActionKind::ConfigReloaded))
-            .expect("query success");
+    let success_rows = fleet::query_audit_rows(
+        None,
+        None,
+        None,
+        Some(fleet::ActionKind::ConfigReloaded),
+        None,
+        None,
+    )
+    .expect("query success");
     assert_eq!(success_rows.len(), 1, "one success audit row");
     assert!(matches!(
         success_rows[0].result,
@@ -494,6 +502,8 @@ fn test_semantic_validation_rejection_preserves_state() {
         None,
         None,
         Some(fleet::ActionKind::ConfigReloadRejected),
+        None,
+        None,
     )
     .expect("query");
     assert_eq!(

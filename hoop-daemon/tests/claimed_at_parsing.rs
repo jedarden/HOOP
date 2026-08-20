@@ -203,25 +203,22 @@ fn demonstrates_premature_end_of_input_issue() {
 #[test]
 fn edge_case_timestamps() {
     let edge_cases = vec![
-        ("2026-04-21T18:42:10Z", true),           // Standard format
-        ("2026-04-21T18:42:10.0Z", true),         // Zero milliseconds
-        ("2026-04-21T18:42:10.000Z", true),       // Three-digit milliseconds
-        ("2026-04-21T18:42:10.000000Z", true),   // Six-digit fractional (microseconds) - chrono accepts these
-        ("2026-04-21T18:42:10+00:00", true),     // Positive offset
-        ("2026-04-21T18:42:10-00:00", true),     // Negative offset
-        ("2026-04-21 18:42:10Z", true),          // Space instead of T - chrono accepts this
-        ("2026-04-21T18:42:10", false),          // Missing Z (no timezone - invalid)
+        ("2026-04-21T18:42:10Z", true),        // Standard format
+        ("2026-04-21T18:42:10.0Z", true),      // Zero milliseconds
+        ("2026-04-21T18:42:10.000Z", true),    // Three-digit milliseconds
+        ("2026-04-21T18:42:10.000000Z", true), // Six-digit fractional (microseconds) - chrono accepts these
+        ("2026-04-21T18:42:10+00:00", true),   // Positive offset
+        ("2026-04-21T18:42:10-00:00", true),   // Negative offset
+        ("2026-04-21 18:42:10Z", true),        // Space instead of T - chrono accepts this
+        ("2026-04-21T18:42:10", false),        // Missing Z (no timezone - invalid)
     ];
 
     for (ts, should_parse) in edge_cases {
         let result = is_valid_rfc3339(ts);
         assert_eq!(
-            result,
-            should_parse,
+            result, should_parse,
             "Timestamp '{}' parse result mismatch: expected {}, got {}",
-            ts,
-            should_parse,
-            result
+            ts, should_parse, result
         );
     }
 }
@@ -239,14 +236,14 @@ fn comprehensive_valid_timestamp_formats() {
         VALID_TIMESTAMP_WITH_NANOSECONDS,
         VALID_TIMESTAMP_MIDNIGHT,
         VALID_TIMESTAMP_MIDNIGHT_WITH_OFFSET,
-        "2026-12-31T23:59:59Z",                  // End of year
-        "2026-02-28T23:59:59Z",                  // End of February (non-leap year)
-        "2024-02-29T23:59:59Z",                  // Leap year
-        "2026-04-21T18:42:10.1Z",                // One decimal place
-        "2026-04-21T18:42:10.12Z",               // Two decimal places
-        "2026-04-21T18:42:10.123456789Z",        // Nine decimal places (nanoseconds)
-        "2026-04-21T18:42:10+23:59",             // Max positive offset
-        "2026-04-21T18:42:10-23:59",             // Max negative offset
+        "2026-12-31T23:59:59Z",           // End of year
+        "2026-02-28T23:59:59Z",           // End of February (non-leap year)
+        "2024-02-29T23:59:59Z",           // Leap year
+        "2026-04-21T18:42:10.1Z",         // One decimal place
+        "2026-04-21T18:42:10.12Z",        // Two decimal places
+        "2026-04-21T18:42:10.123456789Z", // Nine decimal places (nanoseconds)
+        "2026-04-21T18:42:10+23:59",      // Max positive offset
+        "2026-04-21T18:42:10-23:59",      // Max negative offset
     ];
 
     for ts in valid_timestamps {
@@ -283,16 +280,16 @@ fn timestamp_string_preservation_in_collision_entry() {
 #[test]
 fn fractional_second_precisions() {
     let fractional_tests = vec![
-        ("2026-04-21T18:42:10Z", 0),              // No fractional seconds
-        ("2026-04-21T18:42:10.1Z", 1),            // 1 decimal place (100ms)
-        ("2026-04-21T18:42:10.12Z", 2),           // 2 decimal places (10ms)
-        ("2026-04-21T18:42:10.123Z", 3),          // 3 decimal places (1ms - milliseconds)
-        ("2026-04-21T18:42:10.1234Z", 4),         // 4 decimal places (100μs)
-        ("2026-04-21T18:42:10.12345Z", 5),        // 5 decimal places (10μs)
-        ("2026-04-21T18:42:10.123456Z", 6),       // 6 decimal places (1μs - microseconds)
-        ("2026-04-21T18:42:10.1234567Z", 7),      // 7 decimal places (100ns)
-        ("2026-04-21T18:42:10.12345678Z", 8),     // 8 decimal places (10ns)
-        ("2026-04-21T18:42:10.123456789Z", 9),    // 9 decimal places (1ns - nanoseconds)
+        ("2026-04-21T18:42:10Z", 0),           // No fractional seconds
+        ("2026-04-21T18:42:10.1Z", 1),         // 1 decimal place (100ms)
+        ("2026-04-21T18:42:10.12Z", 2),        // 2 decimal places (10ms)
+        ("2026-04-21T18:42:10.123Z", 3),       // 3 decimal places (1ms - milliseconds)
+        ("2026-04-21T18:42:10.1234Z", 4),      // 4 decimal places (100μs)
+        ("2026-04-21T18:42:10.12345Z", 5),     // 5 decimal places (10μs)
+        ("2026-04-21T18:42:10.123456Z", 6),    // 6 decimal places (1μs - microseconds)
+        ("2026-04-21T18:42:10.1234567Z", 7),   // 7 decimal places (100ns)
+        ("2026-04-21T18:42:10.12345678Z", 8),  // 8 decimal places (10ns)
+        ("2026-04-21T18:42:10.123456789Z", 9), // 9 decimal places (1ns - nanoseconds)
     ];
 
     for (ts, expected_decimals) in &fractional_tests {
@@ -314,14 +311,14 @@ fn fractional_second_precisions() {
 #[test]
 fn timezone_offset_variations() {
     let offset_tests = vec![
-        "2026-04-21T18:42:10Z",                  // UTC (Z)
-        "2026-04-21T18:42:10+00:00",             // UTC (+00:00)
-        "2026-04-21T18:42:10-00:00",             // UTC (-00:00)
-        "2026-04-21T18:42:10+01:00",             // CET/CEST
-        "2026-04-21T18:42:10-05:00",             // EST
-        "2026-04-21T18:42:10+08:00",             // AWST
-        "2026-04-21T18:42:10+05:30",             // IST
-        "2026-04-21T18:42:10-03:30",             // NST
+        "2026-04-21T18:42:10Z",      // UTC (Z)
+        "2026-04-21T18:42:10+00:00", // UTC (+00:00)
+        "2026-04-21T18:42:10-00:00", // UTC (-00:00)
+        "2026-04-21T18:42:10+01:00", // CET/CEST
+        "2026-04-21T18:42:10-05:00", // EST
+        "2026-04-21T18:42:10+08:00", // AWST
+        "2026-04-21T18:42:10+05:30", // IST
+        "2026-04-21T18:42:10-03:30", // NST
     ];
 
     for ts in offset_tests {
@@ -379,12 +376,12 @@ fn valid_timestamps_round_trip_through_collision_entry() {
 #[test]
 fn whitespace_handling() {
     let whitespace_cases = vec![
-        (" 2026-04-21T18:42:10Z", false),           // Leading space
-        ("2026-04-21T18:42:10Z ", false),          // Trailing space
-        ("2026-04-21T18:42:10  Z", false),         // Space before Z
-        ("\t2026-04-21T18:42:10Z", false),         // Leading tab
-        ("2026-04-21T18:42:10Z\n", false),         // Trailing newline
-        (" 2026-04-21T18:42:10Z ", false),         // Both leading and trailing
+        (" 2026-04-21T18:42:10Z", false),  // Leading space
+        ("2026-04-21T18:42:10Z ", false),  // Trailing space
+        ("2026-04-21T18:42:10  Z", false), // Space before Z
+        ("\t2026-04-21T18:42:10Z", false), // Leading tab
+        ("2026-04-21T18:42:10Z\n", false), // Trailing newline
+        (" 2026-04-21T18:42:10Z ", false), // Both leading and trailing
     ];
 
     for (ts, should_parse) in whitespace_cases {
@@ -405,9 +402,9 @@ fn whitespace_handling() {
 #[test]
 fn case_sensitivity() {
     let case_cases = vec![
-        ("2026-04-21T18:42:10Z", true),           // Uppercase Z (valid)
-        ("2026-04-21T18:42:10z", true),           // Lowercase z (also valid - chrono accepts both)
-        ("2026-04-21T18:42:10+00:00", true),      // Offset format (valid)
+        ("2026-04-21T18:42:10Z", true),      // Uppercase Z (valid)
+        ("2026-04-21T18:42:10z", true),      // Lowercase z (also valid - chrono accepts both)
+        ("2026-04-21T18:42:10+00:00", true), // Offset format (valid)
     ];
 
     for (ts, should_parse) in case_cases {
@@ -424,16 +421,16 @@ fn case_sensitivity() {
 #[test]
 fn invalid_characters() {
     let invalid_char_cases = vec![
-        "2026-04-21T18:42:10X",                   // X instead of Z
-        "2026-04-21T18:42:10!Z",                  // Exclamation mark
-        "2026-04-21T18:42:10.12Z3",               // Extra digit after Z
-        "2026-04-21T18:42:10@Z",                  // @ symbol
-        "2026-04-21T18:42:10#Z",                  // # symbol
-        "2026-04-21T18:42:10$Z",                  // $ symbol
-        "2026-04-21T18:42:10%Z",                  // % symbol
-        "2026-04-21T18:42:10^Z",                  // ^ symbol
-        "2026-04-21T18:42:10&Z",                  // & symbol
-        "2026-04-21T18:42:10*Z",                  // * symbol
+        "2026-04-21T18:42:10X",     // X instead of Z
+        "2026-04-21T18:42:10!Z",    // Exclamation mark
+        "2026-04-21T18:42:10.12Z3", // Extra digit after Z
+        "2026-04-21T18:42:10@Z",    // @ symbol
+        "2026-04-21T18:42:10#Z",    // # symbol
+        "2026-04-21T18:42:10$Z",    // $ symbol
+        "2026-04-21T18:42:10%Z",    // % symbol
+        "2026-04-21T18:42:10^Z",    // ^ symbol
+        "2026-04-21T18:42:10&Z",    // & symbol
+        "2026-04-21T18:42:10*Z",    // * symbol
     ];
 
     for ts in invalid_char_cases {
@@ -495,7 +492,7 @@ fn sql_injection_attempts() {
 fn extremely_long_timestamps() {
     let long_cases = vec![
         "2026-04-21T18:42:10.123456789123456789123456789Z", // Excessive fractional seconds
-        "0000-01-01T00:00:00.000000000000000000000000000Z",  // Ancient date with long fractional
+        "0000-01-01T00:00:00.000000000000000000000000000Z", // Ancient date with long fractional
         "9999-12-31T23:59:59.999999999999999999999999999Z", // Far future date with long fractional
     ];
 
@@ -514,12 +511,12 @@ fn extremely_long_timestamps() {
 #[test]
 fn negative_timestamps_before_epoch() {
     let negative_cases = vec![
-        "1969-12-31T23:59:59Z",                   // One second before epoch
-        "1960-01-01T00:00:00Z",                   // 1960
-        "1950-06-15T12:30:45Z",                   // 1950
-        "1900-01-01T00:00:00Z",                   // 1900
-        "1850-01-01T00:00:00Z",                   // 1850
-        "0001-01-01T00:00:00Z",                   // Year 1 AD
+        "1969-12-31T23:59:59Z", // One second before epoch
+        "1960-01-01T00:00:00Z", // 1960
+        "1950-06-15T12:30:45Z", // 1950
+        "1900-01-01T00:00:00Z", // 1900
+        "1850-01-01T00:00:00Z", // 1850
+        "0001-01-01T00:00:00Z", // Year 1 AD
     ];
 
     for ts in negative_cases {
@@ -547,10 +544,10 @@ fn negative_timestamps_before_epoch() {
 #[test]
 fn extreme_future_dates() {
     let future_cases = vec![
-        "2100-01-01T00:00:00Z",                   // Year 2100
-        "2500-12-31T23:59:59Z",                   // Year 2500
-        "3000-01-01T00:00:00Z",                   // Year 3000
-        "9999-12-31T23:59:59Z",                   // Year 9999
+        "2100-01-01T00:00:00Z", // Year 2100
+        "2500-12-31T23:59:59Z", // Year 2500
+        "3000-01-01T00:00:00Z", // Year 3000
+        "9999-12-31T23:59:59Z", // Year 9999
     ];
 
     for ts in future_cases {
@@ -572,24 +569,20 @@ fn extreme_future_dates() {
 #[test]
 fn invalid_timezone_offsets() {
     let invalid_offset_cases = vec![
-        "2026-04-21T18:42:10+24:00",              // 24 hours (invalid)
-        "2026-04-21T18:42:10+25:00",              // 25 hours (invalid)
-        "2026-04-21T18:42:10+99:59",              // 99 hours (invalid)
-        "2026-04-21T18:42:10-24:00",              // -24 hours (invalid)
-        "2026-04-21T18:42:10-25:00",              // -25 hours (invalid)
-        "2026-04-21T18:42:10+23:60",              // 60 minutes (invalid)
-        "2026-04-21T18:42:10+00:60",              // 60 minutes (invalid)
-        "2026-04-21T18:42:10+00:99",              // 99 minutes (invalid)
+        "2026-04-21T18:42:10+24:00", // 24 hours (invalid)
+        "2026-04-21T18:42:10+25:00", // 25 hours (invalid)
+        "2026-04-21T18:42:10+99:59", // 99 hours (invalid)
+        "2026-04-21T18:42:10-24:00", // -24 hours (invalid)
+        "2026-04-21T18:42:10-25:00", // -25 hours (invalid)
+        "2026-04-21T18:42:10+23:60", // 60 minutes (invalid)
+        "2026-04-21T18:42:10+00:60", // 60 minutes (invalid)
+        "2026-04-21T18:42:10+00:99", // 99 minutes (invalid)
     ];
 
     for ts in invalid_offset_cases {
         // These should not parse as valid RFC3339
         let result = is_valid_rfc3339(ts);
-        assert!(
-            !result,
-            "Invalid timezone offset '{}' should not parse",
-            ts
-        );
+        assert!(!result, "Invalid timezone offset '{}' should not parse", ts);
 
         // But should be storable
         let entry = create_test_entry(ts);
@@ -602,8 +595,8 @@ fn invalid_timezone_offsets() {
 fn leap_second_handling() {
     // RFC3339 allows leap seconds (60 as the second value)
     let leap_second_cases = vec![
-        "2016-12-31T23:59:60Z",                   // Leap second (June 2016)
-        "2017-01-01T00:00:00Z",                   // Normal time after leap second
+        "2016-12-31T23:59:60Z", // Leap second (June 2016)
+        "2017-01-01T00:00:00Z", // Normal time after leap second
     ];
 
     for ts in leap_second_cases {
@@ -624,15 +617,15 @@ fn leap_second_handling() {
 #[test]
 fn boundary_values() {
     let boundary_cases = vec![
-        ("2026-00-01T00:00:00Z", false),          // Month 0 (invalid)
-        ("2026-13-01T00:00:00Z", false),          // Month 13 (invalid)
-        ("2026-01-00T00:00:00Z", false),          // Day 0 (invalid)
-        ("2026-01-32T00:00:00Z", false),          // Day 32 (invalid)
-        ("2026-02-30T00:00:00Z", false),          // Feb 30 (invalid)
-        ("2026-04-31T00:00:00Z", false),          // Apr 31 (invalid)
-        ("2026-04-21T24:00:00Z", false),          // Hour 24 (invalid)
-        ("2026-04-21T23:60:00Z", false),          // Minute 60 (invalid)
-        ("2026-04-21T23:59:61Z", false),          // Second 61 (invalid, not leap second)
+        ("2026-00-01T00:00:00Z", false), // Month 0 (invalid)
+        ("2026-13-01T00:00:00Z", false), // Month 13 (invalid)
+        ("2026-01-00T00:00:00Z", false), // Day 0 (invalid)
+        ("2026-01-32T00:00:00Z", false), // Day 32 (invalid)
+        ("2026-02-30T00:00:00Z", false), // Feb 30 (invalid)
+        ("2026-04-31T00:00:00Z", false), // Apr 31 (invalid)
+        ("2026-04-21T24:00:00Z", false), // Hour 24 (invalid)
+        ("2026-04-21T23:60:00Z", false), // Minute 60 (invalid)
+        ("2026-04-21T23:59:61Z", false), // Second 61 (invalid, not leap second)
     ];
 
     for (ts, should_parse) in boundary_cases {
@@ -653,16 +646,16 @@ fn boundary_values() {
 #[test]
 fn special_characters_and_unicode() {
     let special_cases = vec![
-        "2026-04-21T18:42:10✓Z",                  // Unicode checkmark
-        "2026-04-21T18:42:10🔥Z",                 // Fire emoji
-        "2026-04-21T18:42:10™Z",                  // Trademark symbol
-        "2026-04-21T18:42:10©Z",                  // Copyright symbol
-        "2026-04-21T18:42:10®Z",                  // Registered symbol
-        "2026-04-21T18:42:10€Z",                  // Euro symbol
-        "2026-04-21T18:42:10£Z",                  // Pound symbol
-        "2026-04-21T18:42:10¥Z",                  // Yen symbol
-        "2026-04-21T18:42:10§Z",                  // Section symbol
-        "2026-04-21T18:42:10¶Z",                  // Pilcrow symbol
+        "2026-04-21T18:42:10✓Z",  // Unicode checkmark
+        "2026-04-21T18:42:10🔥Z", // Fire emoji
+        "2026-04-21T18:42:10™Z",  // Trademark symbol
+        "2026-04-21T18:42:10©Z",  // Copyright symbol
+        "2026-04-21T18:42:10®Z",  // Registered symbol
+        "2026-04-21T18:42:10€Z",  // Euro symbol
+        "2026-04-21T18:42:10£Z",  // Pound symbol
+        "2026-04-21T18:42:10¥Z",  // Yen symbol
+        "2026-04-21T18:42:10§Z",  // Section symbol
+        "2026-04-21T18:42:10¶Z",  // Pilcrow symbol
     ];
 
     for ts in special_cases {
@@ -684,14 +677,14 @@ fn special_characters_and_unicode() {
 #[test]
 fn empty_variants() {
     let empty_cases = vec![
-        "",                                        // Empty string
-        " ",                                       // Single space
-        "  ",                                      // Multiple spaces
-        "\t",                                      // Tab
-        "\n",                                      // Newline
-        "\r",                                      // Carriage return
-        "\r\n",                                    // CRLF
-        "   ",                                     // Multiple spaces
+        "",     // Empty string
+        " ",    // Single space
+        "  ",   // Multiple spaces
+        "\t",   // Tab
+        "\n",   // Newline
+        "\r",   // Carriage return
+        "\r\n", // CRLF
+        "   ",  // Multiple spaces
     ];
 
     for ts in empty_cases {
@@ -725,12 +718,12 @@ fn empty_variants() {
 #[test]
 fn timestamps_with_extra_text() {
     let extra_text_cases = vec![
-        "2026-04-21T18:42:10Z extra text",         // Text after
-        "prefix 2026-04-21T18:42:10Z",            // Text before
-        "2026-04-21T18:42:10Z123",                // Digits after Z
-        "12026-04-21T18:42:10Z",                  // Digit before
-        "2026-04-21T18:42:10ZZ",                  // Extra Z
-        "Z2026-04-21T18:42:10",                   // Z at beginning
+        "2026-04-21T18:42:10Z extra text", // Text after
+        "prefix 2026-04-21T18:42:10Z",     // Text before
+        "2026-04-21T18:42:10Z123",         // Digits after Z
+        "12026-04-21T18:42:10Z",           // Digit before
+        "2026-04-21T18:42:10ZZ",           // Extra Z
+        "Z2026-04-21T18:42:10",            // Z at beginning
     ];
 
     for ts in extra_text_cases {

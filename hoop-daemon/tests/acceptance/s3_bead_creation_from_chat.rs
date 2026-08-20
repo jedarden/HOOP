@@ -102,7 +102,7 @@ async fn s3_chat_creates_draft_in_queue() {
     let original_path = std::env::var("PATH").unwrap_or_default();
     std::env::set_var("PATH", format!("{}:{}", path_prefix, original_path));
 
-    let (base_url, _notify, _temp_dir) = spawn_test_daemon()
+    let (base_url, _daemon) = spawn_test_daemon()
         .await
         .expect("Failed to spawn daemon");
 
@@ -212,7 +212,7 @@ async fn s3_approval_creates_bead_via_stub_br() {
     let original_path = std::env::var("PATH").unwrap_or_default();
     std::env::set_var("PATH", format!("{}:{}", path_prefix, original_path));
 
-    let (base_url, _notify, _temp_dir) = spawn_test_daemon()
+    let (base_url, _daemon) = spawn_test_daemon()
         .await
         .expect("Failed to spawn daemon");
 
@@ -313,7 +313,7 @@ async fn s3_audit_log_contains_stitch_id_and_operator() {
     let original_path = std::env::var("PATH").unwrap_or_default();
     std::env::set_var("PATH", format!("{}:{}", path_prefix, original_path));
 
-    let (base_url, _notify, _temp_dir) = spawn_test_daemon()
+    let (base_url, _daemon) = spawn_test_daemon()
         .await
         .expect("Failed to spawn daemon");
 
@@ -429,7 +429,7 @@ async fn s3_end_to_end_chat_flow() {
     let original_path = std::env::var("PATH").unwrap_or_default();
     std::env::set_var("PATH", format!("{}:{}", path_prefix, original_path));
 
-    let (base_url, _notify, _temp_dir) = spawn_test_daemon()
+    let (base_url, _daemon) = spawn_test_daemon()
         .await
         .expect("Failed to spawn daemon");
 
@@ -551,7 +551,7 @@ async fn s3_draft_queue_exposes_all_required_fields() {
     let original_path = std::env::var("PATH").unwrap_or_default();
     std::env::set_var("PATH", format!("{}:{}", path_prefix, original_path));
 
-    let (base_url, _notify, _temp_dir) = spawn_test_daemon()
+    let (base_url, _daemon) = spawn_test_daemon()
         .await
         .expect("Failed to spawn daemon");
 

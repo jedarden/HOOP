@@ -26,8 +26,7 @@ const SATURATION_THRESHOLD: f64 = 80.0;
 const CLEAR_THRESHOLD: f64 = 75.0;
 
 /// Per-account+window saturation state
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 struct SaturationState {
     /// Alert has been fired for this account+window
     alert_fired: bool,
@@ -36,7 +35,6 @@ struct SaturationState {
     /// Unique alert ID (generated once per session)
     alert_id: Option<String>,
 }
-
 
 /// Saturation detector
 ///
@@ -200,7 +198,14 @@ mod tests {
 
     /// Helper to create a mock AccountCapacity for testing
     /// Only includes the fields needed for saturation detection logic
-    fn mock_capacity(account_id: &str, adapter: &str, util_5h: f64, util_7d: f64, tokens_5h: u64, tokens_7d: u64) -> crate::capacity::AccountCapacity {
+    fn mock_capacity(
+        account_id: &str,
+        adapter: &str,
+        util_5h: f64,
+        util_7d: f64,
+        tokens_5h: u64,
+        tokens_7d: u64,
+    ) -> crate::capacity::AccountCapacity {
         crate::capacity::AccountCapacity {
             account_id: account_id.to_string(),
             adapter: adapter.to_string(),
@@ -291,7 +296,10 @@ mod tests {
     fn test_intermediate_zone() {
         // Zone between clear and saturation thresholds
         let intermediate = 77.5;
-        assert!(intermediate < SATURATION_THRESHOLD, "should not be saturated");
+        assert!(
+            intermediate < SATURATION_THRESHOLD,
+            "should not be saturated"
+        );
         assert!(intermediate > CLEAR_THRESHOLD, "should not be cleared");
         // This is the "no-change" zone where existing alerts persist
     }

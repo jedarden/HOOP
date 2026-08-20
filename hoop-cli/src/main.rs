@@ -23,6 +23,7 @@ use std::{fs, net::SocketAddr, path::PathBuf};
 
 #[derive(Parser, Debug)]
 #[command(name = "hoop")]
+#[command(version)]
 #[command(about = "HOOP - The operator's pane of glass", long_about = None)]
 #[command(args_override_self = true)]
 struct Cli {
@@ -1161,20 +1162,14 @@ mod tests {
     fn add_short_flag_y_before_command() {
         let args = ["hoop", "-y", "add", "/tmp/test"];
         let cli = parse_args(&args).unwrap();
-        assert!(
-            cli.no_interactive,
-            "no_interactive should be true with -y"
-        );
+        assert!(cli.no_interactive, "no_interactive should be true with -y");
     }
 
     #[test]
     fn add_short_flag_y_after_command() {
         let args = ["hoop", "add", "/tmp/test", "-y"];
         let cli = parse_args(&args).unwrap();
-        assert!(
-            cli.no_interactive,
-            "no_interactive should be true with -y"
-        );
+        assert!(cli.no_interactive, "no_interactive should be true with -y");
     }
 
     #[test]
@@ -1216,20 +1211,14 @@ mod tests {
     fn scan_short_flag_y_before_command() {
         let args = ["hoop", "-y", "scan", "/tmp"];
         let cli = parse_args(&args).unwrap();
-        assert!(
-            cli.no_interactive,
-            "no_interactive should be true with -y"
-        );
+        assert!(cli.no_interactive, "no_interactive should be true with -y");
     }
 
     #[test]
     fn scan_short_flag_y_after_command() {
         let args = ["hoop", "scan", "/tmp", "-y"];
         let cli = parse_args(&args).unwrap();
-        assert!(
-            cli.no_interactive,
-            "no_interactive should be true with -y"
-        );
+        assert!(cli.no_interactive, "no_interactive should be true with -y");
     }
 
     #[test]
@@ -1271,20 +1260,14 @@ mod tests {
     fn list_short_flag_y_before_command() {
         let args = ["hoop", "-y", "list"];
         let cli = parse_args(&args).unwrap();
-        assert!(
-            cli.no_interactive,
-            "no_interactive should be true with -y"
-        );
+        assert!(cli.no_interactive, "no_interactive should be true with -y");
     }
 
     #[test]
     fn list_short_flag_y_after_command() {
         let args = ["hoop", "list", "-y"];
         let cli = parse_args(&args).unwrap();
-        assert!(
-            cli.no_interactive,
-            "no_interactive should be true with -y"
-        );
+        assert!(cli.no_interactive, "no_interactive should be true with -y");
     }
 
     #[test]
@@ -1338,10 +1321,7 @@ mod tests {
     fn remove_short_flag_y_before_command() {
         let args = ["hoop", "-y", "remove", "my-project", "--confirm"];
         let cli = parse_args(&args).unwrap();
-        assert!(
-            cli.no_interactive,
-            "no_interactive should be true with -y"
-        );
+        assert!(cli.no_interactive, "no_interactive should be true with -y");
     }
 
     #[test]
@@ -1383,25 +1363,25 @@ mod tests {
     fn status_short_flag_y_before_command() {
         let args = ["hoop", "-y", "status"];
         let cli = parse_args(&args).unwrap();
-        assert!(
-            cli.no_interactive,
-            "no_interactive should be true with -y"
-        );
+        assert!(cli.no_interactive, "no_interactive should be true with -y");
     }
 
     #[test]
     fn status_short_flag_y_after_command() {
         let args = ["hoop", "status", "-y"];
         let cli = parse_args(&args).unwrap();
-        assert!(
-            cli.no_interactive,
-            "no_interactive should be true with -y"
-        );
+        assert!(cli.no_interactive, "no_interactive should be true with -y");
     }
 
     #[test]
     fn status_with_project_filter_no_interactive_before() {
-        let args = ["hoop", "--no-interactive", "status", "--project", "my-project"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "status",
+            "--project",
+            "my-project",
+        ];
         let cli = parse_args(&args).unwrap();
         assert!(cli.no_interactive, "no_interactive should be true");
     }
@@ -1473,10 +1453,7 @@ mod tests {
             "--confirm",
         ];
         let cli = parse_args(&args).unwrap();
-        assert!(
-            cli.no_interactive,
-            "no_interactive should be true with -y"
-        );
+        assert!(cli.no_interactive, "no_interactive should be true with -y");
     }
 
     #[test]
@@ -1518,10 +1495,7 @@ mod tests {
     fn init_short_flag_y_before_command() {
         let args = ["hoop", "-y", "init"];
         let cli = parse_args(&args).unwrap();
-        assert!(
-            cli.no_interactive,
-            "no_interactive should be true with -y"
-        );
+        assert!(cli.no_interactive, "no_interactive should be true with -y");
     }
 
     #[test]
@@ -1621,10 +1595,7 @@ mod tests {
         // both should be parseable
         let args = ["hoop", "--no-interactive", "scan", "/tmp", "--yes"];
         let cli = parse_args(&args).unwrap();
-        assert!(
-            cli.no_interactive,
-            "global no_interactive should be true"
-        );
+        assert!(cli.no_interactive, "global no_interactive should be true");
 
         // Verify the command was parsed correctly
         match cli.command {

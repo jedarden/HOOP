@@ -118,7 +118,9 @@ async fn load_test_api_latency_within_budget() {
 
             let resp = client
                 .get(&format!("{}{}", base_url, endpoint))
-                .timeout(Duration::from_millis(PERFORMANCE_BUDGETS.api_latency_ms * 2))
+                .timeout(Duration::from_millis(
+                    PERFORMANCE_BUDGETS.api_latency_ms * 2,
+                ))
                 .send()
                 .await;
 
@@ -259,7 +261,9 @@ async fn load_test_concurrent_requests_within_budget() {
     // Check that 95th percentile is within budget
     latencies.sort();
     let p95_index = latencies.len() * 95 / 100;
-    let p95 = latencies.get(p95_index).unwrap_or(&PERFORMANCE_BUDGETS.api_latency_ms);
+    let p95 = latencies
+        .get(p95_index)
+        .unwrap_or(&PERFORMANCE_BUDGETS.api_latency_ms);
 
     assert!(
         *p95 <= PERFORMANCE_BUDGETS.api_latency_ms,
@@ -396,20 +400,19 @@ fn setup_load_test_projects(config: &Config, load_config: LoadTestConfig) {
         fs::create_dir_all(&project_path).expect("Failed to create project directory");
 
         // Add to projects registry
-        existing_projects.projects.push(
-            hoop_schema::ProjectsRegistryProjectsItem::Variant0 {
+        existing_projects
+            .projects
+            .push(hoop_schema::ProjectsRegistryProjectsItem::Variant0 {
                 name: project_name,
                 path: project_path,
                 canonical_path: None,
-            },
-        );
+            });
     }
 
     // Write updated projects.yaml
-    let updated_yaml = serde_yaml::to_string(&existing_projects)
-        .expect("Failed to serialize projects.yaml");
-    fs::write(&projects_yaml_path, updated_yaml)
-        .expect("Failed to write projects.yaml");
+    let updated_yaml =
+        serde_yaml::to_string(&existing_projects).expect("Failed to serialize projects.yaml");
+    fs::write(&projects_yaml_path, updated_yaml).expect("Failed to write projects.yaml");
 }
 
 /// Integrated CI load test - main entry point for CI performance budget verification
@@ -468,8 +471,7 @@ async fn load_test_ci_performance_budgets() {
 
     // Write daemon URL to a temp file for Playwright to use
     if let Ok(tmp_path) = std::env::var("HOOP_DAEMON_URL_FILE") {
-        fs::write(&tmp_path, &base_url)
-            .expect("Failed to write daemon URL to file");
+        fs::write(&tmp_path, &base_url).expect("Failed to write daemon URL to file");
         println!("Wrote daemon URL to: {}", tmp_path);
     }
 
@@ -494,8 +496,14 @@ async fn load_test_ci_performance_budgets() {
     println!();
     println!("=== Performance Budgets Satisfied ===");
     println!("✓ API Latency < {}ms", PERFORMANCE_BUDGETS.api_latency_ms);
-    println!("✓ Memory < {}MB", PERFORMANCE_BUDGETS.memory_bytes() / 1024 / 1024);
-    println!("✓ WS Fan-out Lag < {}ms", PERFORMANCE_BUDGETS.ws_fanout_lag_ms);
+    println!(
+        "✓ Memory < {}MB",
+        PERFORMANCE_BUDGETS.memory_bytes() / 1024 / 1024
+    );
+    println!(
+        "✓ WS Fan-out Lag < {}ms",
+        PERFORMANCE_BUDGETS.ws_fanout_lag_ms
+    );
     println!();
     println!("This test run confirms the system is within performance budgets.");
     println!("Budget violations would block merge per hoop-ttb.7.11.");
@@ -560,10 +568,7 @@ mod benchmark_tests {
 
         // Trigger activity and sample memory
         for _ in 0..20 {
-            let _ = client
-                .get(&format!("{}/api/beads", base_url))
-                .send()
-                .await;
+            let _ = client.get(&format!("{}/api/beads", base_url)).send().await;
 
             tokio::time::sleep(Duration::from_millis(100)).await;
         }

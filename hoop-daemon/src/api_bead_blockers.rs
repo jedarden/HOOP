@@ -22,8 +22,8 @@ use std::collections::HashSet;
 #[cfg(feature = "openapi")]
 use utoipa::ToSchema;
 
-use crate::fleet;
 use crate::br_verbs::ReadVerb;
+use crate::fleet;
 
 /// Cross-workspace blocker entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -198,10 +198,7 @@ pub async fn get_bead_blockers(
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 if let Ok(beads) = serde_json::from_str::<Vec<serde_json::Value>>(&stdout) {
                     for bead_json in beads {
-                        let current_id = bead_json
-                            .get("id")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("");
+                        let current_id = bead_json.get("id").and_then(|v| v.as_str()).unwrap_or("");
 
                         if current_id != bead_id {
                             continue;
@@ -273,5 +270,8 @@ pub async fn get_bead_blockers(
 }
 
 pub fn router() -> axum::Router<crate::DaemonState> {
-    axum::Router::new().route("/api/beads/:id/blockers", axum::routing::get(get_bead_blockers))
+    axum::Router::new().route(
+        "/api/beads/:id/blockers",
+        axum::routing::get(get_bead_blockers),
+    )
 }

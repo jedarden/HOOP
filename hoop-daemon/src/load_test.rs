@@ -131,7 +131,12 @@ impl EventGenerator {
     }
 
     /// Generate events for a single worker processing beads
-    fn generate_worker_events(&self, worker: &str, project: &str, ts: &mut chrono::DateTime<chrono::Utc>) -> Vec<NeedleEvent> {
+    fn generate_worker_events(
+        &self,
+        worker: &str,
+        project: &str,
+        ts: &mut chrono::DateTime<chrono::Utc>,
+    ) -> Vec<NeedleEvent> {
         let mut events = Vec::new();
 
         for bead_idx in 0..(self.config.beads_per_worker as usize) {
@@ -476,7 +481,8 @@ pub async fn run_load_test(
     let ws_url = format!("{}/ws", ws_url);
 
     // Channels for coordinating WS event reception
-    let (fanout_tx, mut fanout_rx) = tokio::sync::mpsc::channel::<(usize, Instant)>(num_ws_clients * 10);
+    let (fanout_tx, mut fanout_rx) =
+        tokio::sync::mpsc::channel::<(usize, Instant)>(num_ws_clients * 10);
 
     let mut ws_clients = Vec::new();
     for i in 0..num_ws_clients {
@@ -484,10 +490,8 @@ pub async fn run_load_test(
             Ok((ws_stream, _)) => {
                 let (mut ws_sender, mut ws_receiver) = ws_stream.split();
                 // Wait for init message
-                let init_deadline = tokio::time::timeout(
-                    Duration::from_secs(5),
-                    ws_receiver.next()
-                ).await;
+                let init_deadline =
+                    tokio::time::timeout(Duration::from_secs(5), ws_receiver.next()).await;
                 if init_deadline.is_err() {
                     failures.push(format!("WS client {} timed out waiting for init", i));
                     continue;
@@ -500,7 +504,9 @@ pub async fn run_load_test(
                         match msg_result {
                             Ok(Message::Text(text)) => {
                                 // Look for bead_event messages
-                                if text.contains("\"bead_event\"") || text.contains("\"type\":\"bead\"") {
+                                if text.contains("\"bead_event\"")
+                                    || text.contains("\"type\":\"bead\"")
+                                {
                                     let _ = fanout_tx.send((i, Instant::now())).await;
                                 }
                             }
@@ -560,7 +566,11 @@ pub async fn run_load_test(
 
     // Test /api/capacity endpoint
     let capacity_start = Instant::now();
-    match client.get(&format!("{}/api/capacity", base_url)).send().await {
+    match client
+        .get(&format!("{}/api/capacity", base_url))
+        .send()
+        .await
+    {
         Ok(resp) if resp.status().is_success() => {
             api_latencies.push(capacity_start.elapsed().as_millis() as u64);
         }
@@ -608,7 +618,9 @@ pub async fn run_load_test(
                 while received_count < ws_clients.len() {
                     match tokio::time::timeout(timeout, fanout_rx.recv()).await {
                         Ok(Some((client_id, recv_time))) => {
-                            let lag = recv_time.saturating_duration_since(creation_time).as_millis() as u64;
+                            let lag = recv_time
+                                .saturating_duration_since(creation_time)
+                                .as_millis() as u64;
                             ws_fanout_lags.push(lag);
                             received_count += 1;
                         }
@@ -625,7 +637,10 @@ pub async fn run_load_test(
                 // 404 is expected if project isn't registered in test daemon
                 if status != 404 {
                     if let Ok(body) = resp.text().await {
-                        failures.push(format!("Failed to create bead {}: {} - {}", bead_idx, status, body));
+                        failures.push(format!(
+                            "Failed to create bead {}: {} - {}",
+                            bead_idx, status, body
+                        ));
                     } else {
                         failures.push(format!("Failed to create bead {}: {}", bead_idx, status));
                     }

@@ -109,7 +109,11 @@ async fn get_replay_options(
 
     // Reconstruct failure state
     let failure_state = tokio::task::spawn_blocking(move || {
-        stitch_reconstruction::reconstruct_failure_state(&bead_id, &project_path, &events_jsonl_path)
+        stitch_reconstruction::reconstruct_failure_state(
+            &bead_id,
+            &project_path,
+            &events_jsonl_path,
+        )
     })
     .await
     .map_err(|e| {
@@ -170,7 +174,12 @@ async fn resume_as_new_bead(
         connect_info.map(|ci| ci.0),
         crate::auth::Role::Drafter,
     )
-    .map_err(|e| (e.0, serde_json::to_string(&e.1 .0).unwrap_or_else(|_| e.0.to_string())))?;
+    .map_err(|e| {
+        (
+            e.0,
+            serde_json::to_string(&e.1 .0).unwrap_or_else(|_| e.0.to_string()),
+        )
+    })?;
 
     let project_path = crate::api_beads::resolve_project_path(&project, &state)?;
 
@@ -193,7 +202,11 @@ async fn resume_as_new_bead(
         let project_path = project_path.clone();
         let events_jsonl_path = events_jsonl_path.clone();
         move || {
-            stitch_reconstruction::reconstruct_failure_state(&bead_id, &project_path, &events_jsonl_path)
+            stitch_reconstruction::reconstruct_failure_state(
+                &bead_id,
+                &project_path,
+                &events_jsonl_path,
+            )
         }
     })
     .await
@@ -213,8 +226,12 @@ async fn resume_as_new_bead(
     let replay_options = stitch_reconstruction::generate_replay_options(&failure_state);
 
     // Create new bead with reconstructed state
-    let title = req.title.unwrap_or_else(|| replay_options.suggested_title.clone());
-    let description = req.description.unwrap_or_else(|| replay_options.suggested_body.clone());
+    let title = req
+        .title
+        .unwrap_or_else(|| replay_options.suggested_title.clone());
+    let description = req
+        .description
+        .unwrap_or_else(|| replay_options.suggested_body.clone());
 
     let mut labels = replay_options.labels.clone();
     labels.extend(req.extra_labels);
@@ -237,16 +254,10 @@ async fn resume_as_new_bead(
     };
 
     // Call create_bead
-    let create_response = crate::api_beads::create_bead_internal(
-        project,
-        &state,
-        connect_info,
-        create_req,
-    )
-    .await
-    .map_err(|(status, msg)| {
-        (status, format!("Failed to create new bead: {}", msg))
-    })?;
+    let create_response =
+        crate::api_beads::create_bead_internal(project, &state, connect_info, create_req)
+            .await
+            .map_err(|(status, msg)| (status, format!("Failed to create new bead: {}", msg)))?;
 
     let new_bead_id = create_response.id.clone();
 
@@ -293,7 +304,11 @@ async fn restore_workspace_state(
     let bead_id_clone = bead_id.clone();
     let project_path_clone = project_path.clone();
     let failure_state = tokio::task::spawn_blocking(move || {
-        stitch_reconstruction::reconstruct_failure_state(&bead_id_clone, &project_path_clone, &events_jsonl_path)
+        stitch_reconstruction::reconstruct_failure_state(
+            &bead_id_clone,
+            &project_path_clone,
+            &events_jsonl_path,
+        )
     })
     .await
     .map_err(|e| {
@@ -309,23 +324,18 @@ async fn restore_workspace_state(
         )
     })?;
 
-    let stash_sha = failure_state
-        .fail_event
-        .stash_sha
-        .ok_or_else(|| {
-            (
-                StatusCode::NOT_FOUND,
-                format!("No stash_sha found for bead {}", bead_id),
-            )
-        })?;
+    let stash_sha = failure_state.fail_event.stash_sha.ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            format!("No stash_sha found for bead {}", bead_id),
+        )
+    })?;
 
     // Restore workspace state
     let project_path_clone = project_path.clone();
     tokio::task::spawn_blocking({
         let stash_sha = stash_sha.clone();
-        move || {
-            stitch_reconstruction::restore_workspace_state(&stash_sha, &project_path_clone)
-        }
+        move || stitch_reconstruction::restore_workspace_state(&stash_sha, &project_path_clone)
     })
     .await
     .map_err(|e| {
@@ -381,7 +391,8 @@ mod tests {
 
     #[test]
     fn test_resume_as_new_request_deserialization() {
-        let json = r#"{"title":"Custom title","description":"Custom body","extra_labels":["urgent"]}"#;
+        let json =
+            r#"{"title":"Custom title","description":"Custom body","extra_labels":["urgent"]}"#;
         let req: ResumeAsNewRequest = serde_json::from_str(json).unwrap();
 
         assert_eq!(req.title, Some("Custom title".to_string()));

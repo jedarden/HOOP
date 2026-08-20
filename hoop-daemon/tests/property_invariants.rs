@@ -74,14 +74,14 @@ use chrono::{DateTime, Duration, Timelike, Utc};
 use proptest::prelude::*;
 use proptest::strategy::Strategy;
 use std::collections::{HashMap, HashSet};
-use std::io::{BufRead, Write};
 use std::fs::File;
 use std::io::BufReader;
+use std::io::{BufRead, Write};
 use tempfile::TempDir;
 
 // Import HOOP daemon types for tests
-use hoop_daemon::stitch_status::{LinkedBead, StitchActivity, StitchContext, StitchStatus};
 use hoop_daemon::events::{NeedleEvent, WorkerEvent};
+use hoop_daemon::stitch_status::{LinkedBead, StitchActivity, StitchContext, StitchStatus};
 
 // ============================================================================
 // Invariant 1: Event Ordering (§14.2)
@@ -560,15 +560,13 @@ mod status_monotonicity {
     fn test_status_determinism() {
         let now = Utc::now();
         let ctx = StitchContext {
-            linked_beads: vec![
-                LinkedBead {
-                    id: "bd-1".to_string(),
-                    status: BeadStatus::Open,
-                    issue_type: BeadType::Task,
-                    claimed_by: Some("worker-alpha".to_string()),
-                    updated_at: now,
-                },
-            ],
+            linked_beads: vec![LinkedBead {
+                id: "bd-1".to_string(),
+                status: BeadStatus::Open,
+                issue_type: BeadType::Task,
+                claimed_by: Some("worker-alpha".to_string()),
+                updated_at: now,
+            }],
             activity: StitchActivity {
                 last_message_at: Some(now),
                 last_streaming_at: None,
@@ -625,36 +623,40 @@ mod replay_equals_live {
         // Strategy: generate a list of events
         let timestamp_strategy = {
             let base = Utc::now();
-            (0i64..1000).prop_map(move |secs| {
-                (base + Duration::seconds(secs)).to_rfc3339()
-            })
+            (0i64..1000).prop_map(move |secs| (base + Duration::seconds(secs)).to_rfc3339())
         };
 
         let worker_strategy = "[a-z]{3,10}";
         let bead_strategy = "[a-z]{3,10}-[0-9]{3}";
 
         let event_strategy = prop_oneof![
-            timestamp_strategy.clone().prop_map(|ts| NeedleEvent::Claim {
-                ts,
-                worker: "alpha".to_string(),
-                bead: "bd-1".to_string(),
-                strand: None,
-            }),
-            timestamp_strategy.clone().prop_map(|ts| NeedleEvent::Dispatch {
-                ts,
-                worker: "alpha".to_string(),
-                bead: "bd-1".to_string(),
-                adapter: Some("claude".to_string()),
-                model: Some("opus".to_string()),
-            }),
-            timestamp_strategy.clone().prop_map(|ts| NeedleEvent::Complete {
-                ts,
-                worker: "alpha".to_string(),
-                bead: "bd-1".to_string(),
-                outcome: Some("success".to_string()),
-                duration_ms: Some(1000),
-                exit_code: Some(0),
-            }),
+            timestamp_strategy
+                .clone()
+                .prop_map(|ts| NeedleEvent::Claim {
+                    ts,
+                    worker: "alpha".to_string(),
+                    bead: "bd-1".to_string(),
+                    strand: None,
+                }),
+            timestamp_strategy
+                .clone()
+                .prop_map(|ts| NeedleEvent::Dispatch {
+                    ts,
+                    worker: "alpha".to_string(),
+                    bead: "bd-1".to_string(),
+                    adapter: Some("claude".to_string()),
+                    model: Some("opus".to_string()),
+                }),
+            timestamp_strategy
+                .clone()
+                .prop_map(|ts| NeedleEvent::Complete {
+                    ts,
+                    worker: "alpha".to_string(),
+                    bead: "bd-1".to_string(),
+                    outcome: Some("success".to_string()),
+                    duration_ms: Some(1000),
+                    exit_code: Some(0),
+                }),
         ];
 
         proptest! {
@@ -730,7 +732,8 @@ mod replay_equals_live {
     #[test]
     fn proptest_replay_handles_partial_lines() {
         // Strategy: generate valid JSON and split it arbitrarily
-        let valid_event = r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-1"}"#;
+        let valid_event =
+            r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-1"}"#;
 
         proptest! {
             #[test]
@@ -871,7 +874,11 @@ mod replay_equals_live {
         // Write initial events
         {
             let mut file = File::create(&events_path).unwrap();
-            writeln!(file, r#"{{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-1"}}"#).unwrap();
+            writeln!(
+                file,
+                r#"{{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-1"}}"#
+            )
+            .unwrap();
             writeln!(file, r#"{{"event":"dispatch","ts":"2026-04-21T18:42:11Z","worker":"alpha","bead":"bd-1"}}"#).unwrap();
         }
 
@@ -885,7 +892,11 @@ mod replay_equals_live {
         // Simulate log rotation: truncate and write new events
         {
             let mut file = File::create(&events_path).unwrap();
-            writeln!(file, r#"{{"event":"claim","ts":"2026-04-21T18:43:10Z","worker":"beta","bead":"bd-2"}}"#).unwrap();
+            writeln!(
+                file,
+                r#"{{"event":"claim","ts":"2026-04-21T18:43:10Z","worker":"beta","bead":"bd-2"}}"#
+            )
+            .unwrap();
         }
 
         // Read second set
@@ -910,7 +921,11 @@ mod replay_equals_live {
         // Write mix of valid and malformed events
         {
             let mut file = File::create(&events_path).unwrap();
-            writeln!(file, r#"{{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-1"}}"#).unwrap();
+            writeln!(
+                file,
+                r#"{{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-1"}}"#
+            )
+            .unwrap();
             writeln!(file, r#"{{"event":"invalid"#).unwrap(); // Malformed: missing closing brace
             writeln!(file, r#"not json at all"#).unwrap(); // Malformed: not JSON
             writeln!(file, r#"{{"event":"dispatch","ts":"2026-04-21T18:42:11Z","worker":"alpha","bead":"bd-1"}}"#).unwrap();

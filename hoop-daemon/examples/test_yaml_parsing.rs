@@ -21,7 +21,10 @@ audit:
     println!("retention_days: {:#?}", retention_days);
     println!("retention_days is_string: {}", retention_days.is_string());
     println!("retention_days is_number: {}", retention_days.is_number());
-    println!("retention_days is_u64: {}", retention_days.as_u64().is_some());
+    println!(
+        "retention_days is_u64: {}",
+        retention_days.as_u64().is_some()
+    );
     println!("retention_days as_str: {:?}", retention_days.as_str());
     println!("retention_days as_i64: {:?}", retention_days.as_i64());
 }

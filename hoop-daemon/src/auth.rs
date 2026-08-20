@@ -28,10 +28,10 @@ use axum::{
     response::Response,
     Json,
 };
-use std::future::Future;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashSet;
+use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -62,8 +62,7 @@ impl Role {
 }
 
 /// Role configuration from config.yml
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct RoleConfig {
     /// Identities with viewer role (read-only)
     #[serde(default)]
@@ -72,7 +71,6 @@ pub struct RoleConfig {
     #[serde(default)]
     pub drafters: Vec<String>,
 }
-
 
 /// Role resolver that maps Tailscale identities to roles
 #[derive(Debug, Clone)]
@@ -90,11 +88,7 @@ pub struct RoleResolver {
 impl RoleResolver {
     /// Create a new role resolver from the role configuration
     pub fn new(config: RoleConfig) -> Self {
-        let viewers = config
-            .viewers
-            .into_iter()
-            .map(normalize_identity)
-            .collect();
+        let viewers = config.viewers.into_iter().map(normalize_identity).collect();
 
         let drafters = config
             .drafters
@@ -317,7 +311,9 @@ pub struct DaemonStateLike {
 /// Middleware that requires a specific role for the route
 ///
 /// Returns 403 Forbidden if the client doesn't have the required role.
-pub fn require_role(required_role: Role) -> impl Fn(Request, Next) -> Pin<Box<dyn Future<Output = Response> + Send>> + Clone {
+pub fn require_role(
+    required_role: Role,
+) -> impl Fn(Request, Next) -> Pin<Box<dyn Future<Output = Response> + Send>> + Clone {
     move |request: Request, next: Next| {
         let _required_role = required_role;
         Box::pin(async move {

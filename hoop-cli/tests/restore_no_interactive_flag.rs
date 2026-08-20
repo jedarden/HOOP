@@ -29,7 +29,10 @@ fn test_restore_parse_with_flag_before_subcommand() {
         "--confirm",
     ]);
 
-    assert!(result.is_ok(), "Should successfully parse flag before subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse flag before subcommand"
+    );
     let parsed = result.unwrap();
 
     assert!(parsed.no_interactive, "no_interactive should be true");
@@ -60,7 +63,10 @@ fn test_restore_parse_with_flag_after_subcommand() {
         "--confirm",
     ]);
 
-    assert!(result.is_ok(), "Should successfully parse flag after subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse flag after subcommand"
+    );
     let parsed = result.unwrap();
 
     assert!(parsed.no_interactive, "no_interactive should be true");
@@ -93,7 +99,10 @@ fn test_restore_parse_with_short_flag_before_subcommand() {
     );
     let parsed = result.unwrap();
 
-    assert!(parsed.no_interactive, "no_interactive should be true with -y");
+    assert!(
+        parsed.no_interactive,
+        "no_interactive should be true with -y"
+    );
     assert_eq!(parsed.command, "restore", "Command should be 'restore'");
 }
 
@@ -115,22 +124,23 @@ fn test_restore_parse_with_short_flag_after_subcommand() {
     );
     let parsed = result.unwrap();
 
-    assert!(parsed.no_interactive, "no_interactive should be true with -y");
+    assert!(
+        parsed.no_interactive,
+        "no_interactive should be true with -y"
+    );
     assert_eq!(parsed.command, "restore", "Command should be 'restore'");
 }
 
 #[test]
 fn test_restore_parse_without_flag() {
     // Test: hoop restore --from s3://bucket/key --confirm (default behavior)
-    let result = parse_cli_with_flag(&[
-        "hoop",
-        "restore",
-        "--from",
-        "s3://bucket/key",
-        "--confirm",
-    ]);
+    let result =
+        parse_cli_with_flag(&["hoop", "restore", "--from", "s3://bucket/key", "--confirm"]);
 
-    assert!(result.is_ok(), "Should successfully parse command without flag");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse command without flag"
+    );
     let parsed = result.unwrap();
 
     assert!(
@@ -152,7 +162,10 @@ fn test_restore_parse_with_dry_run_flag() {
         "--dry-run",
     ]);
 
-    assert!(result.is_ok(), "Should successfully parse with --dry-run flag");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse with --dry-run flag"
+    );
     let parsed = result.unwrap();
 
     assert!(parsed.no_interactive, "no_interactive should be true");
@@ -204,17 +217,15 @@ fn test_restore_flag_extraction_after_position() {
 #[test]
 fn test_restore_no_flag_present_verification() {
     // Verify that no_interactive is correctly set to false when flag is absent
-    let parsed = parse_cli_with_flag(&[
-        "hoop",
-        "restore",
-        "--from",
-        "s3://bucket/key",
-        "--confirm",
-    ])
-    .expect("Parse should succeed");
+    let parsed =
+        parse_cli_with_flag(&["hoop", "restore", "--from", "s3://bucket/key", "--confirm"])
+            .expect("Parse should succeed");
 
     let verification_result = verify_no_flag_present(&parsed);
-    assert!(verification_result.is_ok(), "Should verify no flag is present");
+    assert!(
+        verification_result.is_ok(),
+        "Should verify no flag is present"
+    );
 
     assert!(!parsed.no_interactive);
 }
@@ -250,8 +261,7 @@ fn test_restore_flag_propagation_from_main_to_handler() {
 #[test]
 fn test_restore_handler_accepts_no_interactive_parameter() {
     // Verify that run_restore handler actually uses the no_interactive parameter
-    let restore_code = fs::read_to_string("src/restore.rs")
-        .expect("Failed to read restore.rs");
+    let restore_code = fs::read_to_string("src/restore.rs").expect("Failed to read restore.rs");
 
     // Verify function signature accepts no_interactive
     assert!(
@@ -276,8 +286,7 @@ fn test_restore_handler_accepts_no_interactive_parameter() {
 #[test]
 fn test_restore_no_interactive_requires_confirm() {
     // Verify that restore requires --confirm when no_interactive=true
-    let restore_code = fs::read_to_string("src/restore.rs")
-        .expect("Failed to read restore.rs");
+    let restore_code = fs::read_to_string("src/restore.rs").expect("Failed to read restore.rs");
 
     // Find the run_restore function
     let restore_start = restore_code
@@ -317,8 +326,7 @@ fn test_restore_no_interactive_requires_confirm() {
 #[test]
 fn test_restore_confirms_when_no_interactive_true_with_confirm_flag() {
     // Test that restore with no_interactive=true and --confirm proceeds without prompting
-    let restore_code = fs::read_to_string("src/restore.rs")
-        .expect("Failed to read restore.rs");
+    let restore_code = fs::read_to_string("src/restore.rs").expect("Failed to read restore.rs");
 
     // Find the run_restore function
     let restore_start = restore_code
@@ -368,8 +376,7 @@ fn test_restore_confirms_when_no_interactive_true_with_confirm_flag() {
 #[test]
 fn test_restore_prompts_when_no_interactive_false() {
     // Test that restore with no_interactive=false prompts for confirmation
-    let restore_code = fs::read_to_string("src/restore.rs")
-        .expect("Failed to read restore.rs");
+    let restore_code = fs::read_to_string("src/restore.rs").expect("Failed to read restore.rs");
 
     // Find the run_restore function
     let restore_start = restore_code
@@ -435,8 +442,7 @@ fn test_restore_prompts_when_no_interactive_false() {
 #[test]
 fn test_restore_prompts_go_to_stderr() {
     // Verify that restore prompts go to stderr (not stdout) to avoid interfering with data output
-    let restore_code = fs::read_to_string("src/restore.rs")
-        .expect("Failed to read restore.rs");
+    let restore_code = fs::read_to_string("src/restore.rs").expect("Failed to read restore.rs");
 
     // Find the run_restore function
     let restore_start = restore_code
@@ -473,8 +479,7 @@ fn test_restore_prompts_go_to_stderr() {
 fn test_restore_non_interactive_skips_confirmation_prompt() {
     // Verify that when no_interactive=true (with --confirm), the confirmation prompt is skipped
     // and restore proceeds directly
-    let restore_code = fs::read_to_string("src/restore.rs")
-        .expect("Failed to read restore.rs");
+    let restore_code = fs::read_to_string("src/restore.rs").expect("Failed to read restore.rs");
 
     // Find the run_restore function
     let restore_start = restore_code
@@ -492,8 +497,8 @@ fn test_restore_non_interactive_skips_confirmation_prompt() {
         .expect("Should find end of confirm requirement block");
 
     // Get the confirm requirement block
-    let confirm_block = &restore_code[restore_start + confirm_check
-        ..restore_start + confirm_check + confirm_block_end + 50];
+    let confirm_block = &restore_code
+        [restore_start + confirm_check..restore_start + confirm_check + confirm_block_end + 50];
 
     // Verify that in this block, there's no confirmation prompt
     assert!(
@@ -502,8 +507,7 @@ fn test_restore_non_interactive_skips_confirmation_prompt() {
     );
 
     // Now find the prompt check (after the confirm requirement)
-    let after_confirm =
-        &restore_code[restore_start + confirm_check + confirm_block_end..];
+    let after_confirm = &restore_code[restore_start + confirm_check + confirm_block_end..];
     let prompt_check = after_confirm
         .find("if !no_interactive {")
         .expect("Should find prompt check after confirm requirement");
@@ -526,8 +530,7 @@ fn test_restore_non_interactive_skips_confirmation_prompt() {
 #[test]
 fn test_restore_dry_run_respects_no_interactive() {
     // Verify that dry-run mode shows correct usage message based on no_interactive flag
-    let restore_code = fs::read_to_string("src/restore.rs")
-        .expect("Failed to read restore.rs");
+    let restore_code = fs::read_to_string("src/restore.rs").expect("Failed to read restore.rs");
 
     // Find the dry-run section
     let dry_run_section = restore_code
@@ -560,8 +563,7 @@ fn test_restore_code_order_validates_before_destructive() {
     //
     // This is a structural guarantee — if the code order changes,
     // this test documents the intended invariant.
-    let restore_code = fs::read_to_string("src/restore.rs")
-        .expect("Failed to read restore.rs");
+    let restore_code = fs::read_to_string("src/restore.rs").expect("Failed to read restore.rs");
 
     // Find run_restore() function body
     let fn_start = restore_code
@@ -588,8 +590,7 @@ fn test_restore_confirm_check_before_prompt() {
     // Verify the order: no_interactive confirm check must come before
     // the interactive prompt check. This ensures --confirm is required
     // before any prompting logic.
-    let restore_code = fs::read_to_string("src/restore.rs")
-        .expect("Failed to read restore.rs");
+    let restore_code = fs::read_to_string("src/restore.rs").expect("Failed to read restore.rs");
 
     // Find run_restore() function body
     let fn_start = restore_code
@@ -614,8 +615,7 @@ fn test_restore_confirm_check_before_prompt() {
 #[test]
 fn test_restore_error_handling_quality() {
     // Verify that error messages are clear and actionable
-    let restore_code = fs::read_to_string("src/restore.rs")
-        .expect("Failed to read restore.rs");
+    let restore_code = fs::read_to_string("src/restore.rs").expect("Failed to read restore.rs");
 
     // Find the --confirm requirement check
     let check_start = restore_code
@@ -668,20 +668,17 @@ fn test_restore_both_positions_extract_same_value() {
 
     // Both should yield the same no_interactive value
     assert_eq!(
-        parsed_before.no_interactive,
-        parsed_after.no_interactive,
+        parsed_before.no_interactive, parsed_after.no_interactive,
         "Flag position should not affect the extracted value"
     );
 
     assert!(
         parsed_before.no_interactive,
-        true,
         "Both positions should extract no_interactive as true"
     );
 
     assert_eq!(
-        parsed_before.command,
-        parsed_after.command,
+        parsed_before.command, parsed_after.command,
         "Both positions should extract the same command"
     );
 }
@@ -689,8 +686,9 @@ fn test_restore_both_positions_extract_same_value() {
 #[test]
 fn test_restore_short_flag_y_works() {
     // Test that the short -y flag works correctly for restore command
-    let parsed = parse_flag_before_subcommand(&["restore", "--from", "s3://bucket/key", "--confirm"])
-        .expect("Should parse -y flag");
+    let parsed =
+        parse_flag_before_subcommand(&["restore", "--from", "s3://bucket/key", "--confirm"])
+            .expect("Should parse -y flag");
 
     // Verify the global -y flag is recognized as no_interactive
     assert!(
@@ -707,8 +705,7 @@ fn test_restore_comprehensive_no_interactive_coverage() {
     // This serves as a checklist for the test suite
 
     let main_code = fs::read_to_string("src/main.rs").expect("Failed to read main.rs");
-    let restore_code = fs::read_to_string("src/restore.rs")
-        .expect("Failed to read restore.rs");
+    let restore_code = fs::read_to_string("src/restore.rs").expect("Failed to read restore.rs");
 
     // Checklist:
     // 1. Restore command has from, dry_run, and confirm fields

@@ -44,8 +44,8 @@ fn test_observer_config_creation() {
 /// Test that observer router only has read-only endpoints
 #[test]
 fn test_observer_router_is_read_only() {
-    use hoop_daemon::observer::observer_router;
     use axum::Router;
+    use hoop_daemon::observer::observer_router;
 
     let router = observer_router();
     // The observer router should only have GET routes
@@ -105,13 +105,7 @@ async fn test_observer_websocket_event_forwarding() {
     let workers = Arc::new(RwLock::new(Vec::new()));
     let projects = Arc::new(RwLock::new(Vec::new()));
 
-    let _client = ObserverClient::new(
-        primary_addr,
-        event_tx.clone(),
-        beads,
-        workers,
-        projects,
-    );
+    let _client = ObserverClient::new(primary_addr, event_tx.clone(), beads, workers, projects);
 
     // Verify the event channel is working
     let test_event = hoop_daemon::ws::WsEvent::init(vec!["global".to_string()]);

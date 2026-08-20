@@ -11,8 +11,8 @@
 //!
 //! §5.4 Session tailer filtering
 
-use crate::sessions::{create_all_adapters, SessionAdapter};
 use crate::atomic_write;
+use crate::sessions::{create_all_adapters, SessionAdapter};
 use anyhow::{Context, Result};
 use axum::{
     extract::{Path as AxumPath, State},
@@ -120,9 +120,7 @@ pub struct UnassignedTracker {
 
 impl UnassignedTracker {
     /// Create a new unassigned tracker
-    pub fn new(
-        projects: Arc<std::sync::RwLock<Vec<crate::ws::ProjectCardData>>>,
-    ) -> Result<Self> {
+    pub fn new(projects: Arc<std::sync::RwLock<Vec<crate::ws::ProjectCardData>>>) -> Result<Self> {
         let hoop_home = Self::hoop_home_dir()?;
         let ignore_list_path = hoop_home.join(IGNORE_LIST_PATH);
 
@@ -235,7 +233,11 @@ impl UnassignedTracker {
                         // File was skipped (not a valid session)
                     }
                     Err(e) => {
-                        warn!("Failed to parse session file {}: {}", file.path().display(), e);
+                        warn!(
+                            "Failed to parse session file {}: {}",
+                            file.path().display(),
+                            e
+                        );
                     }
                 }
             }
@@ -265,7 +267,8 @@ impl UnassignedTracker {
                 true
             })
             .map(|session| {
-                let total_tokens: i64 = session.total_usage.input_tokens + session.total_usage.output_tokens;
+                let total_tokens: i64 =
+                    session.total_usage.input_tokens + session.total_usage.output_tokens;
 
                 UnassignedEntry {
                     session: UnassignedSession {
@@ -273,9 +276,15 @@ impl UnassignedTracker {
                         provider: session.provider.clone(),
                         kind: match &session.kind {
                             hoop_schema::ParsedSessionKind::Variant0 { .. } => "worker".to_string(),
-                            hoop_schema::ParsedSessionKind::Variant1(hoop_schema::ParsedSessionKindVariant1::Dictated) => "dictated".to_string(),
-                            hoop_schema::ParsedSessionKind::Variant2(hoop_schema::ParsedSessionKindVariant2::AdHoc) => "ad-hoc".to_string(),
-                            hoop_schema::ParsedSessionKind::Variant3(hoop_schema::ParsedSessionKindVariant3::Operator) => "operator".to_string(),
+                            hoop_schema::ParsedSessionKind::Variant1(
+                                hoop_schema::ParsedSessionKindVariant1::Dictated,
+                            ) => "dictated".to_string(),
+                            hoop_schema::ParsedSessionKind::Variant2(
+                                hoop_schema::ParsedSessionKindVariant2::AdHoc,
+                            ) => "ad-hoc".to_string(),
+                            hoop_schema::ParsedSessionKind::Variant3(
+                                hoop_schema::ParsedSessionKindVariant3::Operator,
+                            ) => "operator".to_string(),
                         },
                         cwd: session.cwd.clone(),
                         title: if session.title.is_empty() {
@@ -329,7 +338,8 @@ impl UnassignedTracker {
     /// Check if a cwd matches a project path
     fn cwd_matches_project(&self, cwd: &str, project_path: &Path) -> bool {
         let resolved_cwd = fs::canonicalize(cwd).unwrap_or_else(|_| PathBuf::from(cwd));
-        let resolved_project = fs::canonicalize(project_path).unwrap_or_else(|_| project_path.to_path_buf());
+        let resolved_project =
+            fs::canonicalize(project_path).unwrap_or_else(|_| project_path.to_path_buf());
         let cwd_str = resolved_cwd.to_string_lossy();
         let project_str = resolved_project.to_string_lossy();
         if cwd_str == *project_str {
@@ -396,7 +406,12 @@ async fn list_unassigned(
     let tracker = tracker
         .as_any()
         .downcast_ref::<UnassignedTracker>()
-        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, "Invalid tracker type".to_string()))?;
+        .ok_or_else(|| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Invalid tracker type".to_string(),
+            )
+        })?;
 
     let sessions = tracker.get_sessions();
     let total_count = sessions.len();
@@ -414,19 +429,30 @@ async fn assign_session(
     Json(req): Json<AssignRequest>,
 ) -> Result<Json<SuccessResponse>, (StatusCode, String)> {
     let Some(tracker) = state.unassigned_tracker.as_ref() else {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, "Tracker not available".to_string()));
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Tracker not available".to_string(),
+        ));
     };
 
     let tracker = tracker
         .as_any()
         .downcast_ref::<UnassignedTracker>()
-        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, "Invalid tracker type".to_string()))?;
+        .ok_or_else(|| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Invalid tracker type".to_string(),
+            )
+        })?;
 
     tracker
         .assign_session(&id, &req.project)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    info!("Assigned unassigned session {} to project {}", id, req.project);
+    info!(
+        "Assigned unassigned session {} to project {}",
+        id, req.project
+    );
     Ok(Json(SuccessResponse { success: true }))
 }
 
@@ -436,13 +462,21 @@ async fn ignore_session(
     AxumPath(id): AxumPath<String>,
 ) -> Result<Json<SuccessResponse>, (StatusCode, String)> {
     let Some(tracker) = state.unassigned_tracker.as_ref() else {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, "Tracker not available".to_string()));
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Tracker not available".to_string(),
+        ));
     };
 
     let tracker = tracker
         .as_any()
         .downcast_ref::<UnassignedTracker>()
-        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, "Invalid tracker type".to_string()))?;
+        .ok_or_else(|| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Invalid tracker type".to_string(),
+            )
+        })?;
 
     tracker
         .ignore_session(&id)

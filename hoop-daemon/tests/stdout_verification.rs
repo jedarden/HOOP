@@ -49,7 +49,10 @@ fn test_large_stdout_verification() {
 
     let (total_bytes, line_count) = generate_and_print_large_stdout(&config);
 
-    eprintln!("VERIFICATION_METADATA: Generated {} lines (~{} bytes)", line_count, total_bytes);
+    eprintln!(
+        "VERIFICATION_METADATA: Generated {} lines (~{} bytes)",
+        line_count, total_bytes
+    );
     eprintln!("VERIFICATION_METADATA: Content is deterministic and verifiable");
 
     println!(
@@ -86,10 +89,7 @@ fn test_verification_in_memory() {
     let result = verify_stdout_char_by_char(expected_content, &log_path).unwrap();
 
     assert!(result.passed, "In-memory verification should pass");
-    assert_eq!(
-        result.expected_chars,
-        expected_content.chars().count()
-    );
+    assert_eq!(result.expected_chars, expected_content.chars().count());
 
     eprintln!("VERIFICATION_METADATA: In-memory verification passed");
 
@@ -114,7 +114,10 @@ fn test_verification_detects_mismatch() {
 
     let result = verify_stdout_char_by_char(expected_content, &log_path).unwrap();
 
-    assert!(!result.passed, "Verification should fail for mismatched content");
+    assert!(
+        !result.passed,
+        "Verification should fail for mismatched content"
+    );
     assert!(result.first_mismatch_pos.is_some());
     assert!(result.first_mismatch_line.is_some());
 
@@ -147,10 +150,7 @@ fn test_unicode_and_special_chars() {
     let result = verify_stdout_char_by_char(unicode_content, &log_path).unwrap();
 
     assert!(result.passed, "Unicode verification should pass");
-    assert_eq!(
-        result.actual_chars,
-        unicode_content.chars().count()
-    );
+    assert_eq!(result.actual_chars, unicode_content.chars().count());
 
     eprintln!("VERIFICATION_METADATA: Unicode verification passed");
 
@@ -178,8 +178,7 @@ fn test_exact_content_preservation() {
 
     eprintln!(
         "VERIFICATION_METADATA: Content is deterministic - {} bytes, {} lines",
-        bytes,
-        lines
+        bytes, lines
     );
     eprintln!("VERIFICATION_METADATA: Every character can be verified exactly");
 

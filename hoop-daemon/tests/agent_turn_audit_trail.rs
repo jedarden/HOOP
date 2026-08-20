@@ -114,8 +114,7 @@ fn test_draft_agent_metadata_propagates_to_stitch() {
     .expect("create stitch with audit");
 
     // Query the stitch to verify audit fields were stored
-    let conn = rusqlite::Connection::open(hoop_daemon::fleet::db_path())
-        .expect("open fleet.db");
+    let conn = rusqlite::Connection::open(hoop_daemon::fleet::db_path()).expect("open fleet.db");
 
     let stitch_row: (String, Option<String>, Option<String>, Option<String>, Option<String>, Option<String>) = conn
         .query_row(
@@ -136,11 +135,31 @@ fn test_draft_agent_metadata_propagates_to_stitch() {
         .expect("query stitch");
 
     assert_eq!(stitch_row.0, stitch_id);
-    assert_eq!(stitch_row.1, Some(actor.to_string()), "created_by_actor should be set");
-    assert_eq!(stitch_row.2, Some(session_id.to_string()), "created_by_session_id should be set");
-    assert_eq!(stitch_row.3, Some(adapter.to_string()), "created_by_adapter should be set");
-    assert_eq!(stitch_row.4, Some(model.to_string()), "created_by_model should be set");
-    assert_eq!(stitch_row.5, Some(turn_id.to_string()), "turn_id should be set");
+    assert_eq!(
+        stitch_row.1,
+        Some(actor.to_string()),
+        "created_by_actor should be set"
+    );
+    assert_eq!(
+        stitch_row.2,
+        Some(session_id.to_string()),
+        "created_by_session_id should be set"
+    );
+    assert_eq!(
+        stitch_row.3,
+        Some(adapter.to_string()),
+        "created_by_adapter should be set"
+    );
+    assert_eq!(
+        stitch_row.4,
+        Some(model.to_string()),
+        "created_by_model should be set"
+    );
+    assert_eq!(
+        stitch_row.5,
+        Some(turn_id.to_string()),
+        "turn_id should be set"
+    );
 
     // Verify stitch_messages has the turn_id as a system note
     let message_count: i64 = conn
@@ -151,7 +170,10 @@ fn test_draft_agent_metadata_propagates_to_stitch() {
         )
         .expect("count system messages");
 
-    assert_eq!(message_count, 1, "Should have one system note with turn reference");
+    assert_eq!(
+        message_count, 1,
+        "Should have one system note with turn reference"
+    );
 
     let message_content: String = conn
         .query_row(
@@ -161,7 +183,10 @@ fn test_draft_agent_metadata_propagates_to_stitch() {
         )
         .expect("get system message content");
 
-    assert!(message_content.contains(turn_id), "System message should reference the turn_id");
+    assert!(
+        message_content.contains(turn_id),
+        "System message should reference the turn_id"
+    );
 
     teardown_test_db();
 }
@@ -217,7 +242,10 @@ fn test_stitch_created_audit_includes_agent_metadata() {
         .expect("should find audit row for our stitch");
 
     assert_eq!(audit_row.actor, actor);
-    assert_eq!(audit_row.kind, hoop_daemon::fleet::ActionKind::StitchCreated);
+    assert_eq!(
+        audit_row.kind,
+        hoop_daemon::fleet::ActionKind::StitchCreated
+    );
 
     // Parse args_json and verify agent metadata is present
     let args_value: serde_json::Value = audit_row
@@ -292,8 +320,7 @@ fn test_stitch_reconstructs_to_origin_turn() {
     .expect("create stitch for reconstruction");
 
     // Query the stitch
-    let conn = rusqlite::Connection::open(hoop_daemon::fleet::db_path())
-        .expect("open fleet.db");
+    let conn = rusqlite::Connection::open(hoop_daemon::fleet::db_path()).expect("open fleet.db");
 
     // Reconstruct the origin turn information
     let (stored_session_id, stored_adapter, stored_model, stored_turn_id): (
@@ -323,7 +350,10 @@ fn test_stitch_reconstructs_to_origin_turn() {
 
     // Generate the turn URL (as done in the UI)
     let turn_url = format!("/agent?session={}&turn={}", session_id, turn_id);
-    assert_eq!(turn_url, format!("/agent?session={}&turn={}", session_id, turn_id));
+    assert_eq!(
+        turn_url,
+        format!("/agent?session={}&turn={}", session_id, turn_id)
+    );
 
     teardown_test_db();
 }

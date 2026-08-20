@@ -35,11 +35,20 @@ pub fn router() -> Router<crate::DaemonState> {
         .route("/api/p/{project}/dictated-notes", get(list_notes))
         .route("/api/dictated-notes/{stitch_id}", get(get_note))
         .route("/api/dictated-notes/{stitch_id}", patch(update_note))
-        .route("/api/dictated-notes/{stitch_id}/findings", get(get_findings))
+        .route(
+            "/api/dictated-notes/{stitch_id}/findings",
+            get(get_findings),
+        )
         .route("/api/dictated-notes/{stitch_id}/redact", post(redact_words))
         .route("/api/dictated-notes/{stitch_id}/audio", get(get_audio))
-        .route("/api/dictated-notes/{stitch_id}/synthesize", post(synthesize_draft))
-        .route("/api/dictated-notes/{stitch_id}/draft", post(create_draft_from_note))
+        .route(
+            "/api/dictated-notes/{stitch_id}/synthesize",
+            post(synthesize_draft),
+        )
+        .route(
+            "/api/dictated-notes/{stitch_id}/draft",
+            post(create_draft_from_note),
+        )
 }
 
 /// POST /api/p/:project/dictated-notes — create a new dictated note
@@ -109,10 +118,10 @@ async fn create_note(
             crate::redaction::audit_findings(
                 "transcript",
                 &findings,
-                crate::redaction_policy::RedactionAction::FlaggedOnly,  // Just flag, no automatic action
+                crate::redaction_policy::RedactionAction::FlaggedOnly, // Just flag, no automatic action
                 &valid_stitch_id,
                 Some(&project),
-                "system",  // Voice transcription is automatic
+                "system", // Voice transcription is automatic
             );
         }
     }
@@ -168,7 +177,11 @@ async fn create_note(
         &title,
         &state.pattern_tx,
     ) {
-        tracing::warn!("Failed to sync pattern queries for stitch {}: {}", stitch_id, e);
+        tracing::warn!(
+            "Failed to sync pattern queries for stitch {}: {}",
+            stitch_id,
+            e
+        );
     }
 
     // Insert note metadata
@@ -321,13 +334,14 @@ async fn get_findings(
         )
     })?;
 
-    let note = dictated_notes::get_note(&conn, valid_id.as_str()).map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Query error: {}", e),
-        )
-    })?
-    .ok_or_else(|| (StatusCode::NOT_FOUND, "Note not found".to_string()))?;
+    let note = dictated_notes::get_note(&conn, valid_id.as_str())
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Query error: {}", e),
+            )
+        })?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "Note not found".to_string()))?;
 
     // Scan the transcript for secrets
     let findings = crate::redaction::scan_voice_transcript(&note.transcript);
@@ -493,10 +507,10 @@ async fn update_note(
             crate::redaction::audit_findings(
                 "transcript",
                 &findings,
-                crate::redaction_policy::RedactionAction::FlaggedOnly,  // Just flag, no automatic action
+                crate::redaction_policy::RedactionAction::FlaggedOnly, // Just flag, no automatic action
                 valid_id.as_str(),
                 project,
-                "system",  // Voice transcription is automatic
+                "system", // Voice transcription is automatic
             );
         }
         note.transcript = transcript;
@@ -685,15 +699,12 @@ async fn perform_synthesis(
     state: &crate::DaemonState,
 ) -> Result<SynthesizeResponse, (StatusCode, String)> {
     // Use agent session to synthesize title and body
-    let mgr = state
-        .agent_session_manager
-        .as_ref()
-        .ok_or_else(|| {
-            (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "Agent session manager not available".to_string(),
-            )
-        })?;
+    let mgr = state.agent_session_manager.as_ref().ok_or_else(|| {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Agent session manager not available".to_string(),
+        )
+    })?;
 
     // Build synthesis prompt
     let synthesis_prompt = format!(
@@ -763,7 +774,11 @@ Be concise and actionable. Focus on what needs to be done."#,
     };
 
     let parsed: serde_json::Value = serde_json::from_str(json_str).unwrap_or_else(|e| {
-        tracing::warn!("Failed to parse agent JSON response: {}, raw: {}", e, json_str);
+        tracing::warn!(
+            "Failed to parse agent JSON response: {}, raw: {}",
+            e,
+            json_str
+        );
         // Fallback to derived title
         serde_json::json!({
             "title": dictated_notes::derive_title(&note.transcript),
@@ -781,14 +796,8 @@ Be concise and actionable. Focus on what needs to be done."#,
         .as_str()
         .unwrap_or(note.transcript.as_str())
         .to_string();
-    let kind = parsed["kind"]
-        .as_str()
-        .unwrap_or(default_kind)
-        .to_string();
-    let confidence = parsed["confidence"]
-        .as_str()
-        .unwrap_or("low")
-        .to_string();
+    let kind = parsed["kind"].as_str().unwrap_or(default_kind).to_string();
+    let confidence = parsed["confidence"].as_str().unwrap_or("low").to_string();
 
     // Validate and truncate title
     let title = if title.len() > 280 {
@@ -832,18 +841,14 @@ async fn synthesize_draft(
         )
     })?;
 
-    let note = dictated_notes::get_note(&conn, valid_id.as_str()).map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Query error: {}", e),
-        )
-    })?
-    .ok_or_else(|| {
-        (
-            StatusCode::NOT_FOUND,
-            "Note not found".to_string(),
-        )
-    })?;
+    let note = dictated_notes::get_note(&conn, valid_id.as_str())
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Query error: {}", e),
+            )
+        })?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "Note not found".to_string()))?;
 
     // Check if transcription is complete
     if note.transcription_status != dictated_notes::TranscriptionStatus::Completed {
@@ -866,7 +871,9 @@ async fn synthesize_draft(
         "kind": synthesis.kind,
         "confidence": synthesis.confidence
     });
-    if let Err(e) = dictated_notes::update_synthesis_result(&conn, &stitch_id, &synthesis_json.to_string()) {
+    if let Err(e) =
+        dictated_notes::update_synthesis_result(&conn, &stitch_id, &synthesis_json.to_string())
+    {
         tracing::warn!("Failed to store synthesis_result for {}: {}", stitch_id, e);
     }
 
@@ -892,18 +899,14 @@ async fn create_draft_from_note(
         )
     })?;
 
-    let note = dictated_notes::get_note(&conn, valid_id.as_str()).map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Query error: {}", e),
-        )
-    })?
-    .ok_or_else(|| {
-        (
-            StatusCode::NOT_FOUND,
-            "Note not found".to_string(),
-        )
-    })?;
+    let note = dictated_notes::get_note(&conn, valid_id.as_str())
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Query error: {}", e),
+            )
+        })?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "Note not found".to_string()))?;
 
     // Get the project from the stitch
     let project: String = conn
@@ -942,7 +945,10 @@ async fn create_draft_from_note(
         description: Some(synthesis.body.clone()),
         has_acceptance_criteria: Some(false),
         priority: Some(2),
-        labels: Some(vec!["voice-capture".to_string(), "from-dictation".to_string()]),
+        labels: Some(vec![
+            "voice-capture".to_string(),
+            "from-dictation".to_string(),
+        ]),
         source: format!("dictated-note:{}", stitch_id),
         agent_session_id: None,
         turn_id: None,
@@ -953,7 +959,10 @@ async fn create_draft_from_note(
     let _project_path = crate::api_draft_queue::resolve_project_path(&project, &state)?;
 
     // Validate the stitch kind
-    crate::api_stitch_decompose::validate_stitch_kind(&draft_req.kind, draft_req.has_acceptance_criteria.unwrap_or(false))?;
+    crate::api_stitch_decompose::validate_stitch_kind(
+        &draft_req.kind,
+        draft_req.has_acceptance_criteria.unwrap_or(false),
+    )?;
 
     // Dedup check
     let index = state.vector_index.read().unwrap();
@@ -1006,7 +1015,11 @@ async fn create_draft_from_note(
 
     // Update dictated_note with draft_id (bidirectional link)
     if let Err(e) = dictated_notes::update_draft_id(&conn, &stitch_id, &draft_id) {
-        tracing::warn!("Failed to update draft_id for dictated note {}: {}", stitch_id, e);
+        tracing::warn!(
+            "Failed to update draft_id for dictated note {}: {}",
+            stitch_id,
+            e
+        );
     }
 
     // Audit: draft created from dictated note

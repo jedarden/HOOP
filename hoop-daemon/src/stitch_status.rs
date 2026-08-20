@@ -528,14 +528,22 @@ mod tests {
         for i in 0..100 {
             ctx.linked_beads.push(LinkedBead {
                 id: format!("bd-{}", i),
-                status: if i % 2 == 0 { BeadStatus::Open } else { BeadStatus::Closed },
+                status: if i % 2 == 0 {
+                    BeadStatus::Open
+                } else {
+                    BeadStatus::Closed
+                },
                 issue_type: match i % 4 {
                     0 => BeadType::Review,
                     1 => BeadType::Task,
                     2 => BeadType::Bug,
                     _ => BeadType::Fix,
                 },
-                claimed_by: if i % 5 == 0 { Some(format!("worker-{}", i)) } else { None },
+                claimed_by: if i % 5 == 0 {
+                    Some(format!("worker-{}", i))
+                } else {
+                    None
+                },
                 updated_at: days_ago(i as i64),
             });
         }

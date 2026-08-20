@@ -18,8 +18,8 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tokio::time::timeout;
 
-use integration_harness::spawn_test_daemon_with_config;
 use hoop_schema::{DegradedProject, ReadinessResponse};
+use integration_harness::spawn_test_daemon_with_config;
 
 /// Create a test project directory with .beads/ structure
 fn create_test_project(name: &str) -> (tempfile::TempDir, PathBuf) {
@@ -71,10 +71,11 @@ async fn test_beads_removal_shows_error_state() {
     let project_c_path_clone = project_c_path.clone();
 
     // Spawn daemon with custom config pointing to all three projects
-    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(move |config: &mut hoop_daemon::Config| {
-        // Customize projects.yaml to include all three projects
-        let projects_yaml = format!(
-            r#"projects:
+    let (base_url, _daemon) =
+        spawn_test_daemon_with_config(Some(move |config: &mut hoop_daemon::Config| {
+            // Customize projects.yaml to include all three projects
+            let projects_yaml = format!(
+                r#"projects:
   - name: project_a
     path: {}
     workspaces:
@@ -91,20 +92,20 @@ async fn test_beads_removal_shows_error_state() {
       - path: {}
         role: primary
 "#,
-            project_a_path_clone.display(),
-            project_a_path_clone.display(),
-            project_b_path_clone.display(),
-            project_b_path_clone.display(),
-            project_c_path_clone.display(),
-            project_c_path_clone.display()
-        );
+                project_a_path_clone.display(),
+                project_a_path_clone.display(),
+                project_b_path_clone.display(),
+                project_b_path_clone.display(),
+                project_c_path_clone.display(),
+                project_c_path_clone.display()
+            );
 
-        let hoop_dir = config.control_socket_path.parent().unwrap();
-        fs::write(hoop_dir.join("projects.yaml"), projects_yaml)
-            .expect("Failed to write projects.yaml");
-    }))
-    .await
-    .expect("Failed to spawn test daemon");
+            let hoop_dir = config.control_socket_path.parent().unwrap();
+            fs::write(hoop_dir.join("projects.yaml"), projects_yaml)
+                .expect("Failed to write projects.yaml");
+        }))
+        .await
+        .expect("Failed to spawn test daemon");
 
     let client = reqwest::Client::new();
 
@@ -123,14 +124,12 @@ async fn test_beads_removal_shows_error_state() {
                 .await
                 .expect("Failed to parse projects response");
 
-            let all_healthy = projects
-                .as_array()
-                .unwrap()
-                .iter()
-                .all(|p| p.get("state")
+            let all_healthy = projects.as_array().unwrap().iter().all(|p| {
+                p.get("state")
                     .and_then(|s| s.as_str())
                     .map(|s| s == "healthy")
-                    .unwrap_or(false));
+                    .unwrap_or(false)
+            });
 
             if all_healthy {
                 break;
@@ -279,10 +278,7 @@ async fn test_beads_removal_shows_error_state() {
         .await
         .expect("Failed to POST /api/config/reload");
 
-    assert!(
-        resp.status().is_success(),
-        "Config reload should succeed"
-    );
+    assert!(resp.status().is_success(), "Config reload should succeed");
 
     // Wait for project A to recover (within 10s)
     let start = std::time::Instant::now();
@@ -332,9 +328,10 @@ async fn test_multiple_beads_removal_isolated() {
     let project_b_path_clone = project_b_path.clone();
     let project_c_path_clone = project_c_path.clone();
 
-    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(move |config: &mut hoop_daemon::Config| {
-        let projects_yaml = format!(
-            r#"projects:
+    let (base_url, _daemon) =
+        spawn_test_daemon_with_config(Some(move |config: &mut hoop_daemon::Config| {
+            let projects_yaml = format!(
+                r#"projects:
   - name: project_a
     path: {}
     workspaces:
@@ -351,27 +348,31 @@ async fn test_multiple_beads_removal_isolated() {
       - path: {}
         role: primary
 "#,
-            project_a_path_clone.display(),
-            project_a_path_clone.display(),
-            project_b_path_clone.display(),
-            project_b_path_clone.display(),
-            project_c_path_clone.display(),
-            project_c_path_clone.display()
-        );
+                project_a_path_clone.display(),
+                project_a_path_clone.display(),
+                project_b_path_clone.display(),
+                project_b_path_clone.display(),
+                project_c_path_clone.display(),
+                project_c_path_clone.display()
+            );
 
-        let hoop_dir = config.control_socket_path.parent().unwrap();
-        fs::write(hoop_dir.join("projects.yaml"), projects_yaml)
-            .expect("Failed to write projects.yaml");
-    }))
-    .await
-    .expect("Failed to spawn test daemon");
+            let hoop_dir = config.control_socket_path.parent().unwrap();
+            fs::write(hoop_dir.join("projects.yaml"), projects_yaml)
+                .expect("Failed to write projects.yaml");
+        }))
+        .await
+        .expect("Failed to spawn test daemon");
 
     let client = reqwest::Client::new();
 
     // Wait for all projects to become healthy
     let start = std::time::Instant::now();
     while start.elapsed() < Duration::from_secs(10) {
-        let resp = client.get(&format!("{}/readyz", base_url)).send().await.expect("Failed to GET /readyz");
+        let resp = client
+            .get(&format!("{}/readyz", base_url))
+            .send()
+            .await
+            .expect("Failed to GET /readyz");
         if resp.status().as_u16() == 200 {
             break;
         }

@@ -83,7 +83,11 @@ pub enum StreamItem {
     Header(StreamHeader),
     Chunk(StreamChunk),
     Trailer(StreamTrailer),
-    Error { #[serde(rename = "type")] msg_type: String, error: String },
+    Error {
+        #[serde(rename = "type")]
+        msg_type: String,
+        error: String,
+    },
 }
 
 /// Resolve syntax reference for a filename, using common extension remaps.
@@ -170,7 +174,13 @@ pub fn highlight_stream(
         })
     })
     .chain(stream::unfold(
-        (0usize, content, ss, syntax_for_highlighter, theme_for_highlighter),
+        (
+            0usize,
+            content,
+            ss,
+            syntax_for_highlighter,
+            theme_for_highlighter,
+        ),
         move |(line_idx, remaining_content, ss, syntax, theme)| async move {
             let mut line_idx = line_idx;
 
@@ -198,7 +208,10 @@ pub fn highlight_stream(
 
                 match highlighter.highlight_line(line, &ss) {
                     Ok(ranges) => {
-                        match styled_line_to_highlighted_html(&ranges[..], syntect::html::IncludeBackground::No) {
+                        match styled_line_to_highlighted_html(
+                            &ranges[..],
+                            syntect::html::IncludeBackground::No,
+                        ) {
                             Ok(html) => {
                                 chunk_lines.push(html.trim_end_matches('\n').to_owned());
                                 bytes_consumed += line.len();

@@ -263,14 +263,35 @@ impl McpServerState {
                     name: format!("skill_{}", skill.name),
                     description: skill.manifest.description.clone(),
                     input_schema: InputSchema {
-                        schema_type: skill.manifest.args_schema["type"].as_str().unwrap_or("object").to_string(),
-                        properties: skill.manifest.args_schema["properties"].as_object()
-                            .map(|p| serde_json::Map::from_iter(p.iter().map(|(k, v)| (k.clone(), v.clone()))))
+                        schema_type: skill.manifest.args_schema["type"]
+                            .as_str()
+                            .unwrap_or("object")
+                            .to_string(),
+                        properties: skill.manifest.args_schema["properties"]
+                            .as_object()
+                            .map(|p| {
+                                serde_json::Map::from_iter(
+                                    p.iter().map(|(k, v)| (k.clone(), v.clone())),
+                                )
+                            })
                             .unwrap_or_default(),
-                        required: skill.manifest.args_schema["required"].as_array()
-                            .map(|r| r.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
-                            .or_else(|| skill.manifest.args_schema["required"].as_array()
-                                .and_then(|r| serde_json::from_value::<Vec<String>>(serde_json::Value::Array(r.clone())).ok())),
+                        required: skill.manifest.args_schema["required"]
+                            .as_array()
+                            .map(|r| {
+                                r.iter()
+                                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                    .collect()
+                            })
+                            .or_else(|| {
+                                skill.manifest.args_schema["required"]
+                                    .as_array()
+                                    .and_then(|r| {
+                                        serde_json::from_value::<Vec<String>>(
+                                            serde_json::Value::Array(r.clone()),
+                                        )
+                                        .ok()
+                                    })
+                            }),
                     },
                     output_schema: None,
                 });
@@ -338,29 +359,38 @@ impl McpServerState {
         args: &Map<String, Value>,
     ) -> Result<ToolCallResult, String> {
         // Extract skill name from tool name (skill_<name> -> <name>)
-        let skill_name = tool_name.strip_prefix("skill_")
+        let skill_name = tool_name
+            .strip_prefix("skill_")
             .ok_or_else(|| format!("Invalid skill tool name: {}", tool_name))?;
 
         // Find the skill
-        let skill = self.skills.iter()
+        let skill = self
+            .skills
+            .iter()
             .find(|s| s.name == skill_name)
             .ok_or_else(|| format!("Skill '{}' not found", skill_name))?;
 
         // Check if executable
         if !skill.executable {
-            return Err(format!("Skill '{}' is not executable (run file not found or not +x)", skill_name));
+            return Err(format!(
+                "Skill '{}' is not executable (run file not found or not +x)",
+                skill_name
+            ));
         }
 
         // Validate arguments against the skill's schema
         let args_value = Value::Object(args.clone());
-        let validator = self.schema_cache.lock()
+        let validator = self
+            .schema_cache
+            .lock()
             .map_err(|e| format!("Failed to lock schema cache: {}", e))?
             .get_or_compile(skill_name, &skill.manifest.args_schema)
             .map_err(|e| format!("Failed to compile schema for skill '{}': {}", skill_name, e))?;
 
         if let Err(validation_errors) = crate::skills::validate_args(&validator, &args_value) {
             // Build readable error message
-            let error_messages: Vec<String> = validation_errors.iter()
+            let error_messages: Vec<String> = validation_errors
+                .iter()
                 .map(|e| format!("  - {}: {}", e.instance_path, e.message))
                 .collect();
             return Err(format!(
@@ -383,21 +413,27 @@ impl McpServerState {
             &self.actor,
             result.duration_ms,
             result.success,
-            if result.success { None } else { Some(&result.status) },
+            if result.success {
+                None
+            } else {
+                Some(&result.status)
+            },
         );
 
         Ok(ToolCallResult {
-            content: vec![
-                Content::Text {
-                    text: if result.success {
-                        format!("Skill '{}' completed successfully\n\nStdout:\n{}\nStderr:\n{}",
-                            skill_name, result.stdout, result.stderr)
-                    } else {
-                        format!("Skill '{}' failed\n\nStatus: {}\n\nStdout:\n{}\nStderr:\n{}",
-                            skill_name, result.status, result.stdout, result.stderr)
-                    }
-                }
-            ],
+            content: vec![Content::Text {
+                text: if result.success {
+                    format!(
+                        "Skill '{}' completed successfully\n\nStdout:\n{}\nStderr:\n{}",
+                        skill_name, result.stdout, result.stderr
+                    )
+                } else {
+                    format!(
+                        "Skill '{}' failed\n\nStatus: {}\n\nStdout:\n{}\nStderr:\n{}",
+                        skill_name, result.status, result.stdout, result.stderr
+                    )
+                },
+            }],
             is_error: if result.success { None } else { Some(true) },
         })
     }
@@ -841,8 +877,13 @@ impl McpServerState {
             .ok_or("name parameter is required")?;
 
         // Try to read the note from the notes library
-        let note = crate::notes::read_note_by_name(name, &self.projects)
-            .ok_or_else(|| format!("Note '{}' not found. Available notes: {}", name, crate::notes::list_note_names(&self.projects).join(", ")))?;
+        let note = crate::notes::read_note_by_name(name, &self.projects).ok_or_else(|| {
+            format!(
+                "Note '{}' not found. Available notes: {}",
+                name,
+                crate::notes::list_note_names(&self.projects).join(", ")
+            )
+        })?;
 
         // Build the response
         let mut response = format!("# {}\n", note.title);
@@ -852,9 +893,7 @@ impl McpServerState {
         response.push_str(&note.body);
 
         Ok(ToolCallResult {
-            content: vec![Content::Text {
-                text: response,
-            }],
+            content: vec![Content::Text { text: response }],
             is_error: None,
         })
     }
@@ -2192,8 +2231,14 @@ fn output_schema_read_note() -> OutputSchema {
             props.insert("name".to_string(), json!({ "type": "string" }));
             props.insert("title".to_string(), json!({ "type": "string" }));
             props.insert("description".to_string(), json!({ "type": "string" }));
-            props.insert("tags".to_string(), json!({ "type": "array", "items": { "type": "string" } }));
-            props.insert("scope".to_string(), json!({ "type": "string", "enum": ["global", "project"] }));
+            props.insert(
+                "tags".to_string(),
+                json!({ "type": "array", "items": { "type": "string" } }),
+            );
+            props.insert(
+                "scope".to_string(),
+                json!({ "type": "string", "enum": ["global", "project"] }),
+            );
             props.insert("project".to_string(), json!({ "type": "string" }));
             props.insert("body".to_string(), json!({ "type": "string" }));
             props.insert("size_bytes".to_string(), json!({ "type": "number" }));

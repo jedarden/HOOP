@@ -14,9 +14,9 @@
 //! - Net-Diff (computing transitive closure of changes)
 
 use anyhow::Result;
-use rusqlite::{Connection, params};
-use std::collections::{HashSet, VecDeque};
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashSet, VecDeque};
 
 #[cfg(test)]
 use tempfile::TempDir;
@@ -60,18 +60,19 @@ pub fn parents(conn: &Connection, stitch_id: &str) -> Result<Vec<StitchLink>> {
         "SELECT from_stitch, kind, workspace_from, workspace_to
          FROM stitch_links
          WHERE to_stitch = ?1
-         ORDER BY kind, from_stitch"
+         ORDER BY kind, from_stitch",
     )?;
 
-    let links = stmt.query_map(params![stitch_id], |row| {
-        Ok(StitchLink {
-            stitch_id: row.get(0)?,
-            kind: row.get(1)?,
-            workspace_from: row.get(2)?,
-            workspace_to: row.get(3)?,
-        })
-    })?
-    .collect::<Result<Vec<_>, _>>()?;
+    let links = stmt
+        .query_map(params![stitch_id], |row| {
+            Ok(StitchLink {
+                stitch_id: row.get(0)?,
+                kind: row.get(1)?,
+                workspace_from: row.get(2)?,
+                workspace_to: row.get(3)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
 
     Ok(links)
 }
@@ -91,18 +92,19 @@ pub fn children(conn: &Connection, stitch_id: &str) -> Result<Vec<StitchLink>> {
         "SELECT to_stitch, kind, workspace_from, workspace_to
          FROM stitch_links
          WHERE from_stitch = ?1
-         ORDER BY kind, to_stitch"
+         ORDER BY kind, to_stitch",
     )?;
 
-    let links = stmt.query_map(params![stitch_id], |row| {
-        Ok(StitchLink {
-            stitch_id: row.get(0)?,
-            kind: row.get(1)?,
-            workspace_from: row.get(2)?,
-            workspace_to: row.get(3)?,
-        })
-    })?
-    .collect::<Result<Vec<_>, _>>()?;
+    let links = stmt
+        .query_map(params![stitch_id], |row| {
+            Ok(StitchLink {
+                stitch_id: row.get(0)?,
+                kind: row.get(1)?,
+                workspace_from: row.get(2)?,
+                workspace_to: row.get(3)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
 
     Ok(links)
 }
@@ -122,18 +124,19 @@ pub fn referenced_by(conn: &Connection, stitch_id: &str) -> Result<Vec<StitchLin
         "SELECT from_stitch, kind, workspace_from, workspace_to
          FROM stitch_links
          WHERE to_stitch = ?1 AND kind = 'references'
-         ORDER BY from_stitch"
+         ORDER BY from_stitch",
     )?;
 
-    let links = stmt.query_map(params![stitch_id], |row| {
-        Ok(StitchLink {
-            stitch_id: row.get(0)?,
-            kind: row.get(1)?,
-            workspace_from: row.get(2)?,
-            workspace_to: row.get(3)?,
-        })
-    })?
-    .collect::<Result<Vec<_>, _>>()?;
+    let links = stmt
+        .query_map(params![stitch_id], |row| {
+            Ok(StitchLink {
+                stitch_id: row.get(0)?,
+                kind: row.get(1)?,
+                workspace_from: row.get(2)?,
+                workspace_to: row.get(3)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
 
     Ok(links)
 }
@@ -343,8 +346,12 @@ mod tests {
 
         let parents = parents(&conn, "target").expect("Failed to get parents");
         assert_eq!(parents.len(), 2);
-        assert!(parents.iter().any(|p| p.stitch_id == "p1" && p.kind == "spawned"));
-        assert!(parents.iter().any(|p| p.stitch_id == "p2" && p.kind == "references"));
+        assert!(parents
+            .iter()
+            .any(|p| p.stitch_id == "p1" && p.kind == "spawned"));
+        assert!(parents
+            .iter()
+            .any(|p| p.stitch_id == "p2" && p.kind == "references"));
     }
 
     #[test]
@@ -412,8 +419,8 @@ mod tests {
         insert_link(&conn, "a", "b", "spawned", "", "");
         insert_link(&conn, "b", "c", "spawned", "", "");
 
-        let closure_nodes = closure(&conn, "root", "spawned", None)
-            .expect("Failed to compute closure");
+        let closure_nodes =
+            closure(&conn, "root", "spawned", None).expect("Failed to compute closure");
 
         assert_eq!(closure_nodes.len(), 4); // root + 3 children
 
@@ -438,7 +445,13 @@ mod tests {
         let (conn, _temp) = setup_test_db();
 
         // Create chain: root -> a -> b -> c -> d
-        for (id, title) in [("root", "Root"), ("a", "A"), ("b", "B"), ("c", "C"), ("d", "D")] {
+        for (id, title) in [
+            ("root", "Root"),
+            ("a", "A"),
+            ("b", "B"),
+            ("c", "C"),
+            ("d", "D"),
+        ] {
             insert_stitch(&conn, id, "proj", title);
         }
 
@@ -447,8 +460,8 @@ mod tests {
         }
 
         // Limit to depth 2
-        let closure_nodes = closure(&conn, "root", "spawned", Some(2))
-            .expect("Failed to compute closure");
+        let closure_nodes =
+            closure(&conn, "root", "spawned", Some(2)).expect("Failed to compute closure");
 
         assert_eq!(closure_nodes.len(), 3); // root, a, b only
 
@@ -474,8 +487,8 @@ mod tests {
         insert_link(&conn, "c", "a", "spawned", "", ""); // cycle back
 
         // Should not hang, should visit each node once
-        let closure_nodes = closure(&conn, "a", "spawned", None)
-            .expect("Failed to compute closure");
+        let closure_nodes =
+            closure(&conn, "a", "spawned", None).expect("Failed to compute closure");
 
         assert_eq!(closure_nodes.len(), 3); // Each node visited exactly once
 
@@ -501,8 +514,8 @@ mod tests {
         insert_link(&conn, "a", "c", "spawned", "", "");
         insert_link(&conn, "b", "c", "spawned", "", "");
 
-        let closure_nodes = closure(&conn, "root", "spawned", None)
-            .expect("Failed to compute closure");
+        let closure_nodes =
+            closure(&conn, "root", "spawned", None).expect("Failed to compute closure");
 
         // c should only appear once (visited via a, skipped via b)
         let ids: Vec<_> = closure_nodes.iter().map(|n| n.stitch_id.as_str()).collect();
@@ -520,8 +533,8 @@ mod tests {
 
         insert_link(&conn, "root", "child", "spawned", "", "");
 
-        let closure_nodes = closure(&conn, "root", "spawned", None)
-            .expect("Failed to compute closure");
+        let closure_nodes =
+            closure(&conn, "root", "spawned", None).expect("Failed to compute closure");
 
         assert_eq!(closure_nodes.len(), 2); // root and child only
 
@@ -544,8 +557,7 @@ mod tests {
         insert_link(&conn, "root", "referenced", "references", "", "");
 
         // Only spawned
-        let spawned = closure(&conn, "root", "spawned", None)
-            .expect("Failed to compute closure");
+        let spawned = closure(&conn, "root", "spawned", None).expect("Failed to compute closure");
         assert_eq!(spawned.len(), 2);
         let ids: std::collections::HashSet<_> =
             spawned.iter().map(|n| n.stitch_id.as_str()).collect();
@@ -554,8 +566,8 @@ mod tests {
         assert!(!ids.contains("referenced"));
 
         // Only references
-        let referenced = closure(&conn, "root", "references", None)
-            .expect("Failed to compute closure");
+        let referenced =
+            closure(&conn, "root", "references", None).expect("Failed to compute closure");
         assert_eq!(referenced.len(), 2);
         let ids: std::collections::HashSet<_> =
             referenced.iter().map(|n| n.stitch_id.as_str()).collect();
@@ -564,8 +576,7 @@ mod tests {
         assert!(ids.contains("referenced"));
 
         // All
-        let all = closure(&conn, "root", "all", None)
-            .expect("Failed to compute closure");
+        let all = closure(&conn, "root", "all", None).expect("Failed to compute closure");
         assert_eq!(all.len(), 3);
     }
 
@@ -582,8 +593,8 @@ mod tests {
             insert_link(&conn, "root", &child_id, "spawned", "", "");
         }
 
-        let closure_nodes = closure(&conn, "root", "spawned", None)
-            .expect("Failed to compute closure");
+        let closure_nodes =
+            closure(&conn, "root", "spawned", None).expect("Failed to compute closure");
 
         assert_eq!(closure_nodes.len(), 51); // root + 50 children
     }
@@ -614,15 +625,19 @@ mod tests {
 
         insert_stitch(&conn, "lonely", "proj", "Lonely");
 
-        assert!(parents(&conn, "lonely").expect("Failed to get parents").is_empty());
-        assert!(children(&conn, "lonely").expect("Failed to get children").is_empty());
+        assert!(parents(&conn, "lonely")
+            .expect("Failed to get parents")
+            .is_empty());
+        assert!(children(&conn, "lonely")
+            .expect("Failed to get children")
+            .is_empty());
         assert!(referenced_by(&conn, "lonely")
             .expect("Failed to get referenced_by")
             .is_empty());
 
         // Closure should return just the root node
-        let closure_nodes = closure(&conn, "lonely", "spawned", None)
-            .expect("Failed to compute closure");
+        let closure_nodes =
+            closure(&conn, "lonely", "spawned", None).expect("Failed to compute closure");
         assert_eq!(closure_nodes.len(), 1);
         assert_eq!(closure_nodes[0].stitch_id, "lonely");
     }
@@ -658,8 +673,8 @@ mod tests {
 
         // Performance test: closure to depth 5 should be fast
         let start = std::time::Instant::now();
-        let closure_nodes = closure(&conn, "root", "spawned", Some(5))
-            .expect("Failed to compute closure");
+        let closure_nodes =
+            closure(&conn, "root", "spawned", Some(5)).expect("Failed to compute closure");
         let elapsed = start.elapsed();
 
         // Should find all 100 nodes (depth is only 2, so depth=5 captures everything)

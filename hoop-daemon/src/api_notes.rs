@@ -119,7 +119,10 @@ impl NoteLibrary {
         let mut notes = HashMap::new();
 
         let Ok(entries) = std::fs::read_dir(notes_dir) else {
-            debug!("Global notes directory not readable: {}", notes_dir.display());
+            debug!(
+                "Global notes directory not readable: {}",
+                notes_dir.display()
+            );
             return Ok(());
         };
 
@@ -156,7 +159,10 @@ impl NoteLibrary {
         }
 
         let Ok(entries) = std::fs::read_dir(project_notes_dir) else {
-            debug!("Project notes directory not readable: {}", project_notes_dir.display());
+            debug!(
+                "Project notes directory not readable: {}",
+                project_notes_dir.display()
+            );
             return Ok(());
         };
 
@@ -245,11 +251,7 @@ impl NoteLibrary {
 }
 
 /// Parse a single note markdown file with optional YAML frontmatter.
-fn parse_note_file(
-    path: &StdPath,
-    scope: NoteScope,
-    project: Option<String>,
-) -> Result<Note> {
+fn parse_note_file(path: &StdPath, scope: NoteScope, project: Option<String>) -> Result<Note> {
     let content = std::fs::read_to_string(path)?;
     let metadata = std::fs::metadata(path)?;
 
@@ -274,10 +276,7 @@ fn parse_note_file(
         .modified()
         .ok()
         .and_then(|t| {
-            let secs_since_epoch = t
-                .duration_since(std::time::UNIX_EPOCH)
-                .ok()?
-                .as_secs();
+            let secs_since_epoch = t.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs();
             chrono::DateTime::from_timestamp(secs_since_epoch as i64, 0)
         })
         .map(|dt| dt.to_rfc3339())
@@ -326,24 +325,19 @@ fn split_frontmatter(content: &str) -> (Option<&str>, &str) {
 
 /// Start file watcher for the global notes directory.
 /// Returns the watcher (must be kept alive for watching to work).
-pub fn start_global_watcher(
-    notes_dir: PathBuf,
-    store: NoteStore,
-) -> RecommendedWatcher {
+pub fn start_global_watcher(notes_dir: PathBuf, store: NoteStore) -> RecommendedWatcher {
     let watcher_notes_dir = notes_dir.clone();
     let mut watcher =
-        notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
-            match res {
-                Ok(_event) => {
-                    debug!("Global notes directory changed, reloading");
-                    let mut lib = store.write().unwrap();
-                    if let Err(e) = lib.load_global(&watcher_notes_dir) {
-                        warn!("Global notes reload failed: {}", e);
-                    }
+        notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| match res {
+            Ok(_event) => {
+                debug!("Global notes directory changed, reloading");
+                let mut lib = store.write().unwrap();
+                if let Err(e) = lib.load_global(&watcher_notes_dir) {
+                    warn!("Global notes reload failed: {}", e);
                 }
-                Err(e) => {
-                    warn!("Global notes watch error: {}", e);
-                }
+            }
+            Err(e) => {
+                warn!("Global notes watch error: {}", e);
             }
         })
         .expect("failed to create notes file watcher");
@@ -442,17 +436,13 @@ tags: [glossary, reference]
 // ---------------------------------------------------------------------------
 
 /// GET /api/notes — list all notes (global + all projects)
-async fn list_notes(
-    State(state): State<crate::DaemonState>,
-) -> Json<Vec<Note>> {
+async fn list_notes(State(state): State<crate::DaemonState>) -> Json<Vec<Note>> {
     let lib = state.note_library.read().unwrap();
     Json(lib.list_all())
 }
 
 /// GET /api/notes/global — list global notes only
-async fn list_global_notes(
-    State(state): State<crate::DaemonState>,
-) -> Json<Vec<Note>> {
+async fn list_global_notes(State(state): State<crate::DaemonState>) -> Json<Vec<Note>> {
     let lib = state.note_library.read().unwrap();
     Json(lib.list_global())
 }
@@ -534,7 +524,10 @@ Test content
         assert_eq!(note.name, "test-note");
         assert_eq!(note.title, "Test Note");
         assert_eq!(note.description, Some("A test note".to_string()));
-        assert_eq!(note.tags, Some(vec!["example".to_string(), "test".to_string()]));
+        assert_eq!(
+            note.tags,
+            Some(vec!["example".to_string(), "test".to_string()])
+        );
         assert!(note.body.contains("Test content"));
     }
 
@@ -626,7 +619,8 @@ Test content
                 modified: "2024-01-01T00:00:00Z".to_string(),
             },
         );
-        lib.project_notes.insert("myproject".to_string(), proj_notes);
+        lib.project_notes
+            .insert("myproject".to_string(), proj_notes);
 
         assert_eq!(lib.list_all().len(), 2);
         assert_eq!(lib.list_global().len(), 1);

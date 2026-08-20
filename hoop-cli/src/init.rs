@@ -62,7 +62,9 @@ pub fn run_init_wizard(no_interactive: bool) -> Result<()> {
         // since it requires user input for several steps
         eprintln!("hoop init: cannot run in non-interactive mode.");
         eprintln!("  The init wizard requires interactive input for configuration.");
-        eprintln!("  For automated setup, manually create ~/.hoop/config.yml and ~/.hoop/projects.yaml");
+        eprintln!(
+            "  For automated setup, manually create ~/.hoop/config.yml and ~/.hoop/projects.yaml"
+        );
         std::process::exit(2);
     }
 
@@ -145,7 +147,10 @@ fn stage_2_project_registration() -> Result<()> {
     // Check if projects already exist
     let existing_projects = crate::projects::list_projects()?;
     if !existing_projects.is_empty() {
-        println!("✓ You already have {} project(s) registered.", existing_projects.len());
+        println!(
+            "✓ You already have {} project(s) registered.",
+            existing_projects.len()
+        );
         println!("  Skipping project registration.");
         println!("  Manage projects with: hoop projects list/add/remove");
         return Ok(());
@@ -156,7 +161,10 @@ fn stage_2_project_registration() -> Result<()> {
 
     // Offer to scan home directory
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    eprintln!("I can scan your home directory ({}) for projects with .beads/ directories.", home.display());
+    eprintln!(
+        "I can scan your home directory ({}) for projects with .beads/ directories.",
+        home.display()
+    );
     eprint!("Scan home directory? [Y/n]: ");
     io::stderr().flush()?;
 
@@ -188,15 +196,14 @@ fn stage_2_project_registration() -> Result<()> {
         return Ok(());
     }
 
-    eprintln!("Found {} director{} with .beads/:",
+    eprintln!(
+        "Found {} director{} with .beads/:",
         discovered.len(),
         if discovered.len() == 1 { "y" } else { "ies" }
     );
 
     for (i, path) in discovered.iter().enumerate() {
-        let name = path.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("?");
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("?");
         eprintln!("  {}. {} → {}", i + 1, name, path.display());
     }
     eprintln!();
@@ -234,11 +241,13 @@ fn stage_3_agent_setup() -> Result<()> {
 
     // Check if config exists and has agent configured
     let config_path = get_config_path();
-    let agent_configured = config_path.exists()
-        && agent_configured_in_file(&config_path)?;
+    let agent_configured = config_path.exists() && agent_configured_in_file(&config_path)?;
 
     if agent_configured {
-        println!("✓ Agent adapter already configured in {}", config_path.display());
+        println!(
+            "✓ Agent adapter already configured in {}",
+            config_path.display()
+        );
         println!("  Skipping agent setup.");
         println!("  Change adapter anytime with: hoop config set agent.adapter <type>");
         return Ok(());
@@ -588,8 +597,7 @@ agent:
 "#,
             DEFAULT_BIND_ADDR
         );
-        fs::write(&config_path, default_config)
-            .context("Failed to write config file")?;
+        fs::write(&config_path, default_config).context("Failed to write config file")?;
     }
 
     Ok(())
@@ -612,16 +620,11 @@ fn install_systemd_service() -> Result<()> {
 
     fs::create_dir_all(service_dir)?;
 
-    let hoop_path = std::env::current_exe()
-        .context("Failed to get hoop binary path")?;
-    let hoop_path_str = hoop_path
-        .to_str()
-        .context("Invalid hoop binary path")?;
+    let hoop_path = std::env::current_exe().context("Failed to get hoop binary path")?;
+    let hoop_path_str = hoop_path.to_str().context("Invalid hoop binary path")?;
 
     let home_dir = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    let home_dir_str = home_dir
-        .to_str()
-        .context("Invalid home directory")?;
+    let home_dir_str = home_dir.to_str().context("Invalid home directory")?;
 
     let unit_content = format!(
         r#"[Unit]
@@ -674,7 +677,16 @@ WantedBy=default.target
 /// Check if a URL is reachable
 fn check_url(url: &str) -> bool {
     let output = Command::new("curl")
-        .args(["-s", "-o", "/dev/null", "-w", "%{http_code}", "--max-time", "2", url])
+        .args([
+            "-s",
+            "-o",
+            "/dev/null",
+            "-w",
+            "%{http_code}",
+            "--max-time",
+            "2",
+            url,
+        ])
         .output();
 
     match output {
@@ -701,10 +713,13 @@ mod tests {
         let args = ["hoop", "--no-interactive", "init"];
         let cli = crate::Cli::parse_from(args);
 
-        assert!(cli.no_interactive, "Flag should be true when present before init");
+        assert!(
+            cli.no_interactive,
+            "Flag should be true when present before init"
+        );
 
         match cli.command {
-            crate::Commands::Init => {}, // Correct command
+            crate::Commands::Init => {} // Correct command
             _ => panic!("Expected Init command, got {:?}", cli.command),
         }
     }
@@ -716,10 +731,13 @@ mod tests {
         let args = ["hoop", "init", "--no-interactive"];
         let cli = crate::Cli::parse_from(args);
 
-        assert!(cli.no_interactive, "Flag should be true when present after init");
+        assert!(
+            cli.no_interactive,
+            "Flag should be true when present after init"
+        );
 
         match cli.command {
-            crate::Commands::Init => {}, // Correct command
+            crate::Commands::Init => {} // Correct command
             _ => panic!("Expected Init command, got {:?}", cli.command),
         }
     }
@@ -733,7 +751,7 @@ mod tests {
         assert!(cli.no_interactive, "Flag should be true with -y short form");
 
         match cli.command {
-            crate::Commands::Init => {}, // Correct command
+            crate::Commands::Init => {} // Correct command
             _ => panic!("Expected Init command"),
         }
     }
@@ -764,10 +782,13 @@ mod tests {
         let args = ["hoop", "init"];
         let cli = crate::Cli::parse_from(args);
 
-        assert!(!cli.no_interactive, "Flag should be false when not specified");
+        assert!(
+            !cli.no_interactive,
+            "Flag should be false when not specified"
+        );
 
         match cli.command {
-            crate::Commands::Init => {}, // Correct command
+            crate::Commands::Init => {} // Correct command
             _ => panic!("Expected Init command"),
         }
     }
@@ -779,8 +800,7 @@ mod tests {
     #[test]
     fn test_init_flag_extraction_in_handler() {
         // Verify the handler function signature accepts no_interactive parameter
-        let code = std::fs::read_to_string("src/init.rs")
-            .expect("Failed to read init.rs");
+        let code = std::fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
         assert!(
             code.contains("pub fn run_init_wizard(no_interactive: bool)"),
@@ -794,8 +814,7 @@ mod tests {
         );
 
         // Verify the flag flows from main.rs to the handler
-        let main_code = std::fs::read_to_string("src/main.rs")
-            .expect("Failed to read main.rs");
+        let main_code = std::fs::read_to_string("src/main.rs").expect("Failed to read main.rs");
 
         assert!(
             main_code.contains("init::run_init_wizard(no_interactive)"),
@@ -809,11 +828,11 @@ mod tests {
     /// Tests that the main.rs Init command handler correctly extracts and passes the flag
     #[test]
     fn test_init_flag_passed_to_wizard() {
-        let main_code = std::fs::read_to_string("src/main.rs")
-            .expect("Failed to read main.rs");
+        let main_code = std::fs::read_to_string("src/main.rs").expect("Failed to read main.rs");
 
         // Find the Init command handler
-        let init_handler_start = main_code.find("Commands::Init =>")
+        let init_handler_start = main_code
+            .find("Commands::Init =>")
             .expect("Should have Init handler");
 
         // Extract the handler section (roughly 200 chars should cover it)
@@ -823,7 +842,8 @@ mod tests {
         assert!(
             handler_section.contains("init::run_init_wizard(no_interactive)"),
             "Init handler must pass no_interactive flag to run_init_wizard.\n\
-             Handler section: {}", handler_section
+             Handler section: {}",
+            handler_section
         );
 
         // Verify error handling is in place
@@ -842,8 +862,7 @@ mod tests {
     /// Confirms the pattern: let no_interactive = cli.no_interactive; (line 366 in main.rs)
     #[test]
     fn test_flag_extraction_at_parse_time() {
-        let main_code = std::fs::read_to_string("src/main.rs")
-            .expect("Failed to read main.rs");
+        let main_code = std::fs::read_to_string("src/main.rs").expect("Failed to read main.rs");
 
         // Verify the extraction pattern
         assert!(
@@ -852,9 +871,11 @@ mod tests {
         );
 
         // Verify it's extracted before the match statement
-        let parse_line = main_code.find("let no_interactive = cli.no_interactive;")
+        let parse_line = main_code
+            .find("let no_interactive = cli.no_interactive;")
             .expect("Should have flag extraction");
-        let match_line = main_code.find("match cli.command")
+        let match_line = main_code
+            .find("match cli.command")
             .expect("Should have match statement");
 
         assert!(
@@ -869,19 +890,21 @@ mod tests {
     /// Tests that when no_interactive=true, the wizard exits with appropriate error
     #[test]
     fn test_init_wizard_exits_with_no_interactive_true() {
-        let code = std::fs::read_to_string("src/init.rs")
-            .expect("Failed to read init.rs");
+        let code = std::fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
         // Check for the early exit logic at the start of run_init_wizard
-        let func_start = code.find("pub fn run_init_wizard(no_interactive: bool)")
+        let func_start = code
+            .find("pub fn run_init_wizard(no_interactive: bool)")
             .expect("Should have run_init_wizard function");
 
         // Find the first if no_interactive block (should be near the start)
-        let early_exit_start = code[func_start..].find("if no_interactive {")
+        let early_exit_start = code[func_start..]
+            .find("if no_interactive {")
             .expect("Wizard must check no_interactive at the start");
 
         // Extend the slice to ensure we capture the full early exit block (including the exit call)
-        let early_exit_section = &code[func_start + early_exit_start..func_start + early_exit_start + 600];
+        let early_exit_section =
+            &code[func_start + early_exit_start..func_start + early_exit_start + 600];
 
         // Verify early exit behavior
         assert!(
@@ -895,9 +918,11 @@ mod tests {
         );
 
         assert!(
-            early_exit_section.contains("std::process::exit(2)") || early_exit_section.contains("std::process::exit(2);"),
+            early_exit_section.contains("std::process::exit(2)")
+                || early_exit_section.contains("std::process::exit(2);"),
             "Wizard must exit with code 2 when no_interactive is true.\n\
-             Section content: {}", early_exit_section
+             Section content: {}",
+            early_exit_section
         );
 
         // Verify the error message is helpful
@@ -911,17 +936,21 @@ mod tests {
     /// Confirms the wizard banner and stages are only shown when interactive
     #[test]
     fn test_init_wizard_continues_with_no_interactive_false() {
-        let code = std::fs::read_to_string("src/init.rs")
-            .expect("Failed to read init.rs");
+        let code = std::fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
         // Find the early exit block
-        let early_exit_start = code.find("if no_interactive {").expect("Should have early exit");
+        let early_exit_start = code
+            .find("if no_interactive {")
+            .expect("Should have early exit");
         let early_exit_end = code[early_exit_start..]
             .find('}')
-            .expect("Should close early exit") + early_exit_start + 1;
+            .expect("Should close early exit")
+            + early_exit_start
+            + 1;
 
         // Find print_wizard_banner() call - it should come AFTER the early exit
-        let banner_call = code.find("print_wizard_banner();")
+        let banner_call = code
+            .find("print_wizard_banner();")
             .expect("Should call banner");
 
         assert!(
@@ -961,18 +990,20 @@ mod tests {
     /// Checks that the error message contains all necessary information
     #[test]
     fn test_init_no_interactive_error_message_quality() {
-        let code = std::fs::read_to_string("src/init.rs")
-            .expect("Failed to read init.rs");
+        let code = std::fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
         // Find the error message block
-        let error_start = code.find("if no_interactive {").expect("Should have error block");
+        let error_start = code
+            .find("if no_interactive {")
+            .expect("Should have error block");
         let error_block = &code[error_start..error_start + 500]; // Get enough context
 
         // Verify the error message contains key information
         assert!(
             error_block.contains("hoop init: cannot run in non-interactive mode"),
             "Error must clearly state init cannot run in non-interactive mode.\n\
-             Got: {}", error_block
+             Got: {}",
+            error_block
         );
 
         assert!(
@@ -997,14 +1028,16 @@ mod tests {
     /// Ensures that none of the wizard stages execute when the flag is set
     #[test]
     fn test_wizard_stages_never_execute_with_no_interactive_true() {
-        let code = std::fs::read_to_string("src/init.rs")
-            .expect("Failed to read init.rs");
+        let code = std::fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
         // Find the early exit block
-        let early_exit_start = code.find("if no_interactive {").expect("Should have early exit");
+        let early_exit_start = code
+            .find("if no_interactive {")
+            .expect("Should have early exit");
         let early_exit_end = code[early_exit_start..]
             .find('}')
-            .expect("Should close early exit block") + early_exit_start;
+            .expect("Should close early exit block")
+            + early_exit_start;
 
         // Find all stage calls
         let stages = [
@@ -1022,7 +1055,9 @@ mod tests {
                     "Stage '{}' must be called AFTER the early exit block, \
                      otherwise it would execute even when no_interactive=true.\n\
                      Early exit ends at: {}, Stage called at: {}",
-                    stage, early_exit_end, stage_pos
+                    stage,
+                    early_exit_end,
+                    stage_pos
                 );
             } else {
                 panic!("Stage '{}' not found in code", stage);
@@ -1034,22 +1069,27 @@ mod tests {
     /// Ensures the banner is inside the interactive flow, not before the no_interactive check
     #[test]
     fn test_wizard_banner_only_prints_when_interactive() {
-        let code = std::fs::read_to_string("src/init.rs")
-            .expect("Failed to read init.rs");
+        let code = std::fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
         // Find function start
-        let func_start = code.find("pub fn run_init_wizard(no_interactive: bool)")
+        let func_start = code
+            .find("pub fn run_init_wizard(no_interactive: bool)")
             .expect("Should have run_init_wizard function");
 
         // Find early exit
-        let early_exit_start = code[func_start..].find("if no_interactive {")
-            .expect("Should have early exit") + func_start;
+        let early_exit_start = code[func_start..]
+            .find("if no_interactive {")
+            .expect("Should have early exit")
+            + func_start;
         let early_exit_end = code[early_exit_start..]
             .find('}')
-            .expect("Should close early exit") + early_exit_start + 1;
+            .expect("Should close early exit")
+            + early_exit_start
+            + 1;
 
         // Find banner call
-        let banner_call = code.find("print_wizard_banner();")
+        let banner_call = code
+            .find("print_wizard_banner();")
             .expect("Should call banner");
 
         // Banner must come AFTER early exit
@@ -1058,7 +1098,8 @@ mod tests {
             "print_wizard_banner() must only be called AFTER the no_interactive check, \
              ensuring it only runs when interactive.\n\
              Early exit ends at: {}, Banner called at: {}",
-            early_exit_end, banner_call
+            early_exit_end,
+            banner_call
         );
     }
 
@@ -1177,8 +1218,7 @@ mod tests {
     #[test]
     fn test_init_handler_integration_with_flag_value() {
         // Part 1: Verify handler function signature accepts no_interactive parameter
-        let code = std::fs::read_to_string("src/init.rs")
-            .expect("Failed to read init.rs");
+        let code = std::fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
         // Verify the handler signature includes no_interactive parameter
         assert!(
@@ -1195,7 +1235,8 @@ mod tests {
         );
 
         // Part 3: Verify early exit behavior when no_interactive=true
-        let early_exit_start = code.find("if no_interactive {")
+        let early_exit_start = code
+            .find("if no_interactive {")
             .expect("Handler must check no_interactive flag");
         let early_exit_section = &code[early_exit_start..early_exit_start + 600];
 
@@ -1206,7 +1247,8 @@ mod tests {
         );
 
         assert!(
-            early_exit_section.contains("std::process::exit(2)") || early_exit_section.contains("std::process::exit(2);"),
+            early_exit_section.contains("std::process::exit(2)")
+                || early_exit_section.contains("std::process::exit(2);"),
             "Handler must exit with code 2 when no_interactive=true.\n\
              This prevents the wizard from running in non-interactive mode."
         );
@@ -1214,10 +1256,13 @@ mod tests {
         // Part 4: Verify normal wizard stages only execute when no_interactive=false
         let early_exit_end = code[early_exit_start..]
             .find('}')
-            .expect("Early exit block must be closed") + early_exit_start + 1;
+            .expect("Early exit block must be closed")
+            + early_exit_start
+            + 1;
 
         // Verify banner only prints after early exit check
-        let banner_call = code.find("print_wizard_banner();")
+        let banner_call = code
+            .find("print_wizard_banner();")
             .expect("Handler must call wizard banner");
 
         assert!(
@@ -1225,7 +1270,8 @@ mod tests {
             "Wizard banner must only print AFTER the no_interactive check.\n\
              This ensures banner only shows when interactive (no_interactive=false).\n\
              Early exit ends at: {}, Banner called at: {}",
-            early_exit_end, banner_call
+            early_exit_end,
+            banner_call
         );
 
         // Part 5: Verify all wizard stages are called after the check
@@ -1244,7 +1290,9 @@ mod tests {
                     "Stage '{}' must be called AFTER the early exit check.\n\
                      This ensures stages only execute when interactive.\n\
                      Early exit ends at: {}, Stage called at: {}",
-                    stage, early_exit_end, stage_pos
+                    stage,
+                    early_exit_end,
+                    stage_pos
                 );
             } else {
                 panic!("Stage '{}' not found in code", stage);
@@ -1252,8 +1300,7 @@ mod tests {
         }
 
         // Part 6: Verify the flag flows from main.rs to the handler
-        let main_code = std::fs::read_to_string("src/main.rs")
-            .expect("Failed to read main.rs");
+        let main_code = std::fs::read_to_string("src/main.rs").expect("Failed to read main.rs");
 
         // Verify flag extraction at parse time
         assert!(
@@ -1263,7 +1310,8 @@ mod tests {
         );
 
         // Verify Init command handler passes the flag
-        let init_handler_start = main_code.find("Commands::Init =>")
+        let init_handler_start = main_code
+            .find("Commands::Init =>")
             .expect("main() must have Init command handler");
 
         let init_handler_section = &main_code[init_handler_start..init_handler_start + 200];
@@ -1272,13 +1320,16 @@ mod tests {
             init_handler_section.contains("init::run_init_wizard(no_interactive)"),
             "Init handler must pass no_interactive flag to run_init_wizard.\n\
              This completes the flag extraction flow from CLI parsing to handler invocation.\n\
-             Handler section: {}", init_handler_section
+             Handler section: {}",
+            init_handler_section
         );
 
         // Part 7: Verify the complete extraction flow order
-        let parse_line = main_code.find("let no_interactive = cli.no_interactive;")
+        let parse_line = main_code
+            .find("let no_interactive = cli.no_interactive;")
             .expect("main() must extract flag");
-        let match_line = main_code.find("match cli.command")
+        let match_line = main_code
+            .find("match cli.command")
             .expect("main() must have match statement");
 
         assert!(
@@ -1286,7 +1337,8 @@ mod tests {
             "Flag extraction must happen BEFORE the match statement.\n\
              This ensures the flag is available to all command handlers.\n\
              Parse at: {}, Match at: {}",
-            parse_line, match_line
+            parse_line,
+            match_line
         );
 
         // Part 8: Integration verification - simulate flag flow
@@ -1321,14 +1373,20 @@ mod tests {
             crate::Commands::Init => {
                 // Success - correct command parsed with flag
             }
-            _ => panic!("Integration test: Expected Commands::Init with flag, got {:?}", cli_with_flag.command),
+            _ => panic!(
+                "Integration test: Expected Commands::Init with flag, got {:?}",
+                cli_with_flag.command
+            ),
         }
 
         match cli_without_flag.command {
             crate::Commands::Init => {
                 // Success - correct command parsed without flag
             }
-            _ => panic!("Integration test: Expected Commands::Init without flag, got {:?}", cli_without_flag.command),
+            _ => panic!(
+                "Integration test: Expected Commands::Init without flag, got {:?}",
+                cli_without_flag.command
+            ),
         }
     }
 
@@ -1342,26 +1400,30 @@ mod tests {
     /// - When no_interactive=false: Handler proceeds through wizard stages
     #[test]
     fn test_init_handler_behavior_changes_with_flag_value() {
-        let code = std::fs::read_to_string("src/init.rs")
-            .expect("Failed to read init.rs");
+        let code = std::fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
         // Find the early exit block
-        let early_exit_start = code.find("if no_interactive {")
+        let early_exit_start = code
+            .find("if no_interactive {")
             .expect("Handler must have early exit logic");
         let early_exit_end = code[early_exit_start..]
             .find('}')
-            .expect("Early exit block must be closed") + early_exit_start + 1;
+            .expect("Early exit block must be closed")
+            + early_exit_start
+            + 1;
 
         // Behavior when no_interactive=true: Early exit
         let early_exit_section = &code[early_exit_start..early_exit_end];
         assert!(
-            early_exit_section.contains("eprintln!(\"hoop init: cannot run in non-interactive mode.\")"),
+            early_exit_section
+                .contains("eprintln!(\"hoop init: cannot run in non-interactive mode.\")"),
             "Handler must print error message when no_interactive=true.\n\
              Behavior A: Exit with error - verified."
         );
 
         assert!(
-            early_exit_section.contains("std::process::exit(2)") || early_exit_section.contains("std::process::exit(2);"),
+            early_exit_section.contains("std::process::exit(2)")
+                || early_exit_section.contains("std::process::exit(2);"),
             "Handler must exit with code 2 when no_interactive=true.\n\
              Behavior A: Exit with code 2 - verified."
         );
@@ -1387,7 +1449,8 @@ mod tests {
         }
 
         // Verify stages are called AFTER the early exit (ensuring they only run when interactive)
-        let banner_call = code.find("print_wizard_banner();")
+        let banner_call = code
+            .find("print_wizard_banner();")
             .expect("Handler must call banner");
 
         assert!(
@@ -1395,7 +1458,8 @@ mod tests {
             "Behavior B verification: Wizard stages must execute AFTER early exit check.\n\
              This ensures stages only run when no_interactive=false.\n\
              Early exit ends at: {}, First stage (banner) at: {}",
-            early_exit_end, banner_call
+            early_exit_end,
+            banner_call
         );
     }
 
@@ -1427,14 +1491,17 @@ mod tests {
         );
 
         // Step 2: Verify main() extraction pattern
-        let main_code = std::fs::read_to_string("src/main.rs")
-            .expect("Failed to read main.rs");
+        let main_code = std::fs::read_to_string("src/main.rs").expect("Failed to read main.rs");
 
-        let parse_line = main_code.find("let no_interactive = cli.no_interactive;")
-            .expect("Step 2: main() must extract flag with: let no_interactive = cli.no_interactive;");
+        let parse_line = main_code
+            .find("let no_interactive = cli.no_interactive;")
+            .expect(
+                "Step 2: main() must extract flag with: let no_interactive = cli.no_interactive;",
+            );
 
         // Verify extraction happens before match
-        let match_line = main_code.find("match cli.command")
+        let match_line = main_code
+            .find("match cli.command")
             .expect("Step 2: main() must have match statement");
 
         assert!(
@@ -1442,11 +1509,13 @@ mod tests {
             "Step 2: Flag extraction must happen BEFORE match statement.\n\
              This ensures extracted value is available to all handlers.\n\
              Parse at line: {}, Match at line: {}",
-            parse_line, match_line
+            parse_line,
+            match_line
         );
 
         // Step 3: Verify Init handler passes flag to wizard
-        let init_handler_start = main_code.find("Commands::Init =>")
+        let init_handler_start = main_code
+            .find("Commands::Init =>")
             .expect("Step 3: main() must have Init command handler");
 
         let init_handler_section = &main_code[init_handler_start..init_handler_start + 200];
@@ -1458,8 +1527,7 @@ mod tests {
         );
 
         // Step 4: Verify handler receives and uses the flag
-        let init_code = std::fs::read_to_string("src/init.rs")
-            .expect("Failed to read init.rs");
+        let init_code = std::fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
         assert!(
             init_code.contains("pub fn run_init_wizard(no_interactive: bool)"),
@@ -1494,7 +1562,10 @@ mod tests {
             crate::Commands::Init => {
                 // Success - complete flow verified
             }
-            _ => panic!("Step 5: Expected Commands::Init, got {:?}", test_cli.command),
+            _ => panic!(
+                "Step 5: Expected Commands::Init, got {:?}",
+                test_cli.command
+            ),
         }
     }
 
@@ -1532,7 +1603,10 @@ mod tests {
             crate::Commands::Init => {
                 // Correct - handler would receive no_interactive=true
             }
-            _ => panic!("Runtime: Expected Commands::Init, got {:?}", cli_flag_true_before.command),
+            _ => panic!(
+                "Runtime: Expected Commands::Init, got {:?}",
+                cli_flag_true_before.command
+            ),
         }
 
         // Scenario 2: Flag is set to true (after command)
@@ -1551,7 +1625,10 @@ mod tests {
             crate::Commands::Init => {
                 // Correct - handler would receive no_interactive=true
             }
-            _ => panic!("Runtime: Expected Commands::Init, got {:?}", cli_flag_true_after.command),
+            _ => panic!(
+                "Runtime: Expected Commands::Init, got {:?}",
+                cli_flag_true_after.command
+            ),
         }
 
         // Scenario 3: Short form -y sets flag to true
@@ -1581,7 +1658,10 @@ mod tests {
             crate::Commands::Init => {
                 // Correct - handler would receive no_interactive=false
             }
-            _ => panic!("Runtime: Expected Commands::Init, got {:?}", cli_no_flag.command),
+            _ => panic!(
+                "Runtime: Expected Commands::Init, got {:?}",
+                cli_no_flag.command
+            ),
         }
 
         // Scenario 5: Verify handler would receive different values
@@ -1602,7 +1682,8 @@ mod tests {
             "Runtime: With flag should be true, without flag should be false.\n\
              This ensures handler behavior changes based on flag presence.\n\
              With flag: {}, Without flag: {}",
-            handler_receives_true, handler_receives_false
+            handler_receives_true,
+            handler_receives_false
         );
     }
 
@@ -1663,8 +1744,7 @@ mod tests {
         let extracted_flag: bool = cli.no_interactive;
 
         // Verify the handler signature expects a bool
-        let init_code = std::fs::read_to_string("src/init.rs")
-            .expect("Failed to read init.rs");
+        let init_code = std::fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
         assert!(
             init_code.contains("pub fn run_init_wizard(no_interactive: bool)"),
@@ -1685,8 +1765,7 @@ mod tests {
         }
 
         // Verify main() passes without type conversion
-        let main_code = std::fs::read_to_string("src/main.rs")
-            .expect("Failed to read main.rs");
+        let main_code = std::fs::read_to_string("src/main.rs").expect("Failed to read main.rs");
 
         assert!(
             main_code.contains("init::run_init_wizard(no_interactive)"),

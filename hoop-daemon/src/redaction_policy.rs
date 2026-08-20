@@ -65,7 +65,6 @@ pub enum RedactionAction {
     FlaggedOnly,
 }
 
-
 /// Resolved redaction policy for a specific project.
 ///
 /// Combines global defaults with per-project overrides.
@@ -110,46 +109,64 @@ fn default_pattern_names() -> HashSet<String> {
 /// Extract redaction policy from a ProjectsRegistryProjectsItem.
 ///
 /// Returns None if no redaction override is configured for the project.
-fn extract_redaction_from_project(project: &ProjectsRegistryProjectsItem) -> Option<ResolvedRedactionPolicy> {
+fn extract_redaction_from_project(
+    project: &ProjectsRegistryProjectsItem,
+) -> Option<ResolvedRedactionPolicy> {
     match project {
-        hoop_schema::ProjectsRegistryProjectsItem::Variant0 { redaction, name, .. } => {
-            redaction.as_ref().map(|r| {
-                let patterns = convert_patterns(&r.patterns);
-                ResolvedRedactionPolicy {
-                    action: convert_action(&r.action),
-                    patterns,
-                    source: format!("project:{}", name),
-                }
-            })
-        }
-        hoop_schema::ProjectsRegistryProjectsItem::Variant1 { redaction, name, .. } => {
-            redaction.as_ref().map(|r| {
-                let patterns = convert_patterns_variant1(&r.patterns);
-                ResolvedRedactionPolicy {
-                    action: convert_action_variant1(&r.action),
-                    patterns,
-                    source: format!("project:{}", name),
-                }
-            })
-        }
+        hoop_schema::ProjectsRegistryProjectsItem::Variant0 {
+            redaction, name, ..
+        } => redaction.as_ref().map(|r| {
+            let patterns = convert_patterns(&r.patterns);
+            ResolvedRedactionPolicy {
+                action: convert_action(&r.action),
+                patterns,
+                source: format!("project:{}", name),
+            }
+        }),
+        hoop_schema::ProjectsRegistryProjectsItem::Variant1 {
+            redaction, name, ..
+        } => redaction.as_ref().map(|r| {
+            let patterns = convert_patterns_variant1(&r.patterns);
+            ResolvedRedactionPolicy {
+                action: convert_action_variant1(&r.action),
+                patterns,
+                source: format!("project:{}", name),
+            }
+        }),
     }
 }
 
 /// Convert schema redaction action to internal RedactionAction.
-fn convert_action(action: &hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionAction) -> RedactionAction {
+fn convert_action(
+    action: &hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionAction,
+) -> RedactionAction {
     match action {
-        hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionAction::Warn => RedactionAction::Warn,
-        hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionAction::Redact => RedactionAction::Redact,
-        hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionAction::Reject => RedactionAction::Reject,
+        hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionAction::Warn => {
+            RedactionAction::Warn
+        }
+        hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionAction::Redact => {
+            RedactionAction::Redact
+        }
+        hoop_schema::ProjectsRegistryProjectsItemVariant0RedactionAction::Reject => {
+            RedactionAction::Reject
+        }
     }
 }
 
 /// Convert schema redaction action from Variant1.
-fn convert_action_variant1(action: &hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionAction) -> RedactionAction {
+fn convert_action_variant1(
+    action: &hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionAction,
+) -> RedactionAction {
     match action {
-        hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionAction::Warn => RedactionAction::Warn,
-        hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionAction::Redact => RedactionAction::Redact,
-        hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionAction::Reject => RedactionAction::Reject,
+        hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionAction::Warn => {
+            RedactionAction::Warn
+        }
+        hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionAction::Redact => {
+            RedactionAction::Redact
+        }
+        hoop_schema::ProjectsRegistryProjectsItemVariant1RedactionAction::Reject => {
+            RedactionAction::Reject
+        }
     }
 }
 
@@ -260,11 +277,12 @@ impl RedactionPolicyState {
                 hoop_schema::HoopConfigRedactionAction::Reject => RedactionAction::Reject,
             };
             // Convert Vec<HoopConfigRedactionPatternsItem> to Vec<String>
-            let patterns = config_redaction.patterns.iter().map(|p| p.to_string()).collect();
-            GlobalRedactionPolicy {
-                action,
-                patterns,
-            }
+            let patterns = config_redaction
+                .patterns
+                .iter()
+                .map(|p| p.to_string())
+                .collect();
+            GlobalRedactionPolicy { action, patterns }
         });
 
         Self {
@@ -287,11 +305,7 @@ impl RedactionPolicyState {
     pub async fn resolve_for_project(&self, project_name: &str) -> ResolvedRedactionPolicy {
         // Check for per-project override first
         let registry = self._projects_registry.read().await;
-        if let Some(project) = registry
-            .projects
-            .iter()
-            .find(|p| p.name() == project_name)
-        {
+        if let Some(project) = registry.projects.iter().find(|p| p.name() == project_name) {
             if let Some(policy) = extract_redaction_from_project(project) {
                 return policy;
             }
@@ -332,7 +346,10 @@ impl RedactionPolicyState {
     ///
     /// Returns `None` if the path doesn't match any registered project workspace.
     /// This handles both canonical path matching and prefix matching (for subdirectories).
-    pub async fn find_project_by_workspace(&self, workspace_path: &std::path::Path) -> Option<String> {
+    pub async fn find_project_by_workspace(
+        &self,
+        workspace_path: &std::path::Path,
+    ) -> Option<String> {
         let registry = self._projects_registry.read().await;
 
         // First, try to canonicalize the input path for comparison
@@ -341,7 +358,9 @@ impl RedactionPolicyState {
         for project in &registry.projects {
             for ws_view in project.workspace_views() {
                 // Try canonical path first if available
-                let canon_ws: Option<std::path::PathBuf> = ws_view.canonical_path.as_ref()
+                let canon_ws: Option<std::path::PathBuf> = ws_view
+                    .canonical_path
+                    .as_ref()
                     .map(std::path::PathBuf::from)
                     .or_else(|| std::fs::canonicalize(&ws_view.path).ok());
 

@@ -36,8 +36,8 @@ const REAL_BR_LINE: &str = r#"{
 /// Real captured br line deserializes into Bead without error.
 #[test]
 fn real_br_line_deserializes_successfully() {
-    let bead: Bead = serde_json::from_str(REAL_BR_LINE)
-        .expect("Real br line must deserialize successfully");
+    let bead: Bead =
+        serde_json::from_str(REAL_BR_LINE).expect("Real br line must deserialize successfully");
 
     assert_eq!(bead.id, "bf-1na");
     assert_eq!(bead.status, BeadStatus::Closed);
@@ -141,11 +141,16 @@ fn unrecognized_bead_status_becomes_unknown() {
             v = wire_value
         );
 
-        let bead: Bead = serde_json::from_str(&json)
-            .unwrap_or_else(|_| panic!("Unrecognized status '{}' must deserialize as Unknown", wire_value));
+        let bead: Bead = serde_json::from_str(&json).unwrap_or_else(|_| {
+            panic!(
+                "Unrecognized status '{}' must deserialize as Unknown",
+                wire_value
+            )
+        });
 
         assert_eq!(
-            bead.status, BeadStatus::Unknown,
+            bead.status,
+            BeadStatus::Unknown,
             "Unrecognized status '{}' should become Unknown",
             wire_value
         );
@@ -163,11 +168,16 @@ fn unrecognized_bead_type_becomes_unknown() {
             v = wire_value
         );
 
-        let bead: Bead = serde_json::from_str(&json)
-            .unwrap_or_else(|_| panic!("Unrecognized issue type '{}' must deserialize as Unknown", wire_value));
+        let bead: Bead = serde_json::from_str(&json).unwrap_or_else(|_| {
+            panic!(
+                "Unrecognized issue type '{}' must deserialize as Unknown",
+                wire_value
+            )
+        });
 
         assert_eq!(
-            bead.issue_type, BeadType::Unknown,
+            bead.issue_type,
+            BeadType::Unknown,
             "Unrecognized issue type '{}' should become Unknown",
             wire_value
         );

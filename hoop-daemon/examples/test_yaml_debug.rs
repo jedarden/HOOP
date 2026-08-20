@@ -1,5 +1,5 @@
-use hoop_schema::HoopConfig;
 use hoop_daemon::config_resolver::ConfigError;
+use hoop_schema::HoopConfig;
 
 fn main() {
     // Test 1: Wrong type for schema_version

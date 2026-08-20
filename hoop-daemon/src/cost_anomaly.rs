@@ -249,7 +249,8 @@ pub fn check_on_stitch_close(
     stitch_id: &str,
     sender: Option<&tokio::sync::broadcast::Sender<crate::ws::CostAnomalyAlertData>>,
 ) -> anyhow::Result<bool> {
-    let db_path = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
+    let db_path = dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join(".hoop")
         .join("fleet.db");
 
@@ -321,14 +322,16 @@ pub fn check_on_stitch_close(
         // Broadcast the alert via WebSocket if sender is available
         if let Some(sender) = sender {
             let band = result.band.unwrap();
-            let closest_pattern = result.matching_patterns.first().map(|p| {
-                crate::ws::ClosestPatternMatch {
-                    pattern_id: p.pattern_id.clone(),
-                    pattern_name: p.pattern_name.clone(),
-                    similarity: p.similarity as f64,
-                    recommended_fix_template_md: p.recommended_fix_template_md.clone(),
-                }
-            });
+            let closest_pattern =
+                result
+                    .matching_patterns
+                    .first()
+                    .map(|p| crate::ws::ClosestPatternMatch {
+                        pattern_id: p.pattern_id.clone(),
+                        pattern_name: p.pattern_name.clone(),
+                        similarity: p.similarity as f64,
+                        recommended_fix_template_md: p.recommended_fix_template_md.clone(),
+                    });
 
             let alert = crate::ws::CostAnomalyAlertData {
                 alert_id: uuid::Uuid::new_v4().to_string(),
@@ -356,7 +359,10 @@ pub fn check_on_stitch_close(
 }
 
 /// Load a Stitch's data for anomaly detection.
-fn load_stitch_for_anomaly(conn: &Connection, stitch_id: &str) -> anyhow::Result<CostAnomalyStitch> {
+fn load_stitch_for_anomaly(
+    conn: &Connection,
+    stitch_id: &str,
+) -> anyhow::Result<CostAnomalyStitch> {
     // Load the Stitch row
     let (title, last_activity_at, adapter): (String, String, Option<String>) = conn.query_row(
         "SELECT title, last_activity_at, created_by_adapter FROM stitches WHERE id = ?1",

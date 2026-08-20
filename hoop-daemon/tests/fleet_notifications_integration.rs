@@ -37,7 +37,10 @@ async fn notification_delivered_within_5s() {
     );
 
     let received = result.unwrap().unwrap();
-    assert_eq!(received.kind, hoop_daemon::fleet_notifications::FleetNotificationKind::StitchBeadsClosed);
+    assert_eq!(
+        received.kind,
+        hoop_daemon::fleet_notifications::FleetNotificationKind::StitchBeadsClosed
+    );
     assert_eq!(received.summary, "Test notification");
     assert_eq!(received.project, Some("test-project".to_string()));
 }
@@ -98,8 +101,14 @@ async fn agent_access_recent_notifications_without_tool_calls() {
     );
 
     // Oldest notification (index 5) should be first, newest (index 24) last
-    assert_eq!(snapshot[0].summary, "Notification 5", "Oldest retained notification should be index 5");
-    assert_eq!(snapshot[19].summary, "Notification 24", "Newest notification should be index 24");
+    assert_eq!(
+        snapshot[0].summary, "Notification 5",
+        "Oldest retained notification should be index 5"
+    );
+    assert_eq!(
+        snapshot[19].summary, "Notification 24",
+        "Newest notification should be index 24"
+    );
 }
 
 /// Test synthetic event delivery through all three notification kinds
@@ -147,14 +156,32 @@ async fn synthetic_event_all_kinds() {
     ));
 
     // Verify all three were received
-    let recv1 = timeout(Duration::from_secs(1), rx.recv()).await.unwrap().unwrap();
-    assert_eq!(recv1.kind, hoop_daemon::fleet_notifications::FleetNotificationKind::StitchBeadsClosed);
+    let recv1 = timeout(Duration::from_secs(1), rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        recv1.kind,
+        hoop_daemon::fleet_notifications::FleetNotificationKind::StitchBeadsClosed
+    );
 
-    let recv2 = timeout(Duration::from_secs(1), rx.recv()).await.unwrap().unwrap();
-    assert_eq!(recv2.kind, hoop_daemon::fleet_notifications::FleetNotificationKind::ConvoyComplete);
+    let recv2 = timeout(Duration::from_secs(1), rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        recv2.kind,
+        hoop_daemon::fleet_notifications::FleetNotificationKind::ConvoyComplete
+    );
 
-    let recv3 = timeout(Duration::from_secs(1), rx.recv()).await.unwrap().unwrap();
-    assert_eq!(recv3.kind, hoop_daemon::fleet_notifications::FleetNotificationKind::CapacityAlert);
+    let recv3 = timeout(Duration::from_secs(1), rx.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        recv3.kind,
+        hoop_daemon::fleet_notifications::FleetNotificationKind::CapacityAlert
+    );
 
     // Verify snapshot contains all three
     let snapshot = ring.snapshot();
@@ -234,9 +261,18 @@ async fn multiple_subscribers_receive_notification() {
     ));
 
     // All subscribers should receive the notification
-    let recv1 = timeout(Duration::from_secs(1), rx1.recv()).await.unwrap().unwrap();
-    let recv2 = timeout(Duration::from_secs(1), rx2.recv()).await.unwrap().unwrap();
-    let recv3 = timeout(Duration::from_secs(1), rx3.recv()).await.unwrap().unwrap();
+    let recv1 = timeout(Duration::from_secs(1), rx1.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let recv2 = timeout(Duration::from_secs(1), rx2.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let recv3 = timeout(Duration::from_secs(1), rx3.recv())
+        .await
+        .unwrap()
+        .unwrap();
 
     assert_eq!(recv1.summary, "Broadcast to all subscribers");
     assert_eq!(recv2.summary, "Broadcast to all subscribers");

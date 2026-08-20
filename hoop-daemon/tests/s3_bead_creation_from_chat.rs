@@ -104,9 +104,7 @@ async fn s3_chat_creates_draft_in_queue() {
     let original_path = std::env::var("PATH").unwrap_or_default();
     std::env::set_var("PATH", format!("{}:{}", path_prefix, original_path));
 
-    let (base_url, _notify, _temp_dir) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
@@ -137,7 +135,8 @@ async fn s3_chat_creates_draft_in_queue() {
     let create_elapsed = start.elapsed();
 
     assert_eq!(
-        create_resp.status(), 200,
+        create_resp.status(),
+        200,
         "Draft creation should return 200"
     );
 
@@ -174,9 +173,7 @@ async fn s3_chat_creates_draft_in_queue() {
         .as_array()
         .expect("drafts should be an array");
 
-    let found = drafts
-        .iter()
-        .any(|d| d["id"].as_str() == Some(draft_id));
+    let found = drafts.iter().any(|d| d["id"].as_str() == Some(draft_id));
 
     assert!(found, "Draft should appear in the draft queue");
 
@@ -189,18 +186,24 @@ async fn s3_chat_creates_draft_in_queue() {
 
     assert_eq!(get_resp.status(), 200, "Get draft should return 200");
 
-    let draft: serde_json::Value = get_resp
-        .json()
-        .await
-        .expect("Failed to parse draft");
+    let draft: serde_json::Value = get_resp.json().await.expect("Failed to parse draft");
 
-    assert_eq!(draft["title"], chat_input, "Draft title should match chat input");
+    assert_eq!(
+        draft["title"], chat_input,
+        "Draft title should match chat input"
+    );
     assert_eq!(draft["kind"], "fix", "Draft kind should be fix");
     assert_eq!(draft["source"], "chat", "Draft source should be chat");
-    assert_eq!(draft["project"], "testrepo", "Draft project should be testrepo");
+    assert_eq!(
+        draft["project"], "testrepo",
+        "Draft project should be testrepo"
+    );
     assert_eq!(draft["status"], "pending", "Draft status should be pending");
 
-    println!("S3 PASS: Draft created in queue within {:?}", create_elapsed);
+    println!(
+        "S3 PASS: Draft created in queue within {:?}",
+        create_elapsed
+    );
 }
 
 #[tokio::test]
@@ -214,9 +217,7 @@ async fn s3_approval_creates_bead_via_stub_br() {
     let original_path = std::env::var("PATH").unwrap_or_default();
     std::env::set_var("PATH", format!("{}:{}", path_prefix, original_path));
 
-    let (base_url, _notify, _temp_dir) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
@@ -258,7 +259,8 @@ async fn s3_approval_creates_bead_via_stub_br() {
     let approve_elapsed = approve_start.elapsed();
 
     assert_eq!(
-        approve_resp.status(), 200,
+        approve_resp.status(),
+        200,
         "Draft approval should return 200"
     );
 
@@ -293,15 +295,18 @@ async fn s3_approval_creates_bead_via_stub_br() {
         .await
         .expect("Failed to get draft");
 
-    let draft: serde_json::Value = get_resp
-        .json()
-        .await
-        .expect("Failed to parse draft");
+    let draft: serde_json::Value = get_resp.json().await.expect("Failed to parse draft");
 
-    assert_eq!(draft["status"], "submitted", "Draft status should be submitted");
+    assert_eq!(
+        draft["status"], "submitted",
+        "Draft status should be submitted"
+    );
     assert_eq!(draft["stitch_id"], stitch_id, "Draft should have stitch_id");
 
-    println!("S3 PASS: Bead created within {:?} of approval", approve_elapsed);
+    println!(
+        "S3 PASS: Bead created within {:?} of approval",
+        approve_elapsed
+    );
 }
 
 #[tokio::test]
@@ -315,9 +320,7 @@ async fn s3_audit_log_contains_stitch_id_and_operator() {
     let original_path = std::env::var("PATH").unwrap_or_default();
     std::env::set_var("PATH", format!("{}:{}", path_prefix, original_path));
 
-    let (base_url, _notify, _temp_dir) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
@@ -382,28 +385,36 @@ async fn s3_audit_log_contains_stitch_id_and_operator() {
         .expect("audit_rows should be an array");
 
     // Find DraftCreated entry
-    let draft_created = audit_rows
-        .iter()
-        .find(|row| row["target"].as_str() == Some(draft_id)
-            && row["kind"].as_str() == Some("DraftCreated"));
+    let draft_created = audit_rows.iter().find(|row| {
+        row["target"].as_str() == Some(draft_id) && row["kind"].as_str() == Some("DraftCreated")
+    });
 
-    assert!(draft_created.is_some(), "Audit log should contain DraftCreated entry");
+    assert!(
+        draft_created.is_some(),
+        "Audit log should contain DraftCreated entry"
+    );
 
     // Verify DraftCreated has source=chat
     let draft_created = draft_created.unwrap();
-    let args = draft_created["args"].as_object().expect("args should be an object");
+    let args = draft_created["args"]
+        .as_object()
+        .expect("args should be an object");
     assert_eq!(args["source"], "chat", "DraftCreated source should be chat");
 
     // Find DraftApproved entry (contains stitch_id)
-    let draft_approved = audit_rows
-        .iter()
-        .find(|row| row["target"].as_str() == Some(draft_id)
-            && row["kind"].as_str() == Some("DraftApproved"));
+    let draft_approved = audit_rows.iter().find(|row| {
+        row["target"].as_str() == Some(draft_id) && row["kind"].as_str() == Some("DraftApproved")
+    });
 
-    assert!(draft_approved.is_some(), "Audit log should contain DraftApproved entry");
+    assert!(
+        draft_approved.is_some(),
+        "Audit log should contain DraftApproved entry"
+    );
 
     let draft_approved = draft_approved.unwrap();
-    let approved_args = draft_approved["args"].as_object().expect("args should be an object");
+    let approved_args = draft_approved["args"]
+        .as_object()
+        .expect("args should be an object");
 
     assert_eq!(
         approved_args["stitch_id"], stitch_id,
@@ -411,8 +422,13 @@ async fn s3_audit_log_contains_stitch_id_and_operator() {
     );
 
     // Verify operator identity is present
-    let actor = draft_approved["actor"].as_str().expect("actor should be present");
-    assert!(!actor.is_empty(), "Operator identity should be present in audit log");
+    let actor = draft_approved["actor"]
+        .as_str()
+        .expect("actor should be present");
+    assert!(
+        !actor.is_empty(),
+        "Operator identity should be present in audit log"
+    );
 
     println!("S3 PASS: Audit log contains stitch_id and operator identity");
     println!("  - stitch_id: {}", stitch_id);
@@ -431,9 +447,7 @@ async fn s3_end_to_end_chat_flow() {
     let original_path = std::env::var("PATH").unwrap_or_default();
     std::env::set_var("PATH", format!("{}:{}", path_prefix, original_path));
 
-    let (base_url, _notify, _temp_dir) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
@@ -463,8 +477,11 @@ async fn s3_end_to_end_chat_flow() {
     assert_eq!(create_resp.status(), 200);
     let draft_elapsed = draft_start.elapsed();
 
-    let create_response: serde_json::Value = create_resp.json().await.expect("Failed to parse response");
-    let draft_id = create_response["draft_id"].as_str().expect("draft_id present");
+    let create_response: serde_json::Value =
+        create_resp.json().await.expect("Failed to parse response");
+    let draft_id = create_response["draft_id"]
+        .as_str()
+        .expect("draft_id present");
 
     // Step 2: Operator reviews the draft (check it's in queue)
     let list_resp = client
@@ -492,8 +509,11 @@ async fn s3_end_to_end_chat_flow() {
     assert_eq!(approve_resp.status(), 200);
     let approve_elapsed = approve_start.elapsed();
 
-    let approve_response: serde_json::Value = approve_resp.json().await.expect("Failed to parse approve");
-    let stitch_id = approve_response["stitch_id"].as_str().expect("stitch_id present");
+    let approve_response: serde_json::Value =
+        approve_resp.json().await.expect("Failed to parse approve");
+    let stitch_id = approve_response["stitch_id"]
+        .as_str()
+        .expect("stitch_id present");
 
     // Step 4: Verify bead was created (stub br records it)
     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -511,29 +531,37 @@ async fn s3_end_to_end_chat_flow() {
         .expect("Failed to query audit");
 
     let audit_response: serde_json::Value = audit_resp.json().await.expect("Failed to parse audit");
-    let audit_rows = audit_response["audit_rows"].as_array().expect("audit_rows array");
+    let audit_rows = audit_response["audit_rows"]
+        .as_array()
+        .expect("audit_rows array");
 
     // Find relevant audit entries
-    let draft_created = audit_rows
-        .iter()
-        .find(|r| r["target"].as_str() == Some(draft_id) && r["kind"].as_str() == Some("DraftCreated"));
-    let draft_approved = audit_rows
-        .iter()
-        .find(|r| r["target"].as_str() == Some(draft_id) && r["kind"].as_str() == Some("DraftApproved"));
+    let draft_created = audit_rows.iter().find(|r| {
+        r["target"].as_str() == Some(draft_id) && r["kind"].as_str() == Some("DraftCreated")
+    });
+    let draft_approved = audit_rows.iter().find(|r| {
+        r["target"].as_str() == Some(draft_id) && r["kind"].as_str() == Some("DraftApproved")
+    });
 
     assert!(draft_created.is_some(), "Audit should have DraftCreated");
     assert!(draft_approved.is_some(), "Audit should have DraftApproved");
 
     // Verify source=chat
-    let dc_args = draft_created.unwrap()["args"].as_object().expect("args object");
+    let dc_args = draft_created.unwrap()["args"]
+        .as_object()
+        .expect("args object");
     assert_eq!(dc_args["source"], "chat", "source should be chat");
 
     // Verify stitch_id in approved entry
-    let da_args = draft_approved.unwrap()["args"].as_object().expect("args object");
+    let da_args = draft_approved.unwrap()["args"]
+        .as_object()
+        .expect("args object");
     assert_eq!(da_args["stitch_id"], stitch_id, "stitch_id should match");
 
     // Verify operator present
-    let actor = draft_approved.unwrap()["actor"].as_str().expect("actor present");
+    let actor = draft_approved.unwrap()["actor"]
+        .as_str()
+        .expect("actor present");
     assert!(!actor.is_empty(), "operator identity should be present");
 
     println!("S3 PASS: Full end-to-end chat flow completed");
@@ -553,9 +581,7 @@ async fn s3_draft_queue_exposes_all_required_fields() {
     let original_path = std::env::var("PATH").unwrap_or_default();
     std::env::set_var("PATH", format!("{}:{}", path_prefix, original_path));
 
-    let (base_url, _notify, _temp_dir) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
@@ -581,7 +607,9 @@ async fn s3_draft_queue_exposes_all_required_fields() {
     assert_eq!(create_resp.status(), 200);
 
     let create_response: serde_json::Value = create_resp.json().await.expect("Failed to parse");
-    let draft_id = create_response["draft_id"].as_str().expect("draft_id present");
+    let draft_id = create_response["draft_id"]
+        .as_str()
+        .expect("draft_id present");
 
     // Get the draft and verify all fields
     let get_resp = client

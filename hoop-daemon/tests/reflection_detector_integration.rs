@@ -7,9 +7,9 @@
 //!
 //! Plan reference: §6 Phase 5 marquee #12
 
-use tempfile::TempDir;
 use rusqlite::Connection;
 use serde_json::json;
+use tempfile::TempDir;
 
 /// Test database setup helper
 fn setup_test_db(temp_dir: &TempDir) -> rusqlite::Connection {
@@ -33,7 +33,8 @@ fn setup_test_db(temp_dir: &TempDir) -> rusqlite::Connection {
             schema_version TEXT NOT NULL
         )",
         [],
-    ).unwrap();
+    )
+    .unwrap();
 
     conn.execute(
         "CREATE TABLE stitch_messages (
@@ -44,7 +45,8 @@ fn setup_test_db(temp_dir: &TempDir) -> rusqlite::Connection {
             PRIMARY KEY (stitch_id, ts)
         )",
         [],
-    ).unwrap();
+    )
+    .unwrap();
 
     conn.execute(
         "CREATE TABLE stitch_beads (
@@ -54,7 +56,8 @@ fn setup_test_db(temp_dir: &TempDir) -> rusqlite::Connection {
             PRIMARY KEY (stitch_id, bead_id)
         )",
         [],
-    ).unwrap();
+    )
+    .unwrap();
 
     conn.execute(
         "CREATE TABLE reflection_ledger (
@@ -69,17 +72,20 @@ fn setup_test_db(temp_dir: &TempDir) -> rusqlite::Connection {
             applied_count INTEGER DEFAULT 0
         )",
         [],
-    ).unwrap();
+    )
+    .unwrap();
 
     conn.execute(
         "CREATE INDEX idx_stitches_kind_classification ON stitches(kind, classification)",
         [],
-    ).unwrap();
+    )
+    .unwrap();
 
     conn.execute(
         "CREATE INDEX idx_stitch_messages_stitch_ts ON stitch_messages(stitch_id, ts)",
         [],
-    ).unwrap();
+    )
+    .unwrap();
 
     conn
 }
@@ -110,7 +116,8 @@ fn insert_message(conn: &Connection, stitch_id: &str, role: &str, content: &str,
     conn.execute(
         "INSERT INTO stitch_messages (stitch_id, role, content, ts) VALUES (?1, ?2, ?3, ?4)",
         [stitch_id, role, &content_json, ts],
-    ).unwrap();
+    )
+    .unwrap();
 }
 
 /// Test: Detect repeated negative patterns across operator Stitches
@@ -145,7 +152,13 @@ fn test_detect_repeated_negative_patterns() {
     }
 
     // Add a non-operator stitch (should be ignored)
-    insert_stitch(&conn, "st-worker-1", "worker", "fleet", "2026-04-26T10:01:00Z");
+    insert_stitch(
+        &conn,
+        "st-worker-1",
+        "worker",
+        "fleet",
+        "2026-04-26T10:01:00Z",
+    );
     insert_message(
         &conn,
         "st-worker-1",
@@ -168,7 +181,10 @@ fn test_detect_repeated_negative_patterns() {
     assert!(result.is_ok(), "run_detection should succeed");
 
     let proposed = result.unwrap();
-    assert_eq!(proposed, 1, "Should propose 1 pattern from 3 similar negatives");
+    assert_eq!(
+        proposed, 1,
+        "Should propose 1 pattern from 3 similar negatives"
+    );
 
     // Verify the reflection ledger entry
     let stmt = conn
@@ -177,7 +193,11 @@ fn test_detect_repeated_negative_patterns() {
 
     let entries: Vec<(String, String, String)> = stmt
         .query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
         })
         .unwrap()
         .filter_map(|r| r.ok())
@@ -323,7 +343,10 @@ fn test_only_operator_stitches_scanned() {
     assert!(result.is_ok());
 
     let proposed = result.unwrap();
-    assert_eq!(proposed, 0, "Should not propose patterns: worker stitches ignored, operator below threshold");
+    assert_eq!(
+        proposed, 0,
+        "Should not propose patterns: worker stitches ignored, operator below threshold"
+    );
 
     std::env::remove_var("_HOOP_FLEET_DB_PATH");
 }
@@ -340,7 +363,10 @@ fn test_synthetic_repeated_instruction_fixtures() {
     // Fixture 1: 3 similar negatives about unwrap
     let fixtures = vec![
         ("st-001", "Don't use unwrap() in production code"),
-        ("st-002", "Please don't use unwrap() anywhere in the codebase"),
+        (
+            "st-002",
+            "Please don't use unwrap() anywhere in the codebase",
+        ),
         ("st-003", "Don't use unwrap() — use proper error handling"),
     ];
 
@@ -354,7 +380,10 @@ fn test_synthetic_repeated_instruction_fixtures() {
     // Fixture 2: 3 similar preferences about Result type
     let result_fixtures = vec![
         ("st-004", "I prefer you use Result instead of unwrap"),
-        ("st-005", "Always use Result instead of unwrap in this project"),
+        (
+            "st-005",
+            "Always use Result instead of unwrap in this project",
+        ),
         ("st-006", "I always want Result types, not unwrap calls"),
     ];
 
@@ -365,8 +394,20 @@ fn test_synthetic_repeated_instruction_fixtures() {
     }
 
     // Add some noise that shouldn't trigger detection
-    insert_stitch(&conn, "st-noise", "operator", "operator", "2026-04-26T14:02:00Z");
-    insert_message(&conn, "st-noise", "user", "What does this function do?", "2026-04-26T14:02:00Z");
+    insert_stitch(
+        &conn,
+        "st-noise",
+        "operator",
+        "operator",
+        "2026-04-26T14:02:00Z",
+    );
+    insert_message(
+        &conn,
+        "st-noise",
+        "user",
+        "What does this function do?",
+        "2026-04-26T14:02:00Z",
+    );
 
     std::env::set_var("_HOOP_FLEET_DB_PATH", temp_dir.path().join("fleet.db"));
 
@@ -429,7 +470,13 @@ fn test_time_window_filtering() {
 
     // Recent Stitch (not enough to hit threshold)
     insert_stitch(&conn, "st-recent", "operator", "operator", recent_date);
-    insert_message(&conn, "st-recent", "user", "Don't use unwrap()", recent_date);
+    insert_message(
+        &conn,
+        "st-recent",
+        "user",
+        "Don't use unwrap()",
+        recent_date,
+    );
 
     std::env::set_var("_HOOP_FLEET_DB_PATH", temp_dir.path().join("fleet.db"));
 
@@ -443,7 +490,10 @@ fn test_time_window_filtering() {
     assert!(result.is_ok());
 
     let proposed = result.unwrap();
-    assert_eq!(proposed, 0, "Should not propose patterns: old stitches outside window");
+    assert_eq!(
+        proposed, 0,
+        "Should not propose patterns: old stitches outside window"
+    );
 
     std::env::remove_var("_HOOP_FLEET_DB_PATH");
 }
@@ -455,13 +505,31 @@ fn test_is_operator_stitch() {
     let conn = setup_test_db(&temp_dir);
 
     // Insert an operator stitch
-    insert_stitch(&conn, "st-operator-1", "operator", "operator", "2026-04-26T10:00:00Z");
+    insert_stitch(
+        &conn,
+        "st-operator-1",
+        "operator",
+        "operator",
+        "2026-04-26T10:00:00Z",
+    );
 
     // Insert a worker stitch
-    insert_stitch(&conn, "st-worker-1", "worker", "fleet", "2026-04-26T10:01:00Z");
+    insert_stitch(
+        &conn,
+        "st-worker-1",
+        "worker",
+        "fleet",
+        "2026-04-26T10:01:00Z",
+    );
 
     // Insert an operator-kind but fleet-classification stitch
-    insert_stitch(&conn, "st-fleet-operator", "operator", "fleet", "2026-04-26T10:02:00Z");
+    insert_stitch(
+        &conn,
+        "st-fleet-operator",
+        "operator",
+        "fleet",
+        "2026-04-26T10:02:00Z",
+    );
 
     std::env::set_var("_HOOP_FLEET_DB_PATH", temp_dir.path().join("fleet.db"));
 
@@ -532,11 +600,15 @@ fn test_reflection_injection_audit() {
             hash_self TEXT NOT NULL
         )",
         [],
-    ).unwrap();
+    )
+    .unwrap();
 
     // Insert genesis row for hash chain
     let genesis_id = uuid::Uuid::new_v4().to_string();
-    let genesis_input = format!("{}{}{}{}{}", genesis_id, now, "system", "\"genesis\"", "system_init");
+    let genesis_input = format!(
+        "{}{}{}{}{}",
+        genesis_id, now, "system", "\"genesis\"", "system_init"
+    );
     let genesis_hash = hex_encode(sha256(genesis_input.as_bytes()));
     conn.execute(
         "INSERT INTO actions (id, ts, actor, kind, target, result, hash_prev, hash_self)
@@ -551,25 +623,39 @@ fn test_reflection_injection_audit() {
     let turn_index = 5;
     let result = hoop_daemon::fleet::build_reflection_rules_with_audit(session_id, turn_index);
 
-    assert!(result.is_ok(), "build_reflection_rules_with_audit should succeed");
+    assert!(
+        result.is_ok(),
+        "build_reflection_rules_with_audit should succeed"
+    );
     let rules_string = result.unwrap();
     assert!(rules_string.contains("always run tests before closing"));
     assert!(rules_string.contains("never edit fleet.db directly"));
 
     // Verify audit rows were written
     let audit_stmt = conn
-        .prepare("SELECT id, kind, target, args_json FROM actions WHERE kind = 'reflection_injected'")
+        .prepare(
+            "SELECT id, kind, target, args_json FROM actions WHERE kind = 'reflection_injected'",
+        )
         .unwrap();
 
     let audit_rows: Vec<(String, String, String, String)> = audit_stmt
         .query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?))
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+            ))
         })
         .unwrap()
         .filter_map(|r| r.ok())
         .collect();
 
-    assert_eq!(audit_rows.len(), 2, "Should have 2 audit rows, one per injected rule");
+    assert_eq!(
+        audit_rows.len(),
+        2,
+        "Should have 2 audit rows, one per injected rule"
+    );
 
     // Verify each audit row has the correct structure
     for (audit_id, kind, target, args_json) in &audit_rows {
@@ -593,7 +679,11 @@ fn test_reflection_injection_audit() {
 
     let ledger_rows: Vec<(String, Option<String>, i64)> = ledger_stmt
         .query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?, row.get::<_, i64>(2)?))
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
         })
         .unwrap()
         .filter_map(|r| r.ok())
@@ -603,7 +693,10 @@ fn test_reflection_injection_audit() {
 
     for (rule_id, last_applied, applied_count) in ledger_rows {
         assert!(last_applied.is_some(), "last_applied should be set");
-        assert_eq!(applied_count, 1, "applied_count should be 1 after injection");
+        assert_eq!(
+            applied_count, 1,
+            "applied_count should be 1 after injection"
+        );
     }
 
     // Test atomicity: call again and verify applied_count increments
@@ -615,13 +708,18 @@ fn test_reflection_injection_audit() {
         .unwrap();
 
     let ledger_rows2: Vec<(String, i64)> = ledger_stmt2
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)))
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })
         .unwrap()
         .filter_map(|r| r.ok())
         .collect();
 
     for (rule_id, applied_count) in ledger_rows2 {
-        assert_eq!(applied_count, 2, "applied_count should be 2 after second injection");
+        assert_eq!(
+            applied_count, 2,
+            "applied_count should be 2 after second injection"
+        );
     }
 
     // Verify new audit rows for second injection

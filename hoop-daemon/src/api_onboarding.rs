@@ -5,6 +5,8 @@
 //!
 //! Plan reference: §12 Onboarding (progressive introduction)
 
+use crate::fleet;
+use crate::DaemonState;
 use axum::{
     extract::{ConnectInfo, Query, State},
     http::StatusCode,
@@ -17,8 +19,6 @@ use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use crate::DaemonState;
-use crate::fleet;
 
 /// Current HOOP version (for "what's new" detection)
 const HOOP_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -130,67 +130,95 @@ pub async fn list_onboarding_prompts(
     let operator_id = state.identity_cache.resolve(connect_info.map(|ci| ci.0));
 
     // Get current UI state (run in spawn_blocking to avoid Send issues)
-    let (prompts_enabled, dismissed_prompts, last_seen_version, feature_usage) = tokio::task::spawn_blocking(move || {
-        let conn = Connection::open(fleet::db_path())
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        let mut stmt = conn
-            .prepare("SELECT key, value FROM ui_state WHERE operator_id = ?1")
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let (prompts_enabled, dismissed_prompts, last_seen_version, feature_usage) =
+        tokio::task::spawn_blocking(move || {
+            let conn = Connection::open(fleet::db_path())
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            let mut stmt = conn
+                .prepare("SELECT key, value FROM ui_state WHERE operator_id = ?1")
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-        let ui_state: HashMap<String, String> = stmt
-            .query_map((&operator_id,), |row| {
-                let key: String = row.get(0)?;
-                let value: String = row.get(1)?;
-                Ok((key, value))
-            })
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            let ui_state: HashMap<String, String> = stmt
+                .query_map((&operator_id,), |row| {
+                    let key: String = row.get(0)?;
+                    let value: String = row.get(1)?;
+                    Ok((key, value))
+                })
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                .into_iter()
+                .collect();
+
+            drop(stmt);
+            drop(conn);
+
+            // Check if prompts are globally enabled
+            let prompts_enabled: bool = ui_state
+                .get("prompts_enabled")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(true);
+
+            // Get dismissed prompts
+            let dismissed_prompts: HashMap<String, String> = ui_state
+                .get("prompts_dismissed")
+                .and_then(|v| serde_json::from_str(v).ok())
+                .unwrap_or_default();
+
+            // Get last seen version
+            let last_seen_version = ui_state.get("last_seen_version").cloned();
+
+            // Get feature usage timestamps
+            let feature_usage: HashMap<String, Option<String>> = [
+                (
+                    "agent_first_used",
+                    ui_state.get("agent_first_used").cloned(),
+                ),
+                ("mic_first_used", ui_state.get("mic_first_used").cloned()),
+                (
+                    "patterns_first_used",
+                    ui_state.get("patterns_first_used").cloned(),
+                ),
+                (
+                    "reflection_ledger_first_used",
+                    ui_state.get("reflection_ledger_first_used").cloned(),
+                ),
+            ]
             .into_iter()
+            .map(|(k, v)| (k.to_string(), v))
             .collect();
 
-        drop(stmt);
-        drop(conn);
-
-        // Check if prompts are globally enabled
-        let prompts_enabled: bool = ui_state
-            .get("prompts_enabled")
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(true);
-
-        // Get dismissed prompts
-        let dismissed_prompts: HashMap<String, String> = ui_state
-            .get("prompts_dismissed")
-            .and_then(|v| serde_json::from_str(v).ok())
-            .unwrap_or_default();
-
-        // Get last seen version
-        let last_seen_version = ui_state.get("last_seen_version").cloned();
-
-        // Get feature usage timestamps
-        let feature_usage: HashMap<String, Option<String>> = [
-            ("agent_first_used", ui_state.get("agent_first_used").cloned()),
-            ("mic_first_used", ui_state.get("mic_first_used").cloned()),
-            ("patterns_first_used", ui_state.get("patterns_first_used").cloned()),
-            ("reflection_ledger_first_used", ui_state.get("reflection_ledger_first_used").cloned()),
-        ]
-        .into_iter()
-        .map(|(k, v)| (k.to_string(), v))
-        .collect();
-
-        Ok::<(bool, HashMap<String, String>, Option<String>, HashMap<String, Option<String>>), StatusCode>((prompts_enabled, dismissed_prompts, last_seen_version, feature_usage))
-    })
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
+            Ok::<
+                (
+                    bool,
+                    HashMap<String, String>,
+                    Option<String>,
+                    HashMap<String, Option<String>>,
+                ),
+                StatusCode,
+            >((
+                prompts_enabled,
+                dismissed_prompts,
+                last_seen_version,
+                feature_usage,
+            ))
+        })
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
 
     let mut eligible_prompts = Vec::new();
 
     // Only check prompts if globally enabled
     if prompts_enabled {
         // Check each prompt type
-        eligible_prompts.extend(check_whats_new_prompts(&dismissed_prompts, &last_seen_version));
-        eligible_prompts.extend(check_reflection_ledger_prompt(&dismissed_prompts, &feature_usage).await);
-        eligible_prompts.extend(check_pattern_suggestion_prompt(&dismissed_prompts, &feature_usage).await);
+        eligible_prompts.extend(check_whats_new_prompts(
+            &dismissed_prompts,
+            &last_seen_version,
+        ));
+        eligible_prompts
+            .extend(check_reflection_ledger_prompt(&dismissed_prompts, &feature_usage).await);
+        eligible_prompts
+            .extend(check_pattern_suggestion_prompt(&dismissed_prompts, &feature_usage).await);
         eligible_prompts.extend(check_agent_intro_prompt(&dismissed_prompts, &feature_usage));
         eligible_prompts.extend(check_mic_intro_prompt(&dismissed_prompts, &feature_usage));
     }
@@ -199,14 +227,12 @@ pub async fn list_onboarding_prompts(
     let filtered = if let Some(ref pt) = query.prompt_type {
         eligible_prompts
             .into_iter()
-            .filter(|p| {
-                match &p.prompt_type {
-                    OnboardingPromptType::WhatsNew { .. } => pt == "whats_new",
-                    OnboardingPromptType::ReflectionLedgerEmpty => pt == "reflection_ledger_empty",
-                    OnboardingPromptType::PatternSuggestion { .. } => pt == "pattern_suggestion",
-                    OnboardingPromptType::AgentIntro => pt == "agent_intro",
-                    OnboardingPromptType::MicIntro => pt == "mic_intro",
-                }
+            .filter(|p| match &p.prompt_type {
+                OnboardingPromptType::WhatsNew { .. } => pt == "whats_new",
+                OnboardingPromptType::ReflectionLedgerEmpty => pt == "reflection_ledger_empty",
+                OnboardingPromptType::PatternSuggestion { .. } => pt == "pattern_suggestion",
+                OnboardingPromptType::AgentIntro => pt == "agent_intro",
+                OnboardingPromptType::MicIntro => pt == "mic_intro",
             })
             .collect()
     } else {
@@ -256,8 +282,7 @@ async fn dismiss_onboarding_prompt(
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let operator_id = state.identity_cache.resolve(connect_info.map(|ci| ci.0));
 
-    let conn = Connection::open(fleet::db_path())
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let conn = Connection::open(fleet::db_path()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get current dismissed prompts
     let dismissed: HashMap<String, String> = conn
@@ -284,7 +309,10 @@ async fn dismiss_onboarding_prompt(
          ON CONFLICT (operator_id, key) DO UPDATE SET
              value = excluded.value,
              updated_at = datetime('now')",
-        (&operator_id, &serde_json::to_string(&updated).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?),
+        (
+            &operator_id,
+            &serde_json::to_string(&updated).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+        ),
     )
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -314,8 +342,7 @@ async fn set_onboarding_enabled(
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let operator_id = state.identity_cache.resolve(connect_info.map(|ci| ci.0));
 
-    let conn = Connection::open(fleet::db_path())
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let conn = Connection::open(fleet::db_path()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     conn.execute(
         "INSERT INTO ui_state (operator_id, key, value, updated_at)
@@ -365,8 +392,7 @@ async fn record_feature_usage(
         _ => return Err(StatusCode::BAD_REQUEST),
     };
 
-    let conn = Connection::open(fleet::db_path())
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let conn = Connection::open(fleet::db_path()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Only set if not already set
     conn.execute(
@@ -406,8 +432,7 @@ async fn acknowledge_version(
 ) -> Result<Json<serde_json::Value>, StatusCode> {
     let operator_id = state.identity_cache.resolve(connect_info.map(|ci| ci.0));
 
-    let conn = Connection::open(fleet::db_path())
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let conn = Connection::open(fleet::db_path()).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     conn.execute(
         "INSERT INTO ui_state (operator_id, key, value, updated_at)
@@ -446,11 +471,14 @@ fn check_whats_new_prompts(
                         version: HOOP_VERSION.to_string(),
                     },
                     title: format!("What's new in HOOP {}", HOOP_VERSION),
-                    message: "HOOP has been updated with new features and improvements.".to_string(),
+                    message: "HOOP has been updated with new features and improvements."
+                        .to_string(),
                     action_label: Some("View Release Notes".to_string()),
                     action_url: Some("/RELEASE_NOTES_v1.0.md".to_string()),
                     eligible_at: Utc::now().to_rfc3339(),
-                    dismissed_at: dismissed.get(&format!("whats_new_{}", HOOP_VERSION.replace('.', "_"))).cloned(),
+                    dismissed_at: dismissed
+                        .get(&format!("whats_new_{}", HOOP_VERSION.replace('.', "_")))
+                        .cloned(),
                     priority: 100,
                 });
             }
@@ -472,7 +500,11 @@ async fn check_reflection_ledger_prompt(
     }
 
     // Skip if reflection ledger has been used
-    if feature_usage.get("reflection_ledger_first_used").and_then(|v| v.as_ref()).is_some() {
+    if feature_usage
+        .get("reflection_ledger_first_used")
+        .and_then(|v| v.as_ref())
+        .is_some()
+    {
         return Vec::new();
     }
 
@@ -489,7 +521,8 @@ async fn check_reflection_ledger_prompt(
     // Check when the operator first started using HOOP
     // For simplicity, we'll use a heuristic: if any feature has been used >30 days ago
     let has_usage_older_than_30d = feature_usage.values().any(|v| {
-        v.as_ref().and_then(|ts| ts.parse::<DateTime<Utc>>().ok())
+        v.as_ref()
+            .and_then(|ts| ts.parse::<DateTime<Utc>>().ok())
             .map(|dt| Utc::now().signed_duration_since(dt).num_days() > 30)
             .unwrap_or(false)
     });
@@ -523,7 +556,11 @@ async fn check_pattern_suggestion_prompt(
     }
 
     // Skip if patterns have been used
-    if feature_usage.get("patterns_first_used").and_then(|v| v.as_ref()).is_some() {
+    if feature_usage
+        .get("patterns_first_used")
+        .and_then(|v| v.as_ref())
+        .is_some()
+    {
         return Vec::new();
     }
 
@@ -566,7 +603,11 @@ fn check_agent_intro_prompt(
     }
 
     // Skip if agent has been used
-    if feature_usage.get("agent_first_used").and_then(|v| v.as_ref()).is_some() {
+    if feature_usage
+        .get("agent_first_used")
+        .and_then(|v| v.as_ref())
+        .is_some()
+    {
         return Vec::new();
     }
 
@@ -595,7 +636,11 @@ fn check_mic_intro_prompt(
     }
 
     // Skip if mic has been used
-    if feature_usage.get("mic_first_used").and_then(|v| v.as_ref()).is_some() {
+    if feature_usage
+        .get("mic_first_used")
+        .and_then(|v| v.as_ref())
+        .is_some()
+    {
         return Vec::new();
     }
 

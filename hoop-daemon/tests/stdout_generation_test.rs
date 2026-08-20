@@ -263,7 +263,9 @@ pub fn spawn_multi_line_subprocess(line_count: usize) -> SubprocessResult {
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
 
-    let output = command.output().expect("Failed to execute multi-line subprocess");
+    let output = command
+        .output()
+        .expect("Failed to execute multi-line subprocess");
 
     let success = output.status.success();
     let exit_code = output.status.code();
@@ -377,7 +379,10 @@ fn test_find_test_binary() {
 
     // Try to find a binary that likely doesn't exist
     let path = find_test_binary("nonexistent_test_binary");
-    assert!(path.to_string_lossy().contains("target"), "Path should be in target directory");
+    assert!(
+        path.to_string_lossy().contains("target"),
+        "Path should be in target directory"
+    );
 
     println!("✓ Test binary finder works");
     io::stdout().flush().unwrap();
@@ -412,7 +417,8 @@ mod infrastructure_tests {
     /// Test subprocess result creation
     #[test]
     fn test_subprocess_result_creation() {
-        let result = SubprocessResult::new(true, Some(0), "stdout".to_string(), "stderr".to_string());
+        let result =
+            SubprocessResult::new(true, Some(0), "stdout".to_string(), "stderr".to_string());
 
         assert!(result.succeeded());
         assert_eq!(result.exit_code, Some(0));

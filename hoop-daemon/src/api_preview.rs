@@ -438,8 +438,8 @@ fn query_percentile_index(
     let conn = Connection::open(&db_path).ok()?;
 
     let query_result = query_percentiles(&conn, title, body_length, labels, attachments_count)
-            .ok()
-            .flatten()?;
+        .ok()
+        .flatten()?;
 
     // Only return prediction if we have a meaningful sample size
     if query_result.sample_count < 3 {

@@ -207,8 +207,7 @@ pub enum StuckDetectorEvent {
 }
 
 /// Per-worker stuck detector state
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 struct WorkerStuckState {
     bead: Option<String>,
     adapter: Option<String>,
@@ -225,7 +224,6 @@ struct WorkerStuckState {
     /// Previous bead for detecting retries (when worker starts a new bead, check if it's the same as before)
     previous_bead: Option<String>,
 }
-
 
 /// Three-timer stuck detector
 ///
@@ -674,9 +672,8 @@ impl StuckDetector {
                     Ok(root) => {
                         // Look for the stuck_detector section
                         if let Some(sd_value) = root.get("stuck_detector") {
-                            match serde_yaml::from_value::<StuckDetectorConfigMap>(
-                                sd_value.clone(),
-                            ) {
+                            match serde_yaml::from_value::<StuckDetectorConfigMap>(sd_value.clone())
+                            {
                                 Ok(config_map) => {
                                     info!(
                                         "Loaded stuck detector config from {} ({} adapter configs)",
@@ -701,7 +698,8 @@ impl StuckDetector {
                     Err(e) => {
                         warn!(
                             "Failed to parse config.yml from {}: {}, using defaults",
-                            config_path.display(), e
+                            config_path.display(),
+                            e
                         );
                         StuckDetectorConfigMap::default()
                     }
@@ -710,7 +708,8 @@ impl StuckDetector {
             Err(e) => {
                 warn!(
                     "Failed to read config.yml from {}: {}, using defaults",
-                    config_path.display(), e
+                    config_path.display(),
+                    e
                 );
                 StuckDetectorConfigMap::default()
             }

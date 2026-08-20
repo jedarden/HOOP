@@ -4,7 +4,7 @@
 //!   POST /api/reflections/detect       — trigger reflection detection on recent Stitches
 //!   GET  /api/reflections/detect/status — detection status and last run time
 
-use crate::reflection_detector::{ReflectionDetectorConfig, run_detection};
+use crate::reflection_detector::{run_detection, ReflectionDetectorConfig};
 use crate::DaemonState;
 use axum::{
     extract::State,
@@ -12,9 +12,9 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use utoipa::ToSchema;
 
 /// Build the reflection detector API router
 pub fn router() -> Router<DaemonState> {
@@ -163,9 +163,7 @@ async fn trigger_detection(
         (status = 200, description = "Detection status", body = StatusResponse)
     )
 )]
-async fn get_detection_status(
-    State(state): State<DaemonState>,
-) -> Json<StatusResponse> {
+async fn get_detection_status(State(state): State<DaemonState>) -> Json<StatusResponse> {
     let detection_state = state.reflection_detection_state.as_ref();
 
     let (running, last_run, last_result) = match detection_state {

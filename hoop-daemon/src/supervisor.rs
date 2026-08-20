@@ -89,9 +89,9 @@ use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::{debug, error, info, warn};
 
 use crate::beads::{BeadEvent, BeadReader, BeadReaderConfig};
-use crate::metrics::metrics;
 use crate::cost::CostAggregator;
 use crate::events::{BeadEventData, EventTailer, EventTailerConfig, TailerEvent};
+use crate::metrics::metrics;
 use crate::projects::ProjectsConfig;
 use crate::script_trigger::{trigger_matching_scripts, EventContext};
 use crate::sessions::{SessionEvent, SessionTailer, SessionTailerConfig};
@@ -299,9 +299,16 @@ impl ProjectSupervisor {
                     TailerEvent::Event(parsed) => {
                         // Update stuck detector with worker lifecycle events (§C1, hoop-ttb.3.25)
                         match &parsed.event {
-                            crate::events::NeedleEvent::Dispatch { ts, worker, bead, adapter, .. } => {
+                            crate::events::NeedleEvent::Dispatch {
+                                ts,
+                                worker,
+                                bead,
+                                adapter,
+                                ..
+                            } => {
                                 // Worker started executing a bead
-                                if let Ok(started_at) = ts.parse::<chrono::DateTime<chrono::Utc>>() {
+                                if let Ok(started_at) = ts.parse::<chrono::DateTime<chrono::Utc>>()
+                                {
                                     stuck_detector.lock().unwrap().on_worker_started(
                                         worker,
                                         bead,
@@ -322,7 +329,10 @@ impl ProjectSupervisor {
                             _ => {
                                 // Any other event counts as activity
                                 if let Some(bead_event) = BeadEventData::from_event(&parsed.event) {
-                                    stuck_detector.lock().unwrap().on_worker_event(&bead_event.worker, false);
+                                    stuck_detector
+                                        .lock()
+                                        .unwrap()
+                                        .on_worker_event(&bead_event.worker, false);
                                 }
                             }
                         }
@@ -1274,9 +1284,10 @@ fn check_and_emit_notifications(
 fn lookup_stitch_for_bead(bead_id: &str) -> Option<String> {
     use rusqlite::Connection;
 
-    let db_path = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
-    .join(".hoop")
-    .join("fleet.db");
+    let db_path = dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".hoop")
+        .join("fleet.db");
 
     if !db_path.exists() {
         return None;
@@ -1317,8 +1328,7 @@ fn count_open_beads_for_workspaces(beads: &[Bead], workspaces: &[PathBuf]) -> us
                 && (b.workspace.is_empty()
                     || workspaces.iter().any(|ws| {
                         // Match by display string (handles both canonical and non-canonical paths)
-                        ws.display().to_string() == b.workspace
-                            || Path::new(&b.workspace) == ws
+                        ws.display().to_string() == b.workspace || Path::new(&b.workspace) == ws
                     }))
         })
         .count()

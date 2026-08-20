@@ -55,14 +55,12 @@ pub struct AccountLimits {
 }
 
 /// Top-level accounts.yaml structure.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AccountsConfig {
     /// Per-account configurations keyed by account ID
     #[serde(default)]
     pub accounts: HashMap<String, AccountConfig>,
 }
-
 
 impl AccountsConfig {
     /// Load accounts configuration from a YAML file.
@@ -70,7 +68,10 @@ impl AccountsConfig {
     /// Returns an empty config if the file doesn't exist.
     pub fn load_from_file(path: &Path) -> Result<Self> {
         if !path.exists() {
-            debug!("Accounts config file not found at {}, using empty config", path.display());
+            debug!(
+                "Accounts config file not found at {}, using empty config",
+                path.display()
+            );
             return Ok(Self::default());
         }
 
@@ -91,15 +92,13 @@ impl AccountsConfig {
     ///
     /// Returns None if the account is not configured or doesn't have OpenCode limits.
     pub fn get_opencode_limits(&self, account_id: &str) -> Option<&OpenCodeLimits> {
-        self.accounts
-            .get(account_id)
-            .and_then(|account| {
-                if account.adapter == "opencode" {
-                    account.limits.opencode.as_ref()
-                } else {
-                    None
-                }
-            })
+        self.accounts.get(account_id).and_then(|account| {
+            if account.adapter == "opencode" {
+                account.limits.opencode.as_ref()
+            } else {
+                None
+            }
+        })
     }
 
     /// Get default OpenCode limits for accounts not in the config.

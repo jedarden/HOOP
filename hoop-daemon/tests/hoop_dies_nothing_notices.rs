@@ -57,8 +57,7 @@ fn setup_test_hoop_home() -> TempDir {
         testrepo_root().display()
     );
 
-    fs::write(hoop_dir.join("projects.yaml"), projects_yaml)
-        .expect("write projects.yaml");
+    fs::write(hoop_dir.join("projects.yaml"), projects_yaml).expect("write projects.yaml");
 
     // Create minimal config.yml
     let config_yaml = r#"schema_version: 1
@@ -67,8 +66,7 @@ agent:
   model: claude-sonnet-4-6
 "#;
 
-    fs::write(hoop_dir.join("config.yml"), config_yaml)
-        .expect("write config.yml");
+    fs::write(hoop_dir.join("config.yml"), config_yaml).expect("write config.yml");
 
     // Create data directory for fleet.db
     fs::create_dir_all(hoop_dir.join("data")).expect("create data dir");
@@ -158,7 +156,10 @@ fn count_events_in_file() -> usize {
     }
 
     let content = fs::read_to_string(&path).unwrap_or_default();
-    content.lines().filter(|line| !line.trim().is_empty()).count()
+    content
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .count()
 }
 
 /// Verify that testrepo fixtures are present
@@ -208,15 +209,20 @@ async fn test_hoop_dies_nothing_notices_single_iteration() {
         .expect("write dispatch event");
 
     let initial_count = worker.event_count();
-    assert!(initial_count >= 2, "worker should have written at least 2 events");
+    assert!(
+        initial_count >= 2,
+        "worker should have written at least 2 events"
+    );
 
     // Verify events are in the file
     let file_count = count_events_in_file();
-    assert!(file_count >= 2, "events.jsonl should contain at least 2 events");
+    assert!(
+        file_count >= 2,
+        "events.jsonl should contain at least 2 events"
+    );
 
     // Simulate HOOP reading the events (what would happen during daemon startup)
-    let events_content = fs::read_to_string(events_jsonl_path())
-        .expect("read events.jsonl");
+    let events_content = fs::read_to_string(events_jsonl_path()).expect("read events.jsonl");
 
     // Verify we can parse the events
     let mut parsed_count = 0;
@@ -259,8 +265,8 @@ async fn test_hoop_dies_nothing_notices_single_iteration() {
     );
 
     // Simulate HOOP "restart" by re-reading events.jsonl
-    let events_after_restart = fs::read_to_string(events_jsonl_path())
-        .expect("read events.jsonl after restart");
+    let events_after_restart =
+        fs::read_to_string(events_jsonl_path()).expect("read events.jsonl after restart");
 
     let mut parsed_after_restart = 0;
     for line in events_after_restart.lines() {
@@ -358,8 +364,8 @@ fn test_hoop_dies_nothing_notices_repeated() {
         );
 
         // Verify events are parseable
-        let events_content = fs::read_to_string(events_jsonl_path())
-            .expect("read events.jsonl after restart");
+        let events_content =
+            fs::read_to_string(events_jsonl_path()).expect("read events.jsonl after restart");
 
         let mut parseable = 0;
         for line in events_content.lines() {
@@ -407,9 +413,7 @@ async fn test_projections_rebuild_within_5s() {
     // Write 100 events (simulating a busy workspace)
     for i in 0..100u32 {
         let bead_id = format!("bd-perf-{:03}", i);
-        worker
-            .write_claim(&bead_id)
-            .expect("write claim event");
+        worker.write_claim(&bead_id).expect("write claim event");
 
         if i % 2 == 0 {
             worker
@@ -431,8 +435,8 @@ async fn test_projections_rebuild_within_5s() {
     // Simulate HOOP restart by reading all events
     let rebuild_start = std::time::Instant::now();
 
-    let events_content = fs::read_to_string(events_jsonl_path())
-        .expect("read events.jsonl for rebuild");
+    let events_content =
+        fs::read_to_string(events_jsonl_path()).expect("read events.jsonl for rebuild");
 
     let mut events = Vec::new();
     for line in events_content.lines() {
@@ -487,8 +491,12 @@ fn test_events_jsonl_persists_across_restarts() {
     {
         let mut worker = SimulatedWorker::new("restart-test-1");
         worker.write_claim("bd-restart-001").expect("write claim");
-        worker.write_dispatch("bd-restart-001").expect("write dispatch");
-        worker.write_complete("bd-restart-001").expect("write complete");
+        worker
+            .write_dispatch("bd-restart-001")
+            .expect("write dispatch");
+        worker
+            .write_complete("bd-restart-001")
+            .expect("write complete");
     }
 
     let count_after_run1 = count_events_in_file();
@@ -497,7 +505,9 @@ fn test_events_jsonl_persists_across_restarts() {
     {
         let mut worker = SimulatedWorker::new("restart-test-2");
         worker.write_claim("bd-restart-002").expect("write claim");
-        worker.write_dispatch("bd-restart-002").expect("write dispatch");
+        worker
+            .write_dispatch("bd-restart-002")
+            .expect("write dispatch");
     }
 
     let count_after_run2 = count_events_in_file();
@@ -508,10 +518,12 @@ fn test_events_jsonl_persists_across_restarts() {
     );
 
     // Third "run": Verify all events are still there
-    let events_content = fs::read_to_string(&events_path)
-        .expect("read events after third run");
+    let events_content = fs::read_to_string(&events_path).expect("read events after third run");
 
-    let line_count = events_content.lines().filter(|l| !l.trim().is_empty()).count();
+    let line_count = events_content
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .count();
 
     assert_eq!(
         line_count, count_after_run2,
@@ -587,10 +599,7 @@ async fn test_fleet_db_persists_across_restarts() {
     std::env::set_var("_HOOP_FLEET_DB_PATH", &db_path);
 
     // The database file should still exist
-    assert!(
-        db_path.exists(),
-        "fleet.db should persist across restarts"
-    );
+    assert!(db_path.exists(), "fleet.db should persist across restarts");
 
     // Re-initialize (simulating daemon restart)
     hoop_daemon::fleet::init_fleet_db().expect("re-init fleet.db after restart");
@@ -632,8 +641,12 @@ fn test_corrupted_events_dont_cause_hoop_to_crash() {
 
     // Write some valid events
     let mut worker = SimulatedWorker::new("corruption-test-worker");
-    worker.write_claim("bd-valid-001").expect("write valid claim");
-    worker.write_dispatch("bd-valid-001").expect("write valid dispatch");
+    worker
+        .write_claim("bd-valid-001")
+        .expect("write valid claim");
+    worker
+        .write_dispatch("bd-valid-001")
+        .expect("write valid dispatch");
 
     // Append a corrupted line
     {
@@ -647,12 +660,15 @@ fn test_corrupted_events_dont_cause_hoop_to_crash() {
     }
 
     // Write more valid events after the corruption
-    worker.write_claim("bd-valid-002").expect("write valid claim after corruption");
-    worker.write_complete("bd-valid-001").expect("write valid complete after corruption");
+    worker
+        .write_claim("bd-valid-002")
+        .expect("write valid claim after corruption");
+    worker
+        .write_complete("bd-valid-001")
+        .expect("write valid complete after corruption");
 
     // Verify we can still parse the valid events
-    let events_content = fs::read_to_string(&events_path)
-        .expect("read events with corruption");
+    let events_content = fs::read_to_string(&events_path).expect("read events with corruption");
 
     let mut valid_count = 0;
     let mut invalid_count = 0;
@@ -699,10 +715,12 @@ fn test_empty_events_jsonl_doesnt_crash_hoop() {
     }
 
     // Verify we can "read" (parse) empty file
-    let events_content = fs::read_to_string(&events_path)
-        .expect("read empty events.jsonl");
+    let events_content = fs::read_to_string(&events_path).expect("read empty events.jsonl");
 
-    let count = events_content.lines().filter(|l| !l.trim().is_empty()).count();
+    let count = events_content
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .count();
 
     assert_eq!(count, 0, "empty events.jsonl should have 0 events");
 

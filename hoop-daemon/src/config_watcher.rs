@@ -161,7 +161,9 @@ impl ConfigWatcher {
     ///
     /// Returns a receiver that will receive AgentConfigChanged events
     /// when the agent adapter, model, or API key changes.
-    pub fn subscribe_agent_config_changed(&self) -> tokio::sync::broadcast::Receiver<AgentConfigChanged> {
+    pub fn subscribe_agent_config_changed(
+        &self,
+    ) -> tokio::sync::broadcast::Receiver<AgentConfigChanged> {
         // Create a new channel if not already set
         let tx = self.agent_config_changed_tx.blocking_lock();
         if tx.is_none() {
@@ -249,7 +251,14 @@ impl ConfigWatcher {
         drop(debouncer_guard);
 
         // Trigger immediate reload (no debounce for SIGHUP)
-        Self::reload_config(&watch_path, event_tx, config, cli_overrides, agent_config_changed_tx).await;
+        Self::reload_config(
+            &watch_path,
+            event_tx,
+            config,
+            cli_overrides,
+            agent_config_changed_tx,
+        )
+        .await;
         Ok(())
     }
 
@@ -260,7 +269,9 @@ impl ConfigWatcher {
         config: Arc<Mutex<ResolvedConfig>>,
         debouncer: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
         cli_overrides: CliOverrides,
-        agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
+        agent_config_changed_tx: Arc<
+            Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>,
+        >,
     ) -> Result<()> {
         let event = res?;
 
@@ -287,7 +298,14 @@ impl ConfigWatcher {
             let handle = tokio::spawn(async move {
                 // Wait 2 seconds before reloading (debounce)
                 tokio::time::sleep(Duration::from_secs(2)).await;
-                Self::reload_config(&watch_path, event_tx, config_clone, cli_overrides, agent_config_changed_tx_clone).await;
+                Self::reload_config(
+                    &watch_path,
+                    event_tx,
+                    config_clone,
+                    cli_overrides,
+                    agent_config_changed_tx_clone,
+                )
+                .await;
             });
 
             *debouncer_guard = Some(handle);
@@ -306,7 +324,9 @@ impl ConfigWatcher {
         event_tx: tokio::sync::broadcast::Sender<ConfigEvent>,
         config: Arc<Mutex<ResolvedConfig>>,
         cli_overrides: CliOverrides,
-        agent_config_changed_tx: Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>>,
+        agent_config_changed_tx: Arc<
+            Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>,
+        >,
     ) {
         debug!("Reloading config.yml from {}", path.display());
 
@@ -378,10 +398,16 @@ impl ConfigWatcher {
                 warn!("║ • {} requires daemon restart to take effect", key);
             }
             warn!("║                                                                                ║");
-            warn!("║ Run the following to apply changes:                                          ║");
-            warn!("║   systemctl --user restart hoop                                               ║");
+            warn!(
+                "║ Run the following to apply changes:                                          ║"
+            );
+            warn!(
+                "║   systemctl --user restart hoop                                               ║"
+            );
             warn!("║                                                                                ║");
-            warn!("║ All other config changes are hot-reloadable and have been applied.            ║");
+            warn!(
+                "║ All other config changes are hot-reloadable and have been applied.            ║"
+            );
             warn!("╚════════════════════════════════════════════════════════════════════════════════╝");
         } else {
             info!("✓ Config.yml reloaded successfully — all changes applied via hot-reload");
@@ -390,7 +416,9 @@ impl ConfigWatcher {
         // Log agent config changes (hoop-ttb.6.2.2)
         if let Some(ref acc) = agent_config_changed {
             info!("╔════════════════════════════════════════════════════════════════════════════════╗");
-            info!("║ 🔄 AGENT CONFIG CHANGED: SESSION SWITCH TRIGGERED                             ║");
+            info!(
+                "║ 🔄 AGENT CONFIG CHANGED: SESSION SWITCH TRIGGERED                             ║"
+            );
             info!("╠════════════════════════════════════════════════════════════════════════════════╣");
             info!("║ • Adapter: {} → {}", acc.old_adapter, acc.new_adapter);
             info!("║ • Model: {} → {}", acc.old_model, acc.new_model);
@@ -401,7 +429,9 @@ impl ConfigWatcher {
                 info!("║ • ZAI base URL: changed");
             }
             info!("║                                                                                ║");
-            info!("║ Current agent session will be archived and new session spawned.               ║");
+            info!(
+                "║ Current agent session will be archived and new session spawned.               ║"
+            );
             info!("╚════════════════════════════════════════════════════════════════════════════════╝");
 
             // Send agent config changed event to dedicated channel (hoop-ttb.6.2.2)
@@ -461,12 +491,17 @@ fn detect_restart_required_changes(
     let mut changed_keys = Vec::new();
 
     // Check server.bind_addr (marked restart_required in schema)
-    if new_config.bind_addr.restart_required && old_config.bind_addr.value != new_config.bind_addr.value {
+    if new_config.bind_addr.restart_required
+        && old_config.bind_addr.value != new_config.bind_addr.value
+    {
         changed_keys.push("server.bind_addr".to_string());
     }
 
     // Check metrics.port (marked restart_required in schema, only when enabled)
-    if new_config.metrics_port.restart_required && new_config.metrics_enabled.value && old_config.metrics_port.value != new_config.metrics_port.value {
+    if new_config.metrics_port.restart_required
+        && new_config.metrics_enabled.value
+        && old_config.metrics_port.value != new_config.metrics_port.value
+    {
         changed_keys.push("metrics.port".to_string());
     }
 
@@ -490,9 +525,11 @@ fn detect_agent_config_changes(
 ) -> Option<AgentConfigChanged> {
     let adapter_changed = old_config.agent_adapter.value != new_config.agent_adapter.value;
     let model_changed = old_config.agent_model.value != new_config.agent_model.value;
-    let api_key_changed = old_config.agent_anthropic_api_key.value != new_config.agent_anthropic_api_key.value
+    let api_key_changed = old_config.agent_anthropic_api_key.value
+        != new_config.agent_anthropic_api_key.value
         || old_config.agent_zai_api_key.value != new_config.agent_zai_api_key.value;
-    let zai_base_url_changed = old_config.agent_zai_base_url.value != new_config.agent_zai_base_url.value;
+    let zai_base_url_changed =
+        old_config.agent_zai_base_url.value != new_config.agent_zai_base_url.value;
 
     // Only trigger session switch if meaningful changes occurred
     if adapter_changed || model_changed || api_key_changed || zai_base_url_changed {
@@ -514,8 +551,11 @@ mod tests {
     use super::*;
 
     /// Helper: create an empty agent config changed tx for testing
-    fn create_test_agent_tx() -> Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>> {
-        Arc::new(Mutex::new(None::<tokio::sync::broadcast::Sender<AgentConfigChanged>>))
+    fn create_test_agent_tx(
+    ) -> Arc<Mutex<Option<tokio::sync::broadcast::Sender<AgentConfigChanged>>>> {
+        Arc::new(Mutex::new(
+            None::<tokio::sync::broadcast::Sender<AgentConfigChanged>>,
+        ))
     }
 
     /// Helper: create a temp directory with a valid config.yml

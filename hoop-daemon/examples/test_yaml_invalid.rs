@@ -5,7 +5,7 @@ fn main() {
 agent:
   adapter: [invalid, yaml
 "#;
-    
+
     match serde_yaml::from_str::<Value>(yaml) {
         Ok(v) => {
             println!("Parsed OK: {:?}", v);

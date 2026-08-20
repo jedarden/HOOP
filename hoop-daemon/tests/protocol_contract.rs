@@ -321,8 +321,8 @@ fn test_ws_event_init_serializes_fixture_shape() {
 /// Daemon serializes `worker_update` event matching fixture.
 #[test]
 fn test_ws_event_worker_update_serializes_fixture_shape() {
-    use hoop_daemon::ws::{WorkerData, WorkerDisplayState, WsEvent};
     use hoop_daemon::heartbeats::WorkerLiveness;
+    use hoop_daemon::ws::{WorkerData, WorkerDisplayState, WsEvent};
 
     let fixture = load_fixture("ws_events/worker_update.json");
 
@@ -334,7 +334,11 @@ fn test_ws_event_worker_update_serializes_fixture_shape() {
             model: None,
         },
         liveness: WorkerLiveness::Live,
-        last_heartbeat: fixture["worker"]["last_heartbeat"].as_str().unwrap().parse().unwrap(),
+        last_heartbeat: fixture["worker"]["last_heartbeat"]
+            .as_str()
+            .unwrap()
+            .parse()
+            .unwrap(),
         heartbeat_age_secs: 0,
     };
 
@@ -371,33 +375,28 @@ fn test_ws_event_worker_update_serializes_fixture_shape() {
         serialized.get("worker").is_some(),
         "worker_update must have 'worker'"
     );
-    assert_eq!(
-        serialized["worker"]["worker"],
-        fixture["worker"]["worker"]
-    );
+    assert_eq!(serialized["worker"]["worker"], fixture["worker"]["worker"]);
 }
 
 /// Daemon serializes `workers_snapshot` event matching fixture.
 #[test]
 fn test_ws_event_workers_snapshot_serializes_fixture_shape() {
-    use hoop_daemon::ws::{WorkerData, WorkerDisplayState, WsEvent};
     use hoop_daemon::heartbeats::WorkerLiveness;
+    use hoop_daemon::ws::{WorkerData, WorkerDisplayState, WsEvent};
 
     let fixture = load_fixture("ws_events/workers_snapshot.json");
 
-    let workers = vec![
-        WorkerData {
-            worker: "test-worker".to_string(),
-            state: WorkerDisplayState::Executing {
-                bead: "bead-123".to_string(),
-                adapter: "claude-opus-4-7".to_string(),
-                model: None,
-            },
-            liveness: WorkerLiveness::Live,
-            last_heartbeat: "2026-04-26T10:00:00Z".parse().unwrap(),
-            heartbeat_age_secs: 0,
+    let workers = vec![WorkerData {
+        worker: "test-worker".to_string(),
+        state: WorkerDisplayState::Executing {
+            bead: "bead-123".to_string(),
+            adapter: "claude-opus-4-7".to_string(),
+            model: None,
         },
-    ];
+        liveness: WorkerLiveness::Live,
+        last_heartbeat: "2026-04-26T10:00:00Z".parse().unwrap(),
+        heartbeat_age_secs: 0,
+    }];
 
     let event = WsEvent::workers_snapshot(workers);
     let serialized = serde_json::to_value(&event).unwrap();

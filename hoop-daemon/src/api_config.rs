@@ -4,10 +4,10 @@
 //! The CLI's `hoop config diff` command queries this endpoint to show
 //! which values would change and which require restart.
 
-use axum::{extract::State, response::Json, routing::get, Router};
-use serde::{Deserialize, Serialize};
 use crate::config_resolver::SecretPattern;
 use crate::DaemonState;
+use axum::{extract::State, response::Json, routing::get, Router};
+use serde::{Deserialize, Serialize};
 
 /// Response for GET /api/config
 #[derive(Debug, Clone, Serialize, Deserialize)]

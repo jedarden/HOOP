@@ -49,11 +49,12 @@ async fn create_test_supervisor() -> ProjectSupervisor {
     let (bead_tx, _) = tokio::sync::broadcast::channel(64);
     let (session_tx, _) = tokio::sync::broadcast::channel(64);
     let (monitor_tx, _) = tokio::sync::broadcast::channel(64);
-    let worker_registry = Arc::new(WorkerRegistry::new(monitor_tx, session_tx));
+    let worker_registry = Arc::new(WorkerRegistry::new(monitor_tx, session_tx.clone()));
     let beads = Arc::new(std::sync::RwLock::new(Vec::<Bead>::new()));
     let shutdown = Arc::new(ShutdownCoordinator::new());
     let cost_aggregator = Arc::new(std::sync::RwLock::new(
-        hoop_daemon::cost::CostAggregator::new(PathBuf::from("/tmp/test-cost.json")).expect("Failed to create cost aggregator"),
+        hoop_daemon::cost::CostAggregator::new(PathBuf::from("/tmp/test-cost.json"))
+            .expect("Failed to create cost aggregator"),
     ));
     let vector_index = Arc::new(std::sync::RwLock::new(
         hoop_daemon::vector_index::VectorIndex::new(),
@@ -109,10 +110,7 @@ async fn test_flush_state_phase_coordination() {
     let supervisor = create_test_supervisor().await;
 
     // Start a project runtime
-    let config = create_test_config(vec![create_test_project(
-        "test-project",
-        project_path,
-    )]);
+    let config = create_test_config(vec![create_test_project("test-project", project_path)]);
 
     supervisor
         .reconcile(&config)
@@ -242,10 +240,7 @@ async fn test_runtime_state_transitions_during_lifecycle() {
     let mut status_rx = supervisor.subscribe_status();
 
     // Start a project runtime
-    let config = create_test_config(vec![create_test_project(
-        "test-project",
-        project_path,
-    )]);
+    let config = create_test_config(vec![create_test_project("test-project", project_path)]);
 
     supervisor
         .reconcile(&config)
@@ -304,12 +299,7 @@ async fn test_multiple_shutdown_cycles() {
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         let snapshot = supervisor.snapshot().await;
-        assert_eq!(
-            snapshot.len(),
-            1,
-            "Cycle {}: Should have one runtime",
-            i
-        );
+        assert_eq!(snapshot.len(), 1, "Cycle {}: Should have one runtime", i);
 
         // Stop
         let empty_config = create_test_config(vec![]);
@@ -321,12 +311,7 @@ async fn test_multiple_shutdown_cycles() {
         tokio::time::sleep(Duration::from_millis(50)).await;
 
         let snapshot = supervisor.snapshot().await;
-        assert_eq!(
-            snapshot.len(),
-            0,
-            "Cycle {}: Should have no runtimes",
-            i
-        );
+        assert_eq!(snapshot.len(), 0, "Cycle {}: Should have no runtimes", i);
     }
 }
 

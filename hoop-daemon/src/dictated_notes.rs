@@ -526,7 +526,11 @@ pub fn update_note(conn: &Connection, note: &DictatedNote) -> Result<()> {
 }
 
 /// Update the synthesis_result for a dictated note
-pub fn update_synthesis_result(conn: &Connection, stitch_id: &str, synthesis_result: &str) -> Result<()> {
+pub fn update_synthesis_result(
+    conn: &Connection,
+    stitch_id: &str,
+    synthesis_result: &str,
+) -> Result<()> {
     conn.execute(
         "UPDATE dictated_notes SET synthesis_result = ?1 WHERE stitch_id = ?2",
         params![synthesis_result, stitch_id],

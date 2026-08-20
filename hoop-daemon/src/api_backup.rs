@@ -4,8 +4,8 @@
 //!   POST /api/backup/trigger  — manually trigger a backup
 //!   GET  /api/backup/status   — get backup status
 
-use crate::DaemonState;
 use crate::backup_pipeline::AlreadyRunning;
+use crate::DaemonState;
 use axum::{
     extract::State,
     routing::{get, post},

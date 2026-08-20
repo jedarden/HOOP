@@ -136,7 +136,8 @@ impl BackupPipeline {
         // Write BackupStarted audit row
         let start_args = serde_json::json!({
             "snapshot_id": snapshot_id,
-        }).to_string();
+        })
+        .to_string();
         if let Err(e) = fleet::write_audit_row(
             "backup",
             ActionKind::BackupStarted,
@@ -180,7 +181,9 @@ impl BackupPipeline {
                     // Encryption is enabled but failed - fail the entire backup run
                     // rather than silently uploading unencrypted data (security bug)
                     error!("Age encryption failed (backup.enabled=true): {}", e);
-                    metrics::metrics().hoop_errors_total.inc(&["backup", "encryption_failure"]);
+                    metrics::metrics()
+                        .hoop_errors_total
+                        .inc(&["backup", "encryption_failure"]);
                     bail!(
                         "backup encryption enabled but age encryption failed: {}. \
                          Set HOOP_BACKUP_AGE_KEY or disable encryption in config.",
@@ -223,20 +226,22 @@ impl BackupPipeline {
         }
 
         // 6. Incremental attachment sync
-        let attachments_key =
-            if let Err(e) = self.sync_attachments_with_snapshot(snapshot_id).await {
-                warn!("Attachment sync failed (fleet.db backup succeeded): {}", e);
-                None
-            } else {
-                Some(format!(
-                    "{}/{}/attachments.manifest.json",
-                    self.config.prefix.trim_end_matches('/'),
-                    snapshot_id,
-                ))
-            };
+        let attachments_key = if let Err(e) = self.sync_attachments_with_snapshot(snapshot_id).await
+        {
+            warn!("Attachment sync failed (fleet.db backup succeeded): {}", e);
+            None
+        } else {
+            Some(format!(
+                "{}/{}/attachments.manifest.json",
+                self.config.prefix.trim_end_matches('/'),
+                snapshot_id,
+            ))
+        };
 
         // 7. Config file backup (config.yml and projects.yaml)
-        let config_backup = if let Err(e) = crate::config_backup::upload_config_to_snapshot(self, snapshot_id).await {
+        let config_backup = if let Err(e) =
+            crate::config_backup::upload_config_to_snapshot(self, snapshot_id).await
+        {
             warn!("Config backup failed (fleet.db backup succeeded): {}", e);
             None
         } else {
@@ -301,7 +306,8 @@ impl BackupPipeline {
             "snapshot_id": snapshot_id,
             "size": file_size,
             "duration_secs": elapsed.as_secs_f64(),
-        }).to_string();
+        })
+        .to_string();
         if let Err(e) = fleet::write_audit_row(
             "backup",
             ActionKind::BackupFinished,
@@ -465,7 +471,8 @@ impl BackupPipeline {
         let failed_args = serde_json::json!({
             "snapshot_id": snapshot_id,
             "error": error_msg,
-        }).to_string();
+        })
+        .to_string();
         if let Err(e) = fleet::write_audit_row(
             "backup",
             ActionKind::BackupFailed,
@@ -483,7 +490,11 @@ impl BackupPipeline {
     }
 
     /// Upload raw bytes to S3 with retry (for attachment sync).
-    pub(crate) async fn upload_with_retry_from_bytes(&self, data: &[u8], s3_key: &str) -> Result<()> {
+    pub(crate) async fn upload_with_retry_from_bytes(
+        &self,
+        data: &[u8],
+        s3_key: &str,
+    ) -> Result<()> {
         let mut attempt = 0u32;
         let mut backoff_secs = INITIAL_BACKOFF_SECS;
 

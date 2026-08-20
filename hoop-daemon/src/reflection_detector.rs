@@ -141,7 +141,10 @@ pub fn run_detection(config: &ReflectionDetectorConfig) -> anyhow::Result<usize>
         return Ok(0);
     }
 
-    info!("Reflection detector: found {} candidate patterns", patterns.len());
+    info!(
+        "Reflection detector: found {} candidate patterns",
+        patterns.len()
+    );
 
     // 4. Insert proposed patterns into the Reflection Ledger
     let mut proposed = 0;
@@ -160,7 +163,9 @@ pub fn run_detection(config: &ReflectionDetectorConfig) -> anyhow::Result<usize>
                     id
                 );
                 // Emit proposal metric
-                metrics::metrics().hoop_reflection_proposal_total.inc(&["reflection_detector"]);
+                metrics::metrics()
+                    .hoop_reflection_proposal_total
+                    .inc(&["reflection_detector"]);
                 proposed += 1;
             }
             Err(e) => {
@@ -515,10 +520,7 @@ fn detect_patterns_in_category(
         }
 
         // Use the longest message in the cluster as the representative rule
-        let representative = cluster
-            .iter()
-            .max_by_key(|m| m.normalized.len())
-            .unwrap();
+        let representative = cluster.iter().max_by_key(|m| m.normalized.len()).unwrap();
 
         // Summarize the rule from the representative message
         let rule = summarize_rule(&representative.normalized, category);
@@ -526,10 +528,7 @@ fn detect_patterns_in_category(
             continue;
         }
 
-        let source_stitches: Vec<String> = cluster
-            .iter()
-            .map(|m| m.stitch_id.clone())
-            .collect();
+        let source_stitches: Vec<String> = cluster.iter().map(|m| m.stitch_id.clone()).collect();
 
         let reason = format!(
             "Detected {} '{}' pattern across {} operator Stitches in the last 30 days. \
@@ -565,12 +564,8 @@ fn summarize_rule(normalized: &str, category: PatternCategory) -> String {
             // Extract what was corrected
             extract_directive(lower, "correction")
         }
-        PatternCategory::Preference => {
-            extract_directive(lower, "preference")
-        }
-        PatternCategory::Negative => {
-            extract_directive(lower, "negative")
-        }
+        PatternCategory::Preference => extract_directive(lower, "preference"),
+        PatternCategory::Negative => extract_directive(lower, "negative"),
         PatternCategory::Approval => {
             // Approval messages are usually short; truncate if needed
             let truncated: String = lower.chars().take(120).collect();
@@ -605,34 +600,79 @@ mod tests {
 
     #[test]
     fn test_classify_correction() {
-        assert_eq!(classify_message("No, use tabs not spaces"), Some(PatternCategory::Correction));
-        assert_eq!(classify_message("Actually, I meant the other file"), Some(PatternCategory::Correction));
-        assert_eq!(classify_message("That's not what I asked for"), Some(PatternCategory::Correction));
-        assert_eq!(classify_message("Fix that bug in the parser"), Some(PatternCategory::Correction));
-        assert_eq!(classify_message("I said the config file, not the source"), Some(PatternCategory::Correction));
+        assert_eq!(
+            classify_message("No, use tabs not spaces"),
+            Some(PatternCategory::Correction)
+        );
+        assert_eq!(
+            classify_message("Actually, I meant the other file"),
+            Some(PatternCategory::Correction)
+        );
+        assert_eq!(
+            classify_message("That's not what I asked for"),
+            Some(PatternCategory::Correction)
+        );
+        assert_eq!(
+            classify_message("Fix that bug in the parser"),
+            Some(PatternCategory::Correction)
+        );
+        assert_eq!(
+            classify_message("I said the config file, not the source"),
+            Some(PatternCategory::Correction)
+        );
     }
 
     #[test]
     fn test_classify_negative() {
-        assert_eq!(classify_message("Don't use unwrap() in production code"), Some(PatternCategory::Negative));
-        assert_eq!(classify_message("Never commit directly to main"), Some(PatternCategory::Negative));
-        assert_eq!(classify_message("Stop using println for logging"), Some(PatternCategory::Negative));
-        assert_eq!(classify_message("Avoid cloning large structs"), Some(PatternCategory::Negative));
+        assert_eq!(
+            classify_message("Don't use unwrap() in production code"),
+            Some(PatternCategory::Negative)
+        );
+        assert_eq!(
+            classify_message("Never commit directly to main"),
+            Some(PatternCategory::Negative)
+        );
+        assert_eq!(
+            classify_message("Stop using println for logging"),
+            Some(PatternCategory::Negative)
+        );
+        assert_eq!(
+            classify_message("Avoid cloning large structs"),
+            Some(PatternCategory::Negative)
+        );
     }
 
     #[test]
     fn test_classify_preference() {
-        assert_eq!(classify_message("I prefer early returns over nested if-else"), Some(PatternCategory::Preference));
-        assert_eq!(classify_message("Use Result instead of unwrap"), Some(PatternCategory::Preference));
-        assert_eq!(classify_message("Always use structured logging"), Some(PatternCategory::Preference));
-        assert_eq!(classify_message("Make sure the tests pass before committing"), Some(PatternCategory::Preference));
+        assert_eq!(
+            classify_message("I prefer early returns over nested if-else"),
+            Some(PatternCategory::Preference)
+        );
+        assert_eq!(
+            classify_message("Use Result instead of unwrap"),
+            Some(PatternCategory::Preference)
+        );
+        assert_eq!(
+            classify_message("Always use structured logging"),
+            Some(PatternCategory::Preference)
+        );
+        assert_eq!(
+            classify_message("Make sure the tests pass before committing"),
+            Some(PatternCategory::Preference)
+        );
     }
 
     #[test]
     fn test_classify_approval() {
-        assert_eq!(classify_message("Yes that's right"), Some(PatternCategory::Approval));
+        assert_eq!(
+            classify_message("Yes that's right"),
+            Some(PatternCategory::Approval)
+        );
         assert_eq!(classify_message("Perfect"), Some(PatternCategory::Approval));
-        assert_eq!(classify_message("That works"), Some(PatternCategory::Approval));
+        assert_eq!(
+            classify_message("That works"),
+            Some(PatternCategory::Approval)
+        );
         assert_eq!(classify_message("correct"), Some(PatternCategory::Approval));
     }
 
@@ -647,8 +687,14 @@ mod tests {
 
     #[test]
     fn test_normalize_for_comparison() {
-        assert_eq!(normalize_for_comparison("Use Tabs, NOT Spaces!"), "use tabs not spaces");
-        assert_eq!(normalize_for_comparison("  multiple   spaces  "), "multiple spaces");
+        assert_eq!(
+            normalize_for_comparison("Use Tabs, NOT Spaces!"),
+            "use tabs not spaces"
+        );
+        assert_eq!(
+            normalize_for_comparison("  multiple   spaces  "),
+            "multiple spaces"
+        );
     }
 
     #[test]
@@ -660,7 +706,11 @@ mod tests {
     #[test]
     fn test_jaccard_similar() {
         let sim = jaccard_similarity("don't use unwrap in production", "don't use unwrap ever");
-        assert!(sim > 0.3, "Similar messages should have >0.3 similarity, got {}", sim);
+        assert!(
+            sim > 0.3,
+            "Similar messages should have >0.3 similarity, got {}",
+            sim
+        );
     }
 
     #[test]
@@ -831,7 +881,10 @@ mod tests {
         ];
 
         let user_messages = extract_user_messages(&raw_messages);
-        assert!(user_messages.len() >= 5, "Should extract at least 5 classifiable messages");
+        assert!(
+            user_messages.len() >= 5,
+            "Should extract at least 5 classifiable messages"
+        );
 
         let patterns = group_and_detect(user_messages, &config);
         assert!(
@@ -842,7 +895,10 @@ mod tests {
 
         // At least one pattern should involve 3+ source stitches
         let has_multi_source = patterns.iter().any(|p| p.source_stitches.len() >= 3);
-        assert!(has_multi_source, "At least one pattern should span 3+ Stitches");
+        assert!(
+            has_multi_source,
+            "At least one pattern should span 3+ Stitches"
+        );
     }
 
     #[test]

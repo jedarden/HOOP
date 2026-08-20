@@ -9,18 +9,9 @@
 //! Plan reference: §20 Schema migration
 
 use crate::fleet::{
-    get_schema_version, update_schema_version, write_schema_migration_audit,
+    get_schema_version,
     // Migration functions from fleet.rs
     migrate_v01_to_v11,
-    migrate_v11_to_v12,
-    migrate_v12_to_v13,
-    migrate_v13_to_v14,
-    migrate_v14_to_v15,
-    migrate_v15_to_v16,
-    migrate_v16_to_v17,
-    migrate_v17_to_v18,
-    migrate_v18_to_v19,
-    migrate_v19_to_v110,
     migrate_v110_to_v111,
     migrate_v111_to_v112,
     migrate_v112_to_v113,
@@ -31,6 +22,7 @@ use crate::fleet::{
     migrate_v117_to_v118,
     migrate_v118_to_v119,
     migrate_v119_to_v120,
+    migrate_v11_to_v12,
     migrate_v120_to_v121,
     migrate_v121_to_v122,
     migrate_v122_to_v123,
@@ -41,10 +33,20 @@ use crate::fleet::{
     migrate_v127_to_v128,
     migrate_v128_to_v129,
     migrate_v129_to_v130,
+    migrate_v12_to_v13,
     migrate_v130_to_v131,
     migrate_v131_to_v132,
     migrate_v132_to_v133,
     migrate_v133_to_v134,
+    migrate_v13_to_v14,
+    migrate_v14_to_v15,
+    migrate_v15_to_v16,
+    migrate_v16_to_v17,
+    migrate_v17_to_v18,
+    migrate_v18_to_v19,
+    migrate_v19_to_v110,
+    update_schema_version,
+    write_schema_migration_audit,
 };
 use anyhow::{bail, Result};
 use rusqlite::Connection;
@@ -136,10 +138,7 @@ impl Default for MigrationRegistry {
 /// Compare two semver strings for ordering
 /// Returns a comparable value (major * 1_000_000 + minor * 1000 + patch)
 fn semver_compare(version: &str) -> u64 {
-    let parts: Vec<u32> = version
-        .split('.')
-        .filter_map(|p| p.parse().ok())
-        .collect();
+    let parts: Vec<u32> = version.split('.').filter_map(|p| p.parse().ok()).collect();
 
     let major = *parts.first().unwrap_or(&0);
     let minor = *parts.get(1).unwrap_or(&0);
@@ -174,9 +173,7 @@ pub fn run_pending_migrations(
 
         info!(
             "Running migration {} → {}: {}",
-            from_version,
-            migration.version,
-            migration.description
+            from_version, migration.version, migration.description
         );
 
         // Clear the change counter before migration
@@ -193,10 +190,7 @@ pub fn run_pending_migrations(
 
         info!(
             "Migration {} → {} completed in {:.2} ms ({} rows touched)",
-            from_version,
-            migration.version,
-            elapsed_ms,
-            rows_touched
+            from_version, migration.version, elapsed_ms, rows_touched
         );
 
         // Write audit row
@@ -240,9 +234,7 @@ pub fn rollback_migration(
 
     info!(
         "Rolling back migration {} → {}: {}",
-        current_version,
-        target_version,
-        migration.description
+        current_version, target_version, migration.description
     );
 
     // Clear the change counter before rollback
@@ -259,14 +251,16 @@ pub fn rollback_migration(
 
     info!(
         "Rollback {} → {} completed in {:.2} ms ({} rows touched)",
-        current_version,
-        target_version,
-        elapsed_ms,
-        rows_touched
+        current_version, target_version, elapsed_ms, rows_touched
     );
 
     // Write audit row for rollback
-    let _ = write_schema_migration_audit(current_version, target_version, elapsed_ms, rows_touched as i64);
+    let _ = write_schema_migration_audit(
+        current_version,
+        target_version,
+        elapsed_ms,
+        rows_touched as i64,
+    );
 
     // Record migration duration metric (§16.6)
     metrics::metrics()
@@ -643,7 +637,10 @@ fn rollback_v14_to_v13(conn: &mut Connection) -> Result<()> {
     )?;
 
     conn.execute("DROP TABLE dictated_notes", [])?;
-    conn.execute("ALTER TABLE dictated_notes_backup RENAME TO dictated_notes", [])?;
+    conn.execute(
+        "ALTER TABLE dictated_notes_backup RENAME TO dictated_notes",
+        [],
+    )?;
 
     Ok(())
 }
@@ -680,7 +677,10 @@ fn rollback_v16_to_v15(conn: &mut Connection) -> Result<()> {
     )?;
 
     conn.execute("DROP TABLE dictated_notes", [])?;
-    conn.execute("ALTER TABLE dictated_notes_backup RENAME TO dictated_notes", [])?;
+    conn.execute(
+        "ALTER TABLE dictated_notes_backup RENAME TO dictated_notes",
+        [],
+    )?;
 
     Ok(())
 }
@@ -777,7 +777,10 @@ fn rollback_v112_to_v111(conn: &mut Connection) -> Result<()> {
     )?;
 
     conn.execute("DROP TABLE agent_sessions", [])?;
-    conn.execute("ALTER TABLE agent_sessions_backup RENAME TO agent_sessions", [])?;
+    conn.execute(
+        "ALTER TABLE agent_sessions_backup RENAME TO agent_sessions",
+        [],
+    )?;
 
     Ok(())
 }
@@ -867,7 +870,10 @@ fn rollback_v116_to_v115(conn: &mut Connection) -> Result<()> {
     )?;
 
     conn.execute("DROP TABLE capacity_rollup", [])?;
-    conn.execute("ALTER TABLE capacity_rollup_backup RENAME TO capacity_rollup", [])?;
+    conn.execute(
+        "ALTER TABLE capacity_rollup_backup RENAME TO capacity_rollup",
+        [],
+    )?;
 
     // Recreate index
     conn.execute(
@@ -1079,7 +1085,10 @@ fn rollback_v123_to_v122(conn: &mut Connection) -> Result<()> {
     )?;
 
     conn.execute("DROP TABLE dictated_notes", [])?;
-    conn.execute("ALTER TABLE dictated_notes_backup RENAME TO dictated_notes", [])?;
+    conn.execute(
+        "ALTER TABLE dictated_notes_backup RENAME TO dictated_notes",
+        [],
+    )?;
 
     Ok(())
 }
@@ -1199,7 +1208,10 @@ fn rollback_v130_to_v129(conn: &mut Connection) -> Result<()> {
     )?;
 
     conn.execute("DROP TABLE reflection_ledger", [])?;
-    conn.execute("ALTER TABLE reflection_ledger_backup RENAME TO reflection_ledger", [])?;
+    conn.execute(
+        "ALTER TABLE reflection_ledger_backup RENAME TO reflection_ledger",
+        [],
+    )?;
 
     // Recreate indexes
     conn.execute(
@@ -1244,7 +1256,10 @@ fn rollback_v131_to_v130(conn: &mut Connection) -> Result<()> {
     )?;
 
     conn.execute("DROP TABLE reflection_ledger", [])?;
-    conn.execute("ALTER TABLE reflection_ledger_backup RENAME TO reflection_ledger", [])?;
+    conn.execute(
+        "ALTER TABLE reflection_ledger_backup RENAME TO reflection_ledger",
+        [],
+    )?;
 
     // Recreate indexes (without UNIQUE constraint)
     conn.execute(

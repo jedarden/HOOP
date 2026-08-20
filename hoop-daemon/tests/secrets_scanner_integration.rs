@@ -249,7 +249,10 @@ fn test_high_entropy_context_awareness() {
     let random_entropy = "sk-ant-api03-AAAA1111BBBB2222CCCC3333DDDD4444EEEE5555FFFF6666";
     let findings = secrets_scanner::scan_text(random_entropy, None);
     // This will be caught by the anthropic_api_key pattern, but high_entropy is a fallback
-    assert!(!findings.is_empty(), "High-entropy string should be detected");
+    assert!(
+        !findings.is_empty(),
+        "High-entropy string should be detected"
+    );
 }
 
 /// Test email detection (opt-in)
@@ -298,8 +301,14 @@ fn test_finding_metadata() {
     assert!(!finding.description.is_empty());
     assert!(finding.match_start < content.len());
     assert!(finding.match_start + finding.match_len <= content.len());
-    assert_eq!(finding.matched_text, content[finding.match_start..finding.match_start + finding.match_len]);
-    assert!(matches!(finding.severity.as_str(), "high" | "medium" | "low"));
+    assert_eq!(
+        finding.matched_text,
+        content[finding.match_start..finding.match_start + finding.match_len]
+    );
+    assert!(matches!(
+        finding.severity.as_str(),
+        "high" | "medium" | "low"
+    ));
 }
 
 /// Test multiple secrets in one scan
@@ -357,7 +366,10 @@ fn test_edge_cases() {
 
     // Very short string
     let findings = secrets_scanner::scan_text("sk-abc", None);
-    assert!(findings.is_empty(), "Very short strings should not be flagged");
+    assert!(
+        findings.is_empty(),
+        "Very short strings should not be flagged"
+    );
 
     // Only whitespace
     let findings = secrets_scanner::scan_text("   \n\t  ", None);
@@ -383,8 +395,7 @@ fn test_findings_serialization() {
     assert!(!json.is_empty());
 
     // Test deserialization
-    let deserialized: Vec<secrets_scanner::Finding> =
-        serde_json::from_str(&json).unwrap();
+    let deserialized: Vec<secrets_scanner::Finding> = serde_json::from_str(&json).unwrap();
     assert_eq!(deserialized.len(), findings.len());
     assert_eq!(deserialized[0].pattern_id, findings[0].pattern_id);
 }
@@ -424,7 +435,7 @@ fn test_benign_content() {
         "UUID: 550e8400-e29b-41d4-a716-446655440000",
         "The quick brown fox jumps over the lazy dog",
         "HTTP status code: 200 OK",
-        "Base64 encoded: SGVsbG8gV29ybGQ=",  // "Hello World" in base64
+        "Base64 encoded: SGVsbG8gV29ybGQ=", // "Hello World" in base64
     ];
 
     for sample in benign_samples {
@@ -521,7 +532,10 @@ fn test_false_positive_rate_on_testrepo() {
         "False positive rate test: {}/{} files had findings ({:.1}%)",
         files_with_findings, files_scanned, false_positive_rate
     );
-    println!("Total findings: {} across {} characters", findings_count, total_chars);
+    println!(
+        "Total findings: {} across {} characters",
+        findings_count, total_chars
+    );
 
     // Assert false positive rate is below 5%
     // We allow some leniency for edge cases but the scanner should be quite accurate

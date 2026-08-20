@@ -4,47 +4,50 @@
 //! It reads from projects, beads, sessions, files, events, and heartbeats.
 //! Its only write is `br create` for bead creation.
 
+pub mod accounts_config;
 pub mod adb_dictate;
 pub mod agent_adapter;
 pub mod agent_context;
 pub mod agent_session;
 pub mod ansi_strip;
 pub mod api_agent;
-pub mod api_backup;
 pub mod api_attachments;
 pub mod api_audit;
-pub mod accounts_config;
-pub mod auth;
-pub mod api_beads;
+pub mod api_backup;
 pub mod api_bead_blockers;
 pub mod api_bead_files;
+pub mod api_beads;
 pub mod api_bulk_create;
 pub mod api_config;
-pub mod api_cost_per_stitch;
 pub mod api_conversations;
+pub mod api_cost_per_stitch;
 pub mod api_dictated_notes;
 pub mod api_draft_queue;
-pub mod api_notes;
 pub mod api_metrics;
 pub mod api_morning_brief;
+pub mod api_notes;
 pub mod api_onboarding;
 pub mod api_pattern_mutations;
 pub mod api_patterns;
 pub mod api_propagation;
+pub mod auth;
 
-#[cfg(feature = "openapi")]
-pub mod openapi;
+pub mod api_presence;
 pub mod api_preview;
+pub mod api_reflection_detection;
+pub mod api_reflection_ledger;
 pub mod api_scripts;
+pub mod api_skills;
 pub mod api_stitch_decompose;
 pub mod api_stitch_links;
 pub mod api_stitch_read;
 pub mod api_stitch_replay;
+pub mod api_stitch_traversal;
 pub mod api_timeline;
+pub mod api_tour_project;
 pub mod api_transcription;
 pub mod api_unassigned;
 pub mod api_uploads;
-pub mod api_skills;
 pub mod atomic_write;
 pub mod attachment_sync;
 pub mod attachments;
@@ -57,6 +60,7 @@ pub mod br_verbs;
 pub mod capacity;
 pub mod config_resolver;
 pub mod config_watcher;
+pub mod content_blocks;
 pub mod cost;
 pub mod dictated_notes;
 pub mod embedding;
@@ -65,17 +69,13 @@ pub mod events;
 pub mod files;
 pub mod fleet;
 pub mod fleet_notifications;
-pub mod content_blocks;
-pub mod stitch_traversal;
 pub mod heartbeats;
 pub mod id_validators;
 pub mod identity;
 pub mod multi_operator;
-pub mod api_presence;
-pub mod api_reflection_ledger;
-pub mod api_reflection_detection;
-pub mod api_stitch_traversal;
-pub mod api_tour_project;
+#[cfg(feature = "openapi")]
+pub mod openapi;
+pub mod stitch_traversal;
 
 // Integration test utilities and load testing are only needed for tests
 // These are public for integration tests but not part of the stable API
@@ -86,27 +86,51 @@ pub mod integration_test_client;
 #[cfg(any(test, feature = "testing"))]
 pub mod load_test;
 
+pub mod api_blame;
+pub mod api_content_blocks;
+pub mod api_diff;
+pub mod api_files;
+pub mod api_fix_patterns;
+pub mod api_orphans;
+pub mod api_prompts;
+pub mod api_screen_capture;
+pub mod api_ui_state;
+pub mod bead_commit_index;
+pub mod collision_detector;
+pub mod config_backup;
+pub mod cost_anomaly;
+pub mod cross_project_propagation;
+pub mod fix_patterns;
 pub mod log_rotation;
 pub mod metrics;
 pub mod migrations;
 pub mod morning_brief;
 pub mod mutation_handler;
+pub mod net_diff;
+pub mod observer;
+pub mod orphan_beads;
 pub mod parse_jsonl_safe;
 pub mod path_security;
 pub mod pattern_query_evaluator;
 pub mod pdf_sanitize;
 pub mod predictor;
 pub mod projects;
+pub mod prompt_substitute;
 pub mod redaction;
 pub mod redaction_policy;
+pub mod reflection_detector;
 pub mod risk_patterns;
+pub mod saturation_detector;
+pub mod screen_capture;
 pub mod script_scheduler;
 pub mod script_trigger;
+pub mod secrets_scanner;
 pub mod sessions;
 pub mod shutdown;
 pub mod similarity;
 pub mod snapshot_manifest;
 pub mod stitch_decompose;
+pub mod stitch_percentile_index;
 pub mod stitch_reconstruction;
 pub mod stitch_status;
 pub mod stuck_detector;
@@ -114,38 +138,14 @@ pub mod supervisor;
 pub mod svg_sanitize;
 pub mod syntax_highlight;
 pub mod syntax_highlight_stream;
-pub mod template_library;
-pub mod prompt_substitute;
-pub mod api_prompts;
 pub mod tag_join;
+pub mod template_library;
 pub mod transcription;
 pub mod unknown_event_sink;
 pub mod uploads;
 pub mod vector_index;
 pub mod worker_ack;
 pub mod ws;
-pub mod collision_detector;
-pub mod config_backup;
-pub mod cross_project_propagation;
-pub mod api_blame;
-pub mod api_content_blocks;
-pub mod api_diff;
-pub mod api_files;
-pub mod api_fix_patterns;
-pub mod api_orphans;
-pub mod api_screen_capture;
-pub mod api_ui_state;
-pub mod bead_commit_index;
-pub mod net_diff;
-pub mod orphan_beads;
-pub mod screen_capture;
-pub mod saturation_detector;
-pub mod secrets_scanner;
-pub mod observer;
-pub mod cost_anomaly;
-pub mod reflection_detector;
-pub mod fix_patterns;
-pub mod stitch_percentile_index;
 
 /// Worker execution state from heartbeats
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -407,7 +407,8 @@ pub struct DaemonState {
     // TODO: Uncomment when api_unassigned module is implemented
     pub unassigned_tracker: Option<Arc<api_unassigned::UnassignedTracker>>,
     /// Reflection detection state — coordinates pattern detection runs (Marquee #12, Phase 5)
-    pub reflection_detection_state: Option<Arc<tokio::sync::Mutex<api_reflection_detection::DetectionState>>>,
+    pub reflection_detection_state:
+        Option<Arc<tokio::sync::Mutex<api_reflection_detection::DetectionState>>>,
     /// Global br subprocess semaphore — limits concurrent br subprocesses to min(projects, 10) (§4.8)
     pub br_semaphore: Arc<tokio::sync::Semaphore>,
     /// Target permit count for the br subprocess semaphore — tracked separately for hot-reload (§4.8)
@@ -962,12 +963,8 @@ async fn get_file_content_stream(
     axum::response::Sse<
         Pin<
             Box<
-                dyn futures_util::Stream<
-                        Item = Result<
-                            axum::response::sse::Event,
-                            axum::Error,
-                        >,
-                    > + Send,
+                dyn futures_util::Stream<Item = Result<axum::response::sse::Event, axum::Error>>
+                    + Send,
             >,
         >,
     >,
@@ -1002,27 +999,30 @@ async fn get_file_content_stream(
     let theme = params.theme.unwrap_or_else(|| "dark".to_owned());
 
     // Resolve path and read content in blocking task
-    let (_abs_path, filename, content) = tokio::task::spawn_blocking(move || -> anyhow::Result<(std::path::PathBuf, String, String)> {
-        use crate::path_security::{canonicalize_and_check, PathAllowlist};
-        let allowlist = PathAllowlist::for_workspace(&project_root)
-            .map_err(|e| anyhow::anyhow!("workspace allowlist: {e}"))?;
-        let abs_path = canonicalize_and_check(&project_root.join(&rel_path), &allowlist)
-            .map_err(|e| anyhow::anyhow!("path traversal: {e}"))?;
-        if !abs_path.is_file() {
-            anyhow::bail!("not a file");
-        }
-        let meta = std::fs::metadata(&abs_path)?;
-        if meta.len() > 100 * 1024 * 1024 {
-            anyhow::bail!("file too large (>100 MB)");
-        }
-        let content = std::fs::read_to_string(&abs_path).map_err(|e| anyhow::anyhow!("read: {e}"))?;
-        let filename = abs_path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown")
-            .to_string();
-        Ok((abs_path, filename, content))
-    })
+    let (_abs_path, filename, content) = tokio::task::spawn_blocking(
+        move || -> anyhow::Result<(std::path::PathBuf, String, String)> {
+            use crate::path_security::{canonicalize_and_check, PathAllowlist};
+            let allowlist = PathAllowlist::for_workspace(&project_root)
+                .map_err(|e| anyhow::anyhow!("workspace allowlist: {e}"))?;
+            let abs_path = canonicalize_and_check(&project_root.join(&rel_path), &allowlist)
+                .map_err(|e| anyhow::anyhow!("path traversal: {e}"))?;
+            if !abs_path.is_file() {
+                anyhow::bail!("not a file");
+            }
+            let meta = std::fs::metadata(&abs_path)?;
+            if meta.len() > 100 * 1024 * 1024 {
+                anyhow::bail!("file too large (>100 MB)");
+            }
+            let content =
+                std::fs::read_to_string(&abs_path).map_err(|e| anyhow::anyhow!("read: {e}"))?;
+            let filename = abs_path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown")
+                .to_string();
+            Ok((abs_path, filename, content))
+        },
+    )
     .await
     .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     .map_err(|e| {
@@ -1045,14 +1045,20 @@ async fn get_file_content_stream(
         match futures_util::StreamExt::next(&mut stream).await {
             Some(item) => {
                 let sse_data = syntax_highlight_stream::item_to_sse(&item);
-                Some((Ok(axum::response::sse::Event::default().data(sse_data)), stream))
+                Some((
+                    Ok(axum::response::sse::Event::default().data(sse_data)),
+                    stream,
+                ))
             }
             None => None,
         }
     });
 
-    let boxed: Pin<Box<dyn futures_util::Stream<Item = Result<axum::response::sse::Event, axum::Error>> + Send>> =
-        Box::pin(sse_stream);
+    let boxed: Pin<
+        Box<
+            dyn futures_util::Stream<Item = Result<axum::response::sse::Event, axum::Error>> + Send,
+        >,
+    > = Box::pin(sse_stream);
 
     Ok(axum::response::Sse::new(boxed).keep_alive(
         axum::response::sse::KeepAlive::new()
@@ -1728,7 +1734,8 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         // Check if this bead belongs to a Stitch and run cost anomaly detection
                         if let Some(stitch_id) = find_stitch_for_bead(&bead.id).await {
                             tokio::task::spawn_blocking(move || {
-                                if let Err(e) = crate::cost_anomaly::check_on_stitch_close(&stitch_id, None)
+                                if let Err(e) =
+                                    crate::cost_anomaly::check_on_stitch_close(&stitch_id, None)
                                 {
                                     tracing::debug!(
                                         "Failed to check cost anomaly for stitch {}: {}",
@@ -1990,7 +1997,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
     // This also updates the named patterns used by scan_text_for_secrets().
     {
         let initial_config = config_watcher.lock().await.config().await;
-        let named_patterns = config_resolver::SecretPattern::to_named_patterns(&initial_config.secrets_patterns.value);
+        let named_patterns = config_resolver::SecretPattern::to_named_patterns(
+            &initial_config.secrets_patterns.value,
+        );
         redaction::update_patterns_with_names(&named_patterns);
         info!(
             "Redaction patterns initialized: {} patterns from {}",
@@ -2028,7 +2037,9 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
 
                     // Update redaction patterns from new config (§18)
                     // This also updates the named patterns used by scan_text_for_secrets().
-                    let named_patterns = config_resolver::SecretPattern::to_named_patterns(&config.secrets_patterns.value);
+                    let named_patterns = config_resolver::SecretPattern::to_named_patterns(
+                        &config.secrets_patterns.value,
+                    );
                     redaction::update_patterns_with_names(&named_patterns);
                     info!(
                         "Redaction patterns reloaded: {} patterns from {}",
@@ -2217,7 +2228,12 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                         .map(|w| w.liveness)
                         .unwrap_or(heartbeats::WorkerLiveness::Dead);
                     // Advance last_heartbeat_at for the project this worker is executing
-                    if let WorkerState::Executing { ref bead, ref adapter, .. } = hb.state {
+                    if let WorkerState::Executing {
+                        ref bead,
+                        ref adapter,
+                        ..
+                    } = hb.state
+                    {
                         // Track worker started for stuck detection (on bead switch)
                         let worker_name = hb.worker.clone();
                         let bead_id = bead.clone();
@@ -2233,10 +2249,12 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
                             })
                             .unwrap_or(true);
                         if is_new_bead {
-                            stuck_detector_for_hb
-                                .lock()
-                                .unwrap()
-                                .on_worker_started(&worker_name, &bead_id, Some(&adapter_name), started_at);
+                            stuck_detector_for_hb.lock().unwrap().on_worker_started(
+                                &worker_name,
+                                &bead_id,
+                                Some(&adapter_name),
+                                started_at,
+                            );
                         }
                         // Track worker event for stuck detection
                         stuck_detector_for_hb
@@ -2475,7 +2493,9 @@ Note: This is an automated synthesis from voice dictation."#,
                                     Ok(crate::agent_adapter::AgentEvent::TextDelta { text }) => {
                                         full_response.push_str(&text);
                                     }
-                                    Ok(crate::agent_adapter::AgentEvent::TurnComplete { .. }) => break,
+                                    Ok(crate::agent_adapter::AgentEvent::TurnComplete {
+                                        ..
+                                    }) => break,
                                     Ok(crate::agent_adapter::AgentEvent::Error { message }) => {
                                         tracing::warn!(
                                             "Agent error during synthesis for {}: {}",
@@ -2500,8 +2520,10 @@ Note: This is an automated synthesis from voice dictation."#,
                                 response_text
                             };
 
-                            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str) {
-                                let title = parsed["title"].as_str().unwrap_or("Voice note").to_string();
+                            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str)
+                            {
+                                let title =
+                                    parsed["title"].as_str().unwrap_or("Voice note").to_string();
                                 let body = parsed["body"].as_str().unwrap_or("").to_string();
                                 let kind = parsed["kind"].as_str().unwrap_or("task").to_string();
 
@@ -2536,7 +2558,11 @@ Note: This is an automated synthesis from voice dictation."#,
                             }
                         }
                         Err(e) => {
-                            tracing::warn!("Failed to send synthesis request for {}: {}", stitch_id, e);
+                            tracing::warn!(
+                                "Failed to send synthesis request for {}: {}",
+                                stitch_id,
+                                e
+                            );
                         }
                     }
                 }
@@ -2739,10 +2765,7 @@ Note: This is an automated synthesis from voice dictation."#,
     }
 
     // Start scripts file watcher for hot-reload
-    let _scripts_watcher = api_scripts::start_watcher(
-        scripts_dir.clone(),
-        script_library.clone(),
-    );
+    let _scripts_watcher = api_scripts::start_watcher(scripts_dir.clone(), script_library.clone());
     info!("Scripts library initialized and watcher started");
 
     // Initialize script scheduler (§22.3)
@@ -2764,17 +2787,21 @@ Note: This is an automated synthesis from voice dictation."#,
     // Start redaction audit cleanup scheduler (§18.5) — removes old redaction_audit entries
     let redaction_audit_cleanup_shutdown = shutdown_coordinator.subscribe();
     let audit_retention_days = resolved_config.audit_retention_days.value;
-    fleet::start_redaction_audit_cleanup_scheduler(
-        redaction_audit_cleanup_shutdown,
-        move || audit_retention_days as i64,
+    fleet::start_redaction_audit_cleanup_scheduler(redaction_audit_cleanup_shutdown, move || {
+        audit_retention_days as i64
+    });
+    info!(
+        "Redaction audit cleanup scheduler started (retention: {} days)",
+        audit_retention_days
     );
-    info!("Redaction audit cleanup scheduler started (retention: {} days)", audit_retention_days);
 
     // Initialize template library (§22)
     let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     home.push(".hoop");
     let templates_dir = template_library::ensure_global_templates_dir(&home);
-    let template_library = Arc::new(std::sync::RwLock::new(template_library::TemplateLibrary::new()));
+    let template_library = Arc::new(std::sync::RwLock::new(
+        template_library::TemplateLibrary::new(),
+    ));
 
     // Load initial templates
     {
@@ -2797,11 +2824,8 @@ Note: This is an automated synthesis from voice dictation."#,
         .iter()
         .flat_map(|p| p.all_canonical_paths())
         .collect();
-    let _template_watcher = template_library::start_watcher(
-        templates_dir,
-        template_library.clone(),
-        project_dirs,
-    );
+    let _template_watcher =
+        template_library::start_watcher(templates_dir, template_library.clone(), project_dirs);
     info!("Template library initialized and watcher started");
 
     // Initialize prompt library (§22.5)
@@ -2817,10 +2841,7 @@ Note: This is an automated synthesis from voice dictation."#,
     }
 
     // Start prompt file watcher for hot-reload
-    let _prompt_watcher = api_prompts::start_watcher(
-        prompts_dir,
-        prompt_library.clone(),
-    );
+    let _prompt_watcher = api_prompts::start_watcher(prompts_dir, prompt_library.clone());
     info!("Prompt library initialized and watcher started");
 
     // Initialize notes library (§22.4)
@@ -2836,10 +2857,7 @@ Note: This is an automated synthesis from voice dictation."#,
     }
 
     // Start global notes file watcher for hot-reload
-    let _notes_watcher = api_notes::start_global_watcher(
-        notes_dir,
-        note_library.clone(),
-    );
+    let _notes_watcher = api_notes::start_global_watcher(notes_dir, note_library.clone());
     info!("Notes library initialized and watcher started");
 
     // Initialize skills library (§22.2)
@@ -2855,10 +2873,7 @@ Note: This is an automated synthesis from voice dictation."#,
     }
 
     // Start skills file watcher for hot-reload
-    let _skills_watcher = api_skills::start_watcher(
-        skills_dir,
-        skill_library.clone(),
-    );
+    let _skills_watcher = api_skills::start_watcher(skills_dir, skill_library.clone());
     info!("Skills library initialized and watcher started");
 
     let bead_tx_for_rebuild = bead_tx.clone();
@@ -2942,8 +2957,13 @@ Note: This is an automated synthesis from voice dictation."#,
         script_library,
         identity_cache: identity_cache.clone(),
         role_resolver: Arc::new(
-            auth::RoleResolver::new(config_resolver::resolve(cli_overrides.clone()).roles.value.clone())
-                .with_identity_cache(identity_cache),
+            auth::RoleResolver::new(
+                config_resolver::resolve(cli_overrides.clone())
+                    .roles
+                    .value
+                    .clone(),
+            )
+            .with_identity_cache(identity_cache),
         ),
         unassigned_tracker,
         reflection_detection_state: Some(api_reflection_detection::new_detection_state()),
@@ -2960,12 +2980,18 @@ Note: This is an automated synthesis from voice dictation."#,
             let mut projects_watcher_for_semaphore = match projects::ProjectsWatcher::new() {
                 Ok(watcher) => watcher,
                 Err(e) => {
-                    warn!("Failed to create projects watcher for semaphore updates: {}", e);
+                    warn!(
+                        "Failed to create projects watcher for semaphore updates: {}",
+                        e
+                    );
                     return;
                 }
             };
             if let Err(e) = projects_watcher_for_semaphore.start() {
-                warn!("Failed to start projects watcher for semaphore updates: {}", e);
+                warn!(
+                    "Failed to start projects watcher for semaphore updates: {}",
+                    e
+                );
                 return;
             }
             let mut rx = projects_watcher_for_semaphore.subscribe();
@@ -2978,7 +3004,8 @@ Note: This is an automated synthesis from voice dictation."#,
                             &br_semaphore_for_update,
                             &br_target_permits_for_update,
                             new_project_count,
-                        ).await;
+                        )
+                        .await;
                     }
                     projects::ProjectsEvent::ConfigError { .. } => {
                         // Config error - semaphore capacity unchanged
@@ -2986,7 +3013,9 @@ Note: This is an automated synthesis from voice dictation."#,
                 }
             }
         });
-        info!("br subprocess semaphore capacity updater started (listens to project config changes)");
+        info!(
+            "br subprocess semaphore capacity updater started (listens to project config changes)"
+        );
     }
 
     // Forward project runtime status updates to shared store and broadcast
@@ -3176,12 +3205,13 @@ Note: This is an automated synthesis from voice dictation."#,
         let agent_mgr_for_agent = agent_session_manager.clone();
         tokio::spawn(async move {
             // Subscribe to agent config change events from the ConfigWatcher
-            let mut rx = config_watcher_for_agent.lock().await.subscribe_agent_config_changed();
+            let mut rx = config_watcher_for_agent
+                .lock()
+                .await
+                .subscribe_agent_config_changed();
 
             while let Ok(agent_config_changed) = rx.recv().await {
                 if let Some(ref mgr) = agent_mgr_for_agent {
-                    
-
                     info!(
                         "Agent config changed: adapter {} → {}, model {} → {}, calling switch_adapter",
                         agent_config_changed.old_adapter,
@@ -3202,7 +3232,8 @@ Note: This is an automated synthesis from voice dictation."#,
                         zai_api_key: loaded_config.zai_api_key,
                         rate_limit_rpm: loaded_config.rate_limit_rpm,
                         cost_cap_usd: loaded_config.cost_cap_usd,
-                        system_prompt_budget_bytes: agent_adapter::load_system_prompt_budget_bytes(),
+                        system_prompt_budget_bytes: agent_adapter::load_system_prompt_budget_bytes(
+                        ),
                     };
 
                     match mgr.switch_adapter(new_config).await {
@@ -3338,7 +3369,8 @@ Note: This is an automated synthesis from voice dictation."#,
                     // Use a default operator_id for tour project check
                     // (tour state is global, not per-operator)
                     if let Ok(conn) = rusqlite::Connection::open(crate::fleet::db_path()) {
-                        if let Some(tour_card) = api_tour_project::get_tour_project_card(&conn, "") {
+                        if let Some(tour_card) = api_tour_project::get_tour_project_card(&conn, "")
+                        {
                             cards_with_tour.push(tour_card);
                         }
                     }
@@ -3891,9 +3923,10 @@ async fn find_stitch_for_bead(bead_id: &str) -> Option<String> {
     tokio::task::spawn_blocking(move || {
         use rusqlite::Connection;
 
-        let db_path = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
-        .join(".hoop")
-        .join("fleet.db");
+        let db_path = dirs::home_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join(".hoop")
+            .join("fleet.db");
 
         if !db_path.exists() {
             return None;
@@ -3918,15 +3951,13 @@ async fn find_stitch_for_bead(bead_id: &str) -> Option<String> {
 /// This function is called when a bead is closed to determine if its stitch
 /// is now complete (all linked beads closed). If so, emits a StitchBeadsClosed
 /// notification to the agent.
-fn check_and_emit_stitch_beads_closed(
-    stitch_id: &str,
-    beads: &[Bead],
-) -> anyhow::Result<()> {
+fn check_and_emit_stitch_beads_closed(stitch_id: &str, beads: &[Bead]) -> anyhow::Result<()> {
     use rusqlite::Connection;
 
-    let db_path = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
-    .join(".hoop")
-    .join("fleet.db");
+    let db_path = dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".hoop")
+        .join("fleet.db");
 
     if !db_path.exists() {
         return Ok(());
@@ -3935,9 +3966,7 @@ fn check_and_emit_stitch_beads_closed(
     let conn = Connection::open(&db_path)?;
 
     // Query all beads linked to this stitch
-    let mut stmt = conn.prepare(
-        "SELECT bead_id FROM stitch_beads WHERE stitch_id = ?1"
-    )?;
+    let mut stmt = conn.prepare("SELECT bead_id FROM stitch_beads WHERE stitch_id = ?1")?;
 
     let linked_bead_ids: Vec<String> = stmt
         .query_map(rusqlite::params![stitch_id], |row| row.get::<_, String>(0))?
@@ -3950,7 +3979,9 @@ fn check_and_emit_stitch_beads_closed(
 
     // Check if all linked beads are closed
     let all_closed = linked_bead_ids.iter().all(|bid| {
-        beads.iter().any(|b| &b.id == bid && b.status == BeadStatus::Closed)
+        beads
+            .iter()
+            .any(|b| &b.id == bid && b.status == BeadStatus::Closed)
     });
 
     if !all_closed {
@@ -3974,7 +4005,10 @@ fn check_and_emit_stitch_beads_closed(
     let notification = crate::fleet_notifications::FleetNotification::new(
         crate::fleet_notifications::FleetNotificationKind::StitchBeadsClosed,
         project.clone(),
-        format!("All beads linked to Stitch '{}' are now closed", stitch_title),
+        format!(
+            "All beads linked to Stitch '{}' are now closed",
+            stitch_title
+        ),
         serde_json::json!({
             "stitch_id": stitch_id,
             "stitch_title": stitch_title,
@@ -3998,14 +4032,13 @@ fn check_and_emit_stitch_beads_closed(
 /// This function is called when a worker reaches a terminal state to determine
 /// if all workers for the stitch are complete. If so, emits a ConvoyComplete
 /// notification to the agent.
-fn check_and_emit_convoy_complete(
-    stitch_id: &str,
-) -> anyhow::Result<()> {
+fn check_and_emit_convoy_complete(stitch_id: &str) -> anyhow::Result<()> {
     use rusqlite::Connection;
 
-    let db_path = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
-    .join(".hoop")
-    .join("fleet.db");
+    let db_path = dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".hoop")
+        .join("fleet.db");
 
     if !db_path.exists() {
         return Ok(());
@@ -4014,9 +4047,7 @@ fn check_and_emit_convoy_complete(
     let conn = Connection::open(&db_path)?;
 
     // Query all beads linked to this stitch
-    let mut stmt = conn.prepare(
-        "SELECT bead_id FROM stitch_beads WHERE stitch_id = ?1"
-    )?;
+    let mut stmt = conn.prepare("SELECT bead_id FROM stitch_beads WHERE stitch_id = ?1")?;
 
     let linked_bead_ids: Vec<String> = stmt
         .query_map(rusqlite::params![stitch_id], |row| row.get::<_, String>(0))?
@@ -4029,16 +4060,18 @@ fn check_and_emit_convoy_complete(
 
     // Check if all linked beads have terminal events in events.jsonl
     // Terminal events: Complete, Close, Fail, Timeout, Crash, Release
-    let events_path = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
-    .join(".hoop")
-    .join("events.jsonl");
+    let events_path = dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".hoop")
+        .join("events.jsonl");
 
     if !events_path.exists() {
         return Ok(());
     }
 
     // Read events and track which beads have terminal events
-    let mut beads_with_terminal: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut beads_with_terminal: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
 
     if let Ok(file) = std::fs::File::open(&events_path) {
         use std::io::BufRead;
@@ -4110,9 +4143,10 @@ fn check_and_emit_convoy_complete(
 fn check_and_emit_capacity_alert() -> anyhow::Result<()> {
     use rusqlite::Connection;
 
-    let db_path = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."))
-    .join(".hoop")
-    .join("fleet.db");
+    let db_path = dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".hoop")
+        .join("fleet.db");
 
     if !db_path.exists() {
         return Ok(());
@@ -4133,10 +4167,7 @@ fn check_and_emit_capacity_alert() -> anyhow::Result<()> {
              ORDER BY updated_at DESC
              LIMIT 1",
             [],
-            |row| Ok((
-                row.get::<_, String>(0).ok(),
-                row.get::<_, f64>(1).ok()
-            )),
+            |row| Ok((row.get::<_, String>(0).ok(), row.get::<_, f64>(1).ok())),
         )
         .unwrap_or((None, None));
 
@@ -4153,7 +4184,10 @@ fn check_and_emit_capacity_alert() -> anyhow::Result<()> {
     let notification = crate::fleet_notifications::FleetNotification::new(
         crate::fleet_notifications::FleetNotificationKind::CapacityAlert,
         None, // Capacity alerts are account-level, not project-specific
-        format!("Capacity utilization at {:.1}% exceeds threshold of {:.0}%", util_pct, threshold_pct),
+        format!(
+            "Capacity utilization at {:.1}% exceeds threshold of {:.0}%",
+            util_pct, threshold_pct
+        ),
         serde_json::json!({
             "account_id": account_id,
             "utilization_percent": util_pct,

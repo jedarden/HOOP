@@ -84,8 +84,7 @@ mod gcp_quota_client {
             return None;
         }
 
-        let region = env::var("GEMINI_GCP_REGION")
-            .unwrap_or_else(|_| "us-central1".to_string());
+        let region = env::var("GEMINI_GCP_REGION").unwrap_or_else(|_| "us-central1".to_string());
 
         Some(GcpQuotaConfig {
             project_id,
@@ -669,7 +668,9 @@ impl CapacityMeterConfig {
         // Build list of candidate directories to check
         let candidates = vec![
             // GEMINI_CLI_HOME/tmp/ (sandbox mode)
-            gemini_cli_home.clone().map(|p| PathBuf::from(p).join("tmp")),
+            gemini_cli_home
+                .clone()
+                .map(|p| PathBuf::from(p).join("tmp")),
             // ~/.gemini/tmp/ (default sandbox location)
             Some(home.join(".gemini").join("tmp")),
             // GEMINI_CLI_HOME/sessions/ (custom sessions dir)
@@ -685,14 +686,12 @@ impl CapacityMeterConfig {
                 // Check if this directory contains .jsonl session files
                 let has_jsonl = fs::read_dir(&dir)
                     .map(|entries| {
-                        entries
-                            .filter_map(|e| e.ok())
-                            .any(|e| {
-                                e.path()
-                                    .extension()
-                                    .map(|ext| ext == "jsonl")
-                                    .unwrap_or(false)
-                            })
+                        entries.filter_map(|e| e.ok()).any(|e| {
+                            e.path()
+                                .extension()
+                                .map(|ext| ext == "jsonl")
+                                .unwrap_or(false)
+                        })
                     })
                     .unwrap_or(false);
 
@@ -724,14 +723,12 @@ impl CapacityMeterConfig {
                         if session_dir.exists() && session_dir.is_dir() {
                             let has_jsonl = fs::read_dir(&session_dir)
                                 .map(|entries| {
-                                    entries
-                                        .filter_map(|e| e.ok())
-                                        .any(|e| {
-                                            e.path()
-                                                .extension()
-                                                .map(|ext| ext == "jsonl")
-                                                .unwrap_or(false)
-                                        })
+                                    entries.filter_map(|e| e.ok()).any(|e| {
+                                        e.path()
+                                            .extension()
+                                            .map(|ext| ext == "jsonl")
+                                            .unwrap_or(false)
+                                    })
                                 })
                                 .unwrap_or(false);
 
@@ -768,7 +765,10 @@ impl CapacityMeterConfig {
             .map(PathBuf::from)
             .unwrap_or_else(|| home.join(".local").join("share"));
 
-        let opencode_storage = xdg_data_home.join("opencode").join("storage").join("session");
+        let opencode_storage = xdg_data_home
+            .join("opencode")
+            .join("storage")
+            .join("session");
         if opencode_storage.exists() && opencode_storage.is_dir() {
             debug!(
                 "OpenCode session discovery: found tree-based storage at {}",
@@ -783,14 +783,12 @@ impl CapacityMeterConfig {
             // Check if it contains .jsonl files
             let has_jsonl = fs::read_dir(&legacy_dir)
                 .map(|entries| {
-                    entries
-                        .filter_map(|e| e.ok())
-                        .any(|e| {
-                            e.path()
-                                .extension()
-                                .map(|ext| ext == "jsonl")
-                                .unwrap_or(false)
-                        })
+                    entries.filter_map(|e| e.ok()).any(|e| {
+                        e.path()
+                            .extension()
+                            .map(|ext| ext == "jsonl")
+                            .unwrap_or(false)
+                    })
                 })
                 .unwrap_or(false);
 
@@ -840,14 +838,12 @@ impl CapacityMeterConfig {
             // Check for .json session files (tree-based storage)
             let has_json = fs::read_dir(&session_dir)
                 .map(|entries| {
-                    entries
-                        .filter_map(|e| e.ok())
-                        .any(|e| {
-                            e.path()
-                                .extension()
-                                .map(|ext| ext == "json")
-                                .unwrap_or(false)
-                        })
+                    entries.filter_map(|e| e.ok()).any(|e| {
+                        e.path()
+                            .extension()
+                            .map(|ext| ext == "json")
+                            .unwrap_or(false)
+                    })
                 })
                 .unwrap_or(false);
 
@@ -865,14 +861,12 @@ impl CapacityMeterConfig {
         if legacy_dir.exists() && legacy_dir.is_dir() {
             let has_jsonl = fs::read_dir(&legacy_dir)
                 .map(|entries| {
-                    entries
-                        .filter_map(|e| e.ok())
-                        .any(|e| {
-                            e.path()
-                                .extension()
-                                .map(|ext| ext == "jsonl")
-                                .unwrap_or(false)
-                        })
+                    entries.filter_map(|e| e.ok()).any(|e| {
+                        e.path()
+                            .extension()
+                            .map(|ext| ext == "jsonl")
+                            .unwrap_or(false)
+                    })
                 })
                 .unwrap_or(false);
 
@@ -905,14 +899,12 @@ impl CapacityMeterConfig {
             if session_dir.exists() && session_dir.is_dir() {
                 let has_jsonl = fs::read_dir(&session_dir)
                     .map(|entries| {
-                        entries
-                            .filter_map(|e| e.ok())
-                            .any(|e| {
-                                e.path()
-                                    .extension()
-                                    .map(|ext| ext == "jsonl")
-                                    .unwrap_or(false)
-                            })
+                        entries.filter_map(|e| e.ok()).any(|e| {
+                            e.path()
+                                .extension()
+                                .map(|ext| ext == "jsonl")
+                                .unwrap_or(false)
+                        })
                     })
                     .unwrap_or(false);
 
@@ -1774,8 +1766,7 @@ impl CapacityMeter {
             line_number += 1;
 
             // Gemini JSONL uses "type": "message" or "type": "turn" for assistant responses
-            if !line.contains("\"type\"") &&
-               !line.contains("\"role\"") {
+            if !line.contains("\"type\"") && !line.contains("\"role\"") {
                 continue;
             }
 
@@ -1899,7 +1890,9 @@ impl CapacityMeter {
         }
 
         // Get per-account limits from accounts_config (or default if not configured)
-        let limits_config = self.accounts_config.get_opencode_limits_or_default(&account_id);
+        let limits_config = self
+            .accounts_config
+            .get_opencode_limits_or_default(&account_id);
         let limits = OpenCodePromptLimits {
             prompts_per_5h: limits_config.prompts_per_5h,
             prompts_per_7d: limits_config.prompts_per_7d,
@@ -2025,7 +2018,10 @@ impl CapacityMeter {
     }
 
     /// Scan tree-based OpenCode sessions for assistant prompts.
-    fn scan_opencode_tree_sessions(session_dir: &Path, prompts: &mut Vec<ParsedPrompt>) -> Result<()> {
+    fn scan_opencode_tree_sessions(
+        session_dir: &Path,
+        prompts: &mut Vec<ParsedPrompt>,
+    ) -> Result<()> {
         if !session_dir.exists() {
             return Ok(());
         }
@@ -2049,7 +2045,10 @@ impl CapacityMeter {
     }
 
     /// Parse a single tree-based session file.
-    fn parse_opencode_tree_session_file(session_path: &Path, prompts: &mut Vec<ParsedPrompt>) -> Result<()> {
+    fn parse_opencode_tree_session_file(
+        session_path: &Path,
+        prompts: &mut Vec<ParsedPrompt>,
+    ) -> Result<()> {
         let raw = fs::read(session_path)?;
         let session_data: serde_json::Value = serde_json::from_slice(&raw)?;
 
@@ -2091,7 +2090,8 @@ impl CapacityMeter {
                     if let Ok(msg_data) = serde_json::from_str::<serde_json::Value>(&msg_raw) {
                         let role = msg_data.get("role").and_then(|v| v.as_str());
                         if role == Some("assistant") {
-                            if let Some(ts_str) = msg_data.get("createdAt").and_then(|v| v.as_str()) {
+                            if let Some(ts_str) = msg_data.get("createdAt").and_then(|v| v.as_str())
+                            {
                                 if let Ok(ts) = ts_str.parse() {
                                     prompts.push(ParsedPrompt {
                                         ts,
@@ -2109,7 +2109,10 @@ impl CapacityMeter {
     }
 
     /// Scan legacy OpenCode JSONL sessions for assistant prompts.
-    fn scan_opencode_jsonl_sessions(sessions_dir: &Path, prompts: &mut Vec<ParsedPrompt>) -> Result<()> {
+    fn scan_opencode_jsonl_sessions(
+        sessions_dir: &Path,
+        prompts: &mut Vec<ParsedPrompt>,
+    ) -> Result<()> {
         if !sessions_dir.exists() {
             return Ok(());
         }
@@ -3036,7 +3039,12 @@ mod tests {
         )
         .unwrap();
         // User prompt (should be skipped)
-        writeln!(f, r#"{{"type":"message","role":"user","timestamp":"{}"}}"#, ts_3h).unwrap();
+        writeln!(
+            f,
+            r#"{{"type":"message","role":"user","timestamp":"{}"}}"#,
+            ts_3h
+        )
+        .unwrap();
 
         let mut turns = Vec::new();
         CapacityMeter::parse_gemini_jsonl_file(&jsonl_path, &mut turns).unwrap();
@@ -3093,10 +3101,7 @@ mod tests {
         let accounts = meter.compute();
 
         // Should have one Gemini account
-        let gemini_accounts: Vec<_> = accounts
-            .iter()
-            .filter(|a| a.adapter == "gemini")
-            .collect();
+        let gemini_accounts: Vec<_> = accounts.iter().filter(|a| a.adapter == "gemini").collect();
         assert_eq!(gemini_accounts.len(), 1);
 
         let acct = &gemini_accounts[0];
@@ -3105,8 +3110,14 @@ mod tests {
         assert_eq!(acct.source, "jsonl_estimate");
 
         // Should have positive utilization from recent turns
-        assert!(acct.utilization_5h > 0.0, "5h utilization should be positive");
-        assert!(acct.utilization_7d > 0.0, "7d utilization should be positive");
+        assert!(
+            acct.utilization_5h > 0.0,
+            "5h utilization should be positive"
+        );
+        assert!(
+            acct.utilization_7d > 0.0,
+            "7d utilization should be positive"
+        );
         assert_eq!(acct.turns_5h, 2);
         assert_eq!(acct.turns_7d, 2);
     }
@@ -3132,7 +3143,12 @@ mod tests {
         writeln!(f, "{}", make_gemini_turn_jsonl(&ts, 50000, 5000, 0, None)).unwrap();
 
         let mut f2 = fs::File::create(tmp2.join("session.jsonl")).unwrap();
-        writeln!(f2, "{}", make_gemini_turn_jsonl(&ts, 100000, 10000, 0, None)).unwrap();
+        writeln!(
+            f2,
+            "{}",
+            make_gemini_turn_jsonl(&ts, 100000, 10000, 0, None)
+        )
+        .unwrap();
 
         let config = CapacityMeterConfig {
             account_dirs: vec![],
@@ -3146,10 +3162,7 @@ mod tests {
         let accounts = meter.compute();
 
         // Should have two Gemini accounts
-        let gemini_accounts: Vec<_> = accounts
-            .iter()
-            .filter(|a| a.adapter == "gemini")
-            .collect();
+        let gemini_accounts: Vec<_> = accounts.iter().filter(|a| a.adapter == "gemini").collect();
         assert_eq!(gemini_accounts.len(), 2);
 
         // Find each account
@@ -3302,17 +3315,13 @@ mod tests {
         let meter = CapacityMeter::new(config);
         let accounts = meter.compute();
 
-        let gemini_accounts: Vec<_> = accounts
-            .iter()
-            .filter(|a| a.adapter == "gemini")
-            .collect();
+        let gemini_accounts: Vec<_> = accounts.iter().filter(|a| a.adapter == "gemini").collect();
         assert_eq!(gemini_accounts.len(), 1);
 
         let acct = &gemini_accounts[0];
         assert_eq!(acct.account_id, "gemini-default");
         assert_eq!(
-            acct.source,
-            "jsonl_estimate",
+            acct.source, "jsonl_estimate",
             "Without GCP API, source should be jsonl_estimate"
         );
         assert!(acct.utilization_5h > 0.0);

@@ -77,10 +77,7 @@ pub enum AgentSessionEvent {
         is_error: bool,
     },
     /// A turn started with a unique turn_id for audit trail.
-    TurnStarted {
-        session_id: String,
-        turn_id: String,
-    },
+    TurnStarted { session_id: String, turn_id: String },
     /// A turn completed.
     TurnComplete {
         session_id: String,
@@ -574,7 +571,8 @@ impl AgentSessionManager {
                     );
 
                     // Agent metrics - record turn completion duration
-                    let completion_duration_ms = inner.current_turn_start
+                    let completion_duration_ms = inner
+                        .current_turn_start
                         .map(|s| s.elapsed().as_secs_f64() * 1_000.0)
                         .unwrap_or(0.0);
                     metrics::metrics().hoop_agent_turn_duration_ms.observe(
@@ -597,7 +595,9 @@ impl AgentSessionManager {
                     );
 
                     // Get the current turn_id for this turn
-                    let turn_id = inner.current_turn_id.clone()
+                    let turn_id = inner
+                        .current_turn_id
+                        .clone()
                         .unwrap_or_else(|| format!("turn-unknown-{}", uuid::Uuid::new_v4()));
 
                     let _ = self.event_tx.send(AgentSessionEvent::TurnComplete {
@@ -858,8 +858,8 @@ struct TurnContext {
 
 /// Get the path to the turn context file.
 fn turn_context_path() -> Result<PathBuf> {
-    let mut path = dirs::home_dir()
-        .ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
+    let mut path =
+        dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Cannot determine home directory"))?;
     path.push(".hoop");
     path.push("agent-turn-context.json");
     Ok(path)
@@ -1915,8 +1915,12 @@ mod tests {
         .unwrap();
 
         // 6. Verify old session is archived with correct metadata.
-        let (old_status, old_archived_reason, old_stitch_id): (String, Option<String>, Option<String>) =
-            db.query_row(
+        let (old_status, old_archived_reason, old_stitch_id): (
+            String,
+            Option<String>,
+            Option<String>,
+        ) = db
+            .query_row(
                 "SELECT status, archived_reason, stitch_id FROM agent_sessions WHERE id = ?1",
                 rusqlite::params![old_id],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
@@ -1978,7 +1982,9 @@ mod tests {
             .map(|(scope, rule)| format!("[{}] {}", scope, rule))
             .collect();
         assert!(handoff_rules.iter().any(|r| r.contains("always run tests")));
-        assert!(handoff_rules.iter().any(|r| r.contains("never edit fleet.db")));
+        assert!(handoff_rules
+            .iter()
+            .any(|r| r.contains("never edit fleet.db")));
     }
 
     /// Acceptance: daemon doesn't crash on adapter error, operator can recover.
@@ -2108,7 +2114,8 @@ mod tests {
         db.execute(
             "UPDATE agent_sessions SET stitch_id = ?1 WHERE id = ?2",
             rusqlite::params![stitch_id, old_id],
-        ).unwrap();
+        )
+        .unwrap();
 
         // Create new session on ZAI (switch_adapter does this).
         let new_id = uuid::Uuid::new_v4().to_string();
@@ -2219,7 +2226,10 @@ mod tests {
             _attachments: Vec<Attachment>,
         ) -> Result<EventStream> {
             // If the fail flag is set, return a 5xx error
-            if self.fail_with_5xx.load(std::sync::atomic::Ordering::Relaxed) {
+            if self
+                .fail_with_5xx
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
                 return Err(anyhow::anyhow!(
                     "Anthropic API error: 500 Internal Server Error - service unavailable"
                 ));
@@ -2332,9 +2342,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(archived_status, "switched");
-        assert!(archived_reason
-            .unwrap()
-            .contains("5xx error"));
+        assert!(archived_reason.unwrap().contains("5xx error"));
 
         // 7. Create Stitch for the archived session (kind=operator, archived)
         let stitch_id = uuid::Uuid::new_v4().to_string();
@@ -2410,7 +2418,10 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert_eq!(stitch_msg_count, 2, "Stitch should have 2 messages from the archived session");
+        assert_eq!(
+            stitch_msg_count, 2,
+            "Stitch should have 2 messages from the archived session"
+        );
 
         // Verify archived session is linked to Stitch
         let linked_stitch_id: Option<String> = db
@@ -2431,10 +2442,20 @@ mod tests {
             .filter_map(|r| r.ok())
             .collect();
 
-        assert_eq!(approved_rules.len(), 2, "Both Reflection Ledger entries should be preserved");
-        assert_eq!(approved_rules[0].2, "always verify deployment status before closing");
+        assert_eq!(
+            approved_rules.len(),
+            2,
+            "Both Reflection Ledger entries should be preserved"
+        );
+        assert_eq!(
+            approved_rules[0].2,
+            "always verify deployment status before closing"
+        );
         assert_eq!(approved_rules[1].1, "project:hoop");
-        assert_eq!(approved_rules[1].2, "never archive sessions without confirmation");
+        assert_eq!(
+            approved_rules[1].2,
+            "never archive sessions without confirmation"
+        );
 
         // 10. Verify clean transition: only one active session
         let active_count: i64 = db
@@ -2452,8 +2473,12 @@ mod tests {
             .iter()
             .map(|(_, scope, rule)| format!("[{}] {}", scope, rule))
             .collect();
-        assert!(handoff_rules.iter().any(|r| r.contains("always verify deployment")));
-        assert!(handoff_rules.iter().any(|r| r.contains("never archive sessions")));
+        assert!(handoff_rules
+            .iter()
+            .any(|r| r.contains("always verify deployment")));
+        assert!(handoff_rules
+            .iter()
+            .any(|r| r.contains("never archive sessions")));
     }
 
     /// Acceptance: verify that adapter error events are handled gracefully.
@@ -2465,7 +2490,8 @@ mod tests {
     fn adapter_error_event_propagates_cleanly() {
         // Create an Error event simulating a 5xx response
         let error_event = AgentEvent::Error {
-            message: "Anthropic API error: 500 Internal Server Error - service unavailable".to_string(),
+            message: "Anthropic API error: 500 Internal Server Error - service unavailable"
+                .to_string(),
         };
 
         // Verify the event serializes correctly
@@ -2538,7 +2564,8 @@ mod tests {
         }
 
         let handoff_context = if ctx_parts.is_empty() {
-            "You are the HOOP human-interface agent, continuing after an adapter switch.".to_string()
+            "You are the HOOP human-interface agent, continuing after an adapter switch."
+                .to_string()
         } else {
             let mut ctx = String::from(
                 "You are the HOOP human-interface agent, continuing after an adapter switch. \

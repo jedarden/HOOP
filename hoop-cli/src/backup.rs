@@ -93,10 +93,7 @@ async fn show_status(addr: Option<SocketAddr>) -> Result<()> {
     println!();
 
     // Try to get metrics for backup status
-    let metrics_resp = client
-        .get(format!("http://{}/metrics", addr))
-        .send()
-        .await;
+    let metrics_resp = client.get(format!("http://{}/metrics", addr)).send().await;
 
     match metrics_resp {
         Ok(resp) if resp.status().is_success() => {
@@ -218,7 +215,10 @@ fn print_backup_config() {
     if let Some(schedule) = backup_section.get("schedule").and_then(|s| s.as_str()) {
         println!("  Schedule: {}", schedule);
     }
-    if let Some(retention) = backup_section.get("retention_days").and_then(|r| r.as_i64()) {
+    if let Some(retention) = backup_section
+        .get("retention_days")
+        .and_then(|r| r.as_i64())
+    {
         println!("  Retention: {} days", retention);
     }
     if let Some(encryption) = backup_section.get("encryption").and_then(|e| e.as_bool()) {

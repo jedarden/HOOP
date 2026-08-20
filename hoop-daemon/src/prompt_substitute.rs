@@ -326,13 +326,16 @@ pub fn validate_template(template: &str, known_vars: &[String]) -> Result<(), Su
                 if chars.peek().map(|&(_, nc)| nc) == Some('}') {
                     chars.next(); // consume second '}'
                     let start = var_start.take();
-                    if start.is_some() && !current_var.is_empty()
-                        && !known_vars.contains(&current_var) && !BUILTIN_VARS.contains(&current_var.as_str()) {
-                            return Err(SubstitutionError::UnknownVariable {
-                                name: current_var.clone(),
-                                position: start.unwrap_or(i),
-                            });
-                        }
+                    if start.is_some()
+                        && !current_var.is_empty()
+                        && !known_vars.contains(&current_var)
+                        && !BUILTIN_VARS.contains(&current_var.as_str())
+                    {
+                        return Err(SubstitutionError::UnknownVariable {
+                            name: current_var.clone(),
+                            position: start.unwrap_or(i),
+                        });
+                    }
                     current_var.clear();
                 }
             }
@@ -438,7 +441,8 @@ mod tests {
             .project("myproject".to_string())
             .file("src/main.rs".to_string())
             .set_custom("count", "42".to_string());
-        let result = substitute("Project {{project}}, file {{file}}, count {{count}}", &ctx).unwrap();
+        let result =
+            substitute("Project {{project}}, file {{file}}, count {{count}}", &ctx).unwrap();
         assert_eq!(result, "Project myproject, file src/main.rs, count 42");
     }
 
@@ -528,7 +532,8 @@ mod tests {
             None,
             None,
             &args,
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(result, "Fetch https://example.com (42 times)");
     }
 
@@ -540,7 +545,8 @@ mod tests {
             None,
             None,
             &json!({}),
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(result, "In testproject");
     }
 
@@ -570,7 +576,11 @@ mod tests {
 
     #[test]
     fn test_validate_template_valid() {
-        let known = vec!["project".to_string(), "file".to_string(), "custom".to_string()];
+        let known = vec![
+            "project".to_string(),
+            "file".to_string(),
+            "custom".to_string(),
+        ];
         let result = validate_template("{{project}} and {{file}} and {{custom}}", &known);
         assert!(result.is_ok());
     }

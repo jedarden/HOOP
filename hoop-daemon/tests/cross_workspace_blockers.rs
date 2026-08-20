@@ -26,8 +26,7 @@ fn test_cross_workspace_blocker_chain() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let db_path = temp_dir.path().join("fleet.db");
 
-    let mut conn = rusqlite::Connection::open(&db_path)
-        .expect("Failed to open fleet.db");
+    let mut conn = rusqlite::Connection::open(&db_path).expect("Failed to open fleet.db");
 
     // Set up schema: stitches, stitch_beads, stitch_links
     setup_test_schema(&mut conn);
@@ -39,7 +38,8 @@ fn test_cross_workspace_blocker_chain() {
         "INSERT INTO stitches (id, project, title, created_at, updated_at, last_activity_at)
          VALUES (?1, ?2, ?3, datetime('now'), datetime('now'), datetime('now'))",
         [parent_stitch_id, "project-a", "Migration Root"],
-    ).expect("Failed to insert parent stitch");
+    )
+    .expect("Failed to insert parent stitch");
 
     // Create bead for parent stitch
     let parent_bead_id = "bead-parent-root";
@@ -47,7 +47,8 @@ fn test_cross_workspace_blocker_chain() {
         "INSERT INTO stitch_beads (stitch_id, bead_id, project, canonical_workspace, created_at)
          VALUES (?1, ?2, ?3, ?4, datetime('now'))",
         [parent_stitch_id, parent_bead_id, "project-a", workspace_a],
-    ).expect("Failed to insert parent bead");
+    )
+    .expect("Failed to insert parent bead");
 
     // Create child stitch in workspace B (auth migration)
     let child_stitch_b = "stitch-child-b-001";
@@ -56,7 +57,8 @@ fn test_cross_workspace_blocker_chain() {
         "INSERT INTO stitches (id, project, title, created_at, updated_at, last_activity_at)
          VALUES (?1, ?2, ?3, datetime('now'), datetime('now'), datetime('now'))",
         [child_stitch_b, "project-a", "Auth Migration"],
-    ).expect("Failed to insert child stitch B");
+    )
+    .expect("Failed to insert child stitch B");
 
     // Create bead for child stitch B (OPEN - should block)
     let child_bead_b = "bead-child-auth";
@@ -64,7 +66,8 @@ fn test_cross_workspace_blocker_chain() {
         "INSERT INTO stitch_beads (stitch_id, bead_id, project, canonical_workspace, created_at)
          VALUES (?1, ?2, ?3, ?4, datetime('now'))",
         [child_stitch_b, child_bead_b, "project-a", workspace_b],
-    ).expect("Failed to insert child bead B");
+    )
+    .expect("Failed to insert child bead B");
 
     // Create child stitch in workspace C (storage migration)
     let child_stitch_c = "stitch-child-c-001";
@@ -73,7 +76,8 @@ fn test_cross_workspace_blocker_chain() {
         "INSERT INTO stitches (id, project, title, created_at, updated_at, last_activity_at)
          VALUES (?1, ?2, ?3, datetime('now'), datetime('now'), datetime('now'))",
         [child_stitch_c, "project-a", "Storage Migration"],
-    ).expect("Failed to insert child stitch C");
+    )
+    .expect("Failed to insert child stitch C");
 
     // Create bead for child stitch C (OPEN - should block)
     let child_bead_c = "bead-child-storage";
@@ -81,20 +85,23 @@ fn test_cross_workspace_blocker_chain() {
         "INSERT INTO stitch_beads (stitch_id, bead_id, project, canonical_workspace, created_at)
          VALUES (?1, ?2, ?3, ?4, datetime('now'))",
         [child_stitch_c, child_bead_c, "project-a", workspace_c],
-    ).expect("Failed to insert child bead C");
+    )
+    .expect("Failed to insert child bead C");
 
     // Create spawned links from parent to children with workspace tracking
     conn.execute(
         "INSERT INTO stitch_links (from_stitch, to_stitch, kind, workspace_from, workspace_to)
          VALUES (?1, ?2, 'spawned', ?3, ?4)",
         [parent_stitch_id, child_stitch_b, workspace_a, workspace_b],
-    ).expect("Failed to insert link to child B");
+    )
+    .expect("Failed to insert link to child B");
 
     conn.execute(
         "INSERT INTO stitch_links (from_stitch, to_stitch, kind, workspace_from, workspace_to)
          VALUES (?1, ?2, 'spawned', ?3, ?4)",
         [parent_stitch_id, child_stitch_c, workspace_a, workspace_c],
-    ).expect("Failed to insert link to child C");
+    )
+    .expect("Failed to insert link to child C");
 
     // Query: find child stitches via stitch_links
     let mut child_stmt = conn
@@ -174,8 +181,7 @@ fn test_stitch_links_schema_has_workspace_columns() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let db_path = temp_dir.path().join("fleet.db");
 
-    let mut conn = rusqlite::Connection::open(&db_path)
-        .expect("Failed to open fleet.db");
+    let mut conn = rusqlite::Connection::open(&db_path).expect("Failed to open fleet.db");
 
     setup_test_schema(&mut conn);
 
@@ -206,7 +212,8 @@ fn test_stitch_links_schema_has_workspace_columns() {
         "INSERT INTO stitch_links (from_stitch, to_stitch, kind, workspace_from, workspace_to)
          VALUES ('s1', 's2', 'spawned', '/ws/a', '/ws/b')",
         [],
-    ).expect("Failed to insert stitch link with workspaces");
+    )
+    .expect("Failed to insert stitch link with workspaces");
 
     let (ws_from, ws_to): (String, String) = conn
         .query_row(
@@ -240,7 +247,8 @@ fn setup_test_schema(conn: &mut rusqlite::Connection) {
             turn_id TEXT
         )",
         [],
-    ).expect("Failed to create stitches table");
+    )
+    .expect("Failed to create stitches table");
 
     // Create stitch_beads table
     conn.execute(
@@ -253,7 +261,8 @@ fn setup_test_schema(conn: &mut rusqlite::Connection) {
             PRIMARY KEY (stitch_id, bead_id)
         )",
         [],
-    ).expect("Failed to create stitch_beads table");
+    )
+    .expect("Failed to create stitch_beads table");
 
     // Create stitch_links table with workspace tracking
     conn.execute(
@@ -268,21 +277,25 @@ fn setup_test_schema(conn: &mut rusqlite::Connection) {
             FOREIGN KEY (to_stitch) REFERENCES stitches(id) ON DELETE CASCADE
         )",
         [],
-    ).expect("Failed to create stitch_links table");
+    )
+    .expect("Failed to create stitch_links table");
 
     // Create indexes
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_stitch_links_from ON stitch_links(from_stitch)",
         [],
-    ).expect("Failed to create idx_stitch_links_from");
+    )
+    .expect("Failed to create idx_stitch_links_from");
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_stitch_links_to ON stitch_links(to_stitch)",
         [],
-    ).expect("Failed to create idx_stitch_links_to");
+    )
+    .expect("Failed to create idx_stitch_links_to");
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_stitch_beads_project ON stitch_beads(project)",
         [],
-    ).expect("Failed to create idx_stitch_beads_project");
+    )
+    .expect("Failed to create idx_stitch_beads_project");
 }

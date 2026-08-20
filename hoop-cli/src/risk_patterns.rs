@@ -130,7 +130,10 @@ fn add_pattern(info: PatternCreateInfo<'_>) -> Result<()> {
         "high" => hoop_daemon::risk_patterns::RiskSeverity::High,
         "critical" => hoop_daemon::risk_patterns::RiskSeverity::Critical,
         _ => {
-            eprintln!("Invalid severity '{}'. Must be: low, medium, high, critical", info.severity);
+            eprintln!(
+                "Invalid severity '{}'. Must be: low, medium, high, critical",
+                info.severity
+            );
             std::process::exit(1);
         }
     };
@@ -153,7 +156,8 @@ fn add_pattern(info: PatternCreateInfo<'_>) -> Result<()> {
     };
 
     // Parse keywords
-    let keywords_vec: Vec<String> = info.keywords
+    let keywords_vec: Vec<String> = info
+        .keywords
         .split(',')
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
@@ -165,7 +169,8 @@ fn add_pattern(info: PatternCreateInfo<'_>) -> Result<()> {
     }
 
     // Parse label keywords
-    let label_keywords_vec: Vec<String> = info.label_keywords
+    let label_keywords_vec: Vec<String> = info
+        .label_keywords
         .split(',')
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
@@ -280,20 +285,14 @@ mod tests {
     #[test]
     fn test_parse_keywords() {
         let keywords = "codegen,generate,implement";
-        let parsed: Vec<String> = keywords
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .collect();
+        let parsed: Vec<String> = keywords.split(',').map(|s| s.trim().to_string()).collect();
         assert_eq!(parsed, vec!["codegen", "generate", "implement"]);
     }
 
     #[test]
     fn test_parse_keywords_with_spaces() {
         let keywords = "codegen, generate, implement";
-        let parsed: Vec<String> = keywords
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .collect();
+        let parsed: Vec<String> = keywords.split(',').map(|s| s.trim().to_string()).collect();
         assert_eq!(parsed, vec!["codegen", "generate", "implement"]);
     }
 

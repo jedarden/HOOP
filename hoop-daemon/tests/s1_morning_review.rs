@@ -19,31 +19,28 @@
 
 mod integration_harness;
 
-use std::time::{Duration, Instant};
 use integration_harness::spawn_test_daemon;
 use serde_json::Value as JsonValue;
+use std::time::{Duration, Instant};
 
 #[tokio::test]
 async fn s1_morning_review_all_facts_present() {
     //! Verify all four required facts are present on the overview card
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
     // Fetch the cross-project dashboard with range=today
     let resp = client
-        .get(&format!("{}/api/dashboard/cross-project?range=today", base_url))
+        .get(&format!(
+            "{}/api/dashboard/cross-project?range=today",
+            base_url
+        ))
         .send()
         .await
         .expect("Failed to fetch dashboard");
 
-    assert_eq!(
-        resp.status(),
-        200,
-        "Dashboard endpoint should return 200"
-    );
+    assert_eq!(resp.status(), 200, "Dashboard endpoint should return 200");
 
     let dashboard: JsonValue = resp
         .json()
@@ -114,16 +111,17 @@ async fn s1_morning_review_all_facts_present() {
 #[tokio::test]
 async fn s1_morning_review_renders_quickly() {
     //! Verify the dashboard renders in under 3 seconds
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
     let start = Instant::now();
 
     let resp = client
-        .get(&format!("{}/api/dashboard/cross-project?range=today", base_url))
+        .get(&format!(
+            "{}/api/dashboard/cross-project?range=today",
+            base_url
+        ))
         .send()
         .await
         .expect("Failed to fetch dashboard");
@@ -147,15 +145,16 @@ async fn s1_morning_review_no_external_service_calls() {
     // This test verifies the "HOOP has not contacted any external service" criterion
     // by ensuring the data comes from local state (testrepo fixtures)
 
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
     // Fetch dashboard - should work without any external service
     let resp = client
-        .get(&format!("{}/api/dashboard/cross-project?range=today", base_url))
+        .get(&format!(
+            "{}/api/dashboard/cross-project?range=today",
+            base_url
+        ))
         .send()
         .await
         .expect("Failed to fetch dashboard");
@@ -185,15 +184,16 @@ async fn s1_morning_review_fresh_data() {
     //! Verify data is fresh (not stale by more than one event-cycle)
     // The dashboard should reflect current state from events.jsonl
 
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
     // First fetch
     let resp1 = client
-        .get(&format!("{}/api/dashboard/cross-project?range=today", base_url))
+        .get(&format!(
+            "{}/api/dashboard/cross-project?range=today",
+            base_url
+        ))
         .send()
         .await
         .expect("Failed to fetch dashboard");
@@ -205,7 +205,10 @@ async fn s1_morning_review_fresh_data() {
 
     // Second fetch should return fresh data
     let resp2 = client
-        .get(&format!("{}/api/dashboard/cross-project?range=today", base_url))
+        .get(&format!(
+            "{}/api/dashboard/cross-project?range=today",
+            base_url
+        ))
         .send()
         .await
         .expect("Failed to fetch dashboard");
@@ -226,14 +229,15 @@ async fn s1_morning_review_cost_accuracy() {
     // This tests that cost tracking is accurate by comparing with known
     // fixture data
 
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
     let resp = client
-        .get(&format!("{}/api/dashboard/cross-project?range=today", base_url))
+        .get(&format!(
+            "{}/api/dashboard/cross-project?range=today",
+            base_url
+        ))
         .send()
         .await
         .expect("Failed to fetch dashboard");
@@ -245,10 +249,7 @@ async fn s1_morning_review_cost_accuracy() {
         .as_f64()
         .expect("total_spend_usd must be present");
 
-    assert!(
-        total_cost >= 0.0,
-        "Total cost must be non-negative"
-    );
+    assert!(total_cost >= 0.0, "Total cost must be non-negative");
 
     // Cost breakdown by project should sum to total (within floating point tolerance)
     let spend_by_project = dashboard["spend_by_project"]
@@ -276,14 +277,15 @@ async fn s1_morning_review_cost_accuracy() {
 #[tokio::test]
 async fn s1_morning_review_worker_counts() {
     //! Verify worker counts are present and consistent
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
     let resp = client
-        .get(&format!("{}/api/dashboard/cross-project?range=today", base_url))
+        .get(&format!(
+            "{}/api/dashboard/cross-project?range=today",
+            base_url
+        ))
         .send()
         .await
         .expect("Failed to fetch dashboard");

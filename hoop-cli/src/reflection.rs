@@ -118,11 +118,21 @@ pub fn slug_for(id: &str) -> String {
         .trim()
         .to_lowercase()
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '-' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else {
+                '-'
+            }
+        })
         .collect();
     let collapsed = collapse_dashes(&cleaned);
     let trimmed = collapsed.trim_matches('-');
-    let body = if trimmed.is_empty() { "untitled" } else { trimmed };
+    let body = if trimmed.is_empty() {
+        "untitled"
+    } else {
+        trimmed
+    };
     format!("{SLUG_PREFIX}{body}")
 }
 
@@ -149,7 +159,7 @@ pub fn description_for(rule: &str) -> String {
     single_line(rule, 140)
 }
 
-/// The MEMORY.md index line for an entry: `- [title](slug.md) — hook`.
+/// The MEMORY.md index line for an entry: `- [title](slug.md) - hook`.
 pub fn index_line(slug: &str, entry: &ReflectionLedgerEntry) -> String {
     format!(
         "- [{}]({}.md) - {}",
@@ -163,15 +173,24 @@ pub fn index_line(slug: &str, entry: &ReflectionLedgerEntry) -> String {
 /// shape this workspace's memory files already use.
 pub fn memory_file_body(entry: &ReflectionLedgerEntry) -> String {
     let stitches = format_source_stitches(&entry.source_stitches);
-    let approved_by = entry.approved_by.clone().unwrap_or_else(|| "unknown".to_string());
-    let approved_at = entry.approved_at.clone().unwrap_or_else(|| "unknown".to_string());
+    let approved_by = entry
+        .approved_by
+        .clone()
+        .unwrap_or_else(|| "unknown".to_string());
+    let approved_at = entry
+        .approved_at
+        .clone()
+        .unwrap_or_else(|| "unknown".to_string());
 
     let mut out = String::new();
     // Frontmatter (YAML). description is double-quoted so arbitrary rule text
     // (colons, quotes) serializes safely.
     out.push_str("---\n");
     out.push_str(&format!("name: {}\n", slug_for(&entry.id)));
-    out.push_str(&format!("description: {}\n", yaml_double_quote(&description_for(&entry.rule))));
+    out.push_str(&format!(
+        "description: {}\n",
+        yaml_double_quote(&description_for(&entry.rule))
+    ));
     out.push_str("metadata:\n");
     out.push_str("  node_type: memory\n");
     out.push_str("  type: feedback\n");
@@ -209,7 +228,11 @@ pub fn plan_export<'a>(
                 Some(rec) if rec.content_hash != entry.content_hash => ExportAction::Update,
                 Some(_) => ExportAction::Skip,
             };
-            PlannedEntry { entry, action, slug }
+            PlannedEntry {
+                entry,
+                action,
+                slug,
+            }
         })
         .collect()
 }
@@ -287,9 +310,18 @@ async fn run_export(
     let log = read_export_log(&log_path);
     let planned = plan_export(&entries, &log);
 
-    let adds = planned.iter().filter(|p| p.action == ExportAction::Add).count();
-    let updates = planned.iter().filter(|p| p.action == ExportAction::Update).count();
-    let skips = planned.iter().filter(|p| p.action == ExportAction::Skip).count();
+    let adds = planned
+        .iter()
+        .filter(|p| p.action == ExportAction::Add)
+        .count();
+    let updates = planned
+        .iter()
+        .filter(|p| p.action == ExportAction::Update)
+        .count();
+    let skips = planned
+        .iter()
+        .filter(|p| p.action == ExportAction::Skip)
+        .count();
 
     println!(
         "{} approved reflection(s): {} new, {} changed, {} up-to-date",
@@ -308,7 +340,11 @@ async fn run_export(
                 continue;
             }
             println!();
-            println!("── reflection {} [{}] ──", p.entry.id, action_label(p.action));
+            println!(
+                "── reflection {} [{}] ──",
+                p.entry.id,
+                action_label(p.action)
+            );
             println!("  file:  {}.md", p.slug);
             println!("  index: {}", index_line(&p.slug, p.entry));
             println!("  ── body ──");
@@ -379,7 +415,10 @@ async fn run_export(
     write_export_log(&log_path, log_map.values().cloned().collect())?;
 
     println!();
-    println!("Export complete: {} added, {} updated, {} skipped.", adds, updates, skips);
+    println!(
+        "Export complete: {} added, {} updated, {} skipped.",
+        adds, updates, skips
+    );
     println!("  index:      {}", index_path.display());
     println!("  export log: {}", log_path.display());
     Ok(())
@@ -745,7 +784,11 @@ mod tests {
         let now = "2026-07-26T00:00:00Z".to_string();
         for p in &planned {
             assert_eq!(p.action, ExportAction::Add);
-            fs::write(out_dir.join(format!("{}.md", p.slug)), memory_file_body(p.entry)).unwrap();
+            fs::write(
+                out_dir.join(format!("{}.md", p.slug)),
+                memory_file_body(p.entry),
+            )
+            .unwrap();
             append_index_line(&mut index_content, &p.slug, p.entry);
             log_map.insert(
                 p.entry.id.clone(),
@@ -787,7 +830,11 @@ mod tests {
             if p.action == ExportAction::Skip {
                 continue;
             }
-            fs::write(out_dir.join(format!("{}.md", p.slug)), memory_file_body(p.entry)).unwrap();
+            fs::write(
+                out_dir.join(format!("{}.md", p.slug)),
+                memory_file_body(p.entry),
+            )
+            .unwrap();
             replace_index_line(&mut index_content, &p.slug, p.entry);
         }
         assert!(index_content.contains("rule two edited"));

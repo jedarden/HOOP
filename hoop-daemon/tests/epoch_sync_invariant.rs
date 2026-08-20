@@ -262,10 +262,8 @@ async fn test_epoch_sync_init_is_always_first_message() {
             ))
             .expect("WebSocket stream ended");
 
-        let first_msg = first_msg.expect(&format!(
-            "Failed to receive init message (iteration {})",
-            i
-        ));
+        let first_msg =
+            first_msg.expect(&format!("Failed to receive init message (iteration {})", i));
 
         if let tokio_tungstenite::tungstenite::Message::Text(text) = first_msg {
             let event: serde_json::Value =
@@ -299,10 +297,9 @@ async fn test_epoch_sync_concurrent_connections() {
     for i in 0..5 {
         let ws_url_clone = ws_url.clone();
         let handle = tokio::spawn(async move {
-            let (ws_stream, _) =
-                tokio_tungstenite::connect_async(&ws_url_clone)
-                    .await
-                    .expect("Failed to connect");
+            let (ws_stream, _) = tokio_tungstenite::connect_async(&ws_url_clone)
+                .await
+                .expect("Failed to connect");
 
             let (_, mut ws_receiver) = ws_stream.split();
 
@@ -329,6 +326,9 @@ async fn test_epoch_sync_concurrent_connections() {
 
     // All connections should receive init
     for handle in handles {
-        assert!(handle.await.expect("Task failed"), "Connection should receive init");
+        assert!(
+            handle.await.expect("Task failed"),
+            "Connection should receive init"
+        );
     }
 }

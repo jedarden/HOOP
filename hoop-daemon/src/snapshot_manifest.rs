@@ -160,7 +160,9 @@ mod tests {
             hoop_version: "0.1.0".into(),
             fleet_db_sha256: Some("deadbeef".into()),
             fleet_db_size: Some(2048),
-            final_audit_hash: Some("feedface00000000000000000000000000000000000000000000000000000000".into()),
+            final_audit_hash: Some(
+                "feedface00000000000000000000000000000000000000000000000000000000".into(),
+            ),
             config_backup: None,
         };
         let json = serde_json::to_string(&m).unwrap();

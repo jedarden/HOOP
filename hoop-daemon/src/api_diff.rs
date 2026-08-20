@@ -317,8 +317,7 @@ fn run_git_merge_base(project_root: &Path, upstream: &str) -> Option<String> {
 }
 
 fn validate_ref_arg(r: &str) -> bool {
-    !r.is_empty()
-        && !r.contains([';', '|', '&', '$', '`', '\n', '\r', ' '])
+    !r.is_empty() && !r.contains([';', '|', '&', '$', '`', '\n', '\r', ' '])
 }
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────

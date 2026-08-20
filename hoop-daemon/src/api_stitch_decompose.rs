@@ -291,7 +291,12 @@ async fn submit_stitch(
         connect_info.map(|ci| ci.0),
         crate::auth::Role::Drafter,
     )
-    .map_err(|e| (e.0, serde_json::to_string(&e.1 .0).unwrap_or_else(|_| e.0.to_string())))?;
+    .map_err(|e| {
+        (
+            e.0,
+            serde_json::to_string(&e.1 .0).unwrap_or_else(|_| e.0.to_string()),
+        )
+    })?;
 
     // 1. Validate draft against schema
     validate_stitch_draft(&req)?;
@@ -358,7 +363,8 @@ async fn submit_stitch(
     // Resolve actor identity (cached per connection via IdentityCache)
     let actor = resolve_actor(connect_info.map(|ci| ci.0), &state);
 
-    let result = submit_stitch_internal(&project, &project_path, &req, &state, &actor, None).await?;
+    let result =
+        submit_stitch_internal(&project, &project_path, &req, &state, &actor, None).await?;
 
     Ok(Json(StitchSubmitResponse {
         stitch_id: result.stitch_id,
@@ -1198,8 +1204,7 @@ mod tests {
         // Create a minimal DaemonState with an IdentityCache
         let identity_cache = Arc::new(crate::identity::IdentityCache::new());
         let role_resolver = Arc::new(
-            crate::auth::RoleResolver::unprivileged()
-                .with_identity_cache(identity_cache.clone()),
+            crate::auth::RoleResolver::unprivileged().with_identity_cache(identity_cache.clone()),
         );
         let state = crate::DaemonState {
             config: crate::Config::default(),
@@ -1222,7 +1227,9 @@ mod tests {
             transcription_service: None,
             upload_registry: Arc::new(crate::uploads::UploadRegistry::new()),
             active_project: Arc::new(std::sync::RwLock::new(None)),
-            vector_index: Arc::new(std::sync::RwLock::new(crate::vector_index::VectorIndex::new())),
+            vector_index: Arc::new(std::sync::RwLock::new(
+                crate::vector_index::VectorIndex::new(),
+            )),
             agent_session_manager: None,
             morning_brief_runner: None,
             script_scheduler: None,
@@ -1237,13 +1244,21 @@ mod tests {
             redaction_policy_state: Arc::new(tokio::sync::RwLock::new(
                 crate::redaction_policy::RedactionPolicyState::default(),
             )),
-            stuck_detector: Arc::new(std::sync::Mutex::new(crate::stuck_detector::StuckDetector::new())),
+            stuck_detector: Arc::new(std::sync::Mutex::new(
+                crate::stuck_detector::StuckDetector::new(),
+            )),
             backup_runner: None,
             template_library: crate::template_library::TemplateStore::default(),
-            prompt_library: Arc::new(std::sync::RwLock::new(crate::api_prompts::PromptLibrary::new())),
+            prompt_library: Arc::new(std::sync::RwLock::new(
+                crate::api_prompts::PromptLibrary::new(),
+            )),
             note_library: Arc::new(std::sync::RwLock::new(crate::api_notes::NoteLibrary::new())),
-            skill_library: Arc::new(std::sync::RwLock::new(crate::api_skills::SkillLibrary::new())),
-            script_library: Arc::new(std::sync::RwLock::new(crate::api_scripts::ScriptLibrary::new())),
+            skill_library: Arc::new(std::sync::RwLock::new(
+                crate::api_skills::SkillLibrary::new(),
+            )),
+            script_library: Arc::new(std::sync::RwLock::new(
+                crate::api_scripts::ScriptLibrary::new(),
+            )),
             identity_cache: identity_cache.clone(),
             role_resolver,
             config_status: Arc::new(std::sync::RwLock::new(crate::ws::ConfigStatusData {

@@ -1,5 +1,5 @@
 // Test to understand validation behavior
-use hoop_daemon::config_resolver::validate_config_strict;
+use hoop_daemon::config_resolver::{resolve_from_raw, CliOverrides};
 
 fn main() {
     let yaml = r#"
@@ -9,6 +9,10 @@ audit:
 "#;
 
     println!("Testing YAML with wrong type for audit.retention_days");
-    let result = validate_config_strict(yaml);
+    let cli = CliOverrides {
+        bind_addr: None,
+        allow_br_mismatch: None,
+    };
+    let result = resolve_from_raw(cli, yaml);
     println!("Result: {:?}", result);
 }

@@ -112,7 +112,13 @@ fn main() {
     println!("endpoint: {}", config_full.endpoint);
     println!("bucket: {}", config_full.bucket);
     println!("prefix: {}", config_full.prefix);
-    println!("schedule: {} (expected: '*/30 * * * *')", config_full.schedule);
-    println!("retention_days: {} (expected: 14)", config_full.retention_days);
+    println!(
+        "schedule: {} (expected: '*/30 * * * *')",
+        config_full.schedule
+    );
+    println!(
+        "retention_days: {} (expected: 14)",
+        config_full.retention_days
+    );
     println!("encryption: {} (expected: true)", config_full.encryption);
 }

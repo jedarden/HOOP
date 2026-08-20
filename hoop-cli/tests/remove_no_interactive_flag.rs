@@ -20,9 +20,18 @@ use cli_test_utils::*;
 #[test]
 fn test_remove_parse_with_flag_before_subcommand() {
     // Test: hoop --no-interactive remove my-project --confirm
-    let result = parse_cli_with_flag(&["hoop", "--no-interactive", "remove", "my-project", "--confirm"]);
+    let result = parse_cli_with_flag(&[
+        "hoop",
+        "--no-interactive",
+        "remove",
+        "my-project",
+        "--confirm",
+    ]);
 
-    assert!(result.is_ok(), "Should successfully parse flag before subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse flag before subcommand"
+    );
     let parsed = result.unwrap();
 
     assert!(parsed.no_interactive, "no_interactive should be true");
@@ -40,9 +49,18 @@ fn test_remove_parse_with_flag_before_subcommand() {
 #[test]
 fn test_remove_parse_with_flag_after_subcommand() {
     // Test: hoop remove my-project --no-interactive --confirm
-    let result = parse_cli_with_flag(&["hoop", "remove", "my-project", "--no-interactive", "--confirm"]);
+    let result = parse_cli_with_flag(&[
+        "hoop",
+        "remove",
+        "my-project",
+        "--no-interactive",
+        "--confirm",
+    ]);
 
-    assert!(result.is_ok(), "Should successfully parse flag after subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse flag after subcommand"
+    );
     let parsed = result.unwrap();
 
     assert!(parsed.no_interactive, "no_interactive should be true");
@@ -62,10 +80,16 @@ fn test_remove_parse_with_short_flag_before_subcommand() {
     // Test: hoop -y remove my-project --confirm
     let result = parse_cli_with_flag(&["hoop", "-y", "remove", "my-project", "--confirm"]);
 
-    assert!(result.is_ok(), "Should successfully parse short flag before subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse short flag before subcommand"
+    );
     let parsed = result.unwrap();
 
-    assert!(parsed.no_interactive, "no_interactive should be true with -y");
+    assert!(
+        parsed.no_interactive,
+        "no_interactive should be true with -y"
+    );
     assert_eq!(parsed.command, "remove", "Command should be 'remove'");
 }
 
@@ -74,10 +98,16 @@ fn test_remove_parse_with_short_flag_after_subcommand() {
     // Test: hoop remove my-project -y --confirm
     let result = parse_cli_with_flag(&["hoop", "remove", "my-project", "-y", "--confirm"]);
 
-    assert!(result.is_ok(), "Should successfully parse short flag after subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse short flag after subcommand"
+    );
     let parsed = result.unwrap();
 
-    assert!(parsed.no_interactive, "no_interactive should be true with -y");
+    assert!(
+        parsed.no_interactive,
+        "no_interactive should be true with -y"
+    );
     assert_eq!(parsed.command, "remove", "Command should be 'remove'");
 }
 
@@ -86,10 +116,16 @@ fn test_remove_parse_without_flag() {
     // Test: hoop remove my-project --confirm (default behavior)
     let result = parse_cli_with_flag(&["hoop", "remove", "my-project", "--confirm"]);
 
-    assert!(result.is_ok(), "Should successfully parse command without flag");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse command without flag"
+    );
     let parsed = result.unwrap();
 
-    assert!(!parsed.no_interactive, "no_interactive should default to false");
+    assert!(
+        !parsed.no_interactive,
+        "no_interactive should default to false"
+    );
     assert_eq!(parsed.command, "remove", "Command should be 'remove'");
 }
 
@@ -102,7 +138,10 @@ fn test_remove_flag_extraction_before_position() {
         .expect("Parse should succeed");
 
     let verification_result = verify_flag_extraction(&parsed, "before");
-    assert!(verification_result.is_ok(), "Flag extraction should verify for 'before' position");
+    assert!(
+        verification_result.is_ok(),
+        "Flag extraction should verify for 'before' position"
+    );
 
     // Additional assertions
     assert!(parsed.no_interactive);
@@ -116,7 +155,10 @@ fn test_remove_flag_extraction_after_position() {
         .expect("Parse should succeed");
 
     let verification_result = verify_flag_extraction(&parsed, "after");
-    assert!(verification_result.is_ok(), "Flag extraction should verify for 'after' position");
+    assert!(
+        verification_result.is_ok(),
+        "Flag extraction should verify for 'after' position"
+    );
 
     // Additional assertions
     assert!(parsed.no_interactive);
@@ -130,7 +172,10 @@ fn test_remove_no_flag_present_verification() {
         .expect("Parse should succeed");
 
     let verification_result = verify_no_flag_present(&parsed);
-    assert!(verification_result.is_ok(), "Should verify no flag is present");
+    assert!(
+        verification_result.is_ok(),
+        "Should verify no flag is present"
+    );
 
     assert!(!parsed.no_interactive);
 }
@@ -142,8 +187,7 @@ fn test_remove_flag_propagation_from_main_to_handler() {
     // Verify that the no_interactive flag is correctly extracted in main()
     // and passed to remove_project
 
-    let main_code = fs::read_to_string("src/main.rs")
-        .expect("Failed to read main.rs");
+    let main_code = fs::read_to_string("src/main.rs").expect("Failed to read main.rs");
 
     // Verify flag is extracted from parsed CLI
     assert!(
@@ -167,12 +211,12 @@ fn test_remove_flag_propagation_from_main_to_handler() {
 #[test]
 fn test_remove_handler_accepts_no_interactive_parameter() {
     // Verify that remove_project handler actually uses the no_interactive parameter
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Verify function signature accepts no_interactive
     assert!(
-        projects_code.contains("pub fn remove_project(name: &str, no_interactive: bool, confirm: bool)"),
+        projects_code
+            .contains("pub fn remove_project(name: &str, no_interactive: bool, confirm: bool)"),
         "remove_project must accept no_interactive parameter"
     );
 
@@ -191,19 +235,21 @@ fn test_remove_handler_accepts_no_interactive_parameter() {
 #[test]
 fn test_remove_no_interactive_requires_confirm() {
     // Verify that remove requires --confirm when no_interactive=true
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the remove_project function
-    let remove_start = projects_code.find("pub fn remove_project")
+    let remove_start = projects_code
+        .find("pub fn remove_project")
         .expect("Should find remove_project function");
 
     // Find the no_interactive confirm requirement
-    let confirm_check = projects_code[remove_start..].find("if no_interactive && !confirm {")
+    let confirm_check = projects_code[remove_start..]
+        .find("if no_interactive && !confirm {")
         .expect("Should find confirm requirement check");
 
     // Get the confirm requirement section
-    let confirm_section = &projects_code[remove_start + confirm_check..remove_start + confirm_check + 200];
+    let confirm_section =
+        &projects_code[remove_start + confirm_check..remove_start + confirm_check + 200];
 
     // Verify the error message about --confirm requirement
     assert!(
@@ -223,22 +269,24 @@ fn test_remove_no_interactive_requires_confirm() {
 #[test]
 fn test_remove_confirms_when_no_interactive_true_with_confirm_flag() {
     // Test that remove with no_interactive=true and --confirm proceeds without prompting
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the remove_project function
-    let remove_start = projects_code.find("pub fn remove_project")
+    let remove_start = projects_code
+        .find("pub fn remove_project")
         .expect("Should find remove_project function");
 
     // Find the no_interactive confirm requirement
-    let confirm_check = projects_code[remove_start..].find("if no_interactive && !confirm {")
+    let confirm_check = projects_code[remove_start..]
+        .find("if no_interactive && !confirm {")
         .expect("Should find confirm requirement check");
 
     // Get the section after the confirm check
     let after_confirm_check = &projects_code[remove_start + confirm_check..];
 
     // Find the prompt check
-    let prompt_check = after_confirm_check.find("if !no_interactive {")
+    let prompt_check = after_confirm_check
+        .find("if !no_interactive {")
         .expect("Should have prompt check after confirm requirement");
 
     // Get the prompt section
@@ -266,19 +314,21 @@ fn test_remove_confirms_when_no_interactive_true_with_confirm_flag() {
 #[test]
 fn test_remove_prompts_when_no_interactive_false() {
     // Test that remove with no_interactive=false prompts for confirmation
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the remove_project function
-    let remove_start = projects_code.find("pub fn remove_project")
+    let remove_start = projects_code
+        .find("pub fn remove_project")
         .expect("Should find remove_project function");
 
     // Find the prompt check section
-    let prompt_check = projects_code[remove_start..].find("if !no_interactive {")
+    let prompt_check = projects_code[remove_start..]
+        .find("if !no_interactive {")
         .expect("Should find prompt check");
 
     // Get the prompt section
-    let prompt_section = &projects_code[remove_start + prompt_check..remove_start + prompt_check + 600];
+    let prompt_section =
+        &projects_code[remove_start + prompt_check..remove_start + prompt_check + 600];
 
     // Verify all the interactive prompting elements exist
     assert!(
@@ -320,18 +370,20 @@ fn test_remove_prompts_when_no_interactive_false() {
 #[test]
 fn test_remove_prompts_go_to_stderr() {
     // Verify that remove prompts go to stderr (not stdout) to avoid interfering with data output
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the remove_project function
-    let remove_start = projects_code.find("pub fn remove_project")
+    let remove_start = projects_code
+        .find("pub fn remove_project")
         .expect("Should find remove_project function");
 
     // Find the prompt section
-    let prompt_check = projects_code[remove_start..].find("if !no_interactive {")
+    let prompt_check = projects_code[remove_start..]
+        .find("if !no_interactive {")
         .expect("Should find prompt check");
 
-    let prompt_section = &projects_code[remove_start + prompt_check..remove_start + prompt_check + 600];
+    let prompt_section =
+        &projects_code[remove_start + prompt_check..remove_start + prompt_check + 600];
 
     // Verify prompts use eprint! (stderr) not println! (stdout)
     assert!(
@@ -355,23 +407,26 @@ fn test_remove_prompts_go_to_stderr() {
 fn test_remove_non_interactive_skips_confirmation_prompt() {
     // Verify that when no_interactive=true (with --confirm), the confirmation prompt is skipped
     // and removal proceeds directly
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the remove_project function
-    let remove_start = projects_code.find("pub fn remove_project")
+    let remove_start = projects_code
+        .find("pub fn remove_project")
         .expect("Should find remove_project function");
 
     // Find the confirm requirement check
-    let confirm_check = projects_code[remove_start..].find("if no_interactive && !confirm {")
+    let confirm_check = projects_code[remove_start..]
+        .find("if no_interactive && !confirm {")
         .expect("Should find confirm requirement check");
 
     // Find the closing brace of the confirm requirement block
-    let confirm_block_end = projects_code[remove_start + confirm_check..].find('}')
+    let confirm_block_end = projects_code[remove_start + confirm_check..]
+        .find('}')
         .expect("Should find end of confirm requirement block");
 
     // Get the confirm requirement block
-    let confirm_block = &projects_code[remove_start + confirm_check..remove_start + confirm_check + confirm_block_end + 50];
+    let confirm_block = &projects_code
+        [remove_start + confirm_check..remove_start + confirm_check + confirm_block_end + 50];
 
     // Verify that in this block, there's no confirmation prompt
     assert!(
@@ -381,7 +436,8 @@ fn test_remove_non_interactive_skips_confirmation_prompt() {
 
     // Now find the prompt check (after the confirm requirement)
     let after_confirm = &projects_code[remove_start + confirm_check + confirm_block_end..];
-    let prompt_check = after_confirm.find("if !no_interactive {")
+    let prompt_check = after_confirm
+        .find("if !no_interactive {")
         .expect("Should find prompt check after confirm requirement");
 
     // Get the prompt section
@@ -569,31 +625,40 @@ fn test_remove_flag_position_yields_same_value() {
     // Verify that both flag positions yield the same no_interactive value
 
     // Parse with flag before subcommand
-    let before = parse_cli_with_flag(&["hoop", "--no-interactive", "remove", "my-project", "--confirm"]);
+    let before = parse_cli_with_flag(&[
+        "hoop",
+        "--no-interactive",
+        "remove",
+        "my-project",
+        "--confirm",
+    ]);
     assert!(before.is_ok(), "Should parse flag before command");
     let before_parsed = before.unwrap();
 
     // Parse with flag after subcommand
-    let after = parse_cli_with_flag(&["hoop", "remove", "my-project", "--no-interactive", "--confirm"]);
+    let after = parse_cli_with_flag(&[
+        "hoop",
+        "remove",
+        "my-project",
+        "--no-interactive",
+        "--confirm",
+    ]);
     assert!(after.is_ok(), "Should parse flag after command");
     let after_parsed = after.unwrap();
 
     // Both should yield the same no_interactive value
     assert_eq!(
-        before_parsed.no_interactive,
-        after_parsed.no_interactive,
+        before_parsed.no_interactive, after_parsed.no_interactive,
         "Flag position should not affect the extracted value"
     );
 
     assert!(
         before_parsed.no_interactive,
-        true,
         "Both positions should extract no_interactive as true"
     );
 
     assert_eq!(
-        before_parsed.command,
-        after_parsed.command,
+        before_parsed.command, after_parsed.command,
         "Both positions should extract the same command"
     );
 }
@@ -603,14 +668,19 @@ fn test_remove_flag_position_yields_same_value() {
 #[test]
 fn test_remove_handler_receives_no_interactive_true_from_global_flag() {
     // Test that handler receives no_interactive=true when global flag is set
-    let parsed = parse_cli_with_flag(&["hoop", "--no-interactive", "remove", "my-project", "--confirm"])
-        .expect("Should parse global --no-interactive flag");
+    let parsed = parse_cli_with_flag(&[
+        "hoop",
+        "--no-interactive",
+        "remove",
+        "my-project",
+        "--confirm",
+    ])
+    .expect("Should parse global --no-interactive flag");
 
     // Verify handler receives correct extraction
     let handler_value = extract_remove_handler_value(&parsed);
     assert!(
         handler_value,
-        true,
         "Handler should receive true when global --no-interactive is set"
     );
 }
@@ -635,8 +705,14 @@ fn test_remove_handler_value_extraction_from_parsed_arguments() {
     // This simulates the actual flow: parse → extract → pass to handler
 
     // Case 1: Global flag only
-    let parsed_global = parse_cli_with_flag(&["hoop", "--no-interactive", "remove", "my-project", "--confirm"])
-        .expect("Parse with global flag");
+    let parsed_global = parse_cli_with_flag(&[
+        "hoop",
+        "--no-interactive",
+        "remove",
+        "my-project",
+        "--confirm",
+    ])
+    .expect("Parse with global flag");
     let value_global = simulate_remove_handler_extraction(&parsed_global);
     assert!(value_global, "Global flag should produce true");
 
@@ -673,13 +749,25 @@ fn test_remove_handler_flag_position_independence_for_value() {
     // Both positions should yield the same handler value
 
     // Flag before subcommand
-    let parsed_before = parse_cli_with_flag(&["hoop", "--no-interactive", "remove", "my-project", "--confirm"])
-        .expect("Parse flag before subcommand");
+    let parsed_before = parse_cli_with_flag(&[
+        "hoop",
+        "--no-interactive",
+        "remove",
+        "my-project",
+        "--confirm",
+    ])
+    .expect("Parse flag before subcommand");
     let value_before = simulate_remove_handler_extraction(&parsed_before);
 
     // Flag after subcommand
-    let parsed_after = parse_cli_with_flag(&["hoop", "remove", "my-project", "--no-interactive", "--confirm"])
-        .expect("Parse flag after subcommand");
+    let parsed_after = parse_cli_with_flag(&[
+        "hoop",
+        "remove",
+        "my-project",
+        "--no-interactive",
+        "--confirm",
+    ])
+    .expect("Parse flag after subcommand");
     let value_after = simulate_remove_handler_extraction(&parsed_after);
 
     // Both should yield the same handler value
@@ -724,19 +812,21 @@ fn test_remove_behavioral_requires_confirm_when_no_interactive_true() {
     // - When no_interactive=true and !confirm, it should bail out with error
     // - The error should suggest using --confirm flag
 
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the remove_project function
-    let remove_start = projects_code.find("pub fn remove_project")
+    let remove_start = projects_code
+        .find("pub fn remove_project")
         .expect("Should find remove_project function");
 
     // Find the no_interactive confirm requirement check
-    let confirm_check = projects_code[remove_start..].find("if no_interactive && !confirm {")
+    let confirm_check = projects_code[remove_start..]
+        .find("if no_interactive && !confirm {")
         .expect("Should find confirm requirement check");
 
     // Get the confirm requirement section
-    let confirm_section = &projects_code[remove_start + confirm_check..remove_start + confirm_check + 400];
+    let confirm_section =
+        &projects_code[remove_start + confirm_check..remove_start + confirm_check + 400];
 
     // Verify it bails out with an error
     assert!(
@@ -765,19 +855,21 @@ fn test_remove_behavioral_prompts_shown_when_no_interactive_false() {
     // This test verifies the actual behavior: when no_interactive=false,
     // remove_project SHOULD show prompts
 
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the remove_project function
-    let remove_start = projects_code.find("pub fn remove_project")
+    let remove_start = projects_code
+        .find("pub fn remove_project")
         .expect("Should find remove_project function");
 
     // Find the else/interactive branch that contains the prompts
-    let prompt_check = projects_code[remove_start..].find("if !no_interactive {")
+    let prompt_check = projects_code[remove_start..]
+        .find("if !no_interactive {")
         .expect("Should find prompt check for interactive mode");
 
     // Get the interactive section
-    let interactive_section = &projects_code[remove_start + prompt_check..remove_start + prompt_check + 600];
+    let interactive_section =
+        &projects_code[remove_start + prompt_check..remove_start + prompt_check + 600];
 
     // Verify the interactive/else branch DOES contain prompts
     assert!(
@@ -808,18 +900,20 @@ fn test_remove_behavioral_prompts_use_stderr_not_stdout() {
     // This test verifies that prompts use eprint! (stderr) not println! (stdout)
     // This ensures prompts don't interfere with data output
 
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the remove_project function
-    let remove_start = projects_code.find("pub fn remove_project")
+    let remove_start = projects_code
+        .find("pub fn remove_project")
         .expect("Should find remove_project function");
 
     // Find the prompt section
-    let prompt_check = projects_code[remove_start..].find("if !no_interactive {")
+    let prompt_check = projects_code[remove_start..]
+        .find("if !no_interactive {")
         .expect("Should find prompt check");
 
-    let interactive_section = &projects_code[remove_start + prompt_check..remove_start + prompt_check + 600];
+    let interactive_section =
+        &projects_code[remove_start + prompt_check..remove_start + prompt_check + 600];
 
     // Verify prompts use stderr (eprint!)
     assert!(
@@ -846,23 +940,26 @@ fn test_remove_behavioral_no_stdin_when_no_interactive_true_with_confirm() {
     // This test verifies that when no_interactive=true with --confirm,
     // remove_project does NOT read from stdin (ensures non-blocking behavior)
 
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the remove_project function
-    let remove_start = projects_code.find("pub fn remove_project")
+    let remove_start = projects_code
+        .find("pub fn remove_project")
         .expect("Should find remove_project function");
 
     // Find the confirm requirement check
-    let confirm_check = projects_code[remove_start..].find("if no_interactive && !confirm {")
+    let confirm_check = projects_code[remove_start..]
+        .find("if no_interactive && !confirm {")
         .expect("Should find confirm requirement check");
 
     // Find the prompt check
-    let prompt_check = projects_code[remove_start + confirm_check..].find("if !no_interactive {")
+    let prompt_check = projects_code[remove_start + confirm_check..]
+        .find("if !no_interactive {")
         .expect("Should find prompt check after confirm requirement");
 
     // Get the section between confirm requirement and prompt check
-    let between_sections = &projects_code[remove_start + confirm_check..remove_start + confirm_check + prompt_check];
+    let between_sections =
+        &projects_code[remove_start + confirm_check..remove_start + confirm_check + prompt_check];
 
     // Verify no stdin reading between confirm check and prompt check
     assert!(
@@ -885,11 +982,11 @@ fn test_remove_behavioral_prompt_suppression_matrix() {
     // This test verifies the complete behavior matrix for prompt suppression
     // It ensures the code correctly handles both no_interactive=true and no_interactive=false
 
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the remove_project function
-    let remove_start = projects_code.find("pub fn remove_project")
+    let remove_start = projects_code
+        .find("pub fn remove_project")
         .expect("Should find remove_project function");
 
     let remove_function = &projects_code[remove_start..];
@@ -906,11 +1003,13 @@ fn test_remove_behavioral_prompt_suppression_matrix() {
     );
 
     // Find the confirm requirement check
-    let confirm_check_pos = remove_function.find("if no_interactive && !confirm {")
+    let confirm_check_pos = remove_function
+        .find("if no_interactive && !confirm {")
         .expect("Should find confirm requirement check");
 
     // Find the prompt check
-    let prompt_check_pos = remove_function[confirm_check_pos..].find("if !no_interactive {")
+    let prompt_check_pos = remove_function[confirm_check_pos..]
+        .find("if !no_interactive {")
         .expect("Should find prompt check after confirm requirement");
 
     // Get the confirm requirement section
@@ -944,28 +1043,33 @@ fn test_remove_behavioral_succeeds_when_no_interactive_true_with_confirm() {
     // This test verifies that when no_interactive=true with --confirm,
     // remove_project proceeds to removal without prompting
 
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the remove_project function
-    let remove_start = projects_code.find("pub fn remove_project")
+    let remove_start = projects_code
+        .find("pub fn remove_project")
         .expect("Should find remove_project function");
 
     // Find the confirm requirement check
-    let confirm_check = projects_code[remove_start..].find("if no_interactive && !confirm {")
+    let confirm_check = projects_code[remove_start..]
+        .find("if no_interactive && !confirm {")
         .expect("Should find confirm requirement check");
 
     // Find the end of the confirm requirement block
-    let confirm_block_end = projects_code[remove_start + confirm_check..].find('}')
+    let confirm_block_end = projects_code[remove_start + confirm_check..]
+        .find('}')
         .expect("Should find end of confirm requirement block");
 
     // Find the prompt check
-    let prompt_check = projects_code[remove_start + confirm_check + confirm_block_end..].find("if !no_interactive {")
+    let prompt_check = projects_code[remove_start + confirm_check + confirm_block_end..]
+        .find("if !no_interactive {")
         .expect("Should find prompt check after confirm requirement");
 
     // Find the actual removal code (after both checks)
-    let after_checks = &projects_code[remove_start + confirm_check + confirm_block_end + prompt_check..];
-    let removal_code = after_checks.find("let removed = registry.remove(name)?")
+    let after_checks =
+        &projects_code[remove_start + confirm_check + confirm_block_end + prompt_check..];
+    let removal_code = after_checks
+        .find("let removed = registry.remove(name)?")
         .expect("Should find removal call after checks");
 
     // Get the removal section
@@ -983,11 +1087,11 @@ fn test_remove_behavioral_succeeds_when_no_interactive_true_with_confirm() {
     );
 
     // Verify successful message (printed by main.rs, not remove_project)
-    let main_code = fs::read_to_string("src/main.rs")
-        .expect("Failed to read main.rs");
+    let main_code = fs::read_to_string("src/main.rs").expect("Failed to read main.rs");
 
     // Verify the Remove command handler prints success message
-    let remove_handler = main_code.find("Commands::Remove { name, confirm } =>")
+    let remove_handler = main_code
+        .find("Commands::Remove { name, confirm } =>")
         .expect("Should find Remove command handler in main.rs");
 
     let handler_section = &main_code[remove_handler..remove_handler + 300];
@@ -1005,10 +1109,8 @@ fn test_remove_comprehensive_no_interactive_coverage() {
     // Meta-test that verifies all critical aspects are covered
     // This serves as a checklist for the test suite
 
-    let main_code = fs::read_to_string("src/main.rs")
-        .expect("Failed to read main.rs");
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let main_code = fs::read_to_string("src/main.rs").expect("Failed to read main.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Checklist:
     // 1. Remove command has confirm field (local --confirm flag)
@@ -1031,7 +1133,8 @@ fn test_remove_comprehensive_no_interactive_coverage() {
 
     // 4. remove_project accepts no_interactive and confirm parameters
     assert!(
-        projects_code.contains("pub fn remove_project(name: &str, no_interactive: bool, confirm: bool)"),
+        projects_code
+            .contains("pub fn remove_project(name: &str, no_interactive: bool, confirm: bool)"),
         "✓ remove_project accepts both no_interactive and confirm parameters"
     );
 

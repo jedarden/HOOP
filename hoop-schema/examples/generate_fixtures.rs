@@ -53,7 +53,6 @@ fn main() {
             })
             .unwrap(),
         ),
-
         // Bead types
         (
             "bead_data",
@@ -98,7 +97,6 @@ fn main() {
             })
             .unwrap(),
         ),
-
         // Session/Conversation types
         (
             "session_kind",
@@ -106,7 +104,8 @@ fn main() {
                 worker: "alpha".to_string(),
                 bead: "bd-abc123".to_string(),
                 strand: None,
-            }).unwrap(),
+            })
+            .unwrap(),
         ),
         (
             "session_message",
@@ -175,7 +174,6 @@ fn main() {
             })
             .unwrap(),
         ),
-
         // Stitch types
         (
             "stitch",
@@ -252,7 +250,6 @@ fn main() {
             })
             .unwrap(),
         ),
-
         // Pattern types
         (
             "pattern",
@@ -316,7 +313,6 @@ fn main() {
             })
             .unwrap(),
         ),
-
         // Configuration types
         (
             "hoop_config",
@@ -430,7 +426,6 @@ fn main() {
             })
             .unwrap(),
         ),
-
         // Project types
         (
             "workspace_entry",
@@ -455,12 +450,8 @@ fn main() {
         ),
         (
             "projects_registry",
-            serde_json::to_string_pretty(&ProjectsRegistry {
-                projects: vec![],
-            })
-            .unwrap(),
+            serde_json::to_string_pretty(&ProjectsRegistry { projects: vec![] }).unwrap(),
         ),
-
         // Capacity types
         (
             "capacity_limits",
@@ -539,7 +530,6 @@ fn main() {
             })
             .unwrap(),
         ),
-
         // Audit types
         (
             "audit_row",
@@ -558,7 +548,6 @@ fn main() {
             })
             .unwrap(),
         ),
-
         // Monitoring types
         (
             "debug_state",
@@ -590,7 +579,6 @@ fn main() {
             })
             .unwrap(),
         ),
-
         // WebSocket types
         (
             "ws_event",
@@ -616,7 +604,6 @@ fn main() {
             })
             .unwrap(),
         ),
-
         // UI types
         (
             "ui_state",
@@ -635,7 +622,6 @@ fn main() {
             })
             .unwrap(),
         ),
-
         // Other types
         (
             "dictated_note",
@@ -759,7 +745,6 @@ fn main() {
             })
             .unwrap(),
         ),
-
         // Bead blockers types
         (
             "cross_workspace_blocker",
@@ -788,7 +773,6 @@ fn main() {
             })
             .unwrap(),
         ),
-
         // Presence types
         (
             "presence",
@@ -805,14 +789,12 @@ fn main() {
 
     // Create fixture directory
     let fixture_dir = "../hoop-ui/web/src/__fixtures__/schema";
-    fs::create_dir_all(fixture_dir)
-        .expect("Failed to create fixture directory");
+    fs::create_dir_all(fixture_dir).expect("Failed to create fixture directory");
 
     // Write each fixture
     for (name, json) in &fixtures {
         let file_path = format!("{}/{}.json", fixture_dir, name);
-        fs::write(&file_path, &json)
-            .expect(&format!("Failed to write fixture: {}", file_path));
+        fs::write(&file_path, &json).expect(&format!("Failed to write fixture: {}", file_path));
     }
 
     // Write index
@@ -830,5 +812,9 @@ fn main() {
     fs::write(&index_path, serde_json::to_string_pretty(&index).unwrap())
         .expect("Failed to write index");
 
-    println!("Generated {} schema fixtures in {}", fixtures.len(), fixture_dir);
+    println!(
+        "Generated {} schema fixtures in {}",
+        fixtures.len(),
+        fixture_dir
+    );
 }

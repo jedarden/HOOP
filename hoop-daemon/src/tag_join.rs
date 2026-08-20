@@ -419,7 +419,8 @@ mod tests {
     #[test]
     fn test_fixture_claude_session_001() {
         // Validate against actual Claude fixture: [needle:alpha:bd-abc123:pluck]
-        let first_line = "[needle:alpha:bd-abc123:pluck] tr-open-001|Fix memory leak in parser|open|bug";
+        let first_line =
+            "[needle:alpha:bd-abc123:pluck] tr-open-001|Fix memory leak in parser|open|bug";
         let result = resolve(first_line, None);
 
         match result.kind {
@@ -444,7 +445,8 @@ mod tests {
     #[test]
     fn test_fixture_codex_session_001() {
         // Validate against actual Codex fixture: [needle:bravo:bd-def456:mend]
-        let first_line = "[needle:bravo:bd-def456:mend] tr-open-002|Add streaming support|open|feature";
+        let first_line =
+            "[needle:bravo:bd-def456:mend] tr-open-002|Add streaming support|open|feature";
         let result = resolve(first_line, None);
 
         match result.kind {
@@ -469,7 +471,8 @@ mod tests {
     #[test]
     fn test_fixture_opencode_session_001() {
         // Validate against actual OpenCode fixture: [needle:charlie:bd-ghi789:weave]
-        let first_line = "[needle:charlie:bd-ghi789:weave] tr-open-003|Update documentation|open|task";
+        let first_line =
+            "[needle:charlie:bd-ghi789:weave] tr-open-003|Update documentation|open|task";
         let result = resolve(first_line, None);
 
         match result.kind {
@@ -485,7 +488,9 @@ mod tests {
             _ => panic!("Expected Worker kind for OpenCode fixture"),
         }
 
-        let binding = result.binding.expect("OpenCode fixture should have binding");
+        let binding = result
+            .binding
+            .expect("OpenCode fixture should have binding");
         assert_eq!(binding.worker, "charlie");
         assert_eq!(binding.bead, "bd-ghi789");
         assert_eq!(binding.strand.as_deref(), Some("weave"));

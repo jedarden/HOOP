@@ -48,9 +48,8 @@ impl ConfigBackup {
         };
 
         let (projects_yaml_hash, projects_yaml_size) = if projects_path.exists() {
-            let data = std::fs::read(&projects_path).with_context(|| {
-                format!("read projects.yaml from {}", projects_path.display())
-            })?;
+            let data = std::fs::read(&projects_path)
+                .with_context(|| format!("read projects.yaml from {}", projects_path.display()))?;
             let hash = hex::encode(Sha256::digest(&data));
             let size = data.len() as u64;
             (hash, size)
@@ -172,11 +171,19 @@ mod tests {
 
         // Create config.yml
         let config_path = hoop_dir.join("config.yml");
-        std::fs::write(&config_path, b"schema_version: \"1.0.0\"\nagent:\n  adapter: claude\n").unwrap();
+        std::fs::write(
+            &config_path,
+            b"schema_version: \"1.0.0\"\nagent:\n  adapter: claude\n",
+        )
+        .unwrap();
 
         // Create projects.yaml
         let projects_path = hoop_dir.join("projects.yaml");
-        std::fs::write(&projects_path, b"projects:\n  - name: test\n    path: /test\n").unwrap();
+        std::fs::write(
+            &projects_path,
+            b"projects:\n  - name: test\n    path: /test\n",
+        )
+        .unwrap();
 
         let original_home = std::env::var("HOME").ok();
         std::env::set_var("HOME", tmp.path());

@@ -44,8 +44,7 @@ impl SecretPattern {
     /// Validate that all patterns compile to valid regexes.
     pub fn validate(&self) -> Result<(), String> {
         for pat in &self.patterns {
-            Regex::new(pat)
-                .map_err(|e| format!("invalid regex '{}': {}", pat, e))?;
+            Regex::new(pat).map_err(|e| format!("invalid regex '{}': {}", pat, e))?;
         }
         Ok(())
     }
@@ -368,8 +367,17 @@ fn parse_serde_yaml_details(msg: &str) -> (Option<String>, Option<String>, Optio
     // Pattern: invalid type: string "abc", expected a number at ...
     if msg.contains("invalid type") {
         // Extract expected type
-        let expected = if msg.contains("expected u8") || msg.contains("expected u16") || msg.contains("expected u32") || msg.contains("expected u64") || msg.contains("expected usize") ||
-            msg.contains("expected i8") || msg.contains("expected i16") || msg.contains("expected i32") || msg.contains("expected i64") || msg.contains("expected isize") {
+        let expected = if msg.contains("expected u8")
+            || msg.contains("expected u16")
+            || msg.contains("expected u32")
+            || msg.contains("expected u64")
+            || msg.contains("expected usize")
+            || msg.contains("expected i8")
+            || msg.contains("expected i16")
+            || msg.contains("expected i32")
+            || msg.contains("expected i64")
+            || msg.contains("expected isize")
+        {
             Some("integer".to_string())
         } else if msg.contains("expected f32") || msg.contains("expected f64") {
             Some("number".to_string())
@@ -818,7 +826,11 @@ fn yaml_get_secret_patterns(root: &serde_yaml::Value) -> Option<Vec<SecretPatter
                     patterns.push(pat);
                 }
             }
-            if patterns.is_empty() { None } else { Some(patterns) }
+            if patterns.is_empty() {
+                None
+            } else {
+                Some(patterns)
+            }
         })
 }
 
@@ -876,10 +888,13 @@ fn yaml_get_role_config(root: &serde_yaml::Value) -> Option<crate::auth::RoleCon
 ///   patterns: []
 /// ```
 #[allow(dead_code)]
-fn yaml_get_redaction_policy(root: &serde_yaml::Value) -> Option<crate::redaction_policy::GlobalRedactionPolicy> {
+fn yaml_get_redaction_policy(
+    root: &serde_yaml::Value,
+) -> Option<crate::redaction_policy::GlobalRedactionPolicy> {
     root.get("redaction").and_then(|v| {
         // Parse action
-        let action = v.get("action")
+        let action = v
+            .get("action")
             .and_then(|a| a.as_str())
             .and_then(|s| match s {
                 "warn" => Some(crate::redaction_policy::RedactionAction::Warn),
@@ -889,7 +904,8 @@ fn yaml_get_redaction_policy(root: &serde_yaml::Value) -> Option<crate::redactio
             });
 
         // Parse patterns (optional)
-        let patterns: Vec<String> = v.get("patterns")
+        let patterns: Vec<String> = v
+            .get("patterns")
             .and_then(|p| p.as_sequence())
             .map(|seq| {
                 seq.iter()
@@ -1470,9 +1486,15 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
         let mut valid_patterns = Vec::new();
         for pat in patterns {
             if let Err(e) = pat.validate() {
-                warn!("Invalid secret pattern '{}': {}, using default", pat.name, e);
+                warn!(
+                    "Invalid secret pattern '{}': {}, using default",
+                    pat.name, e
+                );
             } else if !pat.is_valid_severity() {
-                warn!("Invalid severity '{}' for pattern '{}', using default", pat.severity, pat.name);
+                warn!(
+                    "Invalid severity '{}' for pattern '{}', using default",
+                    pat.severity, pat.name
+                );
             } else {
                 valid_patterns.push(pat);
             }
@@ -1547,8 +1569,7 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
     let embedding_cache_ttl_seconds = resolve_opt(
         None::<u64>,
         env_parse("HOOP_EMBEDDING_CACHE_TTL_SECONDS"),
-        yml_ref
-            .and_then(|y| yaml_get_u64(y, "embedding.cache_ttl_seconds")),
+        yml_ref.and_then(|y| yaml_get_u64(y, "embedding.cache_ttl_seconds")),
         86400, // 24 hours default
         "N/A",
         "HOOP_EMBEDDING_CACHE_TTL_SECONDS",
@@ -2181,7 +2202,10 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
                 ));
             } else if !pat.is_valid_severity() {
                 return Err(ConfigError::validation(
-                    format!("invalid severity '{}' for pattern '{}'", pat.severity, pat.name),
+                    format!(
+                        "invalid severity '{}' for pattern '{}'",
+                        pat.severity, pat.name
+                    ),
                     Some("secrets_patterns".to_string()),
                     Some("one of: high, medium, low".to_string()),
                     Some(pat.severity.clone()),
@@ -2398,8 +2422,7 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
         embedding_cache_ttl_seconds: resolve_opt(
             None::<u64>,
             env_parse("HOOP_EMBEDDING_CACHE_TTL_SECONDS"),
-            yml_ref
-                .and_then(|y| yaml_get_u64(y, "embedding.cache_ttl_seconds")),
+            yml_ref.and_then(|y| yaml_get_u64(y, "embedding.cache_ttl_seconds")),
             86400,
             "N/A",
             "HOOP_EMBEDDING_CACHE_TTL_SECONDS",

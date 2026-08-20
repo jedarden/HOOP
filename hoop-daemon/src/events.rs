@@ -6,8 +6,8 @@
 //! Malformed lines are logged with `warn`, never silent-dropped.
 //! Unknown event types are recorded via UnknownEventSink.
 
-use anyhow::{Context, Result};
 use crate::unknown_event_sink;
+use anyhow::{Context, Result};
 /// NEEDLE event types parsed from events.jsonl
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
@@ -706,10 +706,7 @@ impl NdjsonParser {
     fn new(events_path: std::path::PathBuf) -> Self {
         Self {
             partial: String::new(),
-            unknown_sink: unknown_event_sink::UnknownEventSink::with_source(
-                "needle",
-                events_path,
-            ),
+            unknown_sink: unknown_event_sink::UnknownEventSink::with_source("needle", events_path),
         }
     }
 
@@ -742,10 +739,9 @@ impl NdjsonParser {
                 let lag = now.signed_duration_since(event_ts.with_timezone(&chrono::Utc));
                 let lag_seconds = lag.num_seconds().max(0);
 
-                metrics::metrics().hoop_event_tailer_lag_seconds.set(
-                    &[project],
-                    lag_seconds,
-                );
+                metrics::metrics()
+                    .hoop_event_tailer_lag_seconds
+                    .set(&[project], lag_seconds);
             }
         }
     }
@@ -787,7 +783,8 @@ impl NdjsonParser {
                 } else {
                     // Unknown event - use UnknownEventSink
                     let event_kind = extract_event_kind_from_raw(&raw);
-                    self.unknown_sink.record_at_line(&event_kind, &raw, line_number);
+                    self.unknown_sink
+                        .record_at_line(&event_kind, &raw, line_number);
 
                     // Also register with global registry for diagnostics
                     let sample = unknown_event_sink::UnknownEventSample::new(
@@ -822,7 +819,9 @@ impl NdjsonParser {
                     crate::parse_jsonl_safe::quarantine_raw(&raw, &e.to_string(), source);
 
                     // Record parse error for needle adapter
-                    metrics::metrics().hoop_event_parse_errors_total.inc(&["needle"]);
+                    metrics::metrics()
+                        .hoop_event_parse_errors_total
+                        .inc(&["needle"]);
 
                     warn!(
                         "Malformed event on line {}: {}. Line content: {}",
@@ -837,7 +836,8 @@ impl NdjsonParser {
                     // Create an unknown event to preserve the raw data
                     // Record via UnknownEventSink
                     let event_kind = extract_event_kind_from_raw(&raw);
-                    self.unknown_sink.record_at_line(&event_kind, &raw, line_number);
+                    self.unknown_sink
+                        .record_at_line(&event_kind, &raw, line_number);
 
                     // Also register with global registry for diagnostics
                     let sample = unknown_event_sink::UnknownEventSample::new(
@@ -982,20 +982,23 @@ mod tests {
 
         // Parse an unknown event type (not one of the known NeedleEvent variants)
         let unknown_event = r#"{"event":"unknown_type","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-abc123"}"#;
-        let result = parser.parse_line(unknown_event, 1, &test_source()).unwrap().unwrap();
+        let result = parser
+            .parse_line(unknown_event, 1, &test_source())
+            .unwrap()
+            .unwrap();
 
         // Should return Unknown event
         assert!(matches!(result.event, NeedleEvent::Unknown));
 
         // Verify the unknown event was recorded via UnknownEventSink
         let samples = unknown_event_sink::global_registry().get_all_samples();
-        let needle_unknown: Vec<_> = samples
-            .iter()
-            .filter(|s| s.adapter == "needle")
-            .collect();
+        let needle_unknown: Vec<_> = samples.iter().filter(|s| s.adapter == "needle").collect();
 
         // Should have recorded the unknown event
-        assert!(!needle_unknown.is_empty(), "Expected unknown event to be recorded");
+        assert!(
+            !needle_unknown.is_empty(),
+            "Expected unknown event to be recorded"
+        );
         assert_eq!(needle_unknown[0].event_kind, "unknown_type");
         assert!(needle_unknown[0].raw_event.contains("unknown_type"));
 
@@ -1003,8 +1006,15 @@ mod tests {
         let final_total = m.hoop_unknown_event_total.get();
         let final_labeled = m.hoop_unknown_event_labeled_total.snapshot();
 
-        assert!(final_total > initial_total, "Expected hoop_unknown_event_total to increment");
-        assert_eq!(final_total - initial_total, 1, "Expected exactly 1 unknown event");
+        assert!(
+            final_total > initial_total,
+            "Expected hoop_unknown_event_total to increment"
+        );
+        assert_eq!(
+            final_total - initial_total,
+            1,
+            "Expected exactly 1 unknown event"
+        );
 
         // Check labeled metric for needle adapter
         let needle_count = final_labeled
@@ -1018,6 +1028,10 @@ mod tests {
             .map(|(_, count)| count)
             .sum::<u64>();
 
-        assert_eq!(needle_count - initial_needle_count, 1, "Expected exactly 1 unknown event for needle adapter");
+        assert_eq!(
+            needle_count - initial_needle_count,
+            1,
+            "Expected exactly 1 unknown event for needle adapter"
+        );
     }
 }

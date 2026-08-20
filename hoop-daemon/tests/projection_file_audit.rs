@@ -38,7 +38,11 @@ use std::path::{Path, PathBuf};
 ///                          fleet_state.json, fleet_state.yaml, …).  Requiring the
 ///                          opening quote ensures we match file paths, not variable
 ///                          names like `ws_state` or `run_state`.
-const FORBIDDEN_PATTERNS: &[&str] = &[r#""[_a-z]+_state\."#, r"_status\.json", r"live-[^/\\]*\.json"];
+const FORBIDDEN_PATTERNS: &[&str] = &[
+    r#""[_a-z]+_state\."#,
+    r"_status\.json",
+    r"live-[^/\\]*\.json",
+];
 
 // ── Allowlist ────────────────────────────────────────────────────────────────
 
@@ -289,9 +293,7 @@ fn scanner_detects_worker_state_json_write() {
         "scanner failed to detect worker_state.json write — scanner is broken"
     );
     assert!(
-        violations
-            .iter()
-            .any(|v| v.line.contains("worker_state")),
+        violations.iter().any(|v| v.line.contains("worker_state")),
         "violation must be on the worker_state line, got: {:?}",
         violations.iter().map(|v| v.line.trim()).collect::<Vec<_>>()
     );

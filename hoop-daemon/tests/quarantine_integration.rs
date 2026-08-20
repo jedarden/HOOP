@@ -146,17 +146,33 @@ fn per_adapter_parse_error_isolation() {
     // Create a Codex session file with a corrupt line
     let codex_file = tmp.path().join("codex_session.jsonl");
     let mut f = fs::File::create(&codex_file).unwrap();
-    writeln!(f, r#"{{"type":"session_start","session_id":"codex-123","cwd":"/tmp"}}"#).unwrap();
-    writeln!(f, r#"{{"type":"message","role":"user","content":"Hello","timestamp":"2025-01-01T00:00:00Z"}}"#).unwrap();
+    writeln!(
+        f,
+        r#"{{"type":"session_start","session_id":"codex-123","cwd":"/tmp"}}"#
+    )
+    .unwrap();
+    writeln!(
+        f,
+        r#"{{"type":"message","role":"user","content":"Hello","timestamp":"2025-01-01T00:00:00Z"}}"#
+    )
+    .unwrap();
     writeln!(f, "THIS IS NOT JSON - CORRUPT CODEX LINE").unwrap();
     writeln!(f, r#"{{"type":"message","role":"assistant","content":"Hi","timestamp":"2025-01-01T00:00:01Z"}}"#).unwrap();
-    writeln!(f, r#"{{"type":"session_end","end_time":"2025-01-01T00:01:00Z"}}"#).unwrap();
+    writeln!(
+        f,
+        r#"{{"type":"session_end","end_time":"2025-01-01T00:01:00Z"}}"#
+    )
+    .unwrap();
     drop(f);
 
     // Create a Gemini session file with a corrupt line
     let gemini_file = tmp.path().join("gemini_session.jsonl");
     let mut f = fs::File::create(&gemini_file).unwrap();
-    writeln!(f, r#"{{"type":"metadata","session_id":"gemini-456","cwd":"/tmp"}}"#).unwrap();
+    writeln!(
+        f,
+        r#"{{"type":"metadata","session_id":"gemini-456","cwd":"/tmp"}}"#
+    )
+    .unwrap();
     writeln!(f, r#"{{"type":"message","role":"user","content":"Hello Gemini","timestamp":"2025-01-01T00:00:00Z"}}"#).unwrap();
     writeln!(f, "INVALID JSON IN GEMHI {{{{").unwrap();
     writeln!(f, r#"{{"type":"message","role":"assistant","content":"Hi from Gemini","timestamp":"2025-01-01T00:00:01Z"}}"#).unwrap();
@@ -231,7 +247,11 @@ fn per_adapter_parse_error_isolation() {
         .unwrap()
         .collect::<Result<_, _>>()
         .unwrap();
-    assert_eq!(entries.len(), 2, "should have two quarantined entries (one per adapter)");
+    assert_eq!(
+        entries.len(),
+        2,
+        "should have two quarantined entries (one per adapter)"
+    );
 
     // Verify per-adapter metrics
     // Note: This test verifies the pattern that session parsers should follow

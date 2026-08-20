@@ -19,10 +19,10 @@
 //! }
 //! ```
 
-use std::io::{self, Write};
-use std::fs;
-use std::path::Path;
 use std::collections::HashMap;
+use std::fs;
+use std::io::{self, Write};
+use std::path::Path;
 
 /// Read log file contents into memory
 ///
@@ -146,8 +146,14 @@ pub fn generate_interleaved_output(prefix: &str, count: usize) {
 
 /// Generate marker messages for stream identification
 pub fn generate_stream_markers() {
-    generate_output(OutputStream::Stdout, "STDOUT_MARKER: This should be in stdout");
-    generate_output(OutputStream::Stderr, "STDERR_MARKER: This should be in stderr");
+    generate_output(
+        OutputStream::Stdout,
+        "STDOUT_MARKER: This should be in stdout",
+    );
+    generate_output(
+        OutputStream::Stderr,
+        "STDERR_MARKER: This should be in stderr",
+    );
 }
 
 /// Test output generation configuration
@@ -180,10 +186,16 @@ pub fn generate_configured_output(config: &TestOutputConfig) {
         let max_count = config.stdout_count.max(config.stderr_count);
         for i in 0..max_count {
             if i < config.stdout_count {
-                generate_output(OutputStream::Stdout, &format!("{}_COUNT_{:03}", config.prefix, i));
+                generate_output(
+                    OutputStream::Stdout,
+                    &format!("{}_COUNT_{:03}", config.prefix, i),
+                );
             }
             if i < config.stderr_count {
-                generate_output(OutputStream::Stderr, &format!("{}_COUNT_{:03}", config.prefix, i));
+                generate_output(
+                    OutputStream::Stderr,
+                    &format!("{}_COUNT_{:03}", config.prefix, i),
+                );
             }
         }
     } else {
@@ -237,7 +249,10 @@ impl LogFileParser {
 
     /// Get all lines from a specific stream
     pub fn get_lines(&self, stream: OutputStream) -> &[String] {
-        self.content.get(&stream).map(|v| v.as_slice()).unwrap_or(&[])
+        self.content
+            .get(&stream)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
     }
 
     /// Get the total number of lines from a specific stream
@@ -247,19 +262,24 @@ impl LogFileParser {
 
     /// Check if a specific pattern exists in the given stream
     pub fn contains_pattern(&self, stream: OutputStream, pattern: &str) -> bool {
-        self.get_lines(stream).iter().any(|line| line.contains(pattern))
+        self.get_lines(stream)
+            .iter()
+            .any(|line| line.contains(pattern))
     }
 
     /// Count occurrences of a pattern in the given stream
     pub fn count_pattern(&self, stream: OutputStream, pattern: &str) -> usize {
-        self.get_lines(stream).iter()
+        self.get_lines(stream)
+            .iter()
             .filter(|line| line.contains(pattern))
             .count()
     }
 
     /// Verify that expected patterns are present in the stream
     pub fn verify_patterns(&self, stream: OutputStream, patterns: &[&str]) -> bool {
-        patterns.iter().all(|pattern| self.contains_pattern(stream, pattern))
+        patterns
+            .iter()
+            .all(|pattern| self.contains_pattern(stream, pattern))
     }
 }
 
@@ -302,10 +322,16 @@ impl VerificationResult {
         }
 
         if !self.missing_stdout.is_empty() {
-            parts.push(format!("Missing stdout: {}", self.missing_stdout.join(", ")));
+            parts.push(format!(
+                "Missing stdout: {}",
+                self.missing_stdout.join(", ")
+            ));
         }
         if !self.missing_stderr.is_empty() {
-            parts.push(format!("Missing stderr: {}", self.missing_stderr.join(", ")));
+            parts.push(format!(
+                "Missing stderr: {}",
+                self.missing_stderr.join(", ")
+            ));
         }
 
         parts.join("\n")
@@ -448,7 +474,10 @@ pub fn generate_and_print_large_stdout(config: &LargeOutputConfig) -> (usize, us
     io::stdout().flush().unwrap();
 
     // Log verification metadata to stderr for wrapper scripts
-    eprintln!("VERIFICATION_METADATA: Generated {} lines (~{} bytes)", line_count, total_bytes);
+    eprintln!(
+        "VERIFICATION_METADATA: Generated {} lines (~{} bytes)",
+        line_count, total_bytes
+    );
 
     (total_bytes, line_count)
 }
@@ -469,10 +498,12 @@ pub fn verify_size_requirement(actual_bytes: usize, required_bytes: usize) -> bo
 
 /// Find the most recent log file matching a pattern
 pub fn find_latest_log(base_dir: &Path, pattern: &str) -> Option<String> {
-    fs::read_dir(base_dir).ok()?
+    fs::read_dir(base_dir)
+        .ok()?
         .filter_map(|entry| entry.ok())
         .filter(|entry| {
-            entry.path()
+            entry
+                .path()
                 .file_name()
                 .and_then(|n| n.to_str())
                 .map(|name| name.contains(pattern))
@@ -557,8 +588,14 @@ impl CharVerificationResult {
         }
 
         let mut msg = format!("❌ Character-by-character verification failed\n");
-        msg.push_str(&format!("Expected length: {} characters\n", self.expected_chars));
-        msg.push_str(&format!("Actual length: {} characters\n", self.actual_chars));
+        msg.push_str(&format!(
+            "Expected length: {} characters\n",
+            self.expected_chars
+        ));
+        msg.push_str(&format!(
+            "Actual length: {} characters\n",
+            self.actual_chars
+        ));
 
         if let (Some(pos), Some(line), Some(col), Some(exp), Some(act)) = (
             self.first_mismatch_pos,
@@ -589,8 +626,8 @@ impl CharVerificationResult {
 
 /// Extract raw stdout content from a log file (without [STDOUT] prefix)
 pub fn extract_raw_stdout_from_log(log_path: &Path) -> Result<String, String> {
-    let content = fs::read_to_string(log_path)
-        .map_err(|e| format!("Failed to read log file: {}", e))?;
+    let content =
+        fs::read_to_string(log_path).map_err(|e| format!("Failed to read log file: {}", e))?;
 
     let mut stdout_lines = Vec::new();
 
@@ -642,9 +679,7 @@ pub fn verify_stdout_char_by_char(
 
     // Find the first mismatch
     let max_len = expected_len.max(actual_len);
-    for (pos, (&exp_char, &act_char)) in expected_chars.iter()
-        .zip(actual_chars.iter())
-        .enumerate()
+    for (pos, (&exp_char, &act_char)) in expected_chars.iter().zip(actual_chars.iter()).enumerate()
     {
         if exp_char != act_char {
             // Calculate line and column (1-based for user readability)
@@ -788,7 +823,10 @@ mod tests {
         let expected = "Line 1\nLine 2\n";
         let result = verify_stdout_char_by_char(expected, &log_path).unwrap();
 
-        assert!(result.passed, "Verification should pass when content matches");
+        assert!(
+            result.passed,
+            "Verification should pass when content matches"
+        );
         assert_eq!(result.expected_chars, expected.chars().count());
         assert!(result.first_mismatch_pos.is_none());
 
@@ -807,7 +845,10 @@ mod tests {
         let expected = "Line 1\nLine 2\n";
         let result = verify_stdout_char_by_char(expected, &log_path).unwrap();
 
-        assert!(!result.passed, "Verification should fail when content differs");
+        assert!(
+            !result.passed,
+            "Verification should fail when content differs"
+        );
         assert!(result.first_mismatch_pos.is_some());
         assert!(result.first_mismatch_line.is_some());
         assert!(result.expected_char.is_some());
@@ -828,7 +869,10 @@ mod tests {
         let expected = "Short\nExtra\n";
         let result = verify_stdout_char_by_char(expected, &log_path).unwrap();
 
-        assert!(!result.passed, "Verification should fail when lengths differ");
+        assert!(
+            !result.passed,
+            "Verification should fail when lengths differ"
+        );
         assert_eq!(result.expected_chars, expected.chars().count());
         assert_ne!(result.expected_chars, result.actual_chars);
 
@@ -847,7 +891,10 @@ mod tests {
         let expected = "Hello, 世界!\nTab\there\n";
         let result = verify_stdout_char_by_char(expected, &log_path).unwrap();
 
-        assert!(result.passed, "Should handle unicode and special characters");
+        assert!(
+            result.passed,
+            "Should handle unicode and special characters"
+        );
         assert_eq!(result.actual_chars, expected.chars().count());
 
         // Cleanup
@@ -922,16 +969,8 @@ mod tests {
         let result = CharVerificationResult::success(100, 100);
         assert!(result.failure_message().contains("✅"));
 
-        let result = CharVerificationResult::failure(
-            100,
-            95,
-            50,
-            3,
-            10,
-            'x',
-            'y',
-            "context...".to_string(),
-        );
+        let result =
+            CharVerificationResult::failure(100, 95, 50, 3, 10, 'x', 'y', "context...".to_string());
         let msg = result.failure_message();
         assert!(msg.contains("❌"));
         assert!(msg.contains("position 50"));

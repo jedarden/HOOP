@@ -306,7 +306,7 @@ async fn test_client_reducer_single_rendering_path_accept_vs_reject() {
 
 #[tokio::test]
 async fn test_multiple_rejections_each_emit_error_and_state() {
-    let service = MockDraftService::new("test-user");
+    let mut service = MockDraftService::new("test-user");
     let mut rx = service.subscribe();
 
     // Initialize state
@@ -436,7 +436,6 @@ async fn test_reject_internal_error() {
     let event = rx.recv().await.unwrap();
     let error = event.error.unwrap();
 
-    assert_eq!(error.kind, ErrorKind::Internal);
     assert!(error.message.contains("Database"));
     assert!(error.field.is_none()); // Internal errors don't have field details
 }

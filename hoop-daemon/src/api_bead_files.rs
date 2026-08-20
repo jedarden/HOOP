@@ -7,12 +7,7 @@
 //! at the right revision to see what files were changed. Combined with the net-diff
 //! and file blame APIs, this provides complete traceability from bead → file → revision.
 
-use axum::{
-    extract::Path,
-    http::StatusCode,
-    routing::get,
-    Json, Router,
-};
+use axum::{extract::Path, http::StatusCode, routing::get, Json, Router};
 use serde::Serialize;
 
 use crate::{bead_commit_index, id_validators};
@@ -91,11 +86,13 @@ async fn get_bead_files(
     id_validators::validate_bead_id(&bead_id).map_err(id_validators::rejection)?;
 
     // Query bead_commits for this bead
-    let commits = bead_commit_index::get_commits_for_bead(&bead_id)
-        .map_err(|e| {
-            tracing::error!("Failed to query bead_commits for {}: {}", bead_id, e);
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", e))
-        })?;
+    let commits = bead_commit_index::get_commits_for_bead(&bead_id).map_err(|e| {
+        tracing::error!("Failed to query bead_commits for {}: {}", bead_id, e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Database error: {}", e),
+        )
+    })?;
 
     if commits.is_empty() {
         return Err((
@@ -105,7 +102,8 @@ async fn get_bead_files(
     }
 
     // Group files by unique (workspace, path) pairs
-    let mut file_map: std::collections::HashMap<(String, String), BeadFileLink> = std::collections::HashMap::new();
+    let mut file_map: std::collections::HashMap<(String, String), BeadFileLink> =
+        std::collections::HashMap::new();
 
     for commit in commits {
         // Get files changed in this commit using git diff
@@ -170,7 +168,13 @@ async fn get_bead_files(
 /// Get list of files changed in a commit using git diff
 fn get_files_for_commit(workspace: &str, sha: &str) -> anyhow::Result<Vec<String>> {
     let output = std::process::Command::new("git")
-        .args(["-C", workspace, "diff", "--name-only", &format!("{}^..{}", sha, sha)])
+        .args([
+            "-C",
+            workspace,
+            "diff",
+            "--name-only",
+            &format!("{}^..{}", sha, sha),
+        ])
         .output()?;
 
     if !output.status.success() {
@@ -200,16 +204,14 @@ mod tests {
     fn test_bead_files_response_serialization() {
         let response = BeadFilesResponse {
             bead_id: "hoop-ttb.4.12".to_string(),
-            files: vec![
-                BeadFileLink {
-                    path: "src/main.rs".to_string(),
-                    workspace: "/home/user/project".to_string(),
-                    sha: Some("abc123".to_string()),
-                    commit_ts: Some("2024-01-01T00:00:00Z".to_string()),
-                    added: Some(10),
-                    removed: Some(5),
-                },
-            ],
+            files: vec![BeadFileLink {
+                path: "src/main.rs".to_string(),
+                workspace: "/home/user/project".to_string(),
+                sha: Some("abc123".to_string()),
+                commit_ts: Some("2024-01-01T00:00:00Z".to_string()),
+                added: Some(10),
+                removed: Some(5),
+            }],
             total_files: 1,
             earliest_ts: Some("2024-01-01T00:00:00Z".to_string()),
             latest_ts: Some("2024-01-01T00:00:00Z".to_string()),

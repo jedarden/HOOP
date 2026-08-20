@@ -16,10 +16,10 @@
 //! Plan reference: §10 Phase 2 → Phase 3 gate | §6 Phase 2 deliverables 1-13
 //! Feeds into hoop-ttb.7.12 phase2 completion verification
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
 
 /// Phase 2 Core Deliverable (items 1-13 from plan §6)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -349,12 +349,22 @@ fn verify_deliverables() -> VerificationReport {
     for deliverable in &mut deliverables {
         let mut any_test_verified = false;
 
-        for (test_file, test_name) in deliverable.test_files.iter().zip(deliverable.test_names.iter()) {
+        for (test_file, test_name) in deliverable
+            .test_files
+            .iter()
+            .zip(deliverable.test_names.iter())
+        {
             if verify_test_exists(test_file, test_name) {
                 any_test_verified = true;
-                println!("✓ Deliverable {}: test {} exists in {}", deliverable.number, test_name, test_file);
+                println!(
+                    "✓ Deliverable {}: test {} exists in {}",
+                    deliverable.number, test_name, test_file
+                );
             } else {
-                println!("✗ Deliverable {}: test {} NOT FOUND in {}", deliverable.number, test_name, test_file);
+                println!(
+                    "✗ Deliverable {}: test {} NOT FOUND in {}",
+                    deliverable.number, test_name, test_file
+                );
             }
         }
 
@@ -392,7 +402,10 @@ fn phase2_exit_gate_all_core_deliverables_verified() {
     if let Err(e) = report.write_to_file(&output_path) {
         eprintln!("Warning: failed to write verification report: {}", e);
     } else {
-        println!("\nVerification report written to: {}", output_path.display());
+        println!(
+            "\nVerification report written to: {}",
+            output_path.display()
+        );
     }
 
     // Print summary
@@ -405,7 +418,10 @@ fn phase2_exit_gate_all_core_deliverables_verified() {
     // List unverified deliverables
     for deliverable in &report.deliverables {
         if !deliverable.verified {
-            println!("\n✗ Deliverable {}: {}", deliverable.number, deliverable.title);
+            println!(
+                "\n✗ Deliverable {}: {}",
+                deliverable.number, deliverable.title
+            );
             println!("  Description: {}", deliverable.description);
             println!("  Expected tests: {:?}", deliverable.test_names);
         }
@@ -445,7 +461,11 @@ fn phase2_exit_gate_report_format() {
 fn phase2_exit_gate_deliverable_count() {
     // Verify we have exactly 13 core deliverables defined
     let deliverables = phase2_deliverables();
-    assert_eq!(deliverables.len(), 13, "Phase 2 must have exactly 13 core deliverables");
+    assert_eq!(
+        deliverables.len(),
+        13,
+        "Phase 2 must have exactly 13 core deliverables"
+    );
 
     // Verify each has a number 1-13
     for (i, deliverable) in deliverables.iter().enumerate() {

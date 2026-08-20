@@ -22,7 +22,10 @@ fn test_scan_parse_with_flag_before_subcommand() {
     // Test: hoop --no-interactive scan /path/to/projects
     let result = parse_cli_with_flag(&["hoop", "--no-interactive", "scan", "/tmp"]);
 
-    assert!(result.is_ok(), "Should successfully parse flag before subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse flag before subcommand"
+    );
     let parsed = result.unwrap();
 
     assert!(parsed.no_interactive, "no_interactive should be true");
@@ -42,7 +45,10 @@ fn test_scan_parse_with_flag_after_subcommand() {
     // Test: hoop scan /path/to/projects --no-interactive
     let result = parse_cli_with_flag(&["hoop", "scan", "/tmp", "--no-interactive"]);
 
-    assert!(result.is_ok(), "Should successfully parse flag after subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse flag after subcommand"
+    );
     let parsed = result.unwrap();
 
     assert!(parsed.no_interactive, "no_interactive should be true");
@@ -62,10 +68,16 @@ fn test_scan_parse_with_short_flag_before_subcommand() {
     // Test: hoop -y scan /path/to/projects
     let result = parse_cli_with_flag(&["hoop", "-y", "scan", "/tmp"]);
 
-    assert!(result.is_ok(), "Should successfully parse short flag before subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse short flag before subcommand"
+    );
     let parsed = result.unwrap();
 
-    assert!(parsed.no_interactive, "no_interactive should be true with -y");
+    assert!(
+        parsed.no_interactive,
+        "no_interactive should be true with -y"
+    );
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
 }
 
@@ -74,10 +86,16 @@ fn test_scan_parse_with_short_flag_after_subcommand() {
     // Test: hoop scan /path/to/projects -y
     let result = parse_cli_with_flag(&["hoop", "scan", "/tmp", "-y"]);
 
-    assert!(result.is_ok(), "Should successfully parse short flag after subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse short flag after subcommand"
+    );
     let parsed = result.unwrap();
 
-    assert!(parsed.no_interactive, "no_interactive should be true with -y");
+    assert!(
+        parsed.no_interactive,
+        "no_interactive should be true with -y"
+    );
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
 }
 
@@ -86,10 +104,16 @@ fn test_scan_parse_without_flag() {
     // Test: hoop scan /path/to/projects (default behavior)
     let result = parse_cli_with_flag(&["hoop", "scan", "/tmp"]);
 
-    assert!(result.is_ok(), "Should successfully parse command without flag");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse command without flag"
+    );
     let parsed = result.unwrap();
 
-    assert!(!parsed.no_interactive, "no_interactive should default to false");
+    assert!(
+        !parsed.no_interactive,
+        "no_interactive should default to false"
+    );
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
 }
 
@@ -102,7 +126,10 @@ fn test_scan_parse_with_local_yes_flag() {
     assert!(result.is_ok(), "Should successfully parse local --yes flag");
     let parsed = result.unwrap();
 
-    assert!(!parsed.no_interactive, "Global no_interactive should remain false with local --yes");
+    assert!(
+        !parsed.no_interactive,
+        "Global no_interactive should remain false with local --yes"
+    );
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
     assert!(
         parsed.args.contains(&"--yes".to_string()),
@@ -119,7 +146,10 @@ fn test_scan_parse_with_both_flags() {
     assert!(result.is_ok(), "Should successfully parse both flags");
     let parsed = result.unwrap();
 
-    assert!(parsed.no_interactive, "Global no_interactive should be true");
+    assert!(
+        parsed.no_interactive,
+        "Global no_interactive should be true"
+    );
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
     assert!(
         parsed.args.contains(&"--yes".to_string()),
@@ -135,7 +165,10 @@ fn test_scan_flag_extraction_before_position() {
     let parsed = parse_flag_before_subcommand(&["scan", "/tmp"]).expect("Parse should succeed");
 
     let verification_result = verify_flag_extraction(&parsed, "before");
-    assert!(verification_result.is_ok(), "Flag extraction should verify for 'before' position");
+    assert!(
+        verification_result.is_ok(),
+        "Flag extraction should verify for 'before' position"
+    );
 
     // Additional assertions
     assert!(parsed.no_interactive);
@@ -148,7 +181,10 @@ fn test_scan_flag_extraction_after_position() {
     let parsed = parse_flag_after_subcommand(&["scan", "/tmp"]).expect("Parse should succeed");
 
     let verification_result = verify_flag_extraction(&parsed, "after");
-    assert!(verification_result.is_ok(), "Flag extraction should verify for 'after' position");
+    assert!(
+        verification_result.is_ok(),
+        "Flag extraction should verify for 'after' position"
+    );
 
     // Additional assertions
     assert!(parsed.no_interactive);
@@ -161,7 +197,10 @@ fn test_scan_no_flag_present_verification() {
     let parsed = parse_cli_with_flag(&["hoop", "scan", "/tmp"]).expect("Parse should succeed");
 
     let verification_result = verify_no_flag_present(&parsed);
-    assert!(verification_result.is_ok(), "Should verify no flag is present");
+    assert!(
+        verification_result.is_ok(),
+        "Should verify no flag is present"
+    );
 
     assert!(!parsed.no_interactive);
 }
@@ -173,8 +212,7 @@ fn test_scan_flag_propagation_from_main_to_handler() {
     // Verify that the no_interactive flag is correctly extracted in main()
     // and passed to scan_projects
 
-    let main_code = fs::read_to_string("src/main.rs")
-        .expect("Failed to read main.rs");
+    let main_code = fs::read_to_string("src/main.rs").expect("Failed to read main.rs");
 
     // Verify flag is extracted from parsed CLI
     assert!(
@@ -198,8 +236,7 @@ fn test_scan_flag_propagation_from_main_to_handler() {
 #[test]
 fn test_scan_handler_accepts_no_interactive_parameter() {
     // Verify that scan_projects handler actually uses the no_interactive parameter
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Verify function signature accepts no_interactive
     assert!(
@@ -218,8 +255,7 @@ fn test_scan_handler_accepts_no_interactive_parameter() {
 fn test_scan_no_interactive_or_yes_combination_logic() {
     // Verify the combination logic: no_interactive || auto_confirm
     // This means either flag being true should result in auto-registration
-    let main_code = fs::read_to_string("src/main.rs")
-        .expect("Failed to read main.rs");
+    let main_code = fs::read_to_string("src/main.rs").expect("Failed to read main.rs");
 
     // Verify the || logic is used
     assert!(
@@ -228,11 +264,13 @@ fn test_scan_no_interactive_or_yes_combination_logic() {
     );
 
     // Find the specific scan handler call
-    let scan_handler_pos = main_code.find("Commands::Scan { root, auto_confirm } =>")
+    let scan_handler_pos = main_code
+        .find("Commands::Scan { root, auto_confirm } =>")
         .expect("Should find Scan command handler");
 
     // Find the scan_projects call within the handler
-    let scan_call = main_code[scan_handler_pos..].find("projects::scan_projects(&root, no_interactive || auto_confirm)")
+    let scan_call = main_code[scan_handler_pos..]
+        .find("projects::scan_projects(&root, no_interactive || auto_confirm)")
         .expect("Should find scan_projects call with || logic");
 
     // Verify the logic is correct
@@ -248,19 +286,21 @@ fn test_scan_no_interactive_or_yes_combination_logic() {
 #[test]
 fn test_scan_auto_registers_when_no_interactive_true() {
     // Test that scan with no_interactive=true auto-registers without prompting
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the scan_projects function
-    let scan_start = projects_code.find("pub fn scan_projects")
+    let scan_start = projects_code
+        .find("pub fn scan_projects")
         .expect("Should find scan_projects function");
 
     // Find the no_interactive check within scan_projects
-    let no_interactive_check = projects_code[scan_start..].find("if no_interactive {")
+    let no_interactive_check = projects_code[scan_start..]
+        .find("if no_interactive {")
         .expect("Should find no_interactive check in scan_projects");
 
     // Verify auto-registration happens when no_interactive is true
-    let no_interactive_section = &projects_code[scan_start + no_interactive_check..scan_start + no_interactive_check + 500];
+    let no_interactive_section =
+        &projects_code[scan_start + no_interactive_check..scan_start + no_interactive_check + 500];
 
     assert!(
         no_interactive_section.contains("println!(\"  {} — registering\", default_name)"),
@@ -282,11 +322,11 @@ fn test_scan_auto_registers_when_no_interactive_true() {
 #[test]
 fn test_scan_prompts_when_no_interactive_false() {
     // Test that scan with no_interactive=false prompts for each discovery
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the scan_projects function
-    let scan_start = projects_code.find("pub fn scan_projects")
+    let scan_start = projects_code
+        .find("pub fn scan_projects")
         .expect("Should find scan_projects function");
 
     // Search the entire scan_projects function for interactive prompting code
@@ -318,11 +358,11 @@ fn test_scan_prompts_when_no_interactive_false() {
 #[test]
 fn test_scan_prompts_go_to_stderr() {
     // Verify that scan prompts go to stderr (not stdout) to avoid interfering with data output
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the scan_projects function
-    let scan_start = projects_code.find("pub fn scan_projects")
+    let scan_start = projects_code
+        .find("pub fn scan_projects")
         .expect("Should find scan_projects function");
 
     // Search the entire scan_projects function for stderr usage
@@ -350,19 +390,21 @@ fn test_scan_prompts_go_to_stderr() {
 fn test_scan_non_interactive_skips_rename_prompt() {
     // Verify that when no_interactive=true, the rename prompt is skipped
     // and the default name is used
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the scan_projects function
-    let scan_start = projects_code.find("pub fn scan_projects")
+    let scan_start = projects_code
+        .find("pub fn scan_projects")
         .expect("Should find scan_projects function");
 
     // Find the no_interactive check
-    let no_interactive_check = projects_code[scan_start..].find("if no_interactive {")
+    let no_interactive_check = projects_code[scan_start..]
+        .find("if no_interactive {")
         .expect("Should find no_interactive check in scan_projects");
 
     // Take the no_interactive section (from the if statement to the closing brace)
-    let no_interactive_section = &projects_code[scan_start + no_interactive_check..scan_start + no_interactive_check + 800];
+    let no_interactive_section =
+        &projects_code[scan_start + no_interactive_check..scan_start + no_interactive_check + 800];
 
     // Verify registry.add is called with None (no custom name)
     assert!(
@@ -617,8 +659,20 @@ fn test_scan_prompt_suppression_consistency_matrix() {
     // Test matrix: (no_interactive, reg_prompt_expected, rename_prompt_expected, auto_reg_expected)
     let test_cases = vec![
         // (no_interactive, reg_prompt, rename_prompt, auto_reg, description)
-        (true, false, false, true, "no_interactive=true: all prompts suppressed, auto-registers"),
-        (false, true, true, false, "no_interactive=false: all prompts shown, no auto-register"),
+        (
+            true,
+            false,
+            false,
+            true,
+            "no_interactive=true: all prompts suppressed, auto-registers",
+        ),
+        (
+            false,
+            true,
+            true,
+            false,
+            "no_interactive=false: all prompts shown, no auto-register",
+        ),
     ];
 
     for (no_interactive, expected_reg, expected_rename, expected_auto, desc) in test_cases {
@@ -628,15 +682,18 @@ fn test_scan_prompt_suppression_consistency_matrix() {
 
         assert_eq!(
             actual_reg, expected_reg,
-            "{}: registration prompt mismatch", desc
+            "{}: registration prompt mismatch",
+            desc
         );
         assert_eq!(
             actual_rename, expected_rename,
-            "{}: rename prompt mismatch", desc
+            "{}: rename prompt mismatch",
+            desc
         );
         assert_eq!(
             actual_auto, expected_auto,
-            "{}: auto-registration mismatch", desc
+            "{}: auto-registration mismatch",
+            desc
         );
     }
 }
@@ -659,20 +716,17 @@ fn test_scan_flag_position_yields_same_value() {
 
     // Both should yield the same no_interactive value
     assert_eq!(
-        before_parsed.no_interactive,
-        after_parsed.no_interactive,
+        before_parsed.no_interactive, after_parsed.no_interactive,
         "Flag position should not affect the extracted value"
     );
 
     assert!(
         before_parsed.no_interactive,
-        true,
         "Both positions should extract no_interactive as true"
     );
 
     assert_eq!(
-        before_parsed.command,
-        after_parsed.command,
+        before_parsed.command, after_parsed.command,
         "Both positions should extract the same command"
     );
 }
@@ -683,8 +737,7 @@ fn test_scan_flag_position_yields_same_value() {
 fn test_scan_local_yes_flag_exists() {
     // Verify that Scan command has its own local --yes flag (auto_confirm)
     // This is independent of the global --no-interactive flag
-    let main_code = fs::read_to_string("src/main.rs")
-        .expect("Failed to read main.rs");
+    let main_code = fs::read_to_string("src/main.rs").expect("Failed to read main.rs");
 
     // Verify Scan command has auto_confirm field
     assert!(
@@ -696,11 +749,11 @@ fn test_scan_local_yes_flag_exists() {
 #[test]
 fn test_scan_local_yes_flag_documented() {
     // Verify that the local --yes flag is documented
-    let main_code = fs::read_to_string("src/main.rs")
-        .expect("Failed to read main.rs");
+    let main_code = fs::read_to_string("src/main.rs").expect("Failed to read main.rs");
 
     // Find the Scan command definition
-    let scan_def_pos = main_code.find("/// Auto-register every workspace with .beads/")
+    let scan_def_pos = main_code
+        .find("/// Auto-register every workspace with .beads/")
         .expect("Should find Scan command documentation");
 
     let scan_section = &main_code[scan_def_pos..scan_def_pos + 300];
@@ -722,14 +775,15 @@ fn test_scan_local_yes_flag_documented() {
 fn test_scan_combines_global_and_local_flags() {
     // Verify that both global --no-interactive and local --yes work together
     // The handler should use: no_interactive || auto_confirm
-    let main_code = fs::read_to_string("src/main.rs")
-        .expect("Failed to read main.rs");
+    let main_code = fs::read_to_string("src/main.rs").expect("Failed to read main.rs");
 
     // Find the scan handler call
-    let scan_handler = main_code.find("Commands::Scan { root, auto_confirm } =>")
+    let scan_handler = main_code
+        .find("Commands::Scan { root, auto_confirm } =>")
         .expect("Should find Scan command handler");
 
-    let scan_call = main_code[scan_handler..].find("projects::scan_projects(&root, no_interactive || auto_confirm)")
+    let scan_call = main_code[scan_handler..]
+        .find("projects::scan_projects(&root, no_interactive || auto_confirm)")
         .expect("Should find scan_projects call");
 
     let handler_section = &main_code[scan_handler..scan_handler + scan_call + 100];
@@ -748,10 +802,8 @@ fn test_scan_comprehensive_no_interactive_coverage() {
     // Meta-test that verifies all critical aspects are covered
     // This serves as a checklist for the test suite
 
-    let main_code = fs::read_to_string("src/main.rs")
-        .expect("Failed to read main.rs");
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let main_code = fs::read_to_string("src/main.rs").expect("Failed to read main.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Checklist:
     // 1. Scan command has auto_confirm field (local --yes flag)
@@ -829,7 +881,6 @@ fn test_scan_handler_receives_no_interactive_true_from_global_flag() {
     let handler_value = extract_scan_handler_value(&parsed, None);
     assert!(
         handler_value,
-        true,
         "Handler should receive true when global --no-interactive is set"
     );
 }
@@ -844,7 +895,6 @@ fn test_scan_handler_receives_no_interactive_true_from_local_yes_flag() {
     let handler_value = extract_scan_handler_value(&parsed, Some(true));
     assert!(
         handler_value,
-        true,
         "Handler should receive true when local --yes is set (auto_confirm=true)"
     );
 }
@@ -859,7 +909,6 @@ fn test_scan_handler_receives_no_interactive_true_from_both_flags() {
     let handler_value = extract_scan_handler_value(&parsed, Some(true));
     assert!(
         handler_value,
-        true,
         "Handler should receive true when both flags are set (true || true = true)"
     );
 }
@@ -913,8 +962,8 @@ fn test_scan_handler_value_extraction_from_parsed_arguments() {
     assert!(value_global, "Global flag should produce true");
 
     // Case 2: Local flag only
-    let parsed_local = parse_cli_with_flag(&["hoop", "scan", "/tmp", "--yes"])
-        .expect("Parse with local flag");
+    let parsed_local =
+        parse_cli_with_flag(&["hoop", "scan", "/tmp", "--yes"]).expect("Parse with local flag");
     let value_local = simulate_handler_extraction(&parsed_local, true);
     assert!(value_local, "Local flag should produce true");
 
@@ -925,8 +974,8 @@ fn test_scan_handler_value_extraction_from_parsed_arguments() {
     assert!(value_both, "Both flags should produce true");
 
     // Case 4: Neither flag
-    let parsed_neither = parse_cli_with_flag(&["hoop", "scan", "/tmp"])
-        .expect("Parse without flags");
+    let parsed_neither =
+        parse_cli_with_flag(&["hoop", "scan", "/tmp"]).expect("Parse without flags");
     let value_neither = simulate_handler_extraction(&parsed_neither, false);
     assert!(!value_neither, "No flags should produce false");
 }
@@ -934,8 +983,8 @@ fn test_scan_handler_value_extraction_from_parsed_arguments() {
 #[test]
 fn test_scan_handler_short_flag_y_extraction() {
     // Test that the short -y flag is correctly extracted and passed to handler
-    let parsed = parse_cli_with_flag(&["hoop", "-y", "scan", "/tmp"])
-        .expect("Should parse short -y flag");
+    let parsed =
+        parse_cli_with_flag(&["hoop", "-y", "scan", "/tmp"]).expect("Should parse short -y flag");
 
     // Verify the global -y flag is recognized as no_interactive
     assert!(
@@ -1042,19 +1091,21 @@ fn test_scan_behavioral_no_prompts_when_no_interactive_true() {
     // - This branch calls registry.add() directly without any eprint! prompts
     // - All prompts (eprint! calls) are in the else/interactive branch
 
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the scan_projects function
-    let scan_start = projects_code.find("pub fn scan_projects")
+    let scan_start = projects_code
+        .find("pub fn scan_projects")
         .expect("Should find scan_projects function");
 
     // Find the no_interactive check
-    let no_interactive_check = projects_code[scan_start..].find("if no_interactive {")
+    let no_interactive_check = projects_code[scan_start..]
+        .find("if no_interactive {")
         .expect("Should find no_interactive check");
 
     // Get the no_interactive branch (from if statement to the else)
-    let no_interactive_section = &projects_code[scan_start + no_interactive_check..scan_start + no_interactive_check + 600];
+    let no_interactive_section =
+        &projects_code[scan_start + no_interactive_check..scan_start + no_interactive_check + 600];
 
     // Verify the no_interactive branch does NOT contain prompts
     assert!(
@@ -1092,15 +1143,16 @@ fn test_scan_behavioral_prompts_shown_when_no_interactive_false() {
     // This test verifies the actual behavior: when no_interactive=false,
     // scan_projects SHOULD write prompts to stderr
 
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the scan_projects function
-    let scan_start = projects_code.find("pub fn scan_projects")
+    let scan_start = projects_code
+        .find("pub fn scan_projects")
         .expect("Should find scan_projects function");
 
     // Find the else branch that contains the interactive prompts
-    let else_branch = projects_code[scan_start..].find("} else {")
+    let else_branch = projects_code[scan_start..]
+        .find("} else {")
         .expect("Should find else branch with interactive prompts");
 
     // Get the section starting from the else branch to search for prompts
@@ -1147,18 +1199,19 @@ fn test_scan_behavioral_prompts_use_stderr_not_stdout() {
     // This test verifies that prompts use eprint! (stderr) not println! (stdout)
     // This ensures prompts don't interfere with data output
 
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the scan_projects function
-    let scan_start = projects_code.find("pub fn scan_projects")
+    let scan_start = projects_code
+        .find("pub fn scan_projects")
         .expect("Should find scan_projects function");
 
     let scan_function = &projects_code[scan_start..];
 
     // Verify registration confirmation uses stdout (println!)
     assert!(
-        scan_function.contains("println!(\"    Registered '{}' -> {}\", entry.name, path.display())"),
+        scan_function
+            .contains("println!(\"    Registered '{}' -> {}\", entry.name, path.display())"),
         "Behavior: Registration result should go to stdout (println!)"
     );
 
@@ -1187,23 +1240,26 @@ fn test_scan_behavioral_no_stdin_when_no_interactive_true() {
     // This test verifies that when no_interactive=true,
     // scan_projects does NOT read from stdin (ensures non-blocking behavior)
 
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the scan_projects function
-    let scan_start = projects_code.find("pub fn scan_projects")
+    let scan_start = projects_code
+        .find("pub fn scan_projects")
         .expect("Should find scan_projects function");
 
     // Find the no_interactive check
-    let no_interactive_check = projects_code[scan_start..].find("if no_interactive {")
+    let no_interactive_check = projects_code[scan_start..]
+        .find("if no_interactive {")
         .expect("Should find no_interactive check");
 
     // Find the else branch that comes after the no_interactive branch
-    let interactive_start = projects_code[scan_start + no_interactive_check..].find("} else {")
+    let interactive_start = projects_code[scan_start + no_interactive_check..]
+        .find("} else {")
         .expect("Should find else branch for interactive mode");
 
     // Get the no_interactive branch (from if to else)
-    let no_interactive_section = &projects_code[scan_start + no_interactive_check..scan_start + no_interactive_check + interactive_start];
+    let no_interactive_section = &projects_code
+        [scan_start + no_interactive_check..scan_start + no_interactive_check + interactive_start];
 
     // Verify no stdin reading in the no_interactive branch
     assert!(
@@ -1212,7 +1268,8 @@ fn test_scan_behavioral_no_stdin_when_no_interactive_true() {
     );
 
     // Verify stdin reading exists in the else/interactive branch
-    let interactive_section = &projects_code[scan_start + no_interactive_check + interactive_start..];
+    let interactive_section =
+        &projects_code[scan_start + no_interactive_check + interactive_start..];
     assert!(
         interactive_section.contains("std::io::stdin().read_line"),
         "Behavior: Stdin reading should only occur in interactive mode (no_interactive=false)"
@@ -1226,11 +1283,11 @@ fn test_scan_behavioral_prompt_suppression_matrix() {
     // This test verifies the complete behavior matrix for prompt suppression
     // It ensures the code correctly handles both no_interactive=true and no_interactive=false
 
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the scan_projects function
-    let scan_start = projects_code.find("pub fn scan_projects")
+    let scan_start = projects_code
+        .find("pub fn scan_projects")
         .expect("Should find scan_projects function");
 
     let scan_function = &projects_code[scan_start..];
@@ -1242,12 +1299,14 @@ fn test_scan_behavioral_prompt_suppression_matrix() {
     );
 
     // Verify both branches exist and are mutually exclusive
-    let no_interactive_pos = scan_function.find("if no_interactive {")
+    let no_interactive_pos = scan_function
+        .find("if no_interactive {")
         .expect("Should find no_interactive check");
 
     // Find the else/interactive section (after the no_interactive branch closes)
     // We need to find the FIRST "} else {" after the no_interactive block
-    let else_section_start = scan_function[no_interactive_pos..].find("} else {")
+    let else_section_start = scan_function[no_interactive_pos..]
+        .find("} else {")
         .expect("Should find else branch after no_interactive check");
 
     // Get the if section (from if to the else)
@@ -1280,19 +1339,21 @@ fn test_scan_behavioral_uses_default_name_when_no_interactive_true() {
     // This test verifies that when no_interactive=true,
     // scan_projects uses the default name without prompting
 
-    let projects_code = fs::read_to_string("src/projects.rs")
-        .expect("Failed to read projects.rs");
+    let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the scan_projects function
-    let scan_start = projects_code.find("pub fn scan_projects")
+    let scan_start = projects_code
+        .find("pub fn scan_projects")
         .expect("Should find scan_projects function");
 
     // Find the no_interactive check
-    let no_interactive_check = projects_code[scan_start..].find("if no_interactive {")
+    let no_interactive_check = projects_code[scan_start..]
+        .find("if no_interactive {")
         .expect("Should find no_interactive check");
 
     // Get the no_interactive branch
-    let no_interactive_section = &projects_code[scan_start + no_interactive_check..scan_start + no_interactive_check + 600];
+    let no_interactive_section =
+        &projects_code[scan_start + no_interactive_check..scan_start + no_interactive_check + 600];
 
     // Verify registry.add is called with None (no custom name)
     assert!(

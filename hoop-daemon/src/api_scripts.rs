@@ -12,8 +12,7 @@ use axum::{
 };
 use notify::{RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "openapi")]
-use utoipa::ToSchema;
+use sha2::{Digest, Sha256};
 use std::{
     fs,
     io::{BufRead, BufReader},
@@ -24,11 +23,12 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use sha2::{Digest, Sha256};
 use tracing::{debug, info, warn};
+#[cfg(feature = "openapi")]
+use utoipa::ToSchema;
 
-use crate::DaemonState;
 use crate::fleet::{self, ActionKind, ActionResult};
+use crate::DaemonState;
 
 /// Script manifest metadata (from optional manifest.yml next to script)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -503,7 +503,8 @@ async fn list_scripts(
                 let manifest = s.manifest.as_ref();
                 match manifest.map(|m| &m.scope) {
                     None | Some(ScriptScope::Global) => true,
-                    Some(ScriptScope::Project) => manifest.map(|m| m.projects.contains(&project_name))
+                    Some(ScriptScope::Project) => manifest
+                        .map(|m| m.projects.contains(&project_name))
                         .unwrap_or(false),
                 }
             })
@@ -769,22 +770,17 @@ timeout_secs: 30
 
 /// Start file watcher for the scripts directory.
 /// Returns the watcher (must be kept alive for watching to work).
-pub fn start_watcher(
-    scripts_dir: PathBuf,
-    store: ScriptStore,
-) -> notify::RecommendedWatcher {
+pub fn start_watcher(scripts_dir: PathBuf, store: ScriptStore) -> notify::RecommendedWatcher {
     let watcher_scripts_dir = scripts_dir.clone();
     let mut watcher =
-        notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
-            match res {
-                Ok(_event) => {
-                    debug!("Scripts directory changed, reloading");
-                    let mut lib = store.write().unwrap();
-                    lib.load(&watcher_scripts_dir);
-                }
-                Err(e) => {
-                    warn!("Scripts watch error: {}", e);
-                }
+        notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| match res {
+            Ok(_event) => {
+                debug!("Scripts directory changed, reloading");
+                let mut lib = store.write().unwrap();
+                lib.load(&watcher_scripts_dir);
+            }
+            Err(e) => {
+                warn!("Scripts watch error: {}", e);
             }
         })
         .expect("failed to create scripts file watcher");

@@ -2,8 +2,8 @@
 //!
 //! This binary generates the OpenAPI 3.1 spec and writes it to stdout as YAML.
 
-use utoipa::OpenApi;
 use hoop_daemon::openapi::ApiDoc;
+use utoipa::OpenApi;
 
 fn main() -> anyhow::Result<()> {
     // The openapi feature must be enabled for this binary to work

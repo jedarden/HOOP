@@ -248,7 +248,7 @@ pub fn get_commits_for_bead(bead_id: &str) -> Result<Vec<BeadCommit>> {
     let conn = Connection::open(&db_path)?;
 
     let mut stmt = conn.prepare(
-        "SELECT bead_id, workspace, sha, ts FROM bead_commits WHERE bead_id = ?1 ORDER BY ts ASC"
+        "SELECT bead_id, workspace, sha, ts FROM bead_commits WHERE bead_id = ?1 ORDER BY ts ASC",
     )?;
 
     let rows = stmt.query_map(params![bead_id], |row| {
@@ -276,7 +276,7 @@ pub fn get_commits_for_workspace(workspace: &str) -> Result<Vec<BeadCommit>> {
     let conn = Connection::open(&db_path)?;
 
     let mut stmt = conn.prepare(
-        "SELECT bead_id, workspace, sha, ts FROM bead_commits WHERE workspace = ?1 ORDER BY ts ASC"
+        "SELECT bead_id, workspace, sha, ts FROM bead_commits WHERE workspace = ?1 ORDER BY ts ASC",
     )?;
 
     let rows = stmt.query_map(params![workspace], |row| {

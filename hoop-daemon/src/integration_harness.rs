@@ -164,9 +164,7 @@ agent:
     debug!("Spawning test daemon at {}", base_url);
 
     // Spawn the daemon in a background task
-    let handle = tokio::spawn(async move {
-        crate::serve(config).await
-    });
+    let handle = tokio::spawn(async move { crate::serve(config).await });
 
     // Wait for daemon to be ready
     wait_for_daemon_ready(&base_url).await?;
@@ -229,7 +227,11 @@ async fn wait_for_daemon_ready(base_url: &str) -> anyhow::Result<()> {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 
-    anyhow::bail!("Daemon did not become ready within {:?} at {}", timeout, base_url);
+    anyhow::bail!(
+        "Daemon did not become ready within {:?} at {}",
+        timeout,
+        base_url
+    );
 }
 
 #[cfg(test)]
@@ -238,9 +240,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_spawn_and_shutdown() {
-        let (base_url, daemon) = spawn_test_daemon()
-            .await
-            .expect("Failed to spawn daemon");
+        let (base_url, daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
         // Verify health endpoint works
         let client = reqwest::Client::new();
@@ -258,12 +258,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_spawn_with_custom_config() {
-        let (base_url, _daemon) = spawn_test_daemon_with_config::<fn(&mut Config)>(Some(|config| {
-            // Customize the config
-            config.allow_br_mismatch = true;
-        }))
-        .await
-        .expect("Failed to spawn daemon");
+        let (base_url, _daemon) =
+            spawn_test_daemon_with_config::<fn(&mut Config)>(Some(|config| {
+                // Customize the config
+                config.allow_br_mismatch = true;
+            }))
+            .await
+            .expect("Failed to spawn daemon");
 
         // Verify daemon is accessible
         let client = reqwest::Client::new();

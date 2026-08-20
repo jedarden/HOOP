@@ -5,9 +5,9 @@
 //! 2. The hoop_orphan_bead_count metric is updated
 //! 3. Orphan beads can be attached to existing Stitches
 
+use rusqlite::Connection;
 use std::fs;
 use tempfile::TempDir;
-use rusqlite::Connection;
 
 #[test]
 fn orphan_bead_detection_and_attachment() {
@@ -142,11 +142,7 @@ fn orphan_attach_to_stitch_creates_referenced_link() {
     let bead_id = "hoop-ttb.456";
     let workspace = project_path.to_string_lossy().to_string();
 
-    let result = hoop_daemon::orphan_beads::attach_orphan_to_stitch(
-        stitch_id,
-        bead_id,
-        &workspace,
-    );
+    let result = hoop_daemon::orphan_beads::attach_orphan_to_stitch(stitch_id, bead_id, &workspace);
 
     assert!(result.is_ok(), "attach_orphan_to_stitch should succeed");
 
@@ -159,16 +155,19 @@ fn orphan_attach_to_stitch_creates_referenced_link() {
         )
         .unwrap_or(false);
 
-    assert!(link_exists, "stitch_beads link should exist with relationship='referenced'");
-
-    // Test duplicate attach (should be idempotent)
-    let result2 = hoop_daemon::orphan_beads::attach_orphan_to_stitch(
-        stitch_id,
-        bead_id,
-        &workspace,
+    assert!(
+        link_exists,
+        "stitch_beads link should exist with relationship='referenced'"
     );
 
-    assert!(result2.is_ok(), "duplicate attach should succeed (idempotent)");
+    // Test duplicate attach (should be idempotent)
+    let result2 =
+        hoop_daemon::orphan_beads::attach_orphan_to_stitch(stitch_id, bead_id, &workspace);
+
+    assert!(
+        result2.is_ok(),
+        "duplicate attach should succeed (idempotent)"
+    );
 
     // Verify we still have only one row
     let count: i64 = conn
@@ -219,15 +218,14 @@ fn orphan_attach_preserves_existing_relationships() {
     ).unwrap();
 
     // Attempting to attach as 'referenced' should fail due to PRIMARY KEY constraint
-    let result = hoop_daemon::orphan_beads::attach_orphan_to_stitch(
-        stitch_id,
-        bead_id,
-        &workspace,
-    );
+    let result = hoop_daemon::orphan_beads::attach_orphan_to_stitch(stitch_id, bead_id, &workspace);
 
     // The function should succeed (it checks for existence first), but verify
     // the relationship is still 'created-here'
-    assert!(result.is_ok(), "attach should succeed when link already exists");
+    assert!(
+        result.is_ok(),
+        "attach should succeed when link already exists"
+    );
 
     let relationship: String = conn
         .query_row(
@@ -237,5 +235,8 @@ fn orphan_attach_preserves_existing_relationships() {
         )
         .unwrap();
 
-    assert_eq!(relationship, "created-here", "existing relationship should be preserved");
+    assert_eq!(
+        relationship, "created-here",
+        "existing relationship should be preserved"
+    );
 }

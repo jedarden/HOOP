@@ -102,9 +102,7 @@ fn create_test_config(projects: Vec<ProjectsRegistryProjectsItem>) -> ProjectsCo
 
 /// Health check logic: at least one runtime in Healthy/Starting → ready
 fn is_ready(snapshots: &[ProjectRuntimeStatus]) -> bool {
-    snapshots
-        .iter()
-        .any(|s| s.state.is_running())
+    snapshots.iter().any(|s| s.state.is_running())
 }
 
 #[tokio::test]
@@ -167,10 +165,7 @@ async fn test_status_subscription_receives_updates() {
     let mut status_rx = supervisor.subscribe_status();
 
     // Create a project runtime
-    let config = create_test_config(vec![create_test_project(
-        "test-project",
-        project_path,
-    )]);
+    let config = create_test_config(vec![create_test_project("test-project", project_path)]);
 
     supervisor
         .reconcile(&config)
@@ -205,10 +200,7 @@ async fn test_multiple_subscribers_receive_updates() {
     let mut rx3 = supervisor.subscribe_status();
 
     // Create a project runtime
-    let config = create_test_config(vec![create_test_project(
-        "test-project",
-        project_path,
-    )]);
+    let config = create_test_config(vec![create_test_project("test-project", project_path)]);
 
     supervisor
         .reconcile(&config)
@@ -246,10 +238,7 @@ async fn test_health_check_ready_when_healthy() {
     assert!(!is_ready(&snapshot), "Should not be ready with no runtimes");
 
     // Add a project
-    let config = create_test_config(vec![create_test_project(
-        "test-project",
-        project_path,
-    )]);
+    let config = create_test_config(vec![create_test_project("test-project", project_path)]);
 
     supervisor
         .reconcile(&config)
@@ -273,10 +262,7 @@ async fn test_health_check_not_ready_when_all_failed() {
     let supervisor = create_test_supervisor().await;
 
     // Add a project
-    let config = create_test_config(vec![create_test_project(
-        "test-project",
-        project_path,
-    )]);
+    let config = create_test_config(vec![create_test_project("test-project", project_path)]);
 
     supervisor
         .reconcile(&config)
@@ -306,7 +292,10 @@ async fn test_health_check_not_ready_when_all_failed() {
         worker_count: 0,
     }];
 
-    assert!(!is_ready(&all_failed), "Should not be ready when all failed");
+    assert!(
+        !is_ready(&all_failed),
+        "Should not be ready when all failed"
+    );
 
     let all_error = vec![ProjectRuntimeStatus {
         project_name: "test".to_string(),
@@ -320,7 +309,10 @@ async fn test_health_check_not_ready_when_all_failed() {
         worker_count: 0,
     }];
 
-    assert!(!is_ready(&all_error), "Should not be ready when all in error state");
+    assert!(
+        !is_ready(&all_error),
+        "Should not be ready when all in error state"
+    );
 
     let all_abandoned = vec![ProjectRuntimeStatus {
         project_name: "test".to_string(),
@@ -334,7 +326,10 @@ async fn test_health_check_not_ready_when_all_failed() {
         worker_count: 0,
     }];
 
-    assert!(!is_ready(&all_abandoned), "Should not be ready when all abandoned");
+    assert!(
+        !is_ready(&all_abandoned),
+        "Should not be ready when all abandoned"
+    );
 }
 
 #[tokio::test]
@@ -375,7 +370,10 @@ async fn test_health_check_ready_with_one_healthy() {
         },
     ];
 
-    assert!(is_ready(&mixed_states), "Should be ready with at least one healthy");
+    assert!(
+        is_ready(&mixed_states),
+        "Should be ready with at least one healthy"
+    );
 
     // Also works with Starting state
     let mixed_with_starting = vec![
@@ -456,10 +454,7 @@ async fn test_status_broadcasts_on_state_changes() {
     let mut update_count = 0;
 
     // Create a project runtime
-    let config = create_test_config(vec![create_test_project(
-        "test-project",
-        project_path,
-    )]);
+    let config = create_test_config(vec![create_test_project("test-project", project_path)]);
 
     supervisor
         .reconcile(&config)
@@ -497,10 +492,7 @@ async fn test_bead_count_in_status() {
     let supervisor = create_test_supervisor().await;
 
     // Create a project runtime
-    let config = create_test_config(vec![create_test_project(
-        "test-project",
-        project_path,
-    )]);
+    let config = create_test_config(vec![create_test_project("test-project", project_path)]);
 
     supervisor
         .reconcile(&config)

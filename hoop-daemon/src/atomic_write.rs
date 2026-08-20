@@ -139,12 +139,10 @@ pub fn atomic_write_file_str(dest: &Path, content: &str) -> Result<()> {
 ///
 /// Allows customizing the temporary file name prefix instead of using the
 /// destination filename + UUID.
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct AtomicWriteBuilder {
     tmp_prefix: Option<String>,
 }
-
 
 impl AtomicWriteBuilder {
     /// Create a new builder with default settings.

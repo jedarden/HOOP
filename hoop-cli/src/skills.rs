@@ -111,8 +111,7 @@ pub enum SkillsCommands {
 
 /// Get the skills directory
 pub fn skills_dir() -> Result<PathBuf> {
-    let mut path = dirs::home_dir()
-        .ok_or_else(|| anyhow!("Cannot determine home directory"))?;
+    let mut path = dirs::home_dir().ok_or_else(|| anyhow!("Cannot determine home directory"))?;
     path.push(".hoop");
     path.push("skills");
     Ok(path)
@@ -139,13 +138,18 @@ pub fn import_skill(path: &str) -> Result<SkillImportSummary> {
         source_path.clone()
     } else {
         // Assume tarball - extract to temp dir
-        return Err(anyhow!("Tarball import not yet implemented - please extract and import from directory"));
+        return Err(anyhow!(
+            "Tarball import not yet implemented - please extract and import from directory"
+        ));
     };
 
     // Read manifest.yml
     let manifest_path = temp_skill_dir.join("manifest.yml");
     if !manifest_path.exists() {
-        return Err(anyhow!("manifest.yml not found in {}", temp_skill_dir.display()));
+        return Err(anyhow!(
+            "manifest.yml not found in {}",
+            temp_skill_dir.display()
+        ));
     }
 
     let manifest_yaml = fs::read_to_string(&manifest_path)
@@ -175,7 +179,11 @@ pub fn import_skill(path: &str) -> Result<SkillImportSummary> {
 
     let active_path = skills_dir()?.join(&skill_name);
     if active_path.exists() {
-        return Err(anyhow!("Skill '{}' is already active. Use `hoop skills disable {}` first.", skill_name, skill_name));
+        return Err(anyhow!(
+            "Skill '{}' is already active. Use `hoop skills disable {}` first.",
+            skill_name,
+            skill_name
+        ));
     }
 
     // Copy skill directory to pending
@@ -205,11 +213,18 @@ pub fn enable_skill(name: &str) -> Result<SkillEnableEvent> {
     let active_path = skills_dir()?.join(name);
 
     if !pending_path.exists() {
-        return Err(anyhow!("Skill '{}' is not pending. Import it first with `hoop skills import <path>`", name));
+        return Err(anyhow!(
+            "Skill '{}' is not pending. Import it first with `hoop skills import <path>`",
+            name
+        ));
     }
 
     if active_path.exists() {
-        return Err(anyhow!("Skill '{}' is already active. Disable it first with `hoop skills disable {}`.", name, name));
+        return Err(anyhow!(
+            "Skill '{}' is already active. Disable it first with `hoop skills disable {}`.",
+            name,
+            name
+        ));
     }
 
     // Read run file for SHA-256
@@ -249,7 +264,11 @@ pub fn disable_skill(name: &str) -> Result<()> {
     }
 
     if pending_path.exists() {
-        return Err(anyhow!("Skill '{}' is already pending. Remove it first with `hoop skills remove {}`.", name, name));
+        return Err(anyhow!(
+            "Skill '{}' is already pending. Remove it first with `hoop skills remove {}`.",
+            name,
+            name
+        ));
     }
 
     // Move from active to pending
@@ -270,7 +289,11 @@ pub fn list_skills() -> Result<Vec<SkillListEntry>> {
     if let Ok(dir) = fs::read_dir(&skills_base) {
         for entry in dir.filter_map(Result::ok) {
             let path = entry.path();
-            if path.is_dir() && !path.file_name().is_none_or(|n| n.to_string_lossy().starts_with('.')) {
+            if path.is_dir()
+                && !path
+                    .file_name()
+                    .is_none_or(|n| n.to_string_lossy().starts_with('.'))
+            {
                 if let Some(entry) = read_skill_entry(&path, SkillState::Active) {
                     entries.push(entry);
                 }
@@ -292,12 +315,10 @@ pub fn list_skills() -> Result<Vec<SkillListEntry>> {
         }
     }
 
-    entries.sort_by(|a, b| {
-        match (&a.state, &b.state) {
-            (SkillState::Pending, SkillState::Active) => std::cmp::Ordering::Less,
-            (SkillState::Active, SkillState::Pending) => std::cmp::Ordering::Greater,
-            _ => a.name.cmp(&b.name),
-        }
+    entries.sort_by(|a, b| match (&a.state, &b.state) {
+        (SkillState::Pending, SkillState::Active) => std::cmp::Ordering::Less,
+        (SkillState::Active, SkillState::Pending) => std::cmp::Ordering::Greater,
+        _ => a.name.cmp(&b.name),
     });
 
     Ok(entries)
@@ -402,7 +423,6 @@ enum SkillScope {
     Pattern,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillListEntry {
     pub name: String,
@@ -455,23 +475,26 @@ fn analyze_run_script(path: &Path) -> Result<RunScriptInfo> {
         });
     }
 
-    let metadata = fs::metadata(path)
-        .map_err(|e| anyhow!("Failed to read run script metadata: {}", e))?;
+    let metadata =
+        fs::metadata(path).map_err(|e| anyhow!("Failed to read run script metadata: {}", e))?;
     let size = metadata.len();
     let executable = metadata.permissions().mode() & 0o111 != 0;
 
-    let extension = path.extension()
+    let extension = path
+        .extension()
         .and_then(|e| e.to_str())
         .map(|s| s.to_string());
 
-    let content = fs::read(path)
-        .map_err(|e| anyhow!("Failed to read run script: {}", e))?;
+    let content = fs::read(path).map_err(|e| anyhow!("Failed to read run script: {}", e))?;
 
     let shebang = if content.starts_with(b"#!") {
-        Some(content.iter()
-            .take_while(|&&b| b != b'\n')
-            .map(|&b| b as char)
-            .collect::<String>())
+        Some(
+            content
+                .iter()
+                .take_while(|&&b| b != b'\n')
+                .map(|&b| b as char)
+                .collect::<String>(),
+        )
     } else {
         None
     };
@@ -489,8 +512,7 @@ fn analyze_run_script(path: &Path) -> Result<RunScriptInfo> {
 }
 
 fn compute_sha256(path: &Path) -> Result<String> {
-    let content = fs::read(path)
-        .map_err(|e| anyhow!("Failed to read file for SHA-256: {}", e))?;
+    let content = fs::read(path).map_err(|e| anyhow!("Failed to read file for SHA-256: {}", e))?;
     Ok(compute_sha256_from_bytes(&content))
 }
 
@@ -504,8 +526,8 @@ fn copy_directory(source: &Path, dest: &Path) -> Result<()> {
     fs::create_dir_all(dest)
         .map_err(|e| anyhow!("Failed to create destination directory: {}", e))?;
 
-    for entry in fs::read_dir(source)
-        .map_err(|e| anyhow!("Failed to read source directory: {}", e))?
+    for entry in
+        fs::read_dir(source).map_err(|e| anyhow!("Failed to read source directory: {}", e))?
     {
         let entry = entry?;
         let ty = entry.file_type()?;
@@ -561,7 +583,9 @@ fn write_skill_enable_audit(event: &SkillEnableEvent) -> Result<()> {
             [],
             |row| row.get(0),
         )
-        .unwrap_or_else(|_| "0000000000000000000000000000000000000000000000000000000000000000".to_string());
+        .unwrap_or_else(|_| {
+            "0000000000000000000000000000000000000000000000000000000000000000".to_string()
+        });
 
     // Generate audit row ID and timestamp (use event's timestamp)
     let id = event.id.clone();
@@ -625,8 +649,7 @@ fn get_previous_sha256(_name: &str) -> Result<Option<String>> {
 }
 
 fn fleet_db_path() -> Result<PathBuf> {
-    let mut path = dirs::home_dir()
-        .ok_or_else(|| anyhow!("Cannot determine home directory"))?;
+    let mut path = dirs::home_dir().ok_or_else(|| anyhow!("Cannot determine home directory"))?;
     path.push(".hoop");
     path.push("fleet.db");
     Ok(path)
@@ -649,190 +672,188 @@ impl From<SkillManifest> for SkillManifestPublic {
 /// Handle skills commands
 pub async fn handle_skills(cmd: SkillsCommands) -> anyhow::Result<()> {
     match cmd {
-        SkillsCommands::Import { path } => {
-            match import_skill(&path) {
-                Ok(summary) => {
-                    println!("Skill imported to quarantine:");
-                    println!();
-                    println!("  Name: {}", summary.name);
-                    println!("  Description: {}", summary.description);
-                    println!("  Summary: {}", summary.summary);
-                    println!("  Scope: {}", summary.scope);
-                    if !summary.projects.is_empty() {
-                        println!("  Projects: {}", summary.projects.join(", "));
-                    }
-                    if let Some(pattern) = &summary.pattern {
-                        println!("  Pattern: {}", pattern);
-                    }
-                    println!();
-                    println!("  Run script:");
-                    println!("    Exists: {}", summary.run_info.exists);
-                    if let Some(size) = summary.run_info.size {
-                        println!("    Size: {} bytes", size);
-                    }
-                    println!("    Executable: {}", summary.run_info.executable);
-                    if let Some(shebang) = &summary.run_info.shebang {
-                        println!("    Shebang: {}", shebang);
-                    }
-                    if let Some(ext) = &summary.run_info.extension {
-                        println!("    Extension: {}", ext);
-                    }
-                    if let Some(hash) = &summary.run_info.sha256 {
-                        println!("    SHA-256: {}", hash);
-                    }
-                    println!();
-                    println!("  Manifest YAML:");
-                    for line in summary.manifest_yaml.lines() {
-                        println!("    {}", line);
-                    }
-                    println!();
-                    println!("Imported at: {}", summary.imported_at);
-                    println!("Pending path: {}", summary.pending_path.display());
-                    println!();
-                    println!("Review the manifest and run script above, then enable with:");
-                    println!("  hoop skills enable {}", summary.name);
+        SkillsCommands::Import { path } => match import_skill(&path) {
+            Ok(summary) => {
+                println!("Skill imported to quarantine:");
+                println!();
+                println!("  Name: {}", summary.name);
+                println!("  Description: {}", summary.description);
+                println!("  Summary: {}", summary.summary);
+                println!("  Scope: {}", summary.scope);
+                if !summary.projects.is_empty() {
+                    println!("  Projects: {}", summary.projects.join(", "));
                 }
-                Err(e) => {
-                    eprintln!("Import failed: {}", e);
-                    std::process::exit(1);
+                if let Some(pattern) = &summary.pattern {
+                    println!("  Pattern: {}", pattern);
                 }
+                println!();
+                println!("  Run script:");
+                println!("    Exists: {}", summary.run_info.exists);
+                if let Some(size) = summary.run_info.size {
+                    println!("    Size: {} bytes", size);
+                }
+                println!("    Executable: {}", summary.run_info.executable);
+                if let Some(shebang) = &summary.run_info.shebang {
+                    println!("    Shebang: {}", shebang);
+                }
+                if let Some(ext) = &summary.run_info.extension {
+                    println!("    Extension: {}", ext);
+                }
+                if let Some(hash) = &summary.run_info.sha256 {
+                    println!("    SHA-256: {}", hash);
+                }
+                println!();
+                println!("  Manifest YAML:");
+                for line in summary.manifest_yaml.lines() {
+                    println!("    {}", line);
+                }
+                println!();
+                println!("Imported at: {}", summary.imported_at);
+                println!("Pending path: {}", summary.pending_path.display());
+                println!();
+                println!("Review the manifest and run script above, then enable with:");
+                println!("  hoop skills enable {}", summary.name);
             }
-        }
-        SkillsCommands::Enable { name } => {
-            match enable_skill(&name) {
-                Ok(event) => {
-                    println!("Skill '{}' enabled successfully", name);
-                    println!("  Enabled by: {}", event.actor);
-                    println!("  At: {}", event.ts);
-                    if let Some(prev) = &event.prev_sha256 {
-                        println!("  Previous SHA-256: {}", prev);
-                    }
-                    println!("  New SHA-256: {}", event.new_sha256);
-                }
-                Err(e) => {
-                    eprintln!("Enable failed: {}", e);
-                    std::process::exit(1);
-                }
+            Err(e) => {
+                eprintln!("Import failed: {}", e);
+                std::process::exit(1);
             }
-        }
-        SkillsCommands::Disable { name } => {
-            match disable_skill(&name) {
-                Ok(()) => {
-                    println!("Skill '{}' disabled", name);
-                    println!("Moved to pending. Re-enable with: hoop skills enable {}", name);
+        },
+        SkillsCommands::Enable { name } => match enable_skill(&name) {
+            Ok(event) => {
+                println!("Skill '{}' enabled successfully", name);
+                println!("  Enabled by: {}", event.actor);
+                println!("  At: {}", event.ts);
+                if let Some(prev) = &event.prev_sha256 {
+                    println!("  Previous SHA-256: {}", prev);
                 }
-                Err(e) => {
-                    eprintln!("Disable failed: {}", e);
-                    std::process::exit(1);
-                }
+                println!("  New SHA-256: {}", event.new_sha256);
             }
-        }
-        SkillsCommands::List { json } => {
-            match list_skills() {
-                Ok(entries) => {
-                    if json {
-                        println!("{}", serde_json::to_string_pretty(&entries)?);
+            Err(e) => {
+                eprintln!("Enable failed: {}", e);
+                std::process::exit(1);
+            }
+        },
+        SkillsCommands::Disable { name } => match disable_skill(&name) {
+            Ok(()) => {
+                println!("Skill '{}' disabled", name);
+                println!(
+                    "Moved to pending. Re-enable with: hoop skills enable {}",
+                    name
+                );
+            }
+            Err(e) => {
+                eprintln!("Disable failed: {}", e);
+                std::process::exit(1);
+            }
+        },
+        SkillsCommands::List { json } => match list_skills() {
+            Ok(entries) => {
+                if json {
+                    println!("{}", serde_json::to_string_pretty(&entries)?);
+                } else {
+                    if entries.is_empty() {
+                        println!("No skills found");
                     } else {
-                        if entries.is_empty() {
-                            println!("No skills found");
-                        } else {
-                            let mut active_count = 0;
-                            let mut pending_count = 0;
+                        let mut active_count = 0;
+                        let mut pending_count = 0;
 
-                            for entry in &entries {
-                                if entry.state == SkillState::Active {
-                                    active_count += 1;
-                                } else {
-                                    pending_count += 1;
-                                }
+                        for entry in &entries {
+                            if entry.state == SkillState::Active {
+                                active_count += 1;
+                            } else {
+                                pending_count += 1;
                             }
+                        }
 
-                            println!("Skills ({} active, {} pending):", active_count, pending_count);
-                            println!();
+                        println!(
+                            "Skills ({} active, {} pending):",
+                            active_count, pending_count
+                        );
+                        println!();
 
-                            let mut current_state = None;
-                            for entry in &entries {
-                                if current_state != Some(entry.state.clone()) {
-                                    println!("  [{}]", format!("{:?}", entry.state).to_lowercase());
-                                    current_state = Some(entry.state.clone());
-                                }
-                                let exec_marker = if entry.executable { "" } else { " (not executable)" };
-                                println!("    {}{} - {}", entry.name, exec_marker, entry.description);
+                        let mut current_state = None;
+                        for entry in &entries {
+                            if current_state != Some(entry.state.clone()) {
+                                println!("  [{}]", format!("{:?}", entry.state).to_lowercase());
+                                current_state = Some(entry.state.clone());
                             }
+                            let exec_marker = if entry.executable {
+                                ""
+                            } else {
+                                " (not executable)"
+                            };
+                            println!("    {}{} - {}", entry.name, exec_marker, entry.description);
                         }
                     }
                 }
-                Err(e) => {
-                    eprintln!("List failed: {}", e);
-                    std::process::exit(1);
-                }
             }
-        }
-        SkillsCommands::Show { name } => {
-            match show_skill(&name) {
-                Ok(detail) => {
-                    println!("Skill: {}", detail.name);
-                    println!("State: {}", format!("{:?}", detail.state).to_lowercase());
+            Err(e) => {
+                eprintln!("List failed: {}", e);
+                std::process::exit(1);
+            }
+        },
+        SkillsCommands::Show { name } => match show_skill(&name) {
+            Ok(detail) => {
+                println!("Skill: {}", detail.name);
+                println!("State: {}", format!("{:?}", detail.state).to_lowercase());
+                println!();
+                println!("Manifest:");
+                println!("  Name: {}", detail.manifest.name);
+                println!("  Description: {}", detail.manifest.description);
+                println!("  Summary: {}", detail.manifest.summary);
+                println!("  Scope: {}", detail.manifest.scope);
+                if !detail.manifest.projects.is_empty() {
+                    println!("  Projects: {}", detail.manifest.projects.join(", "));
+                }
+                if let Some(pattern) = &detail.manifest.pattern {
+                    println!("  Pattern: {}", pattern);
+                }
+                println!("  Timeout: {} seconds", detail.manifest.timeout_secs);
+                println!();
+                println!("Run script:");
+                println!("  Path: {}", detail.path.join("run").display());
+                println!("  Exists: {}", detail.run_info.exists);
+                if let Some(size) = detail.run_info.size {
+                    println!("  Size: {} bytes", size);
+                }
+                println!("  Executable: {}", detail.run_info.executable);
+                if let Some(shebang) = &detail.run_info.shebang {
+                    println!("  Shebang: {}", shebang);
+                }
+                if let Some(ext) = &detail.run_info.extension {
+                    println!("  Extension: {}", ext);
+                }
+                if let Some(hash) = &detail.run_info.sha256 {
+                    println!("  SHA-256: {}", hash);
+                }
+                println!();
+                println!("Full manifest YAML:");
+                for line in detail.manifest_yaml.lines() {
+                    println!("  {}", line);
+                }
+                if let Some(readme) = &detail.readme {
                     println!();
-                    println!("Manifest:");
-                    println!("  Name: {}", detail.manifest.name);
-                    println!("  Description: {}", detail.manifest.description);
-                    println!("  Summary: {}", detail.manifest.summary);
-                    println!("  Scope: {}", detail.manifest.scope);
-                    if !detail.manifest.projects.is_empty() {
-                        println!("  Projects: {}", detail.manifest.projects.join(", "));
-                    }
-                    if let Some(pattern) = &detail.manifest.pattern {
-                        println!("  Pattern: {}", pattern);
-                    }
-                    println!("  Timeout: {} seconds", detail.manifest.timeout_secs);
-                    println!();
-                    println!("Run script:");
-                    println!("  Path: {}", detail.path.join("run").display());
-                    println!("  Exists: {}", detail.run_info.exists);
-                    if let Some(size) = detail.run_info.size {
-                        println!("  Size: {} bytes", size);
-                    }
-                    println!("  Executable: {}", detail.run_info.executable);
-                    if let Some(shebang) = &detail.run_info.shebang {
-                        println!("  Shebang: {}", shebang);
-                    }
-                    if let Some(ext) = &detail.run_info.extension {
-                        println!("  Extension: {}", ext);
-                    }
-                    if let Some(hash) = &detail.run_info.sha256 {
-                        println!("  SHA-256: {}", hash);
-                    }
-                    println!();
-                    println!("Full manifest YAML:");
-                    for line in detail.manifest_yaml.lines() {
+                    println!("README.md:");
+                    for line in readme.lines() {
                         println!("  {}", line);
                     }
-                    if let Some(readme) = &detail.readme {
-                        println!();
-                        println!("README.md:");
-                        for line in readme.lines() {
-                            println!("  {}", line);
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Show failed: {}", e);
-                    std::process::exit(1);
                 }
             }
-        }
-        SkillsCommands::Remove { name } => {
-            match remove_skill(&name) {
-                Ok(()) => {
-                    println!("Skill '{}' removed", name);
-                }
-                Err(e) => {
-                    eprintln!("Remove failed: {}", e);
-                    std::process::exit(1);
-                }
+            Err(e) => {
+                eprintln!("Show failed: {}", e);
+                std::process::exit(1);
             }
-        }
+        },
+        SkillsCommands::Remove { name } => match remove_skill(&name) {
+            Ok(()) => {
+                println!("Skill '{}' removed", name);
+            }
+            Err(e) => {
+                eprintln!("Remove failed: {}", e);
+                std::process::exit(1);
+            }
+        },
     }
 
     Ok(())

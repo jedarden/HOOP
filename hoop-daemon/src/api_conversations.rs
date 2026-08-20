@@ -324,11 +324,9 @@ async fn list_conversations(
 
     // Sort results
     if descending {
-        all_conversations
-            .sort_by_key(|b| std::cmp::Reverse(b.get_sort_key(sort_field)));
+        all_conversations.sort_by_key(|b| std::cmp::Reverse(b.get_sort_key(sort_field)));
     } else {
-        all_conversations
-            .sort_by_key(|a| a.get_sort_key(sort_field));
+        all_conversations.sort_by_key(|a| a.get_sort_key(sort_field));
     }
 
     // Apply limit

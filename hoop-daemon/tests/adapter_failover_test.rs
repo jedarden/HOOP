@@ -14,9 +14,9 @@ use std::time::Duration;
 use hoop_daemon::agent_adapter::AdapterKind;
 use hoop_daemon::agent_session::AgentAdapterConfig;
 use hoop_daemon::fleet;
-use tracing::info;
 use reqwest::Client;
 use tokio::time::timeout;
+use tracing::info;
 
 mod integration_harness;
 use integration_harness::spawn_test_daemon_with_config;
@@ -154,7 +154,9 @@ async fn daemon_survives_simulated_anthropic_5xx() {
     .await
     .expect("Failed to spawn daemon");
 
-    let client = FailoverClient::new(_base_url.clone()).await.expect("Failed to create client");
+    let client = FailoverClient::new(_base_url.clone())
+        .await
+        .expect("Failed to create client");
 
     // Verify daemon is healthy initially
     let health = client.healthz().await.expect("Health check failed");
@@ -174,7 +176,10 @@ async fn daemon_survives_simulated_anthropic_5xx() {
 
     // Verify daemon is still healthy after the simulated error
     let health = client.healthz().await.expect("Health check failed");
-    assert_eq!(health["status"], "ok", "Daemon should remain healthy after 5xx");
+    assert_eq!(
+        health["status"], "ok",
+        "Daemon should remain healthy after 5xx"
+    );
 }
 
 #[tokio::test]
@@ -186,7 +191,9 @@ async fn adapter_switch_creates_new_session_and_archives_old() {
     .await
     .expect("Failed to spawn daemon");
 
-    let client = FailoverClient::new(_base_url.clone()).await.expect("Failed to create client");
+    let client = FailoverClient::new(_base_url.clone())
+        .await
+        .expect("Failed to create client");
 
     // Spawn initial agent session with Anthropic adapter
     let spawn_resp = client.spawn_agent().await.expect("Failed to spawn agent");
@@ -203,14 +210,19 @@ async fn adapter_switch_creates_new_session_and_archives_old() {
         .expect("Failed to get agent status");
     assert_eq!(status["active"], true, "Agent should be active");
     assert_eq!(
-        status["adapter"],
-        "claude",
+        status["adapter"], "claude",
         "Initial adapter should be claude"
     );
 
     // Switch to ZAI adapter
     let switch_resp = client
-        .switch_adapter("zai", Some("glm-5"), None, Some("https://zai.example.com"), Some("test-key"))
+        .switch_adapter(
+            "zai",
+            Some("glm-5"),
+            None,
+            Some("https://zai.example.com"),
+            Some("test-key"),
+        )
         .await
         .expect("Failed to switch adapter");
     assert_eq!(switch_resp["status"], "ok", "Adapter switch should succeed");
@@ -243,7 +255,10 @@ async fn adapter_switch_creates_new_session_and_archives_old() {
     let archived_count = count_sessions_by_status(&sessions, "switched");
 
     assert_eq!(active_count, 1, "Should have exactly 1 active session");
-    assert_eq!(archived_count, 1, "Should have 1 switched (archived) session");
+    assert_eq!(
+        archived_count, 1,
+        "Should have 1 switched (archived) session"
+    );
 
     // Verify new agent status reflects ZAI adapter
     let status = client
@@ -264,7 +279,9 @@ async fn old_session_transcript_preserved_as_stitch() {
     .await
     .expect("Failed to spawn daemon");
 
-    let client = FailoverClient::new(_base_url.clone()).await.expect("Failed to create client");
+    let client = FailoverClient::new(_base_url.clone())
+        .await
+        .expect("Failed to create client");
 
     // Spawn initial agent session
     let spawn_resp = client.spawn_agent().await.expect("Failed to spawn agent");
@@ -276,7 +293,13 @@ async fn old_session_transcript_preserved_as_stitch() {
 
     // Switch adapter
     let _switch_resp = client
-        .switch_adapter("zai", Some("glm-5"), None, Some("https://zai.example.com"), Some("test-key"))
+        .switch_adapter(
+            "zai",
+            Some("glm-5"),
+            None,
+            Some("https://zai.example.com"),
+            Some("test-key"),
+        )
         .await
         .expect("Failed to switch adapter");
 
@@ -310,10 +333,7 @@ async fn old_session_transcript_preserved_as_stitch() {
     let stitch_row_opt = fleet::load_stitch_by_id(stitch_id.as_ref().unwrap())
         .expect("Failed to query stitch from fleet.db");
 
-    assert!(
-        stitch_row_opt.is_some(),
-        "Stitch should exist in fleet.db"
-    );
+    assert!(stitch_row_opt.is_some(), "Stitch should exist in fleet.db");
 
     let stitch_row = stitch_row_opt.unwrap();
     assert_eq!(
@@ -343,7 +363,9 @@ async fn reflection_ledger_continuity_preserved_on_switch() {
     .await
     .expect("Failed to spawn daemon");
 
-    let client = FailoverClient::new(_base_url.clone()).await.expect("Failed to create client");
+    let client = FailoverClient::new(_base_url.clone())
+        .await
+        .expect("Failed to create client");
 
     // Add a reflection ledger entry before switching
     let entry_id = uuid::Uuid::new_v4().to_string();
@@ -369,13 +391,19 @@ async fn reflection_ledger_continuity_preserved_on_switch() {
     // Spawn and switch agents
     let _spawn_resp = client.spawn_agent().await.expect("Failed to spawn agent");
     let _switch_resp = client
-        .switch_adapter("zai", Some("glm-5"), None, Some("https://zai.example.com"), Some("test-key"))
+        .switch_adapter(
+            "zai",
+            Some("glm-5"),
+            None,
+            Some("https://zai.example.com"),
+            Some("test-key"),
+        )
         .await
         .expect("Failed to switch adapter");
 
     // Verify reflection entry still exists
-    let entries = fleet::list_approved_reflection_entries(None)
-        .expect("Failed to list reflection entries");
+    let entries =
+        fleet::list_approved_reflection_entries(None).expect("Failed to list reflection entries");
 
     assert!(
         entries.iter().any(|e| e.id == entry_id),
@@ -401,7 +429,9 @@ async fn multiple_adapter_switches_create_multiple_stitches() {
     .await
     .expect("Failed to spawn daemon");
 
-    let client = FailoverClient::new(_base_url.clone()).await.expect("Failed to create client");
+    let client = FailoverClient::new(_base_url.clone())
+        .await
+        .expect("Failed to create client");
 
     // Spawn initial session
     let spawn_resp = client.spawn_agent().await.expect("Failed to spawn agent");
@@ -412,13 +442,25 @@ async fn multiple_adapter_switches_create_multiple_stitches() {
 
     // First switch: Claude → ZAI
     let _switch1 = client
-        .switch_adapter("zai", Some("glm-5"), None, Some("https://zai.example.com"), Some("test-key"))
+        .switch_adapter(
+            "zai",
+            Some("glm-5"),
+            None,
+            Some("https://zai.example.com"),
+            Some("test-key"),
+        )
         .await
         .expect("Failed to switch adapter");
 
     // Second switch: ZAI → Claude (switch back)
     let switch2_resp = client
-        .switch_adapter("claude", Some("claude-opus-4-7"), Some("test-key"), None, None)
+        .switch_adapter(
+            "claude",
+            Some("claude-opus-4-7"),
+            Some("test-key"),
+            None,
+            None,
+        )
         .await
         .expect("Failed to switch adapter back");
     let second_session_id = switch2_resp
@@ -479,7 +521,9 @@ async fn adapter_switch_with_active_turn_preserves_continuity() {
     .await
     .expect("Failed to spawn daemon");
 
-    let client = FailoverClient::new(_base_url.clone()).await.expect("Failed to create client");
+    let client = FailoverClient::new(_base_url.clone())
+        .await
+        .expect("Failed to create client");
 
     // Spawn agent
     let _spawn_resp = client.spawn_agent().await.expect("Failed to spawn agent");
@@ -507,7 +551,13 @@ async fn adapter_switch_with_active_turn_preserves_continuity() {
 
     // Switch adapter
     let _switch_resp = client
-        .switch_adapter("zai", Some("glm-5"), None, Some("https://zai.example.com"), Some("test-key"))
+        .switch_adapter(
+            "zai",
+            Some("glm-5"),
+            None,
+            Some("https://zai.example.com"),
+            Some("test-key"),
+        )
         .await
         .expect("Failed to switch adapter");
 
@@ -520,11 +570,13 @@ async fn adapter_switch_with_active_turn_preserves_continuity() {
     assert_eq!(status["adapter"], "zai");
 
     // Verify reflection entry is still accessible (would be injected into new session's system prompt)
-    let entries = fleet::list_approved_reflection_entries(None)
-        .expect("Failed to list reflection entries");
+    let entries =
+        fleet::list_approved_reflection_entries(None).expect("Failed to list reflection entries");
 
     assert!(
-        entries.iter().any(|e| e.id == entry_id && e.rule == "prefer async over sync"),
+        entries
+            .iter()
+            .any(|e| e.id == entry_id && e.rule == "prefer async over sync"),
         "Reflection Ledger entry should be preserved for continuity"
     );
 }
@@ -538,7 +590,9 @@ async fn concurrent_switch_requests_are_handled_gracefully() {
     .await
     .expect("Failed to spawn daemon");
 
-    let client = FailoverClient::new(_base_url.clone()).await.expect("Failed to create client");
+    let client = FailoverClient::new(_base_url.clone())
+        .await
+        .expect("Failed to create client");
 
     // Spawn agent
     let _spawn_resp = client.spawn_agent().await.expect("Failed to spawn agent");
@@ -551,7 +605,13 @@ async fn concurrent_switch_requests_are_handled_gracefully() {
 
     let switch1 = tokio::spawn(async move {
         client_clone
-            .switch_adapter("zai", Some("glm-5"), None, Some("https://zai.example.com"), Some("key1"))
+            .switch_adapter(
+                "zai",
+                Some("glm-5"),
+                None,
+                Some("https://zai.example.com"),
+                Some("key1"),
+            )
             .await
     });
 
@@ -596,7 +656,9 @@ async fn config_yml_hot_reload_triggers_adapter_switch() {
     .await
     .expect("Failed to spawn daemon");
 
-    let client = FailoverClient::new(base_url.clone()).await.expect("Failed to create client");
+    let client = FailoverClient::new(base_url.clone())
+        .await
+        .expect("Failed to create client");
 
     // Spawn initial agent session with Claude adapter
     let spawn_resp = client.spawn_agent().await.expect("Failed to spawn agent");
@@ -613,17 +675,12 @@ async fn config_yml_hot_reload_triggers_adapter_switch() {
         .expect("Failed to get agent status");
     assert_eq!(status["active"], true, "Agent should be active");
     assert_eq!(
-        status["adapter"],
-        "claude",
+        status["adapter"], "claude",
         "Initial adapter should be claude"
     );
 
     // Get the config.yml path from the temp directory
-    let config_path = daemon
-        .temp_dir
-        .path()
-        .join(".hoop")
-        .join("config.yml");
+    let config_path = daemon.temp_dir.path().join(".hoop").join("config.yml");
 
     // Edit config.yml to switch to ZAI adapter
     let new_config_yaml = r#"
@@ -635,8 +692,7 @@ agent:
   zai_api_key: test-key-from-config-reload
 "#;
 
-    fs::write(&config_path, new_config_yaml)
-        .expect("Failed to write updated config.yml");
+    fs::write(&config_path, new_config_yaml).expect("Failed to write updated config.yml");
 
     info!("Edited config.yml to switch adapter from claude to zai");
 
@@ -650,8 +706,7 @@ agent:
         .expect("Failed to get agent status after config reload");
     assert_eq!(status["active"], true, "Agent should still be active");
     assert_eq!(
-        status["adapter"],
-        "zai",
+        status["adapter"], "zai",
         "Adapter should be zai after config reload"
     );
     assert_eq!(status["model"], "glm-5", "Model should be glm-5");
@@ -674,7 +729,10 @@ agent:
     let archived_count = count_sessions_by_status(&sessions, "switched");
 
     assert_eq!(active_count, 1, "Should have exactly 1 active session");
-    assert_eq!(archived_count, 1, "Should have 1 switched (archived) session");
+    assert_eq!(
+        archived_count, 1,
+        "Should have 1 switched (archived) session"
+    );
 
     // Verify the archived session is the original one
     let archived_session = sessions
@@ -699,10 +757,7 @@ agent:
     let stitch_row_opt = fleet::load_stitch_by_id(stitch_id.as_ref().unwrap())
         .expect("Failed to query stitch from fleet.db");
 
-    assert!(
-        stitch_row_opt.is_some(),
-        "Stitch should exist in fleet.db"
-    );
+    assert!(stitch_row_opt.is_some(), "Stitch should exist in fleet.db");
 
     let stitch_row = stitch_row_opt.unwrap();
     assert_eq!(
@@ -720,7 +775,10 @@ agent:
 
     // Verify daemon is still healthy after hot-reload
     let health = client.healthz().await.expect("Health check failed");
-    assert_eq!(health["status"], "ok", "Daemon should remain healthy after hot-reload");
+    assert_eq!(
+        health["status"], "ok",
+        "Daemon should remain healthy after hot-reload"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -753,18 +811,21 @@ impl MockAnthropicServer {
         let base_url = format!("http://{}", addr);
 
         // Build axum app that returns 503 for all requests
-        let app = Router::new().route("/v1/messages", post(|| async {
-            // Return 503 Service Unavailable - simulating Anthropic outage
-            (
-                axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                serde_json::json!({
-                    "error": {
-                        "type": "internal_server_error",
-                        "message": "Simulated Anthropic 5xx outage for testing"
-                    }
-                }),
-            )
-        }));
+        let app = Router::new().route(
+            "/v1/messages",
+            post(|| async {
+                // Return 503 Service Unavailable - simulating Anthropic outage
+                (
+                    axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                    serde_json::json!({
+                        "error": {
+                            "type": "internal_server_error",
+                            "message": "Simulated Anthropic 5xx outage for testing"
+                        }
+                    }),
+                )
+            }),
+        );
 
         // Channel to signal shutdown
         let (shutdown_tx, mut shutdown_rx) = tokio::sync::oneshot::channel();
@@ -811,7 +872,9 @@ async fn anthropic_5xx_mock_server_daemon_survives() {
     .await
     .expect("Failed to spawn daemon");
 
-    let client = FailoverClient::new(_base_url.clone()).await.expect("Failed to create client");
+    let client = FailoverClient::new(_base_url.clone())
+        .await
+        .expect("Failed to create client");
 
     // Verify daemon is healthy initially
     let health = client.healthz().await.expect("Health check failed");
@@ -833,10 +896,12 @@ agent:
         mock_server.base_url()
     );
 
-    std::fs::write(&config_path, mock_config)
-        .expect("Failed to write config with mock server URL");
+    std::fs::write(&config_path, mock_config).expect("Failed to write config with mock server URL");
 
-    info!("Wrote config pointing to mock Anthropic server at {}", mock_server.base_url());
+    info!(
+        "Wrote config pointing to mock Anthropic server at {}",
+        mock_server.base_url()
+    );
 
     // Spawn agent session - it will attempt to connect to mock server
     // The mock will return 503, which should be handled gracefully
@@ -881,7 +946,8 @@ agent:
         // Check health every 5 seconds
         let health = client.healthz().await.expect("Health check failed");
         assert_eq!(
-            health["status"], "ok",
+            health["status"],
+            "ok",
             "Daemon should stay healthy during 503 outage (check {})",
             checks + 1
         );
@@ -896,7 +962,10 @@ agent:
     );
 
     // Verify daemon didn't crash or panic
-    assert!(checks >= 6, "Should have performed at least 6 health checks over 30s");
+    assert!(
+        checks >= 6,
+        "Should have performed at least 6 health checks over 30s"
+    );
 }
 
 #[tokio::test]
@@ -916,7 +985,9 @@ async fn anthropic_5xx_mock_then_adapter_switch_recovery() {
     .await
     .expect("Failed to spawn daemon");
 
-    let client = FailoverClient::new(_base_url.clone()).await.expect("Failed to create client");
+    let client = FailoverClient::new(_base_url.clone())
+        .await
+        .expect("Failed to create client");
 
     // Initial health check
     let health = client.healthz().await.expect("Health check failed");
@@ -945,7 +1016,13 @@ agent:
 
     // Operator recovery: switch adapter to ZAI (which uses different endpoint)
     let switch_resp = client
-        .switch_adapter("zai", Some("glm-5"), None, Some("https://zai.example.com"), Some("test-key"))
+        .switch_adapter(
+            "zai",
+            Some("glm-5"),
+            None,
+            Some("https://zai.example.com"),
+            Some("test-key"),
+        )
         .await
         .expect("Adapter switch should succeed");
 
@@ -956,12 +1033,18 @@ agent:
         .get_agent_status()
         .await
         .expect("Failed to get agent status");
-    assert_eq!(status["active"], true, "Agent should be active after switch");
+    assert_eq!(
+        status["active"], true,
+        "Agent should be active after switch"
+    );
     assert_eq!(status["adapter"], "zai", "Should be using ZAI adapter");
 
     // Verify daemon is healthy after recovery
     let final_health = client.healthz().await.expect("Health check failed");
-    assert_eq!(final_health["status"], "ok", "Daemon should be healthy after recovery");
+    assert_eq!(
+        final_health["status"], "ok",
+        "Daemon should be healthy after recovery"
+    );
 }
 
 // ---------------------------------------------------------------------------

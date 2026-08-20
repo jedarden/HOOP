@@ -217,20 +217,22 @@ pub fn detect_sibling_projects(
 /// Load the source Stitch information
 fn load_source_stitch(conn: &rusqlite::Connection, stitch_id: &str) -> Result<SourceStitchInfo> {
     // Get basic Stitch info
-    let (id, project, kind, title, _created_by, created_at) = conn.query_row(
-        "SELECT id, project, kind, title, created_by, created_at FROM stitches WHERE id = ?1",
-        rusqlite::params![stitch_id],
-        |row| {
-            Ok((
-                row.get::<_, String>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, String>(2)?,
-                row.get::<_, String>(3)?,
-                row.get::<_, String>(4)?,
-                row.get::<_, String>(5)?,
-            ))
-        },
-    ).map_err(|_| anyhow::anyhow!("Stitch '{}' not found", stitch_id))?;
+    let (id, project, kind, title, _created_by, created_at) = conn
+        .query_row(
+            "SELECT id, project, kind, title, created_by, created_at FROM stitches WHERE id = ?1",
+            rusqlite::params![stitch_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                ))
+            },
+        )
+        .map_err(|_| anyhow::anyhow!("Stitch '{}' not found", stitch_id))?;
 
     // Get labels from linked beads (aggregate from all beads in this stitch)
     let labels = get_stitch_labels(conn, stitch_id)?;
@@ -288,9 +290,8 @@ fn load_candidate_stitches(
          LIMIT 500",
     )?;
 
-    let stitches: Result<Vec<_>, _> = stmt.query_map(
-        rusqlite::params![&source.project, &cutoff_str],
-        |row| {
+    let stitches: Result<Vec<_>, _> = stmt
+        .query_map(rusqlite::params![&source.project, &cutoff_str], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
@@ -298,8 +299,8 @@ fn load_candidate_stitches(
                 row.get::<_, String>(3)?,
                 row.get::<_, String>(4)?,
             ))
-        },
-    )?.collect();
+        })?
+        .collect();
 
     let mut candidates = Vec::new();
 
@@ -366,13 +367,9 @@ fn get_stitch_issue_type(conn: &rusqlite::Connection, stitch_id: &str) -> Result
 /// Extract touched files from Stitch messages
 ///
 /// This is a simple heuristic: look for file paths in message content
-fn extract_touched_files(
-    conn: &rusqlite::Connection,
-    stitch_id: &str,
-) -> Result<Vec<String>> {
-    let mut stmt = conn.prepare(
-        "SELECT content FROM stitch_messages WHERE stitch_id = ?1 ORDER BY ts",
-    )?;
+fn extract_touched_files(conn: &rusqlite::Connection, stitch_id: &str) -> Result<Vec<String>> {
+    let mut stmt =
+        conn.prepare("SELECT content FROM stitch_messages WHERE stitch_id = ?1 ORDER BY ts")?;
 
     let messages: Result<Vec<String>, _> = stmt
         .query_map(rusqlite::params![stitch_id], |row| row.get(0))?
@@ -391,7 +388,12 @@ fn extract_touched_files(
             // Look for absolute paths or relative paths with extensions
             if line.contains('/') || line.contains('\\') {
                 for word in line.split_whitespace() {
-                    if word.contains('/') && (word.contains('.') || word.contains("config") || word.contains("Cargo") || word.contains("package")) {
+                    if word.contains('/')
+                        && (word.contains('.')
+                            || word.contains("config")
+                            || word.contains("Cargo")
+                            || word.contains("package"))
+                    {
                         // Clean up punctuation
                         let cleaned = word
                             .trim_start_matches(|c: char| !c.is_alphanumeric() && c != '/')
@@ -422,16 +424,12 @@ fn extract_touched_files(
 }
 
 /// Get the first user message from a Stitch (as description)
-fn get_first_user_message(
-    conn: &rusqlite::Connection,
-    stitch_id: &str,
-) -> Result<Option<String>> {
+fn get_first_user_message(conn: &rusqlite::Connection, stitch_id: &str) -> Result<Option<String>> {
     let mut stmt = conn.prepare(
         "SELECT content FROM stitch_messages WHERE stitch_id = ?1 AND role = 'user' ORDER BY ts LIMIT 1",
     )?;
 
-    let result = stmt
-        .query_row(rusqlite::params![stitch_id], |row| row.get::<_, String>(0));
+    let result = stmt.query_row(rusqlite::params![stitch_id], |row| row.get::<_, String>(0));
 
     match result {
         Ok(msg) => {

@@ -157,13 +157,10 @@ async fn complete_upload(
     let redaction_state = state.redaction_policy_state.read().await.clone();
 
     // Get upload metadata to check the attachment type
-    let meta = state
-        .upload_registry
-        .get_metadata(&valid_id)
-        .map_err(|e| {
-            tracing::error!("Failed to get upload metadata: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let meta = state.upload_registry.get_metadata(&valid_id).map_err(|e| {
+        tracing::error!("Failed to get upload metadata: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Only check redaction policy for bead attachments (stitches are global)
     if meta.attachment_type == "bead" {
@@ -174,16 +171,17 @@ async fn complete_upload(
         })?;
 
         // Find the project name for this workspace
-        let project_name = redaction_state
-            .find_project_by_workspace(&workspace)
-            .await;
+        let project_name = redaction_state.find_project_by_workspace(&workspace).await;
 
         if let Some(proj_name) = project_name {
             // Get the partial file path to scan for secrets
-            let partial_path = state.upload_registry.get_partial_path(&valid_id).map_err(|e| {
-                tracing::error!("Failed to get partial path: {}", e);
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
+            let partial_path = state
+                .upload_registry
+                .get_partial_path(&valid_id)
+                .map_err(|e| {
+                    tracing::error!("Failed to get partial path: {}", e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?;
 
             // Read file content for secret scanning
             let content = std::fs::read_to_string(&partial_path);
@@ -198,7 +196,7 @@ async fn complete_upload(
                     &content,
                     "attachment",
                     &upload_id,
-                    "system",  // Attachment scans are automatic
+                    "system", // Attachment scans are automatic
                 )
                 .await
                 {

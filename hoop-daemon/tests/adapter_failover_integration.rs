@@ -73,7 +73,10 @@ async fn test_anthropic_5xx_doesnt_crash_daemon() {
     assert!(adapter_result.is_ok(), "Adapter build should succeed");
 
     let adapter = adapter_result.unwrap();
-    assert_eq!(adapter.kind(), hoop_daemon::agent_adapter::AdapterKind::Anthropic);
+    assert_eq!(
+        adapter.kind(),
+        hoop_daemon::agent_adapter::AdapterKind::Anthropic
+    );
 
     // The adapter's send_turn would handle HTTP errors internally.
     // The daemon's AgentSessionManager would log the error but remain running.
@@ -90,10 +93,16 @@ async fn test_anthropic_5xx_doesnt_crash_daemon() {
     };
 
     let adapter_result2 = hoop_daemon::agent_adapter::build_adapter(&config2);
-    assert!(adapter_result2.is_ok(), "ZAI adapter build should succeed after Anthropic");
+    assert!(
+        adapter_result2.is_ok(),
+        "ZAI adapter build should succeed after Anthropic"
+    );
 
     let adapter2 = adapter_result2.unwrap();
-    assert_eq!(adapter2.kind(), hoop_daemon::agent_adapter::AdapterKind::Zai);
+    assert_eq!(
+        adapter2.kind(),
+        hoop_daemon::agent_adapter::AdapterKind::Zai
+    );
 
     teardown_test_db();
 }
@@ -157,18 +166,19 @@ async fn test_adapter_switch_archives_session_as_stitch() {
     ];
 
     // Archive session as Stitch
-    let stitch_id =
-        fleet::archive_session_as_stitch(&session_row, &history).expect("archive session as stitch");
+    let stitch_id = fleet::archive_session_as_stitch(&session_row, &history)
+        .expect("archive session as stitch");
 
     // Archive the agent session
-    fleet::archive_agent_session(&session_id, "adapter_switch")
-        .expect("archive agent session");
+    fleet::archive_agent_session(&session_id, "adapter_switch").expect("archive agent session");
 
     // Verify Stitch was created
     let stitch_count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM stitches WHERE id = ?1", [&stitch_id], |row| {
-            row.get(0)
-        })
+        .query_row(
+            "SELECT COUNT(*) FROM stitches WHERE id = ?1",
+            [&stitch_id],
+            |row| row.get(0),
+        )
         .unwrap();
     assert_eq!(stitch_count, 1, "Stitch should be created");
 
@@ -181,7 +191,10 @@ async fn test_adapter_switch_archives_session_as_stitch() {
         )
         .unwrap();
 
-    assert_eq!(stitch_project, "hoop-agent", "Stitch should be in hoop-agent project");
+    assert_eq!(
+        stitch_project, "hoop-agent",
+        "Stitch should be in hoop-agent project"
+    );
     assert_eq!(stitch_kind, "operator", "Stitch should be kind=operator");
     assert!(
         stitch_title.contains("anthropic"),
@@ -212,7 +225,8 @@ async fn test_adapter_switch_archives_session_as_stitch() {
 
     assert_eq!(status, "switched", "Session should be marked as switched");
     assert_eq!(
-        archived_reason, Some("adapter_switch".to_string()),
+        archived_reason,
+        Some("adapter_switch".to_string()),
         "Archived reason should be adapter_switch"
     );
 
@@ -280,11 +294,7 @@ async fn test_new_session_created_after_adapter_switch() {
            (id, adapter_session_id, adapter, model, status, cost_usd, input_tokens,
             output_tokens, turn_count, has_started_session, created_at, last_activity_at)
            VALUES (?1, ?2, 'zai', 'glm-5', 'active', 0.0, 0, 0, 0, 0, ?3, ?3)"#,
-        [
-            &new_session_id,
-            &new_adapter_session_id,
-            &new_now,
-        ],
+        [&new_session_id, &new_adapter_session_id, &new_now],
     )
     .unwrap();
 
@@ -352,8 +362,7 @@ async fn test_adapter_switch_preserves_usage_stats() {
     .unwrap();
 
     // Archive the session
-    fleet::archive_agent_session(&session_id, "adapter_switch")
-        .expect("archive session");
+    fleet::archive_agent_session(&session_id, "adapter_switch").expect("archive session");
 
     // Verify usage stats are preserved
     let (cost_usd, input_tokens, output_tokens, turn_count): (f64, i64, i64, i64) = conn
@@ -593,11 +602,7 @@ async fn test_session_continuity_after_daemon_restart() {
            (id, adapter_session_id, adapter, model, status, cost_usd, input_tokens,
             output_tokens, turn_count, has_started_session, created_at, last_activity_at)
            VALUES (?1, ?2, 'zai', 'glm-5', 'active', 0.0, 0, 0, 0, 0, ?3, ?3)"#,
-        [
-            &new_session_id,
-            &new_adapter_session_id,
-            &new_now,
-        ],
+        [&new_session_id, &new_adapter_session_id, &new_now],
     )
     .unwrap();
 

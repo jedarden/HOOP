@@ -392,7 +392,11 @@ pub async fn handle_patterns(cmd: PatternCommands) -> Result<()> {
                 std::process::exit(1);
             }
         }
-        PatternCommands::AddMember { id, stitch_id, addr } => {
+        PatternCommands::AddMember {
+            id,
+            stitch_id,
+            addr,
+        } => {
             let addr = addr.unwrap_or_else(|| DEFAULT_DAEMON_ADDR.to_string());
             let client = Client::new();
 
@@ -413,7 +417,11 @@ pub async fn handle_patterns(cmd: PatternCommands) -> Result<()> {
                 std::process::exit(1);
             }
         }
-        PatternCommands::RemoveMember { id, stitch_id, addr } => {
+        PatternCommands::RemoveMember {
+            id,
+            stitch_id,
+            addr,
+        } => {
             let addr = addr.unwrap_or_else(|| DEFAULT_DAEMON_ADDR.to_string());
             let client = Client::new();
 

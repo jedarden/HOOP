@@ -181,7 +181,11 @@ fn parse_prompt_file(path: &StdPath) -> Result<Prompt> {
         description: fm.description.unwrap_or_default(),
         body: body.trim().to_string(),
         variables,
-        args: if fm.args.is_empty() { None } else { Some(fm.args) },
+        args: if fm.args.is_empty() {
+            None
+        } else {
+            Some(fm.args)
+        },
     })
 }
 
@@ -207,24 +211,19 @@ fn split_frontmatter(content: &str) -> (Option<&str>, &str) {
 
 /// Start file watcher for the prompts directory.
 /// Returns the watcher (must be kept alive for watching to work).
-pub fn start_watcher(
-    prompts_dir: PathBuf,
-    store: PromptStore,
-) -> RecommendedWatcher {
+pub fn start_watcher(prompts_dir: PathBuf, store: PromptStore) -> RecommendedWatcher {
     let watcher_prompts_dir = prompts_dir.clone();
     let mut watcher =
-        notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
-            match res {
-                Ok(_event) => {
-                    debug!("Prompt directory changed, reloading");
-                    let mut lib = store.write().unwrap();
-                    if let Err(e) = lib.load(&watcher_prompts_dir) {
-                        warn!("Prompt reload failed: {}", e);
-                    }
+        notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| match res {
+            Ok(_event) => {
+                debug!("Prompt directory changed, reloading");
+                let mut lib = store.write().unwrap();
+                if let Err(e) = lib.load(&watcher_prompts_dir) {
+                    warn!("Prompt reload failed: {}", e);
                 }
-                Err(e) => {
-                    warn!("Prompt watch error: {}", e);
-                }
+            }
+            Err(e) => {
+                warn!("Prompt watch error: {}", e);
             }
         })
         .expect("failed to create prompt file watcher");
@@ -329,9 +328,7 @@ Investigate error in {{file}}: {{error_message}}
 // ---------------------------------------------------------------------------
 
 /// GET /api/prompts — list all prompts
-async fn list_prompts(
-    State(state): State<crate::DaemonState>,
-) -> Json<Vec<Prompt>> {
+async fn list_prompts(State(state): State<crate::DaemonState>) -> Json<Vec<Prompt>> {
     let lib = state.prompt_library.read().unwrap();
     Json(lib.list())
 }
@@ -342,9 +339,12 @@ async fn get_prompt(
     State(state): State<crate::DaemonState>,
 ) -> Result<Json<Prompt>, (StatusCode, String)> {
     let lib = state.prompt_library.read().unwrap();
-    lib.get(&name)
-        .map(Json)
-        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Prompt '{}' not found", name)))
+    lib.get(&name).map(Json).ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            format!("Prompt '{}' not found", name),
+        )
+    })
 }
 
 /// POST /api/prompts/:name/substitute — substitute variables in a prompt
@@ -354,11 +354,19 @@ async fn substitute_prompt(
     Json(req): Json<SubstitutionRequest>,
 ) -> Result<Json<SubstitutionResponse>, (StatusCode, String)> {
     let lib = state.prompt_library.read().unwrap();
-    let prompt = lib.get(&name)
-        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Prompt '{}' not found", name)))?;
+    let prompt = lib.get(&name).ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            format!("Prompt '{}' not found", name),
+        )
+    })?;
 
-    let args_json = serde_json::to_value(&req.args)
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to serialize args: {}", e)))?;
+    let args_json = serde_json::to_value(&req.args).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to serialize args: {}", e),
+        )
+    })?;
 
     match substitute_with_args(
         &prompt.body,
@@ -369,14 +377,12 @@ async fn substitute_prompt(
     ) {
         Ok(body) => {
             let substituted = crate::prompt_substitute::extract_variables(&prompt.body);
-            Ok(Json(SubstitutionResponse {
-                body,
-                substituted,
-            }))
+            Ok(Json(SubstitutionResponse { body, substituted }))
         }
-        Err(e) => {
-            Err((StatusCode::BAD_REQUEST, format!("Substitution failed: {}", e)))
-        }
+        Err(e) => Err((
+            StatusCode::BAD_REQUEST,
+            format!("Substitution failed: {}", e),
+        )),
     }
 }
 
@@ -434,7 +440,10 @@ Test {{foo}} with {{bar}}
         let prompt = parse_prompt_file(&file_path).unwrap();
         assert_eq!(prompt.name, "test-prompt");
         assert_eq!(prompt.description, "A test prompt");
-        assert_eq!(prompt.args, Some(vec!["foo".to_string(), "bar".to_string()]));
+        assert_eq!(
+            prompt.args,
+            Some(vec!["foo".to_string(), "bar".to_string()])
+        );
         assert!(prompt.body.contains("Test {{foo}}"));
         assert_eq!(prompt.variables, vec!["bar", "foo"]); // sorted
     }

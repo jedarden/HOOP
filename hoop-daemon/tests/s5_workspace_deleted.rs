@@ -20,8 +20,8 @@
 
 mod integration_harness;
 
-use integration_harness::setup_test_hoop_home;
 use hoop_schema::ReadinessResponse;
+use integration_harness::setup_test_hoop_home;
 use serde_json::Value as JsonValue;
 use std::fs;
 use std::path::PathBuf;

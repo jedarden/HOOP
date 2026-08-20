@@ -245,11 +245,16 @@ fn test_scenario_2_preserve_corrupted_database_for_analysis() {
 
     // Simulate preservation (as documented)
     let timestamp = chrono::Utc::now().format("%Y%m%d%H%M").to_string();
-    let preserved = temp_dir.path().join(format!("fleet.db.corrupted.{}", timestamp));
+    let preserved = temp_dir
+        .path()
+        .join(format!("fleet.db.corrupted.{}", timestamp));
     fs::copy(&fleet_db, &preserved).unwrap();
 
     assert!(preserved.exists(), "corrupted database is preserved");
-    assert!(preserved.to_string_lossy().contains("corrupted"), "filename indicates corruption");
+    assert!(
+        preserved.to_string_lossy().contains("corrupted"),
+        "filename indicates corruption"
+    );
 }
 
 // ---------------------------------------------------------------------------

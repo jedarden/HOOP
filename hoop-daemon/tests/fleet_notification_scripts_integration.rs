@@ -22,9 +22,7 @@ fn install_capture_script(dir: &TempDir, event: &str, output: &std::path::Path) 
     permissions.set_mode(permissions.mode() | 0o111);
     std::fs::set_permissions(&script_path, permissions).expect("make capture script executable");
 
-    let manifest = format!(
-        "name: capture-event\ntimeout_secs: 5\non:\n  - event: {event}\n"
-    );
+    let manifest = format!("name: capture-event\ntimeout_secs: 5\non:\n  - event: {event}\n");
     hoop_daemon::atomic_write::atomic_write_file_str(&manifest_path, &manifest)
         .expect("write capture manifest");
 }

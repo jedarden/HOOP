@@ -595,7 +595,8 @@ mod tests {
     #[test]
     fn test_git_status_from_output() {
         // Test parsing of git status output
-        let output = "M src/lib.rs\nA src/main.rs\nD src/old.rs\n?? new_file.rs\nR old.txt -> new.txt";
+        let output =
+            "M src/lib.rs\nA src/main.rs\nD src/old.rs\n?? new_file.rs\nR old.txt -> new.txt";
         let mut map = HashMap::new();
         for line in output.lines() {
             if line.len() < 3 {
@@ -683,12 +684,33 @@ mod tests {
 
     #[test]
     fn test_git_status_display() {
-        assert_eq!(serde_json::to_string(&GitStatus::Clean).unwrap(), r#""clean""#);
-        assert_eq!(serde_json::to_string(&GitStatus::Modified).unwrap(), r#""modified""#);
-        assert_eq!(serde_json::to_string(&GitStatus::Added).unwrap(), r#""added""#);
-        assert_eq!(serde_json::to_string(&GitStatus::Deleted).unwrap(), r#""deleted""#);
-        assert_eq!(serde_json::to_string(&GitStatus::Untracked).unwrap(), r#""untracked""#);
-        assert_eq!(serde_json::to_string(&GitStatus::Renamed).unwrap(), r#""renamed""#);
-        assert_eq!(serde_json::to_string(&GitStatus::Dirty).unwrap(), r#""dirty""#);
+        assert_eq!(
+            serde_json::to_string(&GitStatus::Clean).unwrap(),
+            r#""clean""#
+        );
+        assert_eq!(
+            serde_json::to_string(&GitStatus::Modified).unwrap(),
+            r#""modified""#
+        );
+        assert_eq!(
+            serde_json::to_string(&GitStatus::Added).unwrap(),
+            r#""added""#
+        );
+        assert_eq!(
+            serde_json::to_string(&GitStatus::Deleted).unwrap(),
+            r#""deleted""#
+        );
+        assert_eq!(
+            serde_json::to_string(&GitStatus::Untracked).unwrap(),
+            r#""untracked""#
+        );
+        assert_eq!(
+            serde_json::to_string(&GitStatus::Renamed).unwrap(),
+            r#""renamed""#
+        );
+        assert_eq!(
+            serde_json::to_string(&GitStatus::Dirty).unwrap(),
+            r#""dirty""#
+        );
     }
 }

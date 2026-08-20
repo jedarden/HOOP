@@ -52,7 +52,8 @@ async fn create_test_supervisor() -> ProjectSupervisor {
     let beads = Arc::new(std::sync::RwLock::new(Vec::<Bead>::new()));
     let shutdown = Arc::new(ShutdownCoordinator::new());
     let cost_aggregator = Arc::new(std::sync::RwLock::new(
-        hoop_daemon::cost::CostAggregator::new(PathBuf::from("/tmp/test-cost.json")).expect("Failed to create cost aggregator"),
+        hoop_daemon::cost::CostAggregator::new(PathBuf::from("/tmp/test-cost.json"))
+            .expect("Failed to create cost aggregator"),
     ));
     let vector_index = Arc::new(std::sync::RwLock::new(
         hoop_daemon::vector_index::VectorIndex::new(),
@@ -306,10 +307,7 @@ async fn test_supervisor_status_broadcasts_on_reconcile() {
     let mut status_rx = supervisor.subscribe_status();
 
     // Reconcile with a new project
-    let config = create_test_config(vec![create_test_project(
-        "test-project",
-        project_path,
-    )]);
+    let config = create_test_config(vec![create_test_project("test-project", project_path)]);
 
     supervisor
         .reconcile(&config)

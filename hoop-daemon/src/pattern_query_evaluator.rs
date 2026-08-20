@@ -466,14 +466,13 @@ pub fn sync_pattern_queries_for_stitch(
 
     let mut matched_patterns = Vec::new();
     for result in &results {
-        if result.matched
-            && insert_pattern_member(&result.pattern_id, stitch_id)? {
-                info!(
-                    "Added stitch {} to pattern {} via saved query ({}ms)",
-                    stitch_id, result.pattern_id, result.query_duration_ms
-                );
-                matched_patterns.push(result.pattern_id.clone());
-            }
+        if result.matched && insert_pattern_member(&result.pattern_id, stitch_id)? {
+            info!(
+                "Added stitch {} to pattern {} via saved query ({}ms)",
+                stitch_id, result.pattern_id, result.query_duration_ms
+            );
+            matched_patterns.push(result.pattern_id.clone());
+        }
 
         if result.is_slow {
             warn!(

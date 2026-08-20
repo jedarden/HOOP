@@ -1231,7 +1231,11 @@ async fn test_daemon_handles_malformed_websocket_messages() {
         .await
         .expect("Health check failed");
 
-    assert_eq!(resp.status(), 200, "Daemon should still be healthy after malformed messages");
+    assert_eq!(
+        resp.status(),
+        200,
+        "Daemon should still be healthy after malformed messages"
+    );
 
     // Close connection
     ws_sender
@@ -1304,7 +1308,10 @@ async fn test_daemon_state_persistence_across_restarts() {
         .await
         .expect("Failed to create bead");
 
-    assert!(create_resp.status().is_success(), "Bead creation should succeed");
+    assert!(
+        create_resp.status().is_success(),
+        "Bead creation should succeed"
+    );
 
     let bead: serde_json::Value = create_resp.json().await.expect("Failed to parse bead");
     let bead_id = bead["id"].as_str().expect("Bead should have an ID");
@@ -1325,7 +1332,10 @@ async fn test_daemon_state_persistence_across_restarts() {
         .await
         .expect("Failed to fetch beads");
 
-    assert!(beads_resp.status().is_success(), "Should be able to fetch beads");
+    assert!(
+        beads_resp.status().is_success(),
+        "Should be able to fetch beads"
+    );
 }
 
 #[tokio::test]
@@ -1352,7 +1362,8 @@ async fn test_websocket_connection_limits() {
                     match timeout(Duration::from_secs(2), ws_receiver.next()).await {
                         Ok(Some(Ok(msg))) => {
                             if let tokio_tungstenite::tungstenite::Message::Text(text) = msg {
-                                if let Ok(event) = serde_json::from_str::<serde_json::Value>(&text) {
+                                if let Ok(event) = serde_json::from_str::<serde_json::Value>(&text)
+                                {
                                     event["type"] == "init"
                                 } else {
                                     false
@@ -1379,7 +1390,10 @@ async fn test_websocket_connection_limits() {
         }
     }
 
-    assert_eq!(success_count, 5, "All WebSocket connections should receive init");
+    assert_eq!(
+        success_count, 5,
+        "All WebSocket connections should receive init"
+    );
 }
 
 #[tokio::test]
@@ -1398,7 +1412,11 @@ async fn test_rest_api_error_handling() {
         .await
         .expect("Request failed");
 
-    assert_eq!(resp.status(), 404, "Non-existent endpoint should return 404");
+    assert_eq!(
+        resp.status(),
+        404,
+        "Non-existent endpoint should return 404"
+    );
 
     // Test 404 for non-existent bead
     let resp = client
@@ -1407,7 +1425,10 @@ async fn test_rest_api_error_handling() {
         .await
         .expect("Request failed");
 
-    assert!(resp.status() == 404 || resp.status() == 400, "Non-existent bead should return error");
+    assert!(
+        resp.status() == 404 || resp.status() == 400,
+        "Non-existent bead should return error"
+    );
 
     // Test invalid JSON for POST requests
     let resp = client
@@ -1418,7 +1439,10 @@ async fn test_rest_api_error_handling() {
         .await
         .expect("Request failed");
 
-    assert!(resp.status() == 400 || resp.status() == 422, "Invalid JSON should return error");
+    assert!(
+        resp.status() == 400 || resp.status() == 422,
+        "Invalid JSON should return error"
+    );
 }
 
 #[tokio::test]
@@ -1436,7 +1460,10 @@ async fn test_daemon_metrics_collection() {
         .await
         .expect("Failed to fetch metrics");
 
-    assert!(metrics.status().is_success(), "Metrics endpoint should return 200");
+    assert!(
+        metrics.status().is_success(),
+        "Metrics endpoint should return 200"
+    );
 
     let metrics_text = metrics.text().await.expect("Failed to read metrics");
 
@@ -1444,16 +1471,17 @@ async fn test_daemon_metrics_collection() {
     assert!(!metrics_text.is_empty(), "Metrics should not be empty");
 
     // Check for Prometheus format (lines with metric names and values)
-    let has_valid_metric = metrics_text
-        .lines()
-        .any(|line| {
-            let trimmed = line.trim();
-            !trimmed.is_empty()
-                && !trimmed.starts_with('#')
-                && (trimmed.contains(' ') || trimmed.contains('\t'))
-        });
+    let has_valid_metric = metrics_text.lines().any(|line| {
+        let trimmed = line.trim();
+        !trimmed.is_empty()
+            && !trimmed.starts_with('#')
+            && (trimmed.contains(' ') || trimmed.contains('\t'))
+    });
 
-    assert!(has_valid_metric, "Metrics should contain at least one valid metric line");
+    assert!(
+        has_valid_metric,
+        "Metrics should contain at least one valid metric line"
+    );
 }
 
 #[tokio::test]
@@ -1478,7 +1506,10 @@ async fn test_project_file_listing() {
     let files: serde_json::Value = resp.json().await.expect("Failed to parse files");
 
     // Should return a list of files/directories
-    assert!(files.is_array() || files.is_object(), "Files should be an array or object");
+    assert!(
+        files.is_array() || files.is_object(),
+        "Files should be an array or object"
+    );
 }
 
 #[tokio::test]
@@ -1503,7 +1534,10 @@ async fn test_bead_lifecycle_via_api() {
         .await
         .expect("Failed to create bead");
 
-    assert!(create_resp.status().is_success(), "Bead creation should succeed");
+    assert!(
+        create_resp.status().is_success(),
+        "Bead creation should succeed"
+    );
 
     let bead: serde_json::Value = create_resp.json().await.expect("Failed to parse bead");
     let bead_id = bead["id"].as_str().expect("Bead should have an ID");
@@ -1515,11 +1549,21 @@ async fn test_bead_lifecycle_via_api() {
         .await
         .expect("Failed to get bead");
 
-    assert!(get_resp.status().is_success(), "Getting bead should succeed");
+    assert!(
+        get_resp.status().is_success(),
+        "Getting bead should succeed"
+    );
 
-    let fetched_bead: serde_json::Value = get_resp.json().await.expect("Failed to parse fetched bead");
-    assert_eq!(fetched_bead["id"], bead["id"], "Fetched bead ID should match");
-    assert_eq!(fetched_bead["title"], "Integration test bead", "Fetched bead title should match");
+    let fetched_bead: serde_json::Value =
+        get_resp.json().await.expect("Failed to parse fetched bead");
+    assert_eq!(
+        fetched_bead["id"], bead["id"],
+        "Fetched bead ID should match"
+    );
+    assert_eq!(
+        fetched_bead["title"], "Integration test bead",
+        "Fetched bead title should match"
+    );
 
     // List all beads (should include our new bead)
     let list_resp = client
@@ -1528,7 +1572,10 @@ async fn test_bead_lifecycle_via_api() {
         .await
         .expect("Failed to list beads");
 
-    assert!(list_resp.status().is_success(), "Listing beads should succeed");
+    assert!(
+        list_resp.status().is_success(),
+        "Listing beads should succeed"
+    );
 
     let beads: Vec<serde_json::Value> = list_resp.json().await.expect("Failed to parse beads list");
     let found = beads.iter().any(|b| b["id"] == bead_id);
@@ -1550,12 +1597,18 @@ async fn test_capacity_endpoint() {
         .await
         .expect("Failed to fetch capacity");
 
-    assert!(resp.status().is_success(), "Capacity endpoint should return 200");
+    assert!(
+        resp.status().is_success(),
+        "Capacity endpoint should return 200"
+    );
 
     let capacity: serde_json::Value = resp.json().await.expect("Failed to parse capacity");
 
     // Capacity should be an object or array
-    assert!(capacity.is_object() || capacity.is_array(), "Capacity should be object or array");
+    assert!(
+        capacity.is_object() || capacity.is_array(),
+        "Capacity should be object or array"
+    );
 }
 
 #[tokio::test]
@@ -1573,9 +1626,13 @@ async fn test_config_status_endpoint() {
         .await
         .expect("Failed to fetch config status");
 
-    assert!(resp.status().is_success(), "Config status endpoint should return 200");
+    assert!(
+        resp.status().is_success(),
+        "Config status endpoint should return 200"
+    );
 
-    let config_status: serde_json::Value = resp.json().await.expect("Failed to parse config status");
+    let config_status: serde_json::Value =
+        resp.json().await.expect("Failed to parse config status");
 
     // Config status should have a 'valid' field
     assert!(

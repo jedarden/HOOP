@@ -68,7 +68,6 @@ fn generate_schema_fixtures() {
             })
             .unwrap(),
         ),
-
         // Bead types
         (
             "bead_data",
@@ -113,7 +112,6 @@ fn generate_schema_fixtures() {
             })
             .unwrap(),
         ),
-
         // Session/Conversation types
         (
             "session_kind",
@@ -121,7 +119,8 @@ fn generate_schema_fixtures() {
                 worker: "alpha".to_string(),
                 bead: "bd-abc123".to_string(),
                 strand: None,
-            }).unwrap(),
+            })
+            .unwrap(),
         ),
         (
             "session_message",
@@ -190,7 +189,6 @@ fn generate_schema_fixtures() {
             })
             .unwrap(),
         ),
-
         // Stitch types
         (
             "stitch",
@@ -267,7 +265,6 @@ fn generate_schema_fixtures() {
             })
             .unwrap(),
         ),
-
         // Pattern types
         (
             "pattern",
@@ -331,7 +328,6 @@ fn generate_schema_fixtures() {
             })
             .unwrap(),
         ),
-
         // Configuration types
         (
             "hoop_config",
@@ -445,7 +441,6 @@ fn generate_schema_fixtures() {
             })
             .unwrap(),
         ),
-
         // Project types
         (
             "workspace_entry",
@@ -470,12 +465,8 @@ fn generate_schema_fixtures() {
         ),
         (
             "projects_registry",
-            serde_json::to_string_pretty(&ProjectsRegistry {
-                projects: vec![],
-            })
-            .unwrap(),
+            serde_json::to_string_pretty(&ProjectsRegistry { projects: vec![] }).unwrap(),
         ),
-
         // Capacity types
         (
             "capacity_limits",
@@ -554,7 +545,6 @@ fn generate_schema_fixtures() {
             })
             .unwrap(),
         ),
-
         // Audit types
         (
             "audit_row",
@@ -573,7 +563,6 @@ fn generate_schema_fixtures() {
             })
             .unwrap(),
         ),
-
         // Monitoring types
         (
             "debug_state",
@@ -605,7 +594,6 @@ fn generate_schema_fixtures() {
             })
             .unwrap(),
         ),
-
         // WebSocket types
         (
             "ws_event",
@@ -631,7 +619,6 @@ fn generate_schema_fixtures() {
             })
             .unwrap(),
         ),
-
         // UI types
         (
             "ui_state",
@@ -650,7 +637,6 @@ fn generate_schema_fixtures() {
             })
             .unwrap(),
         ),
-
         // Other types
         (
             "dictated_note",
@@ -752,14 +738,12 @@ fn generate_schema_fixtures() {
     ];
 
     // Create fixture directory
-    fs::create_dir_all(FIXTURE_DIR)
-        .expect("Failed to create fixture directory");
+    fs::create_dir_all(FIXTURE_DIR).expect("Failed to create fixture directory");
 
     // Write each fixture
     for (name, json) in &fixtures {
         let file_path = format!("{}/{}.json", FIXTURE_DIR, name);
-        fs::write(&file_path, &json)
-            .expect(&format!("Failed to write fixture: {}", file_path));
+        fs::write(&file_path, &json).expect(&format!("Failed to write fixture: {}", file_path));
     }
 
     // Write index
@@ -777,7 +761,11 @@ fn generate_schema_fixtures() {
     fs::write(&index_path, serde_json::to_string_pretty(&index).unwrap())
         .expect("Failed to write index");
 
-    println!("Generated {} schema fixtures in {}", fixtures.len(), FIXTURE_DIR);
+    println!(
+        "Generated {} schema fixtures in {}",
+        fixtures.len(),
+        FIXTURE_DIR
+    );
 }
 
 /// Validate round-trip: Rust → JSON → Rust parse → deep-equal
@@ -869,7 +857,10 @@ fn validate_fixture_roundtrip() {
 
         // Parse back and compare
         let round_trip: serde_json::Value = serde_json::from_str(&normalized).unwrap_or_else(|e| {
-            panic!("Failed to parse normalized JSON for {}: {}", fixture_file, e)
+            panic!(
+                "Failed to parse normalized JSON for {}: {}",
+                fixture_file, e
+            )
         });
 
         assert_eq!(

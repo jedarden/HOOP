@@ -194,7 +194,8 @@ print("hello")
     // Read and verify shebang
     let content = fs::read(skill_dir.join("run")).unwrap();
     assert!(content.starts_with(b"#!"));
-    let shebang_line = content.iter()
+    let shebang_line = content
+        .iter()
         .take_while(|&&b| b != b'\n')
         .map(|&b| b as char)
         .collect::<String>();

@@ -299,7 +299,12 @@ fn rollback(backup_dir: &Path) -> Result<()> {
 /// # Behavior
 /// - **Interactive mode** (no_interactive=false): Prompts with warning about destructive operation
 /// - **Non-interactive mode** (no_interactive=true): Requires --confirm flag, suppresses prompts
-pub async fn run_restore(from_uri: &str, dry_run: bool, no_interactive: bool, confirm: bool) -> Result<()> {
+pub async fn run_restore(
+    from_uri: &str,
+    dry_run: bool,
+    no_interactive: bool,
+    confirm: bool,
+) -> Result<()> {
     // 1. Parse S3 URI and load config
     let locator = parse_s3_uri(from_uri)?;
     let s3_config = load_s3_config()?;
@@ -354,14 +359,20 @@ pub async fn run_restore(from_uri: &str, dry_run: bool, no_interactive: bool, co
         println!("Would restore:");
         println!("  fleet.db -> {}", hoop_dir().join("fleet.db").display());
         if manifest.attachments_manifest_key.is_some() {
-            println!("  attachments -> {}", hoop_dir().join("attachments").display());
+            println!(
+                "  attachments -> {}",
+                hoop_dir().join("attachments").display()
+            );
         }
         println!("  config.yml (if present in snapshot)");
         println!("  projects.yaml (if present in snapshot)");
         println!();
         println!("To perform the restore, run without --dry-run:");
         if no_interactive {
-            println!("  hoop restore --from {} --no-interactive --confirm", from_uri);
+            println!(
+                "  hoop restore --from {} --no-interactive --confirm",
+                from_uri
+            );
         } else {
             println!("  hoop restore --from {}", from_uri);
         }
@@ -473,7 +484,8 @@ pub async fn run_restore(from_uri: &str, dry_run: bool, no_interactive: bool, co
         // 9. Restore config files (config.yml and projects.yaml) from S3 snapshot
         // This restores the config files as they were at backup time
         let snapshot_prefix = format!("{}/{}", locator.key, manifest.snapshot_id);
-        restore_config_files(&s3_config, &locator.bucket, &snapshot_prefix, &hoop).await
+        restore_config_files(&s3_config, &locator.bucket, &snapshot_prefix, &hoop)
+            .await
             .context("Failed to restore config files from S3 snapshot")?;
 
         // 10. Run schema migrations on restored fleet.db
@@ -498,7 +510,8 @@ pub async fn run_restore(from_uri: &str, dry_run: bool, no_interactive: bool, co
                 bail!(
                     "Audit hash mismatch: manifest has {} but restored database has {}. \
                      This indicates the audit log was tampered with after the backup was taken.",
-                    expected_hash, actual_hash
+                    expected_hash,
+                    actual_hash
                 );
             }
             println!("Audit hash chain verified (final: {})", actual_hash);
@@ -1000,7 +1013,8 @@ mod tests {
             .find("if no_interactive && !confirm {")
             .expect("run_restore must check no_interactive && !confirm");
 
-        let check_section = &code[fn_start + no_interactive_check..fn_start + no_interactive_check + 500];
+        let check_section =
+            &code[fn_start + no_interactive_check..fn_start + no_interactive_check + 500];
 
         // Verify the check exists and has proper error message
         assert!(
@@ -1039,7 +1053,8 @@ mod tests {
             .find("if !no_interactive {")
             .expect("run_restore must have interactive prompt for !no_interactive");
 
-        let prompt_section = &code[fn_start + interactive_prompt..fn_start + interactive_prompt + 600];
+        let prompt_section =
+            &code[fn_start + interactive_prompt..fn_start + interactive_prompt + 600];
 
         // Verify the prompt exists
         assert!(
@@ -1082,7 +1097,14 @@ mod tests {
         use clap::Parser;
 
         // Test: hoop --no-interactive restore --from s3://bucket/key --confirm
-        let args = ["hoop", "--no-interactive", "restore", "--from", "s3://bucket/key", "--confirm"];
+        let args = [
+            "hoop",
+            "--no-interactive",
+            "restore",
+            "--from",
+            "s3://bucket/key",
+            "--confirm",
+        ];
         let cli = crate::Cli::parse_from(args);
 
         assert!(cli.no_interactive, "no_interactive should be true");
@@ -1101,7 +1123,14 @@ mod tests {
         use clap::Parser;
 
         // Test: hoop restore --from s3://bucket/key --no-interactive --confirm
-        let args = ["hoop", "restore", "--from", "s3://bucket/key", "--no-interactive", "--confirm"];
+        let args = [
+            "hoop",
+            "restore",
+            "--from",
+            "s3://bucket/key",
+            "--no-interactive",
+            "--confirm",
+        ];
         let cli = crate::Cli::parse_from(args);
 
         assert!(cli.no_interactive, "no_interactive should be true");
@@ -1120,7 +1149,14 @@ mod tests {
         use clap::Parser;
 
         // Test: hoop -y restore --from s3://bucket/key --confirm
-        let args = ["hoop", "-y", "restore", "--from", "s3://bucket/key", "--confirm"];
+        let args = [
+            "hoop",
+            "-y",
+            "restore",
+            "--from",
+            "s3://bucket/key",
+            "--confirm",
+        ];
         let cli = crate::Cli::parse_from(args);
 
         assert!(cli.no_interactive, "no_interactive should be true with -y");
@@ -1138,12 +1174,26 @@ mod tests {
         use clap::Parser;
 
         // Test with flag before command
-        let args_before = ["hoop", "--no-interactive", "restore", "--from", "s3://bucket/key", "--confirm"];
+        let args_before = [
+            "hoop",
+            "--no-interactive",
+            "restore",
+            "--from",
+            "s3://bucket/key",
+            "--confirm",
+        ];
         let cli_before = crate::Cli::parse_from(args_before);
         let no_interactive_before = cli_before.no_interactive;
 
         // Test with flag after command
-        let args_after = ["hoop", "restore", "--from", "s3://bucket/key", "--no-interactive", "--confirm"];
+        let args_after = [
+            "hoop",
+            "restore",
+            "--from",
+            "s3://bucket/key",
+            "--no-interactive",
+            "--confirm",
+        ];
         let cli_after = crate::Cli::parse_from(args_after);
         let no_interactive_after = cli_after.no_interactive;
 
@@ -1181,7 +1231,8 @@ mod tests {
         let main_code = include_str!("main.rs");
 
         // Find the Restore command handler in main.rs
-        let restore_handler_start = main_code.find("Commands::Restore {")
+        let restore_handler_start = main_code
+            .find("Commands::Restore {")
             .expect("main.rs should have Restore command handler");
 
         // Extract the handler section
@@ -1189,9 +1240,11 @@ mod tests {
 
         // Verify the handler passes no_interactive to run_restore
         assert!(
-            handler_section.contains("restore::run_restore(&from, dry_run, no_interactive, confirm)"),
+            handler_section
+                .contains("restore::run_restore(&from, dry_run, no_interactive, confirm)"),
             "Restore handler must pass no_interactive flag to run_restore.\n\
-             Handler section: {}", handler_section
+             Handler section: {}",
+            handler_section
         );
 
         // Verify error handling
@@ -1219,7 +1272,8 @@ mod tests {
         let code = include_str!("restore.rs");
 
         // Find the dry-run section
-        let dry_run_section = code.find("if dry_run {")
+        let dry_run_section = code
+            .find("if dry_run {")
             .expect("run_restore must have dry_run mode");
 
         // Get the dry_run block (expanded window to reach the print statements)
@@ -1244,7 +1298,8 @@ mod tests {
         let code = include_str!("restore.rs");
 
         // Find the --confirm requirement check
-        let check_start = code.find("if no_interactive && !confirm {")
+        let check_start = code
+            .find("if no_interactive && !confirm {")
             .expect("Must have --confirm requirement check");
 
         let check_section = &code[check_start..check_start + 600];

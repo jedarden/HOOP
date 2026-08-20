@@ -19,8 +19,8 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use tracing::{error, info, warn};
 
-use crate::DaemonState;
 use crate::fleet;
+use crate::DaemonState;
 
 /// Tour project identifier (must not conflict with real projects)
 pub const TOUR_PROJECT_NAME: &str = "__hoop_tour__";
@@ -201,7 +201,9 @@ async fn enable_tour_project(
             last_activity: Some(chrono::Utc::now().to_rfc3339()),
         });
         // Broadcast the tour project card
-        let _ = state.project_status_tx.send(projects.last().unwrap().clone());
+        let _ = state
+            .project_status_tx
+            .send(projects.last().unwrap().clone());
     }
 
     info!(
@@ -280,10 +282,7 @@ async fn disable_tour_project(
         let tour_path_buf = PathBuf::from(&path);
         if tour_path_buf.exists() {
             if let Err(e) = fs::remove_dir_all(&tour_path_buf) {
-                warn!(
-                    "Failed to remove tour workspace directory {}: {}",
-                    path, e
-                );
+                warn!("Failed to remove tour workspace directory {}: {}", path, e);
             }
         }
     }
@@ -363,11 +362,10 @@ fn list_tour_stitches(conn: &rusqlite::Connection, project: &str) -> Vec<TourSti
         .prepare("SELECT id, kind, title FROM stitches WHERE project = ?1 ORDER BY created_at")
         .unwrap_or_else(|_| {
             // Table might not exist yet
-            conn
-                .prepare(
-                    "SELECT id, kind, title FROM stitches WHERE project = ?1 ORDER BY created_at",
-                )
-                .unwrap()
+            conn.prepare(
+                "SELECT id, kind, title FROM stitches WHERE project = ?1 ORDER BY created_at",
+            )
+            .unwrap()
         });
 
     let mut stitches = Vec::new();
@@ -401,12 +399,9 @@ fn list_tour_stitches(conn: &rusqlite::Connection, project: &str) -> Vec<TourSti
 }
 
 /// Create an example voice note stitch (dictated)
-fn create_voice_note_example(
-    conn: &mut rusqlite::Connection,
-    _tour_path: &str,
-) -> TourStitchInfo {
-    use uuid::Uuid;
+fn create_voice_note_example(conn: &mut rusqlite::Connection, _tour_path: &str) -> TourStitchInfo {
     use chrono::Utc;
+    use uuid::Uuid;
 
     let stitch_id = Uuid::new_v4().to_string();
     let now = Utc::now().to_rfc3339();
@@ -414,7 +409,15 @@ fn create_voice_note_example(
     let _ = conn.execute(
         "INSERT INTO stitches (id, project, kind, title, created_by, created_at, last_activity_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        (&stitch_id, TOUR_PROJECT_NAME, "dictated", "Tour: Voice Note Demo", "system", &now, &now),
+        (
+            &stitch_id,
+            TOUR_PROJECT_NAME,
+            "dictated",
+            "Tour: Voice Note Demo",
+            "system",
+            &now,
+            &now,
+        ),
     );
 
     // Add example voice note message
@@ -438,12 +441,9 @@ fn create_voice_note_example(
 }
 
 /// Create an example agent chat stitch (operator)
-fn create_agent_chat_example(
-    conn: &mut rusqlite::Connection,
-    _tour_path: &str,
-) -> TourStitchInfo {
-    use uuid::Uuid;
+fn create_agent_chat_example(conn: &mut rusqlite::Connection, _tour_path: &str) -> TourStitchInfo {
     use chrono::Utc;
+    use uuid::Uuid;
 
     let stitch_id = Uuid::new_v4().to_string();
     let now = Utc::now().to_rfc3339();
@@ -451,7 +451,15 @@ fn create_agent_chat_example(
     let _ = conn.execute(
         "INSERT INTO stitches (id, project, kind, title, created_by, created_at, last_activity_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        (&stitch_id, TOUR_PROJECT_NAME, "operator", "Tour: Agent Chat Demo", "system", &now, &now),
+        (
+            &stitch_id,
+            TOUR_PROJECT_NAME,
+            "operator",
+            "Tour: Agent Chat Demo",
+            "system",
+            &now,
+            &now,
+        ),
     );
 
     // Add example conversation messages
@@ -472,7 +480,13 @@ fn create_agent_chat_example(
     let _ = conn.execute(
         "INSERT INTO stitch_messages (id, stitch_id, ts, role, content)
          VALUES (?1, ?2, ?3, ?4, ?5)",
-        (&msg2_id, &stitch_id, &now, "assistant", &content2.to_string()),
+        (
+            &msg2_id,
+            &stitch_id,
+            &now,
+            "assistant",
+            &content2.to_string(),
+        ),
     );
 
     TourStitchInfo {
@@ -488,8 +502,8 @@ fn create_linked_beads_example(
     conn: &mut rusqlite::Connection,
     _tour_path: &str,
 ) -> TourStitchInfo {
-    use uuid::Uuid;
     use chrono::Utc;
+    use uuid::Uuid;
 
     let stitch_id = Uuid::new_v4().to_string();
     let now = Utc::now().to_rfc3339();
@@ -497,7 +511,15 @@ fn create_linked_beads_example(
     let _ = conn.execute(
         "INSERT INTO stitches (id, project, kind, title, created_by, created_at, last_activity_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        (&stitch_id, TOUR_PROJECT_NAME, "ad-hoc", "Tour: Linked Beads Demo", "system", &now, &now),
+        (
+            &stitch_id,
+            TOUR_PROJECT_NAME,
+            "ad-hoc",
+            "Tour: Linked Beads Demo",
+            "system",
+            &now,
+            &now,
+        ),
     );
 
     // Add example message about linked beads
@@ -524,8 +546,8 @@ fn create_cost_anomaly_example(
     conn: &mut rusqlite::Connection,
     _tour_path: &str,
 ) -> TourStitchInfo {
-    use uuid::Uuid;
     use chrono::Utc;
+    use uuid::Uuid;
 
     let stitch_id = Uuid::new_v4().to_string();
     let now = Utc::now().to_rfc3339();

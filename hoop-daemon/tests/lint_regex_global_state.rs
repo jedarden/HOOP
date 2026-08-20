@@ -52,10 +52,10 @@ use std::path::Path;
 
 /// Patterns that indicate global Regex storage
 const GLOBAL_REGEX_PATTERNS: &[&str] = &[
-    "static",       // static declarations
-    "OnceLock",     // std::sync::OnceLock
-    "lazy_static",  // lazy_static! macro
-    "LazyLock",     // std::sync::LazyLock (Rust 1.80+)
+    "static",      // static declarations
+    "OnceLock",    // std::sync::OnceLock
+    "lazy_static", // lazy_static! macro
+    "LazyLock",    // std::sync::LazyLock (Rust 1.80+)
 ];
 
 /// Methods that are SAFE to use with global regexes (no internal state)
@@ -144,7 +144,9 @@ fn bad_function() {{
         "Synthetic violation should have been detected"
     );
     assert_eq!(violations.len(), 1);
-    assert!(violations[0].2.contains("captures_iter() on potentially global Regex"));
+    assert!(violations[0]
+        .2
+        .contains("captures_iter() on potentially global Regex"));
 }
 
 /// Synthetic safe test: prove the scanner allows safe patterns

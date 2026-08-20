@@ -11,7 +11,11 @@ use std::io::Write;
 use tempfile::TempDir;
 
 /// Helper to create a test attachment with secrets
-fn create_attachment_with_secrets(dir: &TempDir, filename: &str, content: &str) -> std::path::PathBuf {
+fn create_attachment_with_secrets(
+    dir: &TempDir,
+    filename: &str,
+    content: &str,
+) -> std::path::PathBuf {
     let path = dir.path().join(filename);
     let mut file = std::fs::File::create(&path).unwrap();
     file.write_all(content.as_bytes()).unwrap();
@@ -41,7 +45,9 @@ fn test_text_attachment_with_secrets_detected() {
 
     assert!(!findings.is_empty(), "Should detect secret in attachment");
     assert!(
-        findings.iter().any(|f| f.pattern_name == "anthropic_api_key"),
+        findings
+            .iter()
+            .any(|f| f.pattern_name == "anthropic_api_key"),
         "Should detect anthropic_api_key pattern"
     );
 }
@@ -91,7 +97,10 @@ It contains links like https://example.com and email addresses like user@example
 
     let findings = hoop_daemon::redaction::scan_attachment(&attachment_path).unwrap();
 
-    assert!(findings.is_empty(), "Clean attachment should have no findings");
+    assert!(
+        findings.is_empty(),
+        "Clean attachment should have no findings"
+    );
 }
 
 /// Test that different text file extensions are scanned
@@ -129,7 +138,8 @@ fn test_binary_files_not_scanned() {
     // Create a fake binary file (PNG magic bytes + some data)
     let path = dir.path().join("image.png");
     let mut file = std::fs::File::create(&path).unwrap();
-    file.write_all(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A]).unwrap(); // PNG header
+    file.write_all(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A])
+        .unwrap(); // PNG header
     file.write_all(b"sk-ant-api03-FAKESECRET").unwrap(); // Secret-like data
 
     let findings = hoop_daemon::redaction::scan_attachment(&path).unwrap();
@@ -195,7 +205,10 @@ export AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 
     let findings = hoop_daemon::redaction::scan_attachment(&attachment_path).unwrap();
 
-    assert!(findings.len() >= 2, "Should detect at least 2 env var secrets");
+    assert!(
+        findings.len() >= 2,
+        "Should detect at least 2 env var secrets"
+    );
 }
 
 /// Test that very large text files are skipped
@@ -243,13 +256,11 @@ fn test_scan_finding_metadata() {
 fn test_findings_written_to_audit() {
     hoop_daemon::secrets_scanner::init();
 
-    let findings = vec![
-        hoop_daemon::redaction::SecretFinding {
-            pattern_name: "test_pattern",
-            match_start: 0,
-            match_len: 20,
-        },
-    ];
+    let findings = vec![hoop_daemon::redaction::SecretFinding {
+        pattern_name: "test_pattern",
+        match_start: 0,
+        match_len: 20,
+    }];
 
     // This should write to audit without errors
     let written = hoop_daemon::redaction::audit_findings(
@@ -273,11 +284,17 @@ fn test_benign_files_no_false_positives() {
 
     // Test various benign file contents
     let benign_files = vec![
-        ("README.md", "Check out https://github.com/user/repo for more info"),
+        (
+            "README.md",
+            "Check out https://github.com/user/repo for more info",
+        ),
         ("config.json", r#"{"timeout": 30, "retries": 3}"#),
         ("python.py", "print('Hello, World!')"),
         ("rust.rs", "fn main() { println!(\"Hello\"); }"),
-        ("yaml.yml", "production:\n  replicas: 3\n  image: nginx:latest"),
+        (
+            "yaml.yml",
+            "production:\n  replicas: 3\n  image: nginx:latest",
+        ),
     ];
 
     for (filename, content) in benign_files {

@@ -203,8 +203,8 @@ impl FixLineageLibrary {
     /// before moving them into the struct.
     pub fn add_pattern(&mut self, pattern: RiskPattern) {
         let idx = self.patterns.len();
-        self.patterns.push(pattern);  // Store pattern FIRST
-        // Then build indexes pointing to existing pattern
+        self.patterns.push(pattern); // Store pattern FIRST
+                                     // Then build indexes pointing to existing pattern
         for keyword in &self.patterns[idx].keywords {
             self.keyword_index
                 .entry(keyword.to_lowercase())
@@ -514,12 +514,19 @@ mod tests {
         let lib = FixLineageLibrary::from_patterns(patterns);
 
         // Verify the library contains all the patterns that were passed in
-        assert_eq!(lib.patterns().len(), expected_count,
-                   "Library should contain all patterns passed to from_patterns()");
+        assert_eq!(
+            lib.patterns().len(),
+            expected_count,
+            "Library should contain all patterns passed to from_patterns()"
+        );
 
         // Verify that at least one expected pattern ID exists in the library
-        assert!(lib.patterns().iter().any(|p| p.id == "large_codegen_stack_overflow"),
-                "Library should contain expected pattern IDs");
+        assert!(
+            lib.patterns()
+                .iter()
+                .any(|p| p.id == "large_codegen_stack_overflow"),
+            "Library should contain expected pattern IDs"
+        );
     }
 
     #[test]
@@ -611,7 +618,7 @@ mod tests {
             id: "test_pattern".to_string(),
             name: "Test".to_string(),
             description: "Test".to_string(),
-            keywords: vec!["test".to_string()],  // This keyword should trigger matches
+            keywords: vec!["test".to_string()], // This keyword should trigger matches
             label_keywords: vec![],
             fix_recommendation: "Test fix".to_string(),
             severity: RiskSeverity::Low,
@@ -623,11 +630,18 @@ mod tests {
         let matches = lib.match_draft("Test this", None, &[]);
 
         // Verify exactly one match is found (the pattern we just added)
-        assert_eq!(matches.len(), 1, "Should find exactly one match for 'test' keyword");
+        assert_eq!(
+            matches.len(),
+            1,
+            "Should find exactly one match for 'test' keyword"
+        );
 
         // Verify the match has the correct pattern ID
         // This confirms the pattern was stored correctly and retrieved via keyword index
-        assert_eq!(matches[0].pattern.id, "test_pattern", "Matched pattern should have the expected ID");
+        assert_eq!(
+            matches[0].pattern.id, "test_pattern",
+            "Matched pattern should have the expected ID"
+        );
     }
 
     #[test]
@@ -663,11 +677,18 @@ mod tests {
         let lib = FixLineageLibrary::from_patterns(default_risk_patterns());
 
         // Test with attachment-related keywords
-        let matches = lib.match_draft("Upload config file with API keys", None, &["attachment".to_string()]);
+        let matches = lib.match_draft(
+            "Upload config file with API keys",
+            None,
+            &["attachment".to_string()],
+        );
         let secret_match = matches
             .iter()
             .find(|m| m.pattern.id == "secrets_in_attachment");
-        assert!(secret_match.is_some(), "secrets_in_attachment pattern should trigger on attachment + config");
+        assert!(
+            secret_match.is_some(),
+            "secrets_in_attachment pattern should trigger on attachment + config"
+        );
         assert!(secret_match.unwrap().confidence > 0.0);
     }
 
@@ -676,11 +697,18 @@ mod tests {
         let lib = FixLineageLibrary::from_patterns(default_risk_patterns());
 
         // Test with .env file reference
-        let matches = lib.match_draft("Fix .env file upload issue", Some("Need to upload the .env file"), &[]);
+        let matches = lib.match_draft(
+            "Fix .env file upload issue",
+            Some("Need to upload the .env file"),
+            &[],
+        );
         let secret_match = matches
             .iter()
             .find(|m| m.pattern.id == "secrets_in_attachment");
-        assert!(secret_match.is_some(), "secrets_in_attachment pattern should trigger on .env keyword");
+        assert!(
+            secret_match.is_some(),
+            "secrets_in_attachment pattern should trigger on .env keyword"
+        );
     }
 
     #[test]
@@ -688,11 +716,18 @@ mod tests {
         let lib = FixLineageLibrary::from_patterns(default_risk_patterns());
 
         // Test with cross-workspace keywords
-        let matches = lib.match_draft("Add cross-workspace dependency on utils", None, &["dependency".to_string()]);
+        let matches = lib.match_draft(
+            "Add cross-workspace dependency on utils",
+            None,
+            &["dependency".to_string()],
+        );
         let dep_match = matches
             .iter()
             .find(|m| m.pattern.id == "cross_workspace_dep");
-        assert!(dep_match.is_some(), "cross_workspace_dep pattern should trigger");
+        assert!(
+            dep_match.is_some(),
+            "cross_workspace_dep pattern should trigger"
+        );
         assert!(dep_match.unwrap().confidence > 0.0);
     }
 
@@ -704,7 +739,10 @@ mod tests {
         let dep_match = matches
             .iter()
             .find(|m| m.pattern.id == "cross_workspace_dep");
-        assert!(dep_match.is_some(), "cross_workspace_dep should trigger on upstream reference");
+        assert!(
+            dep_match.is_some(),
+            "cross_workspace_dep should trigger on upstream reference"
+        );
     }
 
     #[test]
@@ -712,11 +750,18 @@ mod tests {
         let lib = FixLineageLibrary::from_patterns(default_risk_patterns());
 
         // Test with review + iteration keywords
-        let matches = lib.match_draft("Review code again and iterate", Some("Need to recheck the implementation"), &["review".to_string()]);
+        let matches = lib.match_draft(
+            "Review code again and iterate",
+            Some("Need to recheck the implementation"),
+            &["review".to_string()],
+        );
         let loop_match = matches
             .iter()
             .find(|m| m.pattern.id == "infinite_review_loop");
-        assert!(loop_match.is_some(), "infinite_review_loop pattern should trigger on review + again");
+        assert!(
+            loop_match.is_some(),
+            "infinite_review_loop pattern should trigger on review + again"
+        );
     }
 
     #[test]
@@ -727,7 +772,10 @@ mod tests {
         let loop_match = matches
             .iter()
             .find(|m| m.pattern.id == "infinite_review_loop");
-        assert!(loop_match.is_some(), "infinite_review_loop should trigger on loop keyword");
+        assert!(
+            loop_match.is_some(),
+            "infinite_review_loop should trigger on loop keyword"
+        );
     }
 
     #[test]
@@ -735,11 +783,16 @@ mod tests {
         let lib = FixLineageLibrary::from_patterns(default_risk_patterns());
 
         // Test with tool + retry keywords
-        let matches = lib.match_draft("Tool function stuck in retry loop", None, &["retry".to_string()]);
-        let tool_match = matches
-            .iter()
-            .find(|m| m.pattern.id == "runaway_tool_loop");
-        assert!(tool_match.is_some(), "runaway_tool_loop pattern should trigger on tool + retry");
+        let matches = lib.match_draft(
+            "Tool function stuck in retry loop",
+            None,
+            &["retry".to_string()],
+        );
+        let tool_match = matches.iter().find(|m| m.pattern.id == "runaway_tool_loop");
+        assert!(
+            tool_match.is_some(),
+            "runaway_tool_loop pattern should trigger on tool + retry"
+        );
     }
 
     #[test]
@@ -747,10 +800,11 @@ mod tests {
         let lib = FixLineageLibrary::from_patterns(default_risk_patterns());
 
         let matches = lib.match_draft("Repeated tool calls stuck again", None, &[]);
-        let tool_match = matches
-            .iter()
-            .find(|m| m.pattern.id == "runaway_tool_loop");
-        assert!(tool_match.is_some(), "runaway_tool_loop should trigger on repeated + tool");
+        let tool_match = matches.iter().find(|m| m.pattern.id == "runaway_tool_loop");
+        assert!(
+            tool_match.is_some(),
+            "runaway_tool_loop should trigger on repeated + tool"
+        );
     }
 
     #[test]

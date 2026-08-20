@@ -10,10 +10,10 @@
 #[cfg(not(feature = "zero-write-v01"))]
 use crate::br_verbs::invoke_br_create;
 use crate::br_verbs::{invoke_br_read, propagate_stitch_labels, ReadVerb};
-use crate::DaemonState;
 use crate::fleet::{self, ActionKind, ActionResult, BeadActionArgs, BeadSource};
 use crate::pattern_query_evaluator;
 use crate::ws::StitchCreatedData;
+use crate::DaemonState;
 use axum::{
     extract::{ConnectInfo, Path, State},
     http::StatusCode,
@@ -23,7 +23,6 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tracing::warn;
-
 
 /// Valid issue types for bead creation
 const VALID_ISSUE_TYPES: &[&str] = &["task", "bug", "epic", "genesis", "review", "fix"];
@@ -268,7 +267,9 @@ pub async fn dismiss_dedup(
     ),
     tag = "beads"
 )]
-pub async fn get_vector_index_stats(State(state): State<crate::DaemonState>) -> Json<VectorIndexStats> {
+pub async fn get_vector_index_stats(
+    State(state): State<crate::DaemonState>,
+) -> Json<VectorIndexStats> {
     let index = state.vector_index.read().unwrap();
     let (current, total) = index.rebuild_progress();
     Json(VectorIndexStats {
@@ -463,7 +464,9 @@ pub async fn create_bead(
     connect_info: Option<ConnectInfo<SocketAddr>>,
     Json(req): Json<CreateBeadRequest>,
 ) -> Result<Json<CreateBeadResponse>, (StatusCode, String)> {
-    create_bead_internal(project, &state, connect_info, req).await.map(Json)
+    create_bead_internal(project, &state, connect_info, req)
+        .await
+        .map(Json)
 }
 
 /// Internal helper function for bead creation logic
@@ -492,7 +495,12 @@ pub async fn create_bead_internal(
         connect_info.map(|ci| ci.0),
         crate::auth::Role::Drafter,
     )
-    .map_err(|e| (e.0, serde_json::to_string(&e.1 .0).unwrap_or_else(|_| e.0.to_string())))?;
+    .map_err(|e| {
+        (
+            e.0,
+            serde_json::to_string(&e.1 .0).unwrap_or_else(|_| e.0.to_string()),
+        )
+    })?;
 
     // 1. Validate draft against schema
     validate_draft(&req)?;
@@ -1115,20 +1123,30 @@ mod tests {
                 std::sync::Arc::new(std::sync::RwLock::new(Vec::new())),
                 std::sync::Arc::new(crate::shutdown::ShutdownCoordinator::new()),
                 std::sync::Arc::new(std::sync::RwLock::new(
-                    crate::cost::CostAggregator::new("/tmp/test-cost.db".into()).expect("cost aggregator"),
+                    crate::cost::CostAggregator::new("/tmp/test-cost.db".into())
+                        .expect("cost aggregator"),
                 )),
-                std::sync::Arc::new(std::sync::RwLock::new(crate::vector_index::VectorIndex::new())),
+                std::sync::Arc::new(std::sync::RwLock::new(
+                    crate::vector_index::VectorIndex::new(),
+                )),
                 std::path::PathBuf::from("/tmp/test-scripts"),
-                std::sync::Arc::new(std::sync::Mutex::new(crate::stuck_detector::StuckDetector::new())),
+                std::sync::Arc::new(std::sync::Mutex::new(
+                    crate::stuck_detector::StuckDetector::new(),
+                )),
             )),
             projects: std::sync::Arc::new(std::sync::RwLock::new(Vec::new())),
-            project_metadata: std::sync::Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
+            project_metadata: std::sync::Arc::new(std::sync::RwLock::new(
+                std::collections::HashMap::new(),
+            )),
             config_status_tx: tokio::sync::broadcast::channel(1).0,
-            config_status: std::sync::Arc::new(std::sync::RwLock::new(crate::ws::ConfigStatusData::default())),
+            config_status: std::sync::Arc::new(std::sync::RwLock::new(
+                crate::ws::ConfigStatusData::default(),
+            )),
             project_status_tx: tokio::sync::broadcast::channel(1).0,
             capacity_tx: tokio::sync::broadcast::channel(1).0,
             cost_aggregator: std::sync::Arc::new(std::sync::RwLock::new(
-                crate::cost::CostAggregator::new("/tmp/test-cost.db".into()).expect("cost aggregator"),
+                crate::cost::CostAggregator::new("/tmp/test-cost.db".into())
+                    .expect("cost aggregator"),
             )),
             transcription_service: None,
             upload_registry: std::sync::Arc::new(
@@ -1136,7 +1154,9 @@ mod tests {
                     .expect("upload registry"),
             ),
             active_project: std::sync::Arc::new(std::sync::RwLock::new(None)),
-            vector_index: std::sync::Arc::new(std::sync::RwLock::new(crate::vector_index::VectorIndex::new())),
+            vector_index: std::sync::Arc::new(std::sync::RwLock::new(
+                crate::vector_index::VectorIndex::new(),
+            )),
             agent_session_manager: None,
             morning_brief_runner: None,
             script_scheduler: None,
@@ -1157,7 +1177,9 @@ mod tests {
                     std::sync::Arc::new(std::sync::RwLock::new(Vec::new())),
                 ),
             )),
-            stuck_detector: std::sync::Arc::new(std::sync::Mutex::new(crate::stuck_detector::StuckDetector::new())),
+            stuck_detector: std::sync::Arc::new(std::sync::Mutex::new(
+                crate::stuck_detector::StuckDetector::new(),
+            )),
             backup_runner: None,
             template_library: template_library::TemplateStore::new(),
             prompt_library: api_prompts::PromptStore::new(),

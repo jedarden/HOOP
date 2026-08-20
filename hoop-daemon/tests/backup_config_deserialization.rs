@@ -45,11 +45,11 @@ fn minimal_config_applies_defaults() {
     let yaml_value: serde_yaml::Value =
         serde_yaml::from_str(yaml_input).expect("YAML should parse");
 
-    let json_value: serde_json::Value = serde_json::to_value(&yaml_value)
-        .expect("YAML→JSON conversion should succeed");
+    let json_value: serde_json::Value =
+        serde_json::to_value(&yaml_value).expect("YAML→JSON conversion should succeed");
 
-    let config: BackupFileConfig = serde_json::from_value(json_value)
-        .expect("BackupFileConfig should deserialize");
+    let config: BackupFileConfig =
+        serde_json::from_value(json_value).expect("BackupFileConfig should deserialize");
 
     assert_eq!(config.endpoint, "https://s3.example.com");
     assert_eq!(config.bucket, "my-bucket");
@@ -71,11 +71,11 @@ fn full_config_uses_explicit_values() {
     let yaml_value: serde_yaml::Value =
         serde_yaml::from_str(yaml_input).expect("YAML should parse");
 
-    let json_value: serde_json::Value = serde_json::to_value(&yaml_value)
-        .expect("YAML→JSON conversion should succeed");
+    let json_value: serde_json::Value =
+        serde_json::to_value(&yaml_value).expect("YAML→JSON conversion should succeed");
 
-    let config: BackupFileConfig = serde_json::from_value(json_value)
-        .expect("BackupFileConfig should deserialize");
+    let config: BackupFileConfig =
+        serde_json::from_value(json_value).expect("BackupFileConfig should deserialize");
 
     assert_eq!(config.endpoint, "https://s3.example.com");
     assert_eq!(config.bucket, "my-bucket");
@@ -93,8 +93,8 @@ fn direct_json_deserialization_works() {
         "prefix": "backups/"
     }"#;
 
-    let config: BackupFileConfig = serde_json::from_str(json_str)
-        .expect("Should deserialize from JSON directly");
+    let config: BackupFileConfig =
+        serde_json::from_str(json_str).expect("Should deserialize from JSON directly");
 
     assert_eq!(config.endpoint, "https://s3.example.com");
     assert_eq!(config.bucket, "my-bucket");

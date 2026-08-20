@@ -120,8 +120,15 @@ fn test_config_reload_audit_success() {
     assert!(row.hash_prev != row.hash_self, "hash chain must advance");
 
     // Verify we can query it back
-    let rows = fleet::query_audit_rows(None, None, None, Some(fleet::ActionKind::ConfigReloaded))
-        .expect("query");
+    let rows = fleet::query_audit_rows(
+        None,
+        None,
+        None,
+        Some(fleet::ActionKind::ConfigReloaded),
+        None,
+        None,
+    )
+    .expect("query");
     assert_eq!(rows.len(), 1, "should find exactly one config_reloaded row");
     let fetched = &rows[0];
     let fetched_args: serde_json::Value =
@@ -199,6 +206,8 @@ fn test_config_reload_audit_rejected() {
         None,
         None,
         Some(fleet::ActionKind::ConfigReloadRejected),
+        None,
+        None,
     )
     .expect("query");
     assert_eq!(
@@ -318,8 +327,15 @@ fn test_round_trip_config_change_audit_matches_diff() {
     .expect("write audit row");
 
     // Now verify: read the audit row back and confirm delta matches actual diff
-    let rows = fleet::query_audit_rows(None, None, None, Some(fleet::ActionKind::ConfigReloaded))
-        .expect("query");
+    let rows = fleet::query_audit_rows(
+        None,
+        None,
+        None,
+        Some(fleet::ActionKind::ConfigReloaded),
+        None,
+        None,
+    )
+    .expect("query");
     assert_eq!(rows.len(), 1);
     let fetched_args: ConfigReloadAudit =
         serde_json::from_str(rows[0].args_json.as_ref().unwrap()).unwrap();

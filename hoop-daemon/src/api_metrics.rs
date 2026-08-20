@@ -25,11 +25,8 @@ use axum::{
 use serde::Serialize;
 
 use crate::{
-    heartbeats::WorkerLiveness,
-    metrics,
-    unknown_event_sink::global_registry,
-    ws::WorkerDisplayState,
-    BeadStatus, DaemonState,
+    heartbeats::WorkerLiveness, metrics, unknown_event_sink::global_registry,
+    ws::WorkerDisplayState, BeadStatus, DaemonState,
 };
 
 /// Debug-state payload schema version (§20: bump on any field addition/removal).
@@ -676,7 +673,10 @@ pub fn router() -> Router<DaemonState> {
         .route("/metrics", get(get_metrics))
         .route("/debug/state", get(debug_state))
         .route("/api/diagnostics/unknown-events", get(get_unknown_events))
-        .route("/api/diagnostics/unknown-events/samples", get(get_unknown_event_samples))
+        .route(
+            "/api/diagnostics/unknown-events/samples",
+            get(get_unknown_event_samples),
+        )
 }
 
 // ---------------------------------------------------------------------------

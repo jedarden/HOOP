@@ -21,8 +21,8 @@ use axum::{
 use base64::Engine;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use tower::ServiceExt;
+use uuid::Uuid;
 
 /// Wrapper for raw bytes that implements ToSchema
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -171,7 +171,9 @@ async fn create_screen_capture(
     // §18.1 secrets scan: screen capture text (frame labels, transcript)
     {
         // Scan frame labels for secrets
-        let frame_labels: String = req.frame_samples.iter()
+        let frame_labels: String = req
+            .frame_samples
+            .iter()
             .map(|f| f.label.as_str())
             .collect::<Vec<_>>()
             .join(" ");
@@ -253,7 +255,11 @@ async fn create_screen_capture(
         &title,
         &state.pattern_tx,
     ) {
-        tracing::warn!("Failed to sync pattern queries for stitch {}: {}", stitch_id, e);
+        tracing::warn!(
+            "Failed to sync pattern queries for stitch {}: {}",
+            stitch_id,
+            e
+        );
     }
 
     tracing::info!(
@@ -289,8 +295,7 @@ async fn get_metadata(
     Path(stitch_id): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     // Validate and parse stitch_id at API boundary (path-traversal protection, §13)
-    let stitch_id = ValidStitchId::parse(&stitch_id)
-        .map_err(crate::id_validators::rejection)?;
+    let stitch_id = ValidStitchId::parse(&stitch_id).map_err(crate::id_validators::rejection)?;
 
     if !screen_capture::has_video(&stitch_id) {
         return Err((
@@ -401,20 +406,27 @@ async fn start_streaming_upload(
     if !valid_content_type {
         return Err((
             StatusCode::BAD_REQUEST,
-            "Invalid video_content_type. Must be a video MIME type (e.g., video/webm, video/mp4)".into(),
+            "Invalid video_content_type. Must be a video MIME type (e.g., video/webm, video/mp4)"
+                .into(),
         ));
     }
 
-    let registry = screen_capture::StreamingUploadRegistry::new()
-        .map_err(|e| {
-            tracing::error!("Failed to create streaming upload registry: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create upload session".into())
-        })?;
+    let registry = screen_capture::StreamingUploadRegistry::new().map_err(|e| {
+        tracing::error!("Failed to create streaming upload registry: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to create upload session".into(),
+        )
+    })?;
 
-    let response = registry.start_session(project, req.video_content_type)
+    let response = registry
+        .start_session(project, req.video_content_type)
         .map_err(|e| {
             tracing::error!("Failed to start streaming upload: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to start upload: {}", e))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to start upload: {}", e),
+            )
         })?;
 
     tracing::info!(
@@ -451,19 +463,28 @@ async fn append_stream_chunk(
     State(_state): State<crate::DaemonState>,
     Json(body): Json<RawBytes>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let registry = screen_capture::StreamingUploadRegistry::new()
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create registry".into()))?;
+    let registry = screen_capture::StreamingUploadRegistry::new().map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to create registry".into(),
+        )
+    })?;
 
-    let received_bytes = registry.append_chunk(&stream_id, &body.0)
-        .map_err(|e| {
-            tracing::error!("Failed to append chunk to stream {}: {}", stream_id, e);
-            (StatusCode::NOT_FOUND, format!("Stream not found or error: {}", e))
-        })?;
+    let received_bytes = registry.append_chunk(&stream_id, &body.0).map_err(|e| {
+        tracing::error!("Failed to append chunk to stream {}: {}", stream_id, e);
+        (
+            StatusCode::NOT_FOUND,
+            format!("Stream not found or error: {}", e),
+        )
+    })?;
 
-    Ok((StatusCode::OK, Json(serde_json::json!({
-        "stream_id": stream_id,
-        "received_bytes": received_bytes,
-    }))))
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "stream_id": stream_id,
+            "received_bytes": received_bytes,
+        })),
+    ))
 }
 
 /// Request body for completing a streaming upload
@@ -498,13 +519,21 @@ async fn complete_streaming_upload(
     State(state): State<crate::DaemonState>,
     Json(req): Json<CompleteStreamingUploadRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let registry = screen_capture::StreamingUploadRegistry::new()
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create registry".into()))?;
+    let registry = screen_capture::StreamingUploadRegistry::new().map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to create registry".into(),
+        )
+    })?;
 
-    let data = registry.complete_session(&stream_id, req.duration_secs, req.frame_samples, &state)
+    let data = registry
+        .complete_session(&stream_id, req.duration_secs, req.frame_samples, &state)
         .map_err(|e| {
             tracing::error!("Failed to complete streaming upload {}: {}", stream_id, e);
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to complete upload: {}", e))
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to complete upload: {}", e),
+            )
         })?;
 
     tracing::info!(

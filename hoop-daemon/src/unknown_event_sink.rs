@@ -123,10 +123,9 @@ impl UnknownEventSink {
     pub fn record(&self, event_kind: &str, raw_event: &str) {
         // Increment both metrics (unlabeled total and labeled with adapter/event_kind)
         metrics::metrics().hoop_unknown_event_total.inc();
-        metrics::metrics().hoop_unknown_event_labeled_total.inc(&[
-            &self.adapter,
-            event_kind,
-        ]);
+        metrics::metrics()
+            .hoop_unknown_event_labeled_total
+            .inc(&[&self.adapter, event_kind]);
 
         // Log at WARN level
         let source_info = if let Some(ref path) = self.source_path {
@@ -172,10 +171,9 @@ impl UnknownEventSink {
     pub fn record_at_line(&self, event_kind: &str, raw_event: &str, line_number: usize) {
         // Increment both metrics (unlabeled total and labeled with adapter/event_kind)
         metrics::metrics().hoop_unknown_event_total.inc();
-        metrics::metrics().hoop_unknown_event_labeled_total.inc(&[
-            &self.adapter,
-            event_kind,
-        ]);
+        metrics::metrics()
+            .hoop_unknown_event_labeled_total
+            .inc(&[&self.adapter, event_kind]);
 
         // Log at WARN level
         let source_info = if let Some(ref path) = self.source_path {

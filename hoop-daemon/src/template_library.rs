@@ -122,10 +122,7 @@ impl TemplateLibrary {
         for pd in project_dirs {
             let tmpl_dir = pd.join(".hoop").join("templates");
             if tmpl_dir.exists() {
-                let project_name = pd
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("unknown");
+                let project_name = pd.file_name().and_then(|n| n.to_str()).unwrap_or("unknown");
                 load_from_dir(&tmpl_dir, project_name, &mut templates)?;
             }
         }
@@ -142,10 +139,8 @@ impl TemplateLibrary {
                 seen.insert(t.name.clone(), i);
             }
         }
-        let deduped: Vec<StitchTemplate> = seen
-            .into_values()
-            .map(|i| templates[i].clone())
-            .collect();
+        let deduped: Vec<StitchTemplate> =
+            seen.into_values().map(|i| templates[i].clone()).collect();
 
         info!("Template library loaded {} template(s)", deduped.len());
         self.templates = deduped;
@@ -155,7 +150,12 @@ impl TemplateLibrary {
     /// Return all templates, optionally filtered by scope.
     pub fn list(&self, scope: Option<&str>) -> Vec<StitchTemplate> {
         match scope {
-            Some(s) => self.templates.iter().filter(|t| t.scope == s).cloned().collect(),
+            Some(s) => self
+                .templates
+                .iter()
+                .filter(|t| t.scope == s)
+                .cloned()
+                .collect(),
             None => self.templates.clone(),
         }
     }
@@ -245,18 +245,16 @@ pub fn start_watcher(
     let watcher_global_dir = global_dir.clone();
     let watcher_project_dirs = project_dirs.clone();
     let mut watcher =
-        notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| {
-            match res {
-                Ok(_event) => {
-                    debug!("Template directory changed, reloading");
-                    let mut lib = store.write().unwrap();
-                    if let Err(e) = lib.load(&watcher_global_dir, &watcher_project_dirs) {
-                        warn!("Template reload failed: {}", e);
-                    }
+        notify::recommended_watcher(move |res: Result<notify::Event, notify::Error>| match res {
+            Ok(_event) => {
+                debug!("Template directory changed, reloading");
+                let mut lib = store.write().unwrap();
+                if let Err(e) = lib.load(&watcher_global_dir, &watcher_project_dirs) {
+                    warn!("Template reload failed: {}", e);
                 }
-                Err(e) => {
-                    warn!("Template watch error: {}", e);
-                }
+            }
+            Err(e) => {
+                warn!("Template watch error: {}", e);
             }
         })
         .expect("failed to create template file watcher");
@@ -274,7 +272,11 @@ pub fn start_watcher(
             watcher
                 .watch(&tmpl_dir, RecursiveMode::Recursive)
                 .unwrap_or_else(|e| {
-                    warn!("Cannot watch project templates dir {}: {}", tmpl_dir.display(), e)
+                    warn!(
+                        "Cannot watch project templates dir {}: {}",
+                        tmpl_dir.display(),
+                        e
+                    )
                 });
         }
     }
@@ -445,7 +447,8 @@ async fn list_project_templates(
     Path(project): Path<String>,
     State(state): State<crate::DaemonState>,
 ) -> Result<Json<Vec<StitchTemplate>>, (StatusCode, String)> {
-    crate::id_validators::validate_project_name(&project).map_err(crate::id_validators::rejection)?;
+    crate::id_validators::validate_project_name(&project)
+        .map_err(crate::id_validators::rejection)?;
     let lib = state.template_library.read().unwrap();
     // Return all templates — project templates are already merged during load
     Ok(Json(lib.list(None)))
@@ -457,9 +460,12 @@ async fn get_template(
     State(state): State<crate::DaemonState>,
 ) -> Result<Json<StitchTemplate>, (StatusCode, String)> {
     let lib = state.template_library.read().unwrap();
-    lib.get(&name)
-        .map(Json)
-        .ok_or_else(|| (StatusCode::NOT_FOUND, format!("Template '{}' not found", name)))
+    lib.get(&name).map(Json).ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            format!("Template '{}' not found", name),
+        )
+    })
 }
 
 pub fn router() -> Router<crate::DaemonState> {
@@ -610,14 +616,18 @@ Fix {{foo}} with {{bar}}
 
         std::fs::create_dir_all(dir_project.path().join(".hoop").join("templates")).unwrap();
         std::fs::write(
-            dir_project.path().join(".hoop").join("templates").join("review-PR.md"),
+            dir_project
+                .path()
+                .join(".hoop")
+                .join("templates")
+                .join("review-PR.md"),
             "---\nname: review-PR\ndescription: project version\n---\nProject body",
         )
         .unwrap();
 
         let mut lib = TemplateLibrary::new();
-        lib.load(dir_global.path(), &[dir_project.path().to_path_buf()]).unwrap();
-
+        lib.load(dir_global.path(), &[dir_project.path().to_path_buf()])
+            .unwrap();
 
         // Should have exactly one review-PR, the project-scoped one
         let tmpl = lib.get("review-PR").unwrap();

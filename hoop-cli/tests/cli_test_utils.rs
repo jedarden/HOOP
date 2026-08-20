@@ -243,7 +243,11 @@ pub fn verify_flag_extraction(parsed: &ParsedCli, expected_position: &str) -> Re
     }
 
     // Check that flag is in raw args
-    if !parsed.raw_args.iter().any(|a| a == "--no-interactive" || a == "-y") {
+    if !parsed
+        .raw_args
+        .iter()
+        .any(|a| a == "--no-interactive" || a == "-y")
+    {
         return Err("no_interactive flag not found in raw args".to_string());
     }
 
@@ -277,7 +281,11 @@ pub fn verify_flag_extraction(parsed: &ParsedCli, expected_position: &str) -> Re
     }
 
     // Check that flag was removed from remaining args
-    if parsed.args.iter().any(|a| a == "--no-interactive" || a == "-y") {
+    if parsed
+        .args
+        .iter()
+        .any(|a| a == "--no-interactive" || a == "-y")
+    {
         return Err("Flag should be removed from remaining args".to_string());
     }
 
@@ -292,7 +300,11 @@ pub fn verify_no_flag_present(parsed: &ParsedCli) -> Result<(), String> {
         return Err("no_interactive flag should not be present".to_string());
     }
 
-    if parsed.raw_args.iter().any(|a| a == "--no-interactive" || a == "-y") {
+    if parsed
+        .raw_args
+        .iter()
+        .any(|a| a == "--no-interactive" || a == "-y")
+    {
         return Err("Flag should not be in raw args".to_string());
     }
 
@@ -347,7 +359,10 @@ impl MockPrompt for MockYesNoPrompt {
 /// # Returns
 ///
 /// * `Result<(), String>` - Ok if prompt suppression works as expected
-pub fn verify_prompt_suppressed(prompt: &dyn MockPrompt, no_interactive: bool) -> Result<(), String> {
+pub fn verify_prompt_suppressed(
+    prompt: &dyn MockPrompt,
+    no_interactive: bool,
+) -> Result<(), String> {
     let would_prompt = prompt.would_prompt(no_interactive);
 
     if no_interactive && would_prompt {
@@ -403,8 +418,7 @@ pub fn verify_confirm_required(
 /// Create a temporary test workspace with .beads directory
 pub fn create_test_workspace(tmp_dir: &tempfile::TempDir, name: &str) -> PathBuf {
     let workspace = tmp_dir.path().join(name);
-    std::fs::create_dir_all(workspace.join(".beads"))
-        .expect("Failed to create .beads/ directory");
+    std::fs::create_dir_all(workspace.join(".beads")).expect("Failed to create .beads/ directory");
     workspace
 }
 
@@ -419,8 +433,7 @@ pub fn create_hoop_config_dir(tmp_dir: &tempfile::TempDir) -> PathBuf {
 pub fn create_test_registry(tmp_dir: &tempfile::TempDir) -> PathBuf {
     let hoop_dir = create_hoop_config_dir(tmp_dir);
     let registry_path = hoop_dir.join("projects.yaml");
-    std::fs::write(&registry_path, "projects: []")
-        .expect("Failed to write projects.yaml");
+    std::fs::write(&registry_path, "projects: []").expect("Failed to write projects.yaml");
     registry_path
 }
 
@@ -503,7 +516,7 @@ macro_rules! test_no_interactive_flag_before {
             let result = parse_cli_with_flag(&full_args);
             assert!(result.is_ok(), "Failed to parse args: {:?}", full_args);
             let parsed = result.unwrap();
-            assert_eq!(parsed.no_interactive, true, "no_interactive should be true");
+            assert!(parsed.no_interactive, "no_interactive should be true");
         }
     };
 }
@@ -523,15 +536,11 @@ macro_rules! test_no_interactive_flag_after {
     ($test_name:ident, $command:expr, $args:expr) => {
         #[test]
         fn $test_name() {
-            let full_args: Vec<&str> = $args
-                .iter()
-                .chain(&["--no-interactive"])
-                .copied()
-                .collect();
+            let full_args: Vec<&str> = $args.iter().chain(&["--no-interactive"]).copied().collect();
             let result = parse_cli_with_flag(&full_args);
             assert!(result.is_ok(), "Failed to parse args: {:?}", full_args);
             let parsed = result.unwrap();
-            assert_eq!(parsed.no_interactive, true, "no_interactive should be true");
+            assert!(parsed.no_interactive, "no_interactive should be true");
         }
     };
 }
@@ -556,7 +565,10 @@ macro_rules! test_short_flag_y {
             let result = parse_cli_with_flag(&full_args);
             assert!(result.is_ok(), "Failed to parse args: {:?}", full_args);
             let parsed = result.unwrap();
-            assert_eq!(parsed.no_interactive, true, "no_interactive should be true with -y");
+            assert!(
+                parsed.no_interactive,
+                "no_interactive should be true with -y"
+            );
         }
     };
 }
@@ -586,22 +598,17 @@ macro_rules! test_both_positions_consistency {
                 .expect("Failed to parse with flag before command");
 
             // Parse with flag after command
-            let args_after: Vec<&str> = $args
-                .iter()
-                .chain(&["--no-interactive"])
-                .copied()
-                .collect();
-            let parsed_after = parse_cli_with_flag(&args_after)
-                .expect("Failed to parse with flag after command");
+            let args_after: Vec<&str> =
+                $args.iter().chain(&["--no-interactive"]).copied().collect();
+            let parsed_after =
+                parse_cli_with_flag(&args_after).expect("Failed to parse with flag after command");
 
             assert_eq!(
-                parsed_before.no_interactive,
-                parsed_after.no_interactive,
+                parsed_before.no_interactive, parsed_after.no_interactive,
                 "no_interactive value must be consistent regardless of flag position"
             );
-            assert_eq!(
+            assert!(
                 parsed_before.no_interactive,
-                true,
                 "no_interactive should be true"
             );
         }
@@ -620,17 +627,12 @@ macro_rules! test_flag_default_false {
     ($test_name:ident, $args:expr) => {
         #[test]
         fn $test_name() {
-            let full_args: Vec<&str> = vec!["hoop"]
-                .iter()
-                .chain($args.iter())
-                .copied()
-                .collect();
+            let full_args: Vec<&str> = vec!["hoop"].iter().chain($args.iter()).copied().collect();
             let result = parse_cli_with_flag(&full_args);
             assert!(result.is_ok(), "Failed to parse args: {:?}", full_args);
             let parsed = result.unwrap();
-            assert_eq!(
-                parsed.no_interactive,
-                false,
+            assert!(
+                !parsed.no_interactive,
                 "no_interactive should be false when not specified"
             );
         }
@@ -668,20 +670,29 @@ macro_rules! test_command_no_interactive_suite {
                 .copied()
                 .collect();
             let result_before = parse_cli_with_flag(&full_args_before);
-            assert!(result_before.is_ok(), "Failed to parse with flag before command");
+            assert!(
+                result_before.is_ok(),
+                "Failed to parse with flag before command"
+            );
             let parsed_before = result_before.unwrap();
-            assert_eq!(parsed_before.no_interactive, true, "no_interactive should be true before command");
+            assert!(
+                parsed_before.no_interactive,
+                "no_interactive should be true before command"
+            );
 
             // Test 2: Flag after command
-            let full_args_after: Vec<&str> = $args
-                .iter()
-                .chain(&["--no-interactive"])
-                .copied()
-                .collect();
+            let full_args_after: Vec<&str> =
+                $args.iter().chain(&["--no-interactive"]).copied().collect();
             let result_after = parse_cli_with_flag(&full_args_after);
-            assert!(result_after.is_ok(), "Failed to parse with flag after command");
+            assert!(
+                result_after.is_ok(),
+                "Failed to parse with flag after command"
+            );
             let parsed_after = result_after.unwrap();
-            assert_eq!(parsed_after.no_interactive, true, "no_interactive should be true after command");
+            assert!(
+                parsed_after.no_interactive,
+                "no_interactive should be true after command"
+            );
 
             // Test 3: Short flag (-y)
             let full_args_short: Vec<&str> = vec!["hoop", "-y"]
@@ -692,27 +703,25 @@ macro_rules! test_command_no_interactive_suite {
             let result_short = parse_cli_with_flag(&full_args_short);
             assert!(result_short.is_ok(), "Failed to parse with -y flag");
             let parsed_short = result_short.unwrap();
-            assert_eq!(parsed_short.no_interactive, true, "no_interactive should be true with -y");
+            assert!(
+                parsed_short.no_interactive,
+                "no_interactive should be true with -y"
+            );
 
             // Test 4: Both positions consistency
             assert_eq!(
-                parsed_before.no_interactive,
-                parsed_after.no_interactive,
+                parsed_before.no_interactive, parsed_after.no_interactive,
                 "no_interactive value must be consistent regardless of flag position"
             );
 
             // Test 5: Default (no flag)
-            let full_args_default: Vec<&str> = vec!["hoop"]
-                .iter()
-                .chain($args.iter())
-                .copied()
-                .collect();
+            let full_args_default: Vec<&str> =
+                vec!["hoop"].iter().chain($args.iter()).copied().collect();
             let result_default = parse_cli_with_flag(&full_args_default);
             assert!(result_default.is_ok(), "Failed to parse without flag");
             let parsed_default = result_default.unwrap();
-            assert_eq!(
-                parsed_default.no_interactive,
-                false,
+            assert!(
+                !parsed_default.no_interactive,
                 "no_interactive should be false when not specified"
             );
         }
@@ -753,22 +762,21 @@ mod integration_example {
     fn example_manual_implementation() {
         // Test 1a: Flag before subcommand (manual)
         let args_before = &["hoop", "--no-interactive", "status", "--json"];
-        let parsed_before = parse_cli_with_flag(args_before)
-            .expect("Failed to parse with flag before subcommand");
+        let parsed_before =
+            parse_cli_with_flag(args_before).expect("Failed to parse with flag before subcommand");
         assert!(parsed_before.no_interactive);
         assert_eq!(parsed_before.command, "status");
 
         // Test 1b: Flag after subcommand (manual)
         let args_after = &["hoop", "status", "--json", "--no-interactive"];
-        let parsed_after = parse_cli_with_flag(args_after)
-            .expect("Failed to parse with flag after subcommand");
+        let parsed_after =
+            parse_cli_with_flag(args_after).expect("Failed to parse with flag after subcommand");
         assert!(parsed_after.no_interactive);
         assert_eq!(parsed_after.command, "status");
 
         // Test 1c: Verify consistency between positions (manual)
         assert_eq!(
-            parsed_before.no_interactive,
-            parsed_after.no_interactive,
+            parsed_before.no_interactive, parsed_after.no_interactive,
             "Flag value must be consistent regardless of position"
         );
 
@@ -778,14 +786,13 @@ mod integration_example {
 
         // Test 1e: Test short flag form (manual)
         let args_short = &["hoop", "-y", "status", "--json"];
-        let parsed_short = parse_cli_with_flag(args_short)
-            .expect("Failed to parse with -y flag");
+        let parsed_short = parse_cli_with_flag(args_short).expect("Failed to parse with -y flag");
         assert!(parsed_short.no_interactive);
 
         // Test 1f: Test default behavior (no flag)
         let args_default = &["hoop", "status", "--json"];
-        let parsed_default = parse_cli_with_flag(args_default)
-            .expect("Failed to parse without flag");
+        let parsed_default =
+            parse_cli_with_flag(args_default).expect("Failed to parse without flag");
         assert!(!parsed_default.no_interactive);
         assert!(verify_no_flag_present(&parsed_default).is_ok());
     }
@@ -806,10 +813,7 @@ mod integration_example {
         assert!(parsed_after.no_interactive);
 
         // Verify both positions produce same result
-        assert_eq!(
-            parsed_before.no_interactive,
-            parsed_after.no_interactive
-        );
+        assert_eq!(parsed_before.no_interactive, parsed_after.no_interactive);
     }
 
     /// Example 3: Testing prompt suppression
@@ -851,26 +855,34 @@ mod integration_example {
         let test_cases = vec![
             FlagPositionTestCase {
                 description: "add command with flag before".to_string(),
-                command: vec!["hoop", "--no-interactive", "add", "/path/to/project"]
-                    .iter().map(|s| s.to_string()).collect(),
+                command: ["hoop", "--no-interactive", "add", "/path/to/project"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
                 expected_result: true,
             },
             FlagPositionTestCase {
                 description: "add command with flag after".to_string(),
-                command: vec!["hoop", "add", "/path/to/project", "--no-interactive"]
-                    .iter().map(|s| s.to_string()).collect(),
+                command: ["hoop", "add", "/path/to/project", "--no-interactive"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
                 expected_result: true,
             },
             FlagPositionTestCase {
                 description: "add command with short flag".to_string(),
-                command: vec!["hoop", "-y", "add", "/path/to/project"]
-                    .iter().map(|s| s.to_string()).collect(),
+                command: ["hoop", "-y", "add", "/path/to/project"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
                 expected_result: true,
             },
             FlagPositionTestCase {
                 description: "add command without flag".to_string(),
-                command: vec!["hoop", "add", "/path/to/project"]
-                    .iter().map(|s| s.to_string()).collect(),
+                command: ["hoop", "add", "/path/to/project"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
                 expected_result: false,
             },
         ];
@@ -937,8 +949,7 @@ mod integration_example {
 
         // Verify consistency
         assert_eq!(
-            parsed_before.no_interactive,
-            parsed_after.no_interactive,
+            parsed_before.no_interactive, parsed_after.no_interactive,
             "Flag must be consistent regardless of position"
         );
 
@@ -1012,7 +1023,11 @@ mod tests {
     test_command_no_interactive_suite!(scan_suite, "scan", &["scan", "/tmp"]);
 
     // Example: Using the test suite macro for the remove command
-    test_command_no_interactive_suite!(remove_suite, "remove", &["remove", "test-project", "--confirm"]);
+    test_command_no_interactive_suite!(
+        remove_suite,
+        "remove",
+        &["remove", "test-project", "--confirm"]
+    );
 
     #[test]
     fn test_parse_cli_with_flag_before_subcommand() {
@@ -1157,7 +1172,7 @@ mod tests {
         let test_cases = vec![
             FlagPositionTestCase {
                 description: "scan with flag before".to_string(),
-                command: vec!["hoop", "--no-interactive", "scan", "/tmp"]
+                command: ["hoop", "--no-interactive", "scan", "/tmp"]
                     .iter()
                     .map(|s| s.to_string())
                     .collect(),
@@ -1165,7 +1180,7 @@ mod tests {
             },
             FlagPositionTestCase {
                 description: "scan with flag after".to_string(),
-                command: vec!["hoop", "scan", "/tmp", "--no-interactive"]
+                command: ["hoop", "scan", "/tmp", "--no-interactive"]
                     .iter()
                     .map(|s| s.to_string())
                     .collect(),
@@ -1173,7 +1188,7 @@ mod tests {
             },
             FlagPositionTestCase {
                 description: "scan without flag".to_string(),
-                command: vec!["hoop", "scan", "/tmp"]
+                command: ["hoop", "scan", "/tmp"]
                     .iter()
                     .map(|s| s.to_string())
                     .collect(),

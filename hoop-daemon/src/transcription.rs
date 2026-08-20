@@ -750,7 +750,9 @@ impl TranscriptionJobProcessor {
                     job_id, attempt
                 );
                 // Record successful transcription duration
-                metrics::metrics().hoop_whisper_transcription_duration_ms.observe(elapsed_ms / 1000.0);
+                metrics::metrics()
+                    .hoop_whisper_transcription_duration_ms
+                    .observe(elapsed_ms / 1000.0);
                 result = Some(transcription);
                 break;
             } else {
@@ -760,7 +762,9 @@ impl TranscriptionJobProcessor {
                 );
                 last_error = Some("Empty transcript produced".to_string());
                 // Record error for this attempt
-                metrics::metrics().hoop_whisper_transcription_errors_total.inc();
+                metrics::metrics()
+                    .hoop_whisper_transcription_errors_total
+                    .inc();
             }
 
             if attempt < config.max_retries {
@@ -794,7 +798,9 @@ impl TranscriptionJobProcessor {
             }
             None => {
                 // All retries failed - store partial transcript if available
-                let error_msg = last_error.clone().unwrap_or_else(|| "Unknown error".to_string());
+                let error_msg = last_error
+                    .clone()
+                    .unwrap_or_else(|| "Unknown error".to_string());
                 error!(
                     "Transcription failed for job {} after {} attempts: {}",
                     job_id, config.max_retries, error_msg
@@ -802,7 +808,9 @@ impl TranscriptionJobProcessor {
 
                 // Record final failure metric (if not already counted in retry loop)
                 if last_error.is_none() {
-                    metrics::metrics().hoop_whisper_transcription_errors_total.inc();
+                    metrics::metrics()
+                        .hoop_whisper_transcription_errors_total
+                        .inc();
                 }
 
                 let partial_result = TranscriptionResult {
@@ -892,12 +900,13 @@ impl TranscriptionJobProcessor {
                 move || {
                     let db_path = crate::fleet::db_path();
                     let conn = Connection::open(&db_path).ok()?;
-                    let result = conn.query_row(
-                        "SELECT project FROM stitches WHERE id = ?1",
-                        params![stitch_id],
-                        |row| row.get::<_, String>(0),
-                    )
-                    .ok();
+                    let result = conn
+                        .query_row(
+                            "SELECT project FROM stitches WHERE id = ?1",
+                            params![stitch_id],
+                            |row| row.get::<_, String>(0),
+                        )
+                        .ok();
                     Some(result)
                 }
             })
@@ -921,10 +930,10 @@ impl TranscriptionJobProcessor {
                 crate::redaction::audit_findings(
                     "transcript",
                     &findings,
-                    crate::redaction_policy::RedactionAction::FlaggedOnly,  // Just flag, no automatic action
+                    crate::redaction_policy::RedactionAction::FlaggedOnly, // Just flag, no automatic action
                     &stitch_id,
                     project_name.as_deref(),
-                    "system",  // Voice transcription is automatic
+                    "system", // Voice transcription is automatic
                 );
             }
         }

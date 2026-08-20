@@ -254,9 +254,15 @@ pub fn compute_net_diff(bead_ids: &[String], max_lines: usize) -> Result<NetDiff
             if let Ok(commit_diff_output) = run_git_diff(&workspace, &commit_range) {
                 let (commit_files, _) = parse_diff_output(&commit_diff_output, max_lines);
                 for f in commit_files {
-                    let path = if f.new_path.is_empty() { &f.old_path } else { &f.new_path };
+                    let path = if f.new_path.is_empty() {
+                        &f.old_path
+                    } else {
+                        &f.new_path
+                    };
                     // Only attribute if not already attributed (later commits already processed)
-                    file_to_bead.entry(path.clone()).or_insert_with(|| entry.bead_id.clone());
+                    file_to_bead
+                        .entry(path.clone())
+                        .or_insert_with(|| entry.bead_id.clone());
                 }
             }
         }
@@ -265,12 +271,13 @@ pub fn compute_net_diff(bead_ids: &[String], max_lines: usize) -> Result<NetDiff
         let files_with_bead: Vec<FileDiffWithBead> = files
             .into_iter()
             .map(|f| {
-                let path = if f.new_path.is_empty() { &f.old_path } else { &f.new_path };
+                let path = if f.new_path.is_empty() {
+                    &f.old_path
+                } else {
+                    &f.new_path
+                };
                 let bead_id = file_to_bead.get(path).cloned();
-                FileDiffWithBead {
-                    diff: f,
-                    bead_id,
-                }
+                FileDiffWithBead { diff: f, bead_id }
             })
             .collect();
 

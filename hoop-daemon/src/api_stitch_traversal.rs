@@ -308,13 +308,12 @@ async fn get_referenced_by(
         ));
     }
 
-    let references =
-        stitch_traversal::referenced_by(&conn, &stitch_id).map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to query references: {}", e),
-            )
-        })?;
+    let references = stitch_traversal::referenced_by(&conn, &stitch_id).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to query references: {}", e),
+        )
+    })?;
 
     let refs_info: Vec<StitchLinkInfo> = references
         .into_iter()
@@ -400,15 +399,13 @@ async fn get_closure(
         ));
     }
 
-    let nodes =
-        stitch_traversal::closure(&conn, &stitch_id, &query.kind, query.max_depth).map_err(
-            |e| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Failed to compute closure: {}", e),
-                )
-            },
-        )?;
+    let nodes = stitch_traversal::closure(&conn, &stitch_id, &query.kind, query.max_depth)
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to compute closure: {}", e),
+            )
+        })?;
 
     let nodes_info: Vec<ClosureNodeInfo> = nodes
         .into_iter()

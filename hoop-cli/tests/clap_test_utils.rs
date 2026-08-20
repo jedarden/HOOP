@@ -48,8 +48,8 @@
 // re-exported through lib.rs, making them accessible to tests in the tests/
 // directory.
 
-pub use hoop::{AuditCommands, Cli, Commands, ProjectsCommands};
 use clap::Parser;
+pub use hoop::{Cli, Commands, ProjectsCommands};
 
 // ── Core parsing helpers ───────────────────────────────────────────────────────────
 
@@ -112,7 +112,10 @@ pub fn parse_cli(args: &[&str]) -> Result<Cli, clap::Error> {
 ///     &["scan", "/tmp"]
 /// )?;
 /// ```
-pub fn parse_command_with_global_flag(flag_args: &[&str], cmd_args: &[&str]) -> Result<Cli, clap::Error> {
+pub fn parse_command_with_global_flag(
+    flag_args: &[&str],
+    cmd_args: &[&str],
+) -> Result<Cli, clap::Error> {
     let full_args: Vec<&str> = ["hoop"]
         .iter()
         .chain(flag_args.iter())
@@ -157,7 +160,10 @@ pub fn parse_command_with_global_flag(flag_args: &[&str], cmd_args: &[&str]) -> 
 ///     &["--confirm"]
 /// )?;
 /// ```
-pub fn parse_command_with_subcommand_flag(cmd_args: &[&str], flag_args: &[&str]) -> Result<Cli, clap::Error> {
+pub fn parse_command_with_subcommand_flag(
+    cmd_args: &[&str],
+    flag_args: &[&str],
+) -> Result<Cli, clap::Error> {
     let full_args: Vec<&str> = ["hoop"]
         .iter()
         .chain(cmd_args.iter())
@@ -442,7 +448,7 @@ pub fn verify_position_independence(cmd_args: &[&str]) -> Result<(), String> {
 ///
 /// * `Result<(), String>` - Ok if flag defaults to false
 pub fn verify_flag_default_false(cmd_args: &[&str]) -> Result<(), String> {
-    let mut full_args: Vec<&str> = ["hoop"].iter().chain(cmd_args.iter()).copied().collect();
+    let full_args: Vec<&str> = ["hoop"].iter().chain(cmd_args.iter()).copied().collect();
     let cli = parse_cli(&full_args).map_err(|e| format!("Parse error: {}", e))?;
 
     verify_no_interactive_value(&cli, false)
@@ -679,8 +685,8 @@ macro_rules! test_flag_before {
         fn $test_name() {
             let cli = $crate::clap_test_utils::parse_flag_before_subcommand($cmd_args)
                 .expect("Should parse with flag before command");
-            assert_eq!(
-                cli.no_interactive, true,
+            assert!(
+                cli.no_interactive,
                 "no_interactive should be true with flag before command"
             );
         }
@@ -701,8 +707,8 @@ macro_rules! test_flag_after {
         fn $test_name() {
             let cli = $crate::clap_test_utils::parse_flag_after_subcommand($cmd_args)
                 .expect("Should parse with flag after command");
-            assert_eq!(
-                cli.no_interactive, true,
+            assert!(
+                cli.no_interactive,
                 "no_interactive should be true with flag after command"
             );
         }
@@ -723,8 +729,8 @@ macro_rules! test_short_flag {
         fn $test_name() {
             let cli = $crate::clap_test_utils::parse_with_short_flag($cmd_args)
                 .expect("Should parse with -y flag");
-            assert_eq!(
-                cli.no_interactive, true,
+            assert!(
+                cli.no_interactive,
                 "no_interactive should be true with -y flag"
             );
         }
@@ -766,11 +772,12 @@ macro_rules! test_flag_default {
     ($test_name:ident, $cmd_args:expr) => {
         #[test]
         fn $test_name() {
-            let mut full_args: Vec<&str> = ["hoop"].iter().chain($cmd_args.iter()).copied().collect();
-            let cli = $crate::clap_test_utils::parse_cli(&full_args)
-                .expect("Should parse without flag");
-            assert_eq!(
-                cli.no_interactive, false,
+            let mut full_args: Vec<&str> =
+                ["hoop"].iter().chain($cmd_args.iter()).copied().collect();
+            let cli =
+                $crate::clap_test_utils::parse_cli(&full_args).expect("Should parse without flag");
+            assert!(
+                !cli.no_interactive,
                 "no_interactive should default to false"
             );
         }
@@ -801,7 +808,7 @@ macro_rules! test_command_no_interactive_suite {
         fn concat_idents!($prefix, _flag_before_command)() {
             let cli = $crate::clap_test_utils::parse_flag_before_subcommand($cmd_args)
                 .expect("Should parse with flag before command");
-            assert_eq!(cli.no_interactive, true);
+            assert!(cli.no_interactive);
         }
 
         // Test 2: Flag after command
@@ -809,7 +816,7 @@ macro_rules! test_command_no_interactive_suite {
         fn concat_idents!($prefix, _flag_after_command)() {
             let cli = $crate::clap_test_utils::parse_flag_after_subcommand($cmd_args)
                 .expect("Should parse with flag after command");
-            assert_eq!(cli.no_interactive, true);
+            assert!(cli.no_interactive);
         }
 
         // Test 3: Short flag -y
@@ -817,7 +824,7 @@ macro_rules! test_command_no_interactive_suite {
         fn concat_idents!($prefix, _short_flag_y)() {
             let cli = $crate::clap_test_utils::parse_with_short_flag($cmd_args)
                 .expect("Should parse with -y flag");
-            assert_eq!(cli.no_interactive, true);
+            assert!(cli.no_interactive);
         }
 
         // Test 4: Position independence
@@ -838,7 +845,7 @@ macro_rules! test_command_no_interactive_suite {
             let mut full_args: Vec<&str> = ["hoop"].iter().chain($cmd_args.iter()).copied().collect();
             let cli = $crate::clap_test_utils::parse_cli(&full_args)
                 .expect("Should parse without flag");
-            assert_eq!(cli.no_interactive, false);
+            assert!(!cli.no_interactive);
         }
     };
 }
@@ -1074,7 +1081,7 @@ mod tests {
         let test_cases = vec![
             ClapTestCase {
                 description: "scan with flag before".to_string(),
-                args: vec!["hoop", "--no-interactive", "scan", "/tmp"]
+                args: ["hoop", "--no-interactive", "scan", "/tmp"]
                     .iter()
                     .map(|s| s.to_string())
                     .collect(),
@@ -1083,7 +1090,7 @@ mod tests {
             },
             ClapTestCase {
                 description: "scan with flag after".to_string(),
-                args: vec!["hoop", "scan", "/tmp", "--no-interactive"]
+                args: ["hoop", "scan", "/tmp", "--no-interactive"]
                     .iter()
                     .map(|s| s.to_string())
                     .collect(),
@@ -1092,7 +1099,7 @@ mod tests {
             },
             ClapTestCase {
                 description: "scan without flag".to_string(),
-                args: vec!["hoop", "scan", "/tmp"]
+                args: ["hoop", "scan", "/tmp"]
                     .iter()
                     .map(|s| s.to_string())
                     .collect(),
@@ -1111,10 +1118,7 @@ mod tests {
     #[test]
     fn test_parse_command_with_global_flag_single() {
         // Test: hoop --no-interactive scan /tmp
-        let cli = parse_command_with_global_flag(
-            &["--no-interactive"],
-            &["scan", "/tmp"]
-        ).unwrap();
+        let cli = parse_command_with_global_flag(&["--no-interactive"], &["scan", "/tmp"]).unwrap();
 
         assert!(cli.no_interactive);
         match cli.command {
@@ -1129,15 +1133,11 @@ mod tests {
     fn test_parse_command_with_global_flag_position_independence() {
         // Test that global flag position doesn't matter
         // Both before and after subcommand should work identically
-        let before = parse_command_with_global_flag(
-            &["--no-interactive"],
-            &["scan", "/tmp"]
-        ).unwrap();
+        let before =
+            parse_command_with_global_flag(&["--no-interactive"], &["scan", "/tmp"]).unwrap();
 
-        let after = parse_command_with_subcommand_flag(
-            &["scan", "/tmp"],
-            &["--no-interactive"]
-        ).unwrap();
+        let after =
+            parse_command_with_subcommand_flag(&["scan", "/tmp"], &["--no-interactive"]).unwrap();
 
         assert_eq!(before.no_interactive, after.no_interactive);
         assert!(before.no_interactive);
@@ -1146,10 +1146,8 @@ mod tests {
     #[test]
     fn test_parse_command_with_subcommand_flag_single() {
         // Test: hoop scan /tmp --no-interactive
-        let cli = parse_command_with_subcommand_flag(
-            &["scan", "/tmp"],
-            &["--no-interactive"]
-        ).unwrap();
+        let cli =
+            parse_command_with_subcommand_flag(&["scan", "/tmp"], &["--no-interactive"]).unwrap();
 
         assert!(cli.no_interactive);
         match cli.command {
@@ -1163,10 +1161,9 @@ mod tests {
     #[test]
     fn test_parse_command_with_subcommand_flag_multiple() {
         // Test: hoop scan /tmp --no-interactive --yes
-        let cli = parse_command_with_subcommand_flag(
-            &["scan", "/tmp"],
-            &["--no-interactive", "--yes"]
-        ).unwrap();
+        let cli =
+            parse_command_with_subcommand_flag(&["scan", "/tmp"], &["--no-interactive", "--yes"])
+                .unwrap();
 
         assert!(cli.no_interactive);
         match cli.command {
@@ -1222,15 +1219,11 @@ mod tests {
     #[test]
     fn test_general_flag_parsing_position_independence() {
         // Test that both global and subcommand flag positions work correctly
-        let before = parse_command_with_global_flag(
-            &["--no-interactive"],
-            &["scan", "/tmp"]
-        ).unwrap();
+        let before =
+            parse_command_with_global_flag(&["--no-interactive"], &["scan", "/tmp"]).unwrap();
 
-        let after = parse_command_with_subcommand_flag(
-            &["scan", "/tmp"],
-            &["--no-interactive"]
-        ).unwrap();
+        let after =
+            parse_command_with_subcommand_flag(&["scan", "/tmp"], &["--no-interactive"]).unwrap();
 
         assert_eq!(before.no_interactive, after.no_interactive);
         assert!(before.no_interactive);
@@ -1337,7 +1330,8 @@ mod tests {
         assert!(verify_flag_propagation(
             &["restore", "--from", "s3://bucket/key", "--confirm"],
             true
-        ).is_ok());
+        )
+        .is_ok());
     }
 
     #[test]
@@ -1349,15 +1343,11 @@ mod tests {
     #[test]
     fn test_verify_flag_propagation_with_extraction() {
         // Integration test: parse, extract, and verify
-        let cli_before = parse_command_with_global_flag(
-            &["--no-interactive"],
-            &["scan", "/tmp"]
-        ).unwrap();
+        let cli_before =
+            parse_command_with_global_flag(&["--no-interactive"], &["scan", "/tmp"]).unwrap();
 
-        let cli_after = parse_command_with_subcommand_flag(
-            &["scan", "/tmp"],
-            &["--no-interactive"]
-        ).unwrap();
+        let cli_after =
+            parse_command_with_subcommand_flag(&["scan", "/tmp"], &["--no-interactive"]).unwrap();
 
         // Extract flags
         let flag_before = extract_no_interactive_flag(&cli_before);

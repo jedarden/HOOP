@@ -184,10 +184,8 @@ impl HeartbeatMonitor {
         let (shutdown_tx, _) = mpsc::channel(1);
 
         let heartbeats_path = config.heartbeats_path.clone();
-        let unknown_sink = unknown_event_sink::UnknownEventSink::with_source(
-            "heartbeats",
-            heartbeats_path,
-        );
+        let unknown_sink =
+            unknown_event_sink::UnknownEventSink::with_source("heartbeats", heartbeats_path);
 
         Ok(Self {
             config,
@@ -338,7 +336,8 @@ impl HeartbeatMonitor {
 
         match event.kind {
             Access(_) | Create(_) | Modify(_) => {
-                let heartbeats = Self::read_new_heartbeats(heartbeats_path, position.clone(), unknown_sink)?;
+                let heartbeats =
+                    Self::read_new_heartbeats(heartbeats_path, position.clone(), unknown_sink)?;
                 // Process each heartbeat to update worker state and send events
                 for (heartbeat, _) in heartbeats {
                     // Update worker state
@@ -547,10 +546,9 @@ impl HeartbeatMonitor {
         // Record heartbeat freshness metric
         let now = Utc::now();
         let freshness = now.signed_duration_since(heartbeat.ts).num_seconds().max(0) as f64;
-        metrics::metrics().hoop_heartbeat_freshness_seconds.observe(
-            &[&heartbeat.worker],
-            freshness,
-        );
+        metrics::metrics()
+            .hoop_heartbeat_freshness_seconds
+            .observe(&[&heartbeat.worker], freshness);
 
         // Extract PID from the heartbeat state
         let pid = match &heartbeat.state {
@@ -776,7 +774,8 @@ mod tests {
     fn test_parse_heartbeat_line_executing() {
         let unknown_sink = unknown_event_sink::UnknownEventSink::new("test_heartbeats");
         let json = r#"{"ts":"2026-04-21T18:42:10Z","worker":"alpha","state":"executing","bead":"bd-abc123","pid":12345,"adapter":"anthropic"}"#;
-        let heartbeat = HeartbeatMonitor::parse_heartbeat_line(json, &test_source(), &unknown_sink).unwrap();
+        let heartbeat =
+            HeartbeatMonitor::parse_heartbeat_line(json, &test_source(), &unknown_sink).unwrap();
 
         assert_eq!(heartbeat.worker, "alpha");
         match heartbeat.state {
@@ -794,7 +793,8 @@ mod tests {
         let unknown_sink = unknown_event_sink::UnknownEventSink::new("test_heartbeats");
         let json =
             r#"{"ts":"2026-04-21T18:42:10Z","worker":"alpha","state":"idle","last_strand":null}"#;
-        let heartbeat = HeartbeatMonitor::parse_heartbeat_line(json, &test_source(), &unknown_sink).unwrap();
+        let heartbeat =
+            HeartbeatMonitor::parse_heartbeat_line(json, &test_source(), &unknown_sink).unwrap();
 
         assert_eq!(heartbeat.worker, "alpha");
         match heartbeat.state {
@@ -809,7 +809,8 @@ mod tests {
     fn test_parse_heartbeat_line_knot() {
         let unknown_sink = unknown_event_sink::UnknownEventSink::new("test_heartbeats");
         let json = r#"{"ts":"2026-04-21T18:42:10Z","worker":"alpha","state":"knot","reason":"out of capacity"}"#;
-        let heartbeat = HeartbeatMonitor::parse_heartbeat_line(json, &test_source(), &unknown_sink).unwrap();
+        let heartbeat =
+            HeartbeatMonitor::parse_heartbeat_line(json, &test_source(), &unknown_sink).unwrap();
 
         assert_eq!(heartbeat.worker, "alpha");
         match heartbeat.state {
@@ -824,14 +825,17 @@ mod tests {
     fn test_parse_heartbeat_line_malformed() {
         let unknown_sink = unknown_event_sink::UnknownEventSink::new("test_heartbeats");
         let json = r#"{"ts":"2026-04-21T18:42:10Z","worker":"alpha","state":"invalid"}"#;
-        assert!(HeartbeatMonitor::parse_heartbeat_line(json, &test_source(), &unknown_sink).is_none());
+        assert!(
+            HeartbeatMonitor::parse_heartbeat_line(json, &test_source(), &unknown_sink).is_none()
+        );
     }
 
     #[test]
     fn test_parse_heartbeat_line_unknown_state_records_via_sink() {
         let unknown_sink = unknown_event_sink::UnknownEventSink::new("test_heartbeats");
         let json = r#"{"ts":"2026-04-21T18:42:10Z","worker":"alpha","state":"weird_new_state"}"#;
-        let heartbeat = HeartbeatMonitor::parse_heartbeat_line(json, &test_source(), &unknown_sink).unwrap();
+        let heartbeat =
+            HeartbeatMonitor::parse_heartbeat_line(json, &test_source(), &unknown_sink).unwrap();
 
         assert_eq!(heartbeat.worker, "alpha");
         // Unknown state should be recorded via sink

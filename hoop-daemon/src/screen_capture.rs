@@ -313,8 +313,8 @@ impl StreamingUploadRegistry {
     ) -> Result<StartStreamingUploadResponse> {
         let stitch_id = Uuid::new_v4().to_string();
         let stream_id = Uuid::new_v4().to_string();
-        let valid_stitch_id = ValidStitchId::parse(&stitch_id)
-            .context("generated invalid stitch ID")?;
+        let valid_stitch_id =
+            ValidStitchId::parse(&stitch_id).context("generated invalid stitch ID")?;
 
         // Determine file extension from content type
         let file_extension = if video_content_type.contains("mp4") {
@@ -327,8 +327,7 @@ impl StreamingUploadRegistry {
 
         // Create stream directory
         let stream_dir = self.streaming_dir.join(&stream_id);
-        fs::create_dir_all(&stream_dir)
-            .context("failed to create stream directory")?;
+        fs::create_dir_all(&stream_dir).context("failed to create stream directory")?;
 
         // Create the attachments directory for the final stitch
         let _attachments_dir = attachments_dir(&valid_stitch_id)?;
@@ -350,28 +349,25 @@ impl StreamingUploadRegistry {
         let metadata_path = stream_dir.join("metadata.json");
         let metadata_json = serde_json::to_string_pretty(&session)
             .context("failed to serialize session metadata")?;
-        fs::write(&metadata_path, metadata_json)
-            .context("failed to write session metadata")?;
+        fs::write(&metadata_path, metadata_json).context("failed to write session metadata")?;
 
         // Create empty partial file
         let partial_path = stream_dir.join("partial.bin");
-        File::create(&partial_path)
-            .context("failed to create partial file")?;
+        File::create(&partial_path).context("failed to create partial file")?;
 
         Ok(StartStreamingUploadResponse {
             stream_id: stream_id.clone(),
             stitch_id,
             upload_url: format!("/api/p/{{project}}/screen-captures/stream/{}", stream_id),
-            complete_url: format!("/api/p/{{project}}/screen-captures/stream/{}/complete", stream_id),
+            complete_url: format!(
+                "/api/p/{{project}}/screen-captures/stream/{}/complete",
+                stream_id
+            ),
         })
     }
 
     /// Append a chunk to a streaming upload
-    pub fn append_chunk(
-        &self,
-        stream_id: &str,
-        data: &[u8],
-    ) -> Result<u64> {
+    pub fn append_chunk(&self, stream_id: &str, data: &[u8]) -> Result<u64> {
         let partial_path = self.partial_path(stream_id)?;
 
         // Append to partial file
@@ -382,13 +378,12 @@ impl StreamingUploadRegistry {
 
         file.seek(SeekFrom::End(0))
             .context("failed to seek to end of partial file")?;
-        file.write_all(data)
-            .context("failed to write chunk")?;
-        file.sync_all()
-            .context("failed to sync chunk to disk")?;
+        file.write_all(data).context("failed to write chunk")?;
+        file.sync_all().context("failed to sync chunk to disk")?;
 
         // Update metadata
-        let new_size = file.metadata()
+        let new_size = file
+            .metadata()
             .context("failed to get file metadata")?
             .len();
 
@@ -405,8 +400,8 @@ impl StreamingUploadRegistry {
         let metadata_path = self.metadata_path(stream_id)?;
         let content = fs::read_to_string(&metadata_path)
             .with_context(|| format!("stream session not found: {}", stream_id))?;
-        let session: StreamingUploadSession = serde_json::from_str(&content)
-            .context("failed to parse session metadata")?;
+        let session: StreamingUploadSession =
+            serde_json::from_str(&content).context("failed to parse session metadata")?;
         Ok(session)
     }
 
@@ -415,8 +410,7 @@ impl StreamingUploadRegistry {
         let metadata_path = self.metadata_path(stream_id)?;
         let metadata_json = serde_json::to_string_pretty(session)
             .context("failed to serialize session metadata")?;
-        fs::write(&metadata_path, metadata_json)
-            .context("failed to write session metadata")?;
+        fs::write(&metadata_path, metadata_json).context("failed to write session metadata")?;
         Ok(())
     }
 
@@ -454,7 +448,8 @@ impl StreamingUploadRegistry {
 
         // §18.1 secrets scan: screen capture text (frame labels)
         {
-            let frame_labels: String = frame_samples.iter()
+            let frame_labels: String = frame_samples
+                .iter()
                 .map(|f| f.label.as_str())
                 .collect::<Vec<_>>()
                 .join(" ");
@@ -489,15 +484,13 @@ impl StreamingUploadRegistry {
             duration_secs: Some(duration_secs),
         };
         let meta_path = attachments_dir.join("meta.json");
-        let meta_json = serde_json::to_string_pretty(&meta)
-            .context("failed to serialize metadata")?;
-        fs::write(&meta_path, meta_json)
-            .context("failed to write metadata")?;
+        let meta_json =
+            serde_json::to_string_pretty(&meta).context("failed to serialize metadata")?;
+        fs::write(&meta_path, meta_json).context("failed to write metadata")?;
 
         // Insert into fleet.db
         let db_path = crate::fleet::db_path();
-        let conn = rusqlite::Connection::open(&db_path)
-            .context("failed to open database")?;
+        let conn = rusqlite::Connection::open(&db_path).context("failed to open database")?;
         conn.pragma_update(None, "journal_mode", "WAL")
             .context("failed to set WAL mode")?;
 
@@ -521,7 +514,11 @@ impl StreamingUploadRegistry {
             &title,
             &state.pattern_tx,
         ) {
-            tracing::warn!("Failed to sync pattern queries for stitch {}: {}", session.stitch_id, e);
+            tracing::warn!(
+                "Failed to sync pattern queries for stitch {}: {}",
+                session.stitch_id,
+                e
+            );
         }
 
         tracing::info!(
@@ -534,8 +531,7 @@ impl StreamingUploadRegistry {
 
         // Clean up streaming directory
         let stream_dir = self.stream_dir(stream_id)?;
-        fs::remove_dir_all(&stream_dir)
-            .context("failed to clean up stream directory")?;
+        fs::remove_dir_all(&stream_dir).context("failed to clean up stream directory")?;
 
         Ok(ScreenCaptureData {
             video_url: format!("/api/screen-capture/{}/video", session.stitch_id),
@@ -553,8 +549,7 @@ impl StreamingUploadRegistry {
     pub fn cancel_session(&self, stream_id: &str) -> Result<()> {
         let stream_dir = self.stream_dir(stream_id)?;
         if stream_dir.exists() {
-            fs::remove_dir_all(&stream_dir)
-                .context("failed to remove stream directory")?;
+            fs::remove_dir_all(&stream_dir).context("failed to remove stream directory")?;
         }
         Ok(())
     }

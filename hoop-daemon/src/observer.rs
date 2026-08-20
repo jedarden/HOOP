@@ -4,9 +4,12 @@
 //! forwarding read requests to the primary daemon and broadcasting events
 //! to its own WebSocket clients.
 
-use axum::extract::{State, ws::{WebSocket, Message as AxumMessage}};
 use crate::ws::WsEvent;
 use anyhow::Result;
+use axum::extract::{
+    ws::{Message as AxumMessage, WebSocket},
+    State,
+};
 use futures_util::{stream::StreamExt, SinkExt};
 use serde_json::Value;
 use std::net::SocketAddr;
@@ -54,14 +57,19 @@ impl ObserverClient {
 
         // Subscribe to all events (global + per-project)
         let subscribe_msg = r#"{"type":"subscribe","topic":"global"}"#;
-        ws_sender.send(TungsteniteMessage::Text(subscribe_msg.into())).await?;
+        ws_sender
+            .send(TungsteniteMessage::Text(subscribe_msg.into()))
+            .await?;
         debug!("Observer subscribed to global events");
 
         // Forward events from primary to observer's clients
         while let Some(msg) = ws_receiver.next().await {
             match msg {
                 Ok(TungsteniteMessage::Text(text)) => {
-                    debug!("Observer received event from primary: {}", text.chars().take(100).collect::<String>());
+                    debug!(
+                        "Observer received event from primary: {}",
+                        text.chars().take(100).collect::<String>()
+                    );
 
                     // Parse the event and update local state
                     if let Ok(event) = serde_json::from_str::<serde_json::Value>(&text) {
@@ -69,53 +77,86 @@ impl ObserverClient {
                             match event_type {
                                 "init" => {
                                     // Handle initial snapshot
-                                    if let Some(workers) = event.get("workers").and_then(|v| v.as_array()) {
-                                        if let Ok(parsed) = serde_json::from_value::<Vec<crate::ws::WorkerData>>(
-                                            serde_json::json!(workers)
-                                        ) {
+                                    if let Some(workers) =
+                                        event.get("workers").and_then(|v| v.as_array())
+                                    {
+                                        if let Ok(parsed) =
+                                            serde_json::from_value::<Vec<crate::ws::WorkerData>>(
+                                                serde_json::json!(workers),
+                                            )
+                                        {
                                             *self.workers.write().await = parsed;
-                                            info!("Observer initialized with {} workers", self.workers.read().await.len());
+                                            info!(
+                                                "Observer initialized with {} workers",
+                                                self.workers.read().await.len()
+                                            );
                                         }
                                     }
-                                    if let Some(beads) = event.get("beads").and_then(|v| v.as_array()) {
+                                    if let Some(beads) =
+                                        event.get("beads").and_then(|v| v.as_array())
+                                    {
                                         if let Ok(parsed) = serde_json::from_value::<Vec<crate::Bead>>(
-                                            serde_json::json!(beads)
+                                            serde_json::json!(beads),
                                         ) {
                                             *self.beads.write().await = parsed;
-                                            info!("Observer initialized with {} beads", self.beads.read().await.len());
+                                            info!(
+                                                "Observer initialized with {} beads",
+                                                self.beads.read().await.len()
+                                            );
                                         }
                                     }
-                                    if let Some(projects) = event.get("projects").and_then(|v| v.as_array()) {
-                                        if let Ok(parsed) = serde_json::from_value::<Vec<crate::ws::ProjectCardData>>(
-                                            serde_json::json!(projects)
+                                    if let Some(projects) =
+                                        event.get("projects").and_then(|v| v.as_array())
+                                    {
+                                        if let Ok(parsed) = serde_json::from_value::<
+                                            Vec<crate::ws::ProjectCardData>,
+                                        >(
+                                            serde_json::json!(
+                                            projects
+                                        )
                                         ) {
                                             *self.projects.write().await = parsed;
-                                            info!("Observer initialized with {} projects", self.projects.read().await.len());
+                                            info!(
+                                                "Observer initialized with {} projects",
+                                                self.projects.read().await.len()
+                                            );
                                         }
                                     }
                                 }
                                 "workers_snapshot" => {
-                                    if let Some(workers) = event.get("workers").and_then(|v| v.as_array()) {
-                                        if let Ok(parsed) = serde_json::from_value::<Vec<crate::ws::WorkerData>>(
-                                            serde_json::json!(workers)
-                                        ) {
+                                    if let Some(workers) =
+                                        event.get("workers").and_then(|v| v.as_array())
+                                    {
+                                        if let Ok(parsed) =
+                                            serde_json::from_value::<Vec<crate::ws::WorkerData>>(
+                                                serde_json::json!(workers),
+                                            )
+                                        {
                                             *self.workers.write().await = parsed;
                                         }
                                     }
                                 }
                                 "beads_snapshot" => {
-                                    if let Some(beads) = event.get("beads").and_then(|v| v.as_array()) {
+                                    if let Some(beads) =
+                                        event.get("beads").and_then(|v| v.as_array())
+                                    {
                                         if let Ok(parsed) = serde_json::from_value::<Vec<crate::Bead>>(
-                                            serde_json::json!(beads)
+                                            serde_json::json!(beads),
                                         ) {
                                             *self.beads.write().await = parsed;
                                         }
                                     }
                                 }
                                 "projects_snapshot" => {
-                                    if let Some(projects) = event.get("projects").and_then(|v| v.as_array()) {
-                                        if let Ok(parsed) = serde_json::from_value::<Vec<crate::ws::ProjectCardData>>(
-                                            serde_json::json!(projects)
+                                    if let Some(projects) =
+                                        event.get("projects").and_then(|v| v.as_array())
+                                    {
+                                        if let Ok(parsed) = serde_json::from_value::<
+                                            Vec<crate::ws::ProjectCardData>,
+                                        >(
+                                            serde_json::json!(
+                                            projects
+                                        )
                                         ) {
                                             *self.projects.write().await = parsed;
                                         }
@@ -123,11 +164,16 @@ impl ObserverClient {
                                 }
                                 "worker_update" => {
                                     if let Some(worker) = event.get("worker") {
-                                        if let Ok(parsed) = serde_json::from_value::<crate::ws::WorkerData>(
-                                            serde_json::json!(worker)
-                                        ) {
+                                        if let Ok(parsed) =
+                                            serde_json::from_value::<crate::ws::WorkerData>(
+                                                serde_json::json!(worker),
+                                            )
+                                        {
                                             let mut workers = self.workers.write().await;
-                                            if let Some(existing) = workers.iter_mut().find(|w| w.worker == parsed.worker) {
+                                            if let Some(existing) = workers
+                                                .iter_mut()
+                                                .find(|w| w.worker == parsed.worker)
+                                            {
                                                 *existing = parsed;
                                             } else {
                                                 workers.push(parsed);
@@ -138,7 +184,7 @@ impl ObserverClient {
                                 _ => {
                                     // Forward all other events to observer clients
                                     if let Ok(ws_event) = serde_json::from_str::<WsEvent>(&text) {
-                                            let _ = self.event_tx.send(ws_event);
+                                        let _ = self.event_tx.send(ws_event);
                                     }
                                 }
                             }
@@ -202,7 +248,10 @@ impl ObserverHttpClient {
 
     /// Get project cards from primary daemon
     pub async fn get_projects(&self) -> Result<Vec<crate::ws::ProjectCardData>> {
-        let url = format!("http://{}/api/dashboard/cross-project?range=today", self.primary_addr);
+        let url = format!(
+            "http://{}/api/dashboard/cross-project?range=today",
+            self.primary_addr
+        );
         let resp = self.client.get(&url).send().await?;
 
         // Parse the dashboard response to extract project data
@@ -227,7 +276,10 @@ impl ObserverHttpClient {
     }
 
     /// Get cost buckets by project from primary daemon
-    pub async fn get_cost_buckets_by_project(&self, project: &str) -> Result<Vec<crate::cost::CostBucket>> {
+    pub async fn get_cost_buckets_by_project(
+        &self,
+        project: &str,
+    ) -> Result<Vec<crate::cost::CostBucket>> {
         let url = format!("http://{}/api/cost/buckets/{}", self.primary_addr, project);
         let resp = self.client.get(&url).send().await?;
         Ok(resp.json().await?)
@@ -259,10 +311,7 @@ pub struct ObserverState {
 }
 
 /// WebSocket handler for observer mode
-pub async fn observer_ws_handler(
-    ws: WebSocket,
-    state: ObserverState,
-) {
+pub async fn observer_ws_handler(ws: WebSocket, state: ObserverState) {
     let (mut ws_sender, mut ws_receiver) = ws.split();
 
     // Send initial state
@@ -274,10 +323,26 @@ pub async fn observer_ws_handler(
     // Convert beads to BeadData
     let bead_data: Vec<crate::ws::BeadData> = beads.iter().map(crate::ws::bead_to_data).collect();
 
-    let _ = ws_sender.send(AxumMessage::Text(serde_json::to_string(&WsEvent::init(init_subs)).unwrap())).await;
-    let _ = ws_sender.send(AxumMessage::Text(serde_json::to_string(&WsEvent::workers_snapshot(workers)).unwrap())).await;
-    let _ = ws_sender.send(AxumMessage::Text(serde_json::to_string(&WsEvent::beads_snapshot(bead_data)).unwrap())).await;
-    let _ = ws_sender.send(AxumMessage::Text(serde_json::to_string(&WsEvent::projects_snapshot(projects)).unwrap())).await;
+    let _ = ws_sender
+        .send(AxumMessage::Text(
+            serde_json::to_string(&WsEvent::init(init_subs)).unwrap(),
+        ))
+        .await;
+    let _ = ws_sender
+        .send(AxumMessage::Text(
+            serde_json::to_string(&WsEvent::workers_snapshot(workers)).unwrap(),
+        ))
+        .await;
+    let _ = ws_sender
+        .send(AxumMessage::Text(
+            serde_json::to_string(&WsEvent::beads_snapshot(bead_data)).unwrap(),
+        ))
+        .await;
+    let _ = ws_sender
+        .send(AxumMessage::Text(
+            serde_json::to_string(&WsEvent::projects_snapshot(projects)).unwrap(),
+        ))
+        .await;
 
     // Subscribe to events
     let mut event_rx = state.event_tx.subscribe();
@@ -332,7 +397,10 @@ pub async fn serve_observer(config: crate::Config) -> Result<()> {
 
     info!("HOOP observer mode starting");
     info!("Connecting to primary daemon at {}", config.primary_addr);
-    info!("Observer UI will be available at http://{}", config.bind_addr);
+    info!(
+        "Observer UI will be available at http://{}",
+        config.bind_addr
+    );
 
     // Initialize shared state
     let beads: Arc<RwLock<Vec<crate::Bead>>> = Arc::new(RwLock::new(Vec::new()));
@@ -419,7 +487,10 @@ pub fn observer_router() -> axum::Router<ObserverState> {
         .route("/healthz", get(observer_healthz))
         .route("/api/beads", get(observer_get_beads))
         .route("/api/cost/buckets", get(observer_get_cost_buckets))
-        .route("/api/cost/buckets/:project", get(observer_get_cost_buckets_by_project))
+        .route(
+            "/api/cost/buckets/:project",
+            get(observer_get_cost_buckets_by_project),
+        )
         .route("/api/dashboard/cross-project", get(observer_get_dashboard))
         .route("/api/beads/:bead_id/events", get(observer_get_bead_events))
         .route("/ws", get(observer_ws_upgrade))
@@ -434,9 +505,7 @@ async fn observer_healthz() -> axum::Json<hoop_schema::HealthResponse> {
 }
 
 /// Get beads (from local cache, updated via WebSocket)
-async fn observer_get_beads(
-    State(state): State<ObserverState>,
-) -> axum::Json<Vec<crate::Bead>> {
+async fn observer_get_beads(State(state): State<ObserverState>) -> axum::Json<Vec<crate::Bead>> {
     let beads = state.beads.read().await.clone();
     axum::Json(beads)
 }
@@ -470,7 +539,10 @@ async fn observer_get_cost_buckets_by_project(
 async fn observer_get_dashboard(
     State(state): State<ObserverState>,
 ) -> Result<axum::Json<crate::CrossProjectDashboardResponse>, (axum::http::StatusCode, String)> {
-    let url = format!("http://{}/api/dashboard/cross-project?range=today", state.primary_addr);
+    let url = format!(
+        "http://{}/api/dashboard/cross-project?range=today",
+        state.primary_addr
+    );
     let resp = state
         .http_client
         .client

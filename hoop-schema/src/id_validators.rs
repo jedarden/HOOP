@@ -27,9 +27,9 @@
 //! the full validation. This makes it a compile-time error to pass an unvalidated
 //! string to a path-construction function.
 
+use http::StatusCode;
 use std::fmt;
 use std::ops::Deref;
-use http::StatusCode;
 
 /// Maximum bead ID length.
 const BEAD_ID_MAX_LEN: usize = 256;

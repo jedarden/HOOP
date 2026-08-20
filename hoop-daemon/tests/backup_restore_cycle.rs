@@ -35,11 +35,7 @@ async fn backup_restore_cycle_produces_identical_state() {
     fs::create_dir_all(&snapshot_dir).unwrap();
 
     // Copy fleet.db to snapshot
-    fs::copy(
-        hoop_dir.join("fleet.db"),
-        snapshot_dir.join("fleet.db"),
-    )
-    .unwrap();
+    fs::copy(hoop_dir.join("fleet.db"), snapshot_dir.join("fleet.db")).unwrap();
 
     // Copy attachments to snapshot
     let attachments_src = hoop_dir.join("attachments");
@@ -49,11 +45,7 @@ async fn backup_restore_cycle_produces_identical_state() {
     }
 
     // Copy config files to snapshot
-    fs::copy(
-        hoop_dir.join("config.yml"),
-        snapshot_dir.join("config.yml"),
-    )
-    .unwrap();
+    fs::copy(hoop_dir.join("config.yml"), snapshot_dir.join("config.yml")).unwrap();
     fs::copy(
         hoop_dir.join("projects.yaml"),
         snapshot_dir.join("projects.yaml"),
@@ -76,11 +68,7 @@ async fn backup_restore_cycle_produces_identical_state() {
         copy_dir_recursive(&attachments_src, &attachments_dst).unwrap();
     }
 
-    fs::copy(
-        snapshot_dir.join("config.yml"),
-        hoop_dir.join("config.yml"),
-    )
-    .unwrap();
+    fs::copy(snapshot_dir.join("config.yml"), hoop_dir.join("config.yml")).unwrap();
     fs::copy(
         snapshot_dir.join("projects.yaml"),
         hoop_dir.join("projects.yaml"),
@@ -91,20 +79,17 @@ async fn backup_restore_cycle_produces_identical_state() {
     let restored_checksums = compute_state_checksums(&hoop_dir);
 
     assert_eq!(
-        initial_checksums.fleet_db,
-        restored_checksums.fleet_db,
+        initial_checksums.fleet_db, restored_checksums.fleet_db,
         "fleet.db checksum should match after restore"
     );
 
     assert_eq!(
-        initial_checksums.config_yml,
-        restored_checksums.config_yml,
+        initial_checksums.config_yml, restored_checksums.config_yml,
         "config.yml checksum should match after restore"
     );
 
     assert_eq!(
-        initial_checksums.projects_yaml,
-        restored_checksums.projects_yaml,
+        initial_checksums.projects_yaml, restored_checksums.projects_yaml,
         "projects.yaml checksum should match after restore"
     );
 
@@ -141,7 +126,10 @@ async fn backup_credentials_validation() {
         std::env::remove_var("HOOP_BACKUP_AGE_KEY");
 
         let creds = BackupCredentials::from_env(false);
-        assert!(creds.is_none(), "Should return None when credentials missing");
+        assert!(
+            creds.is_none(),
+            "Should return None when credentials missing"
+        );
     }
 
     // Test 2: Credentials without age key (encryption disabled)
@@ -155,7 +143,10 @@ async fn backup_credentials_validation() {
         let creds = creds.unwrap();
         assert_eq!(creds.access_key_id, "test-access-key");
         assert_eq!(creds.secret_access_key, "test-secret-key");
-        assert!(creds.age_key.is_none(), "age_key should be None when encryption disabled");
+        assert!(
+            creds.age_key.is_none(),
+            "age_key should be None when encryption disabled"
+        );
     }
 
     // Test 3: Credentials with age key (encryption enabled)
@@ -166,7 +157,10 @@ async fn backup_credentials_validation() {
         assert!(creds.is_some(), "Should succeed when age key provided");
 
         let creds = creds.unwrap();
-        assert!(creds.age_key.is_some(), "age_key should be Some when encryption enabled");
+        assert!(
+            creds.age_key.is_some(),
+            "age_key should be Some when encryption enabled"
+        );
         assert_eq!(creds.age_key.unwrap(), "age1test-key-for-encryption");
     }
 
@@ -175,7 +169,10 @@ async fn backup_credentials_validation() {
         std::env::remove_var("HOOP_BACKUP_AGE_KEY");
 
         let creds = BackupCredentials::from_env(true);
-        assert!(creds.is_none(), "Should return None when age key missing but encryption enabled");
+        assert!(
+            creds.is_none(),
+            "Should return None when age key missing but encryption enabled"
+        );
     }
 
     // Cleanup
@@ -236,10 +233,7 @@ async fn age_encryption_with_env_key() {
     );
 
     // Set HOOP_BACKUP_AGE_IDENTITY env var (as restore would use)
-    std::env::set_var(
-        "HOOP_BACKUP_AGE_IDENTITY",
-        key_file.to_str().unwrap(),
-    );
+    std::env::set_var("HOOP_BACKUP_AGE_IDENTITY", key_file.to_str().unwrap());
 
     // Decrypt using the private key
     let decrypted_file = test_dir.path().join("test-data-decrypted.db");
@@ -308,7 +302,10 @@ async fn backup_fails_when_encryption_enabled_but_key_missing() {
     let result = pipeline.trigger().await;
 
     // The backup should fail
-    assert!(result.is_err(), "Backup should fail when encryption enabled but age key missing");
+    assert!(
+        result.is_err(),
+        "Backup should fail when encryption enabled but age key missing"
+    );
 
     let error_msg = result.unwrap_err().to_string();
     assert!(
@@ -348,7 +345,10 @@ async fn backup_succeeds_with_encryption_when_key_provided() {
 
     // Verify the config was correctly created with encryption enabled
     assert!(config.encryption, "Config should have encryption enabled");
-    assert!(credentials.age_key.is_some(), "Credentials should have age key");
+    assert!(
+        credentials.age_key.is_some(),
+        "Credentials should have age key"
+    );
 
     // Verify pipeline construction succeeds with encryption enabled and valid key
     let _pipeline = BackupPipeline::new(config, credentials);
@@ -389,7 +389,10 @@ async fn backup_succeeds_without_encryption_when_disabled() {
 
     // Verify the config was correctly created with encryption disabled
     assert!(!config.encryption, "Config should have encryption disabled");
-    assert!(credentials.age_key.is_none(), "Credentials should not have age key");
+    assert!(
+        credentials.age_key.is_none(),
+        "Credentials should not have age key"
+    );
 
     // Verify pipeline construction succeeds with encryption disabled
     let _pipeline = BackupPipeline::new(config, credentials);
@@ -430,7 +433,8 @@ async fn backup_scheduler_runs_on_cron_schedule() {
     let _pipeline = Arc::new(BackupPipeline::new(config, credentials));
 
     // Create a shutdown channel
-    let (_shutdown_tx, _shutdown_rx) = broadcast::channel::<hoop_daemon::shutdown::ShutdownPhase>(1);
+    let (_shutdown_tx, _shutdown_rx) =
+        broadcast::channel::<hoop_daemon::shutdown::ShutdownPhase>(1);
 
     // Note: We can't actually test the scheduler running without:
     // 1. A real S3 endpoint (or mock server)
@@ -567,8 +571,15 @@ async fn create_test_fleet_db(hoop_dir: &Path) {
 
     conn.execute(
         "INSERT INTO stitches (id, project, kind, title, created_at) VALUES (?, ?, ?, ?, ?)",
-        ["test-stitch-1", "test-project", "operator", "Test Stitch", &chrono::Utc::now().to_rfc3339()],
-    ).unwrap();
+        [
+            "test-stitch-1",
+            "test-project",
+            "operator",
+            "Test Stitch",
+            &chrono::Utc::now().to_rfc3339(),
+        ],
+    )
+    .unwrap();
 
     // Cleanup
     std::env::remove_var("_HOOP_FLEET_DB_PATH");
@@ -610,7 +621,10 @@ projects:
 
 fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
     fs::create_dir_all(dst)?;
-    for entry in walkdir::WalkDir::new(src).into_iter().filter_map(|e| e.ok()) {
+    for entry in walkdir::WalkDir::new(src)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
         if entry.file_type().is_file() {
             let rel = entry.path().strip_prefix(src).unwrap();
             let dst_path = dst.join(rel);
@@ -638,7 +652,10 @@ fn generate_test_age_key(key_file: &Path) -> String {
         .expect("age-keygen should be installed for this test");
 
     if !output.status.success() {
-        panic!("age-keygen failed: {}", String::from_utf8_lossy(&output.stderr));
+        panic!(
+            "age-keygen failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
 
     // Read the generated key file to extract the public key

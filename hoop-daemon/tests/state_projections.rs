@@ -60,7 +60,9 @@ async fn collect_ws_snapshots(base_url: &str) -> anyhow::Result<WsSnapshots> {
 
                         match event_type {
                             "init" => {
-                                if let Some(subs) = event.get("subscriptions").and_then(|s| s.as_array()) {
+                                if let Some(subs) =
+                                    event.get("subscriptions").and_then(|s| s.as_array())
+                                {
                                     snapshots.init_subscriptions = subs
                                         .iter()
                                         .filter_map(|s| s.as_str().map(String::from))
@@ -69,7 +71,9 @@ async fn collect_ws_snapshots(base_url: &str) -> anyhow::Result<WsSnapshots> {
                             }
                             "workers_snapshot" => {
                                 snapshots.workers_received = true;
-                                if let Some(workers) = event.get("workers").and_then(|w| w.as_array()) {
+                                if let Some(workers) =
+                                    event.get("workers").and_then(|w| w.as_array())
+                                {
                                     snapshots.worker_count = workers.len();
                                 }
                             }
@@ -81,19 +85,25 @@ async fn collect_ws_snapshots(base_url: &str) -> anyhow::Result<WsSnapshots> {
                             }
                             "conversations_snapshot" => {
                                 snapshots.conversations_received = true;
-                                if let Some(convos) = event.get("conversations").and_then(|c| c.as_array()) {
+                                if let Some(convos) =
+                                    event.get("conversations").and_then(|c| c.as_array())
+                                {
                                     snapshots.conversation_count = convos.len();
                                 }
                             }
                             "projects_snapshot" => {
                                 snapshots.projects_received = true;
-                                if let Some(projects) = event.get("projects").and_then(|p| p.as_array()) {
+                                if let Some(projects) =
+                                    event.get("projects").and_then(|p| p.as_array())
+                                {
                                     snapshots.project_count = projects.len();
                                 }
                             }
                             "config_status" => {
                                 snapshots.config_received = true;
-                                if let Some(valid) = event.get("config_status").and_then(|c| c.get("valid")) {
+                                if let Some(valid) =
+                                    event.get("config_status").and_then(|c| c.get("valid"))
+                                {
                                     snapshots.config_valid = valid.as_bool().unwrap_or(false);
                                 }
                             }
@@ -187,8 +197,8 @@ async fn ws_init_event_first_message() {
     let first_msg = first_msg.expect("Failed to receive first message");
 
     if let tokio_tungstenite::tungstenite::Message::Text(text) = first_msg {
-        let event: serde_json::Value = serde_json::from_str(&text)
-            .expect("Failed to parse init event");
+        let event: serde_json::Value =
+            serde_json::from_str(&text).expect("Failed to parse init event");
 
         assert_eq!(event["type"], "init", "First message must be init");
         assert!(
@@ -225,8 +235,14 @@ async fn ws_receives_all_snapshots_after_init() {
 
     assert!(snapshots.workers_received, "Must receive workers_snapshot");
     assert!(snapshots.beads_received, "Must receive beads_snapshot");
-    assert!(snapshots.conversations_received, "Must receive conversations_snapshot");
-    assert!(snapshots.projects_received, "Must receive projects_snapshot");
+    assert!(
+        snapshots.conversations_received,
+        "Must receive conversations_snapshot"
+    );
+    assert!(
+        snapshots.projects_received,
+        "Must receive projects_snapshot"
+    );
     assert!(snapshots.config_received, "Must receive config_status");
 }
 
@@ -277,15 +293,18 @@ async fn ws_snapshots_are_consistent_with_rest_api() {
 
     // Assert consistency
     assert_eq!(
-        ws_snapshots.worker_count, rest_workers.len(),
+        ws_snapshots.worker_count,
+        rest_workers.len(),
         "WS and REST worker counts must match"
     );
     assert_eq!(
-        ws_snapshots.bead_count, rest_beads.len(),
+        ws_snapshots.bead_count,
+        rest_beads.len(),
         "WS and REST bead counts must match"
     );
     assert_eq!(
-        ws_snapshots.project_count, rest_projects.len(),
+        ws_snapshots.project_count,
+        rest_projects.len(),
         "WS and REST project counts must match"
     );
 }
@@ -324,7 +343,10 @@ async fn ws_subscription_routing() {
         "topic": "global"
     });
     let subscribe_text = subscribe_msg.to_string();
-    ws_sender.send(tokio_tungstenite::tungstenite::Message::Text(subscribe_text))
+    ws_sender
+        .send(tokio_tungstenite::tungstenite::Message::Text(
+            subscribe_text.into(),
+        ))
         .await
         .expect("Failed to send subscribe");
 
@@ -334,14 +356,19 @@ async fn ws_subscription_routing() {
         "topic": "global"
     });
     let unsubscribe_text = unsubscribe_msg.to_string();
-    ws_sender.send(tokio_tungstenite::tungstenite::Message::Text(unsubscribe_text))
+    ws_sender
+        .send(tokio_tungstenite::tungstenite::Message::Text(
+            unsubscribe_text.into(),
+        ))
         .await
         .expect("Failed to send unsubscribe");
 
     // Verify we can still receive messages (global cannot be fully removed)
-    let snapshot_msg = timeout(Duration::from_secs(5), ws_receiver.next())
-        .await;
-    assert!(snapshot_msg.is_ok(), "Should receive messages after subscribe/unsubscribe");
+    let snapshot_msg = timeout(Duration::from_secs(5), ws_receiver.next()).await;
+    assert!(
+        snapshot_msg.is_ok(),
+        "Should receive messages after subscribe/unsubscribe"
+    );
 }
 
 #[tokio::test]
@@ -386,9 +413,6 @@ async fn rest_api_beads_endpoint() {
         .await
         .expect("Failed to parse beads response");
 
-    // Beads response must be an array
-    assert!(beads.is_array(), "Beads must be an array");
-
     // Each bead must have required fields
     for bead in &beads {
         assert!(bead.get("id").is_some(), "Each bead must have an id");
@@ -416,7 +440,10 @@ async fn rest_api_workers_endpoint() {
         .expect("Failed to parse workers response");
 
     // Workers response is typed as Vec, so it's already an array
-    assert!(!workers.is_empty() || workers.is_empty(), "Workers response is valid array");
+    assert!(
+        !workers.is_empty() || workers.is_empty(),
+        "Workers response is valid array"
+    );
 }
 
 #[tokio::test]
@@ -438,7 +465,10 @@ async fn rest_api_projects_endpoint() {
         .expect("Failed to parse projects response");
 
     // Projects response is typed as Vec, so it's already an array
-    assert!(!projects.is_empty() || projects.is_empty(), "Projects response is valid array");
+    assert!(
+        !projects.is_empty() || projects.is_empty(),
+        "Projects response is valid array"
+    );
 }
 
 #[tokio::test]
@@ -471,8 +501,8 @@ async fn concurrent_websocket_connections() {
             let init_msg = init_msg.expect(&format!("No init (conn {})", i));
 
             if let tokio_tungstenite::tungstenite::Message::Text(text) = init_msg {
-                let event: serde_json::Value = serde_json::from_str(&text)
-                    .expect("Failed to parse");
+                let event: serde_json::Value =
+                    serde_json::from_str(&text).expect("Failed to parse");
 
                 assert_eq!(event["type"], "init");
                 true
@@ -485,7 +515,10 @@ async fn concurrent_websocket_connections() {
 
     // All connections should receive init
     for handle in handles {
-        assert!(handle.await.expect("Task failed"), "Connection should receive init");
+        assert!(
+            handle.await.expect("Task failed"),
+            "Connection should receive init"
+        );
     }
 }
 
@@ -570,7 +603,10 @@ async fn ws_reconnect_rebuilds_state() {
     }
 
     assert!(received_init, "Reconnect should receive init event");
-    assert!(received_beads_snapshot, "Reconnect should receive beads_snapshot");
+    assert!(
+        received_beads_snapshot,
+        "Reconnect should receive beads_snapshot"
+    );
 
     // Bead count should be consistent (same server state)
     assert_eq!(
@@ -611,11 +647,11 @@ async fn test_performance_budget() {
                 if let tokio_tungstenite::tungstenite::Message::Text(text) = msg {
                     if let Ok(event) = serde_json::from_str::<serde_json::Value>(&text) {
                         match event.get("type").and_then(|t| t.as_str()) {
-                            Some("workers_snapshot") |
-                            Some("beads_snapshot") |
-                            Some("conversations_snapshot") |
-                            Some("projects_snapshot") |
-                            Some("config_status") => {
+                            Some("workers_snapshot")
+                            | Some("beads_snapshot")
+                            | Some("conversations_snapshot")
+                            | Some("projects_snapshot")
+                            | Some("config_status") => {
                                 // Check if we've received all
                                 received_all = true;
                             }
@@ -660,14 +696,32 @@ async fn ws_topic_validation() {
 
     // Valid topics
     assert!(WsTopic::parse("global").is_some(), "global should be valid");
-    assert!(WsTopic::parse("project:testrepo").is_some(), "project:testrepo should be valid");
-    assert!(WsTopic::parse("project:ns:name").is_some(), "project with colons should be valid");
+    assert!(
+        WsTopic::parse("project:testrepo").is_some(),
+        "project:testrepo should be valid"
+    );
+    assert!(
+        WsTopic::parse("project:ns:name").is_some(),
+        "project with colons should be valid"
+    );
 
     // Invalid topics
-    assert!(WsTopic::parse("project:").is_none(), "empty project name should be invalid");
-    assert!(WsTopic::parse("fleet:alpha").is_none(), "fleet: prefix should be invalid");
-    assert!(WsTopic::parse("").is_none(), "empty string should be invalid");
-    assert!(WsTopic::parse("GLOBAL").is_none(), "GLOBAL (uppercase) should be invalid");
+    assert!(
+        WsTopic::parse("project:").is_none(),
+        "empty project name should be invalid"
+    );
+    assert!(
+        WsTopic::parse("fleet:alpha").is_none(),
+        "fleet: prefix should be invalid"
+    );
+    assert!(
+        WsTopic::parse("").is_none(),
+        "empty string should be invalid"
+    );
+    assert!(
+        WsTopic::parse("GLOBAL").is_none(),
+        "GLOBAL (uppercase) should be invalid"
+    );
 }
 
 #[tokio::test]

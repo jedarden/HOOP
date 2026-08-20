@@ -558,14 +558,18 @@ pub fn remove_project(name: &str, no_interactive: bool, confirm: bool) -> Result
     // Write audit row with path information
     if let Some(proj) = project {
         // Include all workspace paths in the audit args
-        let paths: Vec<serde_json::Value> = proj.workspaces.iter().map(|ws| {
-            let canonical = ws.canonical_path.as_ref().unwrap_or(&ws.path);
-            serde_json::json!({
-                "path": ws.path.to_string_lossy(),
-                "canonical_path": canonical.to_string_lossy(),
-                "role": ws.role.to_string(),
+        let paths: Vec<serde_json::Value> = proj
+            .workspaces
+            .iter()
+            .map(|ws| {
+                let canonical = ws.canonical_path.as_ref().unwrap_or(&ws.path);
+                serde_json::json!({
+                    "path": ws.path.to_string_lossy(),
+                    "canonical_path": canonical.to_string_lossy(),
+                    "role": ws.role.to_string(),
+                })
             })
-        }).collect();
+            .collect();
 
         let args = serde_json::json!({
             "name": name,
@@ -719,10 +723,7 @@ pub fn scan_projects(root: &str, no_interactive: bool) -> Result<()> {
                     println!("    Registered '{}' -> {}", entry.name, path.display());
 
                     // Write audit row for this discovery
-                    let canonical = entry.workspaces[0]
-                        .canonical_path
-                        .as_ref()
-                        .unwrap_or(path);
+                    let canonical = entry.workspaces[0].canonical_path.as_ref().unwrap_or(path);
                     let args = serde_json::json!({
                         "path": path.to_string_lossy(),
                         "canonical_path": canonical.to_string_lossy(),
@@ -779,10 +780,7 @@ pub fn scan_projects(root: &str, no_interactive: bool) -> Result<()> {
                     println!("    Registered '{}' -> {}", entry.name, path.display());
 
                     // Write audit row for this discovery
-                    let canonical = entry.workspaces[0]
-                        .canonical_path
-                        .as_ref()
-                        .unwrap_or(path);
+                    let canonical = entry.workspaces[0].canonical_path.as_ref().unwrap_or(path);
                     let args = serde_json::json!({
                         "path": path.to_string_lossy(),
                         "canonical_path": canonical.to_string_lossy(),
@@ -1580,7 +1578,10 @@ workspaces:
         // The function should succeed but return false (removal cancelled)
         assert!(result.is_ok());
         let removed = result.unwrap();
-        assert!(!removed, "Removal should be cancelled when user doesn't confirm");
+        assert!(
+            !removed,
+            "Removal should be cancelled when user doesn't confirm"
+        );
 
         // Verify the project still exists in the registry
         let registry = ProjectsRegistry::load().expect("load registry");
@@ -1670,17 +1671,34 @@ workspaces:
 
         // Test: no_interactive=true should register all discoveries without prompting
         let result = scan_projects(tmp.path().to_str().unwrap(), true);
-        assert!(result.is_ok(), "scan should succeed with no_interactive=true");
+        assert!(
+            result.is_ok(),
+            "scan should succeed with no_interactive=true"
+        );
 
         // Verify all projects were registered
         let registry = ProjectsRegistry::load().expect("load registry");
-        assert_eq!(registry.projects.len(), 3, "All 3 projects should be registered, found: {}", registry.projects.len());
+        assert_eq!(
+            registry.projects.len(),
+            3,
+            "All 3 projects should be registered, found: {}",
+            registry.projects.len()
+        );
 
         // Verify project names
         let project_names: Vec<&str> = registry.projects.iter().map(|p| p.name.as_str()).collect();
-        assert!(project_names.contains(&"repo-a"), "repo-a should be registered");
-        assert!(project_names.contains(&"repo-b"), "repo-b should be registered");
-        assert!(project_names.contains(&"repo-c"), "repo-c should be registered");
+        assert!(
+            project_names.contains(&"repo-a"),
+            "repo-a should be registered"
+        );
+        assert!(
+            project_names.contains(&"repo-b"),
+            "repo-b should be registered"
+        );
+        assert!(
+            project_names.contains(&"repo-c"),
+            "repo-c should be registered"
+        );
     }
 
     #[test]
@@ -1711,9 +1729,19 @@ workspaces:
 
         // Verify: repo-a remains, repo-b was added (repo-a was skipped during scan)
         let registry = ProjectsRegistry::load().expect("load registry");
-        assert_eq!(registry.projects.len(), 2, "Should have original + new project");
-        assert!(registry.projects.iter().any(|p| p.name == "repo-a"), "Original repo-a should remain");
-        assert!(registry.projects.iter().any(|p| p.name == "repo-b"), "New repo-b should be added");
+        assert_eq!(
+            registry.projects.len(),
+            2,
+            "Should have original + new project"
+        );
+        assert!(
+            registry.projects.iter().any(|p| p.name == "repo-a"),
+            "Original repo-a should remain"
+        );
+        assert!(
+            registry.projects.iter().any(|p| p.name == "repo-b"),
+            "New repo-b should be added"
+        );
     }
 
     #[test]
@@ -1734,12 +1762,22 @@ workspaces:
 
         // Test: no_interactive=true should find and register nested workspaces
         let result = scan_projects(tmp.path().to_str().unwrap(), true);
-        assert!(result.is_ok(), "scan should succeed with no_interactive=true");
+        assert!(
+            result.is_ok(),
+            "scan should succeed with no_interactive=true"
+        );
 
         // Verify nested workspace was registered
         let registry = ProjectsRegistry::load().expect("load registry");
-        assert_eq!(registry.projects.len(), 1, "Nested workspace should be registered");
-        assert_eq!(registry.projects[0].name, "child-repo", "Nested workspace should have correct name");
+        assert_eq!(
+            registry.projects.len(),
+            1,
+            "Nested workspace should be registered"
+        );
+        assert_eq!(
+            registry.projects[0].name, "child-repo",
+            "Nested workspace should have correct name"
+        );
     }
 
     #[test]
@@ -1758,11 +1796,17 @@ workspaces:
 
         // Test: no_interactive=true should handle empty discovery gracefully
         let result = scan_projects(tmp.path().to_str().unwrap(), true);
-        assert!(result.is_ok(), "scan should succeed even with no discoveries");
+        assert!(
+            result.is_ok(),
+            "scan should succeed even with no discoveries"
+        );
 
         // Verify no projects were registered
         let registry = ProjectsRegistry::load().expect("load registry");
-        assert!(registry.projects.is_empty(), "No projects should be registered");
+        assert!(
+            registry.projects.is_empty(),
+            "No projects should be registered"
+        );
     }
 
     #[test]
@@ -1784,7 +1828,10 @@ workspaces:
         // In the test environment, stdin will read EOF, resulting in empty input
         // Empty input is not "y" or "yes", so the registration is cancelled for all
         let result = scan_projects(tmp.path().to_str().unwrap(), false);
-        assert!(result.is_ok(), "scan should succeed even when prompts are cancelled");
+        assert!(
+            result.is_ok(),
+            "scan should succeed even when prompts are cancelled"
+        );
 
         // Verify no projects were registered (user cancelled all prompts)
         let registry = ProjectsRegistry::load().expect("load registry");
@@ -1850,13 +1897,27 @@ workspaces:
 
         // Verify: original project remains, two new ones added
         let registry = ProjectsRegistry::load().expect("load registry");
-        assert_eq!(registry.projects.len(), 3, "Should have 3 projects total, found: {}", registry.projects.len());
+        assert_eq!(
+            registry.projects.len(),
+            3,
+            "Should have 3 projects total, found: {}",
+            registry.projects.len()
+        );
 
         let project_names: std::collections::HashSet<String> =
             registry.projects.iter().map(|p| p.name.clone()).collect();
-        assert!(project_names.contains("existing-project"), "Existing project should remain");
-        assert!(project_names.contains("new-project-a"), "New project-a should be registered");
-        assert!(project_names.contains("new-project-b"), "New project-b should be registered");
+        assert!(
+            project_names.contains("existing-project"),
+            "Existing project should remain"
+        );
+        assert!(
+            project_names.contains("new-project-a"),
+            "New project-a should be registered"
+        );
+        assert!(
+            project_names.contains("new-project-b"),
+            "New project-b should be registered"
+        );
     }
 
     // ── Handler Flag Extraction Tests ─────────────────────────────────────────────

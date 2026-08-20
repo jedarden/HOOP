@@ -86,17 +86,25 @@ fn example_verify_flag_extraction_before_position() {
     let parsed = parse_flag_before_subcommand(&["remove", "test", "--confirm"]).unwrap();
 
     let verification = verify_flag_extraction(&parsed, "before");
-    assert!(verification.is_ok(), "Verification should succeed: {:?}", verification);
+    assert!(
+        verification.is_ok(),
+        "Verification should succeed: {:?}",
+        verification
+    );
 }
 
 #[test]
 fn example_verify_flag_extraction_after_position() {
     // Example 7: Verify flag was correctly extracted from "after" position
-    let parsed = parse_flag_after_subcommand(&["restore", "--from", "s3://b/k", "--confirm"])
-        .unwrap();
+    let parsed =
+        parse_flag_after_subcommand(&["restore", "--from", "s3://b/k", "--confirm"]).unwrap();
 
     let verification = verify_flag_extraction(&parsed, "after");
-    assert!(verification.is_ok(), "Verification should succeed: {:?}", verification);
+    assert!(
+        verification.is_ok(),
+        "Verification should succeed: {:?}",
+        verification
+    );
 }
 
 #[test]
@@ -105,7 +113,11 @@ fn example_verify_no_flag_present() {
     let parsed = parse_cli_with_flag(&["hoop", "scan", "/tmp"]).unwrap();
 
     let verification = verify_no_flag_present(&parsed);
-    assert!(verification.is_ok(), "Should verify no flag is present: {:?}", verification);
+    assert!(
+        verification.is_ok(),
+        "Should verify no flag is present: {:?}",
+        verification
+    );
 }
 
 #[test]
@@ -131,7 +143,11 @@ fn example_verify_prompt_is_suppressed_with_no_interactive() {
     };
 
     let verification = verify_prompt_suppressed(&prompt, true);
-    assert!(verification.is_ok(), "Prompt should be suppressed: {:?}", verification);
+    assert!(
+        verification.is_ok(),
+        "Prompt should be suppressed: {:?}",
+        verification
+    );
 }
 
 #[test]
@@ -184,7 +200,7 @@ fn example_run_batch_flag_position_tests() {
     let test_cases = vec![
         FlagPositionTestCase {
             description: "Scan with flag before command".to_string(),
-            command: vec!["hoop", "--no-interactive", "scan", "/tmp"]
+            command: ["hoop", "--no-interactive", "scan", "/tmp"]
                 .iter()
                 .map(|s| s.to_string())
                 .collect(),
@@ -192,7 +208,7 @@ fn example_run_batch_flag_position_tests() {
         },
         FlagPositionTestCase {
             description: "Scan with flag after command".to_string(),
-            command: vec!["hoop", "scan", "/tmp", "--no-interactive"]
+            command: ["hoop", "scan", "/tmp", "--no-interactive"]
                 .iter()
                 .map(|s| s.to_string())
                 .collect(),
@@ -200,7 +216,7 @@ fn example_run_batch_flag_position_tests() {
         },
         FlagPositionTestCase {
             description: "Scan without flag".to_string(),
-            command: vec!["hoop", "scan", "/tmp"]
+            command: ["hoop", "scan", "/tmp"]
                 .iter()
                 .map(|s| s.to_string())
                 .collect(),
@@ -208,7 +224,7 @@ fn example_run_batch_flag_position_tests() {
         },
         FlagPositionTestCase {
             description: "Remove with flag and confirm".to_string(),
-            command: vec![
+            command: [
                 "hoop",
                 "--no-interactive",
                 "remove",
@@ -222,7 +238,7 @@ fn example_run_batch_flag_position_tests() {
         },
         FlagPositionTestCase {
             description: "Restore with short flag".to_string(),
-            command: vec!["hoop", "-y", "restore", "--from", "s3://b/k", "--confirm"]
+            command: ["hoop", "-y", "restore", "--from", "s3://b/k", "--confirm"]
                 .iter()
                 .map(|s| s.to_string())
                 .collect(),
@@ -266,9 +282,11 @@ fn example_create_test_registry_fixture() {
     );
 
     // Verify the file content
-    let content = std::fs::read_to_string(&registry_path)
-        .expect("Failed to read registry file");
-    assert!(content.contains("projects: []"), "Registry should have empty projects list");
+    let content = std::fs::read_to_string(&registry_path).expect("Failed to read registry file");
+    assert!(
+        content.contains("projects: []"),
+        "Registry should have empty projects list"
+    );
 }
 
 // ── Integration test examples ───────────────────────────────────────────────────
@@ -281,7 +299,12 @@ fn example_integration_test_scan_command() {
     let _registry = create_test_registry(&tmp_dir);
 
     // Parse the scan command with no_interactive flag
-    let result = parse_cli_with_flag(&["hoop", "--no-interactive", "scan", tmp_dir.path().to_str().unwrap()]);
+    let result = parse_cli_with_flag(&[
+        "hoop",
+        "--no-interactive",
+        "scan",
+        tmp_dir.path().to_str().unwrap(),
+    ]);
     assert!(result.is_ok(), "Should parse scan command successfully");
 
     let parsed = result.unwrap();
@@ -395,7 +418,10 @@ fn example_error_handling_empty_args() {
     assert!(result.is_err(), "Should fail with empty args");
 
     let err = result.unwrap_err();
-    assert!(err.contains("No arguments provided"), "Should have descriptive error message");
+    assert!(
+        err.contains("No arguments provided"),
+        "Should have descriptive error message"
+    );
 }
 
 #[test]
@@ -405,7 +431,10 @@ fn example_error_handling_invalid_position() {
         .expect("Should parse successfully");
 
     let result = verify_flag_extraction(&parsed, "invalid_position");
-    assert!(result.is_err(), "Should fail with invalid expected_position");
+    assert!(
+        result.is_err(),
+        "Should fail with invalid expected_position"
+    );
 }
 
 #[test]
@@ -435,15 +464,13 @@ fn example_comprehensive_end_to_end_test() {
     let _registry = create_test_registry(&tmp_dir);
 
     // Test 1: Parse with flag before subcommand
-    let parsed_before =
-        parse_flag_before_subcommand(&["scan", tmp_dir.path().to_str().unwrap()])
-            .expect("Parse with flag before should succeed");
+    let parsed_before = parse_flag_before_subcommand(&["scan", tmp_dir.path().to_str().unwrap()])
+        .expect("Parse with flag before should succeed");
     assert!(parsed_before.no_interactive);
 
     // Test 2: Parse with flag after subcommand
-    let parsed_after =
-        parse_flag_after_subcommand(&["scan", tmp_dir.path().to_str().unwrap()])
-            .expect("Parse with flag after should succeed");
+    let parsed_after = parse_flag_after_subcommand(&["scan", tmp_dir.path().to_str().unwrap()])
+        .expect("Parse with flag after should succeed");
     assert!(parsed_after.no_interactive);
 
     // Test 3: Verify flag extraction

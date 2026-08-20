@@ -6,8 +6,8 @@ use anyhow::{Context, Result};
 use clap::Subcommand;
 use reqwest::Client;
 use serde::Deserialize;
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 
 /// Config subcommands
 #[derive(Subcommand, Debug)]
@@ -67,10 +67,9 @@ pub async fn run_diff() -> Result<()> {
     let running = fetch_running_config().await?;
 
     // Read and parse config.yml
-    let raw = fs::read_to_string(&config_path)
-        .context("Failed to read config.yml")?;
-    let yaml: serde_yaml::Value = serde_yaml::from_str(&raw)
-        .context("Failed to parse config.yml")?;
+    let raw = fs::read_to_string(&config_path).context("Failed to read config.yml")?;
+    let yaml: serde_yaml::Value =
+        serde_yaml::from_str(&raw).context("Failed to parse config.yml")?;
 
     println!("Configuration diff: running vs config.yml");
     println!("===========================================\n");
@@ -84,7 +83,10 @@ pub async fn run_diff() -> Result<()> {
         if yaml_val != running.config.server_bind_addr {
             has_changes = true;
             has_restart_required = true;
-            println!("  [RESTART REQUIRED] server.bind_addr: {} → {}", running.config.server_bind_addr, yaml_val);
+            println!(
+                "  [RESTART REQUIRED] server.bind_addr: {} → {}",
+                running.config.server_bind_addr, yaml_val
+            );
         }
     }
 
@@ -92,7 +94,10 @@ pub async fn run_diff() -> Result<()> {
     if let Some(yaml_val) = get_nested_yaml_value(&yaml, &["agent", "adapter"]) {
         if yaml_val != running.config.agent_adapter {
             has_changes = true;
-            println!("  [HOT-RELOADABLE] agent.adapter: {} → {}", running.config.agent_adapter, yaml_val);
+            println!(
+                "  [HOT-RELOADABLE] agent.adapter: {} → {}",
+                running.config.agent_adapter, yaml_val
+            );
         }
     }
 
@@ -100,7 +105,10 @@ pub async fn run_diff() -> Result<()> {
     if let Some(yaml_val) = get_nested_yaml_value(&yaml, &["agent", "model"]) {
         if yaml_val != running.config.agent_model {
             has_changes = true;
-            println!("  [HOT-RELOADABLE] agent.model: {} → {}", running.config.agent_model, yaml_val);
+            println!(
+                "  [HOT-RELOADABLE] agent.model: {} → {}",
+                running.config.agent_model, yaml_val
+            );
         }
     }
 
@@ -108,7 +116,10 @@ pub async fn run_diff() -> Result<()> {
     if let Some(yaml_val) = get_nested_yaml_value(&yaml, &["ui", "theme"]) {
         if yaml_val != running.config.ui_theme {
             has_changes = true;
-            println!("  [HOT-RELOADABLE] ui.theme: {} → {}", running.config.ui_theme, yaml_val);
+            println!(
+                "  [HOT-RELOADABLE] ui.theme: {} → {}",
+                running.config.ui_theme, yaml_val
+            );
         }
     }
 
@@ -116,7 +127,10 @@ pub async fn run_diff() -> Result<()> {
     if let Some(yaml_val) = get_nested_yaml_bool(&yaml, &["metrics", "enabled"]) {
         if yaml_val != running.config.metrics_enabled {
             has_changes = true;
-            println!("  [HOT-RELOADABLE] metrics.enabled: {} → {}", running.config.metrics_enabled, yaml_val);
+            println!(
+                "  [HOT-RELOADABLE] metrics.enabled: {} → {}",
+                running.config.metrics_enabled, yaml_val
+            );
         }
     }
 
@@ -126,7 +140,10 @@ pub async fn run_diff() -> Result<()> {
         if yaml_port != running.config.metrics_port {
             has_changes = true;
             has_restart_required = true;
-            println!("  [RESTART REQUIRED] metrics.port: {} → {}", running.config.metrics_port, yaml_port);
+            println!(
+                "  [RESTART REQUIRED] metrics.port: {} → {}",
+                running.config.metrics_port, yaml_port
+            );
         }
     }
 
@@ -134,7 +151,10 @@ pub async fn run_diff() -> Result<()> {
     if let Some(yaml_val) = get_nested_yaml_value(&yaml, &["voice", "hotkey"]) {
         if yaml_val != running.config.voice_hotkey {
             has_changes = true;
-            println!("  [HOT-RELOADABLE] voice.hotkey: {} → {}", running.config.voice_hotkey, yaml_val);
+            println!(
+                "  [HOT-RELOADABLE] voice.hotkey: {} → {}",
+                running.config.voice_hotkey, yaml_val
+            );
         }
     }
 
@@ -143,7 +163,10 @@ pub async fn run_diff() -> Result<()> {
         let yaml_days = yaml_val.parse::<u32>().unwrap_or(90);
         if yaml_days != running.config.audit_retention_days {
             has_changes = true;
-            println!("  [HOT-RELOADABLE] audit.retention_days: {} → {}", running.config.audit_retention_days, yaml_days);
+            println!(
+                "  [HOT-RELOADABLE] audit.retention_days: {} → {}",
+                running.config.audit_retention_days, yaml_days
+            );
         }
     }
 
@@ -151,7 +174,10 @@ pub async fn run_diff() -> Result<()> {
     if let Some(yaml_val) = get_nested_yaml_bool(&yaml, &["audit", "hash_chain"]) {
         if yaml_val != running.config.audit_hash_chain {
             has_changes = true;
-            println!("  [HOT-RELOADABLE] audit.hash_chain: {} → {}", running.config.audit_hash_chain, yaml_val);
+            println!(
+                "  [HOT-RELOADABLE] audit.hash_chain: {} → {}",
+                running.config.audit_hash_chain, yaml_val
+            );
         }
     }
 
@@ -159,7 +185,10 @@ pub async fn run_diff() -> Result<()> {
     if let Some(yaml_val) = get_nested_yaml_bool(&yaml, &["reflection", "enabled"]) {
         if yaml_val != running.config.reflection_enabled {
             has_changes = true;
-            println!("  [HOT-RELOADABLE] reflection.enabled: {} → {}", running.config.reflection_enabled, yaml_val);
+            println!(
+                "  [HOT-RELOADABLE] reflection.enabled: {} → {}",
+                running.config.reflection_enabled, yaml_val
+            );
         }
     }
 
@@ -168,16 +197,23 @@ pub async fn run_diff() -> Result<()> {
         let yaml_val_f = yaml_val.parse::<f64>().unwrap_or(0.8);
         if (yaml_val_f - running.config.reflection_detection_threshold).abs() > 0.001 {
             has_changes = true;
-            println!("  [HOT-RELOADABLE] reflection.detection_threshold: {} → {}", running.config.reflection_detection_threshold, yaml_val_f);
+            println!(
+                "  [HOT-RELOADABLE] reflection.detection_threshold: {} → {}",
+                running.config.reflection_detection_threshold, yaml_val_f
+            );
         }
     }
 
     // reflection.auto_archive_after_days
-    if let Some(yaml_val) = get_nested_yaml_value(&yaml, &["reflection", "auto_archive_after_days"]) {
+    if let Some(yaml_val) = get_nested_yaml_value(&yaml, &["reflection", "auto_archive_after_days"])
+    {
         let yaml_days = yaml_val.parse::<u32>().unwrap_or(30);
         if yaml_days != running.config.reflection_auto_archive_after_days {
             has_changes = true;
-            println!("  [HOT-RELOADABLE] reflection.auto_archive_after_days: {} → {}", running.config.reflection_auto_archive_after_days, yaml_days);
+            println!(
+                "  [HOT-RELOADABLE] reflection.auto_archive_after_days: {} → {}",
+                running.config.reflection_auto_archive_after_days, yaml_days
+            );
         }
     }
 
@@ -207,17 +243,19 @@ async fn fetch_running_config() -> Result<ConfigResponse> {
         .await;
 
     match resp {
-        Ok(r) if r.status().is_success() => {
-            r.json::<ConfigResponse>()
-                .await
-                .context("Failed to parse config response")
-        }
-        Ok(r) => {
-            Err(anyhow::anyhow!("Daemon returned status {}: {}", r.status(), r.text().await.unwrap_or_default()))
-        }
-        Err(e) => {
-            Err(anyhow::anyhow!("Failed to connect to daemon at http://127.0.0.1:3000 — is it running?\n\nError: {}", e))
-        }
+        Ok(r) if r.status().is_success() => r
+            .json::<ConfigResponse>()
+            .await
+            .context("Failed to parse config response"),
+        Ok(r) => Err(anyhow::anyhow!(
+            "Daemon returned status {}: {}",
+            r.status(),
+            r.text().await.unwrap_or_default()
+        )),
+        Err(e) => Err(anyhow::anyhow!(
+            "Failed to connect to daemon at http://127.0.0.1:3000 — is it running?\n\nError: {}",
+            e
+        )),
     }
 }
 
@@ -231,17 +269,28 @@ async fn print_running_config_only() -> Result<()> {
     println!("  metrics.enabled: {}", running.config.metrics_enabled);
     println!("  metrics.port: {}", running.config.metrics_port);
     println!("  voice.hotkey: {}", running.config.voice_hotkey);
-    println!("  audit.retention_days: {}", running.config.audit_retention_days);
+    println!(
+        "  audit.retention_days: {}",
+        running.config.audit_retention_days
+    );
     println!("  audit.hash_chain: {}", running.config.audit_hash_chain);
-    println!("  reflection.enabled: {}", running.config.reflection_enabled);
-    println!("  reflection.detection_threshold: {}", running.config.reflection_detection_threshold);
-    println!("  reflection.auto_archive_after_days: {}", running.config.reflection_auto_archive_after_days);
+    println!(
+        "  reflection.enabled: {}",
+        running.config.reflection_enabled
+    );
+    println!(
+        "  reflection.detection_threshold: {}",
+        running.config.reflection_detection_threshold
+    );
+    println!(
+        "  reflection.auto_archive_after_days: {}",
+        running.config.reflection_auto_archive_after_days
+    );
     Ok(())
 }
 
 fn get_config_path() -> Result<PathBuf> {
-    let mut home = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."));
+    let mut home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
     home.push(".hoop");
     home.push("config.yml");
     Ok(home)
@@ -260,7 +309,10 @@ fn get_nested_yaml_value(yaml: &serde_yaml::Value, parts: &[&str]) -> Option<Str
                         serde_yaml::Value::Number(n) => Some(n.to_string()),
                         serde_yaml::Value::Bool(b) => Some(b.to_string()),
                         serde_yaml::Value::Null => Some("null".to_string()),
-                        _ => Some(serde_yaml::to_string(v).unwrap_or_else(|_| "[complex value]".to_string())),
+                        _ => Some(
+                            serde_yaml::to_string(v)
+                                .unwrap_or_else(|_| "[complex value]".to_string()),
+                        ),
                     };
                 }
                 current = v;
@@ -317,12 +369,11 @@ pub fn run_validate() -> Result<()> {
     println!("{}", "=".repeat(60));
 
     // Read file
-    let raw = fs::read_to_string(&config_path)
-        .context("Failed to read config.yml")?;
+    let raw = fs::read_to_string(&config_path).context("Failed to read config.yml")?;
 
     // Parse YAML
-    let yaml: serde_yaml::Value = serde_yaml::from_str(&raw)
-        .with_context(|| "Invalid YAML syntax".to_string())?;
+    let yaml: serde_yaml::Value =
+        serde_yaml::from_str(&raw).with_context(|| "Invalid YAML syntax".to_string())?;
 
     let mut has_errors = false;
     let mut has_warnings = false;
@@ -347,9 +398,20 @@ pub fn run_validate() -> Result<()> {
 
     // Check known sections (warning if missing, not error)
     let sections = [
-        "server", "agent", "projects_file", "ui", "metrics", "voice",
-        "agent_extensions", "audit", "reflection", "backup", "pricing_file",
-        "secrets_patterns", "stuck_detector", "roles",
+        "server",
+        "agent",
+        "projects_file",
+        "ui",
+        "metrics",
+        "voice",
+        "agent_extensions",
+        "audit",
+        "reflection",
+        "backup",
+        "pricing_file",
+        "secrets_patterns",
+        "stuck_detector",
+        "roles",
     ];
 
     if let Some(mapping) = yaml.as_mapping() {
@@ -376,7 +438,10 @@ pub fn run_validate() -> Result<()> {
     if let Some(adapter) = get_nested_yaml_value(&yaml, &["agent", "adapter"]) {
         let valid_adapters = ["claude", "codex", "opencode", "gemini", "aider"];
         if !valid_adapters.contains(&adapter.as_str()) {
-            println!("⚠️  Warning: agent.adapter '{}' is not a known adapter", adapter);
+            println!(
+                "⚠️  Warning: agent.adapter '{}' is not a known adapter",
+                adapter
+            );
             println!("   Valid options: {}", valid_adapters.join(", "));
             has_warnings = true;
         } else {
@@ -405,7 +470,10 @@ pub fn run_validate() -> Result<()> {
                         println!("✓ metrics.port: {} (valid, [RESTART REQUIRED])", p);
                     }
                     _ => {
-                        println!("❌ Error: metrics.port '{}' is not a valid port (1-65535)", port);
+                        println!(
+                            "❌ Error: metrics.port '{}' is not a valid port (1-65535)",
+                            port
+                        );
                         has_errors = true;
                     }
                 }

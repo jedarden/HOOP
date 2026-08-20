@@ -48,7 +48,8 @@ fn create_beads_dir(path: &std::path::Path) -> tempfile::TempDir {
 async fn create_test_supervisor() -> ProjectSupervisor {
     let (bead_tx, _) = tokio::sync::broadcast::channel(64);
     let (session_tx, _) = tokio::sync::broadcast::channel(64);
-    let (monitor_tx, _) = tokio::sync::broadcast::channel::<hoop_daemon::heartbeats::MonitorEvent>(64);
+    let (monitor_tx, _) =
+        tokio::sync::broadcast::channel::<hoop_daemon::heartbeats::MonitorEvent>(64);
     let worker_registry = Arc::new(WorkerRegistry::new(monitor_tx, session_tx.clone()));
     let beads = Arc::new(std::sync::RwLock::new(Vec::<Bead>::new()));
     let shutdown = Arc::new(ShutdownCoordinator::new());

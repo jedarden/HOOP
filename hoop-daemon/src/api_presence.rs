@@ -103,10 +103,12 @@ pub struct RemovePresenceResponse {
 // ---------------------------------------------------------------------------
 
 pub fn router() -> Router<crate::DaemonState> {
-    Router::new()
-        .route("/api/presence", axum::routing::get(get_presence)
+    Router::new().route(
+        "/api/presence",
+        axum::routing::get(get_presence)
             .post(update_presence)
-            .delete(remove_presence))
+            .delete(remove_presence),
+    )
 }
 
 // ---------------------------------------------------------------------------

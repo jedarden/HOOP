@@ -20,16 +20,14 @@
 
 mod integration_harness;
 
-use std::time::{Duration, Instant};
 use integration_harness::spawn_test_daemon;
 use serde_json::Value as JsonValue;
+use std::time::{Duration, Instant};
 
 #[tokio::test]
 async fn s2_bead_events_endpoint_exists() {
     //! Verify the bead events endpoint exists and returns data
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
@@ -40,11 +38,7 @@ async fn s2_bead_events_endpoint_exists() {
         .await
         .expect("Failed to fetch beads");
 
-    assert_eq!(
-        resp.status(),
-        200,
-        "Beads endpoint should return 200"
-    );
+    assert_eq!(resp.status(), 200, "Beads endpoint should return 200");
 
     let beads: JsonValue = resp.json().await.expect("Failed to parse beads");
 
@@ -72,9 +66,15 @@ async fn s2_bead_events_endpoint_exists() {
             if resp.status() == 200 {
                 let events: JsonValue = resp.json().await.expect("Failed to parse events");
                 assert!(events.is_array(), "Events should be an array");
-                println!("S2 PASS: Bead events endpoint returns data for bead {}", bead_id);
+                println!(
+                    "S2 PASS: Bead events endpoint returns data for bead {}",
+                    bead_id
+                );
             } else {
-                println!("S2 PASS: Bead events endpoint exists (no events for bead {})", bead_id);
+                println!(
+                    "S2 PASS: Bead events endpoint exists (no events for bead {})",
+                    bead_id
+                );
             }
         } else {
             println!("S2 PASS: Bead events endpoint verified (no beads in testrepo)");
@@ -85,9 +85,7 @@ async fn s2_bead_events_endpoint_exists() {
 #[tokio::test]
 async fn s2_visual_debug_loads_quickly() {
     //! Verify the visual debug panel loads in under 5 seconds
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
@@ -134,9 +132,7 @@ async fn s2_visual_debug_loads_quickly() {
 #[tokio::test]
 async fn s2_stitch_read_endpoint_exists() {
     //! Verify the stitch read endpoint exists for viewing full conversation
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
@@ -162,9 +158,7 @@ async fn s2_no_manual_file_path_required() {
     //! Verify the visual debug panel doesn't require manual file path entry
     // All data should be accessible via HTTP API, not requiring CLI
 
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
@@ -198,9 +192,7 @@ async fn s2_no_manual_file_path_required() {
 #[tokio::test]
 async fn s2_conversation_history_accessible() {
     //! Verify full conversation history is accessible via API
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
@@ -220,10 +212,7 @@ async fn s2_conversation_history_accessible() {
     let conversations: JsonValue = resp.json().await.expect("Failed to parse conversations");
 
     // Should return an array (may be empty)
-    assert!(
-        conversations.is_array(),
-        "Conversations should be an array"
-    );
+    assert!(conversations.is_array(), "Conversations should be an array");
 
     println!("S2 PASS: Conversation history accessible via API");
 }
@@ -233,9 +222,7 @@ async fn s2_bead_stitch_linking() {
     //! Verify bead-to-stitch linking is available
     // The API should provide links between beads and their originating stitches
 
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
@@ -251,8 +238,8 @@ async fn s2_bead_stitch_linking() {
     if let Some(bead_array) = beads.as_array() {
         for bead in bead_array {
             // Beads may have stitch_id field for linking
-            let has_stitch_link = bead.get("stitch_id").is_some()
-                || bead.get("parent_stitch_id").is_some();
+            let has_stitch_link =
+                bead.get("stitch_id").is_some() || bead.get("parent_stitch_id").is_some();
 
             // Even if not present in current schema, the API supports
             // fetching stitch information given a bead
@@ -267,9 +254,7 @@ async fn s2_cost_breakdown_available() {
     //! Verify cost breakdown by turn is available
     // The visual debug panel should show cost per turn
 
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 
@@ -280,19 +265,12 @@ async fn s2_cost_breakdown_available() {
         .await
         .expect("Failed to fetch cost trends");
 
-    assert_eq!(
-        resp.status(),
-        200,
-        "Cost trends endpoint should return 200"
-    );
+    assert_eq!(resp.status(), 200, "Cost trends endpoint should return 200");
 
     let cost_data: JsonValue = resp.json().await.expect("Failed to parse cost data");
 
     // Should have cost structure
-    assert!(
-        cost_data.is_object(),
-        "Cost data should be an object"
-    );
+    assert!(cost_data.is_object(), "Cost data should be an object");
 
     println!("S2 PASS: Cost breakdown available via API");
 }
@@ -303,9 +281,7 @@ async fn s2_full_cycle_reconstruction() {
     // The bead events endpoint should return all events needed to reconstruct
     // the full execution cycle
 
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
 

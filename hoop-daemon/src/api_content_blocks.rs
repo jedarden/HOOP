@@ -2,8 +2,11 @@
 //!
 //! REST API for managing content blocks associated with stitches.
 
-use crate::content_blocks::{delete_content_block, get_content_blocks, reorder_content_blocks, update_content_block, ContentBlock, ContentBlockCreate, ContentBlockUpdate};
 use crate::content_blocks::create_content_block as db_create_content_block;
+use crate::content_blocks::{
+    delete_content_block, get_content_blocks, reorder_content_blocks, update_content_block,
+    ContentBlock, ContentBlockCreate, ContentBlockUpdate,
+};
 use crate::DaemonState;
 use axum::{
     extract::{Path, State},
@@ -38,7 +41,10 @@ pub async fn list_content_blocks(
     })?;
 
     let blocks = get_content_blocks(&mut conn, &stitch_id).map_err(|e| {
-        error!("Failed to get content blocks for stitch {}: {}", stitch_id, e);
+        error!(
+            "Failed to get content blocks for stitch {}: {}",
+            stitch_id, e
+        );
         (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
     })?;
     Ok(Json(blocks))
@@ -64,8 +70,8 @@ pub async fn create_content_block(
     Path(stitch_id): Path<String>,
     Json(req): Json<ContentBlockCreate>,
 ) -> Result<Json<ContentBlock>, (StatusCode, String)> {
-    use uuid::Uuid;
     use chrono::Utc;
+    use uuid::Uuid;
 
     let id = format!("cb-{}", Uuid::new_v4());
     let block = ContentBlock {
@@ -85,7 +91,10 @@ pub async fn create_content_block(
     })?;
 
     db_create_content_block(&mut conn, &block).map_err(|e| {
-        error!("Failed to create content block for stitch {}: {}", stitch_id, e);
+        error!(
+            "Failed to create content block for stitch {}: {}",
+            stitch_id, e
+        );
         (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
     })?;
 
@@ -186,7 +195,10 @@ pub async fn reorder_content_blocks_endpoint(
     })?;
 
     reorder_content_blocks(&mut conn, &stitch_id, &ordering).map_err(|e| {
-        error!("Failed to reorder content blocks for stitch {}: {}", stitch_id, e);
+        error!(
+            "Failed to reorder content blocks for stitch {}: {}",
+            stitch_id, e
+        );
         (StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
     })?;
 
@@ -196,9 +208,24 @@ pub async fn reorder_content_blocks_endpoint(
 /// Build the router for content block endpoints
 pub fn router() -> Router<DaemonState> {
     Router::new()
-        .route("/api/stitches/{stitch_id}/content-blocks", get(list_content_blocks))
-        .route("/api/stitches/{stitch_id}/content-blocks", post(create_content_block))
-        .route("/api/stitches/{stitch_id}/content-blocks/{block_id}", put(update_content_block_endpoint))
-        .route("/api/stitches/{stitch_id}/content-blocks/{block_id}", delete(delete_content_block_endpoint))
-        .route("/api/stitches/{stitch_id}/content-blocks/reorder", post(reorder_content_blocks_endpoint))
+        .route(
+            "/api/stitches/{stitch_id}/content-blocks",
+            get(list_content_blocks),
+        )
+        .route(
+            "/api/stitches/{stitch_id}/content-blocks",
+            post(create_content_block),
+        )
+        .route(
+            "/api/stitches/{stitch_id}/content-blocks/{block_id}",
+            put(update_content_block_endpoint),
+        )
+        .route(
+            "/api/stitches/{stitch_id}/content-blocks/{block_id}",
+            delete(delete_content_block_endpoint),
+        )
+        .route(
+            "/api/stitches/{stitch_id}/content-blocks/reorder",
+            post(reorder_content_blocks_endpoint),
+        )
 }

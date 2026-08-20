@@ -26,9 +26,9 @@ use std::time::Duration;
 use tempfile::TempDir;
 use tokio::time::sleep;
 
-use integration_harness::{spawn_test_daemon, spawn_test_daemon_with_config};
 use hoop_daemon::Config;
 use hoop_schema::ReadinessResponse;
+use integration_harness::{spawn_test_daemon, spawn_test_daemon_with_config};
 
 /// Create a temporary project directory with .beads subdirectory
 fn setup_project_dir(_name: &str) -> anyhow::Result<(TempDir, PathBuf)> {
@@ -405,9 +405,7 @@ projects:
 #[tokio::test]
 async fn test_readyz_response_format() {
     // Verify /readyz response format is correct
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let client = reqwest::Client::new();
     let readyz_url = format!("{}/readyz", base_url);

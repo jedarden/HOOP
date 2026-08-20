@@ -173,20 +173,19 @@ fn pattern_query_basic_evaluation() {
     assert!(!results[0].is_slow, "query should not be slow");
 
     // Insert into pattern_members
-    let inserted = hoop_daemon::pattern_query_evaluator::insert_pattern_member(
-        &pattern_id,
-        &stitch_id,
-    )
-    .unwrap();
+    let inserted =
+        hoop_daemon::pattern_query_evaluator::insert_pattern_member(&pattern_id, &stitch_id)
+            .unwrap();
     assert!(inserted, "first insert should succeed");
 
     // Verify idempotency - second insert should return false
-    let inserted_again = hoop_daemon::pattern_query_evaluator::insert_pattern_member(
-        &pattern_id,
-        &stitch_id,
-    )
-    .unwrap();
-    assert!(!inserted_again, "second insert should return false (idempotent)");
+    let inserted_again =
+        hoop_daemon::pattern_query_evaluator::insert_pattern_member(&pattern_id, &stitch_id)
+            .unwrap();
+    assert!(
+        !inserted_again,
+        "second insert should return false (idempotent)"
+    );
 
     // Verify the member was added
     let count: i64 = conn
@@ -364,35 +363,39 @@ fn pattern_query_complex_expressions() {
 
     for query in queries {
         let result = hoop_daemon::pattern_query_evaluator::parse_query(query);
-        assert!(result.is_ok(), "should parse query '{}': {:?}", query, result.err());
+        assert!(
+            result.is_ok(),
+            "should parse query '{}': {:?}",
+            query,
+            result.err()
+        );
     }
 
     // Verify AND query matches
-    let and_expr = hoop_daemon::pattern_query_evaluator::parse_query(
-        "title:fix.*urgent AND label:bug"
-    ).unwrap();
+    let and_expr =
+        hoop_daemon::pattern_query_evaluator::parse_query("title:fix.*urgent AND label:bug")
+            .unwrap();
     let matches = hoop_daemon::pattern_query_evaluator::evaluate_query(&and_expr, &ctx).unwrap();
     assert!(matches, "AND query should match");
 
     // Verify NOT query matches
-    let not_expr = hoop_daemon::pattern_query_evaluator::parse_query(
-        "project:HOOP AND NOT label:enhancement"
-    ).unwrap();
+    let not_expr =
+        hoop_daemon::pattern_query_evaluator::parse_query("project:HOOP AND NOT label:enhancement")
+            .unwrap();
     let matches = hoop_daemon::pattern_query_evaluator::evaluate_query(&not_expr, &ctx).unwrap();
     assert!(matches, "NOT query should match");
 
     // Verify OR query matches
-    let or_expr = hoop_daemon::pattern_query_evaluator::parse_query(
-        "label:p0 OR label:p1"
-    ).unwrap();
+    let or_expr =
+        hoop_daemon::pattern_query_evaluator::parse_query("label:p0 OR label:p1").unwrap();
     let matches = hoop_daemon::pattern_query_evaluator::evaluate_query(&or_expr, &ctx).unwrap();
     assert!(matches, "OR query should match");
 
     // Verify query that doesn't match
-    let non_match_expr = hoop_daemon::pattern_query_evaluator::parse_query(
-        "title:feature.*"
-    ).unwrap();
-    let matches = hoop_daemon::pattern_query_evaluator::evaluate_query(&non_match_expr, &ctx).unwrap();
+    let non_match_expr =
+        hoop_daemon::pattern_query_evaluator::parse_query("title:feature.*").unwrap();
+    let matches =
+        hoop_daemon::pattern_query_evaluator::evaluate_query(&non_match_expr, &ctx).unwrap();
     assert!(!matches, "non-matching query should not match");
 }
 
@@ -416,11 +419,19 @@ fn pattern_query_kind_filter() {
 
     let expr = hoop_daemon::pattern_query_evaluator::parse_query("kind:operator").unwrap();
 
-    let matches_operator = hoop_daemon::pattern_query_evaluator::evaluate_query(&expr, &ctx_operator).unwrap();
-    assert!(matches_operator, "kind:operator should match operator stitch");
+    let matches_operator =
+        hoop_daemon::pattern_query_evaluator::evaluate_query(&expr, &ctx_operator).unwrap();
+    assert!(
+        matches_operator,
+        "kind:operator should match operator stitch"
+    );
 
-    let matches_worker = hoop_daemon::pattern_query_evaluator::evaluate_query(&expr, &ctx_worker).unwrap();
-    assert!(!matches_worker, "kind:operator should not match worker stitch");
+    let matches_worker =
+        hoop_daemon::pattern_query_evaluator::evaluate_query(&expr, &ctx_worker).unwrap();
+    assert!(
+        !matches_worker,
+        "kind:operator should not match worker stitch"
+    );
 }
 
 #[test]

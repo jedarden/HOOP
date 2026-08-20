@@ -449,10 +449,7 @@ mod tests {
             cli_before.no_interactive, cli_after.no_interactive,
             "no_interactive value must be consistent regardless of flag position"
         );
-        assert!(
-            cli_before.no_interactive,
-            "no_interactive should be true"
-        );
+        assert!(cli_before.no_interactive, "no_interactive should be true");
     }
 
     #[test]
@@ -597,10 +594,7 @@ mod tests {
 
         assert_eq!(cli_before.no_interactive, cli_after.no_interactive,
                    "no_interactive value must be consistent for projects remove regardless of flag position");
-        assert!(
-            cli_before.no_interactive,
-            "no_interactive should be true"
-        );
+        assert!(cli_before.no_interactive, "no_interactive should be true");
     }
 
     #[test]
@@ -644,10 +638,7 @@ mod tests {
                     name, "my-project",
                     "project name should be extracted correctly"
                 );
-                assert!(
-                    !confirm,
-                    "confirm flag should be false when not provided"
-                );
+                assert!(!confirm, "confirm flag should be false when not provided");
             }
             _ => panic!("expected Projects::Remove command"),
         }
@@ -1054,10 +1045,7 @@ mod tests {
             cli_before.no_interactive, cli_after.no_interactive,
             "no_interactive value must be consistent regardless of flag position"
         );
-        assert!(
-            cli_before.no_interactive,
-            "no_interactive should be true"
-        );
+        assert!(cli_before.no_interactive, "no_interactive should be true");
     }
 
     #[test]
@@ -1332,10 +1320,7 @@ mod tests {
             cli_before.no_interactive, cli_after.no_interactive,
             "no_interactive value must be consistent regardless of flag position"
         );
-        assert!(
-            cli_before.no_interactive,
-            "no_interactive should be true"
-        );
+        assert!(cli_before.no_interactive, "no_interactive should be true");
     }
 
     #[test]
@@ -1559,10 +1544,7 @@ mod tests {
     fn test_scan_with_both_global_and_local_flags() {
         let args = ["hoop", "--no-interactive", "scan", "/tmp/projects", "--yes"];
         let cli = parse_args(&args).expect("should parse successfully");
-        assert!(
-            cli.no_interactive,
-            "Global no_interactive should be true"
-        );
+        assert!(cli.no_interactive, "Global no_interactive should be true");
 
         match cli.command {
             Commands::Scan { root, auto_confirm } => {
@@ -1586,10 +1568,7 @@ mod tests {
             cli_before.no_interactive, cli_after.no_interactive,
             "no_interactive value must be consistent regardless of flag position"
         );
-        assert!(
-            cli_before.no_interactive,
-            "no_interactive should be true"
-        );
+        assert!(cli_before.no_interactive, "no_interactive should be true");
     }
 
     #[test]

@@ -85,9 +85,9 @@ fn test_two_concurrent_drafts_both_land() {
     let draft_b = hoop_daemon::fleet::DraftRow {
         id: "draft-concurrent-b".to_string(),
         project: "test-project".to_string(),
-        title: "Fix auth timeout".to_string(),  // Same title!
+        title: "Fix auth timeout".to_string(), // Same title!
         kind: "fix".to_string(),
-        description: Some("Users report 30s timeouts".to_string()),  // Same description!
+        description: Some("Users report 30s timeouts".to_string()), // Same description!
         has_acceptance_criteria: false,
         priority: Some(5),
         labels: vec!["auth".to_string()],
@@ -118,12 +118,18 @@ fn test_two_concurrent_drafts_both_land() {
     let fetched_a = hoop_daemon::fleet::get_draft("draft-concurrent-a")
         .expect("get draft_a")
         .expect("draft_a exists");
-    assert_eq!(fetched_a.opened_by, Some("tailscale:operator-a@example.com".to_string()));
+    assert_eq!(
+        fetched_a.opened_by,
+        Some("tailscale:operator-a@example.com".to_string())
+    );
 
     let fetched_b = hoop_daemon::fleet::get_draft("draft-concurrent-b")
         .expect("get draft_b")
         .expect("draft_b exists");
-    assert_eq!(fetched_b.opened_by, Some("tailscale:operator-b@example.com".to_string()));
+    assert_eq!(
+        fetched_b.opened_by,
+        Some("tailscale:operator-b@example.com".to_string())
+    );
 
     teardown_test_db();
 }
@@ -173,7 +179,8 @@ fn test_autosave_preserves_draft_concurrency() {
         None,
         Some(7),
         Some(&["urgent".to_string()]),
-    ).expect("autosave draft");
+    )
+    .expect("autosave draft");
 
     let fetched = hoop_daemon::fleet::get_draft("draft-autosave-test")
         .expect("get draft")
@@ -183,8 +190,14 @@ fn test_autosave_preserves_draft_concurrency() {
     assert_eq!(fetched.description, Some("Updated description".to_string()));
     assert_eq!(fetched.priority, Some(7));
     assert_eq!(fetched.labels, vec!["urgent".to_string()]);
-    assert_eq!(fetched.version, 1, "version should NOT increment on autosave");
-    assert!(fetched.last_autosave_at.is_some(), "last_autosave_at should be set");
+    assert_eq!(
+        fetched.version, 1,
+        "version should NOT increment on autosave"
+    );
+    assert!(
+        fetched.last_autosave_at.is_some(),
+        "last_autosave_at should be set"
+    );
 
     teardown_test_db();
 }
@@ -281,7 +294,8 @@ fn test_detect_similar_drafts_warns_duplication() {
         Some("Fix authentication timeout"),
         Some("Users experiencing 30s delays"),
         None,
-    ).expect("detect similar drafts");
+    )
+    .expect("detect similar drafts");
 
     // Should find the existing draft
     assert!(!similar.is_empty(), "should detect similar existing draft");
@@ -304,29 +318,34 @@ fn test_reflection_proposal_dedup_by_content_hash() {
         "Operator repeated this 3 times",
         "global",
         &["stitch-a-1".to_string(), "stitch-a-2".to_string()],
-    ).expect("propose from operator A");
+    )
+    .expect("propose from operator A");
 
     // Operator B proposes the SAME rule (same content hash)
     let id_b = hoop_daemon::fleet::propose_reflection_entry(
         "Always run tests before closing beads",
-        "Different reason text",  // Different reason doesn't matter for dedup
+        "Different reason text", // Different reason doesn't matter for dedup
         "global",
         &["stitch-b-1".to_string()],
-    ).expect("propose from operator B");
+    )
+    .expect("propose from operator B");
 
     // Should return the same ID (deduplicated)
     assert_eq!(id_a, id_b, "duplicate proposal should return the same ID");
 
     // Verify only one proposal exists with merged source_stitches
-    let proposals = hoop_daemon::fleet::list_pending_reflection_proposals()
-        .expect("list proposals");
+    let proposals =
+        hoop_daemon::fleet::list_pending_reflection_proposals().expect("list proposals");
 
     assert_eq!(proposals.len(), 1, "should have only one proposal");
-    assert_eq!(proposals[0].id, id_a, "proposal ID should match first proposal");
+    assert_eq!(
+        proposals[0].id, id_a,
+        "proposal ID should match first proposal"
+    );
 
     // Verify source_stitches were merged from both operators
-    let stitches: Vec<String> = serde_json::from_str(&proposals[0].source_stitches)
-        .expect("parse source_stitches");
+    let stitches: Vec<String> =
+        serde_json::from_str(&proposals[0].source_stitches).expect("parse source_stitches");
     assert_eq!(stitches.len(), 3, "should have 3 merged source stitches");
     assert!(stitches.contains(&"stitch-a-1".to_string()));
     assert!(stitches.contains(&"stitch-a-2".to_string()));
@@ -360,14 +379,14 @@ fn test_reflection_proposal_approval_single_operator() {
         rejection_count: 0,
     };
 
-    hoop_daemon::fleet::insert_reflection_entry(&entry)
-        .expect("insert proposal");
+    hoop_daemon::fleet::insert_reflection_entry(&entry).expect("insert proposal");
 
     // Operator A approves
     let approved = hoop_daemon::fleet::approve_reflection_proposal(
         &proposal_id,
         "tailscale:operator-a@example.com",
-    ).expect("approve proposal");
+    )
+    .expect("approve proposal");
 
     assert!(approved, "proposal should be approved");
 
@@ -379,11 +398,14 @@ fn test_reflection_proposal_approval_single_operator() {
     // Note: After approval, status changes to 'approved', so get_reflection_proposal
     // might not return it (since it filters by status='proposed')
     // Let's check via list_approved_reflection_entries instead
-    let approved_list = hoop_daemon::fleet::list_approved_reflection_entries(None)
-        .expect("list approved entries");
+    let approved_list =
+        hoop_daemon::fleet::list_approved_reflection_entries(None).expect("list approved entries");
 
     assert!(!approved_list.is_empty(), "should have approved entries");
-    assert_eq!(approved_list[0].approved_by, Some("tailscale:operator-a@example.com".to_string()));
+    assert_eq!(
+        approved_list[0].approved_by,
+        Some("tailscale:operator-a@example.com".to_string())
+    );
 
     teardown_test_db();
 }
@@ -412,22 +434,23 @@ fn test_reflection_proposal_rejection_prevents_reproposal() {
         rejection_count: 0,
     };
 
-    hoop_daemon::fleet::insert_reflection_entry(&entry)
-        .expect("insert proposal");
+    hoop_daemon::fleet::insert_reflection_entry(&entry).expect("insert proposal");
 
     // Operator A rejects
-    let rejected = hoop_daemon::fleet::reject_reflection_proposal(&proposal_id)
-        .expect("reject proposal");
+    let rejected =
+        hoop_daemon::fleet::reject_reflection_proposal(&proposal_id).expect("reject proposal");
 
     assert!(rejected, "proposal should be rejected");
 
     // Verify rejection_count was incremented
-    let proposal = hoop_daemon::fleet::get_reflection_proposal(&proposal_id)
-        .expect("get proposal");
+    let proposal = hoop_daemon::fleet::get_reflection_proposal(&proposal_id).expect("get proposal");
 
     // After rejection, the proposal should have rejection_count > 0
     // and status = 'rejected'
-    assert!(proposal.is_none(), "rejected proposal should not appear in proposed list");
+    assert!(
+        proposal.is_none(),
+        "rejected proposal should not appear in proposed list"
+    );
 
     teardown_test_db();
 }
@@ -448,13 +471,12 @@ fn test_presence_update_and_query() {
         Some("test-project"),
         None,
         "visible",
-    ).expect("update presence");
+    )
+    .expect("update presence");
 
     // Query presence for the project
-    let presence = hoop_daemon::fleet::query_presence(
-        Some("test-project"),
-        None,
-    ).expect("query presence");
+    let presence =
+        hoop_daemon::fleet::query_presence(Some("test-project"), None).expect("query presence");
 
     assert_eq!(presence.len(), 1);
     assert_eq!(presence[0].operator_id, "tailscale:operator-a@example.com");
@@ -474,13 +496,12 @@ fn test_presence_privacy_toggle() {
         Some("test-project"),
         None,
         "hidden",
-    ).expect("update presence hidden");
+    )
+    .expect("update presence hidden");
 
     // Query should filter out hidden entries
-    let presence = hoop_daemon::fleet::query_presence(
-        Some("test-project"),
-        None,
-    ).expect("query presence");
+    let presence =
+        hoop_daemon::fleet::query_presence(Some("test-project"), None).expect("query presence");
 
     assert_eq!(presence.len(), 0, "hidden presence should not be returned");
 
@@ -495,7 +516,7 @@ fn test_presence_stale_entries_filtered() {
 
     // Insert a stale presence entry directly into the database
     let db_path = std::path::PathBuf::from(
-        std::env::var("_HOOP_FLEET_DB_PATH").expect("_HOOP_FLEET_DB_PATH not set")
+        std::env::var("_HOOP_FLEET_DB_PATH").expect("_HOOP_FLEET_DB_PATH not set"),
     );
     let conn = rusqlite::Connection::open(&db_path).expect("open db");
 
@@ -509,13 +530,12 @@ fn test_presence_stale_entries_filtered() {
             &old_time,
             "visible",
         ],
-    ).expect("insert stale presence");
+    )
+    .expect("insert stale presence");
 
     // Query should filter out stale entries (>30 seconds old)
-    let presence = hoop_daemon::fleet::query_presence(
-        Some("test-project"),
-        None,
-    ).expect("query presence");
+    let presence =
+        hoop_daemon::fleet::query_presence(Some("test-project"), None).expect("query presence");
 
     assert_eq!(presence.len(), 0, "stale presence should be filtered out");
 
@@ -532,13 +552,12 @@ fn test_presence_remove_on_navigate_away() {
         Some("test-project"),
         None,
         "visible",
-    ).expect("update presence");
+    )
+    .expect("update presence");
 
     // Verify presence is recorded
-    let presence = hoop_daemon::fleet::query_presence(
-        Some("test-project"),
-        None,
-    ).expect("query presence");
+    let presence =
+        hoop_daemon::fleet::query_presence(Some("test-project"), None).expect("query presence");
     assert_eq!(presence.len(), 1);
 
     // Operator A navigates away
@@ -546,13 +565,12 @@ fn test_presence_remove_on_navigate_away() {
         "tailscale:operator-a@example.com",
         Some("test-project"),
         None,
-    ).expect("remove presence");
+    )
+    .expect("remove presence");
 
     // Verify presence is removed
-    let presence = hoop_daemon::fleet::query_presence(
-        Some("test-project"),
-        None,
-    ).expect("query presence");
+    let presence =
+        hoop_daemon::fleet::query_presence(Some("test-project"), None).expect("query presence");
     assert_eq!(presence.len(), 0);
 
     teardown_test_db();
@@ -587,8 +605,7 @@ fn test_agent_session_per_operator() {
         archived_reason: None,
     };
 
-    hoop_daemon::fleet::insert_agent_session(&session_a)
-        .expect("insert session A");
+    hoop_daemon::fleet::insert_agent_session(&session_a).expect("insert session A");
 
     // Create agent session for Operator B
     let session_b = hoop_daemon::fleet::AgentSessionRow {
@@ -609,12 +626,10 @@ fn test_agent_session_per_operator() {
         archived_reason: None,
     };
 
-    hoop_daemon::fleet::insert_agent_session(&session_b)
-        .expect("insert session B");
+    hoop_daemon::fleet::insert_agent_session(&session_b).expect("insert session B");
 
     // Both sessions should coexist (no shared agent)
-    let all_sessions = hoop_daemon::fleet::list_agent_sessions(100)
-        .expect("list agent sessions");
+    let all_sessions = hoop_daemon::fleet::list_agent_sessions(100).expect("list agent sessions");
 
     // Filter for active sessions
     let active_sessions: Vec<_> = all_sessions
@@ -622,7 +637,11 @@ fn test_agent_session_per_operator() {
         .filter(|s| s.status == "active")
         .collect();
 
-    assert_eq!(active_sessions.len(), 2, "both operator sessions should coexist");
+    assert_eq!(
+        active_sessions.len(),
+        2,
+        "both operator sessions should coexist"
+    );
 
     teardown_test_db();
 }
@@ -669,7 +688,10 @@ fn test_draft_tracks_operator_identity() {
         .expect("draft exists");
 
     assert_eq!(fetched.created_by, "tailscale:operator-a@example.com");
-    assert_eq!(fetched.opened_by, Some("tailscale:operator-a@example.com".to_string()));
+    assert_eq!(
+        fetched.opened_by,
+        Some("tailscale:operator-a@example.com".to_string())
+    );
 
     teardown_test_db();
 }
@@ -697,9 +719,10 @@ fn test_no_lock_two_stitches_both_land() {
         "operator",
         "Stitch from Operator A",
         "tailscale:operator-a@example.com",
-        &now,
-        &now,
-    ).expect("create stitch A");
+        &[],
+        "auto",
+    )
+    .expect("create stitch A");
 
     // Create stitch B
     hoop_daemon::fleet::create_stitch(
@@ -708,9 +731,10 @@ fn test_no_lock_two_stitches_both_land() {
         "operator",
         "Stitch from Operator B",
         "tailscale:operator-b@example.com",
-        &now,
-        &now,
-    ).expect("create stitch B");
+        &[],
+        "auto",
+    )
+    .expect("create stitch B");
 
     // Verify both exist by loading them
     let stitch_a = hoop_daemon::fleet::load_stitch_by_id(&stitch_id_a)

@@ -91,10 +91,7 @@ agent:
 /// Get project status from /readyz endpoint
 async fn get_readyz_status(base_url: &str) -> anyhow::Result<(u16, ReadinessResponse)> {
     let client = reqwest::Client::new();
-    let resp = client
-        .get(&format!("{}/readyz", base_url))
-        .send()
-        .await?;
+    let resp = client.get(&format!("{}/readyz", base_url)).send().await?;
 
     let status = resp.status().as_u16();
     let body = resp.json().await?;
@@ -199,16 +196,26 @@ async fn test_beads_removal_shows_error_state_siblings_unaffected() {
             Ok((s, readyz_resp)) => {
                 if s == 503 && readyz_resp.status == "degraded" {
                     // Check if project-a is in the degraded list
-                    if readyz_resp.degraded.iter().any(|p| p.project == "project-a") {
+                    if readyz_resp
+                        .degraded
+                        .iter()
+                        .any(|p| p.project == "project-a")
+                    {
                         degraded_detected = true;
 
                         // Verify projects B and C are NOT in the degraded list
                         assert!(
-                            !readyz_resp.degraded.iter().any(|p| p.project == "project-b"),
+                            !readyz_resp
+                                .degraded
+                                .iter()
+                                .any(|p| p.project == "project-b"),
                             "project-b should not be degraded"
                         );
                         assert!(
-                            !readyz_resp.degraded.iter().any(|p| p.project == "project-c"),
+                            !readyz_resp
+                                .degraded
+                                .iter()
+                                .any(|p| p.project == "project-c"),
                             "project-c should not be degraded"
                         );
 
@@ -346,7 +353,11 @@ async fn test_beads_removal_degraded_readyz_recovery() {
         match get_readyz_status(&base_url).await {
             Ok((s, readyz_resp)) => {
                 if s == 503 && readyz_resp.status == "degraded" {
-                    if readyz_resp.degraded.iter().any(|p| p.project == "project-a") {
+                    if readyz_resp
+                        .degraded
+                        .iter()
+                        .any(|p| p.project == "project-a")
+                    {
                         degraded_detected = true;
                         break;
                     }
@@ -368,7 +379,8 @@ async fn test_beads_removal_degraded_readyz_recovery() {
 
     // Trigger a reload by touching the projects.yaml file
     // This simulates the operator restoring the directory and triggering a reload
-    let projects_content = fs::read_to_string(&projects_path).expect("Failed to read projects.yaml");
+    let projects_content =
+        fs::read_to_string(&projects_path).expect("Failed to read projects.yaml");
     fs::write(&projects_path, projects_content).expect("Failed to write projects.yaml");
 
     // Wait for recovery (project-a should become healthy again)
@@ -505,7 +517,10 @@ async fn test_sibling_projects_continue_during_degradation() {
         if let Ok((s, readyz_resp)) = get_readyz_status(&base_url).await {
             if s == 503
                 && readyz_resp.status == "degraded"
-                && readyz_resp.degraded.iter().any(|p| p.project == "project-a")
+                && readyz_resp
+                    .degraded
+                    .iter()
+                    .any(|p| p.project == "project-a")
             {
                 project_a_degraded = true;
                 break;
@@ -530,9 +545,13 @@ async fn test_sibling_projects_continue_during_degradation() {
                         if let Some(status) = json.get("status").and_then(|s| s.as_str()) {
                             if status == "project_runtime_status" {
                                 if let Some(data) = json.get("data") {
-                                    if let Some(name) = data.get("project_name").and_then(|n| n.as_str()) {
+                                    if let Some(name) =
+                                        data.get("project_name").and_then(|n| n.as_str())
+                                    {
                                         if name == "project-b" {
-                                            if let Some(state) = data.get("runtime_state").and_then(|s| s.as_str()) {
+                                            if let Some(state) =
+                                                data.get("runtime_state").and_then(|s| s.as_str())
+                                            {
                                                 // project-b should be healthy
                                                 assert_eq!(
                                                     state, "healthy",
@@ -541,7 +560,9 @@ async fn test_sibling_projects_continue_during_degradation() {
                                                 received_b_status = true;
                                             }
                                         } else if name == "project-c" {
-                                            if let Some(state) = data.get("runtime_state").and_then(|s| s.as_str()) {
+                                            if let Some(state) =
+                                                data.get("runtime_state").and_then(|s| s.as_str())
+                                            {
                                                 assert_eq!(
                                                     state, "healthy",
                                                     "project-c should remain healthy"

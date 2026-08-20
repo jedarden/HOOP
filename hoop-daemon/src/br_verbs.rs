@@ -350,9 +350,10 @@ pub async fn spawn_br_command(
     use std::time::Instant;
 
     // Acquire permit from semaphore (blocks if limit reached)
-    let _permit = semaphore.acquire().await.map_err(|e| {
-        anyhow::anyhow!("Failed to acquire br subprocess semaphore: {}", e)
-    })?;
+    let _permit = semaphore
+        .acquire()
+        .await
+        .map_err(|e| anyhow::anyhow!("Failed to acquire br subprocess semaphore: {}", e))?;
 
     // Increment concurrent gauge metric
     metrics().hoop_br_subprocess_concurrent.inc();
@@ -373,19 +374,13 @@ pub async fn spawn_br_command(
     // Record total and duration metrics based on result
     match &result {
         Ok(output) if output.status.success() => {
-            metrics()
-                .hoop_br_subprocess_total
-                .inc(&[verb, "ok"]);
+            metrics().hoop_br_subprocess_total.inc(&[verb, "ok"]);
         }
         Ok(_) => {
-            metrics()
-                .hoop_br_subprocess_total
-                .inc(&[verb, "error"]);
+            metrics().hoop_br_subprocess_total.inc(&[verb, "error"]);
         }
         Err(_) => {
-            metrics()
-                .hoop_br_subprocess_total
-                .inc(&[verb, "error"]);
+            metrics().hoop_br_subprocess_total.inc(&[verb, "error"]);
         }
     }
     metrics()
@@ -415,9 +410,9 @@ pub fn spawn_br_command_blocking(
     mut cmd: std::process::Command,
     verb: &str,
 ) -> anyhow::Result<std::process::Output> {
-    let handle = semaphore.try_acquire().map_err(|e| {
-        anyhow::anyhow!("Failed to acquire br subprocess semaphore: {}", e)
-    })?;
+    let handle = semaphore
+        .try_acquire()
+        .map_err(|e| anyhow::anyhow!("Failed to acquire br subprocess semaphore: {}", e))?;
 
     use crate::metrics::metrics;
     metrics().hoop_br_subprocess_concurrent.inc();
@@ -430,19 +425,13 @@ pub fn spawn_br_command_blocking(
 
     match &result {
         Ok(output) if output.status.success() => {
-            metrics()
-                .hoop_br_subprocess_total
-                .inc(&[verb, "ok"]);
+            metrics().hoop_br_subprocess_total.inc(&[verb, "ok"]);
         }
         Ok(_) => {
-            metrics()
-                .hoop_br_subprocess_total
-                .inc(&[verb, "error"]);
+            metrics().hoop_br_subprocess_total.inc(&[verb, "error"]);
         }
         Err(_) => {
-            metrics()
-                .hoop_br_subprocess_total
-                .inc(&[verb, "error"]);
+            metrics().hoop_br_subprocess_total.inc(&[verb, "error"]);
         }
     }
     metrics()

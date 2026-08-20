@@ -7,7 +7,9 @@ use axum::{extract::Query, http::StatusCode, routing::get, Json};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::fleet::{self, ActionKind, AuditRow as FleetAuditRow, RedactionAuditRow as FleetRedactionAuditRow};
+use crate::fleet::{
+    self, ActionKind, AuditRow as FleetAuditRow, RedactionAuditRow as FleetRedactionAuditRow,
+};
 use crate::id_validators::{rejection, validate_project_name};
 
 /// Query parameters for audit log
@@ -156,7 +158,9 @@ impl From<FleetAuditRow> for AuditRow {
 
 impl From<FleetRedactionAuditRow> for RedactionAuditRow {
     fn from(row: FleetRedactionAuditRow) -> Self {
-        let metadata = row.metadata_json.and_then(|s| serde_json::from_str(&s).ok());
+        let metadata = row
+            .metadata_json
+            .and_then(|s| serde_json::from_str(&s).ok());
 
         Self {
             id: row.id,
@@ -293,12 +297,13 @@ pub async fn verify_hash_chain() -> Result<Json<HashChainVerifyResponse>, (Statu
     match fleet::verify_hash_chain() {
         Ok(()) => {
             // Get row count
-            let rows = fleet::query_audit_rows(None, None, None, None, None, None).map_err(|e| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!("Failed to query audit rows: {}", e),
-                )
-            })?;
+            let rows =
+                fleet::query_audit_rows(None, None, None, None, None, None).map_err(|e| {
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        format!("Failed to query audit rows: {}", e),
+                    )
+                })?;
 
             Ok(Json(HashChainVerifyResponse {
                 valid: true,
@@ -386,7 +391,8 @@ pub async fn query_redaction_audit(
     })?
     .len();
 
-    let audit_rows: Vec<RedactionAuditRow> = rows.into_iter().map(RedactionAuditRow::from).collect();
+    let audit_rows: Vec<RedactionAuditRow> =
+        rows.into_iter().map(RedactionAuditRow::from).collect();
 
     Ok(Json(RedactionAuditResponse {
         audit_rows,

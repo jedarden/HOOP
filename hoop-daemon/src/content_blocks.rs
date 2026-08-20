@@ -126,7 +126,10 @@ pub fn create_content_block(conn: &mut Connection, block: &ContentBlock) -> Resu
         ],
     )?;
 
-    info!("Created content block {} for stitch {}", block.id, block.stitch_id);
+    info!(
+        "Created content block {} for stitch {}",
+        block.id, block.stitch_id
+    );
     Ok(())
 }
 
@@ -141,7 +144,9 @@ pub fn update_content_block(
     let metadata_json = if let Some(metadata) = update.metadata {
         Some(serde_json::to_string(&metadata)?)
     } else {
-        current.metadata.and_then(|m| serde_json::to_string(&m).ok())
+        current
+            .metadata
+            .and_then(|m| serde_json::to_string(&m).ok())
     };
 
     conn.execute(
@@ -163,13 +168,20 @@ pub fn update_content_block(
 
 /// Delete a content block
 pub fn delete_content_block(conn: &mut Connection, block_id: &str) -> Result<()> {
-    conn.execute("DELETE FROM content_blocks WHERE id = ?1", params![block_id])?;
+    conn.execute(
+        "DELETE FROM content_blocks WHERE id = ?1",
+        params![block_id],
+    )?;
     info!("Deleted content block {}", block_id);
     Ok(())
 }
 
 /// Reorder content blocks for a stitch
-pub fn reorder_content_blocks(conn: &mut Connection, stitch_id: &str, ordering: &[String]) -> Result<()> {
+pub fn reorder_content_blocks(
+    conn: &mut Connection,
+    stitch_id: &str,
+    ordering: &[String],
+) -> Result<()> {
     let tx = conn.unchecked_transaction()?;
 
     for (index, block_id) in ordering.iter().enumerate() {
@@ -180,7 +192,11 @@ pub fn reorder_content_blocks(conn: &mut Connection, stitch_id: &str, ordering: 
     }
 
     tx.commit()?;
-    info!("Reordered {} content blocks for stitch {}", ordering.len(), stitch_id);
+    info!(
+        "Reordered {} content blocks for stitch {}",
+        ordering.len(),
+        stitch_id
+    );
     Ok(())
 }
 
@@ -215,11 +231,26 @@ mod tests {
 
     #[test]
     fn test_content_block_type_conversion() {
-        assert_eq!(ContentBlockType::from("text".to_string()), ContentBlockType::Text);
-        assert_eq!(ContentBlockType::from("image".to_string()), ContentBlockType::Image);
-        assert_eq!(ContentBlockType::from("audio".to_string()), ContentBlockType::Audio);
-        assert_eq!(ContentBlockType::from("video".to_string()), ContentBlockType::Video);
-        assert_eq!(ContentBlockType::from("file".to_string()), ContentBlockType::File);
+        assert_eq!(
+            ContentBlockType::from("text".to_string()),
+            ContentBlockType::Text
+        );
+        assert_eq!(
+            ContentBlockType::from("image".to_string()),
+            ContentBlockType::Image
+        );
+        assert_eq!(
+            ContentBlockType::from("audio".to_string()),
+            ContentBlockType::Audio
+        );
+        assert_eq!(
+            ContentBlockType::from("video".to_string()),
+            ContentBlockType::Video
+        );
+        assert_eq!(
+            ContentBlockType::from("file".to_string()),
+            ContentBlockType::File
+        );
 
         assert_eq!(String::from(ContentBlockType::Text), "text");
         assert_eq!(String::from(ContentBlockType::Image), "image");

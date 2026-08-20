@@ -21,7 +21,10 @@ fn test_init_parse_with_flag_before_subcommand() {
     // Test: hoop --no-interactive init
     let result = parse_cli_with_flag(&["hoop", "--no-interactive", "init"]);
 
-    assert!(result.is_ok(), "Should successfully parse flag before subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse flag before subcommand"
+    );
     let parsed = result.unwrap();
 
     assert!(parsed.no_interactive, "no_interactive should be true");
@@ -37,7 +40,10 @@ fn test_init_parse_with_flag_after_subcommand() {
     // Test: hoop init --no-interactive
     let result = parse_cli_with_flag(&["hoop", "init", "--no-interactive"]);
 
-    assert!(result.is_ok(), "Should successfully parse flag after subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse flag after subcommand"
+    );
     let parsed = result.unwrap();
 
     assert!(parsed.no_interactive, "no_interactive should be true");
@@ -53,10 +59,16 @@ fn test_init_parse_with_short_flag_before_subcommand() {
     // Test: hoop -y init
     let result = parse_cli_with_flag(&["hoop", "-y", "init"]);
 
-    assert!(result.is_ok(), "Should successfully parse short flag before subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse short flag before subcommand"
+    );
     let parsed = result.unwrap();
 
-    assert!(parsed.no_interactive, "no_interactive should be true with -y");
+    assert!(
+        parsed.no_interactive,
+        "no_interactive should be true with -y"
+    );
     assert_eq!(parsed.command, "init", "Command should be 'init'");
 }
 
@@ -65,10 +77,16 @@ fn test_init_parse_with_short_flag_after_subcommand() {
     // Test: hoop init -y
     let result = parse_cli_with_flag(&["hoop", "init", "-y"]);
 
-    assert!(result.is_ok(), "Should successfully parse short flag after subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse short flag after subcommand"
+    );
     let parsed = result.unwrap();
 
-    assert!(parsed.no_interactive, "no_interactive should be true with -y");
+    assert!(
+        parsed.no_interactive,
+        "no_interactive should be true with -y"
+    );
     assert_eq!(parsed.command, "init", "Command should be 'init'");
 }
 
@@ -77,10 +95,16 @@ fn test_init_parse_without_flag() {
     // Test: hoop init (default behavior)
     let result = parse_cli_with_flag(&["hoop", "init"]);
 
-    assert!(result.is_ok(), "Should successfully parse command without flag");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse command without flag"
+    );
     let parsed = result.unwrap();
 
-    assert!(!parsed.no_interactive, "no_interactive should default to false");
+    assert!(
+        !parsed.no_interactive,
+        "no_interactive should default to false"
+    );
     assert_eq!(parsed.command, "init", "Command should be 'init'");
 }
 
@@ -92,7 +116,10 @@ fn test_init_flag_extraction_before_position() {
     let parsed = parse_flag_before_subcommand(&["init"]).expect("Parse should succeed");
 
     let verification_result = verify_flag_extraction(&parsed, "before");
-    assert!(verification_result.is_ok(), "Flag extraction should verify for 'before' position");
+    assert!(
+        verification_result.is_ok(),
+        "Flag extraction should verify for 'before' position"
+    );
 
     // Additional assertions
     assert!(parsed.no_interactive);
@@ -105,7 +132,10 @@ fn test_init_flag_extraction_after_position() {
     let parsed = parse_flag_after_subcommand(&["init"]).expect("Parse should succeed");
 
     let verification_result = verify_flag_extraction(&parsed, "after");
-    assert!(verification_result.is_ok(), "Flag extraction should verify for 'after' position");
+    assert!(
+        verification_result.is_ok(),
+        "Flag extraction should verify for 'after' position"
+    );
 
     // Additional assertions
     assert!(parsed.no_interactive);
@@ -118,7 +148,10 @@ fn test_init_no_flag_present_verification() {
     let parsed = parse_cli_with_flag(&["hoop", "init"]).expect("Parse should succeed");
 
     let verification_result = verify_no_flag_present(&parsed);
-    assert!(verification_result.is_ok(), "Should verify no flag is present");
+    assert!(
+        verification_result.is_ok(),
+        "Should verify no flag is present"
+    );
 
     assert!(!parsed.no_interactive);
 }
@@ -130,8 +163,7 @@ fn test_init_flag_propagation_from_main_to_handler() {
     // Verify that the no_interactive flag is correctly extracted in main()
     // and passed to run_init_wizard
 
-    let main_code = fs::read_to_string("src/main.rs")
-        .expect("Failed to read main.rs");
+    let main_code = fs::read_to_string("src/main.rs").expect("Failed to read main.rs");
 
     // Verify flag is extracted from parsed CLI
     assert!(
@@ -155,8 +187,7 @@ fn test_init_flag_propagation_from_main_to_handler() {
 #[test]
 fn test_init_handler_accepts_no_interactive_parameter() {
     // Verify that run_init_wizard handler actually uses the no_interactive parameter
-    let init_code = fs::read_to_string("src/init.rs")
-        .expect("Failed to read init.rs");
+    let init_code = fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
     // Verify function signature accepts no_interactive
     assert!(
@@ -178,8 +209,7 @@ fn test_init_wizard_rejects_no_interactive_mode() {
     // Test that the init wizard explicitly rejects no_interactive mode
     // This is different from other commands that adapt to non-interactive mode
 
-    let init_code = fs::read_to_string("src/init.rs")
-        .expect("Failed to read init.rs");
+    let init_code = fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
     // Verify the early rejection pattern exists
     assert!(
@@ -215,8 +245,7 @@ fn test_init_wizard_runs_when_no_interactive_false() {
     // Test that the init wizard runs normally when no_interactive is false
     // This is the default/expected behavior
 
-    let init_code = fs::read_to_string("src/init.rs")
-        .expect("Failed to read init.rs");
+    let init_code = fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
     // Verify wizard stages exist and run after the no_interactive check
     let no_interactive_check = init_code.find("if no_interactive");
@@ -312,8 +341,7 @@ fn test_init_error_message_is_helpful() {
     // Verify that the error message when no_interactive=true is helpful
     // and guides users toward manual configuration
 
-    let init_code = fs::read_to_string("src/init.rs")
-        .expect("Failed to read init.rs");
+    let init_code = fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
     // Verify error message components
     assert!(
@@ -349,8 +377,7 @@ fn test_init_exits_with_correct_error_code() {
     // Verify that init exits with code 2 (fatal/precondition error)
     // when no_interactive=true
 
-    let init_code = fs::read_to_string("src/init.rs")
-        .expect("Failed to read init.rs");
+    let init_code = fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
     // Find the exit code in the no_interactive check
     let no_interactive_section = init_code
@@ -388,20 +415,17 @@ fn test_init_flag_position_yields_same_value() {
 
     // Both should yield the same no_interactive value
     assert_eq!(
-        before_parsed.no_interactive,
-        after_parsed.no_interactive,
+        before_parsed.no_interactive, after_parsed.no_interactive,
         "Flag position should not affect the extracted value"
     );
 
     assert!(
         before_parsed.no_interactive,
-        true,
         "Both positions should extract no_interactive as true"
     );
 
     assert_eq!(
-        before_parsed.command,
-        after_parsed.command,
+        before_parsed.command, after_parsed.command,
         "Both positions should extract the same command"
     );
 }
@@ -413,8 +437,7 @@ fn test_init_comprehensive_no_interactive_coverage() {
     // Meta-test that verifies all critical aspects are covered
     // This serves as a checklist for the test suite
 
-    let init_code = fs::read_to_string("src/init.rs")
-        .expect("Failed to read init.rs");
+    let init_code = fs::read_to_string("src/init.rs").expect("Failed to read init.rs");
 
     // Checklist:
     // 1. Flag is accepted as parameter

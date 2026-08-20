@@ -771,12 +771,12 @@
 //!
 //!         assert!(
 //!             main_code.contains("let no_interactive = cli.no_interactive;"),
-//!             "main() must extract flag from CLI"
+//!             "Main() must extract flag from CLI"
 //!         );
 //!
 //!         assert!(
 //!             main_code.contains("mycommand::run_mycommand(no_interactive)"),
-//!             "main() must pass flag to handler"
+//!             "Main() must pass flag to handler"
 //!         );
 //!     }
 //! }
@@ -948,31 +948,20 @@
 /// Future expansions will add more re-exports as command-specific builders are implemented.
 pub mod prelude {
     // Re-export the flag constants for easy access
-    pub use super::{flags, commands};
 
     // Re-export the flag parsing utilities
     pub use super::{
-        parse_flag_before_subcommand,
-        parse_flag_after_subcommand,
-        parse_nested_subcommand,
-        extract_flag_value,
-        extract_subcommand,
-        verify_flag_position_consistency,
-        FlagParseResult,
+        extract_flag_value, extract_subcommand, parse_flag_after_subcommand,
+        parse_flag_before_subcommand, parse_nested_subcommand, verify_flag_position_consistency,
     };
 
     // Re-export the flag verification utilities
     pub use super::{
-        assert_flag_is_true,
-        assert_flag_is_false,
-        assert_flag_value,
-        assert_flag_propagation,
-        compare_flag_values_at_levels,
-        verify_default_flag_value,
+        assert_flag_is_false, assert_flag_is_true, assert_flag_propagation, assert_flag_value,
+        compare_flag_values_at_levels, verify_default_flag_value,
     };
 
     // Re-export the placeholder builders (will be replaced with real implementations)
-    pub use super::{command_builders, mock_prompts, test_fixtures, assertions};
 }
 
 // ── Test Constants ───────────────────────────────────────────────────────────
@@ -1014,9 +1003,24 @@ pub mod commands {
 
     /// All known top-level subcommands
     pub const TOP_LEVEL: &[&str] = &[
-        SCAN, INIT, REMOVE, STATUS, LIST, PROJECTS, PATTERNS,
-        RESTORE, BACKUP, MIGRATE, AUDIT, STITCH, CONFIG, SCRIPT,
-        AGENT, NEW, SERVE, INSTALL_SYSTEMD,
+        SCAN,
+        INIT,
+        REMOVE,
+        STATUS,
+        LIST,
+        PROJECTS,
+        PATTERNS,
+        RESTORE,
+        BACKUP,
+        MIGRATE,
+        AUDIT,
+        STITCH,
+        CONFIG,
+        SCRIPT,
+        AGENT,
+        NEW,
+        SERVE,
+        INSTALL_SYSTEMD,
     ];
 
     /// All known nested subcommands
@@ -1197,9 +1201,7 @@ pub fn parse_flag_after_subcommand(args: &[&str]) -> Result<FlagParseResult, Str
     let raw_args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
 
     // Check for no_interactive flag anywhere in the args
-    let no_interactive = args
-        .iter()
-        .any(|&a| a == "--no-interactive" || a == "-y");
+    let no_interactive = args.iter().any(|&a| a == "--no-interactive" || a == "-y");
 
     // Collect all non-flag arguments in order
     let non_flag_args: Vec<&str> = args
@@ -1294,9 +1296,7 @@ pub fn parse_nested_subcommand(args: &[&str]) -> Result<FlagParseResult, String>
     let raw_args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
 
     // Check for no_interactive flag anywhere in the args
-    let no_interactive = args
-        .iter()
-        .any(|&a| a == "--no-interactive" || a == "-y");
+    let no_interactive = args.iter().any(|&a| a == "--no-interactive" || a == "-y");
 
     // Collect all non-flag arguments in order
     let non_flag_args: Vec<&str> = args
@@ -1366,8 +1366,7 @@ pub fn parse_nested_subcommand(args: &[&str]) -> Result<FlagParseResult, String>
 /// assert_eq!(has_flag, true);
 /// ```
 pub fn extract_flag_value(args: &[&str]) -> bool {
-    args.iter()
-        .any(|&a| a == "--no-interactive" || a == "-y")
+    args.iter().any(|&a| a == "--no-interactive" || a == "-y")
 }
 
 /// Extract the subcommand name from parsed arguments
@@ -1438,7 +1437,7 @@ pub fn verify_flag_position_consistency(command_args: &[&str]) -> Result<(), Str
             .iter()
             .chain(command_args.iter())
             .copied()
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>(),
     )?;
 
     // Parse with flag after subcommand
@@ -1447,7 +1446,7 @@ pub fn verify_flag_position_consistency(command_args: &[&str]) -> Result<(), Str
             .iter()
             .chain(&["--no-interactive"])
             .copied()
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>(),
     )?;
 
     // Verify no_interactive is the same
@@ -1604,7 +1603,7 @@ pub fn assert_flag_propagation(command_args: &[&str]) -> Result<(), String> {
             .iter()
             .chain(command_args.iter())
             .copied()
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>(),
     )?;
 
     // Parse with flag after subcommand (subcommand-level position)
@@ -1613,7 +1612,7 @@ pub fn assert_flag_propagation(command_args: &[&str]) -> Result<(), String> {
             .iter()
             .chain(&["--no-interactive"])
             .copied()
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>(),
     )?;
 
     // Both should have no_interactive=true
@@ -1706,7 +1705,10 @@ pub fn compare_flag_values_at_levels(args: &[&str]) -> Result<(), String> {
             ));
         }
     } else {
-        errors.push(format!("Before_subcommand parsing failed: {:?}", before_result));
+        errors.push(format!(
+            "Before_subcommand parsing failed: {:?}",
+            before_result
+        ));
     }
 
     // Check that after_subcommand found the flag we added
@@ -1718,7 +1720,10 @@ pub fn compare_flag_values_at_levels(args: &[&str]) -> Result<(), String> {
             ));
         }
     } else {
-        errors.push(format!("After_subcommand parsing failed: {:?}", after_result));
+        errors.push(format!(
+            "After_subcommand parsing failed: {:?}",
+            after_result
+        ));
     }
 
     // Check that direct extraction and nested agree on the original args
@@ -1730,7 +1735,10 @@ pub fn compare_flag_values_at_levels(args: &[&str]) -> Result<(), String> {
             ));
         }
     } else {
-        errors.push(format!("Nested_subcommand parsing failed: {:?}", nested_result));
+        errors.push(format!(
+            "Nested_subcommand parsing failed: {:?}",
+            nested_result
+        ));
     }
 
     if !errors.is_empty() {
@@ -1807,7 +1815,6 @@ pub fn verify_default_flag_value(command_args: &[&str]) -> Result<(), String> {
 /// }
 /// ```
 pub mod command_builders {
-    use super::*;
 
     /// Placeholder for command-specific test builders
     ///
@@ -2016,8 +2023,7 @@ macro_rules! test_flag_positions {
 
             // Verify consistency between positions
             assert_eq!(
-                before_parsed.no_interactive,
-                after_parsed.no_interactive,
+                before_parsed.no_interactive, after_parsed.no_interactive,
                 "Flag position should not affect value for {}",
                 $command_name
             );
@@ -2185,8 +2191,7 @@ macro_rules! test_no_interactive_suite {
                 "Flag before subcommand should set No_interactive=true for {}",
                 $command_name
             );
-            assert_flag_is_true(&before_result)
-                .expect("Flag before subcommand assertion failed");
+            assert_flag_is_true(&before_result).expect("Flag before subcommand assertion failed");
 
             // Test 2: Flag after subcommand
             let args_after: Vec<&str> = $base_args
@@ -2206,8 +2211,7 @@ macro_rules! test_no_interactive_suite {
                 "Flag after subcommand should set No_interactive=true for {}",
                 $command_name
             );
-            assert_flag_is_true(&after_result)
-                .expect("Flag after subcommand assertion failed");
+            assert_flag_is_true(&after_result).expect("Flag after subcommand assertion failed");
 
             // Test 3: Short flag variant
             let args_short: Vec<&str> = vec!["-y"]
@@ -2224,8 +2228,7 @@ macro_rules! test_no_interactive_suite {
 
             // Test 4: Position independence
             assert_eq!(
-                before_result.no_interactive,
-                after_result.no_interactive,
+                before_result.no_interactive, after_result.no_interactive,
                 "Flag position must not affect value for {}",
                 $command_name
             );
@@ -2248,8 +2251,7 @@ macro_rules! test_no_interactive_suite {
                 "Default No_interactive should be false for {}",
                 $command_name
             );
-            assert_flag_is_false(&default_result)
-                .expect("Default flag assertion failed");
+            assert_flag_is_false(&default_result).expect("Default flag assertion failed");
 
             // Test 6: Flag propagation
             assert!(
@@ -2531,7 +2533,8 @@ mod tests {
 
     #[test]
     fn test_parse_nested_subcommand_flag_after() {
-        let result = parse_nested_subcommand(&["patterns", "add", "my-pattern", "--no-interactive"]);
+        let result =
+            parse_nested_subcommand(&["patterns", "add", "my-pattern", "--no-interactive"]);
         assert!(result.is_ok());
 
         let parsed = result.unwrap();
@@ -2586,7 +2589,10 @@ mod tests {
             extract_subcommand(&["projects", "remove", "my-project"]),
             Some("projects".to_string())
         );
-        assert_eq!(extract_subcommand(&["--no-interactive", "status"]), Some("status".to_string()));
+        assert_eq!(
+            extract_subcommand(&["--no-interactive", "status"]),
+            Some("status".to_string())
+        );
     }
 
     #[test]
@@ -2604,7 +2610,8 @@ mod tests {
 
     #[test]
     fn test_verify_flag_position_consistency_nested() {
-        let result = verify_flag_position_consistency(&["projects", "remove", "my-project", "--confirm"]);
+        let result =
+            verify_flag_position_consistency(&["projects", "remove", "my-project", "--confirm"]);
         assert!(result.is_ok());
     }
 
@@ -2663,7 +2670,9 @@ mod tests {
         let result = parse_flag_before_subcommand(&["scan", "/tmp"]).unwrap();
         let result = assert_flag_is_true(&result);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Expected no_interactive flag to be true"));
+        assert!(result
+            .unwrap_err()
+            .contains("Expected no_interactive flag to be true"));
     }
 
     #[test]
@@ -2677,7 +2686,9 @@ mod tests {
         let result = parse_flag_before_subcommand(&["--no-interactive", "scan", "/tmp"]).unwrap();
         let result = assert_flag_is_false(&result);
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Expected no_interactive flag to be false"));
+        assert!(result
+            .unwrap_err()
+            .contains("Expected no_interactive flag to be false"));
     }
 
     #[test]
@@ -2740,7 +2751,13 @@ mod tests {
 
     #[test]
     fn test_compare_flag_values_at_levels_nested() {
-        let result = compare_flag_values_at_levels(&["projects", "remove", "my-project", "--confirm", "--no-interactive"]);
+        let result = compare_flag_values_at_levels(&[
+            "projects",
+            "remove",
+            "my-project",
+            "--confirm",
+            "--no-interactive",
+        ]);
         assert!(result.is_ok());
     }
 
@@ -2841,24 +2858,24 @@ mod tests {
 
         // Pattern 1: Flag before subcommand
         let args_before = &["--no-interactive", "scan", "/tmp"];
-        let parsed_before = parse_flag_before_subcommand(args_before)
-            .expect("Should parse flag before subcommand");
+        let parsed_before =
+            parse_flag_before_subcommand(args_before).expect("Should parse flag before subcommand");
         assert!(parsed_before.no_interactive);
         assert_eq!(parsed_before.subcommand, Some("scan".to_string()));
         assert!(assert_flag_is_true(&parsed_before).is_ok());
 
         // Pattern 2: Flag after subcommand
         let args_after = &["scan", "/tmp", "--no-interactive"];
-        let parsed_after = parse_flag_after_subcommand(args_after)
-            .expect("Should parse flag after subcommand");
+        let parsed_after =
+            parse_flag_after_subcommand(args_after).expect("Should parse flag after subcommand");
         assert!(parsed_after.no_interactive);
         assert_eq!(parsed_after.subcommand, Some("scan".to_string()));
         assert!(assert_flag_is_true(&parsed_after).is_ok());
 
         // Pattern 3: Short flag variant
         let args_short = &["-y", "status", "--json"];
-        let parsed_short = parse_flag_before_subcommand(args_short)
-            .expect("Should parse short flag");
+        let parsed_short =
+            parse_flag_before_subcommand(args_short).expect("Should parse short flag");
         assert!(parsed_short.no_interactive);
         assert!(extract_flag_value(args_short));
 
@@ -2866,8 +2883,8 @@ mod tests {
 
         // Pattern 4: Nested command flag propagation
         let nested_args = &["projects", "remove", "my-project", "--confirm"];
-        let parsed_nested = parse_nested_subcommand(nested_args)
-            .expect("Should parse nested command");
+        let parsed_nested =
+            parse_nested_subcommand(nested_args).expect("Should parse nested command");
         assert_eq!(parsed_nested.subcommand, Some("projects".to_string()));
         assert_eq!(parsed_nested.nested_subcommand, Some("remove".to_string()));
 
@@ -2882,12 +2899,16 @@ mod tests {
         assert!(parsed_nested_flag.no_interactive);
 
         // Pattern 5: Position independence verification
-        assert!(verify_flag_position_consistency(nested_args).is_ok(),
-            "Flag should be consistent at both positions");
+        assert!(
+            verify_flag_position_consistency(nested_args).is_ok(),
+            "Flag should be consistent at both positions"
+        );
 
         // Pattern 6: Flag propagation from top-level to handler
-        assert!(assert_flag_propagation(nested_args).is_ok(),
-            "Flag should propagate correctly through handler chain");
+        assert!(
+            assert_flag_propagation(nested_args).is_ok(),
+            "Flag should propagate correctly through handler chain"
+        );
 
         // ── Part 3: Complex Scenarios ──────────────────────────────────────────────
 
@@ -2901,15 +2922,17 @@ mod tests {
 
         // Scenario 2: Default behavior verification
         let no_flag_args = &["list"];
-        let parsed_default = parse_flag_before_subcommand(no_flag_args)
-            .expect("Should parse command without flag");
+        let parsed_default =
+            parse_flag_before_subcommand(no_flag_args).expect("Should parse command without flag");
         assert!(!parsed_default.no_interactive);
         assert!(verify_default_flag_value(no_flag_args).is_ok());
 
         // Scenario 3: All parsing levels consistency
         let test_args = &["status", "--json", "--no-interactive"];
-        assert!(compare_flag_values_at_levels(test_args).is_ok(),
-            "All parsing levels should agree on flag value");
+        assert!(
+            compare_flag_values_at_levels(test_args).is_ok(),
+            "All parsing levels should agree on flag value"
+        );
 
         // ── Part 4: Integration with Verification Utilities ───────────────────────────
 
@@ -2941,8 +2964,10 @@ mod tests {
 
         // Edge case 3: Multiple occurrences of flag (last wins in practice)
         let multi_flag = &["-y", "scan", "/tmp", "-y"];
-        assert!(extract_flag_value(multi_flag),
-            "Should detect flag presence regardless of count");
+        assert!(
+            extract_flag_value(multi_flag),
+            "Should detect flag presence regardless of count"
+        );
 
         // ── Summary ─────────────────────────────────────────────────────────────────
 
@@ -2984,7 +3009,7 @@ mod tests {
 
         // Verify the handler receives the flag correctly
         let main_code = std::fs::read_to_string("src/main.rs");
-        if let Ok(code) = main_code {
+        if let Ok(_code) = main_code {
             // In real tests, you would assert these conditions
             // assert!(code.contains("newcommand::run_newcommand(no_interactive)"));
         }

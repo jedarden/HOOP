@@ -5,18 +5,18 @@
 //!
 //! Plan reference: §6 Phase 7 deliverable 4
 
+use crate::DaemonState;
 use axum::{
     extract::{ConnectInfo, Path, State},
     http::StatusCode,
     response::Json,
-    routing::{get, put, delete},
+    routing::{delete, get, put},
     Router,
 };
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use crate::DaemonState;
 
 /// Current UI state schema version
 const UI_STATE_SCHEMA_VERSION: &str = "1.1.0";
@@ -74,13 +74,10 @@ async fn get_ui_state(
 
     // Query all state for this operator
     let db_path = crate::fleet::db_path();
-    let conn = Connection::open(&db_path)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let conn = Connection::open(&db_path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mut stmt = conn
-        .prepare(
-            "SELECT key, value FROM ui_state WHERE operator_id = ?1",
-        )
+        .prepare("SELECT key, value FROM ui_state WHERE operator_id = ?1")
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mut rows = stmt
@@ -125,8 +122,7 @@ async fn put_ui_state(
     let operator_id = state.identity_cache.resolve(connect_info.map(|ci| ci.0));
 
     let db_path = crate::fleet::db_path();
-    let conn = Connection::open(&db_path)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let conn = Connection::open(&db_path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     conn.execute(
         "INSERT INTO ui_state (operator_id, key, value, updated_at)
@@ -141,8 +137,7 @@ async fn put_ui_state(
     drop(conn);
 
     // Fetch and return updated state
-    let conn = Connection::open(&db_path)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let conn = Connection::open(&db_path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let mut state_map = HashMap::new();
 
     let mut stmt = conn
@@ -179,9 +174,10 @@ async fn put_ui_state_batch(
     let operator_id = state.identity_cache.resolve(connect_info.map(|ci| ci.0));
 
     let db_path = crate::fleet::db_path();
-    let mut conn = Connection::open(&db_path)
+    let mut conn = Connection::open(&db_path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let tx = conn
+        .transaction()
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let tx = conn.transaction().map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Batch upsert all key-value pairs
     for (key, value) in &payload.state {
@@ -200,8 +196,7 @@ async fn put_ui_state_batch(
     drop(conn);
 
     // Fetch and return updated state
-    let conn = Connection::open(&db_path)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let conn = Connection::open(&db_path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let mut state_map = HashMap::new();
 
     let mut stmt = conn
@@ -238,8 +233,7 @@ async fn delete_ui_state(
     let operator_id = state.identity_cache.resolve(connect_info.map(|ci| ci.0));
 
     let db_path = crate::fleet::db_path();
-    let conn = Connection::open(&db_path)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let conn = Connection::open(&db_path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     conn.execute(
         "DELETE FROM ui_state WHERE operator_id = ?1 AND key = ?2",
@@ -250,8 +244,7 @@ async fn delete_ui_state(
     drop(conn);
 
     // Fetch and return remaining state
-    let conn = Connection::open(&db_path)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let conn = Connection::open(&db_path).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let mut state_map = HashMap::new();
 
     let mut stmt = conn
@@ -292,7 +285,10 @@ mod tests {
     fn test_ui_state_response_serialization() {
         let mut state = HashMap::new();
         state.insert("stitch_view_mode".to_string(), "\"list\"".to_string());
-        state.insert("archive_filter".to_string(), "{\"showArchived\":false}".to_string());
+        state.insert(
+            "archive_filter".to_string(),
+            "{\"showArchived\":false}".to_string(),
+        );
 
         let response = UiStateResponse {
             schema_version: UI_STATE_SCHEMA_VERSION.to_string(),

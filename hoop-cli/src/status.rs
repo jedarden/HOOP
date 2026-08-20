@@ -49,7 +49,9 @@ pub fn run(project_filter: Option<String>, json: bool) -> Result<()> {
     let registry = load_projects()?;
 
     let filtered_projects: Vec<_> = if let Some(ref filter) = project_filter {
-        registry.projects.into_iter()
+        registry
+            .projects
+            .into_iter()
             .filter(|p| p.name() == filter)
             .collect()
     } else {
@@ -192,15 +194,9 @@ fn get_beads_summary(beads_path: &Path) -> Result<BeadsSummary> {
                 let json = std::str::from_utf8(&output.stdout)?;
                 if let Ok(beads) = serde_json::from_str::<Vec<serde_json::Value>>(json) {
                     let total = beads.len() as u64;
-                    let open = beads.iter()
-                        .filter(|b| b["status"] == "open")
-                        .count() as u64;
-                    let claimed = beads.iter()
-                        .filter(|b| b["status"] == "claimed")
-                        .count() as u64;
-                    let closed = beads.iter()
-                        .filter(|b| b["status"] == "closed")
-                        .count() as u64;
+                    let open = beads.iter().filter(|b| b["status"] == "open").count() as u64;
+                    let claimed = beads.iter().filter(|b| b["status"] == "claimed").count() as u64;
+                    let closed = beads.iter().filter(|b| b["status"] == "closed").count() as u64;
 
                     return Ok(BeadsSummary {
                         total,
@@ -239,23 +235,45 @@ fn print_human_readable(project_statuses: &[ProjectStatus]) -> Result<()> {
     }
 
     for project in project_statuses {
-        println!("{} ({})", project.name, project.label.as_ref().unwrap_or(&"unnamed".to_string()));
+        println!(
+            "{} ({})",
+            project.name,
+            project.label.as_ref().unwrap_or(&"unnamed".to_string())
+        );
         println!("  Workspaces:");
 
         for workspace in &project.workspaces {
             if let Some(error) = &workspace.error {
-                println!("    [{}] {} - ERROR: {}", workspace.role, workspace.path, error);
+                println!(
+                    "    [{}] {} - ERROR: {}",
+                    workspace.role, workspace.path, error
+                );
             } else if let Some(summary) = &workspace.beads_summary {
-                println!("    [{}] {} - {} beads ({} open, {} claimed, {} closed)",
-                    workspace.role, workspace.path, summary.total, summary.open, summary.claimed, summary.closed);
+                println!(
+                    "    [{}] {} - {} beads ({} open, {} claimed, {} closed)",
+                    workspace.role,
+                    workspace.path,
+                    summary.total,
+                    summary.open,
+                    summary.claimed,
+                    summary.closed
+                );
             } else {
-                println!("    [{}] {} - no beads data", workspace.role, workspace.path);
+                println!(
+                    "    [{}] {} - no beads data",
+                    workspace.role, workspace.path
+                );
             }
         }
 
         if project.workspaces.len() > 1 {
-            println!("  Total: {} beads ({} open, {} claimed, {} closed)",
-                project.total_beads, project.open_beads, project.claimed_beads, project.closed_beads);
+            println!(
+                "  Total: {} beads ({} open, {} claimed, {} closed)",
+                project.total_beads,
+                project.open_beads,
+                project.claimed_beads,
+                project.closed_beads
+            );
         }
 
         println!();

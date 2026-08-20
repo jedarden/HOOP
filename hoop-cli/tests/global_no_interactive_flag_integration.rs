@@ -15,8 +15,6 @@
 //! - The command succeeds or fails as expected
 
 use std::fs;
-use std::path::PathBuf;
-use tempfile::TempDir;
 
 // Include the test utilities module
 mod cli_test_utils;
@@ -29,12 +27,18 @@ fn test_flag_before_subcommand_scan() {
     // Test: hoop --no-interactive scan /tmp
     let result = parse_cli_with_flag(&["hoop", "--no-interactive", "scan", "/tmp"]);
 
-    assert!(result.is_ok(), "Should successfully parse flag before subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse flag before subcommand"
+    );
     let parsed = result.unwrap();
 
     assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
-    assert!(parsed.args.contains(&"/tmp".to_string()), "Args should contain scan path");
+    assert!(
+        parsed.args.contains(&"/tmp".to_string()),
+        "Args should contain scan path"
+    );
 
     // Verify flag extraction
     assert!(verify_flag_extraction(&parsed, "before").is_ok());
@@ -43,15 +47,30 @@ fn test_flag_before_subcommand_scan() {
 #[test]
 fn test_flag_before_subcommand_remove() {
     // Test: hoop --no-interactive remove my-project --confirm
-    let result = parse_cli_with_flag(&["hoop", "--no-interactive", "remove", "my-project", "--confirm"]);
+    let result = parse_cli_with_flag(&[
+        "hoop",
+        "--no-interactive",
+        "remove",
+        "my-project",
+        "--confirm",
+    ]);
 
-    assert!(result.is_ok(), "Should successfully parse flag before subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse flag before subcommand"
+    );
     let parsed = result.unwrap();
 
     assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "remove", "Command should be 'remove'");
-    assert!(parsed.args.contains(&"my-project".to_string()), "Args should contain project name");
-    assert!(parsed.args.contains(&"--confirm".to_string()), "Args should contain --confirm");
+    assert!(
+        parsed.args.contains(&"my-project".to_string()),
+        "Args should contain project name"
+    );
+    assert!(
+        parsed.args.contains(&"--confirm".to_string()),
+        "Args should contain --confirm"
+    );
 
     // Verify flag extraction
     assert!(verify_flag_extraction(&parsed, "before").is_ok());
@@ -61,17 +80,34 @@ fn test_flag_before_subcommand_remove() {
 fn test_flag_before_subcommand_restore() {
     // Test: hoop --no-interactive restore --from s3://bucket/key --confirm
     let result = parse_cli_with_flag(&[
-        "hoop", "--no-interactive", "restore", "--from", "s3://bucket/key", "--confirm"
+        "hoop",
+        "--no-interactive",
+        "restore",
+        "--from",
+        "s3://bucket/key",
+        "--confirm",
     ]);
 
-    assert!(result.is_ok(), "Should successfully parse flag before subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse flag before subcommand"
+    );
     let parsed = result.unwrap();
 
     assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "restore", "Command should be 'restore'");
-    assert!(parsed.args.contains(&"--from".to_string()), "Args should contain --from");
-    assert!(parsed.args.contains(&"s3://bucket/key".to_string()), "Args should contain URI");
-    assert!(parsed.args.contains(&"--confirm".to_string()), "Args should contain --confirm");
+    assert!(
+        parsed.args.contains(&"--from".to_string()),
+        "Args should contain --from"
+    );
+    assert!(
+        parsed.args.contains(&"s3://bucket/key".to_string()),
+        "Args should contain URI"
+    );
+    assert!(
+        parsed.args.contains(&"--confirm".to_string()),
+        "Args should contain --confirm"
+    );
 
     // Verify flag extraction
     assert!(verify_flag_extraction(&parsed, "before").is_ok());
@@ -82,12 +118,18 @@ fn test_flag_before_subcommand_status() {
     // Test: hoop --no-interactive status --json
     let result = parse_cli_with_flag(&["hoop", "--no-interactive", "status", "--json"]);
 
-    assert!(result.is_ok(), "Should successfully parse flag before subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse flag before subcommand"
+    );
     let parsed = result.unwrap();
 
     assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "status", "Command should be 'status'");
-    assert!(parsed.args.contains(&"--json".to_string()), "Args should contain --json");
+    assert!(
+        parsed.args.contains(&"--json".to_string()),
+        "Args should contain --json"
+    );
 
     // Verify flag extraction
     assert!(verify_flag_extraction(&parsed, "before").is_ok());
@@ -100,12 +142,18 @@ fn test_flag_after_subcommand_scan() {
     // Test: hoop scan /tmp --no-interactive
     let result = parse_cli_with_flag(&["hoop", "scan", "/tmp", "--no-interactive"]);
 
-    assert!(result.is_ok(), "Should successfully parse flag after subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse flag after subcommand"
+    );
     let parsed = result.unwrap();
 
     assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
-    assert!(parsed.args.contains(&"/tmp".to_string()), "Args should contain scan path");
+    assert!(
+        parsed.args.contains(&"/tmp".to_string()),
+        "Args should contain scan path"
+    );
 
     // Verify flag extraction
     assert!(verify_flag_extraction(&parsed, "after").is_ok());
@@ -114,15 +162,30 @@ fn test_flag_after_subcommand_scan() {
 #[test]
 fn test_flag_after_subcommand_remove() {
     // Test: hoop remove my-project --confirm --no-interactive
-    let result = parse_cli_with_flag(&["hoop", "remove", "my-project", "--confirm", "--no-interactive"]);
+    let result = parse_cli_with_flag(&[
+        "hoop",
+        "remove",
+        "my-project",
+        "--confirm",
+        "--no-interactive",
+    ]);
 
-    assert!(result.is_ok(), "Should successfully parse flag after subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse flag after subcommand"
+    );
     let parsed = result.unwrap();
 
     assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "remove", "Command should be 'remove'");
-    assert!(parsed.args.contains(&"my-project".to_string()), "Args should contain project name");
-    assert!(parsed.args.contains(&"--confirm".to_string()), "Args should contain --confirm");
+    assert!(
+        parsed.args.contains(&"my-project".to_string()),
+        "Args should contain project name"
+    );
+    assert!(
+        parsed.args.contains(&"--confirm".to_string()),
+        "Args should contain --confirm"
+    );
 
     // Verify flag extraction
     assert!(verify_flag_extraction(&parsed, "after").is_ok());
@@ -132,17 +195,34 @@ fn test_flag_after_subcommand_remove() {
 fn test_flag_after_subcommand_restore() {
     // Test: hoop restore --from s3://bucket/key --confirm --no-interactive
     let result = parse_cli_with_flag(&[
-        "hoop", "restore", "--from", "s3://bucket/key", "--confirm", "--no-interactive"
+        "hoop",
+        "restore",
+        "--from",
+        "s3://bucket/key",
+        "--confirm",
+        "--no-interactive",
     ]);
 
-    assert!(result.is_ok(), "Should successfully parse flag after subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse flag after subcommand"
+    );
     let parsed = result.unwrap();
 
     assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "restore", "Command should be 'restore'");
-    assert!(parsed.args.contains(&"--from".to_string()), "Args should contain --from");
-    assert!(parsed.args.contains(&"s3://bucket/key".to_string()), "Args should contain URI");
-    assert!(parsed.args.contains(&"--confirm".to_string()), "Args should contain --confirm");
+    assert!(
+        parsed.args.contains(&"--from".to_string()),
+        "Args should contain --from"
+    );
+    assert!(
+        parsed.args.contains(&"s3://bucket/key".to_string()),
+        "Args should contain URI"
+    );
+    assert!(
+        parsed.args.contains(&"--confirm".to_string()),
+        "Args should contain --confirm"
+    );
 
     // Verify flag extraction
     assert!(verify_flag_extraction(&parsed, "after").is_ok());
@@ -153,12 +233,18 @@ fn test_flag_after_subcommand_status() {
     // Test: hoop status --json --no-interactive
     let result = parse_cli_with_flag(&["hoop", "status", "--json", "--no-interactive"]);
 
-    assert!(result.is_ok(), "Should successfully parse flag after subcommand");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse flag after subcommand"
+    );
     let parsed = result.unwrap();
 
     assert!(parsed.no_interactive, "Flag should be extracted as true");
     assert_eq!(parsed.command, "status", "Command should be 'status'");
-    assert!(parsed.args.contains(&"--json".to_string()), "Args should contain --json");
+    assert!(
+        parsed.args.contains(&"--json".to_string()),
+        "Args should contain --json"
+    );
 
     // Verify flag extraction
     assert!(verify_flag_extraction(&parsed, "after").is_ok());
@@ -174,9 +260,15 @@ fn test_short_flag_y_scan() {
     assert!(result.is_ok(), "Should successfully parse short -y flag");
     let parsed = result.unwrap();
 
-    assert!(parsed.no_interactive, "Short flag -y should set no_interactive to true");
+    assert!(
+        parsed.no_interactive,
+        "Short flag -y should set no_interactive to true"
+    );
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
-    assert!(parsed.args.contains(&"/tmp".to_string()), "Args should contain scan path");
+    assert!(
+        parsed.args.contains(&"/tmp".to_string()),
+        "Args should contain scan path"
+    );
 }
 
 #[test]
@@ -187,25 +279,53 @@ fn test_short_flag_y_remove() {
     assert!(result.is_ok(), "Should successfully parse short -y flag");
     let parsed = result.unwrap();
 
-    assert!(parsed.no_interactive, "Short flag -y should set no_interactive to true");
+    assert!(
+        parsed.no_interactive,
+        "Short flag -y should set no_interactive to true"
+    );
     assert_eq!(parsed.command, "remove", "Command should be 'remove'");
-    assert!(parsed.args.contains(&"my-project".to_string()), "Args should contain project name");
-    assert!(parsed.args.contains(&"--confirm".to_string()), "Args should contain --confirm");
+    assert!(
+        parsed.args.contains(&"my-project".to_string()),
+        "Args should contain project name"
+    );
+    assert!(
+        parsed.args.contains(&"--confirm".to_string()),
+        "Args should contain --confirm"
+    );
 }
 
 #[test]
 fn test_short_flag_y_restore() {
     // Test: hoop -y restore --from s3://bucket/key --confirm
-    let result = parse_cli_with_flag(&["hoop", "-y", "restore", "--from", "s3://bucket/key", "--confirm"]);
+    let result = parse_cli_with_flag(&[
+        "hoop",
+        "-y",
+        "restore",
+        "--from",
+        "s3://bucket/key",
+        "--confirm",
+    ]);
 
     assert!(result.is_ok(), "Should successfully parse short -y flag");
     let parsed = result.unwrap();
 
-    assert!(parsed.no_interactive, "Short flag -y should set no_interactive to true");
+    assert!(
+        parsed.no_interactive,
+        "Short flag -y should set no_interactive to true"
+    );
     assert_eq!(parsed.command, "restore", "Command should be 'restore'");
-    assert!(parsed.args.contains(&"--from".to_string()), "Args should contain --from");
-    assert!(parsed.args.contains(&"s3://bucket/key".to_string()), "Args should contain URI");
-    assert!(parsed.args.contains(&"--confirm".to_string()), "Args should contain --confirm");
+    assert!(
+        parsed.args.contains(&"--from".to_string()),
+        "Args should contain --from"
+    );
+    assert!(
+        parsed.args.contains(&"s3://bucket/key".to_string()),
+        "Args should contain URI"
+    );
+    assert!(
+        parsed.args.contains(&"--confirm".to_string()),
+        "Args should contain --confirm"
+    );
 }
 
 #[test]
@@ -216,9 +336,15 @@ fn test_short_flag_y_status() {
     assert!(result.is_ok(), "Should successfully parse short -y flag");
     let parsed = result.unwrap();
 
-    assert!(parsed.no_interactive, "Short flag -y should set no_interactive to true");
+    assert!(
+        parsed.no_interactive,
+        "Short flag -y should set no_interactive to true"
+    );
     assert_eq!(parsed.command, "status", "Command should be 'status'");
-    assert!(parsed.args.contains(&"--json".to_string()), "Args should contain --json");
+    assert!(
+        parsed.args.contains(&"--json".to_string()),
+        "Args should contain --json"
+    );
 }
 
 // ── Scenario 4: Combined with other flags ───────────────────────────────────────────
@@ -232,7 +358,10 @@ fn test_combined_flags_scan_with_json() {
     assert!(result.is_ok(), "Should successfully parse combined flags");
     let parsed = result.unwrap();
 
-    assert!(parsed.no_interactive, "Global no_interactive should be true");
+    assert!(
+        parsed.no_interactive,
+        "Global no_interactive should be true"
+    );
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
 }
 
@@ -244,40 +373,78 @@ fn test_combined_flags_status_with_json() {
     assert!(result.is_ok(), "Should successfully parse combined flags");
     let parsed = result.unwrap();
 
-    assert!(parsed.no_interactive, "Global no_interactive should be true");
+    assert!(
+        parsed.no_interactive,
+        "Global no_interactive should be true"
+    );
     assert_eq!(parsed.command, "status", "Command should be 'status'");
-    assert!(parsed.args.contains(&"--json".to_string()), "Args should contain --json");
+    assert!(
+        parsed.args.contains(&"--json".to_string()),
+        "Args should contain --json"
+    );
 }
 
 #[test]
 fn test_combined_flags_remove_with_confirm() {
     // Test: hoop --no-interactive remove my-project --confirm
-    let result = parse_cli_with_flag(&["hoop", "--no-interactive", "remove", "my-project", "--confirm"]);
+    let result = parse_cli_with_flag(&[
+        "hoop",
+        "--no-interactive",
+        "remove",
+        "my-project",
+        "--confirm",
+    ]);
 
     assert!(result.is_ok(), "Should successfully parse combined flags");
     let parsed = result.unwrap();
 
-    assert!(parsed.no_interactive, "Global no_interactive should be true");
+    assert!(
+        parsed.no_interactive,
+        "Global no_interactive should be true"
+    );
     assert_eq!(parsed.command, "remove", "Command should be 'remove'");
-    assert!(parsed.args.contains(&"my-project".to_string()), "Args should contain project name");
-    assert!(parsed.args.contains(&"--confirm".to_string()), "Args should contain --confirm");
+    assert!(
+        parsed.args.contains(&"my-project".to_string()),
+        "Args should contain project name"
+    );
+    assert!(
+        parsed.args.contains(&"--confirm".to_string()),
+        "Args should contain --confirm"
+    );
 }
 
 #[test]
 fn test_combined_flags_restore_with_dry_run() {
     // Test: hoop --no-interactive restore --dry-run --from s3://bucket/key
     let result = parse_cli_with_flag(&[
-        "hoop", "--no-interactive", "restore", "--dry-run", "--from", "s3://bucket/key"
+        "hoop",
+        "--no-interactive",
+        "restore",
+        "--dry-run",
+        "--from",
+        "s3://bucket/key",
     ]);
 
     assert!(result.is_ok(), "Should successfully parse combined flags");
     let parsed = result.unwrap();
 
-    assert!(parsed.no_interactive, "Global no_interactive should be true");
+    assert!(
+        parsed.no_interactive,
+        "Global no_interactive should be true"
+    );
     assert_eq!(parsed.command, "restore", "Command should be 'restore'");
-    assert!(parsed.args.contains(&"--dry-run".to_string()), "Args should contain --dry-run");
-    assert!(parsed.args.contains(&"--from".to_string()), "Args should contain --from");
-    assert!(parsed.args.contains(&"s3://bucket/key".to_string()), "Args should contain URI");
+    assert!(
+        parsed.args.contains(&"--dry-run".to_string()),
+        "Args should contain --dry-run"
+    );
+    assert!(
+        parsed.args.contains(&"--from".to_string()),
+        "Args should contain --from"
+    );
+    assert!(
+        parsed.args.contains(&"s3://bucket/key".to_string()),
+        "Args should contain URI"
+    );
 }
 
 #[test]
@@ -286,12 +453,21 @@ fn test_combined_flags_global_after_local_flags() {
     // Tests that global flag works when placed after local flags
     let result = parse_cli_with_flag(&["hoop", "scan", "--yes", "/tmp", "--no-interactive"]);
 
-    assert!(result.is_ok(), "Should successfully parse global flag after local flags");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse global flag after local flags"
+    );
     let parsed = result.unwrap();
 
-    assert!(parsed.no_interactive, "Global no_interactive should be true");
+    assert!(
+        parsed.no_interactive,
+        "Global no_interactive should be true"
+    );
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
-    assert!(parsed.args.contains(&"/tmp".to_string()), "Args should contain scan path");
+    assert!(
+        parsed.args.contains(&"/tmp".to_string()),
+        "Args should contain scan path"
+    );
     // Note: --yes flag is in args since it's a local flag for scan command
 }
 
@@ -310,12 +486,14 @@ fn test_flag_position_independence_scan() {
     let after_parsed = after.unwrap();
 
     assert_eq!(
-        before_parsed.no_interactive,
-        after_parsed.no_interactive,
+        before_parsed.no_interactive, after_parsed.no_interactive,
         "Flag position should not affect the extracted value"
     );
 
-    assert!(before_parsed.no_interactive, "Both should extract no_interactive as true");
+    assert!(
+        before_parsed.no_interactive,
+        "Both should extract no_interactive as true"
+    );
 }
 
 #[test]
@@ -331,12 +509,14 @@ fn test_flag_position_independence_remove() {
     let after_parsed = after.unwrap();
 
     assert_eq!(
-        before_parsed.no_interactive,
-        after_parsed.no_interactive,
+        before_parsed.no_interactive, after_parsed.no_interactive,
         "Flag position should not affect the extracted value"
     );
 
-    assert!(before_parsed.no_interactive, "Both should extract no_interactive as true");
+    assert!(
+        before_parsed.no_interactive,
+        "Both should extract no_interactive as true"
+    );
 }
 
 #[test]
@@ -344,24 +524,36 @@ fn test_flag_position_independence_restore() {
     // Verify that both flag positions yield the same no_interactive value for restore
 
     let before = parse_cli_with_flag(&[
-        "hoop", "--no-interactive", "restore", "--from", "s3://bucket/key", "--confirm"
+        "hoop",
+        "--no-interactive",
+        "restore",
+        "--from",
+        "s3://bucket/key",
+        "--confirm",
     ]);
     assert!(before.is_ok(), "Should parse flag before command");
     let before_parsed = before.unwrap();
 
     let after = parse_cli_with_flag(&[
-        "hoop", "restore", "--from", "s3://bucket/key", "--confirm", "--no-interactive"
+        "hoop",
+        "restore",
+        "--from",
+        "s3://bucket/key",
+        "--confirm",
+        "--no-interactive",
     ]);
     assert!(after.is_ok(), "Should parse flag after command");
     let after_parsed = after.unwrap();
 
     assert_eq!(
-        before_parsed.no_interactive,
-        after_parsed.no_interactive,
+        before_parsed.no_interactive, after_parsed.no_interactive,
         "Flag position should not affect the extracted value"
     );
 
-    assert!(before_parsed.no_interactive, "Both should extract no_interactive as true");
+    assert!(
+        before_parsed.no_interactive,
+        "Both should extract no_interactive as true"
+    );
 }
 
 // ── Default behavior tests (no flag) ─────────────────────────────────────────────────
@@ -371,10 +563,16 @@ fn test_default_behavior_scan() {
     // Test: hoop scan /tmp (no no_interactive flag)
     let result = parse_cli_with_flag(&["hoop", "scan", "/tmp"]);
 
-    assert!(result.is_ok(), "Should successfully parse command without flag");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse command without flag"
+    );
     let parsed = result.unwrap();
 
-    assert!(!parsed.no_interactive, "no_interactive should default to false");
+    assert!(
+        !parsed.no_interactive,
+        "no_interactive should default to false"
+    );
     assert_eq!(parsed.command, "scan", "Command should be 'scan'");
 
     // Verify no flag is present
@@ -386,10 +584,16 @@ fn test_default_behavior_remove() {
     // Test: hoop remove my-project --confirm (no no_interactive flag)
     let result = parse_cli_with_flag(&["hoop", "remove", "my-project", "--confirm"]);
 
-    assert!(result.is_ok(), "Should successfully parse command without flag");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse command without flag"
+    );
     let parsed = result.unwrap();
 
-    assert!(!parsed.no_interactive, "no_interactive should default to false");
+    assert!(
+        !parsed.no_interactive,
+        "no_interactive should default to false"
+    );
     assert_eq!(parsed.command, "remove", "Command should be 'remove'");
 
     // Verify no flag is present
@@ -401,10 +605,16 @@ fn test_default_behavior_restore() {
     // Test: hoop restore --from s3://bucket/key (no no_interactive flag)
     let result = parse_cli_with_flag(&["hoop", "restore", "--from", "s3://bucket/key"]);
 
-    assert!(result.is_ok(), "Should successfully parse command without flag");
+    assert!(
+        result.is_ok(),
+        "Should successfully parse command without flag"
+    );
     let parsed = result.unwrap();
 
-    assert!(!parsed.no_interactive, "no_interactive should default to false");
+    assert!(
+        !parsed.no_interactive,
+        "no_interactive should default to false"
+    );
     assert_eq!(parsed.command, "restore", "Command should be 'restore'");
 
     // Verify no flag is present
@@ -537,15 +747,18 @@ fn test_scan_succeeds_with_no_interactive() {
     let projects_code = fs::read_to_string("src/projects.rs").expect("Failed to read projects.rs");
 
     // Find the scan_projects function
-    let scan_start = projects_code.find("pub fn scan_projects")
+    let scan_start = projects_code
+        .find("pub fn scan_projects")
         .expect("Should find scan_projects function");
 
     // Find the no_interactive check
-    let no_interactive_check = projects_code[scan_start..].find("if no_interactive {")
+    let no_interactive_check = projects_code[scan_start..]
+        .find("if no_interactive {")
         .expect("Should find no_interactive check");
 
     // Verify auto-registration happens when no_interactive is true
-    let no_interactive_section = &projects_code[scan_start + no_interactive_check..scan_start + no_interactive_check + 500];
+    let no_interactive_section =
+        &projects_code[scan_start + no_interactive_check..scan_start + no_interactive_check + 500];
 
     assert!(
         no_interactive_section.contains("println!(\"  {} — registering\", default_name)"),
@@ -615,101 +828,154 @@ fn test_batch_flag_position_tests() {
         // Scan command tests
         FlagPositionTestCase {
             description: "scan with flag before".to_string(),
-            command: vec!["hoop", "--no-interactive", "scan", "/tmp"]
-                .iter().map(|s| s.to_string()).collect(),
+            command: ["hoop", "--no-interactive", "scan", "/tmp"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             expected_result: true,
         },
         FlagPositionTestCase {
             description: "scan with flag after".to_string(),
-            command: vec!["hoop", "scan", "/tmp", "--no-interactive"]
-                .iter().map(|s| s.to_string()).collect(),
+            command: ["hoop", "scan", "/tmp", "--no-interactive"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             expected_result: true,
         },
         FlagPositionTestCase {
             description: "scan with short flag".to_string(),
-            command: vec!["hoop", "-y", "scan", "/tmp"]
-                .iter().map(|s| s.to_string()).collect(),
+            command: ["hoop", "-y", "scan", "/tmp"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             expected_result: true,
         },
         FlagPositionTestCase {
             description: "scan without flag".to_string(),
-            command: vec!["hoop", "scan", "/tmp"]
-                .iter().map(|s| s.to_string()).collect(),
+            command: ["hoop", "scan", "/tmp"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             expected_result: false,
         },
         // Remove command tests
         FlagPositionTestCase {
             description: "remove with flag before".to_string(),
-            command: vec!["hoop", "--no-interactive", "remove", "test", "--confirm"]
-                .iter().map(|s| s.to_string()).collect(),
+            command: ["hoop", "--no-interactive", "remove", "test", "--confirm"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             expected_result: true,
         },
         FlagPositionTestCase {
             description: "remove with flag after".to_string(),
-            command: vec!["hoop", "remove", "test", "--confirm", "--no-interactive"]
-                .iter().map(|s| s.to_string()).collect(),
+            command: ["hoop", "remove", "test", "--confirm", "--no-interactive"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             expected_result: true,
         },
         FlagPositionTestCase {
             description: "remove with short flag".to_string(),
-            command: vec!["hoop", "-y", "remove", "test", "--confirm"]
-                .iter().map(|s| s.to_string()).collect(),
+            command: ["hoop", "-y", "remove", "test", "--confirm"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             expected_result: true,
         },
         FlagPositionTestCase {
             description: "remove without flag".to_string(),
-            command: vec!["hoop", "remove", "test", "--confirm"]
-                .iter().map(|s| s.to_string()).collect(),
+            command: ["hoop", "remove", "test", "--confirm"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             expected_result: false,
         },
         // Restore command tests
         FlagPositionTestCase {
             description: "restore with flag before".to_string(),
-            command: vec!["hoop", "--no-interactive", "restore", "--from", "s3://bucket/key", "--confirm"]
-                .iter().map(|s| s.to_string()).collect(),
+            command: [
+                "hoop",
+                "--no-interactive",
+                "restore",
+                "--from",
+                "s3://bucket/key",
+                "--confirm",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
             expected_result: true,
         },
         FlagPositionTestCase {
             description: "restore with flag after".to_string(),
-            command: vec!["hoop", "restore", "--from", "s3://bucket/key", "--confirm", "--no-interactive"]
-                .iter().map(|s| s.to_string()).collect(),
+            command: [
+                "hoop",
+                "restore",
+                "--from",
+                "s3://bucket/key",
+                "--confirm",
+                "--no-interactive",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
             expected_result: true,
         },
         FlagPositionTestCase {
             description: "restore with short flag".to_string(),
-            command: vec!["hoop", "-y", "restore", "--from", "s3://bucket/key", "--confirm"]
-                .iter().map(|s| s.to_string()).collect(),
+            command: [
+                "hoop",
+                "-y",
+                "restore",
+                "--from",
+                "s3://bucket/key",
+                "--confirm",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
             expected_result: true,
         },
         FlagPositionTestCase {
             description: "restore without flag".to_string(),
-            command: vec!["hoop", "restore", "--from", "s3://bucket/key", "--confirm"]
-                .iter().map(|s| s.to_string()).collect(),
+            command: ["hoop", "restore", "--from", "s3://bucket/key", "--confirm"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             expected_result: false,
         },
         // Status command tests
         FlagPositionTestCase {
             description: "status with flag before".to_string(),
-            command: vec!["hoop", "--no-interactive", "status", "--json"]
-                .iter().map(|s| s.to_string()).collect(),
+            command: ["hoop", "--no-interactive", "status", "--json"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             expected_result: true,
         },
         FlagPositionTestCase {
             description: "status with flag after".to_string(),
-            command: vec!["hoop", "status", "--json", "--no-interactive"]
-                .iter().map(|s| s.to_string()).collect(),
+            command: ["hoop", "status", "--json", "--no-interactive"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             expected_result: true,
         },
         FlagPositionTestCase {
             description: "status with short flag".to_string(),
-            command: vec!["hoop", "-y", "status", "--json"]
-                .iter().map(|s| s.to_string()).collect(),
+            command: ["hoop", "-y", "status", "--json"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             expected_result: true,
         },
         FlagPositionTestCase {
             description: "status without flag".to_string(),
-            command: vec!["hoop", "status", "--json"]
-                .iter().map(|s| s.to_string()).collect(),
+            command: ["hoop", "status", "--json"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             expected_result: false,
         },
     ];

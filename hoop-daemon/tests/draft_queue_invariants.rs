@@ -648,7 +648,10 @@ fn test_edit_increments_version_and_stores_original() {
     assert_eq!(edited.description, Some("Updated description".to_string()));
     assert_eq!(edited.priority, Some(8));
     assert_eq!(edited.version, 2, "Edit should increment version");
-    assert_eq!(edited.status, "edited", "Edit should set status to 'edited'");
+    assert_eq!(
+        edited.status, "edited",
+        "Edit should set status to 'edited'"
+    );
     assert!(
         edited.original_json.is_some(),
         "First edit should store original_json"
@@ -753,7 +756,8 @@ fn test_hash_chain_integrity_with_draft_actions() {
         prev_hash = row.hash_self.clone();
     }
 
-    hoop_daemon::fleet::verify_hash_chain().expect("Hash chain should be valid after draft actions");
+    hoop_daemon::fleet::verify_hash_chain()
+        .expect("Hash chain should be valid after draft actions");
 
     teardown_test_db();
 }
@@ -811,7 +815,10 @@ fn test_open_draft_updates_existing_draft() {
         .expect("Get draft should succeed")
         .expect("Draft should exist");
 
-    assert!(abandoned.abandoned_at.is_some(), "Abandoned_at should be set");
+    assert!(
+        abandoned.abandoned_at.is_some(),
+        "Abandoned_at should be set"
+    );
 
     // Re-open should clear abandoned_at
     hoop_daemon::fleet::open_draft(draft_id, project, "os:operator-b")
@@ -823,7 +830,10 @@ fn test_open_draft_updates_existing_draft() {
 
     assert_eq!(reopened.opened_by, Some("os:operator-b".to_string()));
     assert!(reopened.opened_at.is_some());
-    assert!(reopened.abandoned_at.is_none(), "Abandoned_at should be cleared on reopen");
+    assert!(
+        reopened.abandoned_at.is_none(),
+        "Abandoned_at should be cleared on reopen"
+    );
 
     teardown_test_db();
 }
@@ -858,27 +868,29 @@ fn test_autosave_draft_updates_fields() {
     assert_eq!(draft.description, Some("Updated Description".to_string()));
     assert_eq!(draft.kind, "investigation");
     assert_eq!(draft.priority, Some(7));
-    assert_eq!(draft.labels, vec!["urgent".to_string(), "security".to_string()]);
-    assert!(draft.last_autosave_at.is_some(), "Last_autosave_at should be set");
+    assert_eq!(
+        draft.labels,
+        vec!["urgent".to_string(), "security".to_string()]
+    );
+    assert!(
+        draft.last_autosave_at.is_some(),
+        "Last_autosave_at should be set"
+    );
 
     // Autosave should not increment version (only manual edits increment version)
     let original_version = draft.version;
 
-    hoop_daemon::fleet::autosave_draft(
-        draft_id,
-        Some("Another Title"),
-        None,
-        None,
-        None,
-        None,
-    )
-    .expect("Second autosave should succeed");
+    hoop_daemon::fleet::autosave_draft(draft_id, Some("Another Title"), None, None, None, None)
+        .expect("Second autosave should succeed");
 
     let updated = hoop_daemon::fleet::get_draft(draft_id)
         .expect("Get draft should succeed")
         .expect("Draft should exist");
 
-    assert_eq!(updated.version, original_version, "Autosave should not increment version");
+    assert_eq!(
+        updated.version, original_version,
+        "Autosave should not increment version"
+    );
 
     teardown_test_db();
 }
@@ -902,15 +914,17 @@ fn test_abandon_draft_marks_as_abandoned() {
     assert!(draft.abandoned_at.is_none());
 
     // Abandon the draft
-    hoop_daemon::fleet::abandon_draft(draft_id)
-        .expect("Abandon should succeed");
+    hoop_daemon::fleet::abandon_draft(draft_id).expect("Abandon should succeed");
 
     let abandoned = hoop_daemon::fleet::get_draft(draft_id)
         .expect("Get draft should succeed")
         .expect("Draft should exist");
 
     assert_eq!(abandoned.status, "abandoned");
-    assert!(abandoned.abandoned_at.is_some(), "Abandoned_at should be set");
+    assert!(
+        abandoned.abandoned_at.is_some(),
+        "Abandoned_at should be set"
+    );
 
     teardown_test_db();
 }
@@ -1035,16 +1049,18 @@ fn test_cleanup_abandoned_drafts_removes_old_drafts() {
     hoop_daemon::fleet::insert_draft(&recent_draft).expect("Insert recent draft");
 
     // Run cleanup - should remove only the old draft
-    let deleted = hoop_daemon::fleet::cleanup_abandoned_drafts()
-        .expect("Cleanup should succeed");
+    let deleted = hoop_daemon::fleet::cleanup_abandoned_drafts().expect("Cleanup should succeed");
 
     assert_eq!(deleted, 1, "Should delete exactly one old draft");
 
     // Verify old draft is gone
-    let old_draft_after = hoop_daemon::fleet::get_draft(old_draft_id)
-        .expect("Get draft should succeed");
+    let old_draft_after =
+        hoop_daemon::fleet::get_draft(old_draft_id).expect("Get draft should succeed");
 
-    assert!(old_draft_after.is_none(), "Old abandoned draft should be deleted");
+    assert!(
+        old_draft_after.is_none(),
+        "Old abandoned draft should be deleted"
+    );
 
     // Verify recent draft still exists
     let recent_draft_after = hoop_daemon::fleet::get_draft(recent_draft_id)
@@ -1065,8 +1081,7 @@ fn test_full_draft_lifecycle() {
     let operator = "os:test-operator";
 
     // 1. Open draft (form opened)
-    hoop_daemon::fleet::open_draft(draft_id, project, operator)
-        .expect("Open should succeed");
+    hoop_daemon::fleet::open_draft(draft_id, project, operator).expect("Open should succeed");
 
     let draft = hoop_daemon::fleet::get_draft(draft_id)
         .expect("Get draft should succeed")
@@ -1105,8 +1120,7 @@ fn test_full_draft_lifecycle() {
     .expect("Second autosave should succeed");
 
     // 4. Simulate form close without submit - abandon draft
-    hoop_daemon::fleet::abandon_draft(draft_id)
-        .expect("Abandon should succeed");
+    hoop_daemon::fleet::abandon_draft(draft_id).expect("Abandon should succeed");
 
     let abandoned = hoop_daemon::fleet::get_draft(draft_id)
         .expect("Get draft should succeed")

@@ -153,7 +153,10 @@ impl WsConnectionTracker {
     pub fn register(&self, actor: String) -> WsConnectionGuard {
         let conn_id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let connected_at = Utc::now();
-        self.clients.write().unwrap().push((conn_id, connected_at, actor.clone()));
+        self.clients
+            .write()
+            .unwrap()
+            .push((conn_id, connected_at, actor.clone()));
         WsConnectionGuard {
             conn_id,
             clients: self.clients.clone(),
@@ -1767,9 +1770,7 @@ async fn handle_socket(socket: WebSocket, state: DaemonState, actor: String) {
             let subs = subs_for_fwd.read().await;
             if should_deliver(msg.topic.as_deref(), &subs) {
                 let lag_ms = msg.queued_at.elapsed().as_secs_f64() * 1000.0;
-                metrics
-                    .hoop_ws_broadcast_lag_ms
-                    .observe(&[], lag_ms);
+                metrics.hoop_ws_broadcast_lag_ms.observe(&[], lag_ms);
                 drop(subs);
                 if sender.send(Message::Text(msg.json)).await.is_err() {
                     break;
@@ -1792,7 +1793,10 @@ async fn handle_socket(socket: WebSocket, state: DaemonState, actor: String) {
                     let heartbeat_ts = heartbeat.ts;
 
                     // Update stuck detector with heartbeat (§C1, hoop-ttb.3.25)
-                    stuck_detector.lock().unwrap().on_heartbeat(&worker_name, heartbeat_ts);
+                    stuck_detector
+                        .lock()
+                        .unwrap()
+                        .on_heartbeat(&worker_name, heartbeat_ts);
 
                     let liveness = registry_tx
                         .workers
@@ -1824,12 +1828,15 @@ async fn handle_socket(socket: WebSocket, state: DaemonState, actor: String) {
                     let transition_ts = Utc::now();
 
                     // Update stuck detector with liveness transition (§C1, hoop-ttb.3.25)
-                    stuck_detector.lock().unwrap().on_heartbeat_state_transition(
-                        &worker_name,
-                        transition_ts,
-                        transition.old_state,
-                        transition.new_state,
-                    );
+                    stuck_detector
+                        .lock()
+                        .unwrap()
+                        .on_heartbeat_state_transition(
+                            &worker_name,
+                            transition_ts,
+                            transition.old_state,
+                            transition.new_state,
+                        );
 
                     let worker = registry_tx
                         .workers
@@ -1930,7 +1937,9 @@ async fn handle_socket(socket: WebSocket, state: DaemonState, actor: String) {
         loop {
             match pattern_rx.recv().await {
                 Ok(data) => {
-                    if let Ok(json) = serde_json::to_string(&WsEvent::pattern_saved_query_synced(data.clone())) {
+                    if let Ok(json) =
+                        serde_json::to_string(&WsEvent::pattern_saved_query_synced(data.clone()))
+                    {
                         let topic = format!("project:{}", data.project);
                         let _ = ws_tx_pattern.send(WsOutMsg::with_topic(json, topic)).await;
                     }

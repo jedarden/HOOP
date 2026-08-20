@@ -84,11 +84,14 @@ impl TestClient {
                 Ok(Some(Ok(msg))) => {
                     if let Message::Text(text) = msg {
                         if let Ok(event) = serde_json::from_str::<serde_json::Value>(&text) {
-                            let event_type = event.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                            let event_type =
+                                event.get("type").and_then(|t| t.as_str()).unwrap_or("");
 
                             match event_type {
                                 "init" => {
-                                    if let Some(subs) = event.get("subscriptions").and_then(|s| s.as_array()) {
+                                    if let Some(subs) =
+                                        event.get("subscriptions").and_then(|s| s.as_array())
+                                    {
                                         snapshots.init_subscriptions = subs
                                             .iter()
                                             .filter_map(|s| s.as_str().map(String::from))
@@ -98,34 +101,44 @@ impl TestClient {
                                 "workers_snapshot" => {
                                     snapshots.workers_received = true;
                                     snapshots.workers_data = event.get("workers").cloned();
-                                    if let Some(workers) = event.get("workers").and_then(|w| w.as_array()) {
+                                    if let Some(workers) =
+                                        event.get("workers").and_then(|w| w.as_array())
+                                    {
                                         snapshots.worker_count = workers.len();
                                     }
                                 }
                                 "beads_snapshot" => {
                                     snapshots.beads_received = true;
                                     snapshots.beads_data = event.get("beads").cloned();
-                                    if let Some(beads) = event.get("beads").and_then(|b| b.as_array()) {
+                                    if let Some(beads) =
+                                        event.get("beads").and_then(|b| b.as_array())
+                                    {
                                         snapshots.bead_count = beads.len();
                                     }
                                 }
                                 "conversations_snapshot" => {
                                     snapshots.conversations_received = true;
-                                    if let Some(convos) = event.get("conversations").and_then(|c| c.as_array()) {
+                                    if let Some(convos) =
+                                        event.get("conversations").and_then(|c| c.as_array())
+                                    {
                                         snapshots.conversation_count = convos.len();
                                     }
                                 }
                                 "projects_snapshot" => {
                                     snapshots.projects_received = true;
                                     snapshots.projects_data = event.get("projects").cloned();
-                                    if let Some(projects) = event.get("projects").and_then(|p| p.as_array()) {
+                                    if let Some(projects) =
+                                        event.get("projects").and_then(|p| p.as_array())
+                                    {
                                         snapshots.project_count = projects.len();
                                     }
                                 }
                                 "config_status" => {
                                     snapshots.config_received = true;
                                     snapshots.config_data = event.get("config_status").cloned();
-                                    if let Some(valid) = event.get("config_status").and_then(|c| c.get("valid")) {
+                                    if let Some(valid) =
+                                        event.get("config_status").and_then(|c| c.get("valid"))
+                                    {
                                         snapshots.config_valid = valid.as_bool().unwrap_or(false);
                                     }
                                 }
@@ -149,49 +162,81 @@ impl TestClient {
 
     /// GET /healthz
     async fn healthz(&self) -> anyhow::Result<serde_json::Value> {
-        let resp = self.http_client.get(&format!("{}/healthz", self.base_url)).send().await?;
+        let resp = self
+            .http_client
+            .get(&format!("{}/healthz", self.base_url))
+            .send()
+            .await?;
         Ok(resp.json().await?)
     }
 
     /// GET /readyz
     async fn readyz(&self) -> anyhow::Result<serde_json::Value> {
-        let resp = self.http_client.get(&format!("{}/readyz", self.base_url)).send().await?;
+        let resp = self
+            .http_client
+            .get(&format!("{}/readyz", self.base_url))
+            .send()
+            .await?;
         Ok(resp.json().await?)
     }
 
     /// GET /api/beads
     async fn get_beads(&self) -> anyhow::Result<Vec<serde_json::Value>> {
-        let resp = self.http_client.get(&format!("{}/api/beads", self.base_url)).send().await?;
+        let resp = self
+            .http_client
+            .get(&format!("{}/api/beads", self.base_url))
+            .send()
+            .await?;
         Ok(resp.json().await?)
     }
 
     /// GET /api/workers
     async fn get_workers(&self) -> anyhow::Result<Vec<serde_json::Value>> {
-        let resp = self.http_client.get(&format!("{}/api/workers", self.base_url)).send().await?;
+        let resp = self
+            .http_client
+            .get(&format!("{}/api/workers", self.base_url))
+            .send()
+            .await?;
         Ok(resp.json().await?)
     }
 
     /// GET /api/projects
     async fn get_projects(&self) -> anyhow::Result<Vec<serde_json::Value>> {
-        let resp = self.http_client.get(&format!("{}/api/projects", self.base_url)).send().await?;
+        let resp = self
+            .http_client
+            .get(&format!("{}/api/projects", self.base_url))
+            .send()
+            .await?;
         Ok(resp.json().await?)
     }
 
     /// GET /api/config/status
     async fn get_config_status(&self) -> anyhow::Result<serde_json::Value> {
-        let resp = self.http_client.get(&format!("{}/api/config/status", self.base_url)).send().await?;
+        let resp = self
+            .http_client
+            .get(&format!("{}/api/config/status", self.base_url))
+            .send()
+            .await?;
         Ok(resp.json().await?)
     }
 
     /// GET /api/capacity
     async fn get_capacity(&self) -> anyhow::Result<serde_json::Value> {
-        let resp = self.http_client.get(&format!("{}/api/capacity", self.base_url)).send().await?;
+        let resp = self
+            .http_client
+            .get(&format!("{}/api/capacity", self.base_url))
+            .send()
+            .await?;
         Ok(resp.json().await?)
     }
 
     /// GET /metrics
     async fn get_metrics(&self) -> anyhow::Result<String> {
-        let resp = self.http_client.get(&format!("{}/metrics", self.base_url)).send().await?;
+        let resp = self
+            .http_client
+            .get(&format!("{}/metrics", self.base_url))
+            .send()
+            .await?;
         Ok(resp.text().await?)
     }
 }
@@ -233,11 +278,11 @@ impl WsSnapshots {
 #[tokio::test]
 async fn daemon_boots_successfully_against_testrepo() {
     // Acceptance: Daemon starts without errors against testrepo/
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
-    let client = TestClient::new(base_url).await.expect("Failed to create test client");
+    let client = TestClient::new(base_url)
+        .await
+        .expect("Failed to create test client");
 
     // Health check should respond
     let health = client.healthz().await.expect("Health check failed");
@@ -251,11 +296,11 @@ async fn daemon_boots_successfully_against_testrepo() {
 #[tokio::test]
 async fn ws_init_event_is_first_message() {
     // Acceptance: First WS message is always init with subscriptions
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
-    let _client = TestClient::new(base_url.clone()).await.expect("Failed to create test client");
+    let _client = TestClient::new(base_url.clone())
+        .await
+        .expect("Failed to create test client");
 
     let ws_url = base_url.replace("http://", "ws://");
     let ws_url = format!("{}/ws", ws_url);
@@ -274,8 +319,8 @@ async fn ws_init_event_is_first_message() {
     let first_msg = first_msg.expect("Failed to receive first message");
 
     if let Message::Text(text) = first_msg {
-        let event: serde_json::Value = serde_json::from_str(&text)
-            .expect("Failed to parse init event");
+        let event: serde_json::Value =
+            serde_json::from_str(&text).expect("Failed to parse init event");
 
         assert_eq!(event["type"], "init", "First message must be init");
         assert!(
@@ -303,13 +348,16 @@ async fn ws_init_event_is_first_message() {
 #[tokio::test]
 async fn ws_receives_all_snapshot_events() {
     // Acceptance: WS client receives all expected snapshot events
-    let (base_url, _daemon) = spawn_test_daemon()
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
+
+    let client = TestClient::new(base_url)
         .await
-        .expect("Failed to spawn daemon");
+        .expect("Failed to create test client");
 
-    let client = TestClient::new(base_url).await.expect("Failed to create test client");
-
-    let snapshots = client.collect_ws_snapshots().await.expect("Failed to collect snapshots");
+    let snapshots = client
+        .collect_ws_snapshots()
+        .await
+        .expect("Failed to collect snapshots");
 
     // Verify all snapshots were received
     assert!(
@@ -337,20 +385,35 @@ async fn ws_receives_all_snapshot_events() {
 #[tokio::test]
 async fn ws_and_rest_return_consistent_state() {
     // Acceptance: State projections are consistent across WS and REST
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
-    let client = TestClient::new(base_url).await.expect("Failed to create test client");
+    let client = TestClient::new(base_url)
+        .await
+        .expect("Failed to create test client");
 
     // Collect WS snapshots
-    let ws_snapshots = client.collect_ws_snapshots().await.expect("Failed to collect WS snapshots");
+    let ws_snapshots = client
+        .collect_ws_snapshots()
+        .await
+        .expect("Failed to collect WS snapshots");
 
     // Fetch REST endpoints
-    let rest_beads = client.get_beads().await.expect("Failed to fetch beads via REST");
-    let rest_workers = client.get_workers().await.expect("Failed to fetch workers via REST");
-    let rest_projects = client.get_projects().await.expect("Failed to fetch projects via REST");
-    let rest_config = client.get_config_status().await.expect("Failed to fetch config via REST");
+    let rest_beads = client
+        .get_beads()
+        .await
+        .expect("Failed to fetch beads via REST");
+    let rest_workers = client
+        .get_workers()
+        .await
+        .expect("Failed to fetch workers via REST");
+    let rest_projects = client
+        .get_projects()
+        .await
+        .expect("Failed to fetch projects via REST");
+    let rest_config = client
+        .get_config_status()
+        .await
+        .expect("Failed to fetch config via REST");
 
     // Verify bead counts match
     assert_eq!(
@@ -375,7 +438,10 @@ async fn ws_and_rest_return_consistent_state() {
 
     // Verify config valid status matches
     let ws_config_valid = ws_snapshots.config_valid;
-    let rest_config_valid = rest_config.get("valid").and_then(|v| v.as_bool()).unwrap_or(false);
+    let rest_config_valid = rest_config
+        .get("valid")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     assert_eq!(
         ws_config_valid, rest_config_valid,
         "WS and REST config valid status should match"
@@ -385,11 +451,11 @@ async fn ws_and_rest_return_consistent_state() {
 #[tokio::test]
 async fn rest_api_endpoints_return_valid_state() {
     // Acceptance: REST API returns correct state projections
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
-    let client = TestClient::new(base_url).await.expect("Failed to create test client");
+    let client = TestClient::new(base_url)
+        .await
+        .expect("Failed to create test client");
 
     // Test beads endpoint
     let beads = client.get_beads().await.expect("Failed to fetch beads");
@@ -400,8 +466,14 @@ async fn rest_api_endpoints_return_valid_state() {
     assert!(!workers.is_empty(), "Workers response should not be empty");
 
     // Test projects endpoint
-    let projects = client.get_projects().await.expect("Failed to fetch projects");
-    assert!(!projects.is_empty(), "Projects response should not be empty");
+    let projects = client
+        .get_projects()
+        .await
+        .expect("Failed to fetch projects");
+    assert!(
+        !projects.is_empty(),
+        "Projects response should not be empty"
+    );
 
     // Verify testrepo is in projects
     let testrepo_found = projects
@@ -410,22 +482,34 @@ async fn rest_api_endpoints_return_valid_state() {
     assert!(testrepo_found, "testrepo should be in projects list");
 
     // Test config status endpoint
-    let config = client.get_config_status().await.expect("Failed to fetch config status");
-    assert!(config.get("valid").is_some(), "Config status must include 'valid' field");
+    let config = client
+        .get_config_status()
+        .await
+        .expect("Failed to fetch config status");
+    assert!(
+        config.get("valid").is_some(),
+        "Config status must include 'valid' field"
+    );
 
     // Test capacity endpoint
-    let capacity = client.get_capacity().await.expect("Failed to fetch capacity");
-    assert!(capacity.is_object() || capacity.is_array(), "Capacity should be object or array");
+    let capacity = client
+        .get_capacity()
+        .await
+        .expect("Failed to fetch capacity");
+    assert!(
+        capacity.is_object() || capacity.is_array(),
+        "Capacity should be object or array"
+    );
 }
 
 #[tokio::test]
 async fn metrics_endpoint_exposes_expected_metrics() {
     // Acceptance: /metrics returns Prometheus-style metrics
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
-    let client = TestClient::new(base_url).await.expect("Failed to create test client");
+    let client = TestClient::new(base_url)
+        .await
+        .expect("Failed to create test client");
 
     let metrics = client.get_metrics().await.expect("Failed to fetch metrics");
 
@@ -456,9 +540,7 @@ async fn metrics_endpoint_exposes_expected_metrics() {
 #[tokio::test]
 async fn ws_subscribe_unsubscribe_works() {
     // Acceptance: Subscribe/unsubscribe messages are processed
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let ws_url = base_url.replace("http://", "ws://");
     let ws_url = format!("{}/ws", ws_url);
@@ -486,7 +568,8 @@ async fn ws_subscribe_unsubscribe_works() {
         "type": "subscribe",
         "topic": "global"
     });
-    ws_sender.send(Message::Text(subscribe_msg.to_string()))
+    ws_sender
+        .send(Message::Text(subscribe_msg.to_string()))
         .await
         .expect("Failed to send subscribe");
 
@@ -495,22 +578,23 @@ async fn ws_subscribe_unsubscribe_works() {
         "type": "unsubscribe",
         "topic": "global"
     });
-    ws_sender.send(Message::Text(unsubscribe_msg.to_string()))
+    ws_sender
+        .send(Message::Text(unsubscribe_msg.to_string()))
         .await
         .expect("Failed to send unsubscribe");
 
     // Verify we can still receive messages (global cannot be fully removed)
-    let snapshot_msg = timeout(Duration::from_secs(5), ws_receiver.next())
-        .await;
-    assert!(snapshot_msg.is_ok(), "Should receive messages after subscribe/unsubscribe");
+    let snapshot_msg = timeout(Duration::from_secs(5), ws_receiver.next()).await;
+    assert!(
+        snapshot_msg.is_ok(),
+        "Should receive messages after subscribe/unsubscribe"
+    );
 }
 
 #[tokio::test]
 async fn concurrent_websocket_connections() {
     // Acceptance: Multiple concurrent WS connections each receive init
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let ws_url = base_url.replace("http://", "ws://");
     let ws_url = format!("{}/ws", ws_url);
@@ -535,8 +619,8 @@ async fn concurrent_websocket_connections() {
             let init_msg = init_msg.expect(&format!("No init (conn {})", i));
 
             if let Message::Text(text) = init_msg {
-                let event: serde_json::Value = serde_json::from_str(&text)
-                    .expect("Failed to parse");
+                let event: serde_json::Value =
+                    serde_json::from_str(&text).expect("Failed to parse");
 
                 assert_eq!(event["type"], "init");
                 true
@@ -549,16 +633,17 @@ async fn concurrent_websocket_connections() {
 
     // All connections should receive init
     for handle in handles {
-        assert!(handle.await.expect("Task failed"), "Connection should receive init");
+        assert!(
+            handle.await.expect("Task failed"),
+            "Connection should receive init"
+        );
     }
 }
 
 #[tokio::test]
 async fn ws_reconnect_rebuilds_state() {
     // Acceptance: Disconnect → reconnect → receive fresh init + snapshots
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
     let ws_url = base_url.replace("http://", "ws://");
     let ws_url = format!("{}/ws", ws_url);
@@ -625,11 +710,11 @@ async fn ws_reconnect_rebuilds_state() {
 #[tokio::test]
 async fn test_state_projections_contain_required_fields() {
     // Acceptance: State projections contain all required fields
-    let (base_url, _daemon) = spawn_test_daemon()
-        .await
-        .expect("Failed to spawn daemon");
+    let (base_url, _daemon) = spawn_test_daemon().await.expect("Failed to spawn daemon");
 
-    let client = TestClient::new(base_url).await.expect("Failed to create test client");
+    let client = TestClient::new(base_url)
+        .await
+        .expect("Failed to create test client");
 
     // Verify beads projection
     let beads = client.get_beads().await.expect("Failed to fetch beads");
@@ -662,7 +747,10 @@ async fn test_state_projections_contain_required_fields() {
     }
 
     // Verify projects projection
-    let projects = client.get_projects().await.expect("Failed to fetch projects");
+    let projects = client
+        .get_projects()
+        .await
+        .expect("Failed to fetch projects");
     for project in &projects {
         assert!(
             project.get("name").is_some(),

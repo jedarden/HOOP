@@ -403,7 +403,10 @@ mod tests {
             let json = r#"{
                 "id": "test-1",
                 "title": "Test",
-                "status": ""#.to_string() + status_str + r#"",
+                "status": ""#
+                .to_string()
+                + status_str
+                + r#"",
                 "priority": 1,
                 "issue_type": "task",
                 "created_at": "2026-04-22T19:48:33Z",
@@ -411,7 +414,11 @@ mod tests {
             }"#;
 
             let bead: Bead = serde_json::from_str(&json).unwrap();
-            assert_eq!(bead.status, expected_status, "Failed to deserialize status: {}", status_str);
+            assert_eq!(
+                bead.status, expected_status,
+                "Failed to deserialize status: {}",
+                status_str
+            );
         }
     }
 
@@ -438,13 +445,20 @@ mod tests {
                 "title": "Test",
                 "status": "open",
                 "priority": 1,
-                "issue_type": ""#.to_string() + type_str + r#"",
+                "issue_type": ""#
+                .to_string()
+                + type_str
+                + r#"",
                 "created_at": "2026-04-22T19:48:33Z",
                 "updated_at": "2026-04-22T19:48:33Z"
             }"#;
 
             let bead: Bead = serde_json::from_str(&json).unwrap();
-            assert_eq!(bead.issue_type, expected_type, "Failed to deserialize issue_type: {}", type_str);
+            assert_eq!(
+                bead.issue_type, expected_type,
+                "Failed to deserialize issue_type: {}",
+                type_str
+            );
         }
     }
 

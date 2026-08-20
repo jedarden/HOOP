@@ -81,37 +81,40 @@ fn setup_load_test_projects(config: &Config, num_projects: usize, beads_per_proj
         fs::create_dir_all(&project_path).expect("Failed to create project directory");
 
         // Add to projects registry
-        existing_projects.projects.push(
-            hoop_schema::ProjectsRegistryProjectsItem::Variant0 {
+        existing_projects
+            .projects
+            .push(hoop_schema::ProjectsRegistryProjectsItem::Variant0 {
                 name: project_name,
                 path: project_path.to_string_lossy().into_owned(),
                 canonical_path: None,
                 color: None,
                 label: None,
                 redaction: None,
-            },
-        );
+            });
     }
 
     // Write updated projects.yaml
-    let updated_yaml = serde_yaml::to_string(&existing_projects)
-        .expect("Failed to serialize projects.yaml");
-    fs::write(&projects_yaml_path, updated_yaml)
-        .expect("Failed to write projects.yaml");
+    let updated_yaml =
+        serde_yaml::to_string(&existing_projects).expect("Failed to serialize projects.yaml");
+    fs::write(&projects_yaml_path, updated_yaml).expect("Failed to write projects.yaml");
 }
 
 #[tokio::test]
 #[cfg(feature = "testing")]
 async fn performance_budget_20_projects_5_workers_300_beads() {
     // ── Phase 1: Spawn daemon with load test data ─────────────────────────────
-    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg: &mut hoop_daemon::Config| {
-        setup_load_test_projects(cfg, NUM_PROJECTS, BEADS_PER_PROJECT);
-    }))
-    .await
-    .expect("Failed to spawn daemon");
+    let (base_url, _daemon) =
+        spawn_test_daemon_with_config(Some(|cfg: &mut hoop_daemon::Config| {
+            setup_load_test_projects(cfg, NUM_PROJECTS, BEADS_PER_PROJECT);
+        }))
+        .await
+        .expect("Failed to spawn daemon");
 
     let total_beads = NUM_PROJECTS * BEADS_PER_PROJECT;
-    println!("Loaded {} beads across {} projects", total_beads, NUM_PROJECTS);
+    println!(
+        "Loaded {} beads across {} projects",
+        total_beads, NUM_PROJECTS
+    );
 
     // Wait for daemon to fully initialize
     tokio::time::sleep(Duration::from_secs(2)).await;
@@ -132,7 +135,10 @@ async fn performance_budget_20_projects_5_workers_300_beads() {
         healthz_elapsed,
         HEALTHZ_MAX_MS
     );
-    println!("✓ /healthz responded in {}ms (budget: {}ms)", healthz_elapsed, HEALTHZ_MAX_MS);
+    println!(
+        "✓ /healthz responded in {}ms (budget: {}ms)",
+        healthz_elapsed, HEALTHZ_MAX_MS
+    );
 
     // Test /readyz endpoint
     let readyz_start = Instant::now();
@@ -148,7 +154,10 @@ async fn performance_budget_20_projects_5_workers_300_beads() {
         readyz_elapsed,
         READYZ_MAX_MS
     );
-    println!("✓ /readyz responded in {}ms (budget: {}ms)", readyz_elapsed, READYZ_MAX_MS);
+    println!(
+        "✓ /readyz responded in {}ms (budget: {}ms)",
+        readyz_elapsed, READYZ_MAX_MS
+    );
 
     // Test /api/projects endpoint
     let projects_start = Instant::now();
@@ -168,7 +177,11 @@ async fn performance_budget_20_projects_5_workers_300_beads() {
     // Verify we got all projects
     let projects_json: Value = projects_resp.json().await.unwrap();
     let project_count = projects_json.as_array().unwrap().len();
-    assert_eq!(project_count, NUM_PROJECTS, "Expected {} projects", NUM_PROJECTS);
+    assert_eq!(
+        project_count, NUM_PROJECTS,
+        "Expected {} projects",
+        NUM_PROJECTS
+    );
     println!(
         "✓ /api/projects responded in {}ms with {} projects (budget: {}ms)",
         projects_elapsed, project_count, PROJECTS_API_MAX_MS
@@ -192,7 +205,10 @@ async fn performance_budget_20_projects_5_workers_300_beads() {
     // Verify metrics include bead count
     let metrics_text = metrics_resp.text().await.unwrap();
     assert!(metrics_text.contains("hoop_"));
-    println!("✓ /metrics responded in {}ms (budget: {}ms)", metrics_elapsed, METRICS_MAX_MS);
+    println!(
+        "✓ /metrics responded in {}ms (budget: {}ms)",
+        metrics_elapsed, METRICS_MAX_MS
+    );
 
     // ── Phase 3: Verify memory usage is reasonable ───────────────────────────────────
     let memory_mb = get_daemon_memory_usage().await;
@@ -202,7 +218,10 @@ async fn performance_budget_20_projects_5_workers_300_beads() {
         memory_mb,
         MAX_MEMORY_MB
     );
-    println!("✓ Memory usage: {}MB (budget: {}MB)", memory_mb, MAX_MEMORY_MB);
+    println!(
+        "✓ Memory usage: {}MB (budget: {}MB)",
+        memory_mb, MAX_MEMORY_MB
+    );
 }
 
 /// Get the daemon's memory usage in MB
@@ -231,52 +250,53 @@ async fn performance_budget_graceful_degradation() {
     // Test that the daemon remains responsive even when some projects are degraded
 
     // Spawn daemon with config that creates some degraded projects
-    let (base_url, _daemon) = spawn_test_daemon_with_config(Some(|cfg: &mut hoop_daemon::Config| {
-        let hoop_dir = cfg.control_socket_path.parent().unwrap();
-        let temp_dir = hoop_dir.parent().unwrap();
+    let (base_url, _daemon) =
+        spawn_test_daemon_with_config(Some(|cfg: &mut hoop_daemon::Config| {
+            let hoop_dir = cfg.control_socket_path.parent().unwrap();
+            let temp_dir = hoop_dir.parent().unwrap();
 
-        // Create load test configuration
-        let load_config = LoadTestConfig {
-            num_projects: 5,
-            workers_per_project: 2,
-            beads_per_worker: 10,
-            ..Default::default()
-        };
+            // Create load test configuration
+            let load_config = LoadTestConfig {
+                num_projects: 5,
+                workers_per_project: 2,
+                beads_per_worker: 10,
+                ..Default::default()
+            };
 
-        // Populate with synthetic data
-        hoop_daemon::load_test::populate_testrepo(load_config, temp_dir)
-            .expect("Failed to populate testrepo");
+            // Populate with synthetic data
+            hoop_daemon::load_test::populate_testrepo(load_config, temp_dir)
+                .expect("Failed to populate testrepo");
 
-        // Update projects.yaml to include load test projects
-        let projects_yaml_path = hoop_dir.join("projects.yaml");
-        let existing_content = fs::read_to_string(&projects_yaml_path).unwrap_or_default();
-        let mut existing_projects: hoop_schema::ProjectsRegistry =
-            serde_yaml::from_str(&existing_content).unwrap_or_default();
+            // Update projects.yaml to include load test projects
+            let projects_yaml_path = hoop_dir.join("projects.yaml");
+            let existing_content = fs::read_to_string(&projects_yaml_path).unwrap_or_default();
+            let mut existing_projects: hoop_schema::ProjectsRegistry =
+                serde_yaml::from_str(&existing_content).unwrap_or_default();
 
-        let load_test_dir = temp_dir.join("load-test-data");
-        for i in 0..5 {
-            let project_name = format!("healthy-{}", i);
-            let project_path = load_test_dir.join(&project_name);
+            let load_test_dir = temp_dir.join("load-test-data");
+            for i in 0..5 {
+                let project_name = format!("healthy-{}", i);
+                let project_path = load_test_dir.join(&project_name);
 
-            fs::create_dir_all(&project_path).expect("Failed to create project directory");
+                fs::create_dir_all(&project_path).expect("Failed to create project directory");
 
-            existing_projects.projects.push(
-                hoop_schema::ProjectsRegistryProjectsItem::Variant0 {
-                    name: project_name,
-                    path: project_path.to_string_lossy().into_owned(),
-                    canonical_path: None,
-                    color: None,
-                    label: None,
-                    redaction: None,
-                },
-            );
-        }
+                existing_projects.projects.push(
+                    hoop_schema::ProjectsRegistryProjectsItem::Variant0 {
+                        name: project_name,
+                        path: project_path.to_string_lossy().into_owned(),
+                        canonical_path: None,
+                        color: None,
+                        label: None,
+                        redaction: None,
+                    },
+                );
+            }
 
-        let updated_yaml = serde_yaml::to_string(&existing_projects).unwrap();
-        fs::write(&projects_yaml_path, updated_yaml).unwrap();
-    }))
-    .await
-    .expect("Failed to spawn daemon");
+            let updated_yaml = serde_yaml::to_string(&existing_projects).unwrap();
+            fs::write(&projects_yaml_path, updated_yaml).unwrap();
+        }))
+        .await
+        .expect("Failed to spawn daemon");
 
     // Wait for daemon to fully initialize
     tokio::time::sleep(Duration::from_secs(2)).await;
@@ -299,5 +319,8 @@ async fn performance_budget_graceful_degradation() {
     // Should return 200 with healthy projects
     assert_eq!(readyz_resp.status(), StatusCode::OK);
 
-    println!("✓ /readyz reported healthy projects within {}ms", readyz_elapsed);
+    println!(
+        "✓ /readyz reported healthy projects within {}ms",
+        readyz_elapsed
+    );
 }

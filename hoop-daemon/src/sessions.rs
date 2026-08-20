@@ -577,10 +577,7 @@ impl GeminiAdapter {
         // Registry of (provider, sandbox-root, session-subpath) tuples
         let candidates = vec![
             // GEMINI_CLI_HOME set: sessions land at $GEMINI_CLI_HOME/tmp/
-            (
-                std::env::var("GEMINI_CLI_HOME").ok(),
-                "tmp".to_string(),
-            ),
+            (std::env::var("GEMINI_CLI_HOME").ok(), "tmp".to_string()),
             // Default sandbox location
             (
                 Some(home.join(".gemini").to_string_lossy().to_string()),
@@ -610,14 +607,12 @@ impl GeminiAdapter {
                 // Check if this directory contains .jsonl session files
                 let has_jsonl = fs::read_dir(&full_path)
                     .map(|entries| {
-                        entries
-                            .filter_map(|e| e.ok())
-                            .any(|e| {
-                                e.path()
-                                    .extension()
-                                    .map(|ext| ext == "jsonl")
-                                    .unwrap_or(false)
-                            })
+                        entries.filter_map(|e| e.ok()).any(|e| {
+                            e.path()
+                                .extension()
+                                .map(|ext| ext == "jsonl")
+                                .unwrap_or(false)
+                        })
                     })
                     .unwrap_or(false);
 
@@ -630,10 +625,7 @@ impl GeminiAdapter {
                         full_path.display()
                     );
 
-                    found_paths.push(GeminiSessionPath {
-                        subpath,
-                        full_path,
-                    });
+                    found_paths.push(GeminiSessionPath { subpath, full_path });
                 }
             }
         }
@@ -675,7 +667,8 @@ impl SessionAdapter for GeminiAdapter {
 
         // Registry-based path resolution per §A1
         for session_path in Self::discover_session_paths() {
-            let _ = SessionTailer::scan_directory_recursive(&session_path.full_path, &mut discovered);
+            let _ =
+                SessionTailer::scan_directory_recursive(&session_path.full_path, &mut discovered);
         }
 
         discovered
@@ -2342,7 +2335,8 @@ impl SessionTailer {
         let mut first_user_content: Option<String> = None;
 
         // Generate a stable session ID from the file path (Aider doesn't have session IDs)
-        let session_id = format!("aider-{}",
+        let session_id = format!(
+            "aider-{}",
             path.file_name()
                 .and_then(|n| n.to_str())
                 .unwrap_or("unknown")
@@ -2414,7 +2408,10 @@ impl SessionTailer {
                     let timestamp = cmd.timestamp.as_ref().and_then(|s| s.parse().ok());
                     messages.push(ParsedSessionMessagesItem {
                         role: "user".to_string(),
-                        content: cmd.message.map(|m| serde_json::json!(m)).unwrap_or(serde_json::Value::Null),
+                        content: cmd
+                            .message
+                            .map(|m| serde_json::json!(m))
+                            .unwrap_or(serde_json::Value::Null),
                         usage: None,
                         timestamp,
                     });
@@ -2617,7 +2614,8 @@ impl NdjsonParser {
                 // Check if this is an unknown entry and record it
                 if matches!(entry, ClaudeEntry::Unknown) {
                     let event_kind = extract_entry_kind_from_raw(input);
-                    self.unknown_sink.record_at_line(&event_kind, input, source.line_number);
+                    self.unknown_sink
+                        .record_at_line(&event_kind, input, source.line_number);
 
                     // Also register with global registry for diagnostics
                     let sample = unknown_event_sink::UnknownEventSample::new(
@@ -2650,7 +2648,8 @@ impl NdjsonParser {
 
                     // Record the malformed/unknown event via UnknownEventSink
                     let event_kind = extract_entry_kind_from_raw(input);
-                    self.unknown_sink.record_at_line(&event_kind, input, source.line_number);
+                    self.unknown_sink
+                        .record_at_line(&event_kind, input, source.line_number);
 
                     // Also register with global registry for diagnostics
                     let sample = unknown_event_sink::UnknownEventSample::new(
@@ -3322,32 +3321,39 @@ mod tests {
 
         // Verify the unknown event was recorded via UnknownEventSink
         let samples = unknown_event_sink::global_registry().get_all_samples();
-        let claude_unknown: Vec<_> = samples
-            .iter()
-            .filter(|s| s.adapter == "claude")
-            .collect();
+        let claude_unknown: Vec<_> = samples.iter().filter(|s| s.adapter == "claude").collect();
 
         // Should have recorded the unknown event
-        assert!(!claude_unknown.is_empty(), "Expected unknown event to be recorded");
+        assert!(
+            !claude_unknown.is_empty(),
+            "Expected unknown event to be recorded"
+        );
 
         // Verify the event kind was extracted correctly
         let unknown_sample = claude_unknown
             .iter()
             .find(|s| s.event_kind == "weird_new_event_type");
-        assert!(unknown_sample.is_some(), "Expected 'weird_new_event_type' to be recorded");
+        assert!(
+            unknown_sample.is_some(),
+            "Expected 'weird_new_event_type' to be recorded"
+        );
 
         // Verify the metric was incremented
         let final_count = m.hoop_unknown_event_labeled_total.snapshot();
-        assert!(final_count.len() > initial_count.len(), "Expected metric to increment");
+        assert!(
+            final_count.len() > initial_count.len(),
+            "Expected metric to increment"
+        );
 
         // Verify the specific metric label exists
-        let unknown_metric = final_count
-            .iter()
-            .find(|(labels, _)| {
-                labels.first().map(|s| s.as_str()) == Some("claude")
-                    && labels.get(1).map(|s| s.as_str()) == Some("weird_new_event_type")
-            });
-        assert!(unknown_metric.is_some(), "Expected metric with (claude, weird_new_event_type) labels");
+        let unknown_metric = final_count.iter().find(|(labels, _)| {
+            labels.first().map(|s| s.as_str()) == Some("claude")
+                && labels.get(1).map(|s| s.as_str()) == Some("weird_new_event_type")
+        });
+        assert!(
+            unknown_metric.is_some(),
+            "Expected metric with (claude, weird_new_event_type) labels"
+        );
     }
 
     /// Synthetic unknown-event test for Codex adapter (§16.2 acceptance).
@@ -3389,17 +3395,20 @@ mod tests {
 
         // Verify the unknown event was recorded via UnknownEventSink
         let samples = unknown_event_sink::global_registry().get_all_samples();
-        let codex_unknown: Vec<_> = samples
-            .iter()
-            .filter(|s| s.adapter == "codex")
-            .collect();
+        let codex_unknown: Vec<_> = samples.iter().filter(|s| s.adapter == "codex").collect();
 
         // Should have recorded the unknown event
-        assert!(!codex_unknown.is_empty(), "Expected unknown event to be recorded");
+        assert!(
+            !codex_unknown.is_empty(),
+            "Expected unknown event to be recorded"
+        );
 
         // Verify the metric was incremented
         let final_count = m.hoop_unknown_event_labeled_total.snapshot();
-        assert!(final_count.len() > initial_count.len(), "Expected metric to increment");
+        assert!(
+            final_count.len() > initial_count.len(),
+            "Expected metric to increment"
+        );
     }
 
     /// Synthetic unknown-event test for Gemini adapter (§16.2 acceptance).
@@ -3438,17 +3447,20 @@ mod tests {
 
         // Verify the unknown event was recorded via UnknownEventSink
         let samples = unknown_event_sink::global_registry().get_all_samples();
-        let gemini_unknown: Vec<_> = samples
-            .iter()
-            .filter(|s| s.adapter == "gemini")
-            .collect();
+        let gemini_unknown: Vec<_> = samples.iter().filter(|s| s.adapter == "gemini").collect();
 
         // Should have recorded the unknown event
-        assert!(!gemini_unknown.is_empty(), "Expected unknown event to be recorded");
+        assert!(
+            !gemini_unknown.is_empty(),
+            "Expected unknown event to be recorded"
+        );
 
         // Verify the metric was incremented
         let final_count = m.hoop_unknown_event_labeled_total.snapshot();
-        assert!(final_count.len() > initial_count.len(), "Expected metric to increment");
+        assert!(
+            final_count.len() > initial_count.len(),
+            "Expected metric to increment"
+        );
     }
 
     /// Synthetic unknown-event test for OpenCode adapter (§16.2 acceptance).
@@ -3487,17 +3499,20 @@ mod tests {
 
         // Verify the unknown event was recorded via UnknownEventSink
         let samples = unknown_event_sink::global_registry().get_all_samples();
-        let opencode_unknown: Vec<_> = samples
-            .iter()
-            .filter(|s| s.adapter == "opencode")
-            .collect();
+        let opencode_unknown: Vec<_> = samples.iter().filter(|s| s.adapter == "opencode").collect();
 
         // Should have recorded the unknown event
-        assert!(!opencode_unknown.is_empty(), "Expected unknown event to be recorded");
+        assert!(
+            !opencode_unknown.is_empty(),
+            "Expected unknown event to be recorded"
+        );
 
         // Verify the metric was incremented
         let final_count = m.hoop_unknown_event_labeled_total.snapshot();
-        assert!(final_count.len() > initial_count.len(), "Expected metric to increment");
+        assert!(
+            final_count.len() > initial_count.len(),
+            "Expected metric to increment"
+        );
     }
 
     /// Synthetic unknown-event test for Aider adapter (§16.2 acceptance).
@@ -3533,21 +3548,26 @@ mod tests {
         assert!(result.is_some());
         let session = result.unwrap();
         // Aider session_id is generated from the filename
-        assert!(session.session_id.starts_with("aider-test_aider_unknown.jsonl"));
+        assert!(session
+            .session_id
+            .starts_with("aider-test_aider_unknown.jsonl"));
 
         // Verify the unknown event was recorded via UnknownEventSink
         let samples = unknown_event_sink::global_registry().get_all_samples();
-        let aider_unknown: Vec<_> = samples
-            .iter()
-            .filter(|s| s.adapter == "aider")
-            .collect();
+        let aider_unknown: Vec<_> = samples.iter().filter(|s| s.adapter == "aider").collect();
 
         // Should have recorded the unknown event
-        assert!(!aider_unknown.is_empty(), "Expected unknown event to be recorded");
+        assert!(
+            !aider_unknown.is_empty(),
+            "Expected unknown event to be recorded"
+        );
 
         // Verify the metric was incremented
         let final_count = m.hoop_unknown_event_labeled_total.snapshot();
-        assert!(final_count.len() > initial_count.len(), "Expected metric to increment");
+        assert!(
+            final_count.len() > initial_count.len(),
+            "Expected metric to increment"
+        );
     }
 
     /// Test Aider adapter parses sessions with per-message stats and prompt-tag extraction (§4.3 acceptance).
@@ -3585,7 +3605,9 @@ mod tests {
         let session = result.unwrap();
 
         // Verify session identification (Aider generates session_id from filename)
-        assert!(session.session_id.starts_with("aider-test_aider_session.jsonl"));
+        assert!(session
+            .session_id
+            .starts_with("aider-test_aider_session.jsonl"));
         assert_eq!(session.provider, "aider");
         assert_eq!(session.cwd, "/home/user/project");
         assert_eq!(session.title, "Fix auth bug");
@@ -3596,7 +3618,10 @@ mod tests {
         // First assistant message with usage
         let msg1 = &session.messages[1];
         assert_eq!(msg1.role, "assistant");
-        assert!(msg1.usage.is_some(), "First assistant message should have usage");
+        assert!(
+            msg1.usage.is_some(),
+            "First assistant message should have usage"
+        );
         let usage1 = msg1.usage.as_ref().unwrap();
         assert_eq!(usage1.input_tokens, 150);
         assert_eq!(usage1.output_tokens, 200);
@@ -3604,7 +3629,10 @@ mod tests {
         // Second assistant message with usage
         let msg2 = &session.messages[3];
         assert_eq!(msg2.role, "assistant");
-        assert!(msg2.usage.is_some(), "Second assistant message should have usage");
+        assert!(
+            msg2.usage.is_some(),
+            "Second assistant message should have usage"
+        );
         let usage2 = msg2.usage.as_ref().unwrap();
         assert_eq!(usage2.input_tokens, 180);
         assert_eq!(usage2.output_tokens, 250);
@@ -3614,7 +3642,10 @@ mod tests {
         assert_eq!(session.total_usage.output_tokens, 450);
 
         // Verify timing from command invocation
-        assert!(session.complete, "Session should be complete (has exit_code)");
+        assert!(
+            session.complete,
+            "Session should be complete (has exit_code)"
+        );
         assert_eq!(session.created_at.to_string(), "2025-01-15 10:00:00 UTC");
         assert_eq!(session.updated_at.to_string(), "2025-01-15 10:05:00 UTC");
 
@@ -3673,8 +3704,11 @@ mod tests {
 
         // Create a dummy .jsonl file to make it a valid session directory
         let session_file = gemini_tmp.join("session.jsonl");
-        fs::write(&session_file, r#"{"type":"metadata","session_id":"test-123"}"#)
-            .expect("write session file");
+        fs::write(
+            &session_file,
+            r#"{"type":"metadata","session_id":"test-123"}"#,
+        )
+        .expect("write session file");
 
         std::env::set_var("GEMINI_CLI_HOME", tmp.path());
 
@@ -3693,8 +3727,11 @@ mod tests {
         fs::create_dir_all(&sessions_dir).expect("create sessions dir");
 
         let legacy_file = sessions_dir.join("legacy.jsonl");
-        fs::write(&legacy_file, r#"{"type":"metadata","session_id":"legacy-456"}"#)
-            .expect("write legacy session file");
+        fs::write(
+            &legacy_file,
+            r#"{"type":"metadata","session_id":"legacy-456"}"#,
+        )
+        .expect("write legacy session file");
 
         // Note: we can't override dirs::home_dir() in tests, so we just verify
         // the logic would work by checking the path resolution logic

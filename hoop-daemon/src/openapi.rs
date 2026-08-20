@@ -16,9 +16,9 @@
 //! 4. Add schemas to the `components(schemas())` list below
 
 use utoipa::OpenApi;
-use utoipa_swagger_ui::SwaggerUi;
-use utoipa_redoc::{Redoc, Servable};
 use utoipa_rapidoc::RapiDoc;
+use utoipa_redoc::{Redoc, Servable};
+use utoipa_swagger_ui::SwaggerUi;
 
 /// OpenAPI documentation structure
 ///
@@ -580,9 +580,17 @@ pub fn router() -> axum::Router<crate::DaemonState> {
     let openapi_json = ApiDoc::openapi();
 
     axum::Router::new()
-        .route("/api/openapi.json", axum::routing::get(openapi_json_handler))
-        .route("/api/openapi.yaml", axum::routing::get(openapi_yaml_handler))
-        .merge(SwaggerUi::new("/api/docs/swagger-ui").url("/api/openapi.json", openapi_json.clone()))
+        .route(
+            "/api/openapi.json",
+            axum::routing::get(openapi_json_handler),
+        )
+        .route(
+            "/api/openapi.yaml",
+            axum::routing::get(openapi_yaml_handler),
+        )
+        .merge(
+            SwaggerUi::new("/api/docs/swagger-ui").url("/api/openapi.json", openapi_json.clone()),
+        )
         .merge(Redoc::with_url("/api/docs/redoc", openapi_json.clone()))
         .merge(RapiDoc::with_openapi("/api/docs/rapidoc", openapi_json))
 }
@@ -595,7 +603,10 @@ async fn openapi_yaml_handler() -> impl axum::response::IntoResponse {
     let yaml = serde_yaml::to_string(&json).unwrap();
 
     (
-        [(header::CONTENT_TYPE, "application/vnd.oai.openapi;version=3.0")],
+        [(
+            header::CONTENT_TYPE,
+            "application/vnd.oai.openapi;version=3.0",
+        )],
         yaml,
     )
 }
