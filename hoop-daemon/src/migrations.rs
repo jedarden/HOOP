@@ -1433,4 +1433,300 @@ mod tests {
 
         assert!(result.is_err());
     }
+
+    // =========================================================================
+    // Edge Case Tests
+    // =========================================================================
+
+    /// Test malformed version strings are handled gracefully
+    #[test]
+    fn test_semver_compare_malformed_versions() {
+        // Malformed versions should parse to 0 (graceful degradation)
+        let malformed = vec!["", "not.a.version", "abc", "1.2.x", "v1.2.3"];
+
+        for version in malformed {
+            let result = semver_compare(version);
+            // Should not panic, should return a value
+            // Malformed parts are filtered out by filter_map(|p| p.parse().ok())
+            assert!(result >= 0, "Malformed version should not panic");
+        }
+    }
+
+    /// Test version boundaries: zero versions
+    #[test]
+    fn test_semver_compare_zero_boundaries() {
+        assert_eq!(semver_compare("0.0.0"), 0);
+        assert!(semver_compare("0.0.1") > semver_compare("0.0.0"));
+        assert!(semver_compare("0.1.0") > semver_compare("0.0.99"));
+        assert!(semver_compare("1.0.0") > semver_compare("0.99.99"));
+    }
+
+    /// Test version boundaries: large versions
+    #[test]
+    fn test_semver_compare_large_versions() {
+        assert!(semver_compare("99.99.99") > semver_compare("99.99.98"));
+        assert!(semver_compare("100.0.0") > semver_compare("99.99.99"));
+        assert!(semver_compare("999.999.999") > semver_compare("100.0.0"));
+    }
+
+    /// Test version boundary: single component versions
+    #[test]
+    fn test_semver_compare_single_component() {
+        // "1" should parse as major=1, minor=0, patch=0
+        assert_eq!(semver_compare("1"), semver_compare("1.0.0"));
+
+        // "1.2" should parse as major=1, minor=2, patch=0
+        assert_eq!(semver_compare("1.2"), semver_compare("1.2.0"));
+    }
+
+    /// Test version boundary: versions with extra components
+    #[test]
+    fn test_semver_compare_extra_components() {
+        // Extra components beyond patch are ignored
+        assert_eq!(semver_compare("1.2.3.4"), semver_compare("1.2.3"));
+        assert_eq!(semver_compare("1.2.3.4.5"), semver_compare("1.2.3"));
+    }
+
+    /// Test version comparison ordering is transitive
+    #[test]
+    fn test_semver_compare_transitive_ordering() {
+        let v1 = semver_compare("1.0.0");
+        let v2 = semver_compare("1.1.0");
+        let v3 = semver_compare("1.2.0");
+
+        assert!(v1 < v2);
+        assert!(v2 < v3);
+        assert!(v1 < v3); // Transitivity holds
+    }
+
+    /// Test empty migration registry
+    #[test]
+    fn test_empty_registry() {
+        let registry = MigrationRegistry::new();
+
+        // Empty registry should have no migrations
+        assert_eq!(registry.all_migrations().len(), 0);
+
+        // Pending migrations from any version should be empty
+        let pending = registry.pending_migrations("0.1.0").unwrap();
+        assert_eq!(pending.len(), 0);
+
+        // Cannot rollback any version
+        assert!(!registry.can_rollback("1.0.0"));
+
+        // Getting non-existent migration returns None
+        assert!(registry.get("1.0.0").is_none());
+    }
+
+    /// Test migration ordering in registry
+    #[test]
+    fn test_migration_ordering() {
+        let mut registry = MigrationRegistry::new();
+
+        // Register migrations in random order
+        registry
+            .register(Migration {
+                version: "1.3.0",
+                description: "Third",
+                up: |_| Ok(()),
+                down: Some(|_| Ok(())),
+            })
+            .unwrap();
+
+        registry
+            .register(Migration {
+                version: "1.1.0",
+                description: "First",
+                up: |_| Ok(()),
+                down: Some(|_| Ok(())),
+            })
+            .unwrap();
+
+        registry
+            .register(Migration {
+                version: "1.2.0",
+                description: "Second",
+                up: |_| Ok(()),
+                down: Some(|_| Ok(())),
+            })
+            .unwrap();
+
+        // all_migrations should return them in version order
+        let migrations = registry.all_migrations();
+        assert_eq!(migrations.len(), 3);
+        assert_eq!(migrations[0].version, "1.1.0");
+        assert_eq!(migrations[1].version, "1.2.0");
+        assert_eq!(migrations[2].version, "1.3.0");
+    }
+
+    /// Test pending migrations with different starting versions
+    #[test]
+    fn test_pending_migrations_from_different_versions() {
+        let mut registry = MigrationRegistry::new();
+
+        registry
+            .register(Migration {
+                version: "1.1.0",
+                description: "First",
+                up: |_| Ok(()),
+                down: Some(|_| Ok(())),
+            })
+            .unwrap();
+
+        registry
+            .register(Migration {
+                version: "1.2.0",
+                description: "Second",
+                up: |_| Ok(()),
+                down: Some(|_| Ok(())),
+            })
+            .unwrap();
+
+        registry
+            .register(Migration {
+                version: "1.3.0",
+                description: "Third",
+                up: |_| Ok(()),
+                down: Some(|_| Ok(())),
+            })
+            .unwrap();
+
+        // From before first migration
+        let pending = registry.pending_migrations("0.9.0").unwrap();
+        assert_eq!(pending.len(), 3);
+
+        // From between migrations
+        let pending = registry.pending_migrations("1.1.0").unwrap();
+        assert_eq!(pending.len(), 2);
+
+        // From after second migration
+        let pending = registry.pending_migrations("1.2.0").unwrap();
+        assert_eq!(pending.len(), 1);
+
+        // From latest version
+        let pending = registry.pending_migrations("1.3.0").unwrap();
+        assert_eq!(pending.len(), 0);
+
+        // From future version (past latest)
+        let pending = registry.pending_migrations("2.0.0").unwrap();
+        assert_eq!(pending.len(), 0);
+    }
+
+    /// Test rollback availability for major vs minor versions
+    #[test]
+    fn test_rollback_major_vs_minor_versions() {
+        let mut registry = MigrationRegistry::new();
+
+        // Minor version - should have rollback
+        registry
+            .register(Migration {
+                version: "1.1.0",
+                description: "Minor",
+                up: |_| Ok(()),
+                down: Some(|_| Ok(())),
+            })
+            .unwrap();
+
+        // Major version - should not have rollback
+        registry
+            .register(Migration {
+                version: "2.0.0",
+                description: "Major",
+                up: |_| Ok(()),
+                down: None,
+            })
+            .unwrap();
+
+        assert!(registry.can_rollback("1.1.0"));
+        assert!(!registry.can_rollback("2.0.0"));
+    }
+
+    /// Test migration with zero padding in versions
+    #[test]
+    fn test_migration_zero_padded_versions() {
+        let mut registry = MigrationRegistry::new();
+
+        // "01.02.03" should be treated as "1.2.3"
+        registry
+            .register(Migration {
+                version: "01.02.03",
+                description: "Zero padded",
+                up: |_| Ok(()),
+                down: Some(|_| Ok(())),
+            })
+            .unwrap();
+
+        // Should be able to query it
+        let migration = registry.get("01.02.03");
+        assert!(migration.is_some());
+
+        // semver_compare should handle it
+        let v1 = semver_compare("01.02.03");
+        let v2 = semver_compare("1.2.3");
+        assert_eq!(v1, v2);
+    }
+
+    /// Test version string with whitespace
+    #[test]
+    fn test_version_with_whitespace() {
+        // Whitespace should be handled
+        let v1 = semver_compare("1.2.3");
+        let v2 = semver_compare(" 1.2.3 "); // with spaces
+
+        // May not be equal due to parsing, but should not panic
+        let _ = (v1, v2);
+    }
+
+    /// Test migration registry with many versions
+    #[test]
+    fn test_registry_with_many_versions() {
+        let mut registry = MigrationRegistry::new();
+
+        // Register many migrations
+        for i in 1..=10 {
+            let version = format!("1.{}.0", i);
+            registry
+                .register(Migration {
+                    version: version.leak(), // Leak for &'static str in test
+                    description: "Migration",
+                    up: |_| Ok(()),
+                    down: Some(|_| Ok(())),
+                })
+                .unwrap();
+        }
+
+        let migrations = registry.all_migrations();
+        assert_eq!(migrations.len(), 10);
+
+        // Verify they're ordered
+        for i in 0..9 {
+            let v1 = semver_compare(migrations[i].version);
+            let v2 = semver_compare(migrations[i + 1].version);
+            assert!(v1 < v2, "Migrations should be ordered by version");
+        }
+    }
+
+    /// Test get_migration by version
+    #[test]
+    fn test_get_migration_by_version() {
+        let mut registry = MigrationRegistry::new();
+
+        registry
+            .register(Migration {
+                version: "1.1.0",
+                description: "Test migration",
+                up: |_| Ok(()),
+                down: Some(|_| Ok(())),
+            })
+            .unwrap();
+
+        // Get existing migration
+        let migration = registry.get("1.1.0");
+        assert!(migration.is_some());
+        assert_eq!(migration.unwrap().version, "1.1.0");
+
+        // Get non-existent migration
+        let migration = registry.get("9.9.9");
+        assert!(migration.is_none());
+    }
 }
