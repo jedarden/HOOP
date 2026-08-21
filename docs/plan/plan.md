@@ -180,18 +180,18 @@ Operator removes a project's `.beads/` directory while HOOP is running. Within o
 
 - **Host:** Hetzner EX44-class. Bare metal, long-lived, Tailscale-only.
 - **Workspaces:** `~/` holds 5–25 repos. Each has a `.beads/` directory; git worktrees live under `.worktrees/`; some may carry a `fleet.yaml` describing NEEDLE's worker pool (HOOP reads it, doesn't act on it).
-- **The `br` binary** — **beads_rust** by [Jeffrey Emanuel (dicklesworthstone)](https://github.com/dicklesworthstone/beads_rust), installed at `~/.local/bin/br`. HOOP treats `br` as its sole bead API. Every bead read goes through `br` read verbs (e.g. `br list --json`, `br get <id> --json`); every bead write HOOP performs is `br create --json <payload>`. HOOP never opens `.beads/beads.db` directly, never writes to `.beads/beads.jsonl` directly, and never links against bead library code. Shelling out is deliberate — it pins HOOP to the `br` surface area, lets `br` evolve independently, and keeps HOOP honest about the "one write path" invariant.
+- **The `bead` CLI** — **bead-rs** by [jedarden](https://github.com/jedarden/bead-rs), installed at `~/.local/bin/bead` (or configurable via `HOOP_BEAD_CLI` environment variable). HOOP treats `bead` as its sole bead API. Every bead read goes through `bead` read verbs (e.g. `bead list --json`, `bead show <id>`); every bead write HOOP performs is `bead create`. HOOP never opens `.beads/beads.db` directly, never writes to `.beads/` directly, and never links against bead library code. Shelling out is deliberate — it pins HOOP to the `bead` surface area, lets `bead` evolve independently, and keeps HOOP honest about the "one write path" invariant.
 - **Other tooling:** Five CLI adapters installed and credentialed (operator's cache, not HOOP's). NEEDLE installed and running its own workers through its own supervision. git 2.5+.
 - **Process model:** `hoop serve` as a systemd user service on a Tailscale hostname. No tmux spawning by HOOP.
 - **Parallel workloads:** NEEDLE fleets in tmux (HOOP-observed); ad-hoc CLI sessions in separate terminals (HOOP-observed); everything else (HOOP-ignored).
 
-### 2.1. On the `br` dependency
+### 2.1. On the `bead` CLI dependency
 
-`br` is upstream-authoritative for bead semantics. HOOP tracks compatibility by pinning a *minimum* `br` version in config; on startup audit, HOOP runs `br --version`, compares against the pinned minimum, and refuses to start (or starts with the bead-creation surface disabled) if the binary is missing or too old. Version strings get logged so regressions are visible.
+`bead` (the bead-rs CLI) is upstream-authoritative for bead semantics. HOOP tracks compatibility by pinning a *minimum* `bead` version in config; on startup audit, HOOP runs `bead --version`, compares against the pinned minimum, and refuses to start (or starts with the bead-creation surface disabled) if the binary is missing or too old. Version strings get logged so regressions are visible.
 
-This environment currently runs a local fork of beads_rust with a rusqlite compatibility shim (replacing the upstream FrankenSQLite backend that had recurring index corruption — upstream issue `dicklesworthstone/beads_rust#171`). HOOP is agnostic to this: whatever `br` binary is in PATH, that's what HOOP shells out to. If and when the upstream fork stabilizes and the shim is dropped, HOOP needs no changes.
+The bead CLI command name is configurable via the `HOOP_BEAD_CLI` environment variable, defaulting to `"bead"`. This allows HOOP to work with different bead CLI implementations (e.g., legacy `br` from beads_rust) without code changes.
 
-HOOP does not bundle or vendor `br`. Installing HOOP does not install `br`; the startup audit tells the operator to install it if missing. This keeps the release pipelines for the two projects fully independent.
+HOOP does not bundle or vendor `bead`. Installing HOOP does not install `bead`; the startup audit tells the operator to install it if missing. This keeps the release pipelines for the two projects fully independent.
 
 What changes in a multi-project host vs single-workspace: session discovery has to be scoped per project, cost visibility has to bucket per project, bead-creation targets have to be explicit. This plan treats multi-project correctness as the primary design pressure.
 
@@ -206,7 +206,7 @@ What changes in a multi-project host vs single-workspace: session discovery has 
 5. **JSON Schema as cross-repo contract.** Every record has `schema_version: 1`. TS and Rust types codegen off one source.
 6. **Atomic `.tmp` + rename for every write.** Line-buffered NDJSON reader for every read.
 7. **Never silent-drop unknown events.** Log, emit progress, count.
-8. **`br create` is HOOP's only write.** No bead mutation, no tmux control, no worker lifecycle, no capacity enforcement. If the operator wants to close, release, or boost a bead, they use `br` directly or another tool.
+8. **`bead create` is HOOP's only write.** No bead mutation, no tmux control, no worker lifecycle, no capacity enforcement. If the operator wants to close, release, or boost a bead, they use `bead` directly or another tool.
 9. **If HOOP dies, nothing else notices.** NEEDLE keeps running. FABRIC keeps working. The next time HOOP starts, it rebuilds its read state from disk. HOOP is a convenience, not a dependency.
 10. **Read-first defaults.** Even bead creation requires explicit operator confirmation (chat intent → draft → preview → submit). No silent writes.
 11. **Humans speak in Stitches, not beads.** HOOP's UI, human-interface agent, forms, and chat use project-scoped work items. The bead layer is preserved for machine correctness but hidden from normal operator flow. Bead IDs surface only in expert views and audit logs.

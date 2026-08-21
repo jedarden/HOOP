@@ -18,7 +18,7 @@ use std::sync::Mutex;
 use tempfile::TempDir;
 
 /// Serialize test setup so parallel tests don't fight over the env var.
-static LOCK: Mutex<()> = Mutex::new();
+static LOCK: Mutex<()> = Mutex::new(());
 
 /// Set up a temporary fleet.db for testing.
 fn setup_test_db() -> (TempDir, PathBuf) {
@@ -62,6 +62,7 @@ async fn test_anthropic_5xx_doesnt_crash_daemon() {
         adapter: "anthropic".to_string(),
         model: "claude-opus-4-7".to_string(),
         anthropic_api_key: Some("sk-ant-test-key".to_string()),
+        anthropic_base_url: None,
         zai_base_url: None,
         zai_api_key: None,
         rate_limit_rpm: None,
@@ -86,6 +87,7 @@ async fn test_anthropic_5xx_doesnt_crash_daemon() {
         adapter: "zai".to_string(),
         model: "glm-5".to_string(),
         anthropic_api_key: None,
+        anthropic_base_url: None,
         zai_base_url: Some("https://zai.example.com".to_string()),
         zai_api_key: Some("zai-test-key".to_string()),
         rate_limit_rpm: None,
@@ -640,7 +642,7 @@ async fn test_session_continuity_after_daemon_restart() {
 /// switching adapters) correctly includes Reflection Ledger entries.
 #[tokio::test]
 #[serial]
-fn test_handoff_context_includes_reflection_ledger() {
+async fn test_handoff_context_includes_reflection_ledger() {
     let (_tmp, db_path) = setup_test_db();
 
     let conn = rusqlite::Connection::open(&db_path).unwrap();
@@ -650,14 +652,14 @@ fn test_handoff_context_includes_reflection_ledger() {
     conn.execute(
         r#"INSERT INTO reflection_ledger (id, scope, rule, reason, status, created_at)
            VALUES (?1, 'global', 'test rule 1', 'testing', 'approved', ?2)"#,
-        [uuid::Uuid::new_v4().to_string(), &now],
+        [uuid::Uuid::new_v4().to_string(), now.clone()],
     )
     .unwrap();
 
     conn.execute(
         r#"INSERT INTO reflection_ledger (id, scope, rule, reason, status, created_at)
            VALUES (?1, 'project:test', 'test rule 2', 'testing', 'approved', ?2)"#,
-        [uuid::Uuid::new_v4().to_string(), &now],
+        [uuid::Uuid::new_v4().to_string(), now.clone()],
     )
     .unwrap();
 

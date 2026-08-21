@@ -1840,15 +1840,17 @@ pub async fn serve(config: Config) -> anyhow::Result<()> {
         .join(".hoop")
         .join("scripts");
     let supervisor = Arc::new(supervisor::ProjectSupervisor::new(
-        broadcast::channel(256).0, // bead events (internal)
-        session_tx.clone(),
-        worker_registry.clone(),
-        beads.clone(),
-        shutdown_coordinator.clone(),
-        cost_aggregator.clone(),
-        vector_index.clone(),
+        supervisor::SupervisorDeps {
+            bead_tx: broadcast::channel(256).0, // bead events (internal)
+            session_tx: session_tx.clone(),
+            worker_registry: worker_registry.clone(),
+            beads: beads.clone(),
+            shutdown: shutdown_coordinator.clone(),
+            cost_aggregator: cost_aggregator.clone(),
+            vector_index: vector_index.clone(),
+            stuck_detector: stuck_detector.clone(),
+        },
         scripts_dir,
-        stuck_detector.clone(),
     ));
 
     // Start global event tailer (for bead claim/close/release/update events)
@@ -3404,11 +3406,13 @@ Note: This is an automated synthesis from voice dictation."#,
                     if let Err(e) = fleet::snapshot_project_cost_row(
                         &project,
                         &date,
-                        cost_usd,
-                        input,
-                        output,
-                        cache_read,
-                        cache_write,
+                        fleet::CostMetrics {
+                            cost_usd,
+                            input_tokens: input,
+                            output_tokens: output,
+                            cache_read_tokens: cache_read,
+                            cache_write_tokens: cache_write,
+                        },
                     ) {
                         warn!(
                             "fleet: snapshot_project_cost_row failed for {}/{}: {}",

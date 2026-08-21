@@ -18,6 +18,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 hoop-daemon = { path = "../hoop-daemon" }
 hoop-schema = { path = "../hoop-schema" }
+hoop-core = { path = "../hoop-core" }
 tokio = { workspace = true }
 anyhow = "1.0"
 dirs = "5.0"

@@ -110,7 +110,8 @@ impl ProjectsConfig {
     /// Serialize the registry back to the YAML file.
     fn write_back(path: &Path, registry: &hoop_schema::ProjectsRegistry) -> Result<()> {
         let yaml = serde_yaml::to_string(registry).context("Failed to serialize projects.yaml")?;
-        fs::write(path, yaml).context("Failed to write projects.yaml")?;
+        crate::atomic_write::atomic_write_file_str(path, &yaml)
+            .context("Failed to write projects.yaml")?;
         info!("Backfilled canonical_path entries in {}", path.display());
         Ok(())
     }

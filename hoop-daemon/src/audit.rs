@@ -3,7 +3,7 @@
 //! Validates dependencies, environment, and configuration.
 //! Each failure includes the exact command to fix it.
 
-use crate::br_verbs;
+use hoop_core::bead_cli;
 use hoop_schema::version::BR_MIN_VERSION;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -139,7 +139,7 @@ pub struct AuditConfig {
     pub include_optional: bool,
     /// Timeout for external commands
     pub command_timeout: Duration,
-    /// Allow br version mismatch (dev override for --allow-br-mismatch)
+    /// Allow bead version mismatch (dev override for --allow-br-mismatch)
     pub allow_br_mismatch: bool,
     /// Server bind address to check for port availability
     pub server_bind_addr: std::net::SocketAddr,
@@ -180,18 +180,18 @@ pub fn run_audit(config: &AuditConfig) -> AuditReport {
     // Critical checks
     if config.allow_br_mismatch {
         checks.push(AuditCheck::warning(
-            "br_version",
+            "bead_version",
             format!(
-                "br version check skipped (--allow-br-mismatch); requires >={}",
+                "bead version check skipped (--allow-br-mismatch); requires >={}",
                 BR_MIN_VERSION
             ),
             format!(
-                "Remove --allow-br-mismatch and update br to >={}",
+                "Remove --allow-br-mismatch and update bead to >={}",
                 BR_MIN_VERSION
             ),
         ));
     } else {
-        checks.push(check_br_version());
+        checks.push(check_bead_version());
     }
     checks.push(check_tmux());
     checks.push(check_port_availability(config.server_bind_addr));
@@ -243,17 +243,16 @@ pub fn daemon_startup_check(config: &AuditConfig) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Check if br is in PATH and meets minimum version
-fn check_br_version() -> AuditCheck {
-    // Route through br_verbs choke point so all br subprocess calls are
-    // centralized and the zero-write invariant can audit them.
-    let result = br_verbs::invoke_br_read(br_verbs::ReadVerb::Version, &[])
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+/// Check if bead CLI is in PATH and meets minimum version
+fn check_bead_version() -> AuditCheck {
+    let cmd_name = bead_cli::bead_cli_command();
+
+    // Route through the bead adapter to check version
+    let result = bead_cli::check_bead_cli_available();
 
     match result {
         Ok(version_output) if !version_output.is_empty() => {
-            // Parse version - br outputs like "br 0.4.0" or similar
+            // Parse version - bead outputs like "bead 0.1.0" or similar
             let version_str = version_output
                 .split_whitespace()
                 .last()
@@ -261,21 +260,26 @@ fn check_br_version() -> AuditCheck {
 
             if version_meets_minimum(version_str, BR_MIN_VERSION) {
                 AuditCheck::passed(
-                    "br_version",
-                    format!("br {} found (>= {})", version_str, BR_MIN_VERSION),
+                    "bead_version",
+                    format!("{} {} found (>= {})", cmd_name, version_str, BR_MIN_VERSION),
                 )
             } else {
                 AuditCheck::critical(
-                    "br_version",
-                    format!("br {} is below minimum required {}", version_str, BR_MIN_VERSION),
-                    "curl -sSL https://github.com/dicklesworthstone/beads_rust/releases/latest/download/br-linux-x86_64 -o ~/.local/bin/br && chmod +x ~/.local/bin/br".to_string(),
+                    "bead_version",
+                    format!("{} {} is below minimum required {}", cmd_name, version_str, BR_MIN_VERSION),
+                    format!("Install bead-rs from https://github.com/jedarden/bead-rs"),
                 )
             }
         }
-        _ => AuditCheck::critical(
-            "br_version",
-            "br not found in PATH",
-            "curl -sSL https://github.com/dicklesworthstone/beads_rust/releases/latest/download/br-linux-x86_64 -o ~/.local/bin/br && chmod +x ~/.local/bin/br",
+        Ok(_) => AuditCheck::critical(
+            "bead_version",
+            format!("{} returned empty version output", cmd_name),
+            format!("Install bead-rs from https://github.com/jedarden/bead-rs"),
+        ),
+        Err(_) => AuditCheck::critical(
+            "bead_version",
+            format!("{} not found in PATH (set HOOP_BEAD_CLI to override)", cmd_name),
+            "Install bead-rs from https://github.com/jedarden/bead-rs".to_string(),
         ),
     }
 }

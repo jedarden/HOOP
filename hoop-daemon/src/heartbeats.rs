@@ -936,7 +936,6 @@ mod tests {
             // - pid_alive=true, age=0 → Live (fresh heartbeat)
             // - pid_alive=true, age=grace → Live (exactly at grace threshold)
             // - pid_alive=true, age=grace+1 → Hung (just past grace threshold)
-            Ok(())
         });
     }
 
@@ -1090,7 +1089,6 @@ mod tests {
             // 3. Returning Result<bool, io::Error>
             //
             // All of these would be visible violations caught by this test.
-            Ok(())
         });
     }
 

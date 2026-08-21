@@ -80,7 +80,7 @@ use std::io::{BufRead, Write};
 use tempfile::TempDir;
 
 // Import HOOP daemon types for tests
-use hoop_daemon::events::{NeedleEvent, WorkerEvent};
+use hoop_daemon::events::NeedleEvent;
 use hoop_daemon::stitch_status::{LinkedBead, StitchActivity, StitchContext, StitchStatus};
 
 // ============================================================================

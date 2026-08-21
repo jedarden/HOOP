@@ -1020,6 +1020,7 @@ dependencies = [
  "dirs 5.0.1",
  "hex",
  "hmac",
+ "hoop-core",
  "hoop-daemon",
  "hoop-schema",
  "reqwest",
@@ -1036,6 +1037,16 @@ dependencies = [
  "urlencoding",
  "uuid",
  "zstd",
+]
+
+[[package]]
+name = "hoop-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -1057,8 +1068,10 @@ dependencies = [
  "glob",
  "hex",
  "hmac",
+ "hoop-core",
  "hoop-schema",
  "hoop-ui",
+ "humantime",
  "ignore",
  "infer",
  "jsonschema 0.18.3",
@@ -1082,6 +1095,7 @@ dependencies = [
  "syntect",
  "tar",
  "tempfile",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite 0.26.2",
  "tokio-util",
@@ -1111,6 +1125,7 @@ dependencies = [
  "dirs 5.0.1",
  "fnv",
  "hex",
+ "hoop-core",
  "hoop-schema",
  "ignore",
  "jsonschema 0.26.2",
@@ -1206,6 +1221,12 @@ name = "httpdate"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
+
+[[package]]
+name = "humantime"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15cdd26707701c53297e2fa6afb323d55fbc1d0810c3aec078ae3ef0424c3c15"
 
 [[package]]
 name = "hyper"

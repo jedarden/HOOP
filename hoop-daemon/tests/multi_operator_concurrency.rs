@@ -713,28 +713,28 @@ fn test_no_lock_two_stitches_both_land() {
     // Both should succeed - no locking
 
     // Create stitch A
-    hoop_daemon::fleet::create_stitch(
-        &stitch_id_a,
-        "test-project",
-        "operator",
-        "Stitch from Operator A",
-        "tailscale:operator-a@example.com",
-        &[],
-        "auto",
-    )
-    .expect("create stitch A");
+    let basic_info_a = hoop_daemon::fleet::StitchBasicInfo {
+        stitch_id: &stitch_id_a,
+        project: "test-project",
+        kind: "operator",
+        title: "Stitch from Operator A",
+        created_by: "tailscale:operator-a@example.com",
+        classification: "auto",
+    };
+    hoop_daemon::fleet::create_stitch(basic_info_a, &[])
+        .expect("create stitch A");
 
     // Create stitch B
-    hoop_daemon::fleet::create_stitch(
-        &stitch_id_b,
-        "test-project",
-        "operator",
-        "Stitch from Operator B",
-        "tailscale:operator-b@example.com",
-        &[],
-        "auto",
-    )
-    .expect("create stitch B");
+    let basic_info_b = hoop_daemon::fleet::StitchBasicInfo {
+        stitch_id: &stitch_id_b,
+        project: "test-project",
+        kind: "operator",
+        title: "Stitch from Operator B",
+        created_by: "tailscale:operator-b@example.com",
+        classification: "auto",
+    };
+    hoop_daemon::fleet::create_stitch(basic_info_b, &[])
+        .expect("create stitch B");
 
     // Verify both exist by loading them
     let stitch_a = hoop_daemon::fleet::load_stitch_by_id(&stitch_id_a)

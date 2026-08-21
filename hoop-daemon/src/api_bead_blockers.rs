@@ -190,7 +190,7 @@ pub async fn get_bead_blockers(
         }
 
         // Query bead status via br CLI
-        let mut cmd = crate::br_verbs::invoke_br_read(ReadVerb::List, &["--json"]);
+        let mut cmd = crate::br_verbs::invoke_bead_read(ReadVerb::List, &["--json"]);
         cmd.current_dir(workspace_path);
 
         match cmd.output() {

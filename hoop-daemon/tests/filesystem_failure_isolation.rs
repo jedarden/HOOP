@@ -579,6 +579,7 @@ async fn test_sibling_projects_continue_during_degradation() {
             }
             Ok(None) => break,
             Err(_) => continue,
+            Ok(Some(Err(_))) => continue, // Handle WebSocket errors gracefully
         }
 
         if received_b_status && received_c_status {

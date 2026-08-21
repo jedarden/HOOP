@@ -622,6 +622,7 @@ mod tests {
             title: "Fix bug".to_string(),
             description: Some("Fix the crash".to_string()),
             labels: Some("urgent,bug".to_string()),
+            attachments_count: None,
         };
 
         assert_eq!(params.title, "Fix bug");

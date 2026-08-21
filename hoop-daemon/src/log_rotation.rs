@@ -107,14 +107,24 @@ impl RotatingFileWriter {
             let s = f.metadata()?.len();
             (f, s)
         } else {
-            (File::create(&path)?, 0)
+            // Create new log file. Log files are fsynced on every flush (see Write::flush below),
+            // ensuring crash safety for written data. File::create is acceptable here because:
+            // 1. Log files are written incrementally, not as complete atomic writes
+            // 2. sync_all() is called on every flush (line 170), ensuring data reaches disk
+            // 3. The only risk is an empty .tmp file on crash before first write, which is acceptable
+            #[allow(clippy::disallowed_methods)]
+            let f = File::create(&path)?;
+            (f, 0)
         };
 
         if size >= MAX_FILE_SIZE {
             seq += 1;
             let path = file_path(&dir, today, seq);
+            // Create new rotated log file. See justification at line 110 above.
+            #[allow(clippy::disallowed_methods)]
+            let f = File::create(&path)?;
             return Ok(Self {
-                file: File::create(&path)?,
+                file: f,
                 path,
                 size: 0,
                 date: today,
@@ -142,7 +152,10 @@ impl RotatingFileWriter {
             self.seq += 1;
         }
         let path = file_path(&self.dir, self.date, self.seq);
-        self.file = File::create(&path)?;
+        // Create new rotated log file. See justification at line 110 above.
+        #[allow(clippy::disallowed_methods)]
+        let f = File::create(&path)?;
+        self.file = f;
         self.path = path;
         self.size = 0;
         cleanup_old_logs(&self.dir)?;

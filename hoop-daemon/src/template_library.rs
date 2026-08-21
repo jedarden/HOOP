@@ -423,7 +423,7 @@ fields:
 
     for (filename, content) in &examples {
         let path = dir.join(filename);
-        if let Err(e) = std::fs::write(&path, content) {
+        if let Err(e) = crate::atomic_write::atomic_write_file_str(&path, content) {
             warn!("Failed to seed example template {}: {}", filename, e);
         }
     }

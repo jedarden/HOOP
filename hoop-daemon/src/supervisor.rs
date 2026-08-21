@@ -161,6 +161,19 @@ impl ProjectRuntimeState {
     }
 }
 
+/// Dependencies for ProjectSupervisor (groups shared Arc references)
+#[derive(Clone)]
+pub struct SupervisorDeps {
+    pub bead_tx: broadcast::Sender<BeadEvent>,
+    pub session_tx: broadcast::Sender<SessionEvent>,
+    pub worker_registry: Arc<crate::ws::WorkerRegistry>,
+    pub beads: Arc<std::sync::RwLock<Vec<Bead>>>,
+    pub shutdown: Arc<crate::shutdown::ShutdownCoordinator>,
+    pub cost_aggregator: Arc<std::sync::RwLock<CostAggregator>>,
+    pub vector_index: Arc<std::sync::RwLock<crate::vector_index::VectorIndex>>,
+    pub stuck_detector: Arc<std::sync::Mutex<crate::stuck_detector::StuckDetector>>,
+}
+
 /// Project runtime status for UI display
 #[derive(Debug, Clone)]
 pub struct ProjectRuntimeStatus {
@@ -240,32 +253,22 @@ impl std::fmt::Debug for ProjectSupervisor {
 
 impl ProjectSupervisor {
     /// Create a new project supervisor
-    pub fn new(
-        bead_tx: broadcast::Sender<BeadEvent>,
-        session_tx: broadcast::Sender<SessionEvent>,
-        worker_registry: Arc<crate::ws::WorkerRegistry>,
-        beads: Arc<std::sync::RwLock<Vec<Bead>>>,
-        shutdown: Arc<crate::shutdown::ShutdownCoordinator>,
-        cost_aggregator: Arc<std::sync::RwLock<CostAggregator>>,
-        vector_index: Arc<std::sync::RwLock<crate::vector_index::VectorIndex>>,
-        scripts_dir: PathBuf,
-        stuck_detector: Arc<std::sync::Mutex<crate::stuck_detector::StuckDetector>>,
-    ) -> Self {
+    pub fn new(deps: SupervisorDeps, scripts_dir: PathBuf) -> Self {
         let (status_tx, _) = broadcast::channel(64);
 
         Self {
             runtimes: Arc::new(RwLock::new(HashMap::new())),
-            bead_tx,
-            session_tx,
-            worker_registry,
-            beads,
+            bead_tx: deps.bead_tx,
+            session_tx: deps.session_tx,
+            worker_registry: deps.worker_registry,
+            beads: deps.beads,
             status_tx,
-            shutdown,
+            shutdown: deps.shutdown,
             event_tailer: Arc::new(std::sync::Mutex::new(None)),
-            cost_aggregator,
-            vector_index,
+            cost_aggregator: deps.cost_aggregator,
+            vector_index: deps.vector_index,
             scripts_dir,
-            stuck_detector,
+            stuck_detector: deps.stuck_detector,
         }
     }
 

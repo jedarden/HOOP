@@ -1,0 +1,798 @@
+{
+  "metadata": {
+    "extraction_date": "2026-08-15",
+    "total_error_messages": 1192,
+    "scope": "HOOP test suite error messages",
+    "description": "Comprehensive catalog of error messages found in HOOP test files",
+    "catalog_type": "summary_with_sample_data"
+  },
+  "summary_statistics": {
+    "total_files_analyzed": 252,
+    "total_error_messages": 1192,
+    "pattern_distribution": {
+      "expect": 598,
+      "assert": 500,
+      "error_return": 39,
+      "unknown": 29,
+      "bail": 19,
+      "anyhow": 7
+    },
+    "top_files_by_error_count": [
+      {
+        "file": "hoop-daemon/tests_phase5/adapter_failover_test.rs",
+        "error_count": 119
+      },
+      {
+        "file": "hoop-daemon/tests/adapter_failover_test.rs",
+        "error_count": 119
+      },
+      {
+        "file": "hoop-cli/tests/cli_test_helpers.rs",
+        "error_count": 104
+      },
+      {
+        "file": "tests/cli_test_helpers.rs",
+        "error_count": 89
+      },
+      {
+        "file": "hoop-daemon/tests/testrepo_integration.rs",
+        "error_count": 78
+      },
+      {
+        "file": "hoop-daemon/tests/testrepo_harness_integration.rs",
+        "error_count": 73
+      },
+      {
+        "file": "hoop-cli/tests/cli_test_utils.rs",
+        "error_count": 70
+      },
+      {
+        "file": "hoop-cli/tests/init_handler_integration_tests.rs",
+        "error_count": 64
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "error_count": 43
+      },
+      {
+        "file": "tests/acceptance/s4_daemon_restart.rs",
+        "error_count": 41
+      }
+    ]
+  },
+  "pattern_analysis": {
+    "expect": {
+      "count": 598,
+      "description": "Error messages from .expect() calls",
+      "examples": [
+        "workspace root",
+        "Failed to spawn daemon",
+        "Failed to fetch dashboard"
+      ]
+    },
+    "assert": {
+      "count": 500,
+      "description": "Error messages from assert! and assert_eq! macros",
+      "examples": [
+        "Dashboard endpoint should return 200",
+        "total_workers must be a number"
+      ]
+    },
+    "error_return": {
+      "count": 39,
+      "description": "Error messages from Err() and return Err() statements"
+    },
+    "bail": {
+      "count": 19,
+      "description": "Error messages from bail! and ensure! macros"
+    },
+    "anyhow": {
+      "count": 7,
+      "description": "Error messages from anyhow::anyhow! and anyhow::Error"
+    }
+  },
+  "sample_error_messages": [
+    [
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 34,
+        "pattern_type": "expect",
+        "error_message": "workspace root",
+        "context": "        .expect(\"workspace root\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 96,
+        "pattern_type": "anyhow",
+        "error_message": "Daemon failed to start within timeout",
+        "context": "    Err(anyhow::anyhow!(\"Daemon failed to start within timeout\"))"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 103,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 111,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch dashboard",
+        "context": "        .expect(\"Failed to fetch dashboard\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 113,
+        "pattern_type": "assert",
+        "error_message": "Dashboard endpoint should return 200",
+        "context": "    assert_eq!(resp.status(), 200, \"Dashboard endpoint should return 200\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 115,
+        "pattern_type": "expect",
+        "error_message": "Failed to parse dashboard",
+        "context": "    let dashboard: JsonValue = resp.json().await.expect(\"Failed to parse dashboard\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 123,
+        "pattern_type": "expect",
+        "error_message": "total_workers must be a number",
+        "context": "        .expect(\"total_workers must be a number\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 131,
+        "pattern_type": "expect",
+        "error_message": "total_spend_usd must be a number",
+        "context": "        .expect(\"total_spend_usd must be a number\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 132,
+        "pattern_type": "assert",
+        "error_message": "total_spend_usd must be non-negative",
+        "context": "    assert!(total_cost >= 0.0, \"total_spend_usd must be non-negative\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 140,
+        "pattern_type": "expect",
+        "error_message": "longest_running must be an array",
+        "context": "        .expect(\"longest_running must be an array\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 146,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch worker timeline",
+        "context": "        .expect(\"Failed to fetch worker timeline\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 148,
+        "pattern_type": "assert",
+        "error_message": "Worker timeline endpoint should return 200",
+        "context": "    assert_eq!(resp.status(), 200, \"Worker timeline endpoint should return 200\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 150,
+        "pattern_type": "expect",
+        "error_message": "Failed to parse timeline",
+        "context": "    let _timeline: JsonValue = resp.json().await.expect(\"Failed to parse timeline\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 161,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 171,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch dashboard",
+        "context": "        .expect(\"Failed to fetch dashboard\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 175,
+        "pattern_type": "assert",
+        "error_message": "Dashboard should return 200",
+        "context": "    assert_eq!(resp.status(), 200, \"Dashboard should return 200\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 190,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 198,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch dashboard",
+        "context": "        .expect(\"Failed to fetch dashboard\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 206,
+        "pattern_type": "expect",
+        "error_message": "Failed to parse response",
+        "context": "    let dashboard: JsonValue = resp.json().await.expect(\"Failed to parse response\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 208,
+        "pattern_type": "assert",
+        "error_message": "range",
+        "context": "    assert_eq!(dashboard[\"range\"], \"today\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 209,
+        "pattern_type": "assert",
+        "error_message": "total_workers",
+        "context": "    assert!(dashboard[\"total_workers\"].is_number());"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 210,
+        "pattern_type": "assert",
+        "error_message": "total_spend_usd",
+        "context": "    assert!(dashboard[\"total_spend_usd\"].is_number());"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 211,
+        "pattern_type": "assert",
+        "error_message": "spend_by_project",
+        "context": "    assert!(dashboard[\"spend_by_project\"].is_array());"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 212,
+        "pattern_type": "assert",
+        "error_message": "spend_by_adapter",
+        "context": "    assert!(dashboard[\"spend_by_adapter\"].is_array());"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 213,
+        "pattern_type": "assert",
+        "error_message": "workers_by_project",
+        "context": "    assert!(dashboard[\"workers_by_project\"].is_array());"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 214,
+        "pattern_type": "assert",
+        "error_message": "longest_running",
+        "context": "    assert!(dashboard[\"longest_running\"].is_array());"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 223,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 231,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch dashboard",
+        "context": "        .expect(\"Failed to fetch dashboard\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 233,
+        "pattern_type": "expect",
+        "error_message": "Failed to parse response",
+        "context": "    let dashboard1: JsonValue = resp1.json().await.expect(\"Failed to parse response\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 241,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch dashboard",
+        "context": "        .expect(\"Failed to fetch dashboard\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 243,
+        "pattern_type": "expect",
+        "error_message": "Failed to parse response",
+        "context": "    let dashboard2: JsonValue = resp2.json().await.expect(\"Failed to parse response\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 245,
+        "pattern_type": "assert",
+        "error_message": "range",
+        "context": "    assert_eq!(dashboard1[\"range\"], dashboard2[\"range\"]);"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 254,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 262,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch dashboard",
+        "context": "        .expect(\"Failed to fetch dashboard\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 264,
+        "pattern_type": "expect",
+        "error_message": "Failed to parse response",
+        "context": "    let dashboard: JsonValue = resp.json().await.expect(\"Failed to parse response\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 268,
+        "pattern_type": "expect",
+        "error_message": "total_spend_usd must be present",
+        "context": "        .expect(\"total_spend_usd must be present\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 270,
+        "pattern_type": "assert",
+        "error_message": "Total cost must be non-negative",
+        "context": "    assert!(total_cost >= 0.0, \"Total cost must be non-negative\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 274,
+        "pattern_type": "expect",
+        "error_message": "spend_by_project must be an array",
+        "context": "        .expect(\"spend_by_project must be an array\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 295,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 303,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch dashboard",
+        "context": "        .expect(\"Failed to fetch dashboard\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 305,
+        "pattern_type": "expect",
+        "error_message": "Failed to parse response",
+        "context": "    let dashboard: JsonValue = resp.json().await.expect(\"Failed to parse response\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 309,
+        "pattern_type": "expect",
+        "error_message": "total_workers must be present",
+        "context": "        .expect(\"total_workers must be present\");"
+      },
+      {
+        "file": "tests/acceptance/s1_morning_review.rs",
+        "line": 313,
+        "pattern_type": "expect",
+        "error_message": "workers_by_project must be an array",
+        "context": "        .expect(\"workers_by_project must be an array\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 35,
+        "pattern_type": "expect",
+        "error_message": "workspace root",
+        "context": "        .expect(\"workspace root\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 97,
+        "pattern_type": "anyhow",
+        "error_message": "Daemon failed to start within timeout",
+        "context": "    Err(anyhow::anyhow!(\"Daemon failed to start within timeout\"))"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 104,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 112,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch beads",
+        "context": "        .expect(\"Failed to fetch beads\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 114,
+        "pattern_type": "assert",
+        "error_message": "Beads endpoint should return 200",
+        "context": "    assert_eq!(resp.status(), 200, \"Beads endpoint should return 200\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 116,
+        "pattern_type": "expect",
+        "error_message": "Failed to parse beads",
+        "context": "    let beads: JsonValue = resp.json().await.expect(\"Failed to parse beads\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 122,
+        "pattern_type": "expect",
+        "error_message": "Bead should have an id",
+        "context": "                .expect(\"Bead should have an id\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 128,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch bead events",
+        "context": "                .expect(\"Failed to fetch bead events\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 136,
+        "pattern_type": "expect",
+        "error_message": "Failed to parse events",
+        "context": "                let events: JsonValue = resp.json().await.expect(\"Failed to parse events\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 137,
+        "pattern_type": "assert",
+        "error_message": "Events should be an array",
+        "context": "                assert!(events.is_array(), \"Events should be an array\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 152,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 160,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch beads",
+        "context": "        .expect(\"Failed to fetch beads\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 162,
+        "pattern_type": "expect",
+        "error_message": "Failed to parse beads",
+        "context": "    let beads: JsonValue = resp.json().await.expect(\"Failed to parse beads\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 168,
+        "pattern_type": "expect",
+        "error_message": "Bead should have an id",
+        "context": "                .expect(\"Bead should have an id\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 176,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch bead events",
+        "context": "                .expect(\"Failed to fetch bead events\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 197,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 205,
+        "pattern_type": "expect",
+        "error_message": "Failed to connect to stitch endpoint",
+        "context": "        .expect(\"Failed to connect to stitch endpoint\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 219,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 235,
+        "pattern_type": "expect",
+        "error_message": "Failed to connect to endpoint",
+        "context": "            .expect(\"Failed to connect to endpoint\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 251,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 259,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch conversations",
+        "context": "        .expect(\"Failed to fetch conversations\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 261,
+        "pattern_type": "assert",
+        "error_message": "Conversations endpoint should return 200",
+        "context": "    assert_eq!(resp.status(), 200, \"Conversations endpoint should return 200\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 263,
+        "pattern_type": "expect",
+        "error_message": "Failed to parse conversations",
+        "context": "    let conversations: JsonValue = resp.json().await.expect(\"Failed to parse conversations\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 265,
+        "pattern_type": "assert",
+        "error_message": "Conversations should be an array",
+        "context": "    assert!(conversations.is_array(), \"Conversations should be an array\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 274,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 282,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch beads",
+        "context": "        .expect(\"Failed to fetch beads\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 284,
+        "pattern_type": "expect",
+        "error_message": "Failed to parse beads",
+        "context": "    let beads: JsonValue = resp.json().await.expect(\"Failed to parse beads\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 300,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 308,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch cost trends",
+        "context": "        .expect(\"Failed to fetch cost trends\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 310,
+        "pattern_type": "assert",
+        "error_message": "Cost trends endpoint should return 200",
+        "context": "    assert_eq!(resp.status(), 200, \"Cost trends endpoint should return 200\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 312,
+        "pattern_type": "expect",
+        "error_message": "Failed to parse cost data",
+        "context": "    let cost_data: JsonValue = resp.json().await.expect(\"Failed to parse cost data\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 314,
+        "pattern_type": "assert",
+        "error_message": "Cost data should be an object",
+        "context": "    assert!(cost_data.is_object(), \"Cost data should be an object\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 323,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 331,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch beads",
+        "context": "        .expect(\"Failed to fetch beads\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 333,
+        "pattern_type": "expect",
+        "error_message": "Failed to parse beads",
+        "context": "    let beads: JsonValue = resp.json().await.expect(\"Failed to parse beads\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 339,
+        "pattern_type": "expect",
+        "error_message": "Bead should have an id",
+        "context": "                .expect(\"Bead should have an id\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 345,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch bead events",
+        "context": "                .expect(\"Failed to fetch bead events\");"
+      },
+      {
+        "file": "tests/acceptance/s2_transcript_archaeology.rs",
+        "line": 348,
+        "pattern_type": "expect",
+        "error_message": "Failed to parse events",
+        "context": "                let events: JsonValue = resp.json().await.expect(\"Failed to parse events\");"
+      },
+      {
+        "file": "tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 37,
+        "pattern_type": "expect",
+        "error_message": "workspace root",
+        "context": "        .expect(\"workspace root\");"
+      },
+      {
+        "file": "tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 99,
+        "pattern_type": "anyhow",
+        "error_message": "Daemon failed to start within timeout",
+        "context": "    Err(anyhow::anyhow!(\"Daemon failed to start within timeout\"))"
+      },
+      {
+        "file": "tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 106,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 124,
+        "pattern_type": "expect",
+        "error_message": "Failed to create draft",
+        "context": "        .expect(\"Failed to create draft\");"
+      },
+      {
+        "file": "tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 140,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 148,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch drafts",
+        "context": "        .expect(\"Failed to fetch drafts\");"
+      },
+      {
+        "file": "tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 162,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 170,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch audit log",
+        "context": "        .expect(\"Failed to fetch audit log\");"
+      },
+      {
+        "file": "tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 184,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 192,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch beads",
+        "context": "        .expect(\"Failed to fetch beads\");"
+      },
+      {
+        "file": "tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 194,
+        "pattern_type": "assert",
+        "error_message": "Bead list endpoint should return 200",
+        "context": "    assert_eq!(resp.status(), 200, \"Bead list endpoint should return 200\");"
+      },
+      {
+        "file": "tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 205,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 225,
+        "pattern_type": "expect",
+        "error_message": "Failed to create draft",
+        "context": "        .expect(\"Failed to create draft\");"
+      },
+      {
+        "file": "tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 228,
+        "pattern_type": "expect",
+        "error_message": "Failed to parse draft",
+        "context": "        let draft: JsonValue = resp.json().await.expect(\"Failed to parse draft\");"
+      },
+      {
+        "file": "tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 248,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 256,
+        "pattern_type": "expect",
+        "error_message": "Failed to fetch audit log",
+        "context": "        .expect(\"Failed to fetch audit log\");"
+      },
+      {
+        "file": "tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 259,
+        "pattern_type": "expect",
+        "error_message": "Failed to parse audit",
+        "context": "        let audit: JsonValue = resp.json().await.expect(\"Failed to parse audit\");"
+      },
+      {
+        "file": "tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 279,
+        "pattern_type": "expect",
+        "error_message": "Failed to spawn daemon",
+        "context": "        .expect(\"Failed to spawn daemon\");"
+      },
+      {
+        "file": "tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 298,
+        "pattern_type": "expect",
+        "error_message": "Failed to create draft",
+        "context": "        .expect(\"Failed to create draft\");"
+      }
+    ]
+  ]
+}

@@ -94,6 +94,7 @@ pub fn atomic_write_file(dest: &Path, data: &[u8]) -> Result<()> {
     let tmp_path = parent.join(tmp_name);
 
     // Write data to tmp file
+    #[allow(clippy::disallowed_methods)]
     let mut file = File::create(&tmp_path)
         .with_context(|| format!("failed to create tmp file: {}", tmp_path.display()))?;
     file.write_all(data)
@@ -183,6 +184,7 @@ impl AtomicWriteBuilder {
 
         let tmp_path = parent.join(tmp_name);
 
+        #[allow(clippy::disallowed_methods)]
         let mut file = File::create(&tmp_path)
             .with_context(|| format!("failed to create tmp file: {}", tmp_path.display()))?;
         file.write_all(data)

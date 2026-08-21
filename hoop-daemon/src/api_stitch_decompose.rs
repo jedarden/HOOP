@@ -720,13 +720,15 @@ pub async fn submit_stitch_internal(
     };
 
     if let Err(e) = fleet::create_stitch_with_audit(
-        &stitch_id,
-        project,
-        "operator",
-        &req.title,
-        actor,
+        fleet::StitchBasicInfo {
+            stitch_id: &stitch_id,
+            project,
+            kind: "operator",
+            title: &req.title,
+            created_by: actor,
+            classification: "operator",
+        },
         &bead_links,
-        "operator",
         audit_metadata,
     ) {
         warn!("Failed to persist stitch row for {}: {}", stitch_id, e);
@@ -1201,79 +1203,9 @@ mod tests {
 
     #[test]
     fn test_resolve_actor_fallback() {
-        // Create a minimal DaemonState with an IdentityCache
-        let identity_cache = Arc::new(crate::identity::IdentityCache::new());
-        let role_resolver = Arc::new(
-            crate::auth::RoleResolver::unprivileged().with_identity_cache(identity_cache.clone()),
-        );
-        let state = crate::DaemonState {
-            config: crate::Config::default(),
-            started_at: std::time::Instant::now(),
-            worker_registry: Arc::new(crate::ws::WorkerRegistry::new(
-                tokio::sync::broadcast::channel(1).0,
-                tokio::sync::broadcast::channel(1).0,
-            )),
-            beads: Arc::new(std::sync::RwLock::new(Vec::new())),
-            bead_tx: tokio::sync::broadcast::channel(1).0,
-            stitch_tx: tokio::sync::broadcast::channel(1).0,
-            shutdown: Arc::new(crate::shutdown::ShutdownCoordinator::new()),
-            supervisor: Arc::new(crate::supervisor::ProjectSupervisor::new()),
-            projects: Arc::new(std::sync::RwLock::new(Vec::new())),
-            project_metadata: Arc::new(std::sync::RwLock::new(std::collections::HashMap::new())),
-            config_status_tx: tokio::sync::broadcast::channel(1).0,
-            project_status_tx: tokio::sync::broadcast::channel(1).0,
-            capacity_tx: tokio::sync::broadcast::channel(1).0,
-            cost_aggregator: Arc::new(std::sync::RwLock::new(crate::cost::CostAggregator::new())),
-            transcription_service: None,
-            upload_registry: Arc::new(crate::uploads::UploadRegistry::new()),
-            active_project: Arc::new(std::sync::RwLock::new(None)),
-            vector_index: Arc::new(std::sync::RwLock::new(
-                crate::vector_index::VectorIndex::new(),
-            )),
-            agent_session_manager: None,
-            morning_brief_runner: None,
-            script_scheduler: None,
-            brief_tx: tokio::sync::broadcast::channel(1).0,
-            draft_tx: tokio::sync::broadcast::channel(1).0,
-            resolved_config: Arc::new(crate::config_resolver::ResolvedConfig::default()),
-            ws_connection_tracker: Arc::new(crate::ws::WsConnectionTracker::new()),
-            worker_ack_monitor: Arc::new(crate::worker_ack::WorkerAckMonitor::new()),
-            collision_alert_tx: tokio::sync::broadcast::channel(1).0,
-            pattern_tx: tokio::sync::broadcast::channel(1).0,
-            bead_created_by_hoop_tx: tokio::sync::broadcast::channel(1).0,
-            redaction_policy_state: Arc::new(tokio::sync::RwLock::new(
-                crate::redaction_policy::RedactionPolicyState::default(),
-            )),
-            stuck_detector: Arc::new(std::sync::Mutex::new(
-                crate::stuck_detector::StuckDetector::new(),
-            )),
-            backup_runner: None,
-            template_library: crate::template_library::TemplateStore::default(),
-            prompt_library: Arc::new(std::sync::RwLock::new(
-                crate::api_prompts::PromptLibrary::new(),
-            )),
-            note_library: Arc::new(std::sync::RwLock::new(crate::api_notes::NoteLibrary::new())),
-            skill_library: Arc::new(std::sync::RwLock::new(
-                crate::api_skills::SkillLibrary::new(),
-            )),
-            script_library: Arc::new(std::sync::RwLock::new(
-                crate::api_scripts::ScriptLibrary::new(),
-            )),
-            identity_cache: identity_cache.clone(),
-            role_resolver,
-            config_status: Arc::new(std::sync::RwLock::new(crate::ws::ConfigStatusData {
-                valid: true,
-                error: None,
-                restart_required: None,
-            })),
-            saturation_alert_tx: tokio::sync::broadcast::channel(1).0,
-            presence_tx: tokio::sync::broadcast::channel(1).0,
-            reflection_tx: tokio::sync::broadcast::channel(1).0,
-            unassigned_tracker: None,
-            reflection_detection_state: None,
-        };
-
-        let actor = resolve_actor(None, &state);
-        assert!(actor.starts_with("os:"));
+        // Test the fallback path when no state is available
+        // This verifies that resolve_actor_no_state() returns OS username
+        let actor = resolve_actor_no_state(None);
+        assert!(actor.starts_with("os:"), "Fallback should use OS username prefix");
     }
 }

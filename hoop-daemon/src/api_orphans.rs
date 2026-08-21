@@ -123,7 +123,7 @@ async fn attach_orphan(
         let project_path_clone = project_path.clone();
         move || {
             // Check if bead exists via br get
-            let mut cmd = crate::br_verbs::invoke_br_read(
+            let mut cmd = crate::br_verbs::invoke_bead_read(
                 crate::br_verbs::ReadVerb::Get,
                 &[&bead_id, "--json"],
             );

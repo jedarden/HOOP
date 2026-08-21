@@ -215,6 +215,11 @@ pub fn propagate_stitch_labels(target_labels: &mut Vec<String>, parent_labels: &
     }
 }
 
+// Re-exports for test compatibility (trybuild fixtures expect invoke_br_*)
+pub use invoke_bead_read as invoke_br_read;
+pub use invoke_bead_create as invoke_br_create;
+pub use invoke_bead_write as invoke_br_write;
+
 pub fn validate_write_invariant() {
     let cmd_name = hoop_core::bead_cli::bead_cli_command();
     if ZERO_WRITE_ACTIVE {

@@ -569,7 +569,7 @@ async fn ws_subscribe_unsubscribe_works() {
         "topic": "global"
     });
     ws_sender
-        .send(Message::Text(subscribe_msg.to_string()))
+        .send(Message::Text(subscribe_msg.to_string().into()))
         .await
         .expect("Failed to send subscribe");
 
@@ -579,7 +579,7 @@ async fn ws_subscribe_unsubscribe_works() {
         "topic": "global"
     });
     ws_sender
-        .send(Message::Text(unsubscribe_msg.to_string()))
+        .send(Message::Text(unsubscribe_msg.to_string().into()))
         .await
         .expect("Failed to send unsubscribe");
 

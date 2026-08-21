@@ -1,7 +1,7 @@
 //! Load test runner binary
 //!
 //! Usage:
-//!   cargo run --example load-test-runner -- --url http://localhost:3000
+//!   cargo run --example load-test-runner --features testing -- --url http://localhost:3000
 //!
 //! Environment variables:
 //!   HOOP_LOAD_PROJECTS     - number of projects (default: 20)

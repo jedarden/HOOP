@@ -530,7 +530,7 @@ mod tests {
     /// Initialize default patterns for tests.
     /// This ensures both REDACTOR and NAMED_PATTERNS are populated.
     fn init_default_patterns() {
-        let default_patterns = SecretPattern::default_secret_patterns();
+        let default_patterns = crate::config_resolver::default_secret_patterns();
         let named_patterns = SecretPattern::to_named_patterns(&default_patterns);
         update_patterns_with_names(&named_patterns);
     }

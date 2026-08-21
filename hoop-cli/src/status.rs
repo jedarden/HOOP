@@ -179,43 +179,26 @@ fn gather_workspace_status(workspace_view: &WorkspaceView) -> Result<WorkspaceSt
     })
 }
 
-/// Get beads summary by calling br list
+/// Get beads summary by calling the configured bead CLI
 fn get_beads_summary(beads_path: &Path) -> Result<BeadsSummary> {
-    // Try to call br list --json
-    let output = std::process::Command::new("br")
-        .arg("list")
-        .arg("--json")
-        .current_dir(beads_path.parent().unwrap())
-        .output();
+    // Try to call bead list --json via the adapter
+    match hoop_core::bead_cli::list_beads(beads_path) {
+        Ok(beads) => {
+            let total = beads.len() as u64;
+            let open = beads.iter().filter(|b| b.normalized_status() == "open").count() as u64;
+            let claimed = beads.iter().filter(|b| b.normalized_status() == "claimed").count() as u64;
+            let closed = beads.iter().filter(|b| b.normalized_status() == "closed").count() as u64;
 
-    match output {
-        Ok(output) => {
-            if output.status.success() {
-                let json = std::str::from_utf8(&output.stdout)?;
-                if let Ok(beads) = serde_json::from_str::<Vec<serde_json::Value>>(json) {
-                    let total = beads.len() as u64;
-                    let open = beads.iter().filter(|b| b["status"] == "open").count() as u64;
-                    let claimed = beads.iter().filter(|b| b["status"] == "claimed").count() as u64;
-                    let closed = beads.iter().filter(|b| b["status"] == "closed").count() as u64;
-
-                    return Ok(BeadsSummary {
-                        total,
-                        open,
-                        claimed,
-                        closed,
-                    });
-                } else {
-                    bail!("Failed to parse bead list JSON output");
-                }
-            }
-
-            // br list returned non-zero exit status
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("br list failed: {}", stderr.trim().to_string());
+            Ok(BeadsSummary {
+                total,
+                open,
+                claimed,
+                closed,
+            })
         }
         Err(e) => {
-            // br command not found or failed to spawn
-            bail!("Failed to execute br command: {}", e);
+            // bead CLI command not found or failed to spawn
+            bail!("Failed to execute bead command: {}", e);
         }
     }
 }

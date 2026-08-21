@@ -413,7 +413,8 @@ impl StreamingUploadRegistry {
         let metadata_path = self.metadata_path(stream_id)?;
         let metadata_json = serde_json::to_string_pretty(session)
             .context("failed to serialize session metadata")?;
-        fs::write(&metadata_path, metadata_json).context("failed to write session metadata")?;
+        atomic_write::atomic_write_file_str(&metadata_path, &metadata_json)
+            .context("failed to write session metadata")?;
         Ok(())
     }
 
@@ -446,7 +447,7 @@ impl StreamingUploadRegistry {
         let frame_samples_path = attachments_dir.join("frame_samples.json");
         let frame_samples_json = serde_json::to_string_pretty(&frame_samples)
             .context("failed to serialize frame samples")?;
-        fs::write(&frame_samples_path, frame_samples_json)
+        atomic_write::atomic_write_file_str(&frame_samples_path, &frame_samples_json)
             .context("failed to write frame samples")?;
 
         // §18.1 secrets scan: screen capture text (frame labels)
@@ -489,7 +490,8 @@ impl StreamingUploadRegistry {
         let meta_path = attachments_dir.join("meta.json");
         let meta_json =
             serde_json::to_string_pretty(&meta).context("failed to serialize metadata")?;
-        fs::write(&meta_path, meta_json).context("failed to write metadata")?;
+        atomic_write::atomic_write_file_str(&meta_path, &meta_json)
+            .context("failed to write metadata")?;
 
         // Insert into fleet.db
         let db_path = crate::fleet::db_path();

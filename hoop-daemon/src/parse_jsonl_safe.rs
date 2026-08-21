@@ -8,6 +8,8 @@
 use std::fs;
 use std::path::PathBuf;
 
+use crate::atomic_write;
+
 use chrono::Utc;
 use serde::de::DeserializeOwned;
 
@@ -233,10 +235,11 @@ fn quarantine_line(line: &str, reason: &str, source: &LineSource) -> std::io::Re
         "timestamp": Utc::now().to_rfc3339(),
     });
 
-    fs::write(
-        date_dir.join(filename),
-        serde_json::to_string_pretty(&entry).unwrap_or_default(),
-    )?;
+    atomic_write::atomic_write_file_str(
+        &date_dir.join(filename),
+        &serde_json::to_string_pretty(&entry).unwrap_or_default(),
+    )
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
     Ok(())
 }
 

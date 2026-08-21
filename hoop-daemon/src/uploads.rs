@@ -130,7 +130,8 @@ impl UploadRegistry {
     fn save_metadata(&self, upload_id: &ValidUploadId, meta: &UploadMetadata) -> Result<()> {
         let meta_path = self.metadata_path(upload_id)?;
         let content = serde_json::to_string_pretty(meta)?;
-        fs::write(&meta_path, content).context("failed to write metadata")?;
+        atomic_write::atomic_write_file_str(&meta_path, &content)
+            .context("failed to write metadata")?;
         Ok(())
     }
 
@@ -444,7 +445,7 @@ fn apply_svg_sanitization_after_store(
         .join(&unsafe_name);
 
     // Write original to unsafe path.
-    fs::write(&unsafe_path, &svg_data)
+    atomic_write::atomic_write_file(&unsafe_path, &svg_data)
         .with_context(|| format!("failed to write unsafe SVG: {}", unsafe_path.display()))?;
 
     // Write unsafe sidecar (no svg_sanitize record on the unsafe copy).
@@ -468,7 +469,8 @@ fn apply_svg_sanitization_after_store(
         .parent()
         .ok_or_else(|| anyhow::anyhow!("SVG path has no parent directory"))?
         .join(&tmp_name);
-    fs::write(&tmp_path, &result.safe_bytes).context("failed to write sanitized SVG to tmp")?;
+    atomic_write::atomic_write_file(&tmp_path, &result.safe_bytes)
+        .context("failed to write sanitized SVG to tmp")?;
     fs::rename(&tmp_path, final_path)
         .with_context(|| format!("failed to rename sanitized SVG to {}", final_path.display()))?;
 
@@ -514,7 +516,7 @@ fn apply_pdf_sanitization_after_store(
         .join(&unsafe_name);
 
     // Write original to unsafe path.
-    fs::write(&unsafe_path, &pdf_data)
+    atomic_write::atomic_write_file(&unsafe_path, &pdf_data)
         .with_context(|| format!("failed to write unsafe PDF: {}", unsafe_path.display()))?;
 
     // Write unsafe sidecar (no pdf_sanitize record on the unsafe copy).
@@ -538,7 +540,8 @@ fn apply_pdf_sanitization_after_store(
         .parent()
         .ok_or_else(|| anyhow::anyhow!("PDF path has no parent directory"))?
         .join(&tmp_name);
-    fs::write(&tmp_path, &result.safe_bytes).context("failed to write sanitized PDF to tmp")?;
+    atomic_write::atomic_write_file(&tmp_path, &result.safe_bytes)
+        .context("failed to write sanitized PDF to tmp")?;
     fs::rename(&tmp_path, final_path)
         .with_context(|| format!("failed to rename sanitized PDF to {}", final_path.display()))?;
 

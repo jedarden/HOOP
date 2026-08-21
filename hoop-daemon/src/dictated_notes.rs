@@ -787,6 +787,8 @@ mod tests {
                     language: None,
                     tags: vec![],
                     transcription_status: TranscriptionStatus::Pending,
+                    synthesis_result: None,
+                    draft_id: None,
                 },
             )
             .unwrap();

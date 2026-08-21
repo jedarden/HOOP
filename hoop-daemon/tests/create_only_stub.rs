@@ -2,7 +2,7 @@
 //!
 //! This test creates a temporary directory with a fake `br` shell script that
 //! logs every invocation to a file. It then exercises the HOOP code paths that
-//! call br through `invoke_br_create()` and verifies that only `create` is
+//! call br through `invoke_bead_create()` and verifies that only `create` is
 //! ever invoked.
 //!
 //! CI command:
@@ -85,17 +85,17 @@ impl FakeBr {
 }
 
 #[test]
-fn test_invoke_br_create_calls_only_create_verb() {
+fn test_invoke_bead_create_calls_only_create_verb() {
     let fake = FakeBr::new();
 
-    // invoke_br_create is only available under create-only-write or unrestricted
+    // invoke_bead_create is only available under create-only-write or unrestricted
     #[cfg(any(
         feature = "create-only-write",
         not(any(feature = "zero-write-v01", feature = "create-only-write"))
     ))]
     {
         // Build a command through the create-only API
-        let mut cmd = hoop_daemon::br_verbs::invoke_br_create(&["Test bead", "--type", "task"]);
+        let mut cmd = hoop_daemon::br_verbs::invoke_bead_create(&["Test bead", "--type", "task"]);
         cmd.env(
             "PATH",
             format!(
@@ -127,14 +127,14 @@ fn test_invoke_br_create_calls_only_create_verb() {
         not(any(feature = "zero-write-v01", feature = "create-only-write"))
     )))]
     {
-        // Under zero-write-v01, invoke_br_create doesn't exist — nothing to test here.
+        // Under zero-write-v01, invoke_bead_create doesn't exist — nothing to test here.
         // The compile-time check ensures it can't be called.
-        println!("invoke_br_create not available under zero-write-v01 — test is a no-op");
+        println!("invoke_bead_create not available under zero-write-v01 — test is a no-op");
     }
 }
 
 #[test]
-fn test_invoke_br_create_multiple_invocations_all_create() {
+fn test_invoke_bead_create_multiple_invocations_all_create() {
     let fake = FakeBr::new();
 
     #[cfg(any(
@@ -144,7 +144,7 @@ fn test_invoke_br_create_multiple_invocations_all_create() {
     {
         // Simulate creating multiple beads (as stitch submit would)
         for i in 0..3 {
-            let mut cmd = hoop_daemon::br_verbs::invoke_br_create(&[]);
+            let mut cmd = hoop_daemon::br_verbs::invoke_bead_create(&[]);
             cmd.arg(format!("Bead {}", i));
             cmd.arg("--type").arg("task");
             cmd.env(
@@ -174,12 +174,12 @@ fn test_invoke_br_create_multiple_invocations_all_create() {
         not(any(feature = "zero-write-v01", feature = "create-only-write"))
     )))]
     {
-        println!("invoke_br_create not available under zero-write-v01 — test is a no-op");
+        println!("invoke_bead_create not available under zero-write-v01 — test is a no-op");
     }
 }
 
 #[test]
-fn test_invoke_br_read_verbs_never_write() {
+fn test_invoke_bead_read_verbs_never_write() {
     let fake = FakeBr::new();
 
     // Test that read verbs go through the read path and never trigger write classification
@@ -187,7 +187,7 @@ fn test_invoke_br_read_verbs_never_write() {
 
     let empty = "".to_string();
     for (name, verb) in &read_verbs {
-        let mut cmd = hoop_daemon::br_verbs::invoke_br_read(*verb, &["--json"]);
+        let mut cmd = hoop_daemon::br_verbs::invoke_bead_read(*verb, &["--json"]);
         cmd.env(
             "PATH",
             format!(
@@ -291,14 +291,14 @@ fn test_runtime_guard_allows_create() {
 
 #[test]
 fn test_subprocess_arg_validation_allows_create_command() {
-    // Verify that a command built by invoke_br_create passes subprocess-arg validation
+    // Verify that a command built by invoke_bead_create passes subprocess-arg validation
     #[cfg(any(
         feature = "create-only-write",
         not(any(feature = "zero-write-v01", feature = "create-only-write"))
     ))]
     {
         let fake = FakeBr::new();
-        let mut cmd = hoop_daemon::br_verbs::invoke_br_create(&["Test bead", "--type", "task"]);
+        let mut cmd = hoop_daemon::br_verbs::invoke_bead_create(&["Test bead", "--type", "task"]);
         cmd.env(
             "PATH",
             format!(
@@ -316,12 +316,12 @@ fn test_subprocess_arg_validation_allows_create_command() {
         assert_eq!(verbs[0], "create");
 
         // Verify the command args start with "create"
-        let cmd2 = hoop_daemon::br_verbs::invoke_br_create(&["Another bead"]);
+        let cmd2 = hoop_daemon::br_verbs::invoke_bead_create(&["Another bead"]);
         let args: Vec<_> = cmd2.get_args().collect();
         assert_eq!(
             args[0],
             std::ffi::OsStr::new("create"),
-            "invoke_br_create must produce 'create' as first arg"
+            "invoke_bead_create must produce 'create' as first arg"
         );
     }
 }
@@ -347,7 +347,7 @@ fn test_subprocess_arg_validation_rejects_forbidden_commands() {
 }
 
 #[test]
-fn test_invoke_br_create_end_to_end_with_stub() {
+fn test_invoke_bead_create_end_to_end_with_stub() {
     // End-to-end test: exercise the full create path and verify only "create" is logged
     #[cfg(any(
         feature = "create-only-write",
@@ -364,7 +364,7 @@ fn test_invoke_br_create_end_to_end_with_stub() {
         // Simulate a full stitch submit creating multiple beads
         let titles = ["Fix auth race", "Add test coverage", "Update docs"];
         for title in &titles {
-            let mut cmd = hoop_daemon::br_verbs::invoke_br_create(&[]);
+            let mut cmd = hoop_daemon::br_verbs::invoke_bead_create(&[]);
             cmd.arg(title);
             cmd.arg("--type").arg("task");
             cmd.arg("--labels").arg("stitch:test-stitch");
@@ -416,8 +416,8 @@ fn test_read_verbs_also_pass_subprocess_validation() {
         hoop_daemon::br_verbs::ReadVerb::Show,
     ];
     for verb in &verbs_to_test {
-        let cmd = hoop_daemon::br_verbs::invoke_br_read(*verb, &[]);
-        // validate_br_subprocess_args is called internally by invoke_br_read
+        let cmd = hoop_daemon::br_verbs::invoke_bead_read(*verb, &[]);
+        // validate_br_subprocess_args is called internally by invoke_bead_read
         // If we reach this point, validation passed
         let args: Vec<_> = cmd.get_args().collect();
         assert_eq!(args[0], std::ffi::OsStr::new(verb.as_str()));

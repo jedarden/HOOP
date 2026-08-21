@@ -190,6 +190,7 @@ impl EventGenerator {
                     bead: bead_id.clone(),
                     error: Some("simulated failure".to_string()),
                     duration_ms: Some(500 + (bead_idx % 2000) as u64),
+                    stash_sha: None,
                 });
 
                 // Release event

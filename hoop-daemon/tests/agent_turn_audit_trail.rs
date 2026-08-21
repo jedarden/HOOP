@@ -97,19 +97,27 @@ fn test_draft_agent_metadata_propagates_to_stitch() {
 
     let actor = format!("hoop:agent:{}", session_id);
 
-    hoop_daemon::fleet::create_stitch_with_audit(
+    let basic_info = hoop_daemon::fleet::StitchBasicInfo {
         stitch_id,
-        &fetched.project,
-        &fetched.kind,
-        &fetched.title,
-        &fetched.created_by,
+        project: &fetched.project,
+        kind: &fetched.kind,
+        title: &fetched.title,
+        created_by: &fetched.created_by,
+        classification: "operator",
+    };
+
+    let audit_metadata = hoop_daemon::fleet::StitchAuditMetadata {
+        created_by_actor: Some(&actor),
+        created_by_session_id: Some(session_id),
+        created_by_adapter: Some(adapter),
+        created_by_model: Some(model),
+        turn_id: Some(turn_id),
+    };
+
+    hoop_daemon::fleet::create_stitch_with_audit(
+        basic_info,
         &bead_links,
-        "operator",
-        Some(&actor),
-        Some(session_id),
-        Some(adapter),
-        Some(model),
-        Some(turn_id),
+        audit_metadata,
     )
     .expect("create stitch with audit");
 
@@ -303,19 +311,27 @@ fn test_stitch_reconstructs_to_origin_turn() {
     let bead_links: Vec<(&str, &str)> = vec![];
     let actor = format!("hoop:agent:{}", session_id);
 
-    hoop_daemon::fleet::create_stitch_with_audit(
+    let basic_info = hoop_daemon::fleet::StitchBasicInfo {
         stitch_id,
-        "test-project",
-        "investigation",
-        "Reconstruction test",
-        "user:test",
+        project: "test-project",
+        kind: "investigation",
+        title: "Reconstruction test",
+        created_by: "user:test",
+        classification: "operator",
+    };
+
+    let audit_metadata = hoop_daemon::fleet::StitchAuditMetadata {
+        created_by_actor: Some(&actor),
+        created_by_session_id: Some(session_id),
+        created_by_adapter: Some(adapter),
+        created_by_model: Some(model),
+        turn_id: Some(turn_id),
+    };
+
+    hoop_daemon::fleet::create_stitch_with_audit(
+        basic_info,
         &bead_links,
-        "operator",
-        Some(&actor),
-        Some(session_id),
-        Some(adapter),
-        Some(model),
-        Some(turn_id),
+        audit_metadata,
     )
     .expect("create stitch for reconstruction");
 

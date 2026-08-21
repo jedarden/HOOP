@@ -575,6 +575,8 @@ mod tests {
             server: None,
             ui: None,
             voice: None,
+            embedding: None,
+            redaction: None,
         };
         let projects = ProjectsRegistry::default();
         let state = RedactionPolicyState::new(&config, projects);
