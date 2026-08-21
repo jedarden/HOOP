@@ -1,5 +1,5 @@
 //! HOOP status command - CLI overview of fleets / beads / cost
-use anyhow::Result;
+use anyhow::{bail, Result};
 use hoop_schema::{ProjectsRegistry, ProjectsRegistryProjectsItem, WorkspaceView};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -204,25 +204,18 @@ fn get_beads_summary(beads_path: &Path) -> Result<BeadsSummary> {
                         claimed,
                         closed,
                     });
+                } else {
+                    bail!("Failed to parse bead list JSON output");
                 }
             }
 
-            // If br list fails, return empty summary
-            Ok(BeadsSummary {
-                total: 0,
-                open: 0,
-                claimed: 0,
-                closed: 0,
-            })
+            // br list returned non-zero exit status
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("br list failed: {}", stderr.trim().to_string());
         }
-        Err(_) => {
-            // br command not found or failed
-            Ok(BeadsSummary {
-                total: 0,
-                open: 0,
-                claimed: 0,
-                closed: 0,
-            })
+        Err(e) => {
+            // br command not found or failed to spawn
+            bail!("Failed to execute br command: {}", e);
         }
     }
 }
