@@ -572,7 +572,7 @@ pub fn parse_claude_stream_line(line: &str) -> Result<AgentEvent> {
     let event_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
     match event_type {
-        "assistant" | "content_block_start" | "content_block_delta" => {
+        "assistant" | "content_block_start" | "content_block_delta" | "user" => {
             // Text delta - strip ANSI sequences
             if let Some(text) = val.get("text").and_then(|v| v.as_str()) {
                 return Ok(AgentEvent::TextDelta {
@@ -587,6 +587,7 @@ pub fn parse_claude_stream_line(line: &str) -> Result<AgentEvent> {
                     });
                 }
             }
+            // For user events or events without text, return empty delta
             Ok(AgentEvent::TextDelta {
                 text: String::new(),
             })
@@ -1588,7 +1589,7 @@ fn anthropic_sse_to_event(
     let event_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("");
 
     match event_type {
-        "content_block_delta" => {
+        "content_block_delta" | "user" => {
             let delta = val.get("delta");
             let text = delta
                 .and_then(|d| d.get("text"))
@@ -1732,6 +1733,15 @@ fn openai_sse_to_event(
             });
             return Ok(AgentEvent::TurnComplete { usage });
         }
+    }
+
+    // Handle "user" events at the top level (some adapters emit these)
+    let event_type = val.get("type").and_then(|v| v.as_str()).unwrap_or("");
+    if event_type == "user" {
+        // User events don't have content in the delta, return empty
+        return Ok(AgentEvent::TextDelta {
+            text: String::new(),
+        });
     }
 
     // Unknown event type - record via UnknownEventSink
