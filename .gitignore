@@ -62,3 +62,5 @@ hoop-daemon/.fastembed_cache/
 
 # Test output logs
 logs/tests/
+**/test-results/
+**/build-logs/
