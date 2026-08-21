@@ -598,13 +598,6 @@ fn check_size(data: &[u8], limits: &SizeLimits) -> Result<()> {
 
 /// Atomic write: write to a uniquely-named `.tmp` sibling, then rename into place.
 fn write_atomic(dest: &Path, data: &[u8]) -> Result<()> {
-    let tmp_name = format!(
-        "{}.{}.tmp",
-        dest.file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("attachment"),
-        uuid::Uuid::new_v4()
-    );
     atomic_write::atomic_write_file(dest, data)
         .with_context(|| format!("failed to atomic write: {}", dest.display()))?;
 

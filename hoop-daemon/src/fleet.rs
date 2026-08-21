@@ -127,6 +127,17 @@ pub struct StitchAuditMetadata<'a> {
     pub turn_id: Option<&'a str>,
 }
 
+/// Basic stitch information for creation (groups core identity fields)
+#[derive(Debug, Clone)]
+pub struct StitchBasicInfo<'a> {
+    pub stitch_id: &'a str,
+    pub project: &'a str,
+    pub kind: &'a str,
+    pub title: &'a str,
+    pub created_by: &'a str,
+    pub classification: &'a str,
+}
+
 impl BeadActionArgs {
     /// Compute hash of args for integrity verification
     pub fn args_hash(&self) -> String {
@@ -652,22 +663,12 @@ pub fn get_final_audit_hash() -> Result<String> {
 /// The `classification` must be one of: fleet, operator.
 /// Convention: `kind = "worker"` → `classification = "fleet"`; all others → `"operator"`.
 pub fn create_stitch(
-    stitch_id: &str,
-    project: &str,
-    kind: &str,
-    title: &str,
-    created_by: &str,
-    bead_ids: &[(&str, &str)], // (bead_id, workspace)
-    classification: &str,
+    info: StitchBasicInfo<'_>,
+    bead_ids: &[(&str, &str)],
 ) -> Result<()> {
     create_stitch_with_audit(
-        stitch_id,
-        project,
-        kind,
-        title,
-        created_by,
+        info,
         bead_ids,
-        classification,
         StitchAuditMetadata::default(),
     )
 }
@@ -678,13 +679,8 @@ pub fn create_stitch(
 /// stitches. When a stitch is created from an agent-drafted stitch, these fields
 /// enable full reconstruction back to the agent session and turn that created it.
 pub fn create_stitch_with_audit(
-    stitch_id: &str,
-    project: &str,
-    kind: &str,
-    title: &str,
-    created_by: &str,
-    bead_ids: &[(&str, &str)], // (bead_id, workspace)
-    classification: &str,
+    info: StitchBasicInfo<'_>,
+    bead_ids: &[(&str, &str)],
     audit: StitchAuditMetadata<'_>,
 ) -> Result<()> {
     let path = db_path();
@@ -697,7 +693,7 @@ pub fn create_stitch_with_audit(
                              created_by_actor, created_by_session_id, created_by_adapter, created_by_model, turn_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
-        params![stitch_id, project, kind, title, created_by, now, now, classification,
+        params![info.stitch_id, info.project, info.kind, info.title, info.created_by, now, now, info.classification,
                 audit.created_by_actor, audit.created_by_session_id, audit.created_by_adapter, audit.created_by_model, audit.turn_id],
     )?;
 
@@ -710,7 +706,7 @@ pub fn create_stitch_with_audit(
             "#,
             params![
                 Uuid::new_v4().to_string(),
-                stitch_id,
+                info.stitch_id,
                 "system",
                 format!("[Audit: Turn {}]", tid),
                 now,
@@ -727,7 +723,7 @@ pub fn create_stitch_with_audit(
             INSERT INTO stitch_beads (stitch_id, bead_id, workspace, canonical_workspace, relationship)
             VALUES (?, ?, ?, ?, 'created-here')
             "#,
-            params![stitch_id, bead_id, workspace, canonical_ws],
+            params![info.stitch_id, bead_id, workspace, canonical_ws],
         )?;
     }
 
@@ -7672,6 +7668,16 @@ pub struct CostRollupRow {
     pub updated_at: String,
 }
 
+/// Cost metrics for rollup operations (groups token/cost fields)
+#[derive(Debug, Clone, Copy)]
+pub struct CostMetrics {
+    pub cost_usd: f64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub cache_read_tokens: i64,
+    pub cache_write_tokens: i64,
+}
+
 /// A row from the `capacity_rollup` table.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CapacityRollupRow {
@@ -7896,35 +7902,18 @@ fn touch_project_heartbeat_at_conn(conn: &Connection, project: &str, ts: &str) -
 pub fn accumulate_cost_rollup(
     project: &str,
     date: &str,
-    cost_usd: f64,
-    input_tokens: i64,
-    output_tokens: i64,
-    cache_read_tokens: i64,
-    cache_write_tokens: i64,
+    metrics: CostMetrics,
 ) -> Result<()> {
     let path = db_path();
     let conn = Connection::open(&path)?;
-    accumulate_cost_rollup_conn(
-        &conn,
-        project,
-        date,
-        cost_usd,
-        input_tokens,
-        output_tokens,
-        cache_read_tokens,
-        cache_write_tokens,
-    )
+    accumulate_cost_rollup_conn(&conn, project, date, metrics)
 }
 
 fn accumulate_cost_rollup_conn(
     conn: &Connection,
     project: &str,
     date: &str,
-    cost_usd: f64,
-    input_tokens: i64,
-    output_tokens: i64,
-    cache_read_tokens: i64,
-    cache_write_tokens: i64,
+    metrics: CostMetrics,
 ) -> Result<()> {
     let updated_at = Utc::now().to_rfc3339();
     conn.execute(
@@ -7942,11 +7931,11 @@ fn accumulate_cost_rollup_conn(
         params![
             project,
             date,
-            cost_usd,
-            input_tokens,
-            output_tokens,
-            cache_read_tokens,
-            cache_write_tokens,
+            metrics.cost_usd,
+            metrics.input_tokens,
+            metrics.output_tokens,
+            metrics.cache_read_tokens,
+            metrics.cache_write_tokens,
             updated_at,
         ],
     )?;
@@ -8001,35 +7990,18 @@ fn query_cost_rollup_conn(
 pub fn snapshot_project_cost_row(
     project: &str,
     date: &str,
-    cost_usd: f64,
-    input_tokens: i64,
-    output_tokens: i64,
-    cache_read_tokens: i64,
-    cache_write_tokens: i64,
+    metrics: CostMetrics,
 ) -> Result<()> {
     let path = db_path();
     let conn = Connection::open(&path)?;
-    snapshot_project_cost_row_conn(
-        &conn,
-        project,
-        date,
-        cost_usd,
-        input_tokens,
-        output_tokens,
-        cache_read_tokens,
-        cache_write_tokens,
-    )
+    snapshot_project_cost_row_conn(&conn, project, date, metrics)
 }
 
 fn snapshot_project_cost_row_conn(
     conn: &Connection,
     project: &str,
     date: &str,
-    cost_usd: f64,
-    input_tokens: i64,
-    output_tokens: i64,
-    cache_read_tokens: i64,
-    cache_write_tokens: i64,
+    metrics: CostMetrics,
 ) -> Result<()> {
     let updated_at = Utc::now().to_rfc3339();
     conn.execute(
@@ -8040,11 +8012,11 @@ fn snapshot_project_cost_row_conn(
         params![
             project,
             date,
-            cost_usd,
-            input_tokens,
-            output_tokens,
-            cache_read_tokens,
-            cache_write_tokens,
+            metrics.cost_usd,
+            metrics.input_tokens,
+            metrics.output_tokens,
+            metrics.cache_read_tokens,
+            metrics.cache_write_tokens,
             updated_at,
         ],
     )?;
@@ -10447,9 +10419,9 @@ mod tests {
         let date = "2026-04-24";
 
         // Three separate delta accumulations
-        accumulate_cost_rollup_conn(&conn, project, date, 0.10, 1000, 500, 200, 100)?;
-        accumulate_cost_rollup_conn(&conn, project, date, 0.05, 500, 250, 100, 50)?;
-        accumulate_cost_rollup_conn(&conn, project, date, 0.08, 800, 400, 150, 75)?;
+        accumulate_cost_rollup_conn(&conn, project, date, CostMetrics { cost_usd: 0.10, input_tokens: 1000, output_tokens: 500, cache_read_tokens: 200, cache_write_tokens: 100 })?;
+        accumulate_cost_rollup_conn(&conn, project, date, CostMetrics { cost_usd: 0.05, input_tokens: 500, output_tokens: 250, cache_read_tokens: 100, cache_write_tokens: 50 })?;
+        accumulate_cost_rollup_conn(&conn, project, date, CostMetrics { cost_usd: 0.08, input_tokens: 800, output_tokens: 400, cache_read_tokens: 150, cache_write_tokens: 75 })?;
 
         let rows = query_cost_rollup_conn(&conn, None, None)?;
         assert_eq!(rows.len(), 1);
@@ -10490,11 +10462,13 @@ mod tests {
                     &conn,
                     proj,
                     date,
-                    frac,
-                    input_tok / 4,
-                    output_tok / 4,
-                    (chunk * 100) as i64,
-                    (chunk * 50) as i64,
+                    CostMetrics {
+                        cost_usd: frac,
+                        input_tokens: input_tok / 4,
+                        output_tokens: output_tok / 4,
+                        cache_read_tokens: (chunk * 100) as i64,
+                        cache_write_tokens: (chunk * 50) as i64,
+                    },
                 )?;
             }
         }
@@ -10523,11 +10497,11 @@ mod tests {
         let date = "2026-04-24";
 
         // Accumulate deltas first
-        accumulate_cost_rollup_conn(&conn, project, date, 0.50, 5000, 2500, 1000, 500)?;
-        accumulate_cost_rollup_conn(&conn, project, date, 0.25, 2500, 1250, 500, 250)?;
+        accumulate_cost_rollup_conn(&conn, project, date, CostMetrics { cost_usd: 0.50, input_tokens: 5000, output_tokens: 2500, cache_read_tokens: 1000, cache_write_tokens: 500 })?;
+        accumulate_cost_rollup_conn(&conn, project, date, CostMetrics { cost_usd: 0.25, input_tokens: 2500, output_tokens: 1250, cache_read_tokens: 500, cache_write_tokens: 250 })?;
 
         // Snapshot replaces with authoritative total
-        snapshot_project_cost_row_conn(&conn, project, date, 1.00, 10000, 5000, 2000, 1000)?;
+        snapshot_project_cost_row_conn(&conn, project, date, CostMetrics { cost_usd: 1.00, input_tokens: 10000, output_tokens: 5000, cache_read_tokens: 2000, cache_write_tokens: 1000 })?;
 
         let rows = query_cost_rollup_conn(&conn, None, None)?;
         assert_eq!(rows.len(), 1);
@@ -10548,9 +10522,9 @@ mod tests {
     fn test_cost_rollup_date_range_filter() -> Result<()> {
         let (_f, conn) = setup_db()?;
 
-        accumulate_cost_rollup_conn(&conn, "proj", "2026-04-22", 0.10, 100, 50, 20, 10)?;
-        accumulate_cost_rollup_conn(&conn, "proj", "2026-04-23", 0.20, 200, 100, 40, 20)?;
-        accumulate_cost_rollup_conn(&conn, "proj", "2026-04-24", 0.30, 300, 150, 60, 30)?;
+        accumulate_cost_rollup_conn(&conn, "proj", "2026-04-22", CostMetrics { cost_usd: 0.10, input_tokens: 100, output_tokens: 50, cache_read_tokens: 20, cache_write_tokens: 10 })?;
+        accumulate_cost_rollup_conn(&conn, "proj", "2026-04-23", CostMetrics { cost_usd: 0.20, input_tokens: 200, output_tokens: 100, cache_read_tokens: 40, cache_write_tokens: 20 })?;
+        accumulate_cost_rollup_conn(&conn, "proj", "2026-04-24", CostMetrics { cost_usd: 0.30, input_tokens: 300, output_tokens: 150, cache_read_tokens: 60, cache_write_tokens: 30 })?;
 
         let all = query_cost_rollup_conn(&conn, None, None)?;
         assert_eq!(all.len(), 3);
@@ -11181,13 +11155,15 @@ mod tests {
         // Point fleet at our temp DB
         std::env::set_var("_HOOP_FLEET_DB_PATH", &db_path);
         let result = create_stitch(
-            &stitch_id,
-            "test-project",
-            "operator",
-            "Symlink workspace test",
-            "user",
+            StitchBasicInfo {
+                stitch_id: &stitch_id,
+                project: "test-project",
+                kind: "operator",
+                title: "Symlink workspace test",
+                created_by: "user",
+                classification: "auto",
+            },
             &[("bd-symlink-001", link_ws.to_str().unwrap())],
-            "auto",
         );
         std::env::remove_var("_HOOP_FLEET_DB_PATH");
         result?;
