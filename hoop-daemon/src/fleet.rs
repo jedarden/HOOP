@@ -4258,7 +4258,7 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
                 migrate_v133_to_v134,
                 "1.33.0",
                 "1.34.0",
-                "Add skills table"
+                "Seed initial risk patterns"
             )?;
         }
         "1.34.0" => {
