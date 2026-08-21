@@ -688,6 +688,38 @@ struct ConfigLabels<'a> {
     file_label: &'a str,
 }
 
+/// Configuration for resolving optional values with strict YAML type validation.
+///
+/// Bundles together the YAML reference, path, labels, and type validator
+/// to reduce argument count in resolve_opt_strict.
+struct ResolveOptStrictConfig<'a, T: Clone + Serialize> {
+    /// Reference to the parsed YAML document
+    yml_ref: Option<&'a serde_yaml::Value>,
+    /// Dotted path to the field in the YAML document
+    yml_path: &'a str,
+    /// Attribution labels for error messages and logging
+    labels: ConfigLabels<'a>,
+    /// Type-specific validator function
+    type_validator: fn(&'a serde_yaml::Value, &'a str) -> Result<Option<T>, ConfigError>,
+}
+
+impl<'a, T: Clone + Serialize> ResolveOptStrictConfig<'a, T> {
+    /// Create a new resolver config with the given YAML source and labels.
+    fn new(
+        yml_ref: Option<&'a serde_yaml::Value>,
+        yml_path: &'a str,
+        labels: ConfigLabels<'a>,
+        type_validator: fn(&'a serde_yaml::Value, &'a str) -> Result<Option<T>, ConfigError>,
+    ) -> Self {
+        Self {
+            yml_ref,
+            yml_path,
+            labels,
+            type_validator,
+        }
+    }
+}
+
 /// Strict resolve with type validation for hot-reload (§17.5).
 ///
 /// Like `resolve_opt` but validates that config.yml values have the correct type.
@@ -696,30 +728,27 @@ struct ConfigLabels<'a> {
 fn resolve_opt_strict<T: Clone + Serialize>(
     cli: Option<T>,
     env_val: Option<T>,
-    yml_ref: Option<&serde_yaml::Value>,
-    yml_path: &str,
     default: T,
-    labels: ConfigLabels<'_>,
-    type_validator: fn(&serde_yaml::Value, &str) -> Result<Option<T>, ConfigError>,
+    config: ResolveOptStrictConfig<'_, T>,
 ) -> Result<Resolved<T>, ConfigError> {
     if let Some(v) = cli {
         return Ok(Resolved::new(
             v,
             ConfigSource::CliFlag,
-            format!("cli flag {}", labels.cli_label),
+            format!("cli flag {}", config.labels.cli_label),
         ));
     }
     if let Some(v) = env_val {
         return Ok(Resolved::new(
             v,
             ConfigSource::EnvVar,
-            format!("env {}", labels.env_label),
+            format!("env {}", config.labels.env_label),
         ));
     }
 
     // Validate config.yml value type
-    let file_val = if let Some(yml) = yml_ref {
-        type_validator(yml, yml_path)?
+    let file_val = if let Some(yml) = config.yml_ref {
+        (config.type_validator)(yml, config.yml_path)?
     } else {
         None
     };
@@ -728,7 +757,7 @@ fn resolve_opt_strict<T: Clone + Serialize>(
         return Ok(Resolved::new(
             v,
             ConfigSource::ConfigYml,
-            format!("config.yml: {}", labels.file_label),
+            format!("config.yml: {}", config.labels.file_label),
         ));
     }
 
@@ -1708,9 +1737,7 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
         yml_ref: Option<&serde_yaml::Value>,
         yml_path: &str,
         default: &str,
-        cli_label: &str,
-        env_label: &str,
-        file_label: &str,
+        labels: ConfigLabels<'_>,
         validator: fn(&str) -> Result<(), String>,
     ) -> Result<Resolved<String>, ConfigError> {
         let file_val = yml_ref
@@ -1719,14 +1746,14 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
         let env_val = std::env::var(env_var).ok();
 
         let (value, source, attribution) = if let Some(v) = cli {
-            (v, ConfigSource::CliFlag, format!("cli flag {}", cli_label))
+            (v, ConfigSource::CliFlag, format!("cli flag {}", labels.cli_label))
         } else if let Some(v) = env_val {
-            (v, ConfigSource::EnvVar, format!("env {}", env_label))
+            (v, ConfigSource::EnvVar, format!("env {}", labels.env_label))
         } else if let Some(v) = file_val {
             (
                 v.clone(),
                 ConfigSource::ConfigYml,
-                format!("config.yml: {}", file_label),
+                format!("config.yml: {}", labels.file_label),
             )
         } else {
             (
@@ -1741,7 +1768,7 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
             if let Err(e) = validator(&value) {
                 return Err(ConfigError::validation(
                     e,
-                    Some(file_label.to_string()),
+                    Some(labels.file_label.to_string()),
                     None,
                     Some(value),
                 ));
@@ -1781,9 +1808,11 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
         yml_ref,
         "agent.adapter",
         "claude",
-        "N/A",
-        "HOOP_AGENT_ADAPTER",
-        "agent.adapter",
+        ConfigLabels {
+            cli_label: "N/A",
+            env_label: "HOOP_AGENT_ADAPTER",
+            file_label: "agent.adapter",
+        },
         validate_agent_adapter,
     )?;
 
@@ -1886,9 +1915,11 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
         yml_ref,
         "ui.theme",
         "auto",
-        "N/A",
-        "HOOP_UI_THEME",
-        "ui.theme",
+        ConfigLabels {
+            cli_label: "N/A",
+            env_label: "HOOP_UI_THEME",
+            file_label: "ui.theme",
+        },
         validate_ui_theme,
     )?;
 
@@ -1898,9 +1929,11 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
         yml_ref,
         "ui.default_project_sort",
         "last_activity",
-        "N/A",
-        "HOOP_UI_SORT",
-        "ui.default_project_sort",
+        ConfigLabels {
+            cli_label: "N/A",
+            env_label: "HOOP_UI_SORT",
+            file_label: "ui.default_project_sort",
+        },
         validate_ui_sort,
     )?;
 
@@ -2405,9 +2438,11 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
             yml_ref,
             "embedding.adapter",
             "local",
-            "N/A",
-            "HOOP_EMBEDDING_ADAPTER",
-            "embedding.adapter",
+            ConfigLabels {
+                cli_label: "N/A",
+                env_label: "HOOP_EMBEDDING_ADAPTER",
+                file_label: "embedding.adapter",
+            },
             validate_embedding_adapter,
         )?,
         embedding_cache_enabled: resolve_opt(
