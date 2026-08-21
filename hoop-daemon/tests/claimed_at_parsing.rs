@@ -534,7 +534,7 @@ fn extremely_long_timestamps() {
 
         // Parse it (may or may not succeed depending on chrono's behavior)
         let claimed_at_value = entry.claimed_at.as_ref().unwrap();
-        let parse_result = chrono::DateTime::parse_from_rfc3339(claimed_at_value);
+        let _parse_result = chrono::DateTime::parse_from_rfc3339(claimed_at_value);
         // We don't assert success/failure here, just that it doesn't panic
     }
 }
@@ -771,5 +771,440 @@ fn timestamps_with_extra_text() {
         // Should be storable
         let entry = create_test_entry(Some(ts));
         assert_eq!(entry.claimed_at, Some(ts.to_string()));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// New tests for Result-based parsing
+// ---------------------------------------------------------------------------
+
+/// Test that empty timestamp returns appropriate error
+#[test]
+fn empty_timestamp_returns_error() {
+    let result = chrono::DateTime::parse_from_rfc3339("");
+    assert!(result.is_err(), "Empty timestamp should return error");
+
+    let err = result.unwrap_err();
+    let err_msg = err.to_string();
+    assert!(
+        err_msg.contains("premature end of input") || err_msg.contains("empty"),
+        "Empty timestamp error message should mention 'premature end of input' or 'empty', got: {}",
+        err_msg
+    );
+}
+
+/// Test that whitespace-only timestamps return error
+#[test]
+fn whitespace_timestamps_return_errors() {
+    let whitespace_cases = vec![" ", "  ", "\t", "\n", "\r\n", "   "];
+
+    for ts in whitespace_cases {
+        let result = chrono::DateTime::parse_from_rfc3339(ts);
+        assert!(
+            result.is_err(),
+            "Whitespace-only timestamp '{}' should return error",
+            ts.escape_debug()
+        );
+
+        // Should contain helpful error message
+        let err = result.unwrap_err();
+        let err_msg = err.to_string().to_lowercase();
+        assert!(
+            err_msg.contains("premature") || err_msg.contains("invalid") || err_msg.contains("expected"),
+            "Whitespace timestamp error should be descriptive, got: {}",
+            err_msg
+        );
+    }
+}
+
+/// Test partial date components return errors with helpful messages
+#[test]
+fn partial_date_components_return_errors() {
+    let partial_cases = vec![
+        ("2026", "year only"),
+        ("2026-04", "year-month only"),
+        ("2026-04-21", "date only"),
+        ("T18:42:10Z", "time only"),
+    ];
+
+    for (ts, description) in partial_cases {
+        let result = chrono::DateTime::parse_from_rfc3339(ts);
+        assert!(
+            result.is_err(),
+            "Partial timestamp ({}) '{}' should return error",
+            description, ts
+        );
+
+        let err = result.unwrap_err();
+        let err_msg = err.to_string();
+        // Error should indicate what's missing or invalid
+        assert!(
+            !err_msg.is_empty(),
+            "Partial timestamp error should have non-empty message"
+        );
+    }
+}
+
+/// Test that control characters in timestamps are rejected
+#[test]
+fn control_characters_rejected() {
+    let control_cases = vec![
+        "2026-04-21\x00T18:42:10Z", // Null byte
+        "2026-04-21T18:42:10\x01Z", // Start of heading
+        "2026-04-21T18:42:10\x1fZ", // Unit separator
+        "2026-04-21T18:42:10\nZ",   // Newline
+        "2026-04-21T18:42:10\rZ",   // Carriage return
+        "2026-04-21T18:42:10\tZ",   // Tab
+    ];
+
+    for ts in control_cases {
+        let result = chrono::DateTime::parse_from_rfc3339(ts);
+        // These might parse or fail depending on position, but shouldn't panic
+        let _ = result;
+    }
+}
+
+/// Test out-of-range timezone offsets return clear errors
+#[test]
+fn out_of_range_timezone_offsets_return_errors() {
+    let out_of_range_cases = vec![
+        "2026-04-21T18:42:10+24:01", // 1 minute over max
+        "2026-04-21T18:42:10+99:00", // 99 hours
+        "2026-04-21T18:42:10-24:01", // Negative over max
+        "2026-04-21T18:42:10+00:60", // 60 minutes
+        "2026-04-21T18:42:10+12:60", // 60 minutes with offset
+    ];
+
+    for ts in out_of_range_cases {
+        let result = chrono::DateTime::parse_from_rfc3339(ts);
+        assert!(
+            result.is_err(),
+            "Out-of-range timezone offset '{}' should return error",
+            ts
+        );
+
+        let err = result.unwrap_err();
+        let err_msg = err.to_string().to_lowercase();
+        // Error should mention offset, hours, minutes, or range
+        assert!(
+            err_msg.contains("offset") || err_msg.contains("hours") || err_msg.contains("minutes") || err_msg.contains("out of range") || err_msg.contains("invalid"),
+            "Out-of-range offset error should be descriptive for '{}', got: {}",
+            ts, err_msg
+        );
+    }
+}
+
+/// Test invalid date components return descriptive errors
+#[test]
+fn invalid_date_components_return_descriptive_errors() {
+    let invalid_cases = vec![
+        ("2026-13-01T00:00:00Z", "month 13"),
+        ("2026-00-01T00:00:00Z", "month 0"),
+        ("2026-01-32T00:00:00Z", "day 32"),
+        ("2026-01-00T00:00:00Z", "day 0"),
+        ("2026-02-30T00:00:00Z", "Feb 30"),
+        ("2026-04-31T00:00:00Z", "Apr 31"),
+        ("2026-04-21T24:00:00Z", "hour 24"),
+        ("2026-04-21T23:60:00Z", "minute 60"),
+        ("2026-04-21T23:59:61Z", "second 61"),
+    ];
+
+    for (ts, description) in invalid_cases {
+        let result = chrono::DateTime::parse_from_rfc3339(ts);
+        assert!(
+            result.is_err(),
+            "Invalid date component ({}) '{}' should return error",
+            description, ts
+        );
+
+        let err = result.unwrap_err();
+        let err_msg = err.to_string().to_lowercase();
+        // Error should be descriptive about what's wrong
+        assert!(
+            !err_msg.is_empty(),
+            "Invalid component error should have non-empty message for '{}'",
+            description
+        );
+    }
+}
+
+/// Test malformed timestamp formats return clear errors
+#[test]
+fn malformed_timestamps_return_clear_errors() {
+    let malformed_cases = vec![
+        ("not-a-timestamp", "plain text"),
+        ("2026/04/21T18:42:10Z", "slash separator"),
+        ("2026-04-21 18:42:10", "missing T and Z"),
+        ("18:42:10Z", "time only"),
+        ("2026-04-21", "date only"),
+        ("", "empty string"),
+        ("April 21, 2026", "natural language"),
+    ];
+
+    for (ts, description) in malformed_cases {
+        let result = chrono::DateTime::parse_from_rfc3339(ts);
+        assert!(
+            result.is_err(),
+            "Malformed timestamp ({}) '{}' should return error",
+            description, ts
+        );
+
+        let err = result.unwrap_err();
+        let err_msg = err.to_string();
+
+        // Error message should be non-empty and helpful
+        assert!(
+            !err_msg.is_empty(),
+            "Malformed timestamp error should have non-empty message for '{}'",
+            description
+        );
+
+        // For empty string, should mention "premature end of input"
+        if ts.is_empty() {
+            assert!(
+                err_msg.to_lowercase().contains("premature") || err_msg.to_lowercase().contains("empty"),
+                "Empty string error should mention 'premature' or 'empty', got: {}",
+                err_msg
+            );
+        }
+    }
+}
+
+/// Test that timestamps with wrong separators return errors
+#[test]
+fn wrong_separators_return_errors() {
+    let wrong_separator_cases = vec![
+        "2026/04/21T18:42:10Z",     // Slash instead of dash
+        "2026-04-21T18:42:10.123",  // Missing Z
+        "2026-04-21@18:42:10Z",     // @ instead of T
+        "2026-04-21T18-42-10Z",     // Dash instead of colon
+        "2026_04_21T18:42:10Z",     // Underscore instead of dash
+    ];
+
+    for ts in wrong_separator_cases {
+        let result = chrono::DateTime::parse_from_rfc3339(ts);
+        assert!(
+            result.is_err(),
+            "Timestamp with wrong separator '{}' should return error",
+            ts
+        );
+    }
+}
+
+/// Test comprehensive malformed format coverage
+#[test]
+fn comprehensive_malformed_format_coverage() {
+    let comprehensive_cases = vec![
+        // Empty and whitespace
+        "",
+        " ",
+        "  ",
+        "\t",
+        "\n",
+        "\r\n",
+        // Partial timestamps
+        "2026",
+        "2026-04",
+        "2026-04-21",
+        "T18:42:10Z",
+        "18:42:10Z",
+        // Wrong separators
+        "2026/04/21T18:42:10Z",
+        "2026-04-21T18:42:10",
+        "2026_04_21T18:42:10Z",
+        // Invalid characters
+        "2026-04-21T18:42:10!Z",
+        "2026-04-21T18:42:10@Z",
+        "2026-04-21T18:42:10#Z",
+        "2026-04-21T18:42:10$Z",
+        "2026-04-21T18:42:10%Z",
+        // Natural language
+        "April 21, 2026",
+        "21 April 2026",
+        "21-Apr-2026",
+        "2026-Apr-21",
+        // Gibberish
+        "not-a-timestamp",
+        "abcdefg",
+        "12345",
+        "!@#$%",
+        // SQL injection attempts (should fail as timestamps)
+        "'; DROP TABLE users; --",
+        "' OR '1'='1",
+        // Extra text
+        "2026-04-21T18:42:10Z extra",
+        "prefix2026-04-21T18:42:10Z",
+        "2026-04-21T18:42:10ZZ",
+        // Invalid offsets
+        "2026-04-21T18:42:10+24:00",
+        "2026-04-21T18:42:10+00:60",
+        "2026-04-21T18:42:10+99:99",
+        // Invalid date components
+        "2026-13-01T00:00:00Z",
+        "2026-00-01T00:00:00Z",
+        "2026-01-32T00:00:00Z",
+        "2026-01-00T00:00:00Z",
+        "2026-02-30T00:00:00Z",
+        "2026-04-31T00:00:00Z",
+        "2026-04-21T24:00:00Z",
+        "2026-04-21T23:60:00Z",
+        "2026-04-21T23:59:61Z",
+    ];
+
+    let mut parse_count = 0;
+    let mut error_count = 0;
+
+    for ts in comprehensive_cases {
+        let result = chrono::DateTime::parse_from_rfc3339(ts);
+        parse_count += 1;
+
+        if result.is_err() {
+            error_count += 1;
+            let err = result.unwrap_err();
+            let err_msg = err.to_string();
+
+            // All errors should have non-empty messages
+            assert!(
+                !err_msg.is_empty(),
+                "Error for '{}' should have non-empty message",
+                if ts.is_empty() { "(empty)" } else { ts }
+            );
+        }
+    }
+
+    // All malformed cases should fail to parse
+    assert_eq!(
+        parse_count, error_count,
+        "All {} malformed timestamps should fail to parse",
+        parse_count
+    );
+
+    println!(
+        "Timestamp parsing robustness: {}/{} malformed formats correctly rejected",
+        error_count, parse_count
+    );
+}
+
+/// Test error message quality for common failures
+#[test]
+fn error_message_quality_for_common_failures() {
+    let test_cases = vec![
+        ("", "empty string"),
+        ("2026-04-21", "partial timestamp"),
+        ("not-a-timestamp", "gibberish"),
+        ("2026/04/21T18:42:10Z", "wrong separator"),
+        ("2026-13-01T00:00:00Z", "invalid month"),
+        ("2026-04-21T18:42:10+24:00", "invalid offset"),
+    ];
+
+    for (ts, description) in test_cases {
+        let result = chrono::DateTime::parse_from_rfc3339(ts);
+        assert!(
+            result.is_err(),
+            "{} '{}' should fail to parse",
+            description, ts
+        );
+
+        let err = result.unwrap_err();
+        let err_msg = err.to_string();
+
+        // Error message should be non-empty
+        assert!(
+            !err_msg.is_empty(),
+            "{} error should have non-empty message",
+            description
+        );
+
+        // Error message should be reasonably descriptive (at least 10 chars)
+        assert!(
+            err_msg.len() >= 10,
+            "{} error message should be descriptive (>= 10 chars), got: {}",
+            description, err_msg
+        );
+
+        println!(
+            "{}: '{}' -> Error: {}",
+            description, if ts.is_empty() { "(empty)" } else { ts }, err_msg
+        );
+    }
+}
+
+/// Test that parse errors don't cause panics even with extreme inputs
+#[test]
+fn extreme_inputs_dont_panic() {
+    // Create long-lived String values to avoid temporary borrow issues
+    let long_a = "a".repeat(10000);
+    let long_timestamp = "2026-04-21T18:42:10Z".repeat(100);
+    let long_space = " ".repeat(1000);
+
+    let extreme_cases: Vec<&str> = vec![
+        // Very long strings
+        &long_a,
+        &long_timestamp,
+        &long_space,
+        // Special characters
+        "\u{FEFF}", // BOM
+        "\u{200B}", // Zero-width space
+        "\u{200C}\u{200D}", // Join controls
+        // Mixed unicode
+        "🔥 timestamp 🔥",
+        "✓2026-04-21T18:42:10Z✓",
+        // Null bytes
+        "\x00",
+        "\x00\x00\x00",
+    ];
+
+    for ts in extreme_cases {
+        // Should not panic, just return error
+        let result = std::panic::catch_unwind(|| {
+            chrono::DateTime::parse_from_rfc3339(ts)
+        });
+
+        assert!(
+            result.is_ok(),
+            "Parsing extreme input should not panic"
+        );
+
+        let parse_result = result.unwrap();
+        // May succeed or fail, but should never panic
+        let _ = parse_result;
+    }
+}
+
+/// Test round-trip: valid timestamps parse and can be formatted back
+#[test]
+fn valid_timestamps_round_trip_cleanly() {
+    let valid_timestamps = vec![
+        "2026-04-21T18:42:10Z",
+        "2026-04-21T18:42:10.123Z",
+        "2026-04-21T18:42:10+00:00",
+        "2026-04-21T18:42:10+05:30",
+        "2026-04-21T18:42:10.123456Z",
+    ];
+
+    for original_ts in valid_timestamps {
+        let result = chrono::DateTime::parse_from_rfc3339(original_ts);
+        assert!(
+            result.is_ok(),
+            "Valid timestamp '{}' should parse successfully",
+            original_ts
+        );
+
+        let dt = result.unwrap();
+        let formatted = dt.to_rfc3339();
+
+        // Re-parse the formatted timestamp
+        let re_parse_result = chrono::DateTime::parse_from_rfc3339(&formatted);
+        assert!(
+            re_parse_result.is_ok(),
+            "Round-tripped timestamp '{}' should parse successfully",
+            formatted
+        );
+
+        let dt2 = re_parse_result.unwrap();
+        assert_eq!(
+            dt, dt2,
+            "Round-tripped timestamp should be equal to original"
+        );
     }
 }

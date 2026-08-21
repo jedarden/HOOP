@@ -1080,11 +1080,113 @@ fn lookup_project_for_bead(
         .map(|b| b.project.clone())
 }
 
+/// Error type for timestamp parsing failures.
+///
+/// Provides detailed error information for different types of timestamp
+/// parsing failures, making it easier to diagnose malformed timestamp issues.
+#[derive(Debug, Clone, thiserror::Error)]
+enum TimestampParseError {
+    /// Empty timestamp string
+    #[error("Empty timestamp string")]
+    Empty,
+
+    /// Invalid RFC3339 format
+    #[error("Invalid RFC3339 format: '{input}' - {chrono_error}")]
+    InvalidFormat {
+        /// The input timestamp that failed to parse
+        input: String,
+        /// The underlying chrono parse error
+        chrono_error: String,
+    },
+
+    /// Timestamp contains invalid characters
+    #[error("Invalid characters in timestamp: '{input}'")]
+    InvalidCharacters {
+        /// The input timestamp with invalid characters
+        input: String,
+    },
+
+    /// Timestamp has invalid timezone offset
+    #[error("Invalid timezone offset: '{input}'")]
+    InvalidTimezoneOffset {
+        /// The input timestamp with invalid offset
+        input: String,
+    },
+}
+
+/// Parse a timestamp string into a DateTime<Utc> with detailed error reporting.
+///
+/// This function provides comprehensive error messages for different types of
+/// timestamp parsing failures, making it easier to diagnose malformed timestamp issues.
+///
+/// # Arguments
+/// * `ts` - The timestamp string to parse (expected RFC3339 format)
+///
+/// # Returns
+/// * `Ok(DateTime<Utc>)` - The parsed timestamp
+/// * `Err(TimestampParseError)` - Detailed error information
+///
+/// # Examples
+/// ```ignore
+/// let valid = "2026-04-21T18:42:10Z";
+/// match parse_timestamp(valid) {
+///     Ok(dt) => println!("Parsed: {}", dt),
+///     Err(e) => eprintln!("Failed: {}", e),
+/// }
+///
+/// let invalid = "not-a-timestamp";
+/// match parse_timestamp(invalid) {
+///     Ok(dt) => println!("Parsed: {}", dt),
+///     Err(e) => eprintln!("Failed: {}", e),
+/// }
+/// ```
+fn parse_timestamp(ts: &str) -> Result<DateTime<Utc>, TimestampParseError> {
+    // Check for empty string
+    if ts.is_empty() {
+        return Err(TimestampParseError::Empty);
+    }
+
+    // Check for obvious invalid characters (non-printable or control characters)
+    if ts.chars().any(|c| c.is_control()) {
+        return Err(TimestampParseError::InvalidCharacters {
+            input: ts.to_string(),
+        });
+    }
+
+    // Try to parse the timestamp using chrono
+    match DateTime::parse_from_rfc3339(ts) {
+        Ok(dt) => Ok(dt.with_timezone(&Utc)),
+        Err(chrono_error) => {
+            // Categorize the error for better error messages
+            let error_msg = chrono_error.to_string().to_lowercase();
+
+            let error_type = if error_msg.contains("premature end of input") {
+                "incomplete/empty timestamp"
+            } else if error_msg.contains("invalid") && error_msg.contains("offset") {
+                "invalid timezone offset"
+            } else if error_msg.contains("expected") {
+                "format mismatch"
+            } else {
+                "parse error"
+            };
+
+            Err(TimestampParseError::InvalidFormat {
+                input: ts.to_string(),
+                chrono_error: format!("{} ({})", error_type, chrono_error),
+            })
+        }
+    }
+}
+
 /// Validate and sanitize a timestamp string from events.jsonl.
 ///
 /// Returns a valid RFC3339 timestamp string, or a default timestamp if the input
 /// is empty or invalid. This prevents "premature end of input" errors when
 /// storing timestamps in the database.
+///
+/// This is a defensive wrapper around `parse_timestamp()` that logs malformed
+/// timestamps and returns a fallback timestamp instead of propagating errors.
+/// Use `parse_timestamp()` directly if you need to handle errors explicitly.
 ///
 /// # Arguments
 /// * `ts` - The timestamp string to validate
@@ -1092,20 +1194,17 @@ fn lookup_project_for_bead(
 /// # Returns
 /// A valid RFC3339 timestamp string (original if valid, or current time if invalid)
 fn sanitize_timestamp(ts: &str) -> String {
-    // If empty, use current time as fallback
-    if ts.is_empty() {
-        warn!("Empty timestamp in event, using current time as fallback");
-        return Utc::now().to_rfc3339();
-    }
-
-    // Try to parse the timestamp to verify it's valid RFC3339
-    match DateTime::parse_from_rfc3339(ts) {
-        Ok(_) => ts.to_string(), // Valid timestamp, return as-is
+    match parse_timestamp(ts) {
+        Ok(dt) => dt.to_rfc3339(),
         Err(e) => {
+            // Log the malformed timestamp with detailed error information
             warn!(
-                "Invalid timestamp format '{}' in event: {}, using current time as fallback",
-                ts, e
+                "Malformed timestamp detected - using current time as fallback. Error: {}, Input: '{}'",
+                e,
+                if ts.len() <= 100 { ts } else { &ts[..100] }
             );
+
+            // Return current time as fallback to prevent crashes
             Utc::now().to_rfc3339()
         }
     }
