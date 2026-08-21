@@ -777,7 +777,7 @@ impl McpServerState {
         // Execute br create
         #[cfg(not(feature = "zero-write-v01"))]
         {
-            let mut cmd = crate::br_verbs::invoke_br_create(&[]);
+            let mut cmd = crate::br_verbs::invoke_bead_create(&[]);
             cmd.current_dir(project_path);
             cmd.arg(title);
             cmd.arg("--type").arg(issue_type);
@@ -1092,7 +1092,7 @@ impl McpServerState {
         let status_filter = args.get("status").and_then(|v| v.as_str());
 
         // Call br list --json
-        let mut cmd = crate::br_verbs::invoke_br_read(crate::br_verbs::ReadVerb::List, &["--json"]);
+        let mut cmd = crate::br_verbs::invoke_bead_read(crate::br_verbs::ReadVerb::List, &["--json"]);
         let output = cmd
             .current_dir(project_path)
             .output()
@@ -1124,7 +1124,7 @@ impl McpServerState {
 
     fn get_bead_via_br(&self, project_path: &str, bead_id: &str) -> Result<Value, String> {
         let mut cmd =
-            crate::br_verbs::invoke_br_read(crate::br_verbs::ReadVerb::Get, &[bead_id, "--json"]);
+            crate::br_verbs::invoke_bead_read(crate::br_verbs::ReadVerb::Get, &[bead_id, "--json"]);
         let output = cmd
             .current_dir(project_path)
             .output()
