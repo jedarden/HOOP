@@ -26,6 +26,12 @@ const DEFAULT_SAMPLE_BUFFER_SIZE: usize = 20;
 /// Rate limit window for logging unknown events.
 const RATE_LIMIT_WINDOW: Duration = Duration::from_secs(300); // 5 minutes
 
+/// Type alias for rate limit tracker: maps (adapter, event_kind) → (last_log_time, suppressed_count).
+///
+/// This prevents log storms by tracking when each unique event type was last logged
+/// and how many occurrences were suppressed within the rate limit window.
+type RateLimitTracker = Arc<Mutex<HashMap<(String, String), (std::time::Instant, u64)>>>;
+
 /// A single unknown event sample for diagnostic display.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UnknownEventSample {
@@ -91,7 +97,7 @@ pub struct UnknownEventSink {
     /// Maximum number of samples to retain.
     max_samples: usize,
     /// Rate limit tracker: (adapter, event_kind) -> (last_log_time, suppressed_count).
-    rate_limit_tracker: Arc<Mutex<HashMap<(String, String), (std::time::Instant, u64)>>>,
+    rate_limit_tracker: RateLimitTracker,
 }
 
 impl UnknownEventSink {

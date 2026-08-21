@@ -326,11 +326,32 @@ This is the appropriate approach for auto-generated schema code because:
 - The complexity is inherent to nested JSON Schema structures processed by `typify`
 - Suppressing at the crate level is cleaner than modifying build scripts or post-processing generated code
 
+### Final Fix (2026-08-21)
+**File:** `hoop-daemon/src/unknown_event_sink.rs:94`
+
+**Additional resolution:** Added type alias for rate limit tracker:
+```rust
+/// Type alias for rate limit tracker: maps (adapter, event_kind) → (last_log_time, suppressed_count).
+///
+/// This prevents log storms by tracking when each unique event type was last logged
+/// and how many occurrences were suppressed within the rate limit window.
+type RateLimitTracker = Arc<Mutex<HashMap<(String, String), (std::time::Instant, u64)>>>;
+```
+
+The field declaration now uses:
+```rust
+rate_limit_tracker: RateLimitTracker,
+```
+
 ### Verification
-After applying these fixes:
+After applying all fixes:
 ```bash
 cargo clippy --workspace -- -D warnings
 ```
 Result: **No type_complexity warnings** ✅
 
 The workspace now compiles cleanly with all clippy lints enabled.
+
+**Total type_complexity warnings eliminated: 36**
+- Hand-written code: 2 (hoop-mcp, hoop-daemon)
+- Generated code: 34 (hoop-schema, crate-level allow)
