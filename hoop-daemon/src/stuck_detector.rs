@@ -63,7 +63,7 @@ pub enum WorkerAdapterType {
 
 impl WorkerAdapterType {
     /// Parse from string (case-insensitive)
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_str_lower(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "claude" => Some(Self::Claude),
             "codex" => Some(Self::Codex),
