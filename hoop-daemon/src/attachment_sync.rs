@@ -13,6 +13,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use tracing::{debug, info, warn};
 
+use crate::atomic_write;
+
 // ── Manifest types ─────────────────────────────────────────────────────
 
 /// Per-file entry in the backup manifest.
@@ -82,11 +84,8 @@ impl BackupManifest {
         }
         let json = serde_json::to_string_pretty(self).context("serialize manifest")?;
 
-        let tmp_path = path.with_extension("json.tmp");
-        std::fs::write(&tmp_path, &json)
-            .with_context(|| format!("write {}", tmp_path.display()))?;
-        std::fs::rename(&tmp_path, path)
-            .with_context(|| format!("rename {} -> {}", tmp_path.display(), path.display()))?;
+        atomic_write::atomic_write_file_str(path, &json)
+            .with_context(|| format!("atomic write {}", path.display()))?;
 
         Ok(())
     }

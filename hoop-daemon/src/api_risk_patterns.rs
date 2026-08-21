@@ -19,6 +19,7 @@ use std::path::PathBuf;
 #[cfg(feature = "openapi")]
 use utoipa::ToSchema;
 
+use crate::atomic_write;
 use crate::risk_patterns::{default_risk_patterns, FixLineageLibrary, RiskMatch, RiskPattern};
 use crate::DaemonState;
 
@@ -384,12 +385,14 @@ async fn import_patterns(
             )
         })?;
 
-        std::fs::write(&risk_patterns_path, patterns_json).map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("write failed: {e}"),
-            )
-        })?;
+        atomic_write::atomic_write_file_str(&risk_patterns_path, &patterns_json).map_err(
+            |e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("atomic write failed: {e}"),
+                )
+            },
+        )?;
     }
 
     Ok(Json(PatternsImportResponse {

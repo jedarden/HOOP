@@ -14,11 +14,12 @@
 //! All functions accept `ValidStitchId` for compile-time path-traversal protection (§13).
 //! Paths are canonicalized and prefix-checked against an allowlist (§13, §K2).
 
+use crate::atomic_write;
 use crate::id_validators::ValidStitchId;
 use crate::path_security::{canonicalize_and_check, PathAllowlist};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, OpenOptions};
 use std::io::{Seek, SeekFrom, Write};
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -349,11 +350,13 @@ impl StreamingUploadRegistry {
         let metadata_path = stream_dir.join("metadata.json");
         let metadata_json = serde_json::to_string_pretty(&session)
             .context("failed to serialize session metadata")?;
-        fs::write(&metadata_path, metadata_json).context("failed to write session metadata")?;
+        atomic_write::atomic_write_file_str(&metadata_path, &metadata_json)
+            .context("failed to write session metadata")?;
 
         // Create empty partial file
         let partial_path = stream_dir.join("partial.bin");
-        File::create(&partial_path).context("failed to create partial file")?;
+        atomic_write::atomic_write_file(&partial_path, b"")
+            .context("failed to create partial file")?;
 
         Ok(StartStreamingUploadResponse {
             stream_id: stream_id.clone(),

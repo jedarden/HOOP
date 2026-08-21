@@ -9,6 +9,7 @@
 //!
 //! Chunk state is stored in ~/.hoop/uploads/{upload_id}/
 
+use crate::atomic_write;
 use crate::id_validators::{ValidBeadId, ValidStitchId, ValidUploadId};
 use crate::path_security::{canonicalize_and_check, PathAllowlist};
 use anyhow::{Context, Result};
@@ -187,7 +188,7 @@ impl UploadRegistry {
 
         // Create empty partial file
         let partial_path = self.partial_path(&upload_id)?;
-        File::create(&partial_path).context("failed to create partial file")?;
+        atomic_write::atomic_write_file(&partial_path, b"").context("failed to create partial file")?;
 
         let expires_at = now + chrono::Duration::hours(self.config.upload_ttl_hours);
         let upload_url = format!("/api/uploads/{}", upload_id_str);

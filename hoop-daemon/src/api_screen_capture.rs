@@ -8,6 +8,7 @@
 //! GET   /api/screen-capture/:stitch_id                — JSON metadata (chapters + transcript)
 //! GET   /api/screen-capture/:stitch_id/video          — range-aware video stream
 
+use crate::atomic_write;
 use crate::fleet;
 use crate::id_validators::ValidStitchId;
 use crate::screen_capture::{self, FrameSample};
@@ -146,7 +147,7 @@ async fn create_screen_capture(
 
     // Write video file
     let video_path = attachments_dir.join(format!("screen.{}", ext));
-    std::fs::write(&video_path, &video_data).map_err(|e| {
+    atomic_write::atomic_write_file(&video_path, &video_data).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to write video file: {}", e),
@@ -161,7 +162,7 @@ async fn create_screen_capture(
             format!("Failed to serialize frame samples: {}", e),
         )
     })?;
-    std::fs::write(&frame_samples_path, frame_samples_json).map_err(|e| {
+    atomic_write::atomic_write_file_str(&frame_samples_path, &frame_samples_json).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to write frame samples: {}", e),
@@ -213,7 +214,7 @@ async fn create_screen_capture(
             format!("Failed to serialize metadata: {}", e),
         )
     })?;
-    std::fs::write(&meta_path, meta_json).map_err(|e| {
+    atomic_write::atomic_write_file_str(&meta_path, &meta_json).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to write metadata: {}", e),

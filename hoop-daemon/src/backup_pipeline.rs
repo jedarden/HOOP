@@ -9,6 +9,7 @@
 //! - Metrics `hoop_backup_last_success_timestamp`, `hoop_backup_last_size_bytes` updated
 
 use crate::attachment_sync;
+use crate::atomic_write;
 use crate::backup::{BackupCredentials, BackupFileConfig};
 use crate::fleet::{self, ActionKind, ActionResult};
 use crate::id_validators::{validate_bead_id, validate_stitch_id};
@@ -569,8 +570,8 @@ impl BackupPipeline {
 
         let compressed = zstd::encode_all(&raw[..], 3).context("zstd compression failed")?;
 
-        std::fs::write(&output, &compressed)
-            .with_context(|| format!("write {}", output.display()))?;
+        atomic_write::atomic_write_file(&output, &compressed)
+            .with_context(|| format!("atomic write {}", output.display()))?;
 
         info!(
             "Compressed {} → {} bytes ({:.1}x)",

@@ -8,6 +8,7 @@
 //! metrics (uptime, process stats, DB sizes) are appended by the HTTP
 //! handler in `api_metrics.rs`.
 
+use crate::atomic_write;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
@@ -782,11 +783,11 @@ pub struct Metrics {
 
     // ── §16.4 Bead & Stitch Operations ────────────────────────────────────
     /// `br` subprocess invocations by verb (create/list/…) and result.
-    pub hoop_br_subprocess_total: LabeledCounter,
+    pub hoop_bead_subprocess_total: LabeledCounter,
     /// `br` subprocess wall-clock duration in milliseconds, by verb.
-    pub hoop_br_subprocess_duration_ms: LabeledHistogram,
+    pub hoop_bead_subprocess_duration_ms: LabeledHistogram,
     /// Current number of concurrent `br` subprocesses (gauge).
-    pub hoop_br_subprocess_concurrent: Gauge,
+    pub hoop_bead_subprocess_concurrent: Gauge,
     /// Stitches created, labelled by project and kind.
     pub hoop_stitch_created_total: LabeledCounter,
     /// Beads created by HOOP automation, labelled by project.
@@ -921,9 +922,9 @@ impl Metrics {
             hoop_http_requests_total: LabeledCounter::new(&["route", "status"]),
             hoop_http_request_duration_ms: LabeledHistogram::new(&["route"]),
 
-            hoop_br_subprocess_total: LabeledCounter::new(&["verb", "result"]),
-            hoop_br_subprocess_duration_ms: LabeledHistogram::new(&["verb"]),
-            hoop_br_subprocess_concurrent: Gauge::new(),
+            hoop_bead_subprocess_total: LabeledCounter::new(&["verb", "result"]),
+            hoop_bead_subprocess_duration_ms: LabeledHistogram::new(&["verb"]),
+            hoop_bead_subprocess_concurrent: Gauge::new(),
             hoop_stitch_created_total: LabeledCounter::new(&["project", "kind"]),
             hoop_bead_created_by_hoop_total: LabeledCounter::new(&["project"]),
             hoop_audit_append_rate_per_second: Gauge::new(),
@@ -1102,24 +1103,24 @@ impl Metrics {
         // ── §16.4 Bead & Stitch ─────────────────────────────────────────────
         write_labeled_counter(
             &mut out,
-            "hoop_br_subprocess_total",
-            "`br` subprocess invocations by verb and result (ok/error).",
-            self.hoop_br_subprocess_total.label_names,
-            &self.hoop_br_subprocess_total.snapshot(),
+            "hoop_bead_subprocess_total",
+            "`bead` subprocess invocations by verb and result (ok/error).",
+            self.hoop_bead_subprocess_total.label_names,
+            &self.hoop_bead_subprocess_total.snapshot(),
         );
         write_labeled_histogram(
             &mut out,
-            "hoop_br_subprocess_duration_ms",
-            "`br` subprocess wall-clock duration in milliseconds, by verb.",
-            self.hoop_br_subprocess_duration_ms.label_names,
-            &self.hoop_br_subprocess_duration_ms.buckets,
-            &self.hoop_br_subprocess_duration_ms.snapshot(),
+            "hoop_bead_subprocess_duration_ms",
+            "`bead` subprocess wall-clock duration in milliseconds, by verb.",
+            self.hoop_bead_subprocess_duration_ms.label_names,
+            &self.hoop_bead_subprocess_duration_ms.buckets,
+            &self.hoop_bead_subprocess_duration_ms.snapshot(),
         );
         write_gauge_i64(
             &mut out,
-            "hoop_br_subprocess_concurrent",
-            "Current number of concurrent `br` subprocesses.",
-            self.hoop_br_subprocess_concurrent.get(),
+            "hoop_bead_subprocess_concurrent",
+            "Current number of concurrent `bead` subprocesses.",
+            self.hoop_bead_subprocess_concurrent.get(),
         );
         write_labeled_counter(
             &mut out,
@@ -1392,10 +1393,7 @@ pub fn load_restart_reason() -> String {
 /// Persist the restart reason to disk.
 pub fn save_restart_reason(reason: &str) {
     let path = restart_reason_path();
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
-    let _ = std::fs::write(path, reason);
+    let _ = atomic_write::atomic_write_file_str(&path, reason);
 }
 
 // ---------------------------------------------------------------------------

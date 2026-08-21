@@ -49,6 +49,8 @@ use anyhow::Result;
 use std::io::ErrorKind;
 use std::path::Path;
 
+use crate::atomic_write;
+
 /// File I/O error with clear categorization
 #[derive(Debug, Clone)]
 pub enum FileIoError {
@@ -316,7 +318,7 @@ pub fn open_file_optional(path: &Path) -> Result<Option<std::fs::File>> {
 /// write_file_with_context(Path::new("/path/to/file"), "content")?;
 /// ```
 pub fn write_file_with_context(path: &Path, content: &str) -> Result<()> {
-    std::fs::write(path, content).map_err(|e| {
+    atomic_write::atomic_write_file_str(path, content).map_err(|e| {
         let file_error = classify_io_error(&e, path);
         anyhow::anyhow!("{}", file_error)
     })

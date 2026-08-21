@@ -605,15 +605,8 @@ fn write_atomic(dest: &Path, data: &[u8]) -> Result<()> {
             .unwrap_or("attachment"),
         uuid::Uuid::new_v4()
     );
-    let tmp = dest
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("dest path has no parent"))?
-        .join(tmp_name);
-
-    std::fs::write(&tmp, data)
-        .with_context(|| format!("failed to write tmp file: {}", tmp.display()))?;
-    std::fs::rename(&tmp, dest)
-        .with_context(|| format!("failed to rename {} -> {}", tmp.display(), dest.display()))?;
+    atomic_write::atomic_write_file(dest, data)
+        .with_context(|| format!("failed to atomic write: {}", dest.display()))?;
 
     Ok(())
 }
