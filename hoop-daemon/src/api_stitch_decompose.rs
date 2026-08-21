@@ -9,7 +9,7 @@
 
 use crate::api_preview::FileConflict;
 #[cfg(not(feature = "zero-write-v01"))]
-use crate::br_verbs::invoke_br_create;
+use crate::br_verbs::invoke_bead_create;
 use crate::fleet::{self, ActionKind, ActionResult, BeadActionArgs};
 use crate::metrics;
 use crate::pattern_query_evaluator;
@@ -477,7 +477,7 @@ pub async fn submit_stitch_internal(
             let mut all_labels = bead_labels;
             all_labels.push(stitch_label);
 
-            let mut cmd = invoke_br_create(&[]);
+            let mut cmd = invoke_bead_create(&[]);
             cmd.current_dir(&cwd);
             cmd.arg(&bead_title);
             cmd.arg("--type").arg(&bead_issue_type);
@@ -521,10 +521,10 @@ pub async fn submit_stitch_internal(
         let br_elapsed_ms = br_start.elapsed().as_secs_f64() * 1_000.0;
         let br_ok = output.status.success();
         metrics::metrics()
-            .hoop_br_subprocess_total
+            .hoop_bead_subprocess_total
             .inc(&["create", if br_ok { "ok" } else { "error" }]);
         metrics::metrics()
-            .hoop_br_subprocess_duration_ms
+            .hoop_bead_subprocess_duration_ms
             .observe(&["create"], br_elapsed_ms);
 
         if !output.status.success() {
@@ -621,7 +621,7 @@ pub async fn submit_stitch_internal(
                 let _ = tokio::task::spawn_blocking(move || {
                     let start = std::time::Instant::now();
                     let mut cmd =
-                        crate::br_verbs::invoke_br_write(crate::br_verbs::WriteVerb::Close, &[]);
+                        crate::br_verbs::invoke_bead(crate::br_verbs::WriteVerb::Close.as_str(), &[]);
                     cmd.current_dir(&close_cwd);
                     cmd.arg(&close_id);
                     cmd.arg("--actor").arg(&close_actor);
@@ -630,10 +630,10 @@ pub async fn submit_stitch_internal(
                     let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
                     let ok = result.as_ref().map(|o| o.status.success()).unwrap_or(false);
                     crate::metrics::metrics()
-                        .hoop_br_subprocess_total
+                        .hoop_bead_subprocess_total
                         .inc(&["close", if ok { "ok" } else { "error" }]);
                     crate::metrics::metrics()
-                        .hoop_br_subprocess_duration_ms
+                        .hoop_bead_subprocess_duration_ms
                         .observe(&["close"], elapsed_ms);
                     result
                 })

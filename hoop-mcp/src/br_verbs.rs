@@ -1,12 +1,15 @@
-//! br verb classification and create-only invariant guard
+//! bead verb classification and create-only invariant guard
 //!
 //! Mirrors `hoop-daemon::br_verbs` — ensures the MCP server respects the same
-//! write invariant: under `create-only-write`, only `br create` compiles.
+//! write invariant: under `create-only-write`, only `bead create` compiles.
 //!
 //! This module is the MCP crate's belt-and-suspenders enforcement:
-//! - Compile-time: `invoke_br_write` does not exist under `create-only-write`
-//! - Runtime: `validate_br_subprocess_args` inspects built `Command` objects
+//! - Compile-time: `invoke_bead_write` does not exist under `create-only-write`
+//! - Runtime: `validate_bead_subprocess_args` inspects built `Command` objects
 //! - Startup: `validate_write_invariant` logs the active mode
+//!
+//! The bead CLI name is configurable via HOOP_BEAD_CLI environment variable
+//! and defaults to "bead" (the bead-rs CLI).
 
 #[allow(dead_code)]
 pub const WRITE_RESTRICTED: bool =
@@ -94,14 +97,14 @@ pub fn is_forbidden_verb(verb: &str) -> bool {
 pub fn assert_create_only(verb: &str) {
     if is_forbidden_verb(verb) {
         panic!(
-            "HOOP create-only invariant violated: br {} is forbidden. \
-             Only `br create` is allowed in phase 4+. This is a bug — please report it.",
+            "HOOP create-only invariant violated: bead {} is forbidden. \
+             Only `bead create` is allowed in phase 4+. This is a bug — please report it.",
             verb
         );
     }
     if is_write_verb(verb) && verb != "create" {
         panic!(
-            "HOOP create-only invariant violated: br {} is a write verb but not 'create'. \
+            "HOOP create-only invariant violated: bead {} is a write verb but not 'create'. \
              This is a bug — please report it.",
             verb
         );
@@ -111,14 +114,14 @@ pub fn assert_create_only(verb: &str) {
 pub fn assert_read_only(verb: &str) {
     if is_write_verb(verb) {
         panic!(
-            "HOOP zero-write invariant violated: br {} is a write verb. \
+            "HOOP zero-write invariant violated: bead {} is a write verb. \
              Phase 1 is strictly read-only. This is a bug — please report it.",
             verb
         );
     }
 }
 
-pub fn validate_br_subprocess_args(cmd: &std::process::Command) {
+pub fn validate_bead_subprocess_args(cmd: &std::process::Command) {
     let first_arg = cmd.get_args().next();
     let verb = first_arg
         .map(|a| a.to_string_lossy().into_owned())
@@ -127,7 +130,7 @@ pub fn validate_br_subprocess_args(cmd: &std::process::Command) {
     if ZERO_WRITE_ACTIVE {
         if verb.is_empty() {
             panic!(
-                "HOOP zero-write invariant violated: br invoked with no verb. \
+                "HOOP zero-write invariant violated: bead invoked with no verb. \
                  Phase 1 is strictly read-only. This is a bug — please report it."
             );
         }
@@ -135,22 +138,23 @@ pub fn validate_br_subprocess_args(cmd: &std::process::Command) {
     } else if CREATE_ONLY_ACTIVE {
         if verb.is_empty() {
             panic!(
-                "HOOP create-only invariant violated: br invoked with no verb. \
-                 Only `br create` is allowed in phase 4+. This is a bug — please report it."
+                "HOOP create-only invariant violated: bead invoked with no verb. \
+                 Only `bead create` is allowed in phase 4+. This is a bug — please report it."
             );
         }
         assert_create_only(&verb);
     }
 }
 
-pub fn invoke_br_read(verb: ReadVerb, args: &[&str]) -> std::process::Command {
+pub fn invoke_bead_read(verb: ReadVerb, args: &[&str]) -> std::process::Command {
     assert_read_only(verb.as_str());
-    let mut cmd = std::process::Command::new("br");
+    let cmd_name = hoop_core::bead_cli::bead_cli_command();
+    let mut cmd = std::process::Command::new(cmd_name);
     cmd.arg(verb.as_str());
     for arg in args {
         cmd.arg(arg);
     }
-    validate_br_subprocess_args(&cmd);
+    validate_bead_subprocess_args(&cmd);
     cmd
 }
 
@@ -159,25 +163,27 @@ pub fn invoke_br_read(verb: ReadVerb, args: &[&str]) -> std::process::Command {
     not(any(feature = "zero-write-v01", feature = "create-only-write"))
 ))]
 #[allow(dead_code)]
-pub fn invoke_br_create(args: &[&str]) -> std::process::Command {
-    let mut cmd = std::process::Command::new("br");
+pub fn invoke_bead_create(args: &[&str]) -> std::process::Command {
+    let cmd_name = hoop_core::bead_cli::bead_cli_command();
+    let mut cmd = std::process::Command::new(cmd_name);
     cmd.arg("create");
     for arg in args {
         cmd.arg(arg);
     }
-    validate_br_subprocess_args(&cmd);
+    validate_bead_subprocess_args(&cmd);
     cmd
 }
 
 #[cfg(not(any(feature = "zero-write-v01", feature = "create-only-write")))]
 #[allow(dead_code)]
-pub fn invoke_br_write(verb: WriteVerb, args: &[&str]) -> std::process::Command {
-    let mut cmd = std::process::Command::new("br");
+pub fn invoke_bead_write(verb: WriteVerb, args: &[&str]) -> std::process::Command {
+    let cmd_name = hoop_core::bead_cli::bead_cli_command();
+    let mut cmd = std::process::Command::new(cmd_name);
     cmd.arg(verb.as_str());
     for arg in args {
         cmd.arg(arg);
     }
-    validate_br_subprocess_args(&cmd);
+    validate_bead_subprocess_args(&cmd);
     cmd
 }
 
@@ -210,13 +216,21 @@ pub fn propagate_stitch_labels(target_labels: &mut Vec<String>, parent_labels: &
 }
 
 pub fn validate_write_invariant() {
+    let cmd_name = hoop_core::bead_cli::bead_cli_command();
     if ZERO_WRITE_ACTIVE {
-        tracing::info!("write invariant: ZERO-WRITE (phase 1 — no br write verbs at compile time)");
+        tracing::info!(
+            "write invariant: ZERO-WRITE (phase 1 — no bead write verbs at compile time, CLI: {})",
+            cmd_name
+        );
     } else if CREATE_ONLY_ACTIVE {
-        tracing::info!("write invariant: CREATE-ONLY (phase 4+ — only br create at compile time)");
+        tracing::info!(
+            "write invariant: CREATE-ONLY (phase 4+ — only bead create at compile time, CLI: {})",
+            cmd_name
+        );
     } else {
         tracing::warn!(
-            "write invariant: UNRESTRICTED (no feature flag set — all br verbs reachable)"
+            "write invariant: UNRESTRICTED (no feature flag set — all bead verbs reachable, CLI: {})",
+            cmd_name
         );
     }
 
@@ -301,22 +315,24 @@ mod tests {
     }
 
     #[test]
-    fn test_invoke_br_read_builds_command() {
-        let cmd = invoke_br_read(ReadVerb::List, &["--json"]);
-        assert_eq!(cmd.get_program(), "br");
+    fn test_invoke_bead_read_builds_command() {
+        let cmd = invoke_bead_read(ReadVerb::List, &["--json"]);
+        let cmd_name = hoop_core::bead_cli::bead_cli_command();
+        assert_eq!(cmd.get_program(), std::ffi::OsStr::new(&cmd_name));
         let args: Vec<_> = cmd.get_args().collect();
         assert_eq!(args, ["list", "--json"]);
     }
 
     #[test]
-    fn test_invoke_br_create_builds_command() {
+    fn test_invoke_bead_create_builds_command() {
         #[cfg(any(
             feature = "create-only-write",
             not(any(feature = "zero-write-v01", feature = "create-only-write"))
         ))]
         {
-            let cmd = invoke_br_create(&["--type", "task"]);
-            assert_eq!(cmd.get_program(), "br");
+            let cmd = invoke_bead_create(&["--type", "task"]);
+            let cmd_name = hoop_core::bead_cli::bead_cli_command();
+            assert_eq!(cmd.get_program(), std::ffi::OsStr::new(&cmd_name));
             let args: Vec<_> = cmd.get_args().collect();
             assert_eq!(args, ["create", "--type", "task"]);
         }
@@ -338,46 +354,46 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_br_subprocess_args_allows_create() {
-        let mut cmd = std::process::Command::new("br");
+    fn test_validate_bead_subprocess_args_allows_create() {
+        let mut cmd = std::process::Command::new(hoop_core::bead_cli::bead_cli_command());
         cmd.arg("create").arg("--type").arg("task");
-        validate_br_subprocess_args(&cmd);
+        validate_bead_subprocess_args(&cmd);
     }
 
     #[test]
-    fn test_validate_br_subprocess_args_allows_read_verbs() {
+    fn test_validate_bead_subprocess_args_allows_read_verbs() {
         for verb in READ_VERB_NAMES {
-            let mut cmd = std::process::Command::new("br");
+            let mut cmd = std::process::Command::new(hoop_core::bead_cli::bead_cli_command());
             cmd.arg(verb);
-            validate_br_subprocess_args(&cmd);
+            validate_bead_subprocess_args(&cmd);
         }
     }
 
     #[cfg(any(feature = "create-only-write", feature = "zero-write-v01"))]
     #[test]
     #[should_panic(expected = "invariant violated")]
-    fn test_validate_br_subprocess_args_rejects_raw_close_command() {
-        let mut cmd = std::process::Command::new("br");
+    fn test_validate_bead_subprocess_args_rejects_raw_close_command() {
+        let mut cmd = std::process::Command::new(hoop_core::bead_cli::bead_cli_command());
         cmd.arg("close").arg("bd-abc123");
-        validate_br_subprocess_args(&cmd);
+        validate_bead_subprocess_args(&cmd);
     }
 
     #[cfg(any(feature = "create-only-write", feature = "zero-write-v01"))]
     #[test]
     #[should_panic(expected = "invariant violated")]
-    fn test_validate_br_subprocess_args_rejects_raw_update_command() {
-        let mut cmd = std::process::Command::new("br");
+    fn test_validate_bead_subprocess_args_rejects_raw_update_command() {
+        let mut cmd = std::process::Command::new(hoop_core::bead_cli::bead_cli_command());
         cmd.arg("update").arg("bd-abc123");
-        validate_br_subprocess_args(&cmd);
+        validate_bead_subprocess_args(&cmd);
     }
 
     #[cfg(not(any(feature = "create-only-write", feature = "zero-write-v01")))]
     #[test]
-    fn test_validate_br_subprocess_args_allows_all_without_feature_flag() {
+    fn test_validate_bead_subprocess_args_allows_all_without_feature_flag() {
         for verb in WRITE_VERB_NAMES {
-            let mut cmd = std::process::Command::new("br");
+            let mut cmd = std::process::Command::new(hoop_core::bead_cli::bead_cli_command());
             cmd.arg(verb);
-            validate_br_subprocess_args(&cmd);
+            validate_bead_subprocess_args(&cmd);
         }
     }
 

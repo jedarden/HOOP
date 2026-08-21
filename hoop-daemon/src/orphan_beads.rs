@@ -8,7 +8,7 @@
 //! - Metric updates for `hoop_orphan_bead_count{project}`
 //! - API for attaching orphan beads to existing Stitches
 
-use crate::br_verbs::{invoke_br_read, ReadVerb};
+use crate::br_verbs::{invoke_bead_read, ReadVerb};
 use crate::metrics;
 use crate::Bead;
 use anyhow::{Context, Result};
@@ -44,7 +44,7 @@ pub struct OrphansResponse {
 /// An orphan bead is one with no `stitch:*` label.
 /// This function queries br list --json and checks labels directly.
 pub fn detect_orphans(project_name: &str, project_path: &Path) -> Result<OrphansResponse> {
-    let mut cmd = invoke_br_read(ReadVerb::List, &["--json"]);
+    let mut cmd = invoke_bead_read(ReadVerb::List, &["--json"]);
     cmd.current_dir(project_path);
 
     let output = cmd.output().context("Failed to run br list --json")?;

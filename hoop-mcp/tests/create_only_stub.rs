@@ -1,6 +1,6 @@
 //! CI test: fake br stub that logs all verbs; assert only `create` is called
 //!
-//! Exercises the MCP code paths that call br through `invoke_br_create()` and
+//! Exercises the MCP code paths that call br through `invoke_bead_create()` and
 //! verifies that only `create` is ever invoked.
 //!
 //! CI command:
@@ -87,14 +87,14 @@ fn path_with_fake(fake: &FakeBr) -> String {
 }
 
 #[test]
-fn test_invoke_br_create_calls_only_create_verb() {
+fn test_invoke_bead_create_calls_only_create_verb() {
     #[cfg(any(
         feature = "create-only-write",
         not(any(feature = "zero-write-v01", feature = "create-only-write"))
     ))]
     {
         let fake = FakeBr::new();
-        let mut cmd = hoop_mcp::br_verbs::invoke_br_create(&["Test bead", "--type", "task"]);
+        let mut cmd = hoop_mcp::br_verbs::invoke_bead_create(&["Test bead", "--type", "task"]);
         cmd.env("PATH", path_with_fake(&fake));
         let output = cmd.output().expect("run fake br");
         assert!(output.status.success(), "fake br should succeed");
@@ -114,12 +114,12 @@ fn test_invoke_br_create_calls_only_create_verb() {
         not(any(feature = "zero-write-v01", feature = "create-only-write"))
     )))]
     {
-        println!("invoke_br_create not available under zero-write-v01 — test is a no-op");
+        println!("invoke_bead_create not available under zero-write-v01 — test is a no-op");
     }
 }
 
 #[test]
-fn test_invoke_br_create_multiple_invocations_all_create() {
+fn test_invoke_bead_create_multiple_invocations_all_create() {
     #[cfg(any(
         feature = "create-only-write",
         not(any(feature = "zero-write-v01", feature = "create-only-write"))
@@ -129,7 +129,7 @@ fn test_invoke_br_create_multiple_invocations_all_create() {
         let path_env = path_with_fake(&fake);
 
         for i in 0..3 {
-            let mut cmd = hoop_mcp::br_verbs::invoke_br_create(&[]);
+            let mut cmd = hoop_mcp::br_verbs::invoke_bead_create(&[]);
             cmd.arg(format!("Bead {}", i));
             cmd.arg("--type").arg("task");
             cmd.env("PATH", &path_env);
@@ -152,12 +152,12 @@ fn test_invoke_br_create_multiple_invocations_all_create() {
         not(any(feature = "zero-write-v01", feature = "create-only-write"))
     )))]
     {
-        println!("invoke_br_create not available under zero-write-v01 — test is a no-op");
+        println!("invoke_bead_create not available under zero-write-v01 — test is a no-op");
     }
 }
 
 #[test]
-fn test_invoke_br_read_verbs_never_write() {
+fn test_invoke_bead_read_verbs_never_write() {
     let fake = FakeBr::new();
     let path_env = path_with_fake(&fake);
 
@@ -167,7 +167,7 @@ fn test_invoke_br_read_verbs_never_write() {
     ];
 
     for (_name, verb) in &read_verbs {
-        let mut cmd = hoop_mcp::br_verbs::invoke_br_read(*verb, &[]);
+        let mut cmd = hoop_mcp::br_verbs::invoke_bead_read(*verb, &[]);
         cmd.env("PATH", &path_env);
         let _ = cmd.output();
     }
@@ -249,7 +249,7 @@ fn test_subprocess_arg_validation_rejects_forbidden_commands() {
 }
 
 #[test]
-fn test_invoke_br_create_end_to_end_with_stub() {
+fn test_invoke_bead_create_end_to_end_with_stub() {
     #[cfg(any(
         feature = "create-only-write",
         not(any(feature = "zero-write-v01", feature = "create-only-write"))
@@ -260,7 +260,7 @@ fn test_invoke_br_create_end_to_end_with_stub() {
 
         let titles = ["Fix auth race", "Add test coverage", "Update docs"];
         for title in &titles {
-            let mut cmd = hoop_mcp::br_verbs::invoke_br_create(&[]);
+            let mut cmd = hoop_mcp::br_verbs::invoke_bead_create(&[]);
             cmd.arg(title);
             cmd.arg("--type").arg("task");
             cmd.arg("--labels").arg("stitch:test-stitch");
@@ -309,7 +309,7 @@ fn test_read_verbs_also_pass_subprocess_validation() {
         hoop_mcp::br_verbs::ReadVerb::Show,
     ];
     for verb in &verbs_to_test {
-        let cmd = hoop_mcp::br_verbs::invoke_br_read(*verb, &[]);
+        let cmd = hoop_mcp::br_verbs::invoke_bead_read(*verb, &[]);
         let args: Vec<_> = cmd.get_args().collect();
         assert_eq!(args[0], std::ffi::OsStr::new(verb.as_str()));
     }

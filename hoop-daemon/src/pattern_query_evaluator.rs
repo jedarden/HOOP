@@ -321,10 +321,10 @@ fn get_stitch_labels(stitch_id: &str) -> Result<Vec<String>> {
 
 /// Look up a bead's labels via `br get --json`
 fn lookup_bead_labels(project_path: &std::path::Path, bead_id: &str) -> Result<Vec<String>> {
-    use crate::br_verbs::invoke_br_read;
+    use crate::br_verbs::invoke_bead_read;
     use crate::br_verbs::ReadVerb;
 
-    let mut cmd = invoke_br_read(ReadVerb::Get, &[bead_id, "--json"]);
+    let mut cmd = invoke_bead_read(ReadVerb::Get, &[bead_id, "--json"]);
     cmd.current_dir(project_path);
 
     let output = cmd

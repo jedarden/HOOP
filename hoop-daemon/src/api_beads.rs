@@ -8,8 +8,8 @@
 //! Submit flow: draft → validate → dedup check → br create → audit → WS event → response
 
 #[cfg(not(feature = "zero-write-v01"))]
-use crate::br_verbs::invoke_br_create;
-use crate::br_verbs::{invoke_br_read, propagate_stitch_labels, ReadVerb};
+use crate::br_verbs::invoke_bead_create;
+use crate::br_verbs::{invoke_bead_read, propagate_stitch_labels, ReadVerb};
 use crate::fleet::{self, ActionKind, ActionResult, BeadActionArgs, BeadSource};
 use crate::pattern_query_evaluator;
 use crate::ws::StitchCreatedData;
@@ -602,7 +602,7 @@ pub async fn create_bead_internal(
     let actor_for_br = actor.clone();
 
     let output = tokio::task::spawn_blocking(move || {
-        let mut cmd = invoke_br_create(&[]);
+        let mut cmd = invoke_bead_create(&[]);
         cmd.current_dir(&project_path);
         cmd.arg(&title_for_br);
         cmd.arg("--type").arg(&issue_type_for_br);
@@ -827,7 +827,7 @@ fn lookup_bead_labels(
     project_path: &std::path::Path,
     bead_id: &str,
 ) -> Result<Vec<String>, String> {
-    let mut cmd = invoke_br_read(ReadVerb::Get, &[bead_id, "--json"]);
+    let mut cmd = invoke_bead_read(ReadVerb::Get, &[bead_id, "--json"]);
     cmd.current_dir(project_path);
     let output = cmd
         .output()
@@ -855,7 +855,7 @@ fn lookup_bead_labels(
 
 #[allow(dead_code)]
 fn list_via_br(project_path: &std::path::Path) -> Result<Vec<BeadSummary>, String> {
-    let mut cmd = invoke_br_read(ReadVerb::List, &["--json"]);
+    let mut cmd = invoke_bead_read(ReadVerb::List, &["--json"]);
     cmd.current_dir(project_path);
     let output = cmd
         .output()
