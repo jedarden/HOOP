@@ -207,6 +207,14 @@ impl EventGenerator {
     }
 
     /// Write synthetic events to disk in a temporary directory
+    ///
+    /// This function writes synthetic test data for load testing purposes.
+    /// These are temporary test files, not production data that requires
+    /// crash safety. Direct file creation is acceptable here because:
+    /// 1. The data is synthetic and can be regenerated
+    /// 2. Files are written to a temporary directory for testing only
+    /// 3. Load test failures don't affect production data integrity
+    #[allow(clippy::disallowed_methods)]
     pub fn write_to_disk(&self, temp_dir: &Path) -> anyhow::Result<()> {
         for (project_name, events) in self.generate_all() {
             let project_dir = temp_dir.join(&project_name).join(".beads");

@@ -328,6 +328,12 @@ pub fn write_file_with_context(path: &Path, content: &str) -> Result<()> {
 ///
 /// Returns a clear error message that includes the file path and the
 /// specific type of failure (permission denied, already exists, etc.)
+///
+/// # Note
+/// This function is only used in test code. For production code, use
+/// `atomic_write::atomic_write_file` or `atomic_write::atomic_write_file_str`
+/// instead for crash-safe writes.
+#[cfg(test)]
 pub fn create_file_with_context(path: &Path) -> Result<std::fs::File> {
     std::fs::File::create(path).map_err(|e| {
         let file_error = classify_io_error(&e, path);
@@ -340,6 +346,11 @@ pub fn create_file_with_context(path: &Path) -> Result<std::fs::File> {
 /// Returns a clear error message that includes the file path and the
 /// specific type of failure (permission denied, already exists, etc.)
 ///
+/// # Note
+/// This function is only used in test code. For production code, use
+/// `atomic_write::atomic_write_file` or `atomic_write::atomic_write_file_str`
+/// instead for crash-safe writes.
+///
 /// # Examples
 ///
 /// ```ignore
@@ -348,6 +359,7 @@ pub fn create_file_with_context(path: &Path) -> Result<std::fs::File> {
 /// // This will fail with AlreadyExists if the file exists
 /// let file = create_file_exclusive_with_context(Path::new("/path/to/file"))?;
 /// ```
+#[cfg(test)]
 pub fn create_file_exclusive_with_context(path: &Path) -> Result<std::fs::File> {
     std::fs::File::create_new(path).map_err(|e| {
         let file_error = classify_io_error(&e, path);
