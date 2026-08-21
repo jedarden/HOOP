@@ -1179,12 +1179,18 @@ fn update_fleet_from_event(
             if let Some(ref proj) = project {
                 let now = chrono::Utc::now().to_rfc3339();
                 // Sanitize the timestamp to handle empty/invalid values from events.jsonl
+                // Use None if the sanitized timestamp is empty
                 let claimed_at = sanitize_timestamp(ts);
+                let claimed_at_opt = if claimed_at.is_empty() {
+                    None
+                } else {
+                    Some(claimed_at)
+                };
                 let entry = fleet::CollisionIndexEntry {
                     bead_id: bead_id.to_string(),
                     project: proj.clone(),
                     worker: Some(worker.to_string()),
-                    claimed_at,
+                    claimed_at: claimed_at_opt,
                     file_paths: vec![],
                     updated_at: now,
                 };

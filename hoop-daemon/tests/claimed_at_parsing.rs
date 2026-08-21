@@ -10,6 +10,7 @@
 //! 1. Valid RFC3339 timestamps parse correctly
 //! 2. Invalid timestamp formats are detected and handled gracefully
 //! 3. Edge cases (empty strings, partial timestamps) don't cause panics
+//! 4. Missing claimed_at fields are handled gracefully (None)
 
 use hoop_daemon::fleet;
 
@@ -52,14 +53,14 @@ const VALID_TIMESTAMP_MIDNIGHT_WITH_OFFSET: &str = "2026-04-21T00:00:00+00:00";
 // Helper functions
 // ---------------------------------------------------------------------------
 
-/// Create a CollisionIndexEntry for testing
-fn create_test_entry(claimed_at: &str) -> fleet::CollisionIndexEntry {
+/// Create a CollisionIndexEntry for testing with an optional claimed_at
+fn create_test_entry(claimed_at: Option<&str>) -> fleet::CollisionIndexEntry {
     let now = chrono::Utc::now().to_rfc3339();
     fleet::CollisionIndexEntry {
         bead_id: "bd-test001".to_string(),
         project: "test-project".to_string(),
         worker: Some("worker-alpha".to_string()),
-        claimed_at: claimed_at.to_string(),
+        claimed_at: claimed_at.map(|s| s.to_string()),
         file_paths: vec!["src/main.rs".to_string()],
         updated_at: now,
     }
@@ -132,10 +133,10 @@ fn garbage_timestamp_is_invalid() {
 
 #[test]
 fn collision_entry_with_valid_timestamp_creates_successfully() {
-    let entry = create_test_entry(VALID_TIMESTAMP_RFC3339);
+    let entry = create_test_entry(Some(VALID_TIMESTAMP_RFC3339));
 
     // Verify the entry has the expected claimed_at value
-    assert_eq!(entry.claimed_at, VALID_TIMESTAMP_RFC3339);
+    assert_eq!(entry.claimed_at, Some(VALID_TIMESTAMP_RFC3339.to_string()));
     assert_eq!(entry.bead_id, "bd-test001");
     assert_eq!(entry.project, "test-project");
     assert_eq!(entry.worker, Some("worker-alpha".to_string()));
@@ -143,21 +144,33 @@ fn collision_entry_with_valid_timestamp_creates_successfully() {
 
 #[test]
 fn collision_entry_with_empty_timestamp_has_field_set() {
-    let entry = create_test_entry(INVALID_TIMESTAMP_EMPTY);
+    let entry = create_test_entry(Some(INVALID_TIMESTAMP_EMPTY));
 
     // The entry should still be creatable with an invalid timestamp
     // (the field is stored as TEXT in SQLite)
-    assert_eq!(entry.claimed_at, INVALID_TIMESTAMP_EMPTY);
+    assert_eq!(entry.claimed_at, Some(INVALID_TIMESTAMP_EMPTY.to_string()));
     assert_eq!(entry.bead_id, "bd-test001");
 }
 
 #[test]
 fn collision_entry_with_partial_timestamp_has_field_set() {
-    let entry = create_test_entry(INVALID_TIMESTAMP_PARTIAL);
+    let entry = create_test_entry(Some(INVALID_TIMESTAMP_PARTIAL));
 
     // The entry should still be creatable with a partial timestamp
-    assert_eq!(entry.claimed_at, INVALID_TIMESTAMP_PARTIAL);
+    assert_eq!(entry.claimed_at, Some(INVALID_TIMESTAMP_PARTIAL.to_string()));
     assert_eq!(entry.bead_id, "bd-test001");
+}
+
+/// Test that demonstrates the graceful handling of missing claimed_at field
+#[test]
+fn collision_entry_with_missing_claimed_at_creates_successfully() {
+    let entry = create_test_entry(None);
+
+    // The entry should still be creatable without a claimed_at field
+    assert_eq!(entry.claimed_at, None);
+    assert_eq!(entry.bead_id, "bd-test001");
+    assert_eq!(entry.project, "test-project");
+    assert_eq!(entry.worker, Some("worker-alpha".to_string()));
 }
 
 /// Test that demonstrates the issue: when a timestamp string is invalid,
@@ -173,13 +186,14 @@ fn demonstrates_premature_end_of_input_issue() {
     ];
 
     for ts in invalid_timestamps {
-        let entry = create_test_entry(ts);
+        let entry = create_test_entry(Some(ts));
 
         // The entry accepts the invalid timestamp
-        assert_eq!(entry.claimed_at, ts);
+        assert_eq!(entry.claimed_at, Some(ts.to_string()));
 
         // But parsing it fails
-        let parse_result = chrono::DateTime::parse_from_rfc3339(&entry.claimed_at);
+        let claimed_at_value = entry.claimed_at.as_ref().unwrap();
+        let parse_result = chrono::DateTime::parse_from_rfc3339(claimed_at_value);
         assert!(
             parse_result.is_err(),
             "Timestamp '{}' should fail to parse",
@@ -268,9 +282,10 @@ fn timestamp_string_preservation_in_collision_entry() {
     ];
 
     for ts in test_timestamps {
-        let entry = create_test_entry(ts);
+        let entry = create_test_entry(Some(ts));
         assert_eq!(
-            entry.claimed_at, ts,
+            entry.claimed_at,
+            Some(ts.to_string()),
             "Timestamp string should be preserved exactly in CollisionIndexEntry"
         );
     }
@@ -302,8 +317,8 @@ fn fractional_second_precisions() {
         );
 
         // Verify the timestamp can be used in a CollisionIndexEntry
-        let entry = create_test_entry(ts);
-        assert_eq!(entry.claimed_at, *ts);
+        let entry = create_test_entry(Some(ts));
+        assert_eq!(entry.claimed_at, Some(ts.to_string()));
     }
 }
 
@@ -329,8 +344,8 @@ fn timezone_offset_variations() {
         );
 
         // Verify it can be stored in CollisionIndexEntry
-        let entry = create_test_entry(ts);
-        assert_eq!(entry.claimed_at, ts);
+        let entry = create_test_entry(Some(ts));
+        assert_eq!(entry.claimed_at, Some(ts.to_string()));
     }
 }
 
@@ -349,23 +364,38 @@ fn valid_timestamps_round_trip_through_collision_entry() {
 
     for original_ts in valid_timestamps {
         // Create entry with the timestamp
-        let entry = create_test_entry(original_ts);
+        let entry = create_test_entry(Some(original_ts));
 
         // Retrieve the timestamp
         let retrieved_ts = &entry.claimed_at;
 
         // Verify it's preserved exactly
         assert_eq!(
-            retrieved_ts, original_ts,
+            retrieved_ts,
+            &Some(original_ts.to_string()),
             "Timestamp should round-trip through CollisionIndexEntry unchanged"
         );
 
         // Verify the retrieved timestamp is still parseable
         assert!(
-            is_valid_rfc3339(retrieved_ts),
+            is_valid_rfc3339(retrieved_ts.as_ref().unwrap()),
             "Round-tripped timestamp should still be parseable"
         );
     }
+}
+
+/// Test that missing claimed_at field round-trips correctly
+#[test]
+fn missing_claimed_at_round_trips_correctly() {
+    // Create entry with missing claimed_at
+    let entry = create_test_entry(None);
+
+    // Verify it's None
+    assert_eq!(
+        entry.claimed_at,
+        None,
+        "Missing claimed_at should round-trip as None"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -393,8 +423,8 @@ fn whitespace_handling() {
         );
 
         // Even if invalid, it should be stored in CollisionIndexEntry
-        let entry = create_test_entry(ts);
-        assert_eq!(entry.claimed_at, ts);
+        let entry = create_test_entry(Some(ts));
+        assert_eq!(entry.claimed_at, Some(ts.to_string()));
     }
 }
 
@@ -442,8 +472,8 @@ fn invalid_characters() {
         );
 
         // Should still be storable in CollisionIndexEntry
-        let entry = create_test_entry(ts);
-        assert_eq!(entry.claimed_at, ts);
+        let entry = create_test_entry(Some(ts));
+        assert_eq!(entry.claimed_at, Some(ts.to_string()));
     }
 }
 
@@ -474,11 +504,12 @@ fn sql_injection_attempts() {
         );
 
         // But they should be storable without causing panics
-        let entry = create_test_entry(ts);
-        assert_eq!(entry.claimed_at, ts);
+        let entry = create_test_entry(Some(ts));
+        assert_eq!(entry.claimed_at, Some(ts.to_string()));
 
         // Verify they fail to parse
-        let parse_result = chrono::DateTime::parse_from_rfc3339(&entry.claimed_at);
+        let claimed_at_value = entry.claimed_at.as_ref().unwrap();
+        let parse_result = chrono::DateTime::parse_from_rfc3339(claimed_at_value);
         assert!(
             parse_result.is_err(),
             "SQL injection string should fail to parse: '{}'",
@@ -498,11 +529,12 @@ fn extremely_long_timestamps() {
 
     for ts in long_cases {
         // Store the long timestamp
-        let entry = create_test_entry(ts);
-        assert_eq!(entry.claimed_at, ts);
+        let entry = create_test_entry(Some(ts));
+        assert_eq!(entry.claimed_at, Some(ts.to_string()));
 
         // Parse it (may or may not succeed depending on chrono's behavior)
-        let parse_result = chrono::DateTime::parse_from_rfc3339(&entry.claimed_at);
+        let claimed_at_value = entry.claimed_at.as_ref().unwrap();
+        let parse_result = chrono::DateTime::parse_from_rfc3339(claimed_at_value);
         // We don't assert success/failure here, just that it doesn't panic
     }
 }
@@ -529,12 +561,12 @@ fn negative_timestamps_before_epoch() {
         );
 
         // Should be storable
-        let entry = create_test_entry(ts);
-        assert_eq!(entry.claimed_at, ts);
+        let entry = create_test_entry(Some(ts));
+        assert_eq!(entry.claimed_at, Some(ts.to_string()));
 
         // Should round-trip correctly
         assert!(
-            is_valid_rfc3339(&entry.claimed_at),
+            is_valid_rfc3339(entry.claimed_at.as_ref().unwrap()),
             "Negative timestamp should still be parseable after storage"
         );
     }
@@ -560,8 +592,8 @@ fn extreme_future_dates() {
         );
 
         // Should be storable
-        let entry = create_test_entry(ts);
-        assert_eq!(entry.claimed_at, ts);
+        let entry = create_test_entry(Some(ts));
+        assert_eq!(entry.claimed_at, Some(ts.to_string()));
     }
 }
 
@@ -585,8 +617,8 @@ fn invalid_timezone_offsets() {
         assert!(!result, "Invalid timezone offset '{}' should not parse", ts);
 
         // But should be storable
-        let entry = create_test_entry(ts);
-        assert_eq!(entry.claimed_at, ts);
+        let entry = create_test_entry(Some(ts));
+        assert_eq!(entry.claimed_at, Some(ts.to_string()));
     }
 }
 
@@ -608,8 +640,8 @@ fn leap_second_handling() {
         let _ = result;
 
         // Should be storable regardless
-        let entry = create_test_entry(ts);
-        assert_eq!(entry.claimed_at, ts);
+        let entry = create_test_entry(Some(ts));
+        assert_eq!(entry.claimed_at, Some(ts.to_string()));
     }
 }
 
@@ -637,8 +669,8 @@ fn boundary_values() {
         );
 
         // Should be storable regardless
-        let entry = create_test_entry(ts);
-        assert_eq!(entry.claimed_at, ts);
+        let entry = create_test_entry(Some(ts));
+        assert_eq!(entry.claimed_at, Some(ts.to_string()));
     }
 }
 
@@ -668,8 +700,8 @@ fn special_characters_and_unicode() {
         );
 
         // But should be storable
-        let entry = create_test_entry(ts);
-        assert_eq!(entry.claimed_at, ts);
+        let entry = create_test_entry(Some(ts));
+        assert_eq!(entry.claimed_at, Some(ts.to_string()));
     }
 }
 
@@ -697,12 +729,13 @@ fn empty_variants() {
         );
 
         // Should be storable
-        let entry = create_test_entry(ts);
-        assert_eq!(entry.claimed_at, ts);
+        let entry = create_test_entry(Some(ts));
+        assert_eq!(entry.claimed_at, Some(ts.to_string()));
 
         // Should produce appropriate error message
         if ts.is_empty() {
-            let parse_result = chrono::DateTime::parse_from_rfc3339(&entry.claimed_at);
+            let claimed_at_value = entry.claimed_at.as_ref().unwrap();
+            let parse_result = chrono::DateTime::parse_from_rfc3339(claimed_at_value);
             let err = parse_result.unwrap_err();
             let err_msg = err.to_string();
             assert!(
@@ -736,7 +769,7 @@ fn timestamps_with_extra_text() {
         );
 
         // Should be storable
-        let entry = create_test_entry(ts);
-        assert_eq!(entry.claimed_at, ts);
+        let entry = create_test_entry(Some(ts));
+        assert_eq!(entry.claimed_at, Some(ts.to_string()));
     }
 }

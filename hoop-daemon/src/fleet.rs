@@ -4990,7 +4990,7 @@ pub fn migrate_v112_to_v113(conn: &mut Connection) -> Result<()> {
             bead_id    TEXT PRIMARY KEY NOT NULL,
             project    TEXT NOT NULL,
             worker     TEXT,
-            claimed_at TEXT NOT NULL,
+            claimed_at TEXT,
             file_paths TEXT NOT NULL DEFAULT '[]',
             updated_at TEXT NOT NULL
         )
@@ -7725,7 +7725,9 @@ pub struct CollisionIndexEntry {
     pub bead_id: String,
     pub project: String,
     pub worker: Option<String>,
-    pub claimed_at: String,
+    /// The timestamp when this bead was claimed. May be absent if the field
+    /// was missing from the source data or if the bead was never claimed.
+    pub claimed_at: Option<String>,
     /// Sorted list of file paths touched by the worker holding this bead.
     pub file_paths: Vec<String>,
     pub updated_at: String,
@@ -8290,6 +8292,7 @@ fn upsert_collision_entry_conn(conn: &Connection, entry: &CollisionIndexEntry) -
            VALUES (?1,?2,?3,?4,?5,?6)
            ON CONFLICT(bead_id) DO UPDATE SET
                worker     = excluded.worker,
+               claimed_at = excluded.claimed_at,
                file_paths = excluded.file_paths,
                updated_at = excluded.updated_at"#,
         params![
@@ -10708,7 +10711,7 @@ mod tests {
             bead_id: "bead-001".to_string(),
             project: "proj-x".to_string(),
             worker: Some("worker-abc".to_string()),
-            claimed_at: ts.clone(),
+            claimed_at: Some(ts.clone()),
             file_paths: vec!["src/main.rs".to_string(), "src/lib.rs".to_string()],
             updated_at: ts,
         };
@@ -10746,7 +10749,7 @@ mod tests {
             bead_id: "bead-fp".to_string(),
             project: "proj-x".to_string(),
             worker: None,
-            claimed_at: ts.clone(),
+            claimed_at: Some(ts.clone()),
             file_paths: paths.clone(),
             updated_at: ts,
         };
@@ -10774,7 +10777,7 @@ mod tests {
                 bead_id: "bead-A".to_string(),
                 project: "proj-x".to_string(),
                 worker: None,
-                claimed_at: ts.clone(),
+                claimed_at: Some(ts.clone()),
                 file_paths: vec!["src/main.rs".to_string(), "src/lib.rs".to_string()],
                 updated_at: ts.clone(),
             },
@@ -10786,7 +10789,7 @@ mod tests {
                 bead_id: "bead-B".to_string(),
                 project: "proj-x".to_string(),
                 worker: None,
-                claimed_at: ts.clone(),
+                claimed_at: Some(ts.clone()),
                 file_paths: vec!["Cargo.toml".to_string()],
                 updated_at: ts.clone(),
             },
@@ -10798,7 +10801,7 @@ mod tests {
                 bead_id: "bead-C".to_string(),
                 project: "proj-y".to_string(),
                 worker: None,
-                claimed_at: ts.clone(),
+                claimed_at: Some(ts.clone()),
                 file_paths: vec!["src/main.rs".to_string()],
                 updated_at: ts,
             },
@@ -10842,7 +10845,7 @@ mod tests {
                     bead_id: bead.to_string(),
                     project: proj.to_string(),
                     worker: None,
-                    claimed_at: ts.clone(),
+                    claimed_at: Some(ts.clone()),
                     file_paths: vec!["shared/common.rs".to_string()],
                     updated_at: ts.clone(),
                 },
