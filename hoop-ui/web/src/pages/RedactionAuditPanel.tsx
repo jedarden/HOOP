@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAtomValue } from 'jotai';
-import { projectCardsAtom, type RedactionAuditRow, type RedactionAuditResponse } from './atoms';
+import { projectCardsAtom, type RedactionAuditRow, type RedactionAuditResponse } from '../atoms';
 
 const PAGE_SIZE = 50;
 

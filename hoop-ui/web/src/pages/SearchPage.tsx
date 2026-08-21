@@ -5,7 +5,7 @@ import {
   beadsAtom,
   conversationsAtom,
   type SessionKind,
-} from './atoms';
+} from '../atoms';
 
 const PAGE_SIZE = 100;
 

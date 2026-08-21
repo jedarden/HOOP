@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAtomValue } from 'jotai';
-import { projectCardsAtom } from './atoms';
+import { projectCardsAtom } from '../atoms';
 
 // Types matching the backend API
 interface ConversationSummary {

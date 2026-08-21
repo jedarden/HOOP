@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAtomValue } from 'jotai';
-import { projectCardsAtom, type AuditRow, type AuditResponse, type HashChainVerifyResponse } from './atoms';
+import { projectCardsAtom, type AuditRow, type AuditResponse, type HashChainVerifyResponse } from '../atoms';
 
 const PAGE_SIZE = 50;
 

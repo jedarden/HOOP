@@ -8,10 +8,10 @@ import {
   currentTimeAtom,
   stuckWorkersPanelOpenAtom,
   ProjectCardData,
-} from './atoms';
-import { SettingsMenu } from './components/SettingsMenu';
-import { WhatsNewBanner } from './components/OnboardingPromptBanner';
-import StuckWorkersPanel from './StuckWorkersPanel';
+} from '../atoms';
+import { SettingsMenu } from '../components/SettingsMenu';
+import { WhatsNewBanner } from '../components/OnboardingPromptBanner';
+import StuckWorkersPanel from '../StuckWorkersPanel';
 
 function formatRelativeTime(iso?: string, now?: number): string {
   if (!iso) return '--';

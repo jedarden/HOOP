@@ -1,19 +1,19 @@
 import { useAtomValue } from 'jotai';
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { beadsAtom, workersAtom, conversationsAtom, WorkerData } from './atoms';
-import FleetMap from './FleetMap';
-import ConversationPane from './ConversationPane';
-import BeadGraph from './BeadGraph';
-import CostPanel from './CostPanel';
-import CapacityPanel from './CapacityPanel';
-import StitchesTab from './StitchesTab';
-import FilesTab from './FilesTab';
-import DebugPanel from './DebugPanel';
-import DiffViewer from './DiffViewer';
-import StitchNetDiff from './StitchNetDiff';
-import OrphansTab from './OrphansTab';
-import ScriptsTab from './ScriptsTab';
-import FixPatternsTab from './FixPatternsTab';
+import { beadsAtom, workersAtom, conversationsAtom, WorkerData } from '../atoms';
+import FleetMap from '../FleetMap';
+import ConversationPane from '../ConversationPane';
+import BeadGraph from '../BeadGraph';
+import CostPanel from '../CostPanel';
+import CapacityPanel from '../CapacityPanel';
+import StitchesTab from '../StitchesTab';
+import FilesTab from '../FilesTab';
+import DebugPanel from '../DebugPanel';
+import DiffViewer from '../DiffViewer';
+import StitchNetDiff from '../StitchNetDiff';
+import OrphansTab from '../OrphansTab';
+import ScriptsTab from '../ScriptsTab';
+import FixPatternsTab from '../FixPatternsTab';
 
 export type TabId = 'stitches' | 'fleet' | 'graph' | 'conversations' | 'cost' | 'capacity' | 'files' | 'debug' | 'diff' | 'net-diff' | 'scripts' | 'patterns' | 'orphans';
 
