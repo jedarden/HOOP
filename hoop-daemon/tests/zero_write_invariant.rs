@@ -191,7 +191,8 @@ fn test_depend_panics_create_only() {
 #[test]
 fn test_invoke_br_read_produces_valid_command() {
     let cmd = br_verbs::invoke_br_read(ReadVerb::List, &["--json"]);
-    assert_eq!(cmd.get_program(), "br");
+    let expected_cli = hoop_core::bead_cli::bead_cli_command();
+    assert_eq!(cmd.get_program().to_string_lossy().as_ref(), expected_cli);
     let args: Vec<_> = cmd.get_args().collect();
     assert!(args.contains(&std::ffi::OsStr::new("list")));
     assert!(args.contains(&std::ffi::OsStr::new("--json")));
@@ -200,7 +201,8 @@ fn test_invoke_br_read_produces_valid_command() {
 #[test]
 fn test_invoke_br_string_read_verb() {
     let cmd = br_verbs::invoke_br("get", &["bd-abc123"]);
-    assert_eq!(cmd.get_program(), "br");
+    let expected_cli = hoop_core::bead_cli::bead_cli_command();
+    assert_eq!(cmd.get_program().to_string_lossy().as_ref(), expected_cli);
     let args: Vec<_> = cmd.get_args().collect();
     assert!(args.contains(&std::ffi::OsStr::new("get")));
     assert!(args.contains(&std::ffi::OsStr::new("bd-abc123")));
@@ -343,8 +345,9 @@ fn test_validate_zero_write_invariant_alias() {
 
 #[test]
 fn test_validate_br_subprocess_args_allows_read_verbs() {
+    let cli_name = hoop_core::bead_cli::bead_cli_command();
     for verb in br_verbs::READ_VERB_NAMES {
-        let mut cmd = std::process::Command::new("br");
+        let mut cmd = std::process::Command::new(&cli_name);
         cmd.arg(verb);
         br_verbs::validate_br_subprocess_args(&cmd);
     }
@@ -353,9 +356,10 @@ fn test_validate_br_subprocess_args_allows_read_verbs() {
 #[cfg(any(feature = "create-only-write", feature = "zero-write-v01"))]
 #[test]
 fn test_validate_br_subprocess_args_rejects_forbidden_verbs() {
+    let cli_name = hoop_core::bead_cli::bead_cli_command();
     for verb in br_verbs::FORBIDDEN_WRITE_VERBS {
         let result = std::panic::catch_unwind(|| {
-            let mut cmd = std::process::Command::new("br");
+            let mut cmd = std::process::Command::new(&cli_name);
             cmd.arg(verb);
             br_verbs::validate_br_subprocess_args(&cmd);
         });
@@ -370,9 +374,11 @@ fn test_validate_br_subprocess_args_rejects_forbidden_verbs() {
 #[cfg(not(any(feature = "create-only-write", feature = "zero-write-v01")))]
 #[test]
 fn test_validate_br_subprocess_args_allows_all_in_unrestricted() {
+    let cli_name = hoop_core::bead_cli::bead_cli_command();
     for verb in br_verbs::WRITE_VERB_NAMES {
-        let mut cmd = std::process::Command::new("br");
+        let mut cmd = std::process::Command::new(&cli_name);
         cmd.arg(verb);
         br_verbs::validate_br_subprocess_args(&cmd);
     }
+}
 }

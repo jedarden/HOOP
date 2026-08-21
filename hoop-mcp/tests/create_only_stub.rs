@@ -13,13 +13,16 @@ use std::path::PathBuf;
 struct FakeBr {
     bin_dir: tempfile::TempDir,
     log_path: PathBuf,
+    /// Name of the bead CLI being stubbed
+    cli_name: String,
 }
 
 impl FakeBr {
     fn new() -> Self {
         let bin_dir = tempfile::TempDir::new().expect("create temp dir");
-        let br_path = bin_dir.path().join("br");
-        let log_path = bin_dir.path().join("br_invocations.log");
+        let cli_name = hoop_core::bead_cli::bead_cli_command();
+        let cli_path = bin_dir.path().join(&cli_name);
+        let log_path = bin_dir.path().join(format!("{}_invocations.log", cli_name));
 
         let log_path_str = log_path.to_str().unwrap();
         let script = format!(
@@ -34,16 +37,16 @@ impl FakeBr {
              fi\n\
              exit 0\n"
         );
-        let mut f = fs::File::create(&br_path).expect("create br script");
-        f.write_all(script.as_bytes()).expect("write br script");
+        let mut f = fs::File::create(&cli_path).expect("create bead CLI script");
+        f.write_all(script.as_bytes()).expect("write bead CLI script");
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&br_path, fs::Permissions::from_mode(0o755))
-                .expect("chmod br script");
+            fs::set_permissions(&cli_path, fs::Permissions::from_mode(0o755))
+                .expect("chmod bead CLI script");
         }
 
-        Self { bin_dir, log_path }
+        Self { bin_dir, log_path, cli_name }
     }
 
     fn path_prefix(&self) -> String {
@@ -230,9 +233,10 @@ fn test_runtime_guard_allows_create() {
 #[cfg(any(feature = "create-only-write", feature = "zero-write-v01"))]
 #[test]
 fn test_subprocess_arg_validation_rejects_forbidden_commands() {
+    let cli_name = hoop_core::bead_cli::bead_cli_command();
     for verb in hoop_mcp::br_verbs::FORBIDDEN_WRITE_VERBS {
         let result = std::panic::catch_unwind(|| {
-            let mut cmd = std::process::Command::new("br");
+            let mut cmd = std::process::Command::new(&cli_name);
             cmd.arg(verb).arg("bd-test123");
             hoop_mcp::br_verbs::validate_br_subprocess_args(&cmd);
         });

@@ -14,16 +14,19 @@ fn orphan_bead_detection_and_attachment() {
     let tmp = TempDir::new().unwrap();
     let project_path = tmp.path();
 
-    // Set up a minimal br workspace
+    // Set up a minimal bead workspace
     let beads_dir = project_path.join(".beads");
     fs::create_dir_all(&beads_dir).unwrap();
 
-    // Create an empty issues.jsonl (append-only source of truth)
-    let issues_path = beads_dir.join("issues.jsonl");
-    fs::write(&issues_path, "").unwrap();
+    // Create an empty checkpoint (append-only source of truth for bead-rs)
+    let checkpoint_dir = beads_dir.join("checkpoint");
+    fs::create_dir_all(&checkpoint_dir).unwrap();
+    let current_json = checkpoint_dir.join("current.json");
+    fs::write(&current_json, r#"{"version":1,"issues":[]}"#).unwrap();
 
-    // Initialize br workspace
-    let _br_list_output = std::process::Command::new("br")
+    // Initialize bead workspace
+    let cli_name = hoop_core::bead_cli::bead_cli_command();
+    let _bead_list_output = std::process::Command::new(&cli_name)
         .arg("list")
         .current_dir(project_path)
         .output();

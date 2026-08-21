@@ -12,21 +12,24 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 
-/// Path to the log file written by the fake br stub
+/// Path to the log file written by the fake bead CLI stub
 struct FakeBr {
-    /// Directory containing the fake `br` script
+    /// Directory containing the fake bead CLI script
     bin_dir: tempfile::TempDir,
     /// Path to the invocation log
     log_path: PathBuf,
+    /// Name of the bead CLI being stubbed
+    cli_name: String,
 }
 
 impl FakeBr {
     fn new() -> Self {
         let bin_dir = tempfile::TempDir::new().expect("create temp dir");
-        let br_path = bin_dir.path().join("br");
-        let log_path = bin_dir.path().join("br_invocations.log");
+        let cli_name = hoop_core::bead_cli::bead_cli_command();
+        let cli_path = bin_dir.path().join(&cli_name);
+        let log_path = bin_dir.path().join(format!("{}_invocations.log", cli_name));
 
-        // Write the fake br script: log verb + args, then output a fake bead ID
+        // Write the fake bead CLI script: log verb + args, then output a fake bead ID
         let log_path_str = log_path.to_str().unwrap();
         let script = format!(
             "#!/bin/sh\n\
@@ -37,16 +40,16 @@ impl FakeBr {
              fi\n\
              exit 0\n"
         );
-        let mut f = fs::File::create(&br_path).expect("create br script");
-        f.write_all(script.as_bytes()).expect("write br script");
+        let mut f = fs::File::create(&cli_path).expect("create bead CLI script");
+        f.write_all(script.as_bytes()).expect("write bead CLI script");
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&br_path, fs::Permissions::from_mode(0o755))
-                .expect("chmod br script");
+            fs::set_permissions(&cli_path, fs::Permissions::from_mode(0o755))
+                .expect("chmod bead CLI script");
         }
 
-        Self { bin_dir, log_path }
+        Self { bin_dir, log_path, cli_name }
     }
 
     /// Get the PATH prefix that includes the fake br
@@ -328,9 +331,10 @@ fn test_subprocess_arg_validation_allows_create_command() {
 fn test_subprocess_arg_validation_rejects_forbidden_commands() {
     // Verify that raw Command objects with forbidden verbs are rejected
     // by validate_br_subprocess_args
+    let cli_name = hoop_core::bead_cli::bead_cli_command();
     for verb in hoop_daemon::br_verbs::FORBIDDEN_WRITE_VERBS {
         let result = std::panic::catch_unwind(|| {
-            let mut cmd = std::process::Command::new("br");
+            let mut cmd = std::process::Command::new(&cli_name);
             cmd.arg(verb).arg("bd-test123");
             hoop_daemon::br_verbs::validate_br_subprocess_args(&cmd);
         });

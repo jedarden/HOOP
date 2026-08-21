@@ -2,7 +2,7 @@
 
 **Status: Pre-release — Phase 1 in progress. The daemon compiles cleanly (`cargo check` / `cargo build` pass), but `cargo test` does not compile (31 stale-fixture errors) and `cargo clippy -D warnings` is not yet clean (90 errors). See [current repository state](AGENTS.md#current-repository-state); track the Phase 1 CI gate at bead [`bf-5mpcl`](.beads/issues.jsonl).**
 
-Operator observability and control plane for NEEDLE worker fleets. HOOP reads everything — bead state, CLI session transcripts, worker heartbeats, cost data — and surfaces it in a web UI and REST/WebSocket API. It writes exactly one thing: creating new beads via `br create`.
+Operator observability and control plane for NEEDLE worker fleets. HOOP reads everything — bead state, CLI session transcripts, worker heartbeats, cost data — and surfaces it in a web UI and REST/WebSocket API. It writes exactly one thing: creating new beads via `bead create`.
 
 ---
 
@@ -11,13 +11,13 @@ Operator observability and control plane for NEEDLE worker fleets. HOOP reads ev
 HOOP keeps the work queue *taut* by surfacing what is stale, stuck, or missing — and prompting the operator to act — rather than acting autonomously. It is passive observability that creates pressure for action, not active control.
 
 **What HOOP reads:**
-- Bead queues (`.beads/` in every registered workspace) via `br` CLI
+- Bead queues (`.beads/` in every registered workspace) via `bead` CLI
 - CLI session transcripts from Claude Code, Codex, OpenCode, Gemini, and Aider (JSONL format)
 - Worker heartbeats (`.beads/heartbeats.jsonl`) appended by NEEDLE workers every 10 seconds
 - Worker event logs (`.beads/events.jsonl`) on claim, dispatch, complete, and fail
 
 **What HOOP writes:**
-- `br create` — the only mutation HOOP performs. The agent drafts a bead, you approve, HOOP calls `br create`. Nothing else.
+- `bead create` — the only mutation HOOP performs. The agent drafts a bead, you approve, HOOP calls `bead create`. Nothing else.
 
 **What HOOP never does:**
 - Launch or stop NEEDLE workers
@@ -50,7 +50,7 @@ HOOP keeps the work queue *taut* by surfacing what is stale, stuck, or missing �
 | **Workspace** | A single repo on disk with its own `.beads/` queue. A project can span multiple workspaces. |
 | **Stitch** | HOOP's conversation unit: operator chat, voice/dictated note, NEEDLE worker CLI session, or ad-hoc terminal session. Stitches decay by inactivity rather than closing explicitly. |
 | **Pattern** | An optional cross-project grouping of Stitches toward a shared goal. Useful for epics and long-running initiatives. |
-| **Bead** | NEEDLE's execution unit. HOOP never mutates bead state beyond `br create`. |
+| **Bead** | NEEDLE's execution unit. HOOP never mutates bead state beyond `bead create`. |
 | **Human-interface agent** | HOOP's LLM conversation partner for the operator. Reads everything; writes only by drafting Stitches via preview/approval flow. |
 | **Reflection Ledger** | Learned rules store. After each Stitch closes, the agent proposes patterns; approved rules inject into future sessions. |
 
@@ -63,7 +63,7 @@ HOOP keeps the work queue *taut* by surfacing what is stale, stuck, or missing �
 | `serve` | Start the daemon (web UI + WebSocket + REST API) |
 | `projects add/scan/list/remove/show` | Project registry management |
 | `status [project] [--json]` | Fleet/bead/cost overview |
-| `audit check [--strict]` | Startup audit (verifies `br`, `tmux`, CLI adapters, disk space) |
+| `audit check [--strict]` | Startup audit (verifies `bead`, `tmux`, CLI adapters, disk space) |
 | `audit verify` | Verifies audit log SHA-256 hash chain |
 | `new <project> [--dry-run]` | Draft and submit a new Stitch |
 | `agent` | Attach to or start the human-interface agent |
@@ -153,7 +153,7 @@ NEEDLE prefixes the first user message in each worker session with `[needle:<wor
 
 **2. Event tap**
 
-Workers append JSONL to `.beads/events.jsonl` on claim, dispatch, complete, and fail. HOOP watches this file to track bead lifecycle transitions in real time without polling `br`.
+Workers append JSONL to `.beads/events.jsonl` on claim, dispatch, complete, and fail. HOOP watches this file to track bead lifecycle transitions in real time without polling `bead`.
 
 **3. Worker heartbeat**
 
@@ -164,7 +164,7 @@ Each worker appends a JSON line to `.beads/heartbeats.jsonl` every 10 seconds. H
 
 **4. Stitch label inheritance**
 
-When the human-interface agent calls `br create` to spawn follow-up work, it copies `stitch:*` labels onto the new bead. This means NEEDLE workers picking up that bead carry the Stitch lineage forward, keeping the transcript chain intact across multi-step work.
+When the human-interface agent calls `bead create` to spawn follow-up work, it copies `stitch:*` labels onto the new bead. This means NEEDLE workers picking up that bead carry the Stitch lineage forward, keeping the transcript chain intact across multi-step work.
 
 ---
 
@@ -351,6 +351,6 @@ hoop config diff
 
 ## Sibling projects
 
-- [`dicklesworthstone/beads_rust`](https://github.com/dicklesworthstone/beads_rust) — `br`, the bead queue. HOOP shells out to it for all bead operations.
+- [`bead-rs`](https://github.com/jedarden/bead-rs) — `bead`, the native bead queue CLI. HOOP shells out to it for all bead operations.
 - [`jedarden/NEEDLE`](https://github.com/jedarden/NEEDLE) — the worker supervision system. HOOP observes NEEDLE's events and creates beads that NEEDLE workers pick up.
 - [`jedarden/FABRIC`](https://github.com/jedarden/FABRIC) — passive read-only observability dashboard. HOOP links to FABRIC via a URL bridge.
