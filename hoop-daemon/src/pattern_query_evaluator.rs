@@ -67,7 +67,7 @@ pub struct PatternSavedQuerySyncedEvent {
 
 /// Parsed query expression
 #[derive(Debug, Clone, PartialEq)]
-enum QueryExpr {
+pub(crate) enum QueryExpr {
     /// Title regex match
     TitleRegex(String),
     /// Label match

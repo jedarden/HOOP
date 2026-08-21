@@ -57,7 +57,7 @@ struct UserMessage {
 
 /// Categories of repeatable patterns in operator messages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum PatternCategory {
+pub enum PatternCategory {
     Correction,
     Preference,
     Negative,
