@@ -21,7 +21,7 @@ use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 /// Current schema version
-pub const SCHEMA_VERSION: &str = "1.33.0";
+pub const SCHEMA_VERSION: &str = "1.34.0";
 
 /// Initial schema version (for fresh databases - will migrate to SCHEMA_VERSION)
 const INITIAL_SCHEMA_VERSION: &str = "0.1.0";
@@ -1323,6 +1323,13 @@ fn run_migrations(conn: &mut Connection, from_version: &str) -> Result<()> {
                 "1.32.0",
                 "1.33.0",
                 "Add template_id and created_by to fix_patterns"
+            )?;
+            migrate!(
+                conn,
+                migrate_v133_to_v134,
+                "1.33.0",
+                "1.34.0",
+                "Seed initial risk patterns"
             )?;
         }
         "1.1.0" => {
