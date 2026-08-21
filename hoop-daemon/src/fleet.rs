@@ -201,13 +201,27 @@ pub fn write_audit_row(
     let path = db_path();
     let conn = Connection::open(&path)?;
 
-    let hash_prev: String = conn
-        .query_row(
-            "SELECT hash_self FROM actions ORDER BY rowid DESC LIMIT 1",
-            [],
-            |row| row.get(0),
-        )
-        .unwrap_or_else(|_| GENESIS_HASH.to_string());
+    // Set busy timeout to handle SQLITE_BUSY from concurrent access
+    conn.busy_timeout(std::time::Duration::from_secs(5))?;
+
+    // Use IMMEDIATE transaction to prevent TOCTOU race between SELECT and INSERT
+    // This ensures atomicity: hash_prev read and row insert are serialized
+    conn.execute("BEGIN IMMEDIATE TRANSACTION", [])?;
+
+    let hash_prev: String = match conn.query_row(
+        "SELECT hash_self FROM actions ORDER BY rowid DESC LIMIT 1",
+        [],
+        |row| row.get(0),
+    ) {
+        Ok(hash) => hash,
+        Err(rusqlite::Error::QueryReturnedNoRows) => GENESIS_HASH.to_string(),
+        Err(e) => {
+            // Propagate all other errors (e.g., SQLITE_BUSY after timeout, database corruption)
+            // instead of silently resetting to genesis hash
+            let _ = conn.execute("ROLLBACK", []);
+            return Err(e.into());
+        }
+    };
 
     // Compute hash of this row's content
     let hash_input = format!(
@@ -233,6 +247,9 @@ pub fn write_audit_row(
             error, source, stitch_id, args_hash, hash_prev, hash_self
         ],
     )?;
+
+    // Commit the transaction
+    conn.execute("COMMIT", [])?;
 
     // Update audit append rate metric
     crate::metrics::metrics()
