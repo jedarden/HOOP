@@ -354,3 +354,9 @@ hoop config diff
 - [`bead-rs`](https://github.com/jedarden/bead-rs) — `bead`, the native bead queue CLI. HOOP shells out to it for all bead operations.
 - [`jedarden/NEEDLE`](https://github.com/jedarden/NEEDLE) — the worker supervision system. HOOP observes NEEDLE's events and creates beads that NEEDLE workers pick up.
 - [`jedarden/FABRIC`](https://github.com/jedarden/FABRIC) — passive read-only observability dashboard. HOOP links to FABRIC via a URL bridge.
+
+---
+
+Part of [jedarden.com](https://jedarden.com) · Read the write-up: [jedarden.com/projects/hoop/](https://jedarden.com/projects/hoop/)
+
+*This GitHub repo is a read-only mirror of git.ardenone.com/jedarden/HOOP — issues and PRs are welcome here either way.*
