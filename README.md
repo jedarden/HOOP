@@ -1,6 +1,6 @@
 # HOOP
 
-**Status: Pre-release — Phase 1 in progress. The daemon compiles cleanly (`cargo check` / `cargo build` pass), but `cargo test` does not compile (20 stale-fixture errors) and `cargo clippy -D warnings` is not yet clean (43 warnings/errors). See [current repository state](AGENTS.md#current-repository-state); track the Phase 1 CI gate at bead [`hoop-7ae9fbff`](.beads/issues.jsonl).**
+**Status: Pre-release — Phase 1 in progress (re-verified 2026-09-24). The daemon compiles cleanly (`cargo check` / `cargo build` pass; the hoop-daemon lib test target also compiles — the earlier stale-fixture errors are fixed), but two integration-test targets do not compile (`reflection_detector_integration` 7 errors, `load_test` 21 errors — bead [`hoop-9267c2bb`](.beads/issues.jsonl)) and `cargo clippy -D warnings` is not yet clean (50 warnings). See [current repository state](AGENTS.md#current-repository-state); track the Phase 1 CI gate at bead [`hoop-7ae9fbff`](.beads/issues.jsonl).**
 
 Operator observability and control plane for NEEDLE worker fleets. HOOP reads everything — bead state, CLI session transcripts, worker heartbeats, cost data — and surfaces it in a web UI and REST/WebSocket API. It writes exactly one thing: creating new beads via `bead create`.
 
