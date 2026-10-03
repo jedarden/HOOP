@@ -216,8 +216,19 @@ pub fn propagate_stitch_labels(target_labels: &mut Vec<String>, parent_labels: &
 }
 
 // Re-exports for test compatibility (trybuild fixtures expect invoke_br_*)
-pub use invoke_bead_read as invoke_br_read;
+// The production code uses the clearer `invoke_bead_*` names, but these
+// compatibility exports are part of the compile-fail fixture API. They are
+// intentionally unused by this binary crate itself.
+#[cfg(any(
+    feature = "create-only-write",
+    not(any(feature = "zero-write-v01", feature = "create-only-write"))
+))]
+#[allow(unused_imports)]
 pub use invoke_bead_create as invoke_br_create;
+#[allow(unused_imports)]
+pub use invoke_bead_read as invoke_br_read;
+#[cfg(not(any(feature = "zero-write-v01", feature = "create-only-write")))]
+#[allow(unused_imports)]
 pub use invoke_bead_write as invoke_br_write;
 
 pub fn validate_write_invariant() {
@@ -359,6 +370,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "zero-write-v01"))]
     fn test_validate_bead_subprocess_args_allows_create() {
         let mut cmd = std::process::Command::new(hoop_core::bead_cli::bead_cli_command());
         cmd.arg("create").arg("--type").arg("task");

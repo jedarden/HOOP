@@ -13,8 +13,6 @@ use std::path::PathBuf;
 struct FakeBr {
     bin_dir: tempfile::TempDir,
     log_path: PathBuf,
-    /// Name of the bead CLI being stubbed
-    cli_name: String,
 }
 
 impl FakeBr {
@@ -38,7 +36,8 @@ impl FakeBr {
              exit 0\n"
         );
         let mut f = fs::File::create(&cli_path).expect("create bead CLI script");
-        f.write_all(script.as_bytes()).expect("write bead CLI script");
+        f.write_all(script.as_bytes())
+            .expect("write bead CLI script");
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -46,7 +45,7 @@ impl FakeBr {
                 .expect("chmod bead CLI script");
         }
 
-        Self { bin_dir, log_path, cli_name }
+        Self { bin_dir, log_path }
     }
 
     fn path_prefix(&self) -> String {
@@ -238,7 +237,7 @@ fn test_subprocess_arg_validation_rejects_forbidden_commands() {
         let result = std::panic::catch_unwind(|| {
             let mut cmd = std::process::Command::new(&cli_name);
             cmd.arg(verb).arg("bd-test123");
-            hoop_mcp::br_verbs::validate_br_subprocess_args(&cmd);
+            hoop_mcp::br_verbs::validate_bead_subprocess_args(&cmd);
         });
         assert!(
             result.is_err(),

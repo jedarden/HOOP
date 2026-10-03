@@ -722,112 +722,115 @@ impl McpServerState {
         #[cfg(feature = "zero-write-v01")]
         {
             let _ = args;
-            return Err("Bead creation is disabled in zero-write mode".to_string());
+            Err("Bead creation is disabled in zero-write mode".to_string())
         }
 
-        let project = args
-            .get("project")
-            .and_then(|v| v.as_str())
-            .ok_or("project parameter is required")?;
-
-        let title = args
-            .get("title")
-            .and_then(|v| v.as_str())
-            .ok_or("title parameter is required")?;
-
-        let description = args.get("description").and_then(|v| v.as_str());
-
-        let issue_type = args
-            .get("issue_type")
-            .and_then(|v| v.as_str())
-            .unwrap_or("task");
-
-        let priority = args.get("priority").and_then(|v| v.as_i64());
-
-        let labels: Vec<String> = args
-            .get("labels")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        let parent_bead_id = args.get("parent_bead_id").and_then(|v| v.as_str());
-
-        // Validate parent bead ID
-        if let Some(pid) = parent_bead_id {
-            crate::id_validators::validate_bead_id(pid)
-                .map_err(|e| format!("parent_bead_id: {}", e))?;
-        }
-
-        let project_path = self.require_project(project)?;
-
-        // Build label list
-        let mut all_labels = labels;
-
-        // Hook 4: Inherit stitch labels from parent bead
-        if let Some(pid) = parent_bead_id {
-            if let Ok(parent_labels) = self.lookup_bead_labels(project_path, pid) {
-                crate::br_verbs::propagate_stitch_labels(&mut all_labels, &parent_labels);
-            }
-        }
-
-        // Execute br create
         #[cfg(not(feature = "zero-write-v01"))]
         {
-            let mut cmd = crate::br_verbs::invoke_bead_create(&[]);
-            cmd.current_dir(project_path);
-            cmd.arg(title);
-            cmd.arg("--type").arg(issue_type);
+            let project = args
+                .get("project")
+                .and_then(|v| v.as_str())
+                .ok_or("project parameter is required")?;
 
-            if let Some(desc) = description {
-                if !desc.is_empty() {
-                    cmd.arg("--description").arg(desc);
+            let title = args
+                .get("title")
+                .and_then(|v| v.as_str())
+                .ok_or("title parameter is required")?;
+
+            let description = args.get("description").and_then(|v| v.as_str());
+
+            let issue_type = args
+                .get("issue_type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("task");
+
+            let priority = args.get("priority").and_then(|v| v.as_i64());
+
+            let labels: Vec<String> = args
+                .get("labels")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            let parent_bead_id = args.get("parent_bead_id").and_then(|v| v.as_str());
+
+            // Validate parent bead ID
+            if let Some(pid) = parent_bead_id {
+                crate::id_validators::validate_bead_id(pid)
+                    .map_err(|e| format!("parent_bead_id: {}", e))?;
+            }
+
+            let project_path = self.require_project(project)?;
+
+            // Build label list
+            let mut all_labels = labels;
+
+            // Hook 4: Inherit stitch labels from parent bead
+            if let Some(pid) = parent_bead_id {
+                if let Ok(parent_labels) = self.lookup_bead_labels(project_path, pid) {
+                    crate::br_verbs::propagate_stitch_labels(&mut all_labels, &parent_labels);
                 }
             }
 
-            if let Some(p) = priority {
-                cmd.arg("--priority").arg(p.to_string());
+            // Execute br create
+            #[cfg(not(feature = "zero-write-v01"))]
+            {
+                let mut cmd = crate::br_verbs::invoke_bead_create(&[]);
+                cmd.current_dir(project_path);
+                cmd.arg(title);
+                cmd.arg("--type").arg(issue_type);
+
+                if let Some(desc) = description {
+                    if !desc.is_empty() {
+                        cmd.arg("--description").arg(desc);
+                    }
+                }
+
+                if let Some(p) = priority {
+                    cmd.arg("--priority").arg(p.to_string());
+                }
+
+                if !all_labels.is_empty() {
+                    cmd.arg("--labels").arg(all_labels.join(","));
+                }
+
+                cmd.arg("--actor").arg(&self.actor);
+                cmd.arg("--silent");
+
+                let output = cmd
+                    .output()
+                    .map_err(|e| format!("Failed to run br create: {}", e))?;
+
+                if !output.status.success() {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    return Err(format!("br create failed: {}", stderr.trim()));
+                }
+
+                let bead_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if bead_id.is_empty() {
+                    return Err("br create did not return a bead ID".to_string());
+                }
+
+                let result = json!({
+                    "id": bead_id,
+                    "title": title,
+                    "project": project,
+                    "labels": all_labels,
+                    "parent_bead_id": parent_bead_id,
+                });
+
+                let content = serde_json::to_string_pretty(&result)
+                    .map_err(|e| format!("Failed to serialize result: {}", e))?;
+
+                Ok(ToolCallResult {
+                    content: vec![Content::Text { text: content }],
+                    is_error: None,
+                })
             }
-
-            if !all_labels.is_empty() {
-                cmd.arg("--labels").arg(all_labels.join(","));
-            }
-
-            cmd.arg("--actor").arg(&self.actor);
-            cmd.arg("--silent");
-
-            let output = cmd
-                .output()
-                .map_err(|e| format!("Failed to run br create: {}", e))?;
-
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(format!("br create failed: {}", stderr.trim()));
-            }
-
-            let bead_id = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if bead_id.is_empty() {
-                return Err("br create did not return a bead ID".to_string());
-            }
-
-            let result = json!({
-                "id": bead_id,
-                "title": title,
-                "project": project,
-                "labels": all_labels,
-                "parent_bead_id": parent_bead_id,
-            });
-
-            let content = serde_json::to_string_pretty(&result)
-                .map_err(|e| format!("Failed to serialize result: {}", e))?;
-
-            Ok(ToolCallResult {
-                content: vec![Content::Text { text: content }],
-                is_error: None,
-            })
         }
     }
 
@@ -1092,7 +1095,8 @@ impl McpServerState {
         let status_filter = args.get("status").and_then(|v| v.as_str());
 
         // Call br list --json
-        let mut cmd = crate::br_verbs::invoke_bead_read(crate::br_verbs::ReadVerb::List, &["--json"]);
+        let mut cmd =
+            crate::br_verbs::invoke_bead_read(crate::br_verbs::ReadVerb::List, &["--json"]);
         let output = cmd
             .current_dir(project_path)
             .output()
@@ -1142,6 +1146,7 @@ impl McpServerState {
     /// Look up a bead's labels via `br get --json`.
     ///
     /// Used by Hook 4 to inherit stitch labels from a parent bead.
+    #[cfg(not(feature = "zero-write-v01"))]
     fn lookup_bead_labels(&self, project_path: &str, bead_id: &str) -> Result<Vec<String>, String> {
         let bead_json = self.get_bead_via_br(project_path, bead_id)?;
         bead_json
