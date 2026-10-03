@@ -1375,13 +1375,7 @@ mod tests {
 
     #[test]
     fn status_with_project_filter_no_interactive_before() {
-        let args = [
-            "hoop",
-            "--no-interactive",
-            "status",
-            "--project",
-            "my-project",
-        ];
+        let args = ["hoop", "--no-interactive", "status", "my-project"];
         let cli = parse_args(&args).unwrap();
         assert!(cli.no_interactive, "no_interactive should be true");
     }
