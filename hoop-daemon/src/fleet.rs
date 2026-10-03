@@ -1034,7 +1034,7 @@ macro_rules! migrate {
         info!("Running migration {} → {}: {}", $from, $to, $desc);
 
         // Clear the change counter before migration to accurately track rows touched
-        let _ = $conn.execute("SELECT 1", []);
+        let _ = $conn.query_row("SELECT 1", [], |_| Ok(()));
 
         let result = $func($conn);
         let elapsed_ms = start.elapsed().as_secs_f64() * 1_000.0;
@@ -6135,7 +6135,7 @@ pub fn run_major_upgrade_at_version(path: PathBuf, binary_version: &str) -> Resu
     let start = std::time::Instant::now();
 
     // Clear the change counter before migration to accurately track rows touched
-    conn.execute("SELECT 1", [])?;
+    conn.query_row("SELECT 1", [], |_| Ok(()))?;
 
     // Future: add DDL migration steps for each major transition here.
     // For now (1→2 is the first path) the schema tables carry forward and

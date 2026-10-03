@@ -177,7 +177,10 @@ pub fn run_pending_migrations(
         );
 
         // Clear the change counter before migration
-        let _ = conn.execute("SELECT 1", [])?;
+        // Execute a query through rusqlite's query API. `execute` rejects
+        // statements that return rows, so using it for this bookkeeping probe
+        // made every pending migration fail before its migration function ran.
+        conn.query_row("SELECT 1", [], |_| Ok(()))?;
 
         // Run the migration
         (migration.up)(conn)?;
@@ -238,7 +241,7 @@ pub fn rollback_migration(
     );
 
     // Clear the change counter before rollback
-    let _ = conn.execute("SELECT 1", [])?;
+    conn.query_row("SELECT 1", [], |_| Ok(()))?;
 
     // Run the rollback
     down_fn(conn)?;

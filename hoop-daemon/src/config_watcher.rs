@@ -161,16 +161,15 @@ impl ConfigWatcher {
     ///
     /// Returns a receiver that will receive AgentConfigChanged events
     /// when the agent adapter, model, or API key changes.
-    pub fn subscribe_agent_config_changed(
+    pub async fn subscribe_agent_config_changed(
         &self,
     ) -> tokio::sync::broadcast::Receiver<AgentConfigChanged> {
         // Create a new channel if not already set
-        let tx = self.agent_config_changed_tx.blocking_lock();
+        let mut tx = self.agent_config_changed_tx.lock().await;
         if tx.is_none() {
-            drop(tx);
             let (new_tx, _) = tokio::sync::broadcast::channel(8);
             let rx = new_tx.subscribe();
-            *self.agent_config_changed_tx.blocking_lock() = Some(new_tx);
+            *tx = Some(new_tx);
             rx
         } else {
             tx.as_ref().unwrap().subscribe()

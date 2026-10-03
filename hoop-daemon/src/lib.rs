@@ -1348,15 +1348,6 @@ pub fn router() -> Router<DaemonState> {
         )
         .route("/api/fleet/runtime-status", get(get_runtime_status))
         .route("/api/bead-commits", get(get_bead_commits))
-        .route("/api/projects/:project/files", get(get_project_files))
-        .route(
-            "/api/projects/:project/files/search",
-            get(search_project_files),
-        )
-        .route(
-            "/api/projects/:project/files/content",
-            get(get_file_content),
-        )
         .route(
             "/api/projects/:project/files/content/stream",
             get(get_file_content_stream),
@@ -1414,11 +1405,6 @@ pub fn router() -> Router<DaemonState> {
         .merge(api_scripts::router())
         .merge(api_skills::router())
         .merge(api_unassigned::router())
-        .merge(api_screen_capture::router())
-        .merge(api_reflection_ledger::router())
-        .merge(api_reflection_detection::router())
-        .merge(api_propagation::router())
-        .merge(api_stitch_traversal::router())
         .nest_service("/assets", AssetsHandler::router())
         .fallback_service(AssetsHandler::router())
         .layer(TraceLayer::new_for_http())
@@ -3210,7 +3196,8 @@ Note: This is an automated synthesis from voice dictation."#,
             let mut rx = config_watcher_for_agent
                 .lock()
                 .await
-                .subscribe_agent_config_changed();
+                .subscribe_agent_config_changed()
+                .await;
 
             while let Ok(agent_config_changed) = rx.recv().await {
                 if let Some(ref mgr) = agent_mgr_for_agent {
