@@ -1126,6 +1126,7 @@ dependencies = [
  "fnv",
  "hex",
  "hoop-core",
+ "hoop-daemon",
  "hoop-schema",
  "ignore",
  "jsonschema 0.26.2",

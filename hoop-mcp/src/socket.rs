@@ -168,7 +168,12 @@ async fn handle_socket_connection(mut socket: tokio::net::UnixStream, actor: Str
         let is_shutdown = matches!(request.method, crate::protocol::Method::Shutdown(_));
 
         // Handle request
-        let response = handle_request(request.method, &server_state);
+        // create_stitch uses the blocking reqwest client. Keep synchronous
+        // tool execution in Tokio's blocking section so its client runtime
+        // can be created and dropped without blocking or panicking the async
+        // socket worker.
+        let response =
+            tokio::task::block_in_place(|| handle_request(request.method, &server_state));
 
         // Send response
         let response_json = serde_json::to_string(&response)?;

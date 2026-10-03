@@ -1406,41 +1406,52 @@ impl McpServerState {
             "turn_id": turn_id,
         });
 
-        // Call the daemon's draft API
-        let client = reqwest::blocking::Client::new();
-        let response = client
-            .post("http://127.0.0.1:3000/api/drafts")
-            .json(&request_body)
-            .send()
-            .map_err(|e| {
-                format!(
-                    "Failed to connect to daemon: {}. Is hoop-daemon running on 127.0.0.1:3000?",
-                    e
-                )
-            })?;
+        // Call the daemon's draft API. Tests use an ephemeral daemon port via
+        // HOOP_DAEMON_URL; production keeps the established localhost default.
+        let daemon_base_url = std::env::var("HOOP_DAEMON_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:3000".to_string());
+        // reqwest's blocking client owns a Tokio runtime. Run it on a short-lived
+        // OS thread so that a synchronous MCP request cannot retain that runtime's
+        // worker pool after the response is complete (especially in test binaries).
+        std::thread::spawn(move || -> Result<Value, String> {
+            let client = reqwest::blocking::Client::new();
+            let response = client
+                .post(format!(
+                    "{}/api/drafts",
+                    daemon_base_url.trim_end_matches('/')
+                ))
+                .json(&request_body)
+                .send()
+                .map_err(|e| {
+                    format!(
+                        "Failed to connect to daemon: {}. Is hoop-daemon running at {}?",
+                        e, daemon_base_url
+                    )
+                })?;
 
-        let status = response.status();
+            let status = response.status();
 
-        if status == reqwest::StatusCode::CONFLICT {
-            // Deduplication check failed - a similar stitch/bead exists
-            let error_msg = response
-                .text()
-                .unwrap_or_else(|_| "Duplicate detected".to_string());
-            return Err(error_msg);
-        }
+            if status == reqwest::StatusCode::CONFLICT {
+                // Deduplication check failed - a similar stitch/bead exists
+                let error_msg = response
+                    .text()
+                    .unwrap_or_else(|_| "Duplicate detected".to_string());
+                return Err(error_msg);
+            }
 
-        if !status.is_success() {
-            let error_text = response
-                .text()
-                .unwrap_or_else(|_| format!("HTTP {}", status.as_u16()));
-            return Err(format!("Daemon returned error: {}", error_text));
-        }
+            if !status.is_success() {
+                let error_text = response
+                    .text()
+                    .unwrap_or_else(|_| format!("HTTP {}", status.as_u16()));
+                return Err(format!("Daemon returned error: {}", error_text));
+            }
 
-        let response_json: Value = response
-            .json()
-            .map_err(|e| format!("Failed to parse daemon response: {}", e))?;
-
-        Ok(response_json)
+            response
+                .json()
+                .map_err(|e| format!("Failed to parse daemon response: {}", e))
+        })
+        .join()
+        .map_err(|_| "Daemon request thread panicked".to_string())?
     }
 
     /// Read the current turn context from ~/.hoop/agent-turn-context.json.

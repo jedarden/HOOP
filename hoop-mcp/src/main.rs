@@ -164,7 +164,9 @@ async fn run_stdio_mode(actor_override: Option<String>) -> Result<()> {
                 protocol::JsonRpcResponse::result(serde_json::json!(null), result)
             }
             Method::ToolsCall(ref params) => {
-                match server_state.call_tool(&params.name, &params.arguments) {
+                match tokio::task::block_in_place(|| {
+                    server_state.call_tool(&params.name, &params.arguments)
+                }) {
                     Ok(result) => {
                         let result_value = serde_json::to_value(result)?;
                         protocol::JsonRpcResponse::result(request.id.clone(), result_value)
