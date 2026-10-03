@@ -305,6 +305,46 @@ fn all_fixture_events_are_recognized() {
     }
 }
 
+/// Every recognized event keeps its timestamp in the RFC3339 format consumed
+/// by the daemon's projections and timeline APIs.
+#[test]
+fn all_fixture_event_timestamps_are_valid_rfc3339() {
+    let content = fs::read_to_string(events_fixture_path()).unwrap();
+    for (i, line) in content.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+
+        let event = parse_event(line);
+        let timestamp = match &event {
+            NeedleEvent::Claim { ts, .. }
+            | NeedleEvent::Dispatch { ts, .. }
+            | NeedleEvent::Complete { ts, .. }
+            | NeedleEvent::Fail { ts, .. }
+            | NeedleEvent::Timeout { ts, .. }
+            | NeedleEvent::Crash { ts, .. }
+            | NeedleEvent::Close { ts, .. }
+            | NeedleEvent::Release { ts, .. }
+            | NeedleEvent::Update { ts, .. } => ts,
+            NeedleEvent::Unknown => continue,
+        };
+
+        assert!(
+            chrono::DateTime::parse_from_rfc3339(timestamp).is_ok(),
+            "event line {} has a non-RFC3339 timestamp: {timestamp:?}",
+            i + 1
+        );
+
+        let data = BeadEventData::from_event(&event).expect("recognized event has event data");
+        assert_eq!(
+            data.timestamp,
+            *timestamp,
+            "event line {} changed its timestamp while being projected",
+            i + 1
+        );
+    }
+}
+
 // ── BeadEventData::from_event() round-trip ───────────────────────────────────
 
 /// Every recognized event in the fixture must produce a Some(BeadEventData).
