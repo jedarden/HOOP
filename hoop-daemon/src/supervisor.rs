@@ -1574,6 +1574,15 @@ mod tests {
     }
 
     #[test]
+    fn br_sqlite_datetime_with_nanoseconds_is_normalized() {
+        // Historical br worker_sessions rows can contain SQLite's timestamp
+        // representation with the nanosecond precision used by RFC3339 rows.
+        let sanitized = sanitize_timestamp("2026-08-01 02:11:38.034049318");
+
+        assert_eq!(sanitized, "2026-08-01T02:11:38.034049318+00:00");
+    }
+
+    #[test]
     fn surrounding_whitespace_is_ignored_for_supported_formats() {
         let sqlite = sanitize_timestamp(" 2026-07-04 03:02:15 ");
         let rfc3339 = sanitize_timestamp("\t2026-04-21T18:42:10.123Z\n");
