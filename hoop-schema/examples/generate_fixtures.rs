@@ -794,7 +794,8 @@ fn main() {
     // Write each fixture
     for (name, json) in &fixtures {
         let file_path = format!("{}/{}.json", fixture_dir, name);
-        fs::write(&file_path, &json).expect(&format!("Failed to write fixture: {}", file_path));
+        fs::write(&file_path, json)
+            .unwrap_or_else(|_| panic!("Failed to write fixture: {}", file_path));
     }
 
     // Write index

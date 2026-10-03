@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use hoop_daemon::projects::ProjectsConfig;
 use hoop_daemon::shutdown::ShutdownCoordinator;
-use hoop_daemon::supervisor::ProjectSupervisor;
+use hoop_daemon::supervisor::{ProjectSupervisor, SupervisorDeps};
 use hoop_daemon::ws::WorkerRegistry;
 use hoop_daemon::Bead;
 use hoop_schema::{ProjectsRegistry, ProjectsRegistryProjectsItem};
@@ -62,7 +62,7 @@ async fn create_test_supervisor() -> ProjectSupervisor {
         hoop_daemon::stuck_detector::StuckDetector::new(),
     ));
 
-    ProjectSupervisor::new(
+    let deps = SupervisorDeps {
         bead_tx,
         session_tx,
         worker_registry,
@@ -70,9 +70,10 @@ async fn create_test_supervisor() -> ProjectSupervisor {
         shutdown,
         cost_aggregator,
         vector_index,
-        PathBuf::from("/tmp/hoop-test-scripts"),
         stuck_detector,
-    )
+    };
+
+    ProjectSupervisor::new(deps, PathBuf::from("/tmp/hoop-test-scripts"))
 }
 
 /// Create a test ProjectsConfig from project definitions
@@ -278,7 +279,7 @@ async fn test_reconcile_skips_project_with_no_workspaces() {
     let config = create_test_config(vec![invalid_project]);
 
     // Reconcile should succeed but skip the invalid project
-    let result = supervisor.reconcile(&config);
+    let _result = supervisor.reconcile(&config).await;
     // We expect this might succeed or fail depending on implementation
     // The key is that it shouldn't crash
     tokio::time::sleep(Duration::from_millis(100)).await;

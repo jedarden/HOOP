@@ -12,6 +12,8 @@
 use std::fs;
 use std::time::Duration;
 
+use futures_util::StreamExt;
+
 mod integration_harness;
 use integration_harness::spawn_test_daemon_with_config;
 
@@ -403,8 +405,11 @@ fn setup_load_test_projects(config: &Config, load_config: LoadTestConfig) {
             .projects
             .push(hoop_schema::ProjectsRegistryProjectsItem::Variant0 {
                 name: project_name,
-                path: project_path,
+                path: project_path.to_string_lossy().into_owned(),
                 canonical_path: None,
+                label: None,
+                color: None,
+                redaction: None,
             });
     }
 

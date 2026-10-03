@@ -16,7 +16,7 @@ use std::time::Duration;
 use hoop_daemon::metrics::metrics;
 use hoop_daemon::projects::ProjectsConfig;
 use hoop_daemon::shutdown::ShutdownCoordinator;
-use hoop_daemon::supervisor::{ProjectRuntimeState, ProjectSupervisor};
+use hoop_daemon::supervisor::{ProjectRuntimeState, ProjectSupervisor, SupervisorDeps};
 use hoop_daemon::ws::WorkerRegistry;
 use hoop_daemon::Bead;
 use hoop_schema::{ProjectsRegistry, ProjectsRegistryProjectsItem};
@@ -64,7 +64,7 @@ async fn create_test_supervisor() -> ProjectSupervisor {
         hoop_daemon::stuck_detector::StuckDetector::new(),
     ));
 
-    ProjectSupervisor::new(
+    let deps = SupervisorDeps {
         bead_tx,
         session_tx,
         worker_registry,
@@ -72,9 +72,10 @@ async fn create_test_supervisor() -> ProjectSupervisor {
         shutdown,
         cost_aggregator,
         vector_index,
-        PathBuf::from("/tmp/hoop-test-scripts"),
         stuck_detector,
-    )
+    };
+
+    ProjectSupervisor::new(deps, PathBuf::from("/tmp/hoop-test-scripts"))
 }
 
 #[tokio::test]

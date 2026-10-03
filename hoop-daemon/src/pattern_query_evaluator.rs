@@ -67,7 +67,7 @@ pub struct PatternSavedQuerySyncedEvent {
 
 /// Parsed query expression
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum QueryExpr {
+pub enum QueryExpr {
     /// Title regex match
     TitleRegex(String),
     /// Label match
@@ -85,7 +85,7 @@ pub(crate) enum QueryExpr {
 }
 
 /// Parse a query string into a QueryExpr
-pub(crate) fn parse_query(query: &str) -> Result<QueryExpr> {
+pub fn parse_query(query: &str) -> Result<QueryExpr> {
     let tokens = tokenize(query)?;
     let (expr, remaining) = parse_or_expr(&tokens)?;
     if !remaining.is_empty() {
@@ -255,7 +255,7 @@ fn parse_primary_expr(tokens: &[Token]) -> Result<(QueryExpr, &[Token])> {
 }
 
 /// Evaluate a query expression against a stitch context
-pub(crate) fn evaluate_query(expr: &QueryExpr, ctx: &StitchContext) -> Result<bool> {
+pub fn evaluate_query(expr: &QueryExpr, ctx: &StitchContext) -> Result<bool> {
     match expr {
         QueryExpr::TitleRegex(pattern) => {
             let regex =

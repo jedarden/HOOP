@@ -81,3 +81,23 @@ rand = "0.8"
 name = "generate_openapi"
 path = "src/bin/generate_openapi.rs"
 required-features = ["openapi"]
+
+[[example]]
+name = "load-test-runner"
+path = "examples/load-test-runner.rs"
+required-features = ["testing"]
+
+[[example]]
+name = "populate-testrepo"
+path = "examples/populate-testrepo.rs"
+required-features = ["testing"]
+
+[[test]]
+name = "load_test_integration"
+path = "tests/load_test_integration.rs"
+required-features = ["testing"]
+
+[[test]]
+name = "load_test"
+path = "tests/load_test.rs"
+required-features = ["testing"]

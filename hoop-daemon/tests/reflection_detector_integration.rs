@@ -187,7 +187,7 @@ fn test_detect_repeated_negative_patterns() {
     );
 
     // Verify the reflection ledger entry
-    let stmt = conn
+    let mut stmt = conn
         .prepare("SELECT rule, status, source_stitches FROM reflection_ledger")
         .unwrap();
 
@@ -429,7 +429,7 @@ fn test_synthetic_repeated_instruction_fixtures() {
     );
 
     // Verify patterns span multiple Stitches
-    let stmt = conn
+    let mut stmt = conn
         .prepare("SELECT source_stitches FROM reflection_ledger WHERE status = 'proposed'")
         .unwrap();
 
@@ -578,7 +578,7 @@ fn test_reflection_injection_audit() {
     conn.execute(
         "INSERT INTO reflection_ledger (id, scope, rule, reason, status, created_at, last_applied, applied_count)
          VALUES (?1, 'project:hoop', 'never edit fleet.db directly', 'one incident of corruption', 'approved', ?2, NULL, 0)",
-        [rule2_id.clone(), now],
+        [rule2_id.clone(), now.clone()],
     ).unwrap();
 
     // Create actions table for audit
@@ -632,7 +632,7 @@ fn test_reflection_injection_audit() {
     assert!(rules_string.contains("never edit fleet.db directly"));
 
     // Verify audit rows were written
-    let audit_stmt = conn
+    let mut audit_stmt = conn
         .prepare(
             "SELECT id, kind, target, args_json FROM actions WHERE kind = 'reflection_injected'",
         )
@@ -658,7 +658,7 @@ fn test_reflection_injection_audit() {
     );
 
     // Verify each audit row has the correct structure
-    for (audit_id, kind, target, args_json) in &audit_rows {
+    for (_audit_id, kind, target, args_json) in &audit_rows {
         assert_eq!(kind, r#""reflection_injected""#);
 
         let args: serde_json::Value = serde_json::from_str(args_json).unwrap();
@@ -673,7 +673,7 @@ fn test_reflection_injection_audit() {
     }
 
     // Verify last_applied and applied_count were updated atomically
-    let ledger_stmt = conn
+    let mut ledger_stmt = conn
         .prepare("SELECT id, last_applied, applied_count FROM reflection_ledger WHERE status = 'approved'")
         .unwrap();
 
@@ -691,7 +691,7 @@ fn test_reflection_injection_audit() {
 
     assert_eq!(ledger_rows.len(), 2);
 
-    for (rule_id, last_applied, applied_count) in ledger_rows {
+    for (_rule_id, last_applied, applied_count) in ledger_rows {
         assert!(last_applied.is_some(), "last_applied should be set");
         assert_eq!(
             applied_count, 1,
@@ -703,7 +703,7 @@ fn test_reflection_injection_audit() {
     let result2 = hoop_daemon::fleet::build_reflection_rules_with_audit(session_id, turn_index + 1);
     assert!(result2.is_ok());
 
-    let ledger_stmt2 = conn
+    let mut ledger_stmt2 = conn
         .prepare("SELECT id, applied_count FROM reflection_ledger WHERE status = 'approved'")
         .unwrap();
 
@@ -715,7 +715,7 @@ fn test_reflection_injection_audit() {
         .filter_map(|r| r.ok())
         .collect();
 
-    for (rule_id, applied_count) in ledger_rows2 {
+    for (_rule_id, applied_count) in ledger_rows2 {
         assert_eq!(
             applied_count, 2,
             "applied_count should be 2 after second injection"
@@ -723,7 +723,7 @@ fn test_reflection_injection_audit() {
     }
 
     // Verify new audit rows for second injection
-    let audit_stmt2 = conn
+    let mut audit_stmt2 = conn
         .prepare("SELECT COUNT(*) FROM actions WHERE kind = 'reflection_injected'")
         .unwrap();
 

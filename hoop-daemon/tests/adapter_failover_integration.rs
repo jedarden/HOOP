@@ -667,7 +667,7 @@ async fn test_handoff_context_includes_reflection_ledger() {
     conn.execute(
         r#"INSERT INTO reflection_ledger (id, scope, rule, reason, status, created_at)
            VALUES (?1, 'global', 'rejected rule', 'testing', 'rejected', ?2)"#,
-        [uuid::Uuid::new_v4().to_string(), &now],
+        [uuid::Uuid::new_v4().to_string(), now],
     )
     .unwrap();
 

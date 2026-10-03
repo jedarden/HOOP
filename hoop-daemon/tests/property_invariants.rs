@@ -83,6 +83,57 @@ use tempfile::TempDir;
 use hoop_daemon::events::NeedleEvent;
 use hoop_daemon::stitch_status::{LinkedBead, StitchActivity, StitchContext, StitchStatus};
 
+const VALID_EVENT: &str =
+    r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-1"}"#;
+
+fn replay_event_strategy() -> impl Strategy<Value = NeedleEvent> {
+    let base = Utc::now();
+    let timestamps =
+        (0i64..1000).prop_map(move |secs| (base + Duration::seconds(secs)).to_rfc3339());
+
+    prop_oneof![
+        timestamps.clone().prop_map(|ts| NeedleEvent::Claim {
+            ts,
+            worker: "alpha".to_string(),
+            bead: "bd-1".to_string(),
+            strand: None,
+        }),
+        timestamps.clone().prop_map(|ts| NeedleEvent::Dispatch {
+            ts,
+            worker: "alpha".to_string(),
+            bead: "bd-1".to_string(),
+            adapter: Some("claude".to_string()),
+            model: Some("opus".to_string()),
+        }),
+        timestamps.prop_map(|ts| NeedleEvent::Complete {
+            ts,
+            worker: "alpha".to_string(),
+            bead: "bd-1".to_string(),
+            outcome: Some("success".to_string()),
+            duration_ms: Some(1000),
+            exit_code: Some(0),
+        }),
+    ]
+}
+
+fn idempotent_event_strategy() -> impl Strategy<Value = NeedleEvent> {
+    prop_oneof![
+        Just(NeedleEvent::Claim {
+            ts: "2026-04-21T18:42:10Z".to_string(),
+            worker: "alpha".to_string(),
+            bead: "bd-1".to_string(),
+            strand: None,
+        }),
+        Just(NeedleEvent::Dispatch {
+            ts: "2026-04-21T18:42:11Z".to_string(),
+            worker: "alpha".to_string(),
+            bead: "bd-1".to_string(),
+            adapter: Some("claude".to_string()),
+            model: Some("opus".to_string()),
+        }),
+    ]
+}
+
 // ============================================================================
 // Invariant 1: Event Ordering (§14.2)
 // ============================================================================
@@ -620,49 +671,10 @@ mod replay_equals_live {
     /// 3. Minimal malformed events (if testing error handling)
     #[test]
     fn proptest_replay_equals_live() {
-        // Strategy: generate a list of events
-        let timestamp_strategy = {
-            let base = Utc::now();
-            (0i64..1000).prop_map(move |secs| (base + Duration::seconds(secs)).to_rfc3339())
-        };
-
-        let worker_strategy = "[a-z]{3,10}";
-        let bead_strategy = "[a-z]{3,10}-[0-9]{3}";
-
-        let event_strategy = prop_oneof![
-            timestamp_strategy
-                .clone()
-                .prop_map(|ts| NeedleEvent::Claim {
-                    ts,
-                    worker: "alpha".to_string(),
-                    bead: "bd-1".to_string(),
-                    strand: None,
-                }),
-            timestamp_strategy
-                .clone()
-                .prop_map(|ts| NeedleEvent::Dispatch {
-                    ts,
-                    worker: "alpha".to_string(),
-                    bead: "bd-1".to_string(),
-                    adapter: Some("claude".to_string()),
-                    model: Some("opus".to_string()),
-                }),
-            timestamp_strategy
-                .clone()
-                .prop_map(|ts| NeedleEvent::Complete {
-                    ts,
-                    worker: "alpha".to_string(),
-                    bead: "bd-1".to_string(),
-                    outcome: Some("success".to_string()),
-                    duration_ms: Some(1000),
-                    exit_code: Some(0),
-                }),
-        ];
-
         proptest! {
             #[test]
             fn proptest_replay_equals_live_inner(
-                events in prop::collection::vec(event_strategy, 0..20)
+                events in prop::collection::vec(replay_event_strategy(), 0..20)
             ) {
                 // Simulate "live" processing: track events as they arrive
                 let mut live_state = Vec::new();
@@ -731,18 +743,14 @@ mod replay_equals_live {
     /// 2. Chunk boundaries that split events
     #[test]
     fn proptest_replay_handles_partial_lines() {
-        // Strategy: generate valid JSON and split it arbitrarily
-        let valid_event =
-            r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"alpha","bead":"bd-1"}"#;
-
         proptest! {
             #[test]
             fn proptest_replay_handles_partial_lines_inner(
-                split_pos in 0..valid_event.len()
+                split_pos in 0..VALID_EVENT.len()
             ) {
                 // Split the event into two chunks
-                let chunk1 = &valid_event[..split_pos];
-                let chunk2 = &valid_event[split_pos..];
+                let chunk1 = &VALID_EVENT[..split_pos];
+                let chunk2 = &VALID_EVENT[split_pos..];
 
                 // Simulate line-buffered reader with partial line carry-over
                 let mut buffer = String::new();
@@ -771,7 +779,7 @@ mod replay_equals_live {
                 }
 
                 // If the split was at a valid boundary, we should have parsed the event
-                let split_at_boundary = split_pos == 0 || split_pos == valid_event.len();
+                let split_at_boundary = split_pos == 0 || split_pos == VALID_EVENT.len();
 
                 if split_at_boundary {
                     prop_assert_eq!(
@@ -808,26 +816,10 @@ mod replay_equals_live {
     /// 2. 2 replay calls (minimum to detect non-idempotency)
     #[test]
     fn proptest_replay_is_idempotent() {
-        let event_strategy = prop_oneof![
-            Just(NeedleEvent::Claim {
-                ts: "2026-04-21T18:42:10Z".to_string(),
-                worker: "alpha".to_string(),
-                bead: "bd-1".to_string(),
-                strand: None,
-            }),
-            Just(NeedleEvent::Dispatch {
-                ts: "2026-04-21T18:42:11Z".to_string(),
-                worker: "alpha".to_string(),
-                bead: "bd-1".to_string(),
-                adapter: Some("claude".to_string()),
-                model: Some("opus".to_string()),
-            }),
-        ];
-
         proptest! {
             #[test]
             fn proptest_replay_is_idempotent_inner(
-                events in prop::collection::vec(event_strategy, 0..10)
+                events in prop::collection::vec(idempotent_event_strategy(), 0..10)
             ) {
                 let tmp_dir = TempDir::new().unwrap();
                 let events_path = tmp_dir.path().join("events.jsonl");
@@ -859,7 +851,7 @@ mod replay_equals_live {
                 let replay3 = replay_events(&events_path);
 
                 // All replays must be identical
-                prop_assert_eq!(replay1, replay2, "First and second replays differ");
+                prop_assert_eq!(replay1, replay2.clone(), "First and second replays differ");
                 prop_assert_eq!(replay2, replay3, "Second and third replays differ");
             }
         }

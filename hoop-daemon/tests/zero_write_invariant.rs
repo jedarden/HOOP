@@ -190,7 +190,7 @@ fn test_depend_panics_create_only() {
 
 #[test]
 fn test_invoke_br_read_produces_valid_command() {
-    let cmd = br_verbs::invoke_br_read(ReadVerb::List, &["--json"]);
+    let cmd = br_verbs::invoke_bead_read(ReadVerb::List, &["--json"]);
     let expected_cli = hoop_core::bead_cli::bead_cli_command();
     assert_eq!(cmd.get_program().to_string_lossy().as_ref(), expected_cli);
     let args: Vec<_> = cmd.get_args().collect();
@@ -200,7 +200,7 @@ fn test_invoke_br_read_produces_valid_command() {
 
 #[test]
 fn test_invoke_br_string_read_verb() {
-    let cmd = br_verbs::invoke_br("get", &["bd-abc123"]);
+    let cmd = br_verbs::invoke_bead("get", &["bd-abc123"]);
     let expected_cli = hoop_core::bead_cli::bead_cli_command();
     assert_eq!(cmd.get_program().to_string_lossy().as_ref(), expected_cli);
     let args: Vec<_> = cmd.get_args().collect();
@@ -217,7 +217,9 @@ fn test_invoke_br_string_create_panics_read_only() {
     // This test expects a panic because it runs under zero-write-v01 or unrestricted
     // (under create-only-write it would NOT panic — this test is cfg-gated below)
     #[cfg(not(feature = "create-only-write"))]
-    br_verbs::invoke_br("create", &["--json", "{}"]);
+    {
+        let _ = br_verbs::invoke_bead("create", &["--json", "{}"]);
+    }
 
     #[cfg(feature = "create-only-write")]
     panic!("invariant violated: this test should not run under create-only-write");
@@ -226,13 +228,13 @@ fn test_invoke_br_string_create_panics_read_only() {
 #[test]
 #[should_panic(expected = "invariant violated")]
 fn test_invoke_br_string_close_panics() {
-    br_verbs::invoke_br("close", &["bd-abc123"]);
+    br_verbs::invoke_bead("close", &["bd-abc123"]);
 }
 
 #[test]
 #[should_panic(expected = "invariant violated")]
 fn test_invoke_br_string_update_panics() {
-    br_verbs::invoke_br("update", &["bd-abc123"]);
+    br_verbs::invoke_bead("update", &["bd-abc123"]);
 }
 
 // ---------------------------------------------------------------------------
@@ -349,7 +351,7 @@ fn test_validate_br_subprocess_args_allows_read_verbs() {
     for verb in br_verbs::READ_VERB_NAMES {
         let mut cmd = std::process::Command::new(&cli_name);
         cmd.arg(verb);
-        br_verbs::validate_br_subprocess_args(&cmd);
+        br_verbs::validate_bead_subprocess_args(&cmd);
     }
 }
 
@@ -361,7 +363,7 @@ fn test_validate_br_subprocess_args_rejects_forbidden_verbs() {
         let result = std::panic::catch_unwind(|| {
             let mut cmd = std::process::Command::new(&cli_name);
             cmd.arg(verb);
-            br_verbs::validate_br_subprocess_args(&cmd);
+            br_verbs::validate_bead_subprocess_args(&cmd);
         });
         assert!(
             result.is_err(),
@@ -378,7 +380,6 @@ fn test_validate_br_subprocess_args_allows_all_in_unrestricted() {
     for verb in br_verbs::WRITE_VERB_NAMES {
         let mut cmd = std::process::Command::new(&cli_name);
         cmd.arg(verb);
-        br_verbs::validate_br_subprocess_args(&cmd);
+        br_verbs::validate_bead_subprocess_args(&cmd);
     }
-}
 }

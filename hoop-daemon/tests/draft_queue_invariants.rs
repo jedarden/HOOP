@@ -373,6 +373,7 @@ fn test_audit_row_captures_approver_identity() {
         created_at: chrono::Utc::now().to_rfc3339(),
         source: "agent".to_string(),
         agent_session_id: None,
+        turn_id: None,
         status: "pending".to_string(),
         version: 1,
         original_json: None,
@@ -381,6 +382,10 @@ fn test_audit_row_captures_approver_identity() {
         rejection_reason: None,
         stitch_id: None,
         preview_json: None,
+        opened_by: None,
+        opened_at: None,
+        last_autosave_at: None,
+        abandoned_at: None,
     };
 
     hoop_daemon::fleet::insert_draft(&draft).expect("Insert draft");
@@ -516,6 +521,7 @@ fn test_rejection_without_reason() {
         created_at: chrono::Utc::now().to_rfc3339(),
         source: "agent".to_string(),
         agent_session_id: None,
+        turn_id: None,
         status: "pending".to_string(),
         version: 1,
         original_json: None,
@@ -524,6 +530,10 @@ fn test_rejection_without_reason() {
         rejection_reason: None,
         stitch_id: None,
         preview_json: None,
+        opened_by: None,
+        opened_at: None,
+        last_autosave_at: None,
+        abandoned_at: None,
     };
 
     hoop_daemon::fleet::insert_draft(&draft).expect("Insert draft");

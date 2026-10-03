@@ -148,7 +148,7 @@ fn get_session_stitch_id(session: &serde_json::Value) -> Option<String> {
 #[tokio::test]
 async fn daemon_survives_simulated_anthropic_5xx() {
     // Acceptance: Simulated Anthropic 500 doesn't crash daemon
-    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config| {
+    let (_base_url, _daemon) = spawn_test_daemon_with_config(Some(|config: &mut Config| {
         // Use a test configuration that enables agent session
         config.allow_br_mismatch = true;
     }))
@@ -616,8 +616,12 @@ async fn concurrent_switch_requests_are_handled_gracefully() {
             .await
     });
 
+    let client_for_switch2 = FailoverClient {
+        base_url: _base_url.clone(),
+        client: client.client.clone(),
+    };
     let switch2 = tokio::spawn(async move {
-        client
+        client_for_switch2
             .switch_adapter("claude", Some("claude-opus-4-7"), Some("key2"), None, None)
             .await
     });
@@ -651,7 +655,7 @@ async fn config_yml_hot_reload_triggers_adapter_switch() {
     use std::time::Duration;
     use tokio::time::sleep;
 
-    let (base_url, daemon) = spawn_test_daemon_with_config(Some(|config| {
+    let (base_url, daemon) = spawn_test_daemon_with_config(Some(|config: &mut Config| {
         config.allow_br_mismatch = true;
     }))
     .await
@@ -818,12 +822,12 @@ impl MockAnthropicServer {
                 // Return 503 Service Unavailable - simulating Anthropic outage
                 (
                     axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                    serde_json::json!({
+                    axum::Json(serde_json::json!({
                         "error": {
                             "type": "internal_server_error",
                             "message": "Simulated Anthropic 5xx outage for testing"
                         }
-                    }),
+                    })),
                 )
             }),
         );

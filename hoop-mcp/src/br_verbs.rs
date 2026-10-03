@@ -340,18 +340,13 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(feature = "zero-write-v01"))]
     fn test_invoke_bead_create_builds_command() {
-        #[cfg(any(
-            feature = "create-only-write",
-            not(any(feature = "zero-write-v01", feature = "create-only-write"))
-        ))]
-        {
-            let cmd = invoke_bead_create(&["--type", "task"]);
-            let cmd_name = hoop_core::bead_cli::bead_cli_command();
-            assert_eq!(cmd.get_program(), std::ffi::OsStr::new(&cmd_name));
-            let args: Vec<_> = cmd.get_args().collect();
-            assert_eq!(args, ["create", "--type", "task"]);
-        }
+        let cmd = invoke_bead_create(&["--type", "task"]);
+        let cmd_name = hoop_core::bead_cli::bead_cli_command();
+        assert_eq!(cmd.get_program(), std::ffi::OsStr::new(&cmd_name));
+        let args: Vec<_> = cmd.get_args().collect();
+        assert_eq!(args, ["create", "--type", "task"]);
     }
 
     #[test]

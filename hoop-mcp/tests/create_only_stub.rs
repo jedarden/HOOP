@@ -87,10 +87,7 @@ fn path_with_fake(fake: &FakeBr) -> String {
 
 #[test]
 fn test_invoke_bead_create_calls_only_create_verb() {
-    #[cfg(any(
-        feature = "create-only-write",
-        not(any(feature = "zero-write-v01", feature = "create-only-write"))
-    ))]
+    #[cfg(not(feature = "zero-write-v01"))]
     {
         let fake = FakeBr::new();
         let mut cmd = hoop_mcp::br_verbs::invoke_bead_create(&["Test bead", "--type", "task"]);
@@ -119,10 +116,7 @@ fn test_invoke_bead_create_calls_only_create_verb() {
 
 #[test]
 fn test_invoke_bead_create_multiple_invocations_all_create() {
-    #[cfg(any(
-        feature = "create-only-write",
-        not(any(feature = "zero-write-v01", feature = "create-only-write"))
-    ))]
+    #[cfg(not(feature = "zero-write-v01"))]
     {
         let fake = FakeBr::new();
         let path_env = path_with_fake(&fake);
@@ -249,10 +243,7 @@ fn test_subprocess_arg_validation_rejects_forbidden_commands() {
 
 #[test]
 fn test_invoke_bead_create_end_to_end_with_stub() {
-    #[cfg(any(
-        feature = "create-only-write",
-        not(any(feature = "zero-write-v01", feature = "create-only-write"))
-    ))]
+    #[cfg(not(feature = "zero-write-v01"))]
     {
         let fake = FakeBr::new();
         let path_env = path_with_fake(&fake);
