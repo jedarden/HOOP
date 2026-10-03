@@ -80,7 +80,7 @@
 //! - Status broadcasts consumed by UI for runtime state display
 
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -1157,29 +1157,47 @@ fn parse_timestamp(ts: &str) -> Result<DateTime<Utc>, TimestampParseError> {
         });
     }
 
-    // Try to parse the timestamp using chrono
-    match DateTime::parse_from_rfc3339(ts) {
-        Ok(dt) => Ok(dt.with_timezone(&Utc)),
-        Err(chrono_error) => {
-            // Categorize the error for better error messages
-            let error_msg = chrono_error.to_string().to_lowercase();
+    // RFC3339 is the canonical event format. Try it first so existing event
+    // timestamps keep their timezone and fractional-second semantics.
+    let rfc3339_error = match DateTime::parse_from_rfc3339(ts) {
+        Ok(dt) => return Ok(dt.with_timezone(&Utc)),
+        Err(error) => error,
+    };
 
-            let error_type = if error_msg.contains("premature end of input") {
-                "incomplete/empty timestamp"
-            } else if error_msg.contains("invalid") && error_msg.contains("offset") {
-                "invalid timezone offset"
-            } else if error_msg.contains("expected") {
-                "format mismatch"
-            } else {
-                "parse error"
-            };
-
-            Err(TimestampParseError::InvalidFormat {
-                input: timestamp_preview(ts),
-                chrono_error: format!("{} ({})", error_type, chrono_error),
-            })
+    // Older br/beads_rust rows can contain SQLite's UTC datetime format. It
+    // has no timezone suffix, so these values are interpreted as UTC, which is
+    // how SQLite's CURRENT_TIMESTAMP is defined and how the worker events are
+    // produced. Keep the accepted legacy forms deliberately narrow: accepting
+    // arbitrary local-time strings would silently shift event ordering.
+    for format in [
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M:%S%.f",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S%.f",
+    ] {
+        if let Ok(dt) = NaiveDateTime::parse_from_str(ts, format) {
+            return Ok(dt.and_utc());
         }
     }
+
+    // Categorize the error for better error messages. Include the RFC3339
+    // parser's diagnostic because it remains the most useful explanation for
+    // values that match neither the canonical nor legacy formats.
+    let error_msg = rfc3339_error.to_string().to_lowercase();
+    let error_type = if error_msg.contains("premature end of input") {
+        "incomplete/empty timestamp"
+    } else if error_msg.contains("invalid") && error_msg.contains("offset") {
+        "invalid timezone offset"
+    } else if error_msg.contains("expected") {
+        "format mismatch"
+    } else {
+        "parse error"
+    };
+
+    Err(TimestampParseError::InvalidFormat {
+        input: timestamp_preview(ts),
+        chrono_error: format!("{} ({})", error_type, rfc3339_error),
+    })
 }
 
 /// Validate and sanitize a timestamp string from events.jsonl.
@@ -1196,7 +1214,7 @@ fn parse_timestamp(ts: &str) -> Result<DateTime<Utc>, TimestampParseError> {
 /// * `ts` - The timestamp string to validate
 ///
 /// # Returns
-/// A valid RFC3339 timestamp string (original if valid, or current time if invalid)
+/// A valid, normalized RFC3339 timestamp string (or current time if invalid)
 fn sanitize_timestamp(ts: &str) -> String {
     match parse_timestamp(ts) {
         Ok(dt) => dt.to_rfc3339(),
@@ -1511,5 +1529,32 @@ mod tests {
         let sanitized = sanitize_timestamp(" \t\n ");
 
         assert!(DateTime::parse_from_rfc3339(&sanitized).is_ok());
+    }
+
+    #[test]
+    fn sqlite_datetime_claim_timestamp_is_normalized_to_rfc3339() {
+        let sanitized = sanitize_timestamp("2026-07-04 03:02:15");
+
+        assert_eq!(sanitized, "2026-07-04T03:02:15+00:00");
+        assert!(DateTime::parse_from_rfc3339(&sanitized).is_ok());
+    }
+
+    #[test]
+    fn timezone_less_legacy_timestamps_preserve_fractional_seconds() {
+        let sanitized = sanitize_timestamp("2026-08-03T06:46:20.80");
+
+        assert_eq!(sanitized, "2026-08-03T06:46:20.800+00:00");
+        assert!(DateTime::parse_from_rfc3339(&sanitized).is_ok());
+    }
+
+    #[test]
+    fn rfc3339_timestamps_keep_their_instant() {
+        let sanitized = sanitize_timestamp("2026-04-21T18:42:10.123+05:30");
+        let parsed = DateTime::parse_from_rfc3339(&sanitized).unwrap();
+
+        assert_eq!(
+            parsed,
+            DateTime::parse_from_rfc3339("2026-04-21T13:12:10.123Z").unwrap()
+        );
     }
 }
