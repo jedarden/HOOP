@@ -10,7 +10,6 @@
 //! Plan reference: §10 Phase 2 exit gate | §6 Phase 6 deliverable 9
 
 use std::fs;
-use std::path::PathBuf;
 use std::time::Duration;
 
 mod integration_harness;

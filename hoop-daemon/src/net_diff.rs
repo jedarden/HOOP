@@ -423,7 +423,6 @@ pub fn router() -> Router<DaemonState> {
 mod tests {
     use super::*;
     use std::fs;
-    use std::path::PathBuf;
     use tempfile::TempDir;
 
     // ---------------------------------------------------------------------------

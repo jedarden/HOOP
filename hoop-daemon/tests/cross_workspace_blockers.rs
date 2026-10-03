@@ -8,7 +8,6 @@
 //! Plan reference: §4.2 Cross-workspace dependencies
 
 use std::fs;
-use std::path::PathBuf;
 use tempfile::TempDir;
 
 /// Integration test: migration Stitch touching 3 workspaces has correct blocker graph
