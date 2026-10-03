@@ -5,8 +5,10 @@
 //! Plan reference: §14.2 bullet 5
 //! Feeds into hoop-ttb.7.11 performance budget verification
 
-// Use local load_test module (not the library version which is cfg-gated)
-// The load_test types are defined within this file's tests below
+mod integration_harness;
+
+use hoop_daemon::load_test::{run_load_test, EventGenerator, LoadTestConfig, PerformanceReport};
+use integration_harness::spawn_test_daemon;
 
 // Marker for tests that need exclusive access (serial execution)
 // These tests spawn daemons and can't run in parallel
@@ -189,8 +191,6 @@ async fn test_load_test_with_daemon() {
     let _lock = __TEST_MUTEX.lock().await;
 
     // Small-scale integration test with a real daemon
-    use crate::integration_harness::spawn_test_daemon;
-
     let config = LoadTestConfig {
         num_projects: 1,
         workers_per_project: 1,
@@ -243,8 +243,6 @@ async fn test_full_scale_load_test() {
     if std::env::var("HOOP_LOAD_TEST_FULL_SCALE").is_err() {
         return;
     }
-
-    use crate::integration_harness::spawn_test_daemon;
 
     let config = LoadTestConfig::default();
 
@@ -308,8 +306,6 @@ async fn test_full_scale_load_test() {
 async fn test_medium_scale_load_test() {
     // Acquire lock to prevent concurrent daemon spawning
     let _lock = __TEST_MUTEX.lock().await;
-
-    use crate::integration_harness::spawn_test_daemon;
 
     let config = LoadTestConfig {
         num_projects: 5,

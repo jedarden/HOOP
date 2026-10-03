@@ -1188,6 +1188,20 @@ fn parse_timestamp(ts: &str) -> Result<DateTime<Utc>, TimestampParseError> {
     // how SQLite's CURRENT_TIMESTAMP is defined and how the worker events are
     // produced. Keep the accepted legacy forms deliberately narrow: accepting
     // arbitrary local-time strings would silently shift event ordering.
+    // Some br versions wrote an RFC3339-like value with SQLite's space
+    // separator. Parse offset-bearing forms first so an explicit offset is
+    // never accidentally interpreted as a UTC wall-clock value.
+    for format in [
+        "%Y-%m-%d %H:%M:%S%:z",
+        "%Y-%m-%d %H:%M:%S%.f%:z",
+        "%Y-%m-%dT%H:%M:%S%:z",
+        "%Y-%m-%dT%H:%M:%S%.f%:z",
+    ] {
+        if let Ok(dt) = DateTime::parse_from_str(value, format) {
+            return Ok(dt.with_timezone(&Utc));
+        }
+    }
+
     for format in [
         "%Y-%m-%d %H:%M:%S",
         "%Y-%m-%d %H:%M:%S%.f",
@@ -1580,6 +1594,13 @@ mod tests {
         let sanitized = sanitize_timestamp("2026-08-01 02:11:38.034049318");
 
         assert_eq!(sanitized, "2026-08-01T02:11:38.034049318+00:00");
+    }
+
+    #[test]
+    fn space_separated_timestamp_with_offset_preserves_the_instant() {
+        let sanitized = sanitize_timestamp("2026-04-21 18:42:10.123456789+05:30");
+
+        assert_eq!(sanitized, "2026-04-21T13:12:10.123456789+00:00");
     }
 
     #[test]
