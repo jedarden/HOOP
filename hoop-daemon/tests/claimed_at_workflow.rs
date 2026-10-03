@@ -210,6 +210,20 @@ fn assert_database_is_healthy(db_path: &Path) {
         duplicate_count, 0,
         "collision index must not contain duplicates"
     );
+
+    let last_event_at: Option<String> = conn
+        .query_row(
+            "SELECT last_event_at FROM project_status WHERE project = ?1",
+            [PROJECT],
+            |row| row.get(0),
+        )
+        .expect("read project activity timestamp");
+    assert!(
+        last_event_at
+            .as_deref()
+            .is_some_and(|timestamp| DateTime::parse_from_rfc3339(timestamp).is_ok()),
+        "project activity timestamps must remain valid RFC3339 values: {last_event_at:?}"
+    );
 }
 
 #[tokio::test]
@@ -362,6 +376,29 @@ async fn malformed_timestamps_and_terminal_events_work_together() {
             .len(),
         2
     );
+    assert_database_is_healthy(&workflow.db_path);
+    workflow.stop().await;
+}
+
+#[tokio::test]
+#[serial]
+async fn long_multibyte_malformed_claim_timestamp_does_not_crash_projection() {
+    let workflow = Workflow::new(&["bd-multibyte-claim", "bd-after-multibyte"]).await;
+    let malformed = format!("{}🔥not-a-timestamp", "é".repeat(49));
+    let event = format!(
+        r#"{{"event":"claim","ts":"{}","worker":"worker-multibyte","bead":"bd-multibyte-claim"}}"#,
+        malformed
+    );
+    let following = r#"{"event":"claim","ts":"2026-04-21T18:42:10Z","worker":"worker-after-multibyte","bead":"bd-after-multibyte"}"#;
+
+    append_events(&workflow.events_path, &[&event, following]);
+
+    let (claimed_at, _) = wait_for_collision_row(&workflow.db_path, "bd-multibyte-claim").await;
+    assert!(DateTime::parse_from_rfc3339(claimed_at.as_deref().unwrap()).is_ok());
+
+    let (following_claimed_at, _) =
+        wait_for_collision_row(&workflow.db_path, "bd-after-multibyte").await;
+    assert!(DateTime::parse_from_rfc3339(following_claimed_at.as_deref().unwrap()).is_ok());
     assert_database_is_healthy(&workflow.db_path);
     workflow.stop().await;
 }

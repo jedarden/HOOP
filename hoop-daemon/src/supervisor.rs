@@ -1108,13 +1108,13 @@ enum TimestampParseError {
         /// The input timestamp with invalid characters
         input: String,
     },
+}
 
-    /// Timestamp has invalid timezone offset
-    #[error("Invalid timezone offset: '{input}'")]
-    InvalidTimezoneOffset {
-        /// The input timestamp with invalid offset
-        input: String,
-    },
+/// Keep malformed external timestamps bounded in diagnostics without slicing
+/// through a UTF-8 code point. Event data is external input, so logging it
+/// must not introduce a new panic path for otherwise recoverable data.
+fn timestamp_preview(ts: &str) -> String {
+    ts.chars().take(100).collect()
 }
 
 /// Parse a timestamp string into a DateTime<Utc> with detailed error reporting.
@@ -1144,15 +1144,16 @@ enum TimestampParseError {
 /// }
 /// ```
 fn parse_timestamp(ts: &str) -> Result<DateTime<Utc>, TimestampParseError> {
-    // Check for empty string
-    if ts.is_empty() {
+    // Treat whitespace-only values as missing as well. They carry no useful
+    // claim time and should follow the same safe fallback path as `""`.
+    if ts.trim().is_empty() {
         return Err(TimestampParseError::Empty);
     }
 
     // Check for obvious invalid characters (non-printable or control characters)
     if ts.chars().any(|c| c.is_control()) {
         return Err(TimestampParseError::InvalidCharacters {
-            input: ts.to_string(),
+            input: timestamp_preview(ts),
         });
     }
 
@@ -1174,7 +1175,7 @@ fn parse_timestamp(ts: &str) -> Result<DateTime<Utc>, TimestampParseError> {
             };
 
             Err(TimestampParseError::InvalidFormat {
-                input: ts.to_string(),
+                input: timestamp_preview(ts),
                 chrono_error: format!("{} ({})", error_type, chrono_error),
             })
         }
@@ -1204,7 +1205,7 @@ fn sanitize_timestamp(ts: &str) -> String {
             warn!(
                 "Malformed timestamp detected - using current time as fallback. Error: {}, Input: '{}'",
                 e,
-                if ts.len() <= 100 { ts } else { &ts[..100] }
+                timestamp_preview(ts)
             );
 
             // Return current time as fallback to prevent crashes
@@ -1274,25 +1275,21 @@ fn update_fleet_from_event(
 
     // Resolve project from in-memory bead store
     let project = lookup_project_for_bead(bead_id, beads);
+    // Normalize once for both the claim projection and project activity
+    // projection. Keeping the raw event timestamp in either table would let
+    // malformed input poison ordering comparisons on later reads.
+    let safe_ts = sanitize_timestamp(ts);
 
     match event {
         NeedleEvent::Claim { .. } => {
             // Register in collision index so concurrent-work detection can fire
             if let Some(ref proj) = project {
                 let now = chrono::Utc::now().to_rfc3339();
-                // Sanitize the timestamp to handle empty/invalid values from events.jsonl
-                // Use None if the sanitized timestamp is empty
-                let claimed_at = sanitize_timestamp(ts);
-                let claimed_at_opt = if claimed_at.is_empty() {
-                    None
-                } else {
-                    Some(claimed_at)
-                };
                 let entry = fleet::CollisionIndexEntry {
                     bead_id: bead_id.to_string(),
                     project: proj.clone(),
                     worker: Some(worker.to_string()),
-                    claimed_at: claimed_at_opt,
+                    claimed_at: Some(safe_ts.clone()),
                     file_paths: vec![],
                     updated_at: now,
                 };
@@ -1323,7 +1320,7 @@ fn update_fleet_from_event(
 
     // Advance last_event_at for the project (best-effort; warns on failure)
     if let Some(ref proj) = project {
-        if let Err(e) = fleet::touch_project_event_at(proj, ts) {
+        if let Err(e) = fleet::touch_project_event_at(proj, &safe_ts) {
             warn!("fleet: touch_project_event_at failed for {}: {}", proj, e);
         }
     }
@@ -1497,5 +1494,22 @@ mod tests {
         ));
         assert!(!ProjectSupervisor::is_permanent_error("Connection refused"));
         assert!(!ProjectSupervisor::is_permanent_error("Timeout"));
+    }
+
+    #[test]
+    fn malformed_multibyte_timestamp_does_not_panic_while_logging() {
+        // Byte 100 intentionally falls inside the emoji. A byte-index slice
+        // at that position would panic while trying to log this bad value.
+        let malformed = format!("{}🔥not-a-timestamp", "é".repeat(49));
+        let sanitized = sanitize_timestamp(&malformed);
+
+        assert!(DateTime::parse_from_rfc3339(&sanitized).is_ok());
+    }
+
+    #[test]
+    fn whitespace_only_timestamp_uses_the_safe_fallback() {
+        let sanitized = sanitize_timestamp(" \t\n ");
+
+        assert!(DateTime::parse_from_rfc3339(&sanitized).is_ok());
     }
 }
