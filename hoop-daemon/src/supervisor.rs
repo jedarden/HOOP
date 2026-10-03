@@ -214,6 +214,23 @@ struct ProjectRuntime {
     bead_count: usize,
 }
 
+/// Inputs shared by the per-project runtime task.
+///
+/// Keeping the task's channels and shared state together makes its lifecycle
+/// explicit and avoids a long positional argument list at the spawn site.
+struct ProjectRuntimeArgs {
+    project_name: String,
+    workspaces: Vec<PathBuf>,
+    bead_tx: broadcast::Sender<BeadEvent>,
+    worker_registry: Arc<crate::ws::WorkerRegistry>,
+    beads: Arc<std::sync::RwLock<Vec<Bead>>>,
+    shutdown: Arc<crate::shutdown::ShutdownCoordinator>,
+    session_tailer_ref: Arc<std::sync::Mutex<Option<SessionTailer>>>,
+    bead_readers: Arc<std::sync::Mutex<Vec<BeadReader>>>,
+    error_tx: mpsc::Sender<anyhow::Error>,
+    vector_index: Arc<std::sync::RwLock<crate::vector_index::VectorIndex>>,
+}
+
 /// Supervisor for all project runtimes
 #[derive(Clone)]
 pub struct ProjectSupervisor {
@@ -582,7 +599,6 @@ impl ProjectSupervisor {
         let project_name = runtime.name.clone();
         let workspaces = runtime.workspaces.clone();
         let bead_tx = self.bead_tx.clone();
-        let session_tx = self.session_tx.clone();
         let worker_registry = self.worker_registry.clone();
         let beads = self.beads.clone();
         let _runtimes = self.runtimes.clone();
@@ -590,7 +606,6 @@ impl ProjectSupervisor {
         let shutdown = self.shutdown.clone();
         let session_tailer = runtime.session_tailer.clone();
         let bead_readers = runtime.bead_readers.clone();
-        let cost_aggregator = self.cost_aggregator.clone();
         let vector_index = self.vector_index.clone();
         let supervisor = self.clone();
 
@@ -610,20 +625,18 @@ impl ProjectSupervisor {
             info!("Project runtime started: {}", project_name_clone);
 
             // Run the project runtime
-            let result = Self::run_project_runtime(
-                project_name_clone.clone(),
-                workspaces.clone(),
+            let result = Self::run_project_runtime(ProjectRuntimeArgs {
+                project_name: project_name_clone.clone(),
+                workspaces,
                 bead_tx,
-                session_tx,
                 worker_registry,
-                beads.clone(),
+                beads,
                 shutdown,
-                session_tailer,
+                session_tailer_ref: session_tailer,
                 bead_readers,
                 error_tx,
-                cost_aggregator,
                 vector_index,
-            )
+            })
             .await;
 
             match result {
@@ -789,21 +802,20 @@ impl ProjectSupervisor {
     }
 
     /// Run the project runtime (bead reader + session tailer)
-    #[allow(clippy::too_many_arguments)]
-    async fn run_project_runtime(
-        project_name: String,
-        workspaces: Vec<PathBuf>,
-        bead_tx: broadcast::Sender<BeadEvent>,
-        _session_tx: broadcast::Sender<SessionEvent>,
-        worker_registry: Arc<crate::ws::WorkerRegistry>,
-        beads: Arc<std::sync::RwLock<Vec<Bead>>>,
-        shutdown: Arc<crate::shutdown::ShutdownCoordinator>,
-        session_tailer_clone: Arc<std::sync::Mutex<Option<SessionTailer>>>,
-        bead_readers_clone: Arc<std::sync::Mutex<Vec<BeadReader>>>,
-        error_tx: mpsc::Sender<anyhow::Error>,
-        _cost_aggregator: Arc<std::sync::RwLock<CostAggregator>>,
-        vector_index: Arc<std::sync::RwLock<crate::vector_index::VectorIndex>>,
-    ) -> Result<()> {
+    async fn run_project_runtime(args: ProjectRuntimeArgs) -> Result<()> {
+        let ProjectRuntimeArgs {
+            project_name,
+            workspaces,
+            bead_tx,
+            worker_registry,
+            beads,
+            shutdown,
+            session_tailer_ref,
+            bead_readers,
+            error_tx,
+            vector_index,
+        } = args;
+
         // Subscribe to shutdown phases
         let mut shutdown_rx = shutdown.subscribe();
 
@@ -955,7 +967,7 @@ impl ProjectSupervisor {
 
         // Store bead readers in shared reference for external access and graceful shutdown
         {
-            let mut bead_readers_ref = bead_readers_clone.lock().unwrap();
+            let mut bead_readers_ref = bead_readers.lock().unwrap();
             *bead_readers_ref = local_bead_readers;
         }
 
@@ -1023,7 +1035,7 @@ impl ProjectSupervisor {
 
         // Store the session tailer in the shared reference for external access
         {
-            let mut tailer_ref = session_tailer_clone.lock().unwrap();
+            let mut tailer_ref = session_tailer_ref.lock().unwrap();
             *tailer_ref = Some(session_tailer);
         }
 
@@ -1036,7 +1048,7 @@ impl ProjectSupervisor {
                         Ok(ShutdownPhase::FlushState) => {
                             info!("Project runtime {}: flushing in-flight state", project_name);
                             // Flush session tailer to ensure all pending data is written
-                            let tailer_opt = session_tailer_clone.lock().unwrap().take();
+                            let tailer_opt = session_tailer_ref.lock().unwrap().take();
                             if let Some(mut tailer) = tailer_opt {
                                 if let Err(e) = tailer.stop().await {
                                     warn!("Error flushing session tailer for {}: {}", project_name, e);
