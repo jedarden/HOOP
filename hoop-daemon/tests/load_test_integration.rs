@@ -12,7 +12,7 @@
 use std::fs;
 use std::time::Duration;
 
-use futures_util::StreamExt;
+use futures_util::{SinkExt, StreamExt};
 
 mod integration_harness;
 use integration_harness::spawn_test_daemon_with_config;
@@ -381,7 +381,7 @@ fn setup_load_test_projects(config: &Config, load_config: LoadTestConfig) {
     let load_test_dir = temp_dir.join("load-test-data");
 
     // Populate with synthetic data
-    populate_testrepo(load_config, temp_dir)
+    populate_testrepo(load_config.clone(), temp_dir)
         .expect("Failed to populate testrepo with load test data");
 
     // Update projects.yaml to include load test projects
