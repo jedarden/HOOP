@@ -1156,22 +1156,29 @@ fn timestamp_preview(ts: &str) -> String {
 /// }
 /// ```
 fn parse_timestamp(ts: &str) -> Result<DateTime<Utc>, TimestampParseError> {
+    // The br CLI reads these values from SQLite text fields, where accidental
+    // surrounding whitespace is possible. Trim only the boundary whitespace;
+    // whitespace inside a timestamp remains invalid. This also makes a value
+    // containing only whitespace follow the same missing-value path as an
+    // empty string.
+    let value = ts.trim();
+
     // Treat whitespace-only values as missing as well. They carry no useful
     // claim time and should follow the same safe fallback path as `""`.
-    if ts.trim().is_empty() {
+    if value.is_empty() {
         return Err(TimestampParseError::Empty);
     }
 
     // Check for obvious invalid characters (non-printable or control characters)
-    if ts.chars().any(|c| c.is_control()) {
+    if value.chars().any(|c| c.is_control()) {
         return Err(TimestampParseError::InvalidCharacters {
-            input: timestamp_preview(ts),
+            input: timestamp_preview(value),
         });
     }
 
     // RFC3339 is the canonical event format. Try it first so existing event
     // timestamps keep their timezone and fractional-second semantics.
-    let rfc3339_error = match DateTime::parse_from_rfc3339(ts) {
+    let rfc3339_error = match DateTime::parse_from_rfc3339(value) {
         Ok(dt) => return Ok(dt.with_timezone(&Utc)),
         Err(error) => error,
     };
@@ -1187,7 +1194,7 @@ fn parse_timestamp(ts: &str) -> Result<DateTime<Utc>, TimestampParseError> {
         "%Y-%m-%dT%H:%M:%S",
         "%Y-%m-%dT%H:%M:%S%.f",
     ] {
-        if let Ok(dt) = NaiveDateTime::parse_from_str(ts, format) {
+        if let Ok(dt) = NaiveDateTime::parse_from_str(value, format) {
             return Ok(dt.and_utc());
         }
     }
@@ -1207,7 +1214,7 @@ fn parse_timestamp(ts: &str) -> Result<DateTime<Utc>, TimestampParseError> {
     };
 
     Err(TimestampParseError::InvalidFormat {
-        input: timestamp_preview(ts),
+        input: timestamp_preview(value),
         chrono_error: format!("{} ({})", error_type, rfc3339_error),
     })
 }
@@ -1557,6 +1564,22 @@ mod tests {
 
         assert_eq!(sanitized, "2026-08-03T06:46:20.800+00:00");
         assert!(DateTime::parse_from_rfc3339(&sanitized).is_ok());
+    }
+
+    #[test]
+    fn sqlite_datetime_with_fractional_seconds_is_normalized() {
+        let sanitized = sanitize_timestamp("2026-07-04 03:02:15.123456");
+
+        assert_eq!(sanitized, "2026-07-04T03:02:15.123456+00:00");
+    }
+
+    #[test]
+    fn surrounding_whitespace_is_ignored_for_supported_formats() {
+        let sqlite = sanitize_timestamp(" 2026-07-04 03:02:15 ");
+        let rfc3339 = sanitize_timestamp("\t2026-04-21T18:42:10.123Z\n");
+
+        assert_eq!(sqlite, "2026-07-04T03:02:15+00:00");
+        assert_eq!(rfc3339, "2026-04-21T18:42:10.123+00:00");
     }
 
     #[test]
