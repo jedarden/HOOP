@@ -599,6 +599,9 @@ pub struct ResolvedConfig {
     // Secrets scanner patterns (§18)
     pub secrets_patterns: Resolved<Vec<SecretPattern>>,
 
+    // Global redaction policy (§18.5)
+    pub redaction: Resolved<Option<crate::redaction_policy::GlobalRedactionPolicy>>,
+
     // Stuck detector (§C1, hoop-ttb.3.25)
     pub stuck_detector: Resolved<Option<StuckDetectorConfigMap>>,
 
@@ -1549,6 +1552,21 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
         )
     };
 
+    // Global redaction policy (§18.5)
+    let redaction = if let Some(policy) = yml_ref.and_then(yaml_get_redaction_policy) {
+        Resolved::new(
+            Some(policy),
+            ConfigSource::ConfigYml,
+            "config.yml: redaction".to_string(),
+        )
+    } else {
+        Resolved::new(
+            None,
+            ConfigSource::Default,
+            "compiled default (redaction not configured)".to_string(),
+        )
+    };
+
     // Load stuck detector configuration
     let stuck_detector_config_map = crate::stuck_detector::StuckDetector::load_config();
     let stuck_detector = Resolved::new(
@@ -1645,6 +1663,7 @@ pub fn resolve(cli: CliOverrides) -> ResolvedConfig {
         backup_encryption,
         pricing_file,
         secrets_patterns,
+        redaction,
         stuck_detector,
         roles,
         embedding_adapter,
@@ -1746,7 +1765,11 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
         let env_val = std::env::var(env_var).ok();
 
         let (value, source, attribution) = if let Some(v) = cli {
-            (v, ConfigSource::CliFlag, format!("cli flag {}", labels.cli_label))
+            (
+                v,
+                ConfigSource::CliFlag,
+                format!("cli flag {}", labels.cli_label),
+            )
         } else if let Some(v) = env_val {
             (v, ConfigSource::EnvVar, format!("env {}", labels.env_label))
         } else if let Some(v) = file_val {
@@ -2260,6 +2283,21 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
         )
     };
 
+    // Global redaction policy (§18.5)
+    let redaction = if let Some(policy) = yml_ref.and_then(yaml_get_redaction_policy) {
+        Resolved::new(
+            Some(policy),
+            ConfigSource::ConfigYml,
+            "config.yml: redaction".to_string(),
+        )
+    } else {
+        Resolved::new(
+            None,
+            ConfigSource::Default,
+            "compiled default (redaction not configured)".to_string(),
+        )
+    };
+
     // Validate unknown top-level fields (config.yml only)
     if let Some(yml) = yml_ref {
         if let Some(mapping) = yml.as_mapping() {
@@ -2413,6 +2451,7 @@ pub fn resolve_from_raw(cli: CliOverrides, raw: &str) -> Result<ResolvedConfig, 
         backup_encryption,
         pricing_file,
         secrets_patterns,
+        redaction,
         stuck_detector: Resolved::new(
             Some(crate::stuck_detector::StuckDetector::load_config()),
             ConfigSource::ConfigYml,
@@ -2682,6 +2721,27 @@ mod tests {
         assert!(!config.reflection_enabled.attribution.is_empty());
         assert!(!config.voice_hotkey.attribution.is_empty());
         assert!(!config.voice_max_recording_seconds.attribution.is_empty());
+    }
+
+    #[test]
+    fn redaction_policy_is_resolved_and_attributed() {
+        let config = resolve_from_raw(
+            CliOverrides::default(),
+            "redaction:\n  action: redact\n  patterns:\n    - github_token\n",
+        )
+        .expect("redaction policy should resolve");
+
+        let policy = config
+            .redaction
+            .value
+            .expect("configured redaction policy should be present");
+        assert_eq!(
+            policy.action,
+            crate::redaction_policy::RedactionAction::Redact
+        );
+        assert_eq!(policy.patterns, vec!["github_token"]);
+        assert_eq!(config.redaction.source, ConfigSource::ConfigYml);
+        assert_eq!(config.redaction.attribution, "config.yml: redaction");
     }
 
     /// to_debug_map produces a serializable map.
