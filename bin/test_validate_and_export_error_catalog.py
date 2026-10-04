@@ -85,7 +85,56 @@ class ReleaseCatalogTests(unittest.TestCase):
         self.assertTrue(report["json_identity_parity"])
         self.assertTrue(report["csv_identity_parity"])
         self.assertTrue(report["json_csv_identity_parity"])
+        self.assertTrue(report["json_csv_values_equivalent"])
+        self.assertTrue(report["csv_preserves_json_fields"])
         self.assertTrue(report["module_file_grouping_deterministic"])
+
+    def test_json_and_csv_must_match_every_emitted_value_and_metadata(self) -> None:
+        intermediate = [
+            {
+                **self.intermediate[0],
+                "metadata": {"owner": "catalog", "ordinal": 1},
+            },
+            self.intermediate[1],
+        ]
+        final = build_final_rows(intermediate, self.ranks)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "catalog.csv"
+            write_csv(final, path)
+            csv_rows, header = load_csv(path)
+            self.assertIn("metadata", header)
+
+            csv_rows[0]["error_type"] = "runtime"
+            report = validate_outputs(
+                self.source,
+                final,
+                csv_rows,
+                header,
+                self.allowed,
+                self.ranks,
+            )
+
+        self.assertFalse(report["json_csv_values_equivalent"])
+        self.assertTrue(
+            any("field 'error_type'" in error for error in report["errors"])
+        )
+
+    def test_exports_are_byte_reproducible_on_rerun(self) -> None:
+        final = build_final_rows(self.intermediate, self.ranks)
+        rendered_json = json.dumps(final, indent=2, ensure_ascii=False) + "\n"
+        with tempfile.TemporaryDirectory() as directory:
+            directory_path = Path(directory)
+            json_one = directory_path / "one.json"
+            json_two = directory_path / "two.json"
+            csv_one = directory_path / "one.csv"
+            csv_two = directory_path / "two.csv"
+            json_one.write_text(rendered_json, encoding="utf-8")
+            json_two.write_text(rendered_json, encoding="utf-8")
+            write_csv(final, csv_one)
+            write_csv(final, csv_two)
+
+            self.assertEqual(json_one.read_bytes(), json_two.read_bytes())
+            self.assertEqual(csv_one.read_bytes(), csv_two.read_bytes())
 
     def test_location_change_breaks_identity_parity(self) -> None:
         changed = [dict(row) for row in self.intermediate]

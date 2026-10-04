@@ -17,9 +17,11 @@
   },
   "output_validation": {
     "csv_identity_parity": true,
+    "csv_preserves_json_fields": true,
     "csv_records": 3466,
     "errors": [],
     "json_csv_identity_parity": true,
+    "json_csv_values_equivalent": true,
     "json_identity_parity": true,
     "json_order_is_deterministic": true,
     "json_records": 3466,

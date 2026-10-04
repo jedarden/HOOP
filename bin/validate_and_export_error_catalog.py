@@ -204,11 +204,27 @@ def build_final_rows(
 
 
 def csv_fields(rows: list[dict[str, Any]]) -> list[str]:
-    fields: list[str] = []
-    for field in FINAL_REQUIRED_FIELDS + ("exception_flags",):
-        if any(field in row for row in rows):
-            fields.append(field)
-    return fields
+    """Return a stable header that includes every final-record field.
+
+    The required fields have a documented consumer-facing order.  Any
+    extraction metadata beyond that contract is appended lexicographically so
+    CSV remains lossless and reruns do not depend on dictionary insertion
+    order.
+    """
+
+    preferred = FINAL_REQUIRED_FIELDS + ("exception_flags",)
+    fields = [field for field in preferred if any(field in row for row in rows)]
+    extras = sorted({field for row in rows for field in row if field not in fields})
+    return fields + extras
+
+
+def csv_cell(row: dict[str, Any], field: str) -> str:
+    """Render one JSON value exactly as :func:`write_csv` renders it."""
+
+    value = row.get(field, "")
+    if isinstance(value, (list, dict)):
+        return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return "" if value is None else str(value)
 
 
 def write_csv(rows: list[dict[str, Any]], path: Path) -> None:
@@ -219,14 +235,7 @@ def write_csv(rows: list[dict[str, Any]], path: Path) -> None:
     writer = csv.DictWriter(buffer, fieldnames=fields, lineterminator="\n")
     writer.writeheader()
     for row in rows:
-        writer.writerow(
-            {
-                field: json.dumps(row[field], ensure_ascii=False, sort_keys=True)
-                if isinstance(row.get(field), (list, dict))
-                else row.get(field, "")
-                for field in fields
-            }
-        )
+        writer.writerow({field: csv_cell(row, field) for field in fields})
     atomic_write(path, buffer.getvalue())
 
 
@@ -263,6 +272,13 @@ def validate_outputs(
         errors.append("CSV record identity does not match source catalog")
     if json_ids != csv_ids:
         errors.append("JSON and CSV record identity do not match")
+
+    expected_header = csv_fields(json_rows)
+    if csv_header != expected_header:
+        errors.append(
+            "CSV header does not preserve the JSON fields in deterministic order: "
+            f"expected {expected_header!r}, got {csv_header!r}"
+        )
 
     for index, row in enumerate(json_rows):
         prefix = f"JSON row {index + 1}"
@@ -301,6 +317,22 @@ def validate_outputs(
         if expected == UNKNOWN_MESSAGE and isinstance(flags, list) and "no_original_message" not in flags:
             errors.append(f"{prefix} missing no_original_message exception")
 
+    # Identity parity alone would allow a CSV row to retain the same location
+    # while silently changing its category, source module, message, or
+    # metadata.  Compare every emitted field against the exact CSV rendering
+    # of the JSON row, preserving structured values through their canonical
+    # JSON encoding.
+    if len(json_rows) == len(csv_rows):
+        for index, (json_row, csv_row) in enumerate(zip(json_rows, csv_rows), start=1):
+            for field in expected_header:
+                expected_cell = csv_cell(json_row, field)
+                actual_cell = csv_row.get(field, "")
+                if actual_cell != expected_cell:
+                    errors.append(
+                        f"JSON/CSV value mismatch at row {index}, field {field!r}: "
+                        f"expected {expected_cell!r}, got {actual_cell!r}"
+                    )
+
     # The exporter uses taxonomy order; checking module/file monotonicity here
     # is the release invariant that is visible to consumers.
     module_file_order = [
@@ -313,6 +345,10 @@ def validate_outputs(
         "json_identity_parity": json_ids == source_ids,
         "csv_identity_parity": csv_ids == source_ids,
         "json_csv_identity_parity": json_ids == csv_ids,
+        "json_csv_values_equivalent": not any(
+            "JSON/CSV value mismatch" in error for error in errors
+        ),
+        "csv_preserves_json_fields": csv_header == expected_header,
         "required_final_fields_present": required_csv.issubset(set(csv_header))
         and all(all(field in row for field in FINAL_REQUIRED_FIELDS) for row in json_rows),
         "taxonomy_categories_valid": not any("outside the taxonomy" in error for error in errors),
