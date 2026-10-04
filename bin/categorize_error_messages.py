@@ -24,8 +24,9 @@ import sys
 import tempfile
 from pathlib import Path
 
+from load_error_catalog import load_catalog
 
-REQUIRED_FIELDS = {"file", "line", "category", "line_content"}
+
 DERIVED_FIELDS = ("error_type", "source_module", "exception_flags")
 UNKNOWN_MODULE = "unknown_module"
 TAXONOMY_PATH = Path(__file__).resolve().parents[1] / "docs" / "error_category_taxonomy.json"
@@ -237,16 +238,10 @@ def atomic_write(path: Path, data: str) -> None:
 
 
 def classify_catalog(input_path: Path) -> list[dict[str, object]]:
-    rows = json.loads(input_path.read_text(encoding="utf-8"))
-    if not isinstance(rows, list):
-        raise ValueError(f"expected a JSON array in {input_path}")
+    rows = load_catalog(input_path)
 
     categorized = []
     for row in rows:
-        if not isinstance(row, dict):
-            raise ValueError("every catalog entry must be a JSON object")
-        if not REQUIRED_FIELDS <= row.keys():
-            raise ValueError(f"catalog entry is missing required fields: {row!r}")
         updated = dict(row)
         message = message_for_row(row)
         updated["error_type"] = error_type(row)
