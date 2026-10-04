@@ -1,7 +1,7 @@
 //! Local text embedding for semantic deduplication (CPU-bound, no external API)
 //!
-//! STUB VERSION: fastembed temporarily disabled for compilation
-//! TODO: Re-enable fastembed after fixing compilation errors
+//! The local embedder uses deterministic character n-gram feature hashing, so
+//! semantic deduplication remains available without an external model.
 
 /// Dimension of the embedding vectors
 pub const EMBEDDING_DIM: usize = 256;
@@ -34,7 +34,10 @@ pub trait Embedder: Send + Sync {
     fn as_any(&self) -> &dyn std::any::Any;
 }
 
-/// N-gram hashing embedder (fallback implementation)
+/// N-gram hashing embedder.
+///
+/// Each lowercase character trigram contributes one count to a deterministic
+/// bucket. The resulting vector is L2-normalized before it is returned.
 pub struct NgramEmbedder {
     dims: usize,
 }
@@ -60,8 +63,31 @@ impl Embedder for NgramEmbedder {
         ("ngram-hash".to_string(), format!("dims-{}", self.dims))
     }
 
-    fn embed(&self, _text: &str) -> Embedding {
-        [0.0f32; EMBEDDING_DIM]
+    fn embed(&self, text: &str) -> Embedding {
+        let mut embedding = [0.0f32; EMBEDDING_DIM];
+        let bucket_count = self.dims.min(EMBEDDING_DIM);
+        if bucket_count == 0 {
+            return embedding;
+        }
+
+        let lowercase: Vec<char> = text.chars().flat_map(char::to_lowercase).collect();
+        for ngram in lowercase.windows(3) {
+            let bucket = hash_ngram(ngram) % bucket_count;
+            embedding[bucket] += 1.0;
+        }
+
+        let norm = embedding
+            .iter()
+            .map(|value| value * value)
+            .sum::<f32>()
+            .sqrt();
+        if norm > 0.0 {
+            for value in &mut embedding {
+                *value /= norm;
+            }
+        }
+
+        embedding
     }
 
     fn canonical_tokens(&self, text: &str) -> Vec<String> {
@@ -75,6 +101,21 @@ impl Embedder for NgramEmbedder {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+}
+
+/// Hash a character n-gram without relying on a process-randomized hasher.
+fn hash_ngram(ngram: &[char]) -> usize {
+    const FNV_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 0x100000001b3;
+
+    ngram.iter().fold(FNV_OFFSET_BASIS, |hash, character| {
+        (*character as u32)
+            .to_le_bytes()
+            .into_iter()
+            .fold(hash, |hash, byte| {
+                (hash ^ u64::from(byte)).wrapping_mul(FNV_PRIME)
+            })
+    }) as usize
 }
 
 /// Compute cosine similarity between two embeddings
@@ -110,4 +151,49 @@ pub fn jaccard_similarity(tokens_a: &[String], tokens_b: &[String]) -> f64 {
     }
 
     intersection / union
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn embeds_non_empty_text_into_a_non_zero_vector() {
+        let embedding = NgramEmbedder::new().embed("login bug");
+
+        assert!(embedding.iter().any(|value| *value != 0.0));
+    }
+
+    #[test]
+    fn similar_sentences_have_high_cosine_similarity() {
+        let embedder = NgramEmbedder::new();
+        let first = embedder.embed("fix login bug in auth module");
+        let second = embedder.embed("fix the login bug in the auth module");
+
+        assert!(
+            cosine_similarity(&first, &second) > 0.7,
+            "expected similar sentences to have high cosine similarity"
+        );
+    }
+
+    #[test]
+    fn unrelated_sentences_have_low_cosine_similarity() {
+        let embedder = NgramEmbedder::new();
+        let first = embedder.embed("fix login bug in auth module");
+        let second = embedder.embed("the ocean tide moves beneath the moon");
+
+        assert!(
+            cosine_similarity(&first, &second) < 0.3,
+            "expected unrelated sentences to have low cosine similarity"
+        );
+    }
+
+    #[test]
+    fn hashing_is_deterministic_and_case_insensitive() {
+        let embedder = NgramEmbedder::new();
+        let lowercase = embedder.embed("Fix Login Bug");
+        let uppercase = embedder.embed("fix login bug");
+
+        assert_eq!(lowercase, uppercase);
+    }
 }
