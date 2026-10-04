@@ -4,6 +4,7 @@
 //! single long-lived host that holds many repos, many NEEDLE fleets, and
 //! many native-CLI conversations.
 
+mod agent;
 mod backup;
 mod config;
 mod init;
@@ -18,6 +19,7 @@ mod skills;
 mod status;
 
 use clap::Parser;
+use hoop::daemon::DEFAULT_DAEMON_BIND_ADDR;
 use hoop_daemon::{audit, fleet, serve, Config as DaemonConfig};
 use std::{fs, net::SocketAddr, path::PathBuf};
 
@@ -374,9 +376,16 @@ async fn main() -> anyhow::Result<()> {
             primary_addr,
             allow_br_mismatch,
         } => {
-            let bind_addr = addr.unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 3000)));
-            let primary_addr =
-                primary_addr.unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 3000)));
+            let bind_addr = addr.unwrap_or_else(|| {
+                DEFAULT_DAEMON_BIND_ADDR
+                    .parse()
+                    .expect("default daemon bind address is valid")
+            });
+            let primary_addr = primary_addr.unwrap_or_else(|| {
+                DEFAULT_DAEMON_BIND_ADDR
+                    .parse()
+                    .expect("default daemon bind address is valid")
+            });
 
             // In observer mode, default bind to a different port to avoid conflict
             let bind_addr = if observer && addr.is_none() {
@@ -453,8 +462,10 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Commands::Agent => {
-            eprintln!("hoop agent: not yet implemented");
-            std::process::exit(1);
+            if let Err(e) = agent::run().await {
+                eprintln!("hoop agent: {}", e);
+                std::process::exit(exit_code_for_error(&e));
+            }
         }
         Commands::New { project, dry_run } => {
             if let Err(e) = new::run(&project, dry_run).await {
@@ -1020,7 +1031,7 @@ TimeoutStartSec=30
 TimeoutStopSec=30
 Environment="HOME={home_dir_str}"
 Environment="PATH=/usr/local/bin:/usr/bin:/bin"
-ExecStart={hoop_path_str} serve --addr 127.0.0.1:3000
+ExecStart={hoop_path_str} serve --addr {default_bind_addr}
 
 # Logging
 StandardOutput=journal
@@ -1033,7 +1044,8 @@ PrivateTmp=true
 
 [Install]
 WantedBy=default.target
-"#
+"#,
+        default_bind_addr = DEFAULT_DAEMON_BIND_ADDR
     );
 
     // Write the service file

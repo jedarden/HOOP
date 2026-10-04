@@ -1,10 +1,9 @@
 //! HOOP stitch command - list open Stitches
 
 use anyhow::Result;
+use hoop::daemon::resolve_daemon_url;
 use reqwest::Client;
 use serde::Deserialize;
-
-const DAEMON_ADDR: &str = "http://127.0.0.1:3000";
 
 /// Conversations query response from daemon
 #[derive(Debug, Deserialize)]
@@ -46,9 +45,10 @@ struct WorkerMetadata {
 /// Run the stitch list command
 pub async fn run(project_filter: Option<String>) -> Result<()> {
     let client = Client::new();
+    let daemon_url = resolve_daemon_url(None);
 
     // Build query URL with optional project filter
-    let mut query_url = format!("{}/api/conversations?limit=100", DAEMON_ADDR);
+    let mut query_url = format!("{}/api/conversations?limit=100", daemon_url);
 
     if let Some(project) = &project_filter {
         query_url.push_str(&format!("&project={}", urlencode(project)));
@@ -59,17 +59,14 @@ pub async fn run(project_filter: Option<String>) -> Result<()> {
         Err(e) => {
             anyhow::bail!(
                 "Failed to connect to daemon at {} — is it running?\n\nError: {}",
-                DAEMON_ADDR,
+                daemon_url,
                 e
             )
         }
     };
 
     if !response.status().is_success() {
-        anyhow::bail!(
-            "Daemon returned error status: {}",
-            response.status()
-        );
+        anyhow::bail!("Daemon returned error status: {}", response.status());
     }
 
     let result: ConversationsResponse = response.json().await?;
@@ -129,14 +126,22 @@ fn print_by_project(conversations: &[ConversationSummary]) {
     }
 
     let total = conversations.len();
-    println!("Total: {} open stitch{}", total, if total == 1 { "" } else { "es" });
+    println!(
+        "Total: {} open stitch{}",
+        total,
+        if total == 1 { "" } else { "es" }
+    );
 }
 
 /// Print conversations for a single project
 fn print_single_project(conversations: &[ConversationSummary], project: &str) {
     println!("Open Stitches for project '{}':", project);
     println!();
-    println!("Total: {} stitch{}", conversations.len(), if conversations.len() == 1 { "" } else { "es" });
+    println!(
+        "Total: {} stitch{}",
+        conversations.len(),
+        if conversations.len() == 1 { "" } else { "es" }
+    );
     println!();
 
     for conv in conversations {
@@ -161,8 +166,16 @@ fn print_conversation(conv: &ConversationSummary) {
         println!("     Session: {}", conv.session_id);
     }
 
-    println!("     Messages: {} | Tokens: {} | Complete: {}", conv.message_count, conv.total_tokens, if conv.complete { "yes" } else { "no" });
-    println!("     Created: {} | Updated: {}", conv.created_at, conv.updated_at);
+    println!(
+        "     Messages: {} | Tokens: {} | Complete: {}",
+        conv.message_count,
+        conv.total_tokens,
+        if conv.complete { "yes" } else { "no" }
+    );
+    println!(
+        "     Created: {} | Updated: {}",
+        conv.created_at, conv.updated_at
+    );
     println!("     CWD: {}", conv.cwd);
 }
 

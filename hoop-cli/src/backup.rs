@@ -3,6 +3,7 @@
 //! Plan reference: §15
 
 use anyhow::{bail, Context, Result};
+use hoop::daemon::resolve_daemon_url;
 use std::net::SocketAddr;
 use std::time::Duration;
 
@@ -32,7 +33,7 @@ pub async fn handle_backup(cmd: BackupCommands) -> Result<()> {
 
 /// Trigger a backup via the daemon's REST API.
 async fn trigger_backup(addr: Option<SocketAddr>) -> Result<()> {
-    let addr = addr.unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 3000)));
+    let addr = daemon_url(addr);
 
     println!("Triggering backup on {} ...", addr);
 
@@ -41,7 +42,7 @@ async fn trigger_backup(addr: Option<SocketAddr>) -> Result<()> {
         .build()?;
 
     let resp = client
-        .post(format!("http://{}/api/backup/trigger", addr))
+        .post(format!("{}/api/backup/trigger", addr))
         .send()
         .await
         .context("Failed to connect to daemon — is it running?")?;
@@ -64,17 +65,14 @@ async fn trigger_backup(addr: Option<SocketAddr>) -> Result<()> {
 
 /// Show backup configuration and status.
 async fn show_status(addr: Option<SocketAddr>) -> Result<()> {
-    let addr = addr.unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 3000)));
+    let addr = daemon_url(addr);
 
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
         .build()?;
 
     // Check daemon health first
-    let health_resp = client
-        .get(format!("http://{}/api/health", addr))
-        .send()
-        .await;
+    let health_resp = client.get(format!("{}/api/health", addr)).send().await;
 
     let is_running = match health_resp {
         Ok(r) => r.status().is_success(),
@@ -93,7 +91,7 @@ async fn show_status(addr: Option<SocketAddr>) -> Result<()> {
     println!();
 
     // Try to get metrics for backup status
-    let metrics_resp = client.get(format!("http://{}/metrics", addr)).send().await;
+    let metrics_resp = client.get(format!("{}/metrics", addr)).send().await;
 
     match metrics_resp {
         Ok(resp) if resp.status().is_success() => {
@@ -109,6 +107,11 @@ async fn show_status(addr: Option<SocketAddr>) -> Result<()> {
     print_backup_config();
 
     Ok(())
+}
+
+fn daemon_url(addr: Option<SocketAddr>) -> String {
+    let explicit = addr.map(|addr| addr.to_string());
+    resolve_daemon_url(explicit.as_deref())
 }
 
 /// Print backup-related metrics from Prometheus output.

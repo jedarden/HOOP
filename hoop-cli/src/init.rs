@@ -10,6 +10,7 @@
 //! Re-runnable and idempotent — each step can be skipped if already done.
 
 use anyhow::{Context, Result};
+use hoop::daemon::DEFAULT_DAEMON_BIND_ADDR;
 use hoop_daemon::audit;
 use serde::Deserialize;
 use std::fs;
@@ -18,9 +19,6 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::thread;
 use std::time::Duration;
-
-/// Default daemon bind address
-const DEFAULT_BIND_ADDR: &str = "127.0.0.1:3000";
 
 /// Tailscale status JSON structure
 #[derive(Debug, Deserialize)]
@@ -362,7 +360,7 @@ fn stage_5_health_check() -> Result<()> {
     println!();
 
     // Check if daemon is already running
-    let health_url = format!("http://{}/healthz", DEFAULT_BIND_ADDR);
+    let health_url = format!("http://{}/healthz", DEFAULT_DAEMON_BIND_ADDR);
     if check_url(&health_url) {
         println!("✓ HOOP daemon is already running and healthy!");
         println!();
@@ -375,7 +373,7 @@ fn stage_5_health_check() -> Result<()> {
 
     // Start the daemon in the background
     let mut child = Command::new("hoop")
-        .args(["serve", "--addr", DEFAULT_BIND_ADDR])
+        .args(["serve", "--addr", DEFAULT_DAEMON_BIND_ADDR])
         .spawn()
         .context("Failed to start hoop daemon. Is it installed and in PATH?")?;
 
@@ -423,7 +421,7 @@ fn print_access_urls() {
     println!("Open in your browser:");
 
     // Always print localhost
-    println!("  http://{}", DEFAULT_BIND_ADDR);
+    println!("  http://{}", DEFAULT_DAEMON_BIND_ADDR);
 
     // Try to get Tailscale hostname
     match get_tailscale_hostname() {
@@ -595,7 +593,7 @@ server:
 
 agent:
 "#,
-            DEFAULT_BIND_ADDR
+            DEFAULT_DAEMON_BIND_ADDR
         );
         fs::write(&config_path, default_config).context("Failed to write config file")?;
     }
@@ -655,7 +653,7 @@ PrivateTmp=true
 [Install]
 WantedBy=default.target
 "#,
-        bind_addr = DEFAULT_BIND_ADDR
+        bind_addr = DEFAULT_DAEMON_BIND_ADDR
     );
 
     fs::write(&service_path, unit_content)?;

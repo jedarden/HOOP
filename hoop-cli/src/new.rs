@@ -4,6 +4,7 @@
 //! is validated and the draft is POSTed to the running daemon with source="cli".
 
 use anyhow::{bail, Context, Result};
+use hoop::daemon::resolve_daemon_url;
 use serde::{Deserialize, Serialize};
 use std::io::Write as _;
 use std::process::Command;
@@ -72,6 +73,8 @@ struct CreateDraftResponse {
 // ---------------------------------------------------------------------------
 
 pub async fn run(project: &str, dry_run: bool) -> Result<()> {
+    let daemon_url = resolve_daemon_url(None);
+
     // 1. Validate project exists in registry
     let registry = crate::projects::ProjectsRegistry::load()?;
     if registry.get(project).is_none() {
@@ -138,7 +141,7 @@ pub async fn run(project: &str, dry_run: bool) -> Result<()> {
 
     // 6. Dry-run: print what would be submitted and exit
     if dry_run {
-        println!("--dry-run: would POST to http://127.0.0.1:3000/api/drafts");
+        println!("--dry-run: would POST to {}/api/drafts", daemon_url);
         println!("{}", serde_json::to_string_pretty(&payload)?);
         return Ok(());
     }
@@ -147,7 +150,7 @@ pub async fn run(project: &str, dry_run: bool) -> Result<()> {
     let body = serde_json::to_string(&payload)?;
     let client = reqwest::Client::new();
     let resp = client
-        .post("http://127.0.0.1:3000/api/drafts")
+        .post(format!("{}/api/drafts", daemon_url))
         .header("Content-Type", "application/json")
         .body(body)
         .send()
@@ -169,7 +172,7 @@ pub async fn run(project: &str, dry_run: bool) -> Result<()> {
 
     println!("Draft created: {}", created.draft_id);
     println!("Status:        {}", created.status);
-    println!("Approve in the UI at http://localhost:3000");
+    println!("Approve in the UI at {}", daemon_url);
 
     Ok(())
 }

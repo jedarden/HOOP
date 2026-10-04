@@ -4,6 +4,7 @@
 
 use anyhow::{Context, Result};
 use clap::Subcommand;
+use hoop::daemon::resolve_daemon_url;
 use reqwest::Client;
 use serde::Deserialize;
 use std::fs;
@@ -236,8 +237,9 @@ pub async fn run_diff() -> Result<()> {
 /// Fetch the running config from the daemon
 async fn fetch_running_config() -> Result<ConfigResponse> {
     let client = Client::new();
+    let daemon_url = resolve_daemon_url(None);
     let resp = client
-        .get("http://127.0.0.1:3000/api/config")
+        .get(format!("{}/api/config", daemon_url))
         .timeout(std::time::Duration::from_secs(5))
         .send()
         .await;
@@ -253,7 +255,8 @@ async fn fetch_running_config() -> Result<ConfigResponse> {
             r.text().await.unwrap_or_default()
         )),
         Err(e) => Err(anyhow::anyhow!(
-            "Failed to connect to daemon at http://127.0.0.1:3000 — is it running?\n\nError: {}",
+            "Failed to connect to daemon at {} — is it running?\n\nError: {}",
+            daemon_url,
             e
         )),
     }

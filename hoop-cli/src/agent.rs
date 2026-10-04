@@ -1,10 +1,9 @@
 //! HOOP agent command - attach to or start the human-interface agent conversation
 
 use anyhow::Result;
+use hoop::daemon::resolve_daemon_url;
 use reqwest::Client;
 use serde::Deserialize;
-
-const DAEMON_ADDR: &str = "http://127.0.0.1:3000";
 
 /// Agent session status from daemon
 #[derive(Debug, Deserialize)]
@@ -44,25 +43,23 @@ struct SpawnResponse {
 /// Run the agent command
 pub async fn run() -> Result<()> {
     let client = Client::new();
+    let daemon_url = resolve_daemon_url(None);
 
     // First, check if there's an active session
-    let status_url = format!("{}/api/agent/status", DAEMON_ADDR);
+    let status_url = format!("{}/api/agent/status", daemon_url);
     let status_response = match client.get(&status_url).send().await {
         Ok(resp) => resp,
         Err(e) => {
             anyhow::bail!(
                 "Failed to connect to daemon at {} — is it running?\n\nError: {}",
-                DAEMON_ADDR,
+                daemon_url,
                 e
             )
         }
     };
 
     if !status_response.status().is_success() {
-        anyhow::bail!(
-            "Daemon returned error status: {}",
-            status_response.status()
-        );
+        anyhow::bail!("Daemon returned error status: {}", status_response.status());
     }
 
     let status: AgentStatus = status_response.json().await?;
@@ -71,9 +68,18 @@ pub async fn run() -> Result<()> {
         // Session is already active
         println!("Agent session is already active");
         println!();
-        println!("Session ID: {}", status.session_id.as_ref().unwrap_or(&"unknown".to_string()));
-        println!("Adapter: {}", status.adapter.as_ref().unwrap_or(&"unknown".to_string()));
-        println!("Model: {}", status.model.as_ref().unwrap_or(&"unknown".to_string()));
+        println!(
+            "Session ID: {}",
+            status.session_id.as_ref().unwrap_or(&"unknown".to_string())
+        );
+        println!(
+            "Adapter: {}",
+            status.adapter.as_ref().unwrap_or(&"unknown".to_string())
+        );
+        println!(
+            "Model: {}",
+            status.model.as_ref().unwrap_or(&"unknown".to_string())
+        );
 
         if let Some(stitch_id) = &status.stitch_id {
             println!("Stitch ID: {}", stitch_id);
@@ -99,7 +105,10 @@ pub async fn run() -> Result<()> {
         }
 
         println!();
-        println!("To interact with this session, use the HOOP web UI at http://127.0.0.1:3000");
+        println!(
+            "To interact with this session, use the HOOP web UI at {}",
+            daemon_url
+        );
 
         return Ok(());
     }
@@ -107,7 +116,7 @@ pub async fn run() -> Result<()> {
     // No active session, spawn one
     println!("No active agent session found. Starting a new session...");
 
-    let spawn_url = format!("{}/api/agent/spawn", DAEMON_ADDR);
+    let spawn_url = format!("{}/api/agent/spawn", daemon_url);
     let spawn_response = match client.post(&spawn_url).send().await {
         Ok(resp) => resp,
         Err(e) => {
@@ -132,11 +141,16 @@ pub async fn run() -> Result<()> {
         }
 
         println!();
-        println!("To interact with this session, use the HOOP web UI at http://127.0.0.1:3000");
+        println!(
+            "To interact with this session, use the HOOP web UI at {}",
+            daemon_url
+        );
     } else {
         anyhow::bail!(
             "Failed to start agent session: {}",
-            spawn_result.message.unwrap_or_else(|| "unknown error".to_string())
+            spawn_result
+                .message
+                .unwrap_or_else(|| "unknown error".to_string())
         );
     }
 

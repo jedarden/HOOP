@@ -16,6 +16,7 @@
 //! Plan reference: §19.2 (Reflection Ledger).
 
 use anyhow::{bail, Context, Result};
+use hoop::daemon::resolve_daemon_url;
 use hoop_daemon::fleet::ReflectionLedgerEntry;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -297,10 +298,11 @@ async fn run_export(
 ) -> Result<()> {
     // Only claude-memory exists today; `_format` is accepted for forward-compat.
     let out_dir = out.unwrap_or_else(default_memory_dir);
-    let addr = addr.unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 3000)));
+    let explicit_addr = addr.map(|addr| addr.to_string());
+    let addr = resolve_daemon_url(explicit_addr.as_deref());
 
     println!("Fetching approved reflections from {} …", addr);
-    let entries = fetch_approved(addr).await?;
+    let entries = fetch_approved(&addr).await?;
     if entries.is_empty() {
         println!("No approved reflections to export.");
         return Ok(());
@@ -425,7 +427,7 @@ async fn run_export(
 }
 
 /// Fetch approved reflections from the daemon's REST API.
-async fn fetch_approved(addr: SocketAddr) -> Result<Vec<ReflectionLedgerEntry>> {
+async fn fetch_approved(addr: &str) -> Result<Vec<ReflectionLedgerEntry>> {
     #[derive(Deserialize)]
     struct ReflectionsResponse {
         reflections: Vec<ReflectionLedgerEntry>,
@@ -437,7 +439,7 @@ async fn fetch_approved(addr: SocketAddr) -> Result<Vec<ReflectionLedgerEntry>> 
         .timeout(Duration::from_secs(10))
         .build()?;
     let resp = client
-        .get(format!("http://{}/api/reflections", addr))
+        .get(format!("{}/api/reflections", addr))
         .send()
         .await
         .context("Failed to connect to daemon — is it running?")?;

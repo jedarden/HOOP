@@ -13,9 +13,8 @@
 
 use anyhow::Result;
 use clap::Subcommand;
+use hoop::daemon::resolve_daemon_url;
 use reqwest::Client;
-
-const DEFAULT_DAEMON_ADDR: &str = "http://127.0.0.1:3000";
 
 #[derive(Subcommand, Debug)]
 pub enum PatternCommands {
@@ -160,7 +159,7 @@ pub async fn handle_patterns(cmd: PatternCommands) -> Result<()> {
             parent,
             addr,
         } => {
-            let addr = addr.unwrap_or_else(|| DEFAULT_DAEMON_ADDR.to_string());
+            let addr = resolve_daemon_url(addr.as_deref());
             let client = Client::new();
 
             let mut payload = serde_json::json!({ "title": title });
@@ -200,7 +199,7 @@ pub async fn handle_patterns(cmd: PatternCommands) -> Result<()> {
             }
         }
         PatternCommands::List { json, addr } => {
-            let addr = addr.unwrap_or_else(|| DEFAULT_DAEMON_ADDR.to_string());
+            let addr = resolve_daemon_url(addr.as_deref());
             let client = Client::new();
 
             let resp = client.get(format!("{}/api/patterns", addr)).send().await?;
@@ -230,7 +229,7 @@ pub async fn handle_patterns(cmd: PatternCommands) -> Result<()> {
             }
         }
         PatternCommands::Show { id, json, addr } => {
-            let addr = addr.unwrap_or_else(|| DEFAULT_DAEMON_ADDR.to_string());
+            let addr = resolve_daemon_url(addr.as_deref());
             let client = Client::new();
 
             let resp = client
@@ -294,7 +293,7 @@ pub async fn handle_patterns(cmd: PatternCommands) -> Result<()> {
             parent,
             addr,
         } => {
-            let addr = addr.unwrap_or_else(|| DEFAULT_DAEMON_ADDR.to_string());
+            let addr = resolve_daemon_url(addr.as_deref());
             let client = Client::new();
 
             let mut payload = serde_json::json!({});
@@ -337,7 +336,7 @@ pub async fn handle_patterns(cmd: PatternCommands) -> Result<()> {
             }
         }
         PatternCommands::Close { id, addr } => {
-            let addr = addr.unwrap_or_else(|| DEFAULT_DAEMON_ADDR.to_string());
+            let addr = resolve_daemon_url(addr.as_deref());
             let client = Client::new();
 
             let payload = serde_json::json!({ "status": "done" });
@@ -376,7 +375,7 @@ pub async fn handle_patterns(cmd: PatternCommands) -> Result<()> {
                 }
             }
 
-            let addr = addr.unwrap_or_else(|| DEFAULT_DAEMON_ADDR.to_string());
+            let addr = resolve_daemon_url(addr.as_deref());
             let client = Client::new();
 
             let resp = client
@@ -397,7 +396,7 @@ pub async fn handle_patterns(cmd: PatternCommands) -> Result<()> {
             stitch_id,
             addr,
         } => {
-            let addr = addr.unwrap_or_else(|| DEFAULT_DAEMON_ADDR.to_string());
+            let addr = resolve_daemon_url(addr.as_deref());
             let client = Client::new();
 
             let payload = serde_json::json!({ "stitch_id": stitch_id });
@@ -422,7 +421,7 @@ pub async fn handle_patterns(cmd: PatternCommands) -> Result<()> {
             stitch_id,
             addr,
         } => {
-            let addr = addr.unwrap_or_else(|| DEFAULT_DAEMON_ADDR.to_string());
+            let addr = resolve_daemon_url(addr.as_deref());
             let client = Client::new();
 
             let resp = client
@@ -442,7 +441,7 @@ pub async fn handle_patterns(cmd: PatternCommands) -> Result<()> {
             }
         }
         PatternCommands::AddQuery { id, query, addr } => {
-            let addr = addr.unwrap_or_else(|| DEFAULT_DAEMON_ADDR.to_string());
+            let addr = resolve_daemon_url(addr.as_deref());
             let client = Client::new();
 
             let payload = serde_json::json!({ "query": query });
@@ -463,7 +462,7 @@ pub async fn handle_patterns(cmd: PatternCommands) -> Result<()> {
             }
         }
         PatternCommands::RemoveQuery { id, query, addr } => {
-            let addr = addr.unwrap_or_else(|| DEFAULT_DAEMON_ADDR.to_string());
+            let addr = resolve_daemon_url(addr.as_deref());
             let client = Client::new();
 
             // URL encode the query

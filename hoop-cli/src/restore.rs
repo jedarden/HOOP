@@ -7,6 +7,7 @@
 use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use hmac::{Hmac, Mac};
+use hoop::daemon::resolve_daemon_url;
 use sha2::{Digest, Sha256};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -194,9 +195,11 @@ fn is_daemon_running() -> bool {
         }
     }
 
-    // Also try the TCP port as a fallback
-    if std::net::TcpStream::connect("127.0.0.1:3000").is_ok() {
-        return true;
+    // Also try the configured TCP address as a fallback.
+    if let Some(bind_addr) = resolve_daemon_url(None).strip_prefix("http://") {
+        if std::net::TcpStream::connect(bind_addr).is_ok() {
+            return true;
+        }
     }
 
     false

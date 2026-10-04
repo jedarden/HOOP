@@ -253,7 +253,7 @@ fn test_restore_flag_propagation_from_main_to_handler() {
 
     // Verify the Restore command enum variant exists
     assert!(
-        main_code.contains("Commands::Restore { from, dry_run, confirm } =>"),
+        main_code.contains("Commands::Restore {"),
         "Restore command handler should exist in main.rs"
     );
 }
@@ -710,7 +710,11 @@ fn test_restore_comprehensive_no_interactive_coverage() {
     // Checklist:
     // 1. Restore command has from, dry_run, and confirm fields
     assert!(
-        main_code.contains("Commands::Restore { from, dry_run, confirm } =>"),
+        main_code.contains("Commands::Restore {")
+            && main_code.contains("from,")
+            && main_code.contains("dry_run,")
+            && main_code.contains("confirm,")
+            && main_code.contains("} =>"),
         "✓ Restore command has from, dry_run, and confirm fields"
     );
 

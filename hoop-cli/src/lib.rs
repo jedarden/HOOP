@@ -1,6 +1,7 @@
 //! HOOP CLI library — provides the project registry and shared utilities.
 
 pub mod cli;
+pub mod daemon;
 pub mod projects;
 
 pub use cli::{AuditCommands, Cli, Commands, ProjectsCommands};

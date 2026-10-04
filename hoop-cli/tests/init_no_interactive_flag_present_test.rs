@@ -254,8 +254,8 @@ fn test_init_handler_flag_present_complete_flow() {
         "Args should contain 'init' command"
     );
     assert!(
-        parsed.args.contains(&"--no-interactive".to_string()),
-        "Args should contain '--no-interactive' flag"
+        parsed.raw_args.contains(&"--no-interactive".to_string()),
+        "Raw args should contain '--no-interactive' flag"
     );
 
     // Step 3: Verify propagation through main.rs

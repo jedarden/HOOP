@@ -2,6 +2,7 @@
 
 use anyhow::{Context, Result};
 use clap::Subcommand;
+use hoop::daemon::resolve_daemon_url;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -71,15 +72,9 @@ struct ScriptManifest {
     timeout_secs: u64,
 }
 
-/// Get the daemon API URL from control socket or default
+/// Get the daemon API URL from config or the default.
 fn get_daemon_url() -> String {
-    // Try to read from control socket first
-    if let Ok(home) = std::env::var("HOME") {
-        let _socket_path = format!("{}/.hoop/control.sock", home);
-        // For now, use default localhost URL
-        // TODO: Implement Unix socket communication
-    }
-    "http://127.0.0.1:3000".to_string()
+    resolve_daemon_url(None)
 }
 
 /// Run a script
