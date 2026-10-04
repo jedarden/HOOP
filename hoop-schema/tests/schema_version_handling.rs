@@ -62,8 +62,6 @@ mod compatibility_checks {
 
 #[cfg(test)]
 mod version_comparison {
-    use super::*;
-
     /// Parse semver string to comparable tuple
     fn parse_version(v: &str) -> (u32, u32, u32) {
         let parts: Vec<u32> = v
