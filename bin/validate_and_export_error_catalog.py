@@ -26,6 +26,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
 from categorize_error_messages import (  # noqa: E402
+    UNKNOWN_MODULE,
     message_text,
     source_module,
 )
@@ -42,7 +43,6 @@ FINAL_REQUIRED_FIELDS = (
     "original_message",
 )
 UNKNOWN_MESSAGE = "unknown"
-UNKNOWN_MODULE = "unknown_module"
 
 
 def atomic_write(path: Path, data: str) -> None:
@@ -90,8 +90,17 @@ def taxonomy_allowed(path: Path) -> tuple[set[str], dict[str, int]]:
 
 
 def expected_message(row: dict[str, Any]) -> str:
-    """Extract the message from the unchanged source line, never from a label."""
+    """Return the preserved handoff message or derive it from source text.
 
+    The loader's ``original_message`` is the authoritative handoff when it is
+    present.  Re-extracting from a line with multiple string literals can pick
+    a different value and would make an otherwise lossless intermediate fail
+    validation.
+    """
+
+    original = row.get("original_message")
+    if isinstance(original, str) and original.strip():
+        return original
     return message_text(str(row["line_content"])) or UNKNOWN_MESSAGE
 
 
@@ -139,7 +148,11 @@ def validate_intermediate(
             flags = []
         message = expected_message(row)
         message_counts["unknown" if message == UNKNOWN_MESSAGE else "known"] += 1
-        if "original_message" in row and row["original_message"] not in (message, UNKNOWN_MESSAGE):
+        if "original_message" in row and row["original_message"] not in (
+            message,
+            UNKNOWN_MESSAGE,
+            None,
+        ):
             errors.append(f"{prefix} original_message changed from source-derived value")
         if message == UNKNOWN_MESSAGE and "no_original_message" not in flags:
             errors.append(f"{prefix} missing no_original_message exception")

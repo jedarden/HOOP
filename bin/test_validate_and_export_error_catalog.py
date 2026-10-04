@@ -95,6 +95,18 @@ class ReleaseCatalogTests(unittest.TestCase):
         self.assertFalse(report["identity_parity"])
         self.assertTrue(any("identity" in error for error in report["errors"]))
 
+    def test_preserved_handoff_message_is_used_before_reextracting_source(self) -> None:
+        intermediate = [
+            {
+                **self.intermediate[0],
+                "original_message": "Preserved handoff message",
+            }
+        ]
+        self.assertEqual(
+            build_final_rows(intermediate, self.ranks)[0]["original_message"],
+            "Preserved handoff message",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

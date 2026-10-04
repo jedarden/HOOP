@@ -16,6 +16,8 @@ from categorize_error_messages import (  # noqa: E402
     UNKNOWN_MODULE,
     classify_catalog,
     error_type,
+    group_by_source_module,
+    load_taxonomy,
     source_module,
     write_csv,
 )
@@ -104,6 +106,81 @@ class CategorizerTests(unittest.TestCase):
         )
         self.assertEqual(source_module("/tmp/outside.rs"), UNKNOWN_MODULE)
         self.assertEqual(source_module("hoop-cli/tests/../outside.rs"), UNKNOWN_MODULE)
+
+    def test_source_module_fallback_is_documented_and_used_for_grouping(self) -> None:
+        taxonomy = load_taxonomy()
+        self.assertEqual(
+            UNKNOWN_MODULE,
+            taxonomy["source_module_normalization"]["fallback_value"],
+        )
+
+        records = [
+            row(
+                'anyhow::bail!(\\"Failed to parse JSON\\");',
+                file="hoop-daemon/src/catalog.rs",
+            ),
+            {
+                **row(
+                    'anyhow::bail!(\\"Failed to fetch response\\");',
+                    file="hoop-daemon/src/catalog.rs",
+                ),
+                "line": 8,
+                "message": "keep this metadata",
+                "column": 4,
+            },
+            row(
+                'anyhow::bail!(\\"Failed to write file\\");',
+                file="/tmp/generated.rs",
+            ),
+            row(
+                'anyhow::bail!(\\"Failed to fetch response\\");',
+                file="hoop-cli/src/status.rs",
+            ),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "input.json"
+            input_path.write_text(json.dumps(records), encoding="utf-8")
+            categorized = classify_catalog(input_path)
+
+        grouped = group_by_source_module(categorized)
+        self.assertEqual(
+            list(grouped),
+            [
+                "hoop_cli::src::status",
+                "hoop_daemon::src::catalog",
+                UNKNOWN_MODULE,
+            ],
+        )
+        self.assertEqual(
+            list(grouped["hoop_daemon::src::catalog"]),
+            ["network", "parsing"],
+        )
+        grouped_record = grouped["hoop_daemon::src::catalog"]["network"][0]
+        self.assertEqual(grouped_record["file"], "hoop-daemon/src/catalog.rs")
+        self.assertEqual(grouped_record["line"], 8)
+        self.assertEqual(grouped_record["message"], "keep this metadata")
+        self.assertEqual(grouped[UNKNOWN_MODULE]["filesystem"][0]["file"], "/tmp/generated.rs")
+        self.assertIn("invalid_source_file", grouped[UNKNOWN_MODULE]["filesystem"][0]["exception_flags"])
+
+    def test_grouping_and_flat_output_are_independent_of_input_order(self) -> None:
+        records = [
+            row('anyhow::bail!(\\"Failed to parse JSON\\");', file="hoop-daemon/src/a.rs"),
+            row('anyhow::bail!(\\"Failed to fetch response\\");', file="hoop-daemon/src/a.rs"),
+            row('anyhow::bail!(\\"Failed to fetch response\\");', file="hoop-cli/src/a.rs"),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            first_path = Path(directory) / "first.json"
+            second_path = Path(directory) / "second.json"
+            first_path.write_text(json.dumps(records), encoding="utf-8")
+            second_path.write_text(json.dumps(list(reversed(records))), encoding="utf-8")
+            first = classify_catalog(first_path)
+            second = classify_catalog(second_path)
+
+        self.assertEqual(first, second)
+        self.assertEqual(
+            list(group_by_source_module(first)),
+            ["hoop_cli::src::a", "hoop_daemon::src::a"],
+        )
 
     def test_message_less_and_invalid_records_get_explicit_flags(self) -> None:
         records = [

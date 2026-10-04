@@ -274,6 +274,7 @@
   },
   "source_module_normalization": {
     "input": "source_file (the validated repository-relative file field)",
+    "fallback_value": "unknown_module",
     "steps": [
       "Replace backslash separators with forward slashes.",
       "Remove leading ./ segments.",

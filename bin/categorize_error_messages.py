@@ -28,7 +28,6 @@ from load_error_catalog import load_catalog
 
 
 DERIVED_FIELDS = ("error_type", "source_module", "exception_flags")
-UNKNOWN_MODULE = "unknown_module"
 TAXONOMY_PATH = Path(__file__).resolve().parents[1] / "docs" / "error_category_taxonomy.json"
 
 
@@ -42,16 +41,23 @@ def load_taxonomy(path: Path = TAXONOMY_PATH) -> dict[str, object]:
     precedence = taxonomy.get("message_rule_precedence")
     rules = taxonomy.get("message_rules")
     fallback = taxonomy.get("source_file_fallback")
+    module_normalization = taxonomy.get("source_module_normalization")
     if not isinstance(allowed, list) or not all(isinstance(value, str) for value in allowed):
         raise ValueError(f"taxonomy has no valid allowed_error_types: {path}")
     if not isinstance(precedence, list) or precedence != [value for value in precedence if value in allowed]:
         raise ValueError(f"taxonomy has an invalid message_rule_precedence: {path}")
     if not isinstance(rules, list) or not isinstance(fallback, dict):
         raise ValueError(f"taxonomy is missing classification rules: {path}")
+    if not isinstance(module_normalization, dict):
+        raise ValueError(f"taxonomy is missing source-module normalization: {path}")
+    module_fallback = module_normalization.get("fallback_value")
+    if not isinstance(module_fallback, str) or not module_fallback.strip():
+        raise ValueError(f"taxonomy has no valid source-module fallback value: {path}")
     return taxonomy
 
 
 TAXONOMY = load_taxonomy()
+UNKNOWN_MODULE = str(TAXONOMY["source_module_normalization"]["fallback_value"])
 ALLOWED_ERROR_TYPES = tuple(TAXONOMY["allowed_error_types"])
 ERROR_TYPE_RANK = {category: index for index, category in enumerate(ALLOWED_ERROR_TYPES)}
 CATEGORY_DESCRIPTIONS = {
@@ -284,6 +290,26 @@ def sort_key(row: dict[str, object]) -> tuple[str, int, str, int, str, str, str]
     )
 
 
+def group_by_source_module(
+    rows: list[dict[str, object]],
+) -> dict[str, dict[str, list[dict[str, object]]]]:
+    """Return a deterministic ``source_module -> error_type -> records`` view.
+
+    The records are the categorized dictionaries themselves, not reduced
+    summaries.  This keeps source identity, the extracted message, and any
+    unrelated metadata available to every grouping consumer.  Sorting before
+    inserting into the nested dictionaries makes both module and error-type
+    iteration order stable for the same input.
+    """
+
+    grouped: dict[str, dict[str, list[dict[str, object]]]] = {}
+    for row in sorted(rows, key=sort_key):
+        module = str(row["source_module"])
+        category = str(row["error_type"])
+        grouped.setdefault(module, {}).setdefault(category, []).append(row)
+    return grouped
+
+
 def write_csv(rows: list[dict[str, object]], path: Path) -> None:
     fields = []
     for row in rows:
@@ -319,8 +345,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    global ALLOWED_ERROR_TYPES, ERROR_TYPE_RANK, CATEGORY_DESCRIPTIONS, RULES, SOURCE_FALLBACK_RULES
+    global ALLOWED_ERROR_TYPES, ERROR_TYPE_RANK, CATEGORY_DESCRIPTIONS, RULES, SOURCE_FALLBACK_RULES, UNKNOWN_MODULE
     taxonomy = load_taxonomy(args.taxonomy)
+    UNKNOWN_MODULE = str(taxonomy["source_module_normalization"]["fallback_value"])
     ALLOWED_ERROR_TYPES = tuple(taxonomy["allowed_error_types"])
     ERROR_TYPE_RANK = {category: index for index, category in enumerate(ALLOWED_ERROR_TYPES)}
     CATEGORY_DESCRIPTIONS = {
