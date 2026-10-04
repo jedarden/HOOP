@@ -75,6 +75,10 @@ impl Embedder for NgramEmbedder {
             let bucket = hash_ngram(ngram) % bucket_count;
             embedding[bucket] += 1.0;
         }
+        if !lowercase.is_empty() && lowercase.len() < 3 {
+            let bucket = hash_ngram(&lowercase) % bucket_count;
+            embedding[bucket] += 1.0;
+        }
 
         let norm = embedding
             .iter()
@@ -160,6 +164,13 @@ mod tests {
     #[test]
     fn embeds_non_empty_text_into_a_non_zero_vector() {
         let embedding = NgramEmbedder::new().embed("login bug");
+
+        assert!(embedding.iter().any(|value| *value != 0.0));
+    }
+
+    #[test]
+    fn embeds_short_non_empty_text_into_a_non_zero_vector() {
+        let embedding = NgramEmbedder::new().embed("x");
 
         assert!(embedding.iter().any(|value| *value != 0.0));
     }
