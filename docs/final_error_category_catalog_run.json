@@ -1,0 +1,36 @@
+{
+  "command": "python3 bin/validate_and_export_error_catalog.py --source test_error_messages.json --intermediate docs/categorized_error_catalog.json --taxonomy docs/error_category_taxonomy.json --json-output docs/final_categorized_error_catalog.json --csv-output docs/final_categorized_error_catalog.csv",
+  "exit_code": 0,
+  "intermediate": "docs/categorized_error_catalog.json",
+  "intermediate_validation": {
+    "errors": [],
+    "identity_parity": true,
+    "intermediate_records": 3466,
+    "message_records": {
+      "known": 3371,
+      "unknown": 95
+    },
+    "source_module_order_is_non_decreasing": true,
+    "source_module_values_valid": true,
+    "source_records": 3466,
+    "taxonomy_categories_valid": true
+  },
+  "output_validation": {
+    "csv_identity_parity": true,
+    "csv_records": 3466,
+    "errors": [],
+    "json_csv_identity_parity": true,
+    "json_identity_parity": true,
+    "json_order_is_deterministic": true,
+    "json_records": 3466,
+    "module_file_grouping_deterministic": true,
+    "required_final_fields_present": true,
+    "taxonomy_categories_valid": true
+  },
+  "outputs": [
+    "docs/final_categorized_error_catalog.json",
+    "docs/final_categorized_error_catalog.csv"
+  ],
+  "source": "test_error_messages.json",
+  "taxonomy": "docs/error_category_taxonomy.json"
+}
