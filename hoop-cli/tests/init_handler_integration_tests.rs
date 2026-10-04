@@ -706,8 +706,13 @@ fn test_init_handler_signature_and_parameter_usage() {
         "Parameter must be used in conditional check"
     );
 
-    // Test 4: Verify early exit based on parameter value
-    let early_exit_section = &init_code[func_start..func_start + 600];
+    // Test 4: Verify early exit based on parameter value. Locate the end of
+    // the guard by the first wizard-stage call instead of relying on a
+    // brittle byte-count bound.
+    let banner_call = init_code
+        .find("print_wizard_banner();")
+        .expect("Should call wizard banner");
+    let early_exit_section = &init_code[func_start..banner_call];
 
     assert!(
         early_exit_section.contains("if no_interactive {"),
@@ -720,10 +725,6 @@ fn test_init_handler_signature_and_parameter_usage() {
     );
 
     // Test 5: Verify wizard stages execute only when parameter is false
-    let banner_call = init_code
-        .find("print_wizard_banner();")
-        .expect("Should call wizard banner");
-
     let early_exit_end = init_code[func_start..]
         .find('}')
         .expect("Should close early exit")

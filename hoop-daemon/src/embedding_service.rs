@@ -420,8 +420,6 @@ impl EmbeddingService {
 
         metrics().hoop_embedding_cache_misses_total.inc();
 
-        metrics().hoop_embedding_cache_misses_total.inc();
-
         // Generate embedding using the underlying adapter (remote or local)
         let adapter_kind = match self.config.adapter.as_str() {
             "cached" => "local", // cached wraps local by default
