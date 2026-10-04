@@ -1,0 +1,312 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "taxonomy_version": 1,
+  "title": "HOOP test error catalog taxonomy",
+  "purpose": "Closed, single-label rules for classifying records from test_error_messages.json",
+  "input": {
+    "authoritative_catalog": "test_error_messages.json",
+    "handoff_fields": {
+      "source_file": "file",
+      "source_line": "line",
+      "extraction_kind": "category",
+      "source_text": "line_content",
+      "original_message": "string|null; derived by the source-catalog handoff",
+      "source_module": "derived from source_file",
+      "exception_flags": "array"
+    },
+    "identity": ["file", "line", "category", "line_content"],
+    "preservation": "Never drop, deduplicate, or rewrite source identity fields. Derived fields are added or replaced only according to this taxonomy."
+  },
+  "allowed_error_types": [
+    "authentication",
+    "authorization",
+    "concurrency",
+    "configuration",
+    "filesystem",
+    "network",
+    "parsing",
+    "persistence",
+    "performance",
+    "resource",
+    "runtime",
+    "security",
+    "state",
+    "timeout",
+    "validation",
+    "other"
+  ],
+  "categories": {
+    "authentication": {
+      "description": "Identity, credential, token, or login verification",
+      "examples": ["invalid token", "authentication failed", "missing API key"]
+    },
+    "authorization": {
+      "description": "Permission, access, forbidden, or explicit confirmation checks",
+      "examples": ["permission denied", "forbidden", "--confirm is required"]
+    },
+    "concurrency": {
+      "description": "Tasks, locks, races, cancellation, shutdown, or reconnect coordination",
+      "examples": ["race", "mutex", "reconnect"]
+    },
+    "configuration": {
+      "description": "Configuration files, CLI flags, adapters, models, settings, or wizard behavior",
+      "examples": ["invalid config", "missing flag", "adapter setting"]
+    },
+    "filesystem": {
+      "description": "Files, directories, paths, local file I/O, or workspace filesystem state",
+      "examples": ["file not found", "directory should exist", "failed to write path"]
+    },
+    "network": {
+      "description": "HTTP, WebSocket, sockets, ports, endpoints, requests, or transport communication",
+      "examples": ["request failed", "cannot connect", "WebSocket response"]
+    },
+    "parsing": {
+      "description": "Parsing, serialization, deserialization, encoding, malformed input, or structured output",
+      "examples": ["failed to parse JSON", "invalid UTF-8", "malformed output"]
+    },
+    "persistence": {
+      "description": "SQLite, databases, audit rows, migrations, backups, restore, or durable storage",
+      "examples": ["database query failed", "backup not restored", "migration mismatch"]
+    },
+    "performance": {
+      "description": "Load, latency, throughput, percentile, slowness, or performance-budget checks",
+      "examples": ["latency budget exceeded", "load test", "throughput"]
+    },
+    "resource": {
+      "description": "Creation, lookup, or lifecycle of a domain resource when no more specific subsystem applies",
+      "examples": ["draft was not created", "missing metadata", "resource entry"]
+    },
+    "runtime": {
+      "description": "Daemon, process, subprocess, service, command execution, or standard-stream lifecycle",
+      "examples": ["daemon failed to start", "process exited", "command failed"]
+    },
+    "security": {
+      "description": "Secrets, redaction, sensitive data, traversal, privacy, or credential exposure",
+      "examples": ["secret was exposed", "redaction failed", "path traversal"]
+    },
+    "state": {
+      "description": "Events, beads, Stitches, workers, sessions, claims, projections, or domain state",
+      "examples": ["event missing", "bead status", "worker snapshot"]
+    },
+    "timeout": {
+      "description": "Timeouts, elapsed deadlines, readiness waits, or failure to become ready",
+      "examples": ["timed out", "waiting for init", "did not become ready"]
+    },
+    "validation": {
+      "description": "Expected values, invariants, required fields, equality, mismatch, or generic assertion outcomes",
+      "examples": ["expected one event", "value mismatch", "should contain"]
+    },
+    "other": {
+      "description": "Unknown, empty, generic, or ambiguous messages with no determinable supported category",
+      "examples": ["failed", "error", "test-project"]
+    }
+  },
+  "message_extraction": {
+    "precedence": [
+      "handoff.original_message",
+      "final_string_literal_for_expectation_or_error_macro",
+      "assertion_message_after_third_argument",
+      "empty_message"
+    ],
+    "rules": [
+      {
+        "id": "message.handoff",
+        "when": "original_message is a non-null, non-empty string",
+        "value": "Use original_message exactly after JSON/string unescaping; do not inspect unrelated literals in source_text."
+      },
+      {
+        "id": "message.expectation",
+        "when": "original_message is null and source_text contains an expectation or error macro with string literals",
+        "value": "Use the final string literal, matching the preceding handoff validator behavior."
+      },
+      {
+        "id": "message.assertion",
+        "when": "original_message is null and source_text contains assert_eq! or assert_ne!",
+        "value": "Use string literals in the third and later macro arguments only; a value-only assertion has an empty message."
+      },
+      {
+        "id": "message.empty",
+        "when": "No message literal is available",
+        "value": "Use the empty string for message-rule matching, retain the record, and retain/add the no_original_message exception flag."
+      }
+    ],
+    "matching": "All message patterns are case-insensitive regular expressions applied only to the extracted message text. A pattern either matches or does not; there is no scoring or confidence threshold."
+  },
+  "message_rule_precedence": [
+    "security",
+    "authentication",
+    "authorization",
+    "timeout",
+    "performance",
+    "concurrency",
+    "configuration",
+    "persistence",
+    "filesystem",
+    "parsing",
+    "network",
+    "runtime",
+    "state",
+    "resource",
+    "validation"
+  ],
+  "message_rules": [
+    {
+      "id": "M01",
+      "category": "security",
+      "pattern": "\\bsecret\\b|redact|traversal|privacy|\\bsensitive\\b|access[_ -]?key|age[_ -]?key|credential leak"
+    },
+    {
+      "id": "M02",
+      "category": "authentication",
+      "pattern": "authenticat|\\bauth\\b|credential|\\btoken\\b|api[_ -]?key|password|\\blogin\\b|oauth"
+    },
+    {
+      "id": "M03",
+      "category": "authorization",
+      "pattern": "forbidden|unauthori[sz]|permission denied|access denied|not allowed|must confirm|confirm requirement"
+    },
+    {
+      "id": "M04",
+      "category": "timeout",
+      "pattern": "timeout|timed out|within \\d+ seconds|within timeout|did not become ready|failed to become ready|waiting for|wait for"
+    },
+    {
+      "id": "M05",
+      "category": "performance",
+      "pattern": "performance|load test|load data|budget|latency|percentile|throughput|slow"
+    },
+    {
+      "id": "M06",
+      "category": "concurrency",
+      "pattern": "concurr|parallel|race|lock|mutex|deadlock|shutdown|cancel|\\bepoch\\b|\\btask\\b|reconnect"
+    },
+    {
+      "id": "M07",
+      "category": "configuration",
+      "pattern": "config(?:uration)?|projects\\.ya?ml|no[_ -]?interactive|\\bflag\\b|adapter|model|setting|wizard|confirm"
+    },
+    {
+      "id": "M08",
+      "category": "persistence",
+      "pattern": "sqlite|database|fleet\\.db|\\baudit\\b|hash|migration|transaction|\\bquery\\b|\\brow\\b|backup|restore|wal|init fleet db|rebuild|\\bcount\\b"
+    },
+    {
+      "id": "M09",
+      "category": "filesystem",
+      "pattern": "\\bfile\\b|\\bdirectory\\b|\\bdir\\b|\\bpath\\b|\\.beads|\\.hoop|\\bread\\b|\\bwrite\\b|\\bremove\\b|mkdir|temp|should exist|must be readable|created|workspace root|manifest_dir|\\.jsonl\\b"
+    },
+    {
+      "id": "M10",
+      "category": "parsing",
+      "pattern": "\\bparse\\b|parsing|deserial|serializ|utf-?8|malformed|valid json|json output|valid regex"
+    },
+    {
+      "id": "M11",
+      "category": "network",
+      "pattern": "bind|random port|local address|\\bport\\b|http|https|request|response|fetch|connect|receive|send|socket|websocket|readyz|health|endpoint|client|server|stream ended"
+    },
+    {
+      "id": "M12",
+      "category": "runtime",
+      "pattern": "daemon|spawn|start|stop|crash|panic|process|service|running|exit|execute|stdin|stdout|stderr|\\bcommand\\b|\\brun\\b"
+    },
+    {
+      "id": "M13",
+      "category": "state",
+      "pattern": "event|state|bead|stitch|project|worker|session|claim|dispatch|heartbeat|snapshot|status|timeline|message|subscription|fixture|actor|payload|capacity|replay|array|object|title|name|timestamp|default"
+    },
+    {
+      "id": "M14",
+      "category": "resource",
+      "pattern": "costaggregator|metadata|draft|proposal|entry|table|index|schema|pattern|skill|presence|notification|action|rule|script|approved|populate|\\bcreate\\b|\\binsert\\b|\\blist\\b|\\bget\\b|\\bapprove\\b|\\breject\\b|\\bedit\\b|\\bupdate\\b"
+    },
+    {
+      "id": "M15",
+      "category": "validation",
+      "pattern": "invalid|expected|should|must|mismatch|equal|success|failure|found|match|contain|preserv|remain|output"
+    }
+  ],
+  "source_file_fallback": {
+    "applies_after": "All message rules have failed to match.",
+    "only_when": "The message is empty, generic, or has no supported semantic signal.",
+    "rules": [
+      {
+        "id": "F01",
+        "category": "authentication",
+        "pattern": "(?:^|[/_-])auth(?:entication)?(?:[/_.-]|$)"
+      },
+      {
+        "id": "F02",
+        "category": "network",
+        "pattern": "network|websocket|socket|http"
+      },
+      {
+        "id": "F03",
+        "category": "filesystem",
+        "pattern": "file[_-]?io|filesystem|path"
+      },
+      {
+        "id": "F04",
+        "category": "persistence",
+        "pattern": "database|migration|backup|restore|storage"
+      },
+      {
+        "id": "F05",
+        "category": "concurrency",
+        "pattern": "concurr|parallel|race|lock|shutdown"
+      },
+      {
+        "id": "F06",
+        "category": "configuration",
+        "pattern": "config|no[_-]?interactive|adapter"
+      }
+    ],
+    "ambiguity": "Collect the distinct categories matched by the source_file rules. Apply the single category only when exactly one distinct category matches. If zero or more than one category matches, return other. Never resolve conflicting file hints by rule order."
+  },
+  "fallback": {
+    "category": "other",
+    "when": [
+      "message text is unknown, empty, generic, or ambiguous",
+      "no message rule matches and source_file provides no unique fallback category",
+      "source_file is malformed or cannot be normalized"
+    ],
+    "prohibition": "Do not add an error type outside allowed_error_types to represent uncertainty."
+  },
+  "source_module_normalization": {
+    "input": "source_file (the validated repository-relative file field)",
+    "steps": [
+      "Replace backslash separators with forward slashes.",
+      "Remove leading ./ segments.",
+      "Remove exactly one trailing .rs suffix from the file name.",
+      "Replace every hyphen in every path segment with an underscore.",
+      "Join the remaining non-empty path segments with ::.",
+      "Preserve case and all other characters; do not collapse lib.rs or mod.rs, because the source file remains the grouping identity."
+    ],
+    "examples": [
+      {
+        "source_file": "hoop-daemon/tests/acceptance/s3_bead_creation_from_chat.rs",
+        "source_module": "hoop_daemon::tests::acceptance::s3_bead_creation_from_chat"
+      },
+      {
+        "source_file": "./hoop-cli/tests/no-interactive.rs",
+        "source_module": "hoop_cli::tests::no_interactive"
+      }
+    ],
+    "invalid_input": "Use source_module=unknown_module, retain source_file unchanged, and add an exception flag; do not invent a module from an absolute path or a path containing .. segments."
+  },
+  "output_order": [
+    "source_module ascending",
+    "error_type ascending according to allowed_error_types",
+    "file ascending",
+    "line ascending numerically",
+    "category ascending",
+    "line_content ascending"
+  ],
+  "invariants": [
+    "Every retained record receives exactly one error_type from allowed_error_types.",
+    "Every retained valid source record receives exactly one deterministic source_module.",
+    "A record is never assigned more than one error_type; precedence selects the first matching message rule.",
+    "The extractor category field is metadata and is never used as an error_type.",
+    "Original message, file, line, category, line_content, and unrelated input fields remain unchanged."
+  ]
+}
