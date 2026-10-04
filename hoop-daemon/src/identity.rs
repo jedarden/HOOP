@@ -125,6 +125,12 @@ impl IdentityCache {
         cache.len()
     }
 
+    /// Return whether the cache has no entries
+    pub fn is_empty(&self) -> bool {
+        let cache = self.inner.read().unwrap();
+        cache.is_empty()
+    }
+
     /// Remove expired entries from the cache
     pub fn purge_expired(&self) {
         let mut cache = self.inner.write().unwrap();

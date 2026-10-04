@@ -596,11 +596,10 @@ impl Default for CapacityMeterConfig {
         // Load optional GCP quota configuration from environment
         let gcp_quota_config = gcp_quota_client::load_gcp_quota_config();
 
-        if gcp_quota_config.is_some() {
+        if let Some(gcp_quota_config) = &gcp_quota_config {
             info!(
                 "GCP quota API enabled for Gemini: project={}, region={}",
-                gcp_quota_config.as_ref().unwrap().project_id,
-                gcp_quota_config.as_ref().unwrap().region
+                gcp_quota_config.project_id, gcp_quota_config.region
             );
         }
 
@@ -1600,11 +1599,9 @@ impl CapacityMeter {
         let reader = BufReader::new(file);
 
         let mut seen_message_ids: HashMap<String, bool> = HashMap::new();
-        let mut line_number: usize = 0;
-
-        for line in reader.lines() {
+        for (line_number, line) in reader.lines().enumerate() {
             let line = line?;
-            line_number += 1;
+            let line_number = line_number + 1;
 
             if !line.contains("\"type\":\"assistant\"") {
                 continue;
@@ -1760,10 +1757,9 @@ impl CapacityMeter {
         let file = fs::File::open(path)?;
         let reader = BufReader::new(file);
 
-        let mut line_number: usize = 0;
-        for line in reader.lines() {
+        for (line_number, line) in reader.lines().enumerate() {
             let line = line?;
-            line_number += 1;
+            let line_number = line_number + 1;
 
             // Gemini JSONL uses "type": "message" or "type": "turn" for assistant responses
             if !line.contains("\"type\"") && !line.contains("\"role\"") {

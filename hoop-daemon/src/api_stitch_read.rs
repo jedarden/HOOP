@@ -467,7 +467,7 @@ fn extract_touched_files(messages: &[StitchMessage]) -> Vec<TouchedFile> {
             mention_count,
         })
         .collect();
-    files.sort_by(|a, b| b.mention_count.cmp(&a.mention_count));
+    files.sort_by_key(|file| std::cmp::Reverse(file.mention_count));
     files.truncate(50);
     files
 }

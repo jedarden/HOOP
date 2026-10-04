@@ -1222,7 +1222,7 @@ async fn get_cross_project_dashboard(
             worker_count: c.worker_count,
         })
         .collect();
-    workers_by_project.sort_by(|a, b| b.worker_count.cmp(&a.worker_count));
+    workers_by_project.sort_by_key(|worker| std::cmp::Reverse(worker.worker_count));
 
     // --- Longest-running stitches (open beads sorted by age) ---
     let beads_guard = state.beads.read().unwrap();

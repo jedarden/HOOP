@@ -326,7 +326,7 @@ impl UnassignedTracker {
         // Update cache (evict oldest if over limit)
         let mut cache = self.cache.lock().unwrap();
         cache.extend(unassigned);
-        cache.sort_by(|a, b| b.discovered_at.cmp(&a.discovered_at));
+        cache.sort_by_key(|entry| std::cmp::Reverse(entry.discovered_at));
         cache.truncate(MAX_UNASSIGNED_SESSIONS);
 
         debug!(

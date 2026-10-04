@@ -1283,7 +1283,7 @@ fn lookup_bead_info(
 ///
 /// - `Claim`  → upsert collision_index entry + touch project last_event_at
 /// - terminal events (Complete/Close/Release/Fail/Timeout/Crash)
-///            → remove collision_index entry + touch project last_event_at
+///   → remove collision_index entry + touch project last_event_at
 /// - other events → touch project last_event_at only
 fn update_fleet_from_event(
     event: &crate::events::NeedleEvent,

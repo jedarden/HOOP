@@ -217,15 +217,15 @@ fn parse_porcelain_blame(text: &str) -> Vec<RawBlameLine> {
                 ts: entry.1.clone(),
                 summary: entry.2.clone(),
             });
-        } else if line.starts_with("author ") && !line.starts_with("author-") {
-            cur_author = line[7..].to_string();
+        } else if let Some(author) = line.strip_prefix("author ") {
+            cur_author = author.to_string();
             meta.entry(cur_sha.clone()).and_modify(|e| {
                 if e.0.is_empty() {
                     e.0 = cur_author.clone();
                 }
             });
-        } else if line.starts_with("author-time ") {
-            if let Ok(unix) = line[12..].trim().parse::<i64>() {
+        } else if let Some(timestamp) = line.strip_prefix("author-time ") {
+            if let Ok(unix) = timestamp.trim().parse::<i64>() {
                 cur_ts = format_unix_ts(unix);
                 meta.entry(cur_sha.clone()).and_modify(|e| {
                     if e.1.is_empty() {
@@ -233,8 +233,8 @@ fn parse_porcelain_blame(text: &str) -> Vec<RawBlameLine> {
                     }
                 });
             }
-        } else if line.starts_with("summary ") {
-            cur_summary = line[8..].to_string();
+        } else if let Some(summary) = line.strip_prefix("summary ") {
+            cur_summary = summary.to_string();
             meta.entry(cur_sha.clone()).and_modify(|e| {
                 if e.2.is_empty() {
                     e.2 = cur_summary.clone();

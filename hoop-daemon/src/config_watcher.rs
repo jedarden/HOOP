@@ -40,7 +40,7 @@ pub struct AgentConfigChanged {
 pub enum ConfigEvent {
     /// Configuration was reloaded successfully
     ConfigReloaded {
-        config: ResolvedConfig,
+        config: Box<ResolvedConfig>,
         /// Hash of the previous config file contents
         prev_hash: String,
         /// Restart-required keys that changed (§17.4)
@@ -443,7 +443,7 @@ impl ConfigWatcher {
         }
 
         let _ = event_tx.send(ConfigEvent::ConfigReloaded {
-            config: new_config,
+            config: Box::new(new_config),
             prev_hash: prev_hash.clone(),
             restart_required,
             agent_config_changed,

@@ -1144,10 +1144,9 @@ impl SessionTailer {
         let mut first_prompt_hash = String::new();
         let mut first_user_content: Option<String> = None;
 
-        let mut line_number: usize = 0;
-        for line in reader.lines() {
+        for (line_number, line) in reader.lines().enumerate() {
             let line = line?;
-            line_number += 1;
+            let line_number = line_number + 1;
             let source = crate::parse_jsonl_safe::LineSource {
                 tag: "sessions/claude",
                 file_path: path.to_path_buf(),

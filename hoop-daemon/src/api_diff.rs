@@ -165,8 +165,8 @@ pub fn parse_diff_output(output: &str, max_lines: usize) -> (Vec<FileDiff>, bool
             continue;
         };
 
-        if line.starts_with("--- ") {
-            let p = line[4..].trim_start_matches("a/");
+        if let Some(stripped) = line.strip_prefix("--- ") {
+            let p = stripped.trim_start_matches("a/");
             file.old_path = if p == "/dev/null" {
                 String::new()
             } else {
@@ -174,8 +174,8 @@ pub fn parse_diff_output(output: &str, max_lines: usize) -> (Vec<FileDiff>, bool
             };
             continue;
         }
-        if line.starts_with("+++ ") {
-            let p = line[4..].trim_start_matches("b/");
+        if let Some(stripped) = line.strip_prefix("+++ ") {
+            let p = stripped.trim_start_matches("b/");
             file.new_path = if p == "/dev/null" {
                 String::new()
             } else {

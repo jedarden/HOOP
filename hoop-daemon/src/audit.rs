@@ -266,19 +266,25 @@ fn check_bead_version() -> AuditCheck {
             } else {
                 AuditCheck::critical(
                     "bead_version",
-                    format!("{} {} is below minimum required {}", cmd_name, version_str, BR_MIN_VERSION),
-                    format!("Install bead-rs from https://github.com/jedarden/bead-rs"),
+                    format!(
+                        "{} {} is below minimum required {}",
+                        cmd_name, version_str, BR_MIN_VERSION
+                    ),
+                    "Install bead-rs from https://github.com/jedarden/bead-rs".to_string(),
                 )
             }
         }
         Ok(_) => AuditCheck::critical(
             "bead_version",
             format!("{} returned empty version output", cmd_name),
-            format!("Install bead-rs from https://github.com/jedarden/bead-rs"),
+            "Install bead-rs from https://github.com/jedarden/bead-rs".to_string(),
         ),
         Err(_) => AuditCheck::critical(
             "bead_version",
-            format!("{} not found in PATH (set HOOP_BEAD_CLI to override)", cmd_name),
+            format!(
+                "{} not found in PATH (set HOOP_BEAD_CLI to override)",
+                cmd_name
+            ),
             "Install bead-rs from https://github.com/jedarden/bead-rs".to_string(),
         ),
     }
