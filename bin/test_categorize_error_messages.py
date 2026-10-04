@@ -33,17 +33,34 @@ def row(line_content: str, *, file: str = "tests/example.rs") -> dict[str, objec
 class CategorizerTests(unittest.TestCase):
     def test_semantic_categories_are_single_label(self) -> None:
         examples = {
+            'anyhow::bail!(\\"Invalid token\\");': "authentication",
             'anyhow::bail!(\\"Invalid project config\\");': "configuration",
             'anyhow::bail!(\\"Forbidden workspace\\");': "authorization",
             'anyhow::bail!(\\"Failed to fetch response\\");': "network",
             'anyhow::bail!(\\"Failed to parse JSON\\");': "parsing",
             'anyhow::bail!(\\"Daemon failed to start\\");': "runtime",
-            'anyhow::bail!(\\"Expected one event\\");': "state",
+            'anyhow::bail!(\\"Expected value to be equal\\");': "validation",
         }
 
         for line_content, expected in examples.items():
             with self.subTest(line_content=line_content):
                 self.assertEqual(error_type(row(line_content)), expected)
+
+    def test_precedence_makes_multi_signal_messages_single_label(self) -> None:
+        # timeout precedes network in the approved taxonomy. The same message
+        # must never produce both labels or depend on source-file hints.
+        record = row(
+            'anyhow::bail!(\\"HTTP request timed out while waiting for response\\");',
+            file="src/network/client.rs",
+        )
+        self.assertEqual(error_type(record), "timeout")
+
+        # Authentication precedes network when a credential failure is
+        # reported by a remote request.
+        self.assertEqual(
+            error_type(row('anyhow::bail!(\\"Request rejected: invalid token\\");')),
+            "authentication",
+        )
 
     def test_generic_message_uses_stable_source_hint(self) -> None:
         self.assertEqual(
@@ -52,10 +69,33 @@ class CategorizerTests(unittest.TestCase):
         )
         self.assertEqual(error_type(row('anyhow::bail!(\\"failed\\");')), "other")
 
+    def test_conflicting_source_hints_use_documented_fallback(self) -> None:
+        self.assertEqual(
+            error_type(row("assert_eq!(actual, expected);", file="src/network/path.rs")),
+            "other",
+        )
+
     def test_handoff_message_wins_over_unrelated_source_literals(self) -> None:
         record = row('anyhow::bail!(\\"Failed to fetch response\\");')
         record["original_message"] = "Failed to parse JSON"
         self.assertEqual(error_type(record), "parsing")
+
+    def test_classification_preserves_loaded_message_and_location(self) -> None:
+        original = row(
+            'anyhow::bail!(\\"network source text\\");',
+            file="hoop-daemon/src/auth.rs",
+        )
+        original["line"] = 41
+        original["original_message"] = "Invalid token"
+
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "input.json"
+            input_path.write_text(json.dumps([original]), encoding="utf-8")
+            categorized = classify_catalog(input_path)
+
+        self.assertEqual(categorized[0]["error_type"], "authentication")
+        for field in ("original_message", "file", "line", "category", "line_content"):
+            self.assertEqual(categorized[0][field], original[field])
 
     def test_source_module_normalization_and_invalid_fallback(self) -> None:
         self.assertEqual(

@@ -70,6 +70,7 @@ SOURCE_FALLBACK_RULES = tuple(
     (rule["category"], re.compile(rule["pattern"], re.I))
     for rule in TAXONOMY["source_file_fallback"]["rules"]
 )
+FALLBACK_ERROR_TYPE = "other"
 
 
 def _split_macro_args(arguments: str) -> list[str]:
@@ -179,26 +180,38 @@ def source_module(source_file: str) -> str:
     return "::".join(segments) or UNKNOWN_MODULE
 
 
-def error_type(row: dict[str, object]) -> str:
-    """Classify one catalog entry into exactly one semantic category."""
+def classify_message(message: str, source_file: object) -> str:
+    """Classify message context into one approved, deterministic category.
 
-    text = message_for_row(row)
+    Message rules are intentionally evaluated as an ordered decision list. A
+    message can match several patterns, but returning on the first match makes
+    the result mutually exclusive and keeps precedence independent of the
+    source-file hint. Source fallback is considered only when no message rule
+    matches; conflicting source hints resolve to the documented fallback.
+    """
+
     for category, pattern in RULES:
-        if pattern.search(text):
+        if pattern.search(message):
             return category
 
     # Generic messages such as ``"failed"`` carry too little information by
     # themselves.  A few source-file names are stable domain hints and are only
     # consulted after message rules, so explicit message text always wins.
-    source = _normalized_source_path(row.get("file"))
+    source = _normalized_source_path(source_file)
     if source is None:
-        return "other"
+        return FALLBACK_ERROR_TYPE
     matching_categories = {
         category for category, pattern in SOURCE_FALLBACK_RULES if pattern.search(source)
     }
     if len(matching_categories) == 1:
         return matching_categories.pop()
-    return "other"
+    return FALLBACK_ERROR_TYPE
+
+
+def error_type(row: dict[str, object]) -> str:
+    """Classify one loaded catalog entry into exactly one semantic category."""
+
+    return classify_message(message_for_row(row), row.get("file"))
 
 
 def _exception_flags(row: dict[str, object], *, message: str, module: str) -> list[object]:
