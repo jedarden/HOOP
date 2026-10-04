@@ -12,7 +12,13 @@ from pathlib import Path
 
 
 sys.path.insert(0, str(Path(__file__).parent))
-from categorize_error_messages import classify_catalog, error_type, write_csv  # noqa: E402
+from categorize_error_messages import (  # noqa: E402
+    UNKNOWN_MODULE,
+    classify_catalog,
+    error_type,
+    source_module,
+    write_csv,
+)
 
 
 def row(line_content: str, *, file: str = "tests/example.rs") -> dict[str, object]:
@@ -45,6 +51,51 @@ class CategorizerTests(unittest.TestCase):
             "network",
         )
         self.assertEqual(error_type(row('anyhow::bail!(\\"failed\\");')), "other")
+
+    def test_handoff_message_wins_over_unrelated_source_literals(self) -> None:
+        record = row('anyhow::bail!(\\"Failed to fetch response\\");')
+        record["original_message"] = "Failed to parse JSON"
+        self.assertEqual(error_type(record), "parsing")
+
+    def test_source_module_normalization_and_invalid_fallback(self) -> None:
+        self.assertEqual(
+            source_module(r"./hoop-cli/tests/no-interactive.rs"),
+            "hoop_cli::tests::no_interactive",
+        )
+        self.assertEqual(source_module("/tmp/outside.rs"), UNKNOWN_MODULE)
+        self.assertEqual(source_module("hoop-cli/tests/../outside.rs"), UNKNOWN_MODULE)
+
+    def test_message_less_and_invalid_records_get_explicit_flags(self) -> None:
+        records = [
+            row("assert_eq!(actual, expected);"),
+            row('anyhow::bail!(\\"failed\\");', file="/tmp/outside.rs"),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "input.json"
+            input_path.write_text(json.dumps(records), encoding="utf-8")
+            categorized = classify_catalog(input_path)
+
+        by_file = {record["file"]: record for record in categorized}
+        self.assertEqual(by_file["tests/example.rs"]["error_type"], "other")
+        self.assertIn("no_original_message", by_file["tests/example.rs"]["exception_flags"])
+        self.assertEqual(by_file["/tmp/outside.rs"]["source_module"], UNKNOWN_MODULE)
+        self.assertIn("invalid_source_file", by_file["/tmp/outside.rs"]["exception_flags"])
+
+    def test_sort_keeps_taxonomy_groups_then_source_order(self) -> None:
+        records = [
+            row('anyhow::bail!(\\"Failed to fetch response\\");', file="z.rs"),
+            row('anyhow::bail!(\\"Failed to parse JSON\\");', file="a.rs"),
+            row('anyhow::bail!(\\"Failed to fetch response\\");', file="a.rs"),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "input.json"
+            input_path.write_text(json.dumps(records), encoding="utf-8")
+            categorized = classify_catalog(input_path)
+
+        self.assertEqual(
+            [(record["error_type"], record["file"]) for record in categorized],
+            [("network", "a.rs"), ("parsing", "a.rs"), ("network", "z.rs")],
+        )
 
     def test_input_fields_and_extra_fields_are_preserved(self) -> None:
         records = [

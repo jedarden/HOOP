@@ -1,0 +1,10 @@
+{
+  "taxonomy": "docs/error_category_taxonomy.json",
+  "input": "test_error_messages.json",
+  "outputs": [
+    "docs/categorized_error_catalog.json"
+  ],
+  "classification_command": "python3 bin/categorize_error_messages.py --input test_error_messages.json --taxonomy docs/error_category_taxonomy.json --json-output docs/categorized_error_catalog.json",
+  "output_format": "JSON array",
+  "record_count": 3466
+}

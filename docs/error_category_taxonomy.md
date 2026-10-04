@@ -104,6 +104,8 @@ numeric `line`, extraction `category`, and `line_content`, all ascending. The
 original identity and all unrelated fields remain unchanged. This makes the
 catalog reproducible while retaining every overlapping extraction record.
 
-The taxonomy deliberately defines the decision contract only. Applying it to
-the validated catalog and exporting the categorized intermediate is the next
-pipeline stage.
+The checked-in categorized intermediate is
+[`categorized_error_catalog.json`](categorized_error_catalog.json). The
+machine-readable run record at
+[`error_category_catalog_run.json`](error_category_catalog_run.json) records
+the taxonomy, input, output, command, and record count used to produce it.
