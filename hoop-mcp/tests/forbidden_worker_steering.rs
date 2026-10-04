@@ -7,6 +7,19 @@ use hoop_mcp::tools::{
     forbidden_worker_steering_error, is_forbidden_worker_steering_verb,
     FORBIDDEN_WORKER_STEERING_VERBS,
 };
+use serde_json::Value;
+use std::path::Path;
+use std::time::Duration;
+
+async fn wait_for_socket(path: &Path) {
+    for _ in 0..100 {
+        if path.exists() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("MCP socket did not appear at {}", path.display());
+}
 
 #[test]
 fn test_forbidden_list_contains_all_required_verbs() {
@@ -137,6 +150,82 @@ fn test_runtime_guard_rejects_all_forbidden_verbs() {
             error_msg
         );
     }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn forbidden_worker_steering_jsonrpc_calls_return_hard_errors() {
+    use hoop_mcp::socket::{run_socket_server, SocketConfig};
+    use tempfile::tempdir;
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tokio::net::UnixStream;
+
+    let socket_dir = tempdir().expect("create MCP socket directory");
+    let socket_path = socket_dir.path().join("mcp.sock");
+    let socket_task = tokio::spawn(run_socket_server(SocketConfig {
+        socket_path: socket_path.clone(),
+        actor: "forbidden-worker-steering-test".to_string(),
+    }));
+    wait_for_socket(&socket_path).await;
+
+    let stream = UnixStream::connect(&socket_path)
+        .await
+        .expect("connect to MCP socket");
+    let (reader, mut writer) = stream.into_split();
+    let mut reader = BufReader::new(reader);
+
+    for (id, tool_name) in [(1, "launch_fleet"), (2, "kill_worker")] {
+        let request = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "tools/call",
+            "params": { "name": tool_name }
+        });
+        writer
+            .write_all(format!("{request}\n").as_bytes())
+            .await
+            .expect("send forbidden JSON-RPC request");
+        writer
+            .flush()
+            .await
+            .expect("flush forbidden JSON-RPC request");
+
+        let mut response_line = String::new();
+        tokio::time::timeout(Duration::from_secs(2), reader.read_line(&mut response_line))
+            .await
+            .expect("forbidden JSON-RPC response timed out")
+            .expect("read forbidden JSON-RPC response");
+        let response: Value =
+            serde_json::from_str(&response_line).expect("valid forbidden JSON-RPC response");
+
+        assert_eq!(response["jsonrpc"], "2.0");
+        assert!(
+            response.get("result").is_none(),
+            "forbidden tool {tool_name} must not return a result: {response}"
+        );
+        let error = response
+            .get("error")
+            .and_then(Value::as_object)
+            .unwrap_or_else(|| {
+                panic!("forbidden tool {tool_name} must return an error: {response}")
+            });
+        assert_eq!(error["code"], -32603);
+        let message = error["message"]
+            .as_str()
+            .expect("JSON-RPC error should include a message");
+        assert!(
+            message.contains(tool_name),
+            "error should name forbidden tool {tool_name}: {message}"
+        );
+        assert!(
+            message.contains("cannot perform worker-steering actions"),
+            "error should explain that worker-steering is forbidden: {message}"
+        );
+    }
+
+    drop(reader);
+    drop(writer);
+    socket_task.abort();
+    let _ = socket_task.await;
 }
 
 #[test]
