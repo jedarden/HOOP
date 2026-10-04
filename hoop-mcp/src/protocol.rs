@@ -68,11 +68,44 @@ pub struct ClientInfo {
 }
 
 /// Tool call parameters
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct ToolCallParams {
     pub name: String,
-    #[serde(flatten)]
     pub arguments: serde_json::Map<String, Value>,
+}
+
+/// Deserialize both the standard MCP request shape and the legacy flattened
+/// shape accepted by early HOOP clients.
+///
+/// Standard MCP sends tool arguments as `params.arguments`. Older HOOP
+/// fixtures placed those fields directly beside `params.name`; retaining that
+/// form keeps existing clients compatible while making the wire protocol
+/// interoperable with MCP clients.
+impl<'de> Deserialize<'de> for ToolCallParams {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct WireToolCallParams {
+            name: String,
+            #[serde(default)]
+            arguments: Option<serde_json::Map<String, Value>>,
+            #[serde(flatten)]
+            flattened_arguments: serde_json::Map<String, Value>,
+        }
+
+        let wire = WireToolCallParams::deserialize(deserializer)?;
+        let arguments = match wire.arguments {
+            Some(arguments) => arguments,
+            None => wire.flattened_arguments,
+        };
+
+        Ok(Self {
+            name: wire.name,
+            arguments,
+        })
+    }
 }
 
 /// JSON-RPC 2.0 response

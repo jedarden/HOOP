@@ -397,6 +397,35 @@ fn test_tools_call_request_mcp_parses_fixture() {
     }
 }
 
+/// Standard MCP clients put tool arguments under `params.arguments`. Keep
+/// this separate from the legacy flattened fixture above so both wire forms
+/// remain covered.
+#[test]
+fn test_tools_call_request_mcp_parses_standard_nested_arguments() {
+    let fixture = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": 42,
+        "method": "tools/call",
+        "params": {
+            "name": "find_beads",
+            "arguments": { "project": "NEEDLE", "limit": 5 }
+        }
+    });
+
+    let req: hoop_mcp::protocol::JsonRpcRequest =
+        serde_json::from_value(fixture).expect("standard MCP tools/call request must deserialize");
+
+    assert_eq!(req.id, serde_json::json!(42));
+    match req.method {
+        hoop_mcp::protocol::Method::ToolsCall(params) => {
+            assert_eq!(params.name, "find_beads");
+            assert_eq!(params.arguments["project"], "NEEDLE");
+            assert_eq!(params.arguments["limit"], 5);
+        }
+        _ => panic!("expected Method::ToolsCall"),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // MCP socket: tools/call — hoop-mcp sends to agent
 // ---------------------------------------------------------------------------

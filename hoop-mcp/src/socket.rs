@@ -165,15 +165,16 @@ async fn handle_socket_connection(mut socket: tokio::net::UnixStream, actor: Str
         };
 
         // Check if shutdown is requested before handling
-        let is_shutdown = matches!(request.method, crate::protocol::Method::Shutdown(_));
+        let is_shutdown = matches!(&request.method, crate::protocol::Method::Shutdown(_));
 
         // Handle request
         // create_stitch uses the blocking reqwest client. Keep synchronous
         // tool execution in Tokio's blocking section so its client runtime
         // can be created and dropped without blocking or panicking the async
         // socket worker.
-        let response =
-            tokio::task::block_in_place(|| handle_request(request.method, &server_state));
+        let response = tokio::task::block_in_place(|| {
+            handle_request(request.id, request.method, &server_state)
+        });
 
         // Send response
         let response_json = serde_json::to_string(&response)?;
@@ -192,6 +193,7 @@ async fn handle_socket_connection(mut socket: tokio::net::UnixStream, actor: Str
 
 /// Handle a single MCP request
 fn handle_request(
+    id: serde_json::Value,
     method: crate::protocol::Method,
     server_state: &crate::tools::McpServerState,
 ) -> crate::protocol::JsonRpcResponse {
@@ -215,39 +217,36 @@ fn handle_request(
                     version: env!("CARGO_PKG_VERSION").to_string(),
                 },
             };
-            crate::protocol::JsonRpcResponse::result(
-                serde_json::json!(null),
-                serde_json::to_value(result).unwrap(),
-            )
+            crate::protocol::JsonRpcResponse::result(id, serde_json::to_value(result).unwrap())
         }
         crate::protocol::Method::ToolsList(_) => {
             let tools = server_state.get_tools();
             let result = serde_json::json!({ "tools": tools });
-            crate::protocol::JsonRpcResponse::result(serde_json::json!(null), result)
+            crate::protocol::JsonRpcResponse::result(id, result)
         }
         crate::protocol::Method::ToolsCall(params) => {
             match server_state.call_tool(&params.name, &params.arguments) {
                 Ok(result) => {
                     let result_value = serde_json::to_value(result).unwrap_or_default();
-                    crate::protocol::JsonRpcResponse::result(serde_json::json!(null), result_value)
+                    crate::protocol::JsonRpcResponse::result(id, result_value)
                 }
                 Err(e) => {
                     warn!("Tool call error: {}", e);
-                    crate::protocol::JsonRpcResponse::error(serde_json::json!(null), -32603, e)
+                    crate::protocol::JsonRpcResponse::error(id, -32603, e)
                 }
             }
         }
         crate::protocol::Method::PromptsList(_) => {
             let result = serde_json::json!({ "prompts": [] });
-            crate::protocol::JsonRpcResponse::result(serde_json::json!(null), result)
+            crate::protocol::JsonRpcResponse::result(id, result)
         }
         crate::protocol::Method::ResourcesList(_) => {
             let result = serde_json::json!({ "resources": [] });
-            crate::protocol::JsonRpcResponse::result(serde_json::json!(null), result)
+            crate::protocol::JsonRpcResponse::result(id, result)
         }
         crate::protocol::Method::Shutdown(_) => {
             info!("Shutdown requested");
-            crate::protocol::JsonRpcResponse::result(serde_json::json!(null), serde_json::json!({}))
+            crate::protocol::JsonRpcResponse::result(id, serde_json::json!({}))
         }
     }
 }

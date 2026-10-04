@@ -198,6 +198,7 @@ async fn forbidden_worker_steering_jsonrpc_calls_return_hard_errors() {
             serde_json::from_str(&response_line).expect("valid forbidden JSON-RPC response");
 
         assert_eq!(response["jsonrpc"], "2.0");
+        assert_eq!(response["id"], id);
         assert!(
             response.get("result").is_none(),
             "forbidden tool {tool_name} must not return a result: {response}"

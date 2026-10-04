@@ -916,34 +916,49 @@ impl McpServerState {
     /// Call the daemon's aggregated-read endpoint for a stitch.
     /// Returns the full enriched response (messages, live beads, cost/duration, link graph).
     fn read_stitch_via_daemon(&self, stitch_id: &str) -> Result<Value, String> {
-        let client = reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()
-            .map_err(|e| format!("HTTP client error: {}", e))?;
+        let daemon_base_url = std::env::var("HOOP_DAEMON_URL")
+            .unwrap_or_else(|_| "http://127.0.0.1:3000".to_string());
+        let stitch_id = stitch_id.to_string();
 
-        let url = format!("http://127.0.0.1:3000/api/stitches/{}", stitch_id);
-        let response = client
-            .get(&url)
-            .send()
-            .map_err(|e| format!("Daemon unreachable: {}", e))?;
+        // reqwest's blocking client owns a Tokio runtime. Run it on a short-lived
+        // OS thread so the MCP Tokio worker remains responsive and the client's
+        // runtime can be dropped outside the async context.
+        std::thread::spawn(move || -> Result<Value, String> {
+            let client = reqwest::blocking::Client::builder()
+                .timeout(std::time::Duration::from_secs(5))
+                .build()
+                .map_err(|e| format!("HTTP client error: {}", e))?;
 
-        let status = response.status();
-        if status == reqwest::StatusCode::NOT_FOUND {
-            return Err(format!("Stitch '{}' not found", stitch_id));
-        }
-        if !status.is_success() {
-            let error_text = response
-                .text()
-                .unwrap_or_else(|_| format!("HTTP {}", status.as_u16()));
-            return Err(format!("Daemon returned error: {}", error_text));
-        }
+            let url = format!(
+                "{}/api/stitches/{}",
+                daemon_base_url.trim_end_matches('/'),
+                stitch_id
+            );
+            let response = client
+                .get(&url)
+                .send()
+                .map_err(|e| format!("Daemon unreachable: {}", e))?;
 
-        let data: Value = response
-            .json()
-            .map_err(|e| format!("Failed to parse daemon response: {}", e))?;
+            let status = response.status();
+            if status == reqwest::StatusCode::NOT_FOUND {
+                return Err(format!("Stitch '{}' not found", stitch_id));
+            }
+            if !status.is_success() {
+                let error_text = response
+                    .text()
+                    .unwrap_or_else(|_| format!("HTTP {}", status.as_u16()));
+                return Err(format!("Daemon returned error: {}", error_text));
+            }
 
-        // §18.3: Redact secrets in message content before forwarding to the agent.
-        Ok(redact_stitch_response(data))
+            let data: Value = response
+                .json()
+                .map_err(|e| format!("Failed to parse daemon response: {}", e))?;
+
+            // §18.3: Redact secrets in message content before forwarding to the agent.
+            Ok(redact_stitch_response(data))
+        })
+        .join()
+        .map_err(|_| "Daemon request thread panicked".to_string())?
     }
 
     fn query_stitches_from_db(
@@ -1108,7 +1123,7 @@ impl McpServerState {
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        let mut beads: Vec<Value> = serde_json::from_str(&stdout).unwrap_or_default();
+        let mut beads = parse_bead_list_output(&stdout)?;
 
         // Apply filters
         if let Some(status) = status_filter {
@@ -1127,8 +1142,10 @@ impl McpServerState {
     }
 
     fn get_bead_via_br(&self, project_path: &str, bead_id: &str) -> Result<Value, String> {
-        let mut cmd =
-            crate::br_verbs::invoke_bead_read(crate::br_verbs::ReadVerb::Get, &[bead_id, "--json"]);
+        let mut cmd = crate::br_verbs::invoke_bead_read(
+            crate::br_verbs::ReadVerb::Show,
+            &[bead_id, "--json"],
+        );
         let output = cmd
             .current_dir(project_path)
             .output()
@@ -1136,11 +1153,23 @@ impl McpServerState {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("br get failed: {}", stderr));
+            return Err(format!("bead show failed: {}", stderr));
         }
 
         let stdout = String::from_utf8_lossy(&output.stdout);
-        serde_json::from_str(&stdout).map_err(|e| format!("Failed to parse br output: {}", e))
+        let value: Value = serde_json::from_str(&stdout)
+            .map_err(|e| format!("Failed to parse bead output: {}", e))?;
+
+        // bead-rs returns a one-element JSON array for `show --json`.
+        match value {
+            Value::Array(mut values) if values.len() == 1 => Ok(values.remove(0)),
+            Value::Array(values) => Err(format!(
+                "bead show returned {} records for '{}', expected exactly one",
+                values.len(),
+                bead_id
+            )),
+            value => Ok(value),
+        }
     }
 
     /// Look up a bead's labels via `br get --json`.
@@ -1476,6 +1505,31 @@ impl McpServerState {
 
         Ok(Some(ctx))
     }
+}
+
+/// Parse bead-rs list output in either JSON-array or JSON-lines form.
+///
+/// bead-rs currently emits one JSON object per line for `list --json`, while
+/// older compatible clients emitted a single JSON array. Accept both so the
+/// MCP read surface does not lose bead data when the CLI output mode changes.
+fn parse_bead_list_output(stdout: &str) -> Result<Vec<Value>, String> {
+    let trimmed = stdout.trim();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    if let Ok(values) = serde_json::from_str::<Vec<Value>>(trimmed) {
+        return Ok(values);
+    }
+
+    trimmed
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            serde_json::from_str::<Value>(line)
+                .map_err(|e| format!("Failed to parse bead list JSON line: {}", e))
+        })
+        .collect()
 }
 
 // -----------------------------------------------------------------------
@@ -2363,5 +2417,34 @@ fn output_schema_escalate_to_operator() -> OutputSchema {
             props
         },
         required: Some(vec!["message".to_string()]),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_bead_list_output;
+
+    #[test]
+    fn parse_bead_list_accepts_json_array() {
+        let values = parse_bead_list_output(r#"[{"id":"needle-a"}]"#).unwrap();
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0]["id"], "needle-a");
+    }
+
+    #[test]
+    fn parse_bead_list_accepts_json_lines() {
+        let values = parse_bead_list_output(
+            r#"{"id":"needle-a"}
+{"id":"needle-b"}
+"#,
+        )
+        .unwrap();
+        assert_eq!(values.len(), 2);
+        assert_eq!(values[1]["id"], "needle-b");
+    }
+
+    #[test]
+    fn parse_bead_list_rejects_malformed_json() {
+        assert!(parse_bead_list_output("not-json").is_err());
     }
 }
