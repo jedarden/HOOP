@@ -235,3 +235,36 @@ touch still `16bfcda3`), and the blob at HEAD is byte-identical to the blob
 the audit was written against — so the close-verification runs recorded in
 §§6–7 attach to the identical Rust inputs at this HEAD too. No source files
 were modified by this pass; the only edit is this section.
+
+## 10. Final verdict — reconciliation of child verification and delta (2026-10-11, bead hoop-675dd561)
+
+Child 3 of the auto-split; this section closes the umbrella by reconciling §8
+(child-1 verification, bead hoop-faddd3a0, closed) with §9 (child-2 delta, bead
+hoop-32b592c9, closed) into the audit's single final verdict. Neither child
+corrected a claim, and the reconciliation matches what both recorded.
+
+**FINAL VERDICT: FLAGGED — stands.**
+`d7a8bbb1c4d98377b025862277d079dd1e53d979` is import-cleanup-only for this
+file; `018ac073e154927d411e4a9c90a7180d6ebfebac` and
+`16bfcda39756e8849d8e3a63d794ed86d0391f47` carry **4 out-of-scope hunks**
+between them (2 each). Of the four, two are import-line changes that are
+additions or widenings rather than cleanups (`018ac073` hunk 1, `16bfcda3`
+hunk 1) and two are functional (`018ac073` hunk 2, `16bfcda3` hunk 2) — exactly
+the inventory of §2, re-confirmed hunk-for-hunk by §8.
+
+Basis, from the two closed children:
+
+- §8 (hoop-faddd3a0): every hunk-level claim in §§1–4 re-derived from live
+  `git show` / `git diff` output at `bd67c05a4b27f1f7c9758e37107d44dad1f9f55e`
+  — **all confirmed, no corrections**.
+- §9 (hoop-32b592c9): the post-split range `8dbfd82c..a3bcd51a` does not touch
+  the file (blob `efa3cf422b917d108a276f7894d21d0fee7b9a68` identical) — the
+  verdict attaches unchanged to current HEAD.
+
+Consistency check against the tracker: bead hoop-a26c81c8's Notes already
+carry the same verdict with the same exact full SHAs and the same hunk
+inventory ("the 4 non-import hunks above (018ac073 hunk 1&2, 16bfcda3 hunk
+1&2)"). No bead-note update was required. With this section committed, the
+umbrella's acceptance criteria — verdict on the bead plus a committed
+`notes/hoop-a26c81c8.md` artifact — are satisfied. No source files were
+modified by this pass; the only edit is this section.
