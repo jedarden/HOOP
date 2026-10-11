@@ -202,3 +202,36 @@ the import-cleanup commit (`d7a8bbb1`) is in scope for this file, and each of
 the two later compile-fix commits (`018ac073`, `16bfcda3`) carries exactly the
 non-import hunks recorded in §2 — no more, no fewer. No source files were
 modified by this pass; the only edit is this section.
+
+## 9. Delta for commits after split-time HEAD `8dbfd82c` (2026-10-11, bead hoop-32b592c9)
+
+Child 2 of the auto-split. The audit above characterized the file's history up
+to split-time HEAD `8dbfd82c416a907a7c04d0e002784cfcbd87a14a`; workspace HEAD
+has since moved onto the audit's own commits. This section extends the audit
+over exactly that range. **Result: verified empty — no commit after
+`8dbfd82c` touches the file, so §§1–5 and the FLAGGED verdict are unaffected.**
+
+Checked at delta-time HEAD `a3bcd51a26fb80b09f7f666facc5ce3747b26e90`:
+
+| Command | Result |
+|---|---|
+| `git log --oneline 8dbfd82c..HEAD -- hoop-daemon/tests/load_test_integration.rs` | **empty** (exit 0, no output) |
+| `git diff 8dbfd82c..HEAD --stat -- hoop-daemon/tests/load_test_integration.rs` | empty (exit 0) |
+| `git rev-parse 8dbfd82c:<file>` vs `HEAD:<file>` | identical blob `efa3cf422b917d108a276f7894d21d0fee7b9a68` |
+| `git status --short -- <file>` and `git diff HEAD -- <file>` | empty — no uncommitted or staged edits ride along (disk mtime still 2026-10-03 17:59) |
+
+Three commits exist in the range, and each touches only this audit's own
+artifact `notes/hoop-a26c81c8.md` — nothing else:
+
+| SHA | Message | Footprint |
+|---|---|---|
+| `1940f228b6d0579b07ff4b104f953d9362375d3c` | `wip(hoop-a26c81c8): audit load_test_integration.rs cleanup scope` | A `notes/hoop-a26c81c8.md` |
+| `bd67c05a4b27f1f7c9758e37107d44dad1f9f55e` | `wip(hoop-a26c81c8): record close-verification outcome in audit notes` | M `notes/hoop-a26c81c8.md` |
+| `a3bcd51a26fb80b09f7f666facc5ce3747b26e90` | `wip(hoop-faddd3a0): verify audit claims against live diffs at HEAD` | M `notes/hoop-a26c81c8.md` |
+
+The expected result stated on the bead therefore holds: §2's per-commit
+characterization remains the complete post-cleanup history of the file (latest
+touch still `16bfcda3`), and the blob at HEAD is byte-identical to the blob
+the audit was written against — so the close-verification runs recorded in
+§§6–7 attach to the identical Rust inputs at this HEAD too. No source files
+were modified by this pass; the only edit is this section.
