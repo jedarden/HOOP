@@ -135,3 +135,70 @@ reflection_detector, unknown_event_sink, vector_index) and a >60 s hang in
 `integration_harness::tests::test_spawn_and_shutdown`; HOOP's process-cleanup
 rules warn leaked test processes OOM the box. Unrelated-failure evidence is on
 the parent bead; repeating the run adds risk, not information.
+
+## 7. Attempt 3 (2026-10-11, later session) — independent re-verification
+
+Attempt 1's agent died on an API error after committing the audit but before
+completing the close gate. This pass re-verified every audit claim first-hand
+rather than trusting the recorded notes; the verdict is **unchanged: FLAGGED**.
+
+- **Hunk characterization re-confirmed by direct `git show`** of all three
+  post-cleanup commits: `d7a8bbb1` import-cleanup-only for this file (single
+  hunk, `use std::path::PathBuf;` deletion; 3 files / 3 deletions commit-wide);
+  `018ac073` out of scope (adds `use futures_util::StreamExt;` + functional
+  `to_string_lossy()` / `label`/`color`/`redaction` schema fields; 18 files
+  +168/−137); `16bfcda3` out of scope (`{SinkExt, StreamExt}` widening +
+  `load_config.clone()` moved-value fix; only this file, +2/−2). §2's
+  characterizations are accurate as written.
+- **Uncommitted-state check re-run**: `git diff HEAD`, `git diff --cached`, and
+  `git status --short` for the file all empty at the pre-attempt-3 HEAD
+  `bd67c05a4b27f1f7c9758e37107d44dad1f9f55e`.
+- **Rust-tree identity across HEAD movement.** Since the parent's verification
+  HEAD `a4737ad6` the only commits are `8dbfd82c` (bin/*.py + docs/*.json only),
+  `1940f228` and `bd67c05a` (notes/*.md only), and this attempt's notes commit —
+  zero Rust-visible changes. The parent's `cargo build --all-targets` exit 0 and
+  the repo-wide-test failure inventory therefore attach to byte-identical Rust
+  inputs.
+- **Close verification at the closed HEAD** is gate-shaped this time: the
+  NEEDLE close-evidence gate re-runs `verified:` block commands with a cleared,
+  allowlisted environment (`sh -c`, no nix-shell, 30 min/command cap). This is
+  viable here because the tree has **no openssl-sys** (reqwest is
+  `default-features = false, rustls-tls`, nothing else pulls openssl) and the
+  cargo wrapper maps `git archive` extractions to the warm shared target dir
+  `/build/hoop` by Cargo.toml identity. Both block commands carry explicit
+  `-j 1` because default-parallel `cargo build --all-targets` exceeded the
+  worker scope's 6G memory cap in §6 (rustc on `hoop-daemon` peaked ~3.3 GB;
+  parallel big-crate compiles overflow 6 G). Exact commands and exit codes are
+  recorded on bead hoop-a26c81c8; full `cargo test` stays excluded for the §6
+  reasons (pre-existing unrelated failures + hanging test, documented on the
+  parent bead at identical Rust inputs).
+
+## 8. Verification of the committed audit against live diffs at HEAD (2026-10-11, bead hoop-faddd3a0)
+
+Child-1 verification pass of this bead's auto-split. The audit was **not**
+redone: every hunk-level claim in §§1–4 was re-derived from live
+`git show` / `git diff` / `git log` output at pre-verification HEAD
+`bd67c05a4b27f1f7c9758e37107d44dad1f9f55e` and compared against the committed
+artifact. **All claims confirmed; no corrections.**
+
+| Claim (section) | Live check | Result |
+|---|---|---|
+| §1 `git diff HEAD -- <file>` empty | exit 0, no output | confirmed |
+| §1 `git diff --cached -- <file>` empty | exit 0, no output | confirmed |
+| §1 `git status --short -- <file>` empty | exit 0, no output | confirmed |
+| §2 `d7a8bbb1` single hunk deleting `use std::path::PathBuf;` only | one hunk `@@ -10,7 +10,6 @@`, exactly that deletion, 0 insertions | confirmed |
+| §2 `d7a8bbb1` footprint: 3 files, 1 deletion each, companions identical PathBuf removals | `--stat`: `net_diff.rs`, `cross_workspace_blockers.rs`, this file — 3 deletions; full patches show the identical `use std::path::PathBuf;` deletion in each (indented inside `mod tests` in `net_diff.rs`) | confirmed |
+| §2 `018ac073` hunk 1 `@@ -12,6 +12,8 @@` adds `use futures_util::StreamExt;` | exact hunk present (import + separating blank line) | confirmed |
+| §2 `018ac073` hunk 2 `@@ -403,8 +405,11 @@` in `setup_load_test_projects`: `path: project_path` → `path: project_path.to_string_lossy().into_owned()` + `label`/`color`/`redaction`: `None` on `ProjectsRegistryProjectsItem::Variant0` | exact hunk present, all four changes exactly as described | confirmed |
+| §2 `018ac073` footprint 18 files, +168/−137 | `--stat` tail: `18 files changed, 168 insertions(+), 137 deletions(-)` | confirmed |
+| §2 `16bfcda3` hunk 1 `@@ -12,7 +12,7 @@`: `use futures_util::StreamExt;` → `use futures_util::{SinkExt, StreamExt};` | exact hunk present | confirmed |
+| §2 `16bfcda3` hunk 2 `@@ -381,7 +381,7 @@` in `setup_load_test_projects`: `populate_testrepo(load_config, temp_dir)` → `populate_testrepo(load_config.clone(), temp_dir)` | exact hunk present | confirmed |
+| §2 `16bfcda3` touches only this file, +2/−2 | `--stat`: `1 file changed, 2 insertions(+), 2 deletions(-)` | confirmed |
+| §4 file is 592 lines, blob unchanged since `16bfcda3` | `wc -l` → 592; `git log --oneline 16bfcda3..HEAD -- <file>` → empty | confirmed |
+| §4 `futures-util = "0.3"` direct dep; target registered `[[test]]` with `required-features = ["testing"]` | `hoop-daemon/Cargo.toml:41` → `futures-util = "0.3"`; lines 98–100 → `[[test]] name = "load_test_integration"`, `required-features = ["testing"]` | confirmed |
+
+The FLAGGED verdict therefore stands on independently re-derived evidence:
+the import-cleanup commit (`d7a8bbb1`) is in scope for this file, and each of
+the two later compile-fix commits (`018ac073`, `16bfcda3`) carries exactly the
+non-import hunks recorded in §2 — no more, no fewer. No source files were
+modified by this pass; the only edit is this section.
