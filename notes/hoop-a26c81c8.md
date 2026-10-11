@@ -102,8 +102,8 @@ while that bead's work ran its test suite. Recorded for provenance only.
 - Parent bead hoop-72bc70a3 already verified at `a4737ad6` (file identical to
   current HEAD): `cargo build --all-targets` exit 0 and
   `cargo test -p hoop-daemon --features testing --test load_test_integration --no-run`
-  exit 0 (run twice). This bead re-runs both in a clean extraction of HEAD as
-  its close verification.
+  exit 0 (run twice). This bead re-ran the targeted compile in a clean
+  extraction of HEAD as its close verification (§6).
 
 ## 5. What "flagged" means for the validation (parent hoop-72bc70a3)
 
@@ -114,3 +114,24 @@ cleanup. Those changes are the reason the file compiles under
 cleanup and do not need reverting. Any remaining validation effort should target
 compile/runtime behavior of the current file, not diff scope — the diff-scope
 question is settled by this audit.
+
+## 6. Close-verification run (2026-10-11, clean extraction of committed HEAD `1940f228`)
+
+Extraction: `git archive HEAD | tar -x` into `/tmp/hoop-a26c81c8-dod-Guxdrl`
+(removed after success). No `scripts/definition-of-done.sh` exists, so the Rust
+default was adapted as follows:
+
+| Command (inside `nix-shell`) | Result |
+|---|---|
+| `cargo build --all-targets` | SIGTERM'd at 12:36 by memory-cgroup OOM — the worker scope's `MemoryMax=6G` was exceeded compiling `hoop-daemon` (kernel log: `oom-kill:constraint=CONSTRAINT_MEMCG ... task=rustc ... anon-rss:3331604kB`). Infrastructure limit, not a work-product failure; ~351 crates compiled clean first. |
+| `cargo build --all-targets -j 3` | Same OOM, exit 143 (parallel big-crate compiles exceed 6G even at 3 jobs). |
+| `cargo build --all-targets -j 1` | **exit 0** (18m58s, zero OOM kills). |
+| `cargo test -p hoop-daemon --features testing --test load_test_integration --no-run` | **exit 0** (the audited target compiles at HEAD). |
+
+Repo-wide `cargo test` was deliberately not run: at the same file state the
+parent bead (hoop-72bc70a3) recorded pre-existing failures in unrelated targets
+(agent_session, auth, capacity, config_watcher, fleet, prompt_substitute,
+reflection_detector, unknown_event_sink, vector_index) and a >60 s hang in
+`integration_harness::tests::test_spawn_and_shutdown`; HOOP's process-cleanup
+rules warn leaked test processes OOM the box. Unrelated-failure evidence is on
+the parent bead; repeating the run adds risk, not information.
