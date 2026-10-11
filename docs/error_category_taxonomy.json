@@ -2,9 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "taxonomy_version": 1,
   "title": "HOOP test error catalog taxonomy",
-  "purpose": "Closed, single-label rules for classifying records from test_error_messages.json",
+  "purpose": "Closed, single-label rules for classifying records from docs/normalized_error_catalog.json",
   "input": {
-    "authoritative_catalog": "test_error_messages.json",
+    "authoritative_catalog": "docs/normalized_error_catalog.json",
     "handoff_fields": {
       "source_file": "file",
       "source_line": "line",

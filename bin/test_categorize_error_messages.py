@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from categorize_error_messages import (  # noqa: E402
     UNKNOWN_MODULE,
     classify_catalog,
+    classification_report,
     error_type,
     group_by_source_module,
     load_taxonomy,
@@ -245,6 +246,72 @@ class CategorizerTests(unittest.TestCase):
             self.assertIn("message", csv_rows[0])
             self.assertIn("column", csv_rows[0])
             self.assertEqual(len(csv_rows), len(records))
+
+    def test_normalized_handoff_fields_are_preserved_and_reported(self) -> None:
+        records = [
+            {
+                **row('anyhow::bail!(\\"Invalid token\\");', file="hoop-cli/src/auth.rs"),
+                "source_record_id": "r0000042",
+                "source_record_index": 42,
+                "original_message": "Invalid token",
+                "message_status": "extracted",
+                "normalization_flags": [],
+                "unrelated_metadata": {"owner": "test"},
+            },
+            {
+                **row("assert_eq!(actual, expected);", file="src/network/path.rs"),
+                "source_record_id": "r0000043",
+                "source_record_index": 43,
+                "original_message": None,
+                "message_status": "not_present",
+                "normalization_flags": ["no_original_message"],
+            },
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "normalized.json"
+            input_path.write_text(json.dumps(records), encoding="utf-8")
+            categorized = classify_catalog(input_path)
+            report = classification_report(
+                categorized,
+                input_path=input_path,
+                taxonomy_path=Path("taxonomy.json"),
+                output_path=Path("categorized.json"),
+                command="classifier",
+            )
+
+        by_id = {record["source_record_id"]: record for record in categorized}
+        self.assertEqual(by_id["r0000042"]["error_type"], "authentication")
+        self.assertEqual(by_id["r0000042"]["unrelated_metadata"], {"owner": "test"})
+        self.assertEqual(by_id["r0000043"]["error_type"], "other")
+        self.assertEqual(by_id["r0000043"]["original_message"], None)
+        for field, value in records[0].items():
+            self.assertEqual(by_id["r0000042"][field], value)
+        self.assertEqual(report["record_count"], 2)
+        self.assertEqual(
+            report["message_rule_precedence"],
+            [
+                "security",
+                "authentication",
+                "authorization",
+                "timeout",
+                "performance",
+                "concurrency",
+                "configuration",
+                "persistence",
+                "filesystem",
+                "parsing",
+                "network",
+                "runtime",
+                "state",
+                "resource",
+                "validation",
+            ],
+        )
+        self.assertEqual(report["fallback_error_type"], "other")
+        self.assertEqual(report["counts_by_error_type"]["authentication"], 1)
+        self.assertEqual(report["fallback"]["count"], 1)
+        self.assertEqual(report["fallback"]["records"][0]["source_record_id"], "r0000043")
+        self.assertIsNone(report["fallback"]["records"][0]["original_message"])
 
 
 if __name__ == "__main__":

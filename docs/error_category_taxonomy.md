@@ -3,13 +3,15 @@
 The machine-readable source of truth for catalog classification is
 [`error_category_taxonomy.json`](error_category_taxonomy.json). It defines a
 closed set of semantic `error_type` values and a single-label decision
-procedure for the validated `test_error_messages.json` handoff.
+procedure for the normalized handoff at
+[`normalized_error_catalog.json`](normalized_error_catalog.json).
 
 ## Input and preservation contract
 
 The extraction `category` field is the extractor's pattern name (for example,
-`expect with failure`); it is not a semantic error type. Classification reads
-the handoff fields established by `bin/validate_source_error_catalog.py`:
+`expect with failure`); it is not a semantic error type. The preceding
+normalization step reads `test_error_messages.json`, preserves every input
+field, and writes the normalized handoff. Classification reads these fields:
 
 | Handoff field | Source field | Treatment |
 | --- | --- | --- |
@@ -108,4 +110,8 @@ The checked-in categorized intermediate is
 [`categorized_error_catalog.json`](categorized_error_catalog.json). The
 machine-readable run record at
 [`error_category_catalog_run.json`](error_category_catalog_run.json) records
-the taxonomy, input, output, command, and record count used to produce it.
+the taxonomy, normalized input, output, applied precedence, per-type counts,
+and the provenance of every fallback or ambiguous record. Run
+`python3 bin/categorize_error_messages.py` from the repository root to
+reproduce both files; the script defaults to the normalized input and these
+documented output paths.

@@ -1,10 +1,1648 @@
 {
   "taxonomy": "docs/error_category_taxonomy.json",
-  "input": "test_error_messages.json",
-  "outputs": [
-    "docs/categorized_error_catalog.json"
-  ],
-  "classification_command": "python3 bin/categorize_error_messages.py --input test_error_messages.json --taxonomy docs/error_category_taxonomy.json --json-output docs/categorized_error_catalog.json",
+  "input": "docs/normalized_error_catalog.json",
+  "output": "docs/categorized_error_catalog.json",
+  "classification_command": "/run/current-system/sw/bin/python3 bin/categorize_error_messages.py",
   "output_format": "JSON array",
-  "record_count": 3466
+  "message_rule_precedence": [
+    "security",
+    "authentication",
+    "authorization",
+    "timeout",
+    "performance",
+    "concurrency",
+    "configuration",
+    "persistence",
+    "filesystem",
+    "parsing",
+    "network",
+    "runtime",
+    "state",
+    "resource",
+    "validation"
+  ],
+  "fallback_error_type": "other",
+  "record_count": 3466,
+  "counts_by_error_type": {
+    "authentication": 0,
+    "authorization": 21,
+    "concurrency": 33,
+    "configuration": 238,
+    "filesystem": 698,
+    "network": 537,
+    "parsing": 379,
+    "persistence": 248,
+    "performance": 19,
+    "resource": 242,
+    "runtime": 460,
+    "security": 2,
+    "state": 314,
+    "timeout": 29,
+    "validation": 162,
+    "other": 84
+  },
+  "fallback": {
+    "error_type": "other",
+    "count": 84,
+    "records": [
+      {
+        "source_record_index": 9,
+        "source_record_id": "r0000009",
+        "file": "hoop-cli/tests/clap_test_utils.rs",
+        "line": 1199,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(name, \\\"test-project\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 10,
+        "source_record_id": "r0000010",
+        "file": "hoop-cli/tests/clap_test_utils.rs",
+        "line": 1499,
+        "category": "assert_eq detailed message",
+        "line_content": "//             assert_eq!(name, \\\"test-project\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "comment_or_doc_source",
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 36,
+        "source_record_id": "r0000036",
+        "file": "hoop-cli/tests/cli_test_helpers.rs",
+        "line": 2378,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(flags::LONG, \\\"--no-interactive\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 74,
+        "source_record_id": "r0000074",
+        "file": "hoop-cli/tests/cli_test_utils.rs",
+        "line": 994,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(parsed.command, \\\"--no-interactive\\\"); // Edge case: flag becomes command name",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 755,
+        "source_record_id": "r0000755",
+        "file": "hoop-daemon/tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 600,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(draft[\\\"title\\\"], \\\"Test draft with all fields\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 756,
+        "source_record_id": "r0000756",
+        "file": "hoop-daemon/tests/acceptance/s3_bead_creation_from_chat.rs",
+        "line": 602,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(draft[\\\"description\\\"], \\\"Full description\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1326,
+        "source_record_id": "r0001326",
+        "file": "hoop-daemon/tests/backup_config_deserialization.rs",
+        "line": 54,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(config.endpoint, \\\"https://s3.example.com\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:ambiguous_source_hints",
+        "competing_source_hints": [
+          "configuration",
+          "persistence"
+        ]
+      },
+      {
+        "source_record_index": 1327,
+        "source_record_id": "r0001327",
+        "file": "hoop-daemon/tests/backup_config_deserialization.rs",
+        "line": 80,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(config.endpoint, \\\"https://s3.example.com\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:ambiguous_source_hints",
+        "competing_source_hints": [
+          "configuration",
+          "persistence"
+        ]
+      },
+      {
+        "source_record_index": 1328,
+        "source_record_id": "r0001328",
+        "file": "hoop-daemon/tests/backup_config_deserialization.rs",
+        "line": 83,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(config.schedule, \\\"*/30 * * * *\\\"); // explicit value",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:ambiguous_source_hints",
+        "competing_source_hints": [
+          "configuration",
+          "persistence"
+        ]
+      },
+      {
+        "source_record_index": 1329,
+        "source_record_id": "r0001329",
+        "file": "hoop-daemon/tests/backup_config_deserialization.rs",
+        "line": 99,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(config.endpoint, \\\"https://s3.example.com\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:ambiguous_source_hints",
+        "competing_source_hints": [
+          "configuration",
+          "persistence"
+        ]
+      },
+      {
+        "source_record_index": 1339,
+        "source_record_id": "r0001339",
+        "file": "hoop-daemon/tests/bead_created_by_hoop_broadcast.rs",
+        "line": 82,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(notification.details[\\\"bead_id\\\"], \\\"hoop-ttb.3.53\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1340,
+        "source_record_id": "r0001340",
+        "file": "hoop-daemon/tests/bead_created_by_hoop_broadcast.rs",
+        "line": 83,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(notification.details[\\\"project\\\"], \\\"test-project\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1341,
+        "source_record_id": "r0001341",
+        "file": "hoop-daemon/tests/bead_created_by_hoop_broadcast.rs",
+        "line": 84,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(notification.details[\\\"actor\\\"], \\\"tailscale:test@example.com\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1342,
+        "source_record_id": "r0001342",
+        "file": "hoop-daemon/tests/bead_created_by_hoop_broadcast.rs",
+        "line": 113,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(parsed.project, \\\"test-project\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1343,
+        "source_record_id": "r0001343",
+        "file": "hoop-daemon/tests/bead_created_by_hoop_broadcast.rs",
+        "line": 115,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(parsed.actor, \\\"os:testuser\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1344,
+        "source_record_id": "r0001344",
+        "file": "hoop-daemon/tests/bead_created_by_hoop_broadcast.rs",
+        "line": 117,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(parsed.ts, \\\"2026-04-26T12:00:00Z\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1349,
+        "source_record_id": "r0001349",
+        "file": "hoop-daemon/tests/bead_real_line_deserialization.rs",
+        "line": 206,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(bead.id, \\\"test-extra\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1423,
+        "source_record_id": "r0001423",
+        "file": "hoop-daemon/tests/claimed_at_parsing.rs",
+        "line": 140,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(entry.bead_id, \\\"bd-test001\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1424,
+        "source_record_id": "r0001424",
+        "file": "hoop-daemon/tests/claimed_at_parsing.rs",
+        "line": 141,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(entry.project, \\\"test-project\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1425,
+        "source_record_id": "r0001425",
+        "file": "hoop-daemon/tests/claimed_at_parsing.rs",
+        "line": 152,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(entry.bead_id, \\\"bd-test001\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1426,
+        "source_record_id": "r0001426",
+        "file": "hoop-daemon/tests/claimed_at_parsing.rs",
+        "line": 161,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(entry.bead_id, \\\"bd-test001\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1427,
+        "source_record_id": "r0001427",
+        "file": "hoop-daemon/tests/claimed_at_parsing.rs",
+        "line": 171,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(entry.bead_id, \\\"bd-test001\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1428,
+        "source_record_id": "r0001428",
+        "file": "hoop-daemon/tests/claimed_at_parsing.rs",
+        "line": 172,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(entry.project, \\\"test-project\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1602,
+        "source_record_id": "r0001602",
+        "file": "hoop-daemon/tests/draft_queue_invariants.rs",
+        "line": 137,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(fetched.created_by, \\\"os:agent-worker-3\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1603,
+        "source_record_id": "r0001603",
+        "file": "hoop-daemon/tests/draft_queue_invariants.rs",
+        "line": 214,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(fetched1.title, \\\"First draft\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1604,
+        "source_record_id": "r0001604",
+        "file": "hoop-daemon/tests/draft_queue_invariants.rs",
+        "line": 220,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(fetched2.title, \\\"Second draft\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1605,
+        "source_record_id": "r0001605",
+        "file": "hoop-daemon/tests/draft_queue_invariants.rs",
+        "line": 343,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(audit_row.actor, \\\"os:test-agent\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1606,
+        "source_record_id": "r0001606",
+        "file": "hoop-daemon/tests/draft_queue_invariants.rs",
+        "line": 345,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(audit_row.target, \\\"draft-audit-1\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1607,
+        "source_record_id": "r0001607",
+        "file": "hoop-daemon/tests/draft_queue_invariants.rs",
+        "line": 647,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(edited.title, \\\"Updated title\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1608,
+        "source_record_id": "r0001608",
+        "file": "hoop-daemon/tests/draft_queue_invariants.rs",
+        "line": 867,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(draft.title, \\\"Updated Title\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1609,
+        "source_record_id": "r0001609",
+        "file": "hoop-daemon/tests/draft_queue_invariants.rs",
+        "line": 869,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(draft.kind, \\\"investigation\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1610,
+        "source_record_id": "r0001610",
+        "file": "hoop-daemon/tests/draft_queue_invariants.rs",
+        "line": 1108,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(autosaved.title, \\\"My Stitch Title\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1768,
+        "source_record_id": "r0001768",
+        "file": "hoop-daemon/tests/fix_patterns_integration.rs",
+        "line": 62,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(pattern.name, \\\"Unwrap Option\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1769,
+        "source_record_id": "r0001769",
+        "file": "hoop-daemon/tests/fix_patterns_integration.rs",
+        "line": 63,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(pattern.keywords, \\\"unwrap,option,panic,null\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1770,
+        "source_record_id": "r0001770",
+        "file": "hoop-daemon/tests/fix_patterns_integration.rs",
+        "line": 86,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(updated.name, \\\"Unwrap Option (Fixed)\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1771,
+        "source_record_id": "r0001771",
+        "file": "hoop-daemon/tests/fix_patterns_integration.rs",
+        "line": 87,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(updated.keywords, \\\"unwrap,option,pattern-matching\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1772,
+        "source_record_id": "r0001772",
+        "file": "hoop-daemon/tests/fix_patterns_integration.rs",
+        "line": 192,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(matches[2].pattern.name, \\\"Different Pattern\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1773,
+        "source_record_id": "r0001773",
+        "file": "hoop-daemon/tests/fix_patterns_integration.rs",
+        "line": 304,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(results[0].name, \\\"Index Out of Bounds\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1774,
+        "source_record_id": "r0001774",
+        "file": "hoop-daemon/tests/fix_patterns_integration.rs",
+        "line": 310,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(results[0].name, \\\"Type Mismatch\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1786,
+        "source_record_id": "r0001786",
+        "file": "hoop-daemon/tests/fleet_notification_scripts_integration.rs",
+        "line": 70,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(payload[\\\"kind\\\"], \\\"capacity_alert\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1787,
+        "source_record_id": "r0001787",
+        "file": "hoop-daemon/tests/fleet_notification_scripts_integration.rs",
+        "line": 71,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(payload[\\\"summary\\\"], \\\"Account utilization is high\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1792,
+        "source_record_id": "r0001792",
+        "file": "hoop-daemon/tests/fleet_notifications_integration.rs",
+        "line": 44,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(received.summary, \\\"Test notification\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1793,
+        "source_record_id": "r0001793",
+        "file": "hoop-daemon/tests/fleet_notifications_integration.rs",
+        "line": 242,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(snapshot[0].details[\\\"metadata\\\"][\\\"project\\\"], \\\"test-project\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1794,
+        "source_record_id": "r0001794",
+        "file": "hoop-daemon/tests/fleet_notifications_integration.rs",
+        "line": 277,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(recv1.summary, \\\"Broadcast to all subscribers\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1795,
+        "source_record_id": "r0001795",
+        "file": "hoop-daemon/tests/fleet_notifications_integration.rs",
+        "line": 278,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(recv2.summary, \\\"Broadcast to all subscribers\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 1796,
+        "source_record_id": "r0001796",
+        "file": "hoop-daemon/tests/fleet_notifications_integration.rs",
+        "line": 279,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(recv3.summary, \\\"Broadcast to all subscribers\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2187,
+        "source_record_id": "r0002187",
+        "file": "hoop-daemon/tests/mutation_handler_test.rs",
+        "line": 413,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(error.message, \\\"Priority must be positive\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2204,
+        "source_record_id": "r0002204",
+        "file": "hoop-daemon/tests/orphans_integration.rs",
+        "line": 70,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(response.project, \\\"test-project\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2205,
+        "source_record_id": "r0002205",
+        "file": "hoop-daemon/tests/orphans_integration.rs",
+        "line": 73,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(response.orphans[0].id, \\\"hoop-ttb.1\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2206,
+        "source_record_id": "r0002206",
+        "file": "hoop-daemon/tests/orphans_integration.rs",
+        "line": 74,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(response.orphans[1].id, \\\"hoop-ttb.2\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2208,
+        "source_record_id": "r0002208",
+        "file": "hoop-daemon/tests/output_capture_helpers/mod.rs",
+        "line": 913,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(extracted, \\\"Line 1\\\\nLine 2\\\\nLine 3\\\\n\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2214,
+        "source_record_id": "r0002214",
+        "file": "hoop-daemon/tests/per_project_redaction_integration.rs",
+        "line": 143,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(policy.source, \\\"project:customer-data\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2215,
+        "source_record_id": "r0002215",
+        "file": "hoop-daemon/tests/per_project_redaction_integration.rs",
+        "line": 149,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(policy.source, \\\"project:internal-tools\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2216,
+        "source_record_id": "r0002216",
+        "file": "hoop-daemon/tests/per_project_redaction_integration.rs",
+        "line": 155,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(policy.source, \\\"built-in default\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2217,
+        "source_record_id": "r0002217",
+        "file": "hoop-daemon/tests/per_project_redaction_integration.rs",
+        "line": 161,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(policy.source, \\\"built-in default\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2218,
+        "source_record_id": "r0002218",
+        "file": "hoop-daemon/tests/per_project_redaction_integration.rs",
+        "line": 188,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(err.project, \\\"customer-data\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2219,
+        "source_record_id": "r0002219",
+        "file": "hoop-daemon/tests/per_project_redaction_integration.rs",
+        "line": 266,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(err.project, \\\"customer-data\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2220,
+        "source_record_id": "r0002220",
+        "file": "hoop-daemon/tests/per_project_redaction_integration.rs",
+        "line": 359,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(policy.source, \\\"project:multi-workspace-project\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2247,
+        "source_record_id": "r0002247",
+        "file": "hoop-daemon/tests/property_invariants.rs",
+        "line": 385,
+        "category": "assert_eq detailed message",
+        "line_content": "prop_assert_eq!(status1, status2.clone(), \\\"First and second calls differ\\\");",
+        "original_message": "First and second calls differ",
+        "message_status": "extracted",
+        "normalization_flags": [],
+        "exception_flags": [],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2248,
+        "source_record_id": "r0002248",
+        "file": "hoop-daemon/tests/property_invariants.rs",
+        "line": 386,
+        "category": "assert_eq detailed message",
+        "line_content": "prop_assert_eq!(status2, status3, \\\"Second and third calls differ\\\");",
+        "original_message": "Second and third calls differ",
+        "message_status": "extracted",
+        "normalization_flags": [],
+        "exception_flags": [],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2254,
+        "source_record_id": "r0002254",
+        "file": "hoop-daemon/tests/protocol_contract.rs",
+        "line": 259,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(status.projects[0].name, \\\"test-project\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2255,
+        "source_record_id": "r0002255",
+        "file": "hoop-daemon/tests/protocol_contract.rs",
+        "line": 286,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(message, \\\"daemon not running\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2256,
+        "source_record_id": "r0002256",
+        "file": "hoop-daemon/tests/pure_functions.rs",
+        "line": 291,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(result, \\\"Working on myproject\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2263,
+        "source_record_id": "r0002263",
+        "file": "hoop-daemon/tests/quarantine_integration.rs",
+        "line": 78,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(entry[\\\"tag\\\"], \\\"integration_test\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2264,
+        "source_record_id": "r0002264",
+        "file": "hoop-daemon/tests/quarantine_integration.rs",
+        "line": 124,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(entry[\\\"tag\\\"], \\\"custom_parser\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2278,
+        "source_record_id": "r0002278",
+        "file": "hoop-daemon/tests/risk_patterns_standalone.rs",
+        "line": 192,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(matches[0].pattern.id, \\\"label_pattern\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2393,
+        "source_record_id": "r0002393",
+        "file": "hoop-daemon/tests/s3_bead_creation_from_chat.rs",
+        "line": 627,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(draft[\\\"title\\\"], \\\"Test draft with all fields\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2394,
+        "source_record_id": "r0002394",
+        "file": "hoop-daemon/tests/s3_bead_creation_from_chat.rs",
+        "line": 629,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(draft[\\\"description\\\"], \\\"Full description\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2668,
+        "source_record_id": "r0002668",
+        "file": "hoop-daemon/tests/skills_integration.rs",
+        "line": 47,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(skills[0].name, \\\"test-skill\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2670,
+        "source_record_id": "r0002670",
+        "file": "hoop-daemon/tests/skills_integration.rs",
+        "line": 93,
+        "category": "expect call with detailed message",
+        "line_content": "fs::set_permissions(skill_dir.join(\\\"run\\\"), perms).expect(\\\"Failed to set permissions\\\");",
+        "original_message": "Failed to set permissions",
+        "message_status": "extracted",
+        "normalization_flags": [
+          "source_location_collision"
+        ],
+        "exception_flags": [],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2669,
+        "source_record_id": "r0002669",
+        "file": "hoop-daemon/tests/skills_integration.rs",
+        "line": 93,
+        "category": "expect with failure",
+        "line_content": "fs::set_permissions(skill_dir.join(\\\"run\\\"), perms).expect(\\\"Failed to set permissions\\\");",
+        "original_message": "Failed to set permissions",
+        "message_status": "extracted",
+        "normalization_flags": [
+          "source_location_collision"
+        ],
+        "exception_flags": [],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2671,
+        "source_record_id": "r0002671",
+        "file": "hoop-daemon/tests/skills_integration.rs",
+        "line": 323,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(tools[0][\\\"name\\\"], \\\"skill_fetch\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2672,
+        "source_record_id": "r0002672",
+        "file": "hoop-daemon/tests/skills_integration.rs",
+        "line": 324,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(tools[0][\\\"description\\\"], \\\"Fetch a URL\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2697,
+        "source_record_id": "r0002697",
+        "file": "hoop-daemon/tests/skills_quarantine_integration.rs",
+        "line": 202,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(shebang_line, \\\"#!/usr/bin/env python3\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2810,
+        "source_record_id": "r0002810",
+        "file": "hoop-daemon/tests/stitch_percentile_index_integration.rs",
+        "line": 21,
+        "category": "expect call with detailed message",
+        "line_content": "let mut conn = Connection::open(&db_path).expect(\\\"Failed to open test DB\\\");",
+        "original_message": "Failed to open test DB",
+        "message_status": "extracted",
+        "normalization_flags": [
+          "source_location_collision"
+        ],
+        "exception_flags": [],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2809,
+        "source_record_id": "r0002809",
+        "file": "hoop-daemon/tests/stitch_percentile_index_integration.rs",
+        "line": 21,
+        "category": "expect with failure",
+        "line_content": "let mut conn = Connection::open(&db_path).expect(\\\"Failed to open test DB\\\");",
+        "original_message": "Failed to open test DB",
+        "message_status": "extracted",
+        "normalization_flags": [
+          "source_location_collision"
+        ],
+        "exception_flags": [],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2881,
+        "source_record_id": "r0002881",
+        "file": "hoop-daemon/tests/supervisor_health.rs",
+        "line": 435,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(status.project_name, \\\"my-test-project\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 2893,
+        "source_record_id": "r0002893",
+        "file": "hoop-daemon/tests/supervisor_hotreload.rs",
+        "line": 137,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(snapshot[0].project_name, \\\"test-project\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 3001,
+        "source_record_id": "r0003001",
+        "file": "hoop-daemon/tests/testrepo_harness_integration.rs",
+        "line": 295,
+        "category": "expect call with detailed message",
+        "line_content": "let ready = client.readyz().await.expect(\\\"Ready check failed\\\");",
+        "original_message": "Ready check failed",
+        "message_status": "extracted",
+        "normalization_flags": [],
+        "exception_flags": [],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 3104,
+        "source_record_id": "r0003104",
+        "file": "hoop-daemon/tests/testrepo_integration.rs",
+        "line": 292,
+        "category": "expect call with detailed message",
+        "line_content": "let ready = client.readyz().await.expect(\\\"Ready check failed\\\");",
+        "original_message": "Ready check failed",
+        "message_status": "extracted",
+        "normalization_flags": [],
+        "exception_flags": [],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 3456,
+        "source_record_id": "r0003456",
+        "file": "tests/cli_test_helpers.rs",
+        "line": 582,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(name, \\\"my-project\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 3457,
+        "source_record_id": "r0003457",
+        "file": "tests/cli_test_helpers.rs",
+        "line": 657,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(name, \\\"my-project\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 3458,
+        "source_record_id": "r0003458",
+        "file": "tests/cli_test_helpers.rs",
+        "line": 1006,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(name, \\\"my-project\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      },
+      {
+        "source_record_index": 3459,
+        "source_record_id": "r0003459",
+        "file": "tests/cli_test_helpers.rs",
+        "line": 1080,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(name, \\\"my-project\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:no_matching_rule"
+      }
+    ]
+  },
+  "ambiguous": {
+    "count": 4,
+    "records": [
+      {
+        "source_record_index": 1326,
+        "source_record_id": "r0001326",
+        "file": "hoop-daemon/tests/backup_config_deserialization.rs",
+        "line": 54,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(config.endpoint, \\\"https://s3.example.com\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:ambiguous_source_hints",
+        "competing_source_hints": [
+          "configuration",
+          "persistence"
+        ]
+      },
+      {
+        "source_record_index": 1327,
+        "source_record_id": "r0001327",
+        "file": "hoop-daemon/tests/backup_config_deserialization.rs",
+        "line": 80,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(config.endpoint, \\\"https://s3.example.com\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:ambiguous_source_hints",
+        "competing_source_hints": [
+          "configuration",
+          "persistence"
+        ]
+      },
+      {
+        "source_record_index": 1328,
+        "source_record_id": "r0001328",
+        "file": "hoop-daemon/tests/backup_config_deserialization.rs",
+        "line": 83,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(config.schedule, \\\"*/30 * * * *\\\"); // explicit value",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:ambiguous_source_hints",
+        "competing_source_hints": [
+          "configuration",
+          "persistence"
+        ]
+      },
+      {
+        "source_record_index": 1329,
+        "source_record_id": "r0001329",
+        "file": "hoop-daemon/tests/backup_config_deserialization.rs",
+        "line": 99,
+        "category": "assert_eq detailed message",
+        "line_content": "assert_eq!(config.endpoint, \\\"https://s3.example.com\\\");",
+        "original_message": null,
+        "message_status": "not_present",
+        "normalization_flags": [
+          "no_original_message"
+        ],
+        "exception_flags": [
+          "no_original_message"
+        ],
+        "error_type": "other",
+        "reason": "fallback:ambiguous_source_hints",
+        "competing_source_hints": [
+          "configuration",
+          "persistence"
+        ]
+      }
+    ]
+  }
 }

@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Add semantic error types and source-module identifiers to the test catalog.
+"""Classify the normalized error catalog into mutually exclusive error types.
 
 The extraction catalog's existing ``category`` field describes the Rust
 assertion/extraction pattern (for example, ``expect with failure``).  This
 script adds ``error_type`` for the operation that failed and ``source_module``
 for grouping entries without losing the original source path and line.
 
-The classifier is deliberately single-label: rules are evaluated in the order
-below, so a message that mentions both a timeout and a network operation is
-categorized as ``timeout``.  ``other`` is retained for messages whose
-meaning cannot be inferred reliably from the catalog entry.
+The classifier is deliberately single-label: rules are evaluated in the
+documented taxonomy order, so a message that mentions both a timeout and a
+network operation is categorized as ``timeout``.  ``other`` is the explicit
+fallback for messages whose meaning cannot be inferred reliably from the
+catalog entry.
 """
 
 from __future__ import annotations
@@ -22,6 +23,8 @@ import re
 import shlex
 import sys
 import tempfile
+from collections import Counter
+from copy import deepcopy
 from pathlib import Path
 
 from load_error_catalog import load_catalog
@@ -42,12 +45,37 @@ def load_taxonomy(path: Path = TAXONOMY_PATH) -> dict[str, object]:
     rules = taxonomy.get("message_rules")
     fallback = taxonomy.get("source_file_fallback")
     module_normalization = taxonomy.get("source_module_normalization")
-    if not isinstance(allowed, list) or not all(isinstance(value, str) for value in allowed):
+    if not isinstance(allowed, list) or not allowed or not all(
+        isinstance(value, str) and value for value in allowed
+    ):
         raise ValueError(f"taxonomy has no valid allowed_error_types: {path}")
-    if not isinstance(precedence, list) or precedence != [value for value in precedence if value in allowed]:
+    if len(set(allowed)) != len(allowed):
+        raise ValueError(f"taxonomy has no valid allowed_error_types: {path}")
+    if (
+        not isinstance(precedence, list)
+        or not all(isinstance(value, str) and value for value in precedence)
+    ):
         raise ValueError(f"taxonomy has an invalid message_rule_precedence: {path}")
-    if not isinstance(rules, list) or not isinstance(fallback, dict):
+    if len(set(precedence)) != len(precedence) or set(precedence) != set(allowed) - {"other"}:
+        raise ValueError(f"taxonomy has an invalid message_rule_precedence: {path}")
+    categories = taxonomy.get("categories")
+    if not isinstance(categories, dict) or set(categories) != set(allowed):
+        raise ValueError(f"taxonomy categories do not match allowed_error_types: {path}")
+    rule_categories = [rule.get("category") for rule in rules] if isinstance(rules, list) else []
+    if (
+        not isinstance(rules, list)
+        or not all(
+            isinstance(rule, dict)
+            and isinstance(rule.get("pattern"), str)
+            and isinstance(rule.get("category"), str)
+            for rule in rules
+        )
+    ):
         raise ValueError(f"taxonomy is missing classification rules: {path}")
+    if len(rule_categories) != len(set(rule_categories)) or set(rule_categories) != set(precedence):
+        raise ValueError(f"taxonomy is missing classification rules: {path}")
+    if not isinstance(fallback, dict) or fallback.get("category", "other") != "other":
+        raise ValueError(f"taxonomy is missing the explicit other fallback: {path}")
     if not isinstance(module_normalization, dict):
         raise ValueError(f"taxonomy is missing source-module normalization: {path}")
     module_fallback = module_normalization.get("fallback_value")
@@ -77,6 +105,35 @@ SOURCE_FALLBACK_RULES = tuple(
     for rule in TAXONOMY["source_file_fallback"]["rules"]
 )
 FALLBACK_ERROR_TYPE = "other"
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+
+
+def classification_details(
+    message: str, source_file: object
+) -> tuple[str, str, tuple[str, ...]]:
+    """Return the label, decision path, and any competing source hints.
+
+    The decision path is reporting metadata only.  ``RULES`` remains the
+    normative ordered decision list, and the first matching message rule is
+    still the sole source of the returned label.
+    """
+
+    for category, pattern in RULES:
+        if pattern.search(message):
+            return category, f"message:{category}", ()
+
+    source = _normalized_source_path(source_file)
+    if source is None:
+        return FALLBACK_ERROR_TYPE, "fallback:invalid_source_file", ()
+
+    matching_categories = tuple(
+        sorted({category for category, pattern in SOURCE_FALLBACK_RULES if pattern.search(source)})
+    )
+    if len(matching_categories) == 1:
+        return matching_categories[0], "source_file:unique_hint", matching_categories
+    if len(matching_categories) > 1:
+        return FALLBACK_ERROR_TYPE, "fallback:ambiguous_source_hints", matching_categories
+    return FALLBACK_ERROR_TYPE, "fallback:no_matching_rule", ()
 
 
 def _split_macro_args(arguments: str) -> list[str]:
@@ -196,22 +253,7 @@ def classify_message(message: str, source_file: object) -> str:
     matches; conflicting source hints resolve to the documented fallback.
     """
 
-    for category, pattern in RULES:
-        if pattern.search(message):
-            return category
-
-    # Generic messages such as ``"failed"`` carry too little information by
-    # themselves.  A few source-file names are stable domain hints and are only
-    # consulted after message rules, so explicit message text always wins.
-    source = _normalized_source_path(source_file)
-    if source is None:
-        return FALLBACK_ERROR_TYPE
-    matching_categories = {
-        category for category, pattern in SOURCE_FALLBACK_RULES if pattern.search(source)
-    }
-    if len(matching_categories) == 1:
-        return matching_categories.pop()
-    return FALLBACK_ERROR_TYPE
+    return classification_details(message, source_file)[0]
 
 
 def error_type(row: dict[str, object]) -> str:
@@ -256,6 +298,16 @@ def atomic_write(path: Path, data: str) -> None:
         raise
 
 
+def display_path(path: Path) -> str:
+    """Use repository-relative paths in committed run metadata when possible."""
+
+    resolved = Path(path).resolve()
+    try:
+        return str(resolved.relative_to(REPOSITORY_ROOT))
+    except ValueError:
+        return str(path)
+
+
 def classify_catalog(input_path: Path) -> list[dict[str, object]]:
     rows = load_catalog(input_path)
 
@@ -270,6 +322,94 @@ def classify_catalog(input_path: Path) -> list[dict[str, object]]:
         )
         categorized.append(updated)
     return sorted(categorized, key=sort_key)
+
+
+def _record_reference(row: dict[str, object], *, reason: str, hints: tuple[str, ...]) -> dict[str, object]:
+    """Identify a report entry with enough provenance to inspect it."""
+
+    reference: dict[str, object] = {
+        field: deepcopy(row[field])
+        for field in (
+            "source_record_index",
+            "source_record_id",
+            "file",
+            "line",
+            "category",
+            "line_content",
+            "original_message",
+            "message_status",
+            "normalization_flags",
+            "exception_flags",
+            "error_type",
+        )
+        if field in row
+    }
+    reference["reason"] = reason
+    if hints:
+        reference["competing_source_hints"] = list(hints)
+    return reference
+
+
+def classification_report(
+    rows: list[dict[str, object]],
+    *,
+    input_path: Path,
+    taxonomy_path: Path,
+    output_path: Path,
+    command: str,
+) -> dict[str, object]:
+    """Build a deterministic audit report for the categorized handoff."""
+
+    ordered_rows = sorted(rows, key=sort_key)
+    counts = Counter(str(row["error_type"]) for row in ordered_rows)
+    unexpected = sorted(set(counts) - set(ALLOWED_ERROR_TYPES))
+    if unexpected:
+        raise ValueError(f"catalog contains error_type outside taxonomy: {unexpected}")
+    fallback_records: list[dict[str, object]] = []
+    ambiguous_records: list[dict[str, object]] = []
+    for row in ordered_rows:
+        message = message_for_row(row)
+        category, reason, hints = classification_details(message, row.get("file"))
+        if category != row["error_type"]:
+            raise ValueError(f"classification changed between catalog and report for {row!r}")
+
+        flags = set()
+        for field in ("normalization_flags", "exception_flags"):
+            value = row.get(field)
+            if isinstance(value, list):
+                flags.update(str(flag) for flag in value)
+        message_ambiguous = row.get("message_status") == "ambiguous" or any(
+            "ambiguous" in flag for flag in flags
+        )
+        source_ambiguous = reason == "fallback:ambiguous_source_hints"
+        if message_ambiguous or source_ambiguous:
+            ambiguous_records.append(
+                _record_reference(row, reason=reason, hints=hints)
+            )
+        if category == FALLBACK_ERROR_TYPE:
+            fallback_records.append(_record_reference(row, reason=reason, hints=hints))
+
+    ordered_counts = {category: counts.get(category, 0) for category in ALLOWED_ERROR_TYPES}
+    return {
+        "taxonomy": display_path(taxonomy_path),
+        "input": display_path(input_path),
+        "output": display_path(output_path),
+        "classification_command": command,
+        "output_format": "JSON array",
+        "message_rule_precedence": [category for category, _ in RULES],
+        "fallback_error_type": FALLBACK_ERROR_TYPE,
+        "record_count": len(ordered_rows),
+        "counts_by_error_type": ordered_counts,
+        "fallback": {
+            "error_type": FALLBACK_ERROR_TYPE,
+            "count": len(fallback_records),
+            "records": fallback_records,
+        },
+        "ambiguous": {
+            "count": len(ambiguous_records),
+            "records": ambiguous_records,
+        },
+    }
 
 
 def sort_key(row: dict[str, object]) -> tuple[str, int, str, int, str, str, str]:
@@ -336,10 +476,17 @@ def write_csv(rows: list[dict[str, object]], path: Path) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, default=Path("test_error_messages.json"))
+    parser.add_argument(
+        "--input", type=Path, default=Path("docs/normalized_error_catalog.json")
+    )
     parser.add_argument("--taxonomy", type=Path, default=TAXONOMY_PATH)
-    parser.add_argument("--json-output", type=Path, default=Path("categorized_error_catalog.json"))
+    parser.add_argument(
+        "--json-output", type=Path, default=Path("docs/categorized_error_catalog.json")
+    )
     parser.add_argument("--csv-output", type=Path)
+    parser.add_argument(
+        "--report-output", type=Path, default=Path("docs/error_category_catalog_run.json")
+    )
     return parser.parse_args()
 
 
@@ -370,16 +517,26 @@ def main() -> None:
     if args.csv_output is not None:
         write_csv(rows, args.csv_output)
 
+    command = " ".join(
+        shlex.quote(argument) for argument in [sys.executable, *sys.argv]
+    )
+    report = classification_report(
+        rows,
+        input_path=args.input,
+        taxonomy_path=args.taxonomy,
+        output_path=args.json_output,
+        command=command,
+    )
+    atomic_write(args.report_output, json.dumps(report, indent=2, ensure_ascii=False) + "\n")
+
     print(f"categorized {len(rows)} entries")
     print(f"input: {args.input}")
     print(f"taxonomy: {args.taxonomy}")
     print(f"json_output: {args.json_output}")
     if args.csv_output is not None:
         print(f"csv_output: {args.csv_output}")
-    print(
-        "classification_command: "
-        + " ".join(shlex.quote(argument) for argument in [sys.executable, *sys.argv])
-    )
+    print(f"report_output: {args.report_output}")
+    print(f"classification_command: {command}")
     for category in CATEGORY_DESCRIPTIONS:
         count = sum(row["error_type"] == category for row in rows)
         print(f"{category}: {count}")
