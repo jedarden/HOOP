@@ -115,3 +115,27 @@ and the provenance of every fallback or ambiguous record. Run
 `python3 bin/categorize_error_messages.py` from the repository root to
 reproduce both files; the script defaults to the normalized input and these
 documented output paths.
+
+## Source-module grouped intermediate
+
+The same run also writes
+[`categorized_error_catalog_by_module.json`](categorized_error_catalog_by_module.json),
+the source-module grouping consumed by the final export child. It nests the
+complete categorized records as `source_module -> error_type -> records`
+(never reduced summaries), so no consumer has to join the grouped view back
+against the flat catalog. Modules are sorted lexicographically and error
+types follow `allowed_error_types` order inside each module. The document
+carries `record_count`, `module_count`, taxonomy-ordered
+`counts_by_error_type`, sorted `counts_by_source_module`, and
+`unresolved_module_mappings` — the explicit list of records whose `file`
+could not be mapped (each also grouped under the `unknown_module` fallback
+value from the taxonomy's `source_module_normalization` block). A count of
+zero there means every record resolved to a concrete module.
+
+The run record mirrors this for the flat catalog: `source_modules` reports
+`module_count`, per-module counts, the `unknown_module` value, and the
+unresolved mappings; `field_coverage` records how many records carry
+`error_type` and `source_module`. Classification refuses to write any
+artifact when a record is missing either field, and the final export child
+must treat a nonzero `unresolved_module_mappings.count` as a handoff
+exception to resolve or flag, never as data to drop.

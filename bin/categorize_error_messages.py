@@ -6,6 +6,11 @@ assertion/extraction pattern (for example, ``expect with failure``).  This
 script adds ``error_type`` for the operation that failed and ``source_module``
 for grouping entries without losing the original source path and line.
 
+Outputs: the flat, deterministically sorted catalog (``--json-output``), the
+same records nested ``source_module -> error_type`` with per-module and
+per-type counts (``--grouped-output``), and the audit report with counts,
+field coverage, and unresolved module mappings (``--report-output``).
+
 The classifier is deliberately single-label: rules are evaluated in the
 documented taxonomy order, so a message that mentions both a timeout and a
 network operation is categorized as ``timeout``.  ``other`` is the explicit
@@ -350,6 +355,27 @@ def _record_reference(row: dict[str, object], *, reason: str, hints: tuple[str, 
     return reference
 
 
+def verify_required_derived_fields(rows: list[dict[str, object]]) -> None:
+    """Reject the handoff when any record lacks a derived grouping field.
+
+    Downstream grouping and export both key on ``error_type`` and
+    ``source_module``, so a record missing either would silently split or
+    drop entries.  The check runs before any artifact is written.
+    """
+
+    missing: list[str] = []
+    for index, row in enumerate(rows):
+        for field in ("error_type", "source_module"):
+            value = row.get(field)
+            if not isinstance(value, str) or not value.strip():
+                missing.append(f"record {index + 1} is missing {field}")
+    if missing:
+        raise ValueError(
+            "categorized catalog has records without required derived fields: "
+            + "; ".join(missing[:5])
+        )
+
+
 def classification_report(
     rows: list[dict[str, object]],
     *,
@@ -357,9 +383,11 @@ def classification_report(
     taxonomy_path: Path,
     output_path: Path,
     command: str,
+    grouped_output: Path | None = None,
 ) -> dict[str, object]:
     """Build a deterministic audit report for the categorized handoff."""
 
+    verify_required_derived_fields(rows)
     ordered_rows = sorted(rows, key=sort_key)
     counts = Counter(str(row["error_type"]) for row in ordered_rows)
     unexpected = sorted(set(counts) - set(ALLOWED_ERROR_TYPES))
@@ -390,6 +418,12 @@ def classification_report(
             fallback_records.append(_record_reference(row, reason=reason, hints=hints))
 
     ordered_counts = {category: counts.get(category, 0) for category in ALLOWED_ERROR_TYPES}
+    module_counts = Counter(str(row["source_module"]) for row in ordered_rows)
+    unresolved = [
+        _record_reference(row, reason="invalid_source_file", hints=())
+        for row in ordered_rows
+        if str(row["source_module"]) == UNKNOWN_MODULE
+    ]
     return {
         "taxonomy": display_path(taxonomy_path),
         "input": display_path(input_path),
@@ -400,6 +434,27 @@ def classification_report(
         "fallback_error_type": FALLBACK_ERROR_TYPE,
         "record_count": len(ordered_rows),
         "counts_by_error_type": ordered_counts,
+        "field_coverage": {
+            "records_with_error_type": sum(
+                1 for row in ordered_rows if str(row.get("error_type", "")).strip()
+            ),
+            "records_with_source_module": sum(
+                1 for row in ordered_rows if str(row.get("source_module", "")).strip()
+            ),
+            "record_count": len(ordered_rows),
+        },
+        "source_modules": {
+            "unknown_module": UNKNOWN_MODULE,
+            "module_count": len(module_counts),
+            "counts_by_source_module": {
+                module: module_counts[module] for module in sorted(module_counts)
+            },
+            "unresolved_module_mappings": {
+                "count": len(unresolved),
+                "records": unresolved,
+            },
+        },
+        "grouped_output": display_path(grouped_output) if grouped_output is not None else None,
         "fallback": {
             "error_type": FALLBACK_ERROR_TYPE,
             "count": len(fallback_records),
@@ -450,6 +505,65 @@ def group_by_source_module(
     return grouped
 
 
+def module_grouping_document(
+    rows: list[dict[str, object]],
+    *,
+    source_path: Path,
+) -> dict[str, object]:
+    """Build the grouped intermediate consumed by the final export child.
+
+    The document nests the complete categorized records under
+    ``source_module`` and then ``error_type``, so a consumer never has to join
+    the grouped view back against the flat catalog.  Modules are sorted
+    lexicographically and error types follow taxonomy rank order, which makes
+    the serialized document byte-stable for the same input.  Per-module and
+    per-type counts accompany the records, and records whose path could not be
+    mapped are listed explicitly under ``unresolved_module_mappings`` instead
+    of being silently grouped away.
+    """
+
+    verify_required_derived_fields(rows)
+    grouped = group_by_source_module(rows)
+    modules: dict[str, dict[str, object]] = {}
+    for module in sorted(grouped):
+        by_type = grouped[module]
+        ordered_types = sorted(by_type, key=lambda category: (
+            ERROR_TYPE_RANK.get(category, len(ERROR_TYPE_RANK)),
+            category,
+        ))
+        modules[module] = {
+            "record_count": sum(len(by_type[category]) for category in ordered_types),
+            "counts_by_error_type": {
+                category: len(by_type[category]) for category in ordered_types
+            },
+            "records": {category: by_type[category] for category in ordered_types},
+        }
+    type_counts = Counter(str(row["error_type"]) for row in rows)
+    unresolved = [
+        _record_reference(row, reason="invalid_source_file", hints=())
+        for row in sorted(rows, key=sort_key)
+        if str(row["source_module"]) == UNKNOWN_MODULE
+    ]
+    return {
+        "source": display_path(source_path),
+        "unknown_module": UNKNOWN_MODULE,
+        "record_count": len(rows),
+        "module_count": len(modules),
+        "counts_by_error_type": {
+            category: type_counts.get(category, 0) for category in ALLOWED_ERROR_TYPES
+        },
+        "counts_by_source_module": {
+            module: sum(len(records) for records in grouped[module].values())
+            for module in sorted(grouped)
+        },
+        "unresolved_module_mappings": {
+            "count": len(unresolved),
+            "records": unresolved,
+        },
+        "modules": modules,
+    }
+
+
 def write_csv(rows: list[dict[str, object]], path: Path) -> None:
     fields = []
     for row in rows:
@@ -483,6 +597,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--json-output", type=Path, default=Path("docs/categorized_error_catalog.json")
     )
+    parser.add_argument(
+        "--grouped-output",
+        type=Path,
+        default=Path("docs/categorized_error_catalog_by_module.json"),
+    )
     parser.add_argument("--csv-output", type=Path)
     parser.add_argument(
         "--report-output", type=Path, default=Path("docs/error_category_catalog_run.json")
@@ -513,19 +632,26 @@ def main() -> None:
         for rule in taxonomy["source_file_fallback"]["rules"]
     )
     rows = classify_catalog(args.input)
-    atomic_write(args.json_output, json.dumps(rows, indent=2, ensure_ascii=False) + "\n")
-    if args.csv_output is not None:
-        write_csv(rows, args.csv_output)
+    verify_required_derived_fields(rows)
 
     command = " ".join(
         shlex.quote(argument) for argument in [sys.executable, *sys.argv]
     )
+    grouped = module_grouping_document(rows, source_path=args.json_output)
     report = classification_report(
         rows,
         input_path=args.input,
         taxonomy_path=args.taxonomy,
         output_path=args.json_output,
         command=command,
+        grouped_output=args.grouped_output,
+    )
+
+    atomic_write(args.json_output, json.dumps(rows, indent=2, ensure_ascii=False) + "\n")
+    if args.csv_output is not None:
+        write_csv(rows, args.csv_output)
+    atomic_write(
+        args.grouped_output, json.dumps(grouped, indent=2, ensure_ascii=False) + "\n"
     )
     atomic_write(args.report_output, json.dumps(report, indent=2, ensure_ascii=False) + "\n")
 
@@ -533,6 +659,7 @@ def main() -> None:
     print(f"input: {args.input}")
     print(f"taxonomy: {args.taxonomy}")
     print(f"json_output: {args.json_output}")
+    print(f"grouped_output: {args.grouped_output}")
     if args.csv_output is not None:
         print(f"csv_output: {args.csv_output}")
     print(f"report_output: {args.report_output}")
