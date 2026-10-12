@@ -110,6 +110,48 @@ class CategorizerTests(unittest.TestCase):
         self.assertEqual(source_module("/tmp/outside.rs"), UNKNOWN_MODULE)
         self.assertEqual(source_module("hoop-cli/tests/../outside.rs"), UNKNOWN_MODULE)
 
+    def test_source_module_rule_is_documented_and_deterministic(self) -> None:
+        # The documented rule must be a pure function of the location: the
+        # same record location always yields the same module.
+        location = "hoop-daemon/tests/acceptance/s3_bead_creation_from_chat.rs"
+        self.assertEqual(
+            source_module(location),
+            "hoop_daemon::tests::acceptance::s3_bead_creation_from_chat",
+        )
+        self.assertEqual(source_module(location), source_module(location))
+
+    def test_source_module_covers_documented_path_edge_cases(self) -> None:
+        # Backslash separators are converted before any other step.
+        self.assertEqual(
+            source_module("hoop-daemon\\src\\bin\\some-tool.rs"),
+            "hoop_daemon::src::bin::some_tool",
+        )
+        # Repeated leading ./ segments are all removed.
+        self.assertEqual(
+            source_module("././hoop-cli/src/status.rs"), "hoop_cli::src::status"
+        )
+        # Exactly one trailing .rs suffix is removed; lib.rs and mod.rs are
+        # not collapsed, and empty segments from duplicate separators vanish.
+        self.assertEqual(source_module("src//lib.rs"), "src::lib")
+        self.assertEqual(source_module("src/mod.rs"), "src::mod")
+        self.assertEqual(source_module("a.rs.rs"), "a.rs")
+
+    def test_source_module_fallback_is_the_only_invalid_path_outcome(self) -> None:
+        malformed = [
+            "",
+            "   ",
+            None,  # non-string file values cannot name a source module
+            "src/main.txt",  # the rule is defined only for .rs sources
+            "C:/temp/generated.rs",  # Windows drive-letter absolute path
+            "C:\\temp\\generated.rs",
+            "../outside.rs",  # .. segments must not be reconstructed
+            "..\\outside.rs",  # .. hidden behind separator conversion
+            "/tmp/generated.rs",
+        ]
+        for value in malformed:
+            with self.subTest(file=value):
+                self.assertEqual(source_module(value), UNKNOWN_MODULE)  # type: ignore[arg-type]
+
     def test_source_module_fallback_is_documented_and_used_for_grouping(self) -> None:
         taxonomy = load_taxonomy()
         self.assertEqual(
