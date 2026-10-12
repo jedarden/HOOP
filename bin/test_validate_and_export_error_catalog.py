@@ -15,7 +15,10 @@ sys.path.insert(0, str(Path(__file__).parent))
 from validate_and_export_error_catalog import (  # noqa: E402
     UNKNOWN_MESSAGE,
     build_final_rows,
+    final_counts,
     load_csv,
+    load_grouped,
+    validate_grouped,
     validate_intermediate,
     validate_outputs,
     write_csv,
@@ -155,6 +158,98 @@ class ReleaseCatalogTests(unittest.TestCase):
             build_final_rows(intermediate, self.ranks)[0]["original_message"],
             "Preserved handoff message",
         )
+
+    def _grouped_doc(self, rows: list[dict]) -> dict:
+        """Nest rows into the source-module -> error_type -> records shape."""
+
+        modules: dict[str, dict] = {}
+        for row in rows:
+            entry = modules.setdefault(
+                str(row["source_module"]),
+                {"record_count": 0, "counts_by_error_type": {}, "records": {}},
+            )
+            entry["records"].setdefault(str(row["error_type"]), []).append(row)
+            entry["record_count"] += 1
+            type_counts = entry["counts_by_error_type"]
+            type_counts[str(row["error_type"])] = type_counts.get(str(row["error_type"]), 0) + 1
+        doc = {
+            "record_count": len(rows),
+            "module_count": len(modules),
+            "counts_by_error_type": {
+                name: sum(
+                    len(module_records["records"].get(name, []))
+                    for module_records in modules.values()
+                )
+                for name in ("parsing", "other")
+            },
+            "counts_by_source_module": {
+                name: entry["record_count"] for name, entry in modules.items()
+            },
+            "unresolved_module_mappings": {"count": 0, "records": []},
+            "modules": modules,
+        }
+        return doc
+
+    def _write_grouped(self, doc: dict) -> Path:
+        """Persist a grouped document and load it back through the real loader."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "grouped.json"
+            path.write_text(json.dumps(doc), encoding="utf-8")
+            return load_grouped(path)
+
+    def test_grouped_handoff_parity_passes_on_matching_records(self) -> None:
+        final = build_final_rows(self.intermediate, self.ranks)
+        grouped_records, doc = self._write_grouped(self._grouped_doc(final))
+        report = validate_grouped(final, grouped_records, doc)
+
+        self.assertEqual(report["errors"], [])
+        self.assertTrue(report["identity_parity"])
+        self.assertTrue(report["derived_fields_agree"])
+        self.assertTrue(report["counts_match"])
+        self.assertEqual(report["unresolved_count"], 0)
+
+    def test_grouped_handoff_catches_missing_record(self) -> None:
+        final = build_final_rows(self.intermediate, self.ranks)
+        grouped_records, doc = self._write_grouped(self._grouped_doc(final[:-1]))
+        report = validate_grouped(final, grouped_records, doc)
+
+        self.assertFalse(report["identity_parity"])
+        self.assertFalse(report["counts_match"])
+        self.assertTrue(report["errors"])
+
+    def test_grouped_handoff_catches_reclassified_record(self) -> None:
+        final = build_final_rows(self.intermediate, self.ranks)
+        relabeled = [dict(final[0])]
+        relabeled[0]["error_type"] = "runtime"
+        grouped_records, doc = self._write_grouped(self._grouped_doc(final))
+        report = validate_grouped(relabeled + final[1:], grouped_records, doc)
+
+        self.assertFalse(report["derived_fields_agree"])
+        self.assertFalse(report["counts_match"])
+
+    def test_grouped_handoff_flags_unresolved_mappings(self) -> None:
+        final = build_final_rows(self.intermediate, self.ranks)
+        _, doc = self._write_grouped(self._grouped_doc(final))
+        doc["unresolved_module_mappings"] = {"count": 1, "records": [{"file": "x"}]}
+        grouped_records, _ = self._write_grouped(doc)
+        report = validate_grouped(final, grouped_records, doc)
+
+        self.assertEqual(report["unresolved_count"], 1)
+        self.assertTrue(
+            any("handoff exception" in error for error in report["errors"])
+        )
+
+    def test_final_counts_sum_to_record_count(self) -> None:
+        final = build_final_rows(self.intermediate, self.ranks)
+        counts = final_counts(final, ["parsing", "other"])
+
+        self.assertEqual(counts["record_count"], 2)
+        self.assertEqual(counts["module_count"], 1)
+        self.assertEqual(counts["counts_by_error_type"], {"parsing": 1, "other": 1})
+        self.assertEqual(counts["counts_by_source_module"], {"tests::example": 2})
+        self.assertTrue(counts["type_counts_sum_to_record_count"])
+        self.assertTrue(counts["module_counts_sum_to_record_count"])
 
 
 if __name__ == "__main__":

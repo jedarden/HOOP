@@ -2,9 +2,10 @@
 """Validate and export the categorized error catalog release candidate.
 
 The source catalog owns the record identity.  This command validates the
-classified intermediate against that identity, checks the closed taxonomy and
-derived source module, then writes a deterministic JSON and CSV projection.
-Records without an assertion/error message are retained with the explicit
+classified intermediate against that identity, cross-checks the previous
+child's source-module grouped handoff, checks the closed taxonomy and derived
+source module, then writes a deterministic JSON and CSV projection.  Records
+without an assertion/error message are retained with the explicit
 ``original_message`` value ``"unknown"`` and the ``no_original_message``
 exception flag.
 """
@@ -17,7 +18,7 @@ import json
 import os
 import sys
 import tempfile
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -81,12 +82,155 @@ def identity_counts(rows: Iterable[dict[str, Any]]) -> Counter[tuple[str, str, s
     return Counter(identity(row) for row in rows)
 
 
-def taxonomy_allowed(path: Path) -> tuple[set[str], dict[str, int]]:
+def taxonomy_allowed(path: Path) -> tuple[set[str], list[str], dict[str, int]]:
     taxonomy = json.loads(path.read_text(encoding="utf-8"))
     allowed = taxonomy.get("allowed_error_types") if isinstance(taxonomy, dict) else None
     if not isinstance(allowed, list) or not all(isinstance(value, str) for value in allowed):
         raise ValueError(f"taxonomy has no valid allowed_error_types: {path}")
-    return set(allowed), {value: index for index, value in enumerate(allowed)}
+    ranks = {value: index for index, value in enumerate(allowed)}
+    return set(allowed), allowed, ranks
+
+
+def load_grouped(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Flatten the previous child's grouped handoff back into records.
+
+    The grouped document nests complete records as
+    ``source_module -> error_type -> records`` and never reduced summaries, so
+    the export can validate itself against it without a join.
+    """
+
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(doc, dict):
+        raise ValueError(f"grouped catalog must be a JSON object: {path}")
+    modules = doc.get("modules")
+    if not isinstance(modules, dict) or not modules:
+        raise ValueError(f"grouped catalog has no module entries: {path}")
+    records: list[dict[str, Any]] = []
+    for module_name, entry in modules.items():
+        if not isinstance(entry, dict):
+            raise ValueError(f"grouped module {module_name!r} is not an object: {path}")
+        nested = entry.get("records")
+        if not isinstance(nested, dict) or not nested:
+            raise ValueError(
+                f"grouped module {module_name!r} has no error-type records: {path}"
+            )
+        for error_type, rows in nested.items():
+            if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+                raise ValueError(
+                    f"grouped module {module_name!r} type {error_type!r} is not a record array: {path}"
+                )
+            records.extend(rows)
+    return records, doc
+
+
+def validate_grouped(
+    final_rows: list[dict[str, Any]],
+    grouped_records: list[dict[str, Any]],
+    grouped_doc: dict[str, Any],
+) -> dict[str, Any]:
+    """Cross-check the final rows against the source-module grouped handoff.
+
+    Retains the handoff's standing rule: a nonzero
+    ``unresolved_module_mappings.count`` is a handoff exception to resolve or
+    flag, never data to drop, so the export refuses to publish while it is set.
+    """
+
+    errors: list[str] = []
+    grouped_ids = identity_counts(grouped_records)
+    final_ids = identity_counts(final_rows)
+    if grouped_ids != final_ids:
+        errors.append(
+            "export does not retain every grouped record exactly once: "
+            f"grouped={len(grouped_records)} export={len(final_rows)}"
+        )
+
+    grouped_fields: dict[tuple[str, str, str, str], list[tuple[str, str]]] = defaultdict(list)
+    for row in grouped_records:
+        key = identity(row)
+        grouped_fields[key].append(
+            (str(row.get("error_type", "")), str(row.get("source_module", "")))
+        )
+    for row in final_rows:
+        key = identity(row)
+        derived = (str(row.get("error_type", "")), str(row.get("source_module", "")))
+        candidates = grouped_fields.get(key, [])
+        if derived in candidates:
+            candidates.remove(derived)
+        else:
+            errors.append(
+                f"export record {key} disagrees with the grouped handoff on "
+                f"error_type/source_module: {derived!r}"
+            )
+
+    type_counts = Counter(str(row.get("error_type", "")) for row in final_rows)
+    module_counts = Counter(str(row.get("source_module", "")) for row in final_rows)
+    counts_match = True
+    for name, actual in (
+        ("counts_by_error_type", type_counts),
+        ("counts_by_source_module", module_counts),
+    ):
+        # The grouped handoff zero-fills taxonomy types that have no records;
+        # compare semantic content, so explicit zeros on either side are equal.
+        expected = grouped_doc.get(name)
+        if not isinstance(expected, dict) or {
+            name_: count for name_, count in actual.items() if count
+        } != {name_: count for name_, count in expected.items() if count}:
+            errors.append(f"{name} does not match the grouped handoff")
+            counts_match = False
+    if grouped_doc.get("record_count") != len(final_rows):
+        errors.append(
+            f"record_count mismatch: grouped={grouped_doc.get('record_count')} export={len(final_rows)}"
+        )
+    modules = grouped_doc.get("modules")
+    grouped_module_count = len(modules) if isinstance(modules, dict) else None
+    if grouped_doc.get("module_count") != len(module_counts) or grouped_module_count != len(
+        module_counts
+    ):
+        errors.append(
+            f"module_count mismatch: grouped={grouped_doc.get('module_count')} export={len(module_counts)}"
+        )
+
+    unresolved = grouped_doc.get("unresolved_module_mappings")
+    unresolved_count: Any = None
+    if not isinstance(unresolved, dict):
+        errors.append("grouped handoff does not report unresolved_module_mappings")
+        unresolved = None
+    else:
+        unresolved_count = unresolved.get("count")
+        if unresolved_count != 0:
+            errors.append(
+                "grouped handoff has unresolved source-module mappings "
+                f"(count={unresolved_count!r}) - a handoff exception to resolve or "
+                "flag, never data to drop"
+            )
+
+    return {
+        "grouped_records": len(grouped_records),
+        "grouped_module_count": grouped_module_count,
+        "identity_parity": grouped_ids == final_ids,
+        "derived_fields_agree": not any(
+            "disagrees with the grouped handoff" in error for error in errors
+        ),
+        "counts_match": counts_match,
+        "unresolved_module_mappings": unresolved,
+        "unresolved_count": unresolved_count,
+        "errors": errors,
+    }
+
+
+def final_counts(rows: list[dict[str, Any]], taxonomy_order: list[str]) -> dict[str, Any]:
+    """Summarize and validate the category/module counts of the final rows."""
+
+    type_counts = Counter(str(row.get("error_type", "")) for row in rows)
+    module_counts = Counter(str(row.get("source_module", "")) for row in rows)
+    return {
+        "record_count": len(rows),
+        "module_count": len(module_counts),
+        "counts_by_error_type": {name: type_counts.get(name, 0) for name in taxonomy_order},
+        "counts_by_source_module": dict(sorted(module_counts.items())),
+        "type_counts_sum_to_record_count": sum(type_counts.values()) == len(rows),
+        "module_counts_sum_to_record_count": sum(module_counts.values()) == len(rows),
+    }
 
 
 def expected_message(row: dict[str, Any]) -> str:
@@ -370,6 +514,12 @@ def parse_args() -> argparse.Namespace:
         default=Path("docs/categorized_error_catalog.json"),
     )
     parser.add_argument(
+        "--grouped",
+        type=Path,
+        default=Path("docs/categorized_error_catalog_by_module.json"),
+        help="source-module grouped handoff to cross-check the export against",
+    )
+    parser.add_argument(
         "--taxonomy", type=Path, default=Path("docs/error_category_taxonomy.json")
     )
     parser.add_argument(
@@ -391,12 +541,30 @@ def main() -> int:
     try:
         source = load_records(args.source)
         intermediate = load_records(args.intermediate)
-        allowed, ranks = taxonomy_allowed(args.taxonomy)
+        allowed, taxonomy_order, ranks = taxonomy_allowed(args.taxonomy)
         intermediate_report = validate_intermediate(source, intermediate, allowed)
         if intermediate_report["errors"]:
             raise ValueError("intermediate validation failed: " + "; ".join(intermediate_report["errors"][:5]))
 
         final_rows = build_final_rows(intermediate, ranks)
+
+        grouped_report = None
+        if args.grouped is not None:
+            grouped_records, grouped_doc = load_grouped(args.grouped)
+            grouped_report = validate_grouped(final_rows, grouped_records, grouped_doc)
+            if grouped_report["errors"]:
+                raise ValueError(
+                    "grouped handoff validation failed: "
+                    + "; ".join(grouped_report["errors"][:5])
+                )
+
+        counts = final_counts(final_rows, taxonomy_order)
+        if not (
+            counts["type_counts_sum_to_record_count"]
+            and counts["module_counts_sum_to_record_count"]
+        ):
+            raise ValueError("final category or module counts do not sum to the record count")
+
         atomic_write(args.json_output, json.dumps(final_rows, indent=2, ensure_ascii=False) + "\n")
         write_csv(final_rows, args.csv_output)
         rendered_json = load_records(args.json_output)
@@ -410,27 +578,35 @@ def main() -> int:
         print(f"catalog release validation failed: {error}", file=sys.stderr)
         return 2
 
+    command = [
+        "bin/validate_and_export_error_catalog.py",
+        "--source",
+        str(args.source),
+        "--intermediate",
+        str(args.intermediate),
+    ]
+    if args.grouped is not None:
+        command.extend(["--grouped", str(args.grouped)])
+    command.extend(
+        [
+            "--taxonomy",
+            str(args.taxonomy),
+            "--json-output",
+            str(args.json_output),
+            "--csv-output",
+            str(args.csv_output),
+        ]
+    )
     report = {
         "source": str(args.source),
         "intermediate": str(args.intermediate),
+        "grouped": str(args.grouped) if args.grouped is not None else None,
         "outputs": [str(args.json_output), str(args.csv_output)],
         "taxonomy": str(args.taxonomy),
-        "command": "python3 " + " ".join(
-            [
-                "bin/validate_and_export_error_catalog.py",
-                "--source",
-                str(args.source),
-                "--intermediate",
-                str(args.intermediate),
-                "--taxonomy",
-                str(args.taxonomy),
-                "--json-output",
-                str(args.json_output),
-                "--csv-output",
-                str(args.csv_output),
-            ]
-        ),
+        "command": "python3 " + " ".join(command),
         "intermediate_validation": intermediate_report,
+        "grouped_validation": grouped_report,
+        "final_counts": counts,
         "output_validation": output_report,
         "exit_code": 0,
     }
