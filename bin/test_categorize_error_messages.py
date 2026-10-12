@@ -8,10 +8,14 @@ import json
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
+from unittest import mock
 
 
 sys.path.insert(0, str(Path(__file__).parent))
+import categorize_error_messages  # noqa: E402
 from categorize_error_messages import (  # noqa: E402
     UNKNOWN_MODULE,
     classify_catalog,
@@ -411,6 +415,54 @@ class CategorizerTests(unittest.TestCase):
         empty_type[0]["error_type"] = "  "
         with self.assertRaises(ValueError):
             verify_required_derived_fields(empty_type)
+
+    def test_main_writes_no_artifact_when_a_derived_field_is_missing(self) -> None:
+        # The run-level gate: main() must abort before any output file is
+        # written when a record lacks either derived field, so a downstream
+        # consumer can never observe a partial catalog.
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            input_path = base / "normalized.json"
+            input_path.write_text(
+                json.dumps([row('anyhow::bail!(\\"Invalid token\\");')]),
+                encoding="utf-8",
+            )
+            outputs = {
+                "--json-output": base / "categorized.json",
+                "--grouped-output": base / "by_module.json",
+                "--report-output": base / "run.json",
+            }
+            argv = ["categorize_error_messages.py", "--input", str(input_path)]
+            for flag, path in outputs.items():
+                argv.extend([flag, str(path)])
+
+            complete = classify_catalog(input_path)
+            corruption_modes = {
+                "missing source_module": lambda row: row.pop("source_module"),
+                "blank error_type": lambda row: row.update(error_type="  "),
+            }
+            for mode, corrupt in corruption_modes.items():
+                with self.subTest(mode=mode):
+                    incomplete = [dict(complete[0])]
+                    corrupt(incomplete[0])
+
+                    with mock.patch(
+                        "categorize_error_messages.classify_catalog",
+                        return_value=incomplete,
+                    ), mock.patch("sys.argv", argv):
+                        with self.assertRaises(ValueError):
+                            categorize_error_messages.main()
+                    for path in outputs.values():
+                        self.assertFalse(
+                            path.exists(), f"partial artifact written: {path}"
+                        )
+
+            # With both derived fields present, the same run writes every
+            # artifact, proving the gate does not refuse complete catalogs.
+            with mock.patch("sys.argv", argv), redirect_stdout(StringIO()):
+                categorize_error_messages.main()
+            for path in outputs.values():
+                self.assertTrue(path.exists(), f"missing artifact: {path}")
 
     def test_message_less_and_invalid_records_get_explicit_flags(self) -> None:
         records = [
