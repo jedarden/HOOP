@@ -11,7 +11,7 @@
     "filesystem": 698,
     "network": 537,
     "parsing": 379,
-    "persistence": 248,
+    "persistence": 252,
     "performance": 19,
     "resource": 242,
     "runtime": 460,
@@ -19,7 +19,7 @@
     "state": 314,
     "timeout": 29,
     "validation": 162,
-    "other": 84
+    "other": 80
   },
   "counts_by_source_module": {
     "hoop_cli::tests::clap_test_utils": 10,
@@ -26069,8 +26069,8 @@
       "counts_by_error_type": {
         "configuration": 2,
         "parsing": 3,
-        "validation": 2,
-        "other": 4
+        "persistence": 4,
+        "validation": 2
       },
       "records": {
         "configuration": [
@@ -26167,6 +26167,96 @@
             "exception_flags": []
           }
         ],
+        "persistence": [
+          {
+            "file": "hoop-daemon/tests/backup_config_deserialization.rs",
+            "line": 54,
+            "category": "assert_eq detailed message",
+            "line_content": "assert_eq!(config.endpoint, \\\"https://s3.example.com\\\");",
+            "error_type": "persistence",
+            "source_module": "hoop_daemon::tests::backup_config_deserialization",
+            "source_record_index": 1326,
+            "source_record_id": "r0001326",
+            "normalized_file": "hoop-daemon/tests/backup_config_deserialization.rs",
+            "normalized_line": 54,
+            "normalized_category": "assert_eq detailed message",
+            "original_message": null,
+            "message_status": "not_present",
+            "normalization_status": "ready",
+            "normalization_flags": [
+              "no_original_message"
+            ],
+            "exception_flags": [
+              "no_original_message"
+            ]
+          },
+          {
+            "file": "hoop-daemon/tests/backup_config_deserialization.rs",
+            "line": 80,
+            "category": "assert_eq detailed message",
+            "line_content": "assert_eq!(config.endpoint, \\\"https://s3.example.com\\\");",
+            "error_type": "persistence",
+            "source_module": "hoop_daemon::tests::backup_config_deserialization",
+            "source_record_index": 1327,
+            "source_record_id": "r0001327",
+            "normalized_file": "hoop-daemon/tests/backup_config_deserialization.rs",
+            "normalized_line": 80,
+            "normalized_category": "assert_eq detailed message",
+            "original_message": null,
+            "message_status": "not_present",
+            "normalization_status": "ready",
+            "normalization_flags": [
+              "no_original_message"
+            ],
+            "exception_flags": [
+              "no_original_message"
+            ]
+          },
+          {
+            "file": "hoop-daemon/tests/backup_config_deserialization.rs",
+            "line": 83,
+            "category": "assert_eq detailed message",
+            "line_content": "assert_eq!(config.schedule, \\\"*/30 * * * *\\\"); // explicit value",
+            "error_type": "persistence",
+            "source_module": "hoop_daemon::tests::backup_config_deserialization",
+            "source_record_index": 1328,
+            "source_record_id": "r0001328",
+            "normalized_file": "hoop-daemon/tests/backup_config_deserialization.rs",
+            "normalized_line": 83,
+            "normalized_category": "assert_eq detailed message",
+            "original_message": null,
+            "message_status": "not_present",
+            "normalization_status": "ready",
+            "normalization_flags": [
+              "no_original_message"
+            ],
+            "exception_flags": [
+              "no_original_message"
+            ]
+          },
+          {
+            "file": "hoop-daemon/tests/backup_config_deserialization.rs",
+            "line": 99,
+            "category": "assert_eq detailed message",
+            "line_content": "assert_eq!(config.endpoint, \\\"https://s3.example.com\\\");",
+            "error_type": "persistence",
+            "source_module": "hoop_daemon::tests::backup_config_deserialization",
+            "source_record_index": 1329,
+            "source_record_id": "r0001329",
+            "normalized_file": "hoop-daemon/tests/backup_config_deserialization.rs",
+            "normalized_line": 99,
+            "normalized_category": "assert_eq detailed message",
+            "original_message": null,
+            "message_status": "not_present",
+            "normalization_status": "ready",
+            "normalization_flags": [
+              "no_original_message"
+            ],
+            "exception_flags": [
+              "no_original_message"
+            ]
+          }
+        ],
         "validation": [
           {
             "file": "hoop-daemon/tests/backup_config_deserialization.rs",
@@ -26203,96 +26293,6 @@
             "normalization_status": "ready",
             "normalization_flags": [],
             "exception_flags": []
-          }
-        ],
-        "other": [
-          {
-            "file": "hoop-daemon/tests/backup_config_deserialization.rs",
-            "line": 54,
-            "category": "assert_eq detailed message",
-            "line_content": "assert_eq!(config.endpoint, \\\"https://s3.example.com\\\");",
-            "error_type": "other",
-            "source_module": "hoop_daemon::tests::backup_config_deserialization",
-            "source_record_index": 1326,
-            "source_record_id": "r0001326",
-            "normalized_file": "hoop-daemon/tests/backup_config_deserialization.rs",
-            "normalized_line": 54,
-            "normalized_category": "assert_eq detailed message",
-            "original_message": null,
-            "message_status": "not_present",
-            "normalization_status": "ready",
-            "normalization_flags": [
-              "no_original_message"
-            ],
-            "exception_flags": [
-              "no_original_message"
-            ]
-          },
-          {
-            "file": "hoop-daemon/tests/backup_config_deserialization.rs",
-            "line": 80,
-            "category": "assert_eq detailed message",
-            "line_content": "assert_eq!(config.endpoint, \\\"https://s3.example.com\\\");",
-            "error_type": "other",
-            "source_module": "hoop_daemon::tests::backup_config_deserialization",
-            "source_record_index": 1327,
-            "source_record_id": "r0001327",
-            "normalized_file": "hoop-daemon/tests/backup_config_deserialization.rs",
-            "normalized_line": 80,
-            "normalized_category": "assert_eq detailed message",
-            "original_message": null,
-            "message_status": "not_present",
-            "normalization_status": "ready",
-            "normalization_flags": [
-              "no_original_message"
-            ],
-            "exception_flags": [
-              "no_original_message"
-            ]
-          },
-          {
-            "file": "hoop-daemon/tests/backup_config_deserialization.rs",
-            "line": 83,
-            "category": "assert_eq detailed message",
-            "line_content": "assert_eq!(config.schedule, \\\"*/30 * * * *\\\"); // explicit value",
-            "error_type": "other",
-            "source_module": "hoop_daemon::tests::backup_config_deserialization",
-            "source_record_index": 1328,
-            "source_record_id": "r0001328",
-            "normalized_file": "hoop-daemon/tests/backup_config_deserialization.rs",
-            "normalized_line": 83,
-            "normalized_category": "assert_eq detailed message",
-            "original_message": null,
-            "message_status": "not_present",
-            "normalization_status": "ready",
-            "normalization_flags": [
-              "no_original_message"
-            ],
-            "exception_flags": [
-              "no_original_message"
-            ]
-          },
-          {
-            "file": "hoop-daemon/tests/backup_config_deserialization.rs",
-            "line": 99,
-            "category": "assert_eq detailed message",
-            "line_content": "assert_eq!(config.endpoint, \\\"https://s3.example.com\\\");",
-            "error_type": "other",
-            "source_module": "hoop_daemon::tests::backup_config_deserialization",
-            "source_record_index": 1329,
-            "source_record_id": "r0001329",
-            "normalized_file": "hoop-daemon/tests/backup_config_deserialization.rs",
-            "normalized_line": 99,
-            "normalized_category": "assert_eq detailed message",
-            "original_message": null,
-            "message_status": "not_present",
-            "normalization_status": "ready",
-            "normalization_flags": [
-              "no_original_message"
-            ],
-            "exception_flags": [
-              "no_original_message"
-            ]
           }
         ]
       }

@@ -11,11 +11,12 @@
       "extraction_kind": "category",
       "source_text": "line_content",
       "original_message": "string|null; derived by the source-catalog handoff",
-      "source_module": "derived from source_file",
+    "error_type": "preserved from the error-type intermediate catalog",
+    "source_module": "derived from source_file",
       "exception_flags": "array"
     },
     "identity": ["file", "line", "category", "line_content"],
-    "preservation": "Never drop, deduplicate, or rewrite source identity fields. Derived fields are added or replaced only according to this taxonomy."
+    "preservation": "Never drop, deduplicate, or rewrite source identity fields or the upstream error_type. Derive source_module from source_file according to source_module_normalization."
   },
   "allowed_error_types": [
     "authentication",

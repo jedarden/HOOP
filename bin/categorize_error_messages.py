@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Classify the normalized error catalog into mutually exclusive error types.
+"""Group the preclassified error catalog by stable source module.
 
 The extraction catalog's existing ``category`` field describes the Rust
 assertion/extraction pattern (for example, ``expect with failure``).  This
-script adds ``error_type`` for the operation that failed and ``source_module``
-for grouping entries without losing the original source path and line.
+script consumes the upstream ``error_type`` classification and derives
+``source_module`` for grouping entries without losing the original source path
+and line.  A missing ``error_type`` is classified for compatibility with the
+standalone fixture tests, but a supplied value is never rewritten.
 
 Outputs: the flat, deterministically sorted catalog (``--json-output``), the
 same records nested ``source_module -> error_type`` with per-module and
@@ -237,7 +239,7 @@ def _normalized_source_path(source_file: object) -> str | None:
     return normalized
 
 
-def source_module(source_file: str) -> str:
+def source_module(source_file: object) -> str:
     """Return a stable crate-like module path while preserving ``file``."""
 
     normalized = _normalized_source_path(source_file)
@@ -320,8 +322,11 @@ def classify_catalog(input_path: Path) -> list[dict[str, object]]:
     for row in rows:
         updated = dict(row)
         message = message_for_row(row)
-        updated["error_type"] = error_type(row)
-        updated["source_module"] = source_module(row["file"])
+        if "error_type" not in row:
+            # Keep the helper useful for small standalone fixtures, while the
+            # real handoff preserves the previous child's classification.
+            updated["error_type"] = error_type(row)
+        updated["source_module"] = source_module(row.get("file"))
         updated["exception_flags"] = _exception_flags(
             row, message=message, module=str(updated["source_module"])
         )
@@ -397,9 +402,19 @@ def classification_report(
     ambiguous_records: list[dict[str, object]] = []
     for row in ordered_rows:
         message = message_for_row(row)
-        category, reason, hints = classification_details(message, row.get("file"))
-        if category != row["error_type"]:
-            raise ValueError(f"classification changed between catalog and report for {row!r}")
+        classified_category, classified_reason, classified_hints = classification_details(
+            message, row.get("file")
+        )
+        recorded_category = str(row["error_type"])
+        if recorded_category == classified_category:
+            reason = classified_reason
+            hints = classified_hints
+        else:
+            # The previous catalog child owns semantic classification.  Keep
+            # this report diagnostic-only so grouping cannot silently rewrite
+            # an upstream label when taxonomy rules evolve.
+            reason = f"preclassified:{recorded_category}"
+            hints = ()
 
         flags = set()
         for field in ("normalization_flags", "exception_flags"):
@@ -409,12 +424,12 @@ def classification_report(
         message_ambiguous = row.get("message_status") == "ambiguous" or any(
             "ambiguous" in flag for flag in flags
         )
-        source_ambiguous = reason == "fallback:ambiguous_source_hints"
+        source_ambiguous = classified_reason == "fallback:ambiguous_source_hints"
         if message_ambiguous or source_ambiguous:
             ambiguous_records.append(
                 _record_reference(row, reason=reason, hints=hints)
             )
-        if category == FALLBACK_ERROR_TYPE:
+        if recorded_category == FALLBACK_ERROR_TYPE:
             fallback_records.append(_record_reference(row, reason=reason, hints=hints))
 
     ordered_counts = {category: counts.get(category, 0) for category in ALLOWED_ERROR_TYPES}
@@ -432,6 +447,7 @@ def classification_report(
         "output_format": "JSON array",
         "message_rule_precedence": [category for category, _ in RULES],
         "fallback_error_type": FALLBACK_ERROR_TYPE,
+        "error_type_source": "preserved_from_input",
         "record_count": len(ordered_rows),
         "counts_by_error_type": ordered_counts,
         "field_coverage": {

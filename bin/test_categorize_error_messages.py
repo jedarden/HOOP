@@ -106,6 +106,48 @@ class CategorizerTests(unittest.TestCase):
         for field in ("original_message", "file", "line", "category", "line_content"):
             self.assertEqual(categorized[0][field], original[field])
 
+    def test_grouping_preserves_preclassified_error_type(self) -> None:
+        original = row(
+            'assert_eq!(config.endpoint, \\"https://s3.example.com\\");',
+            file="hoop-daemon/tests/backup_config_deserialization.rs",
+        )
+        original["error_type"] = "persistence"
+        original["source_module"] = "legacy::classification"
+
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "input.json"
+            input_path.write_text(json.dumps([original]), encoding="utf-8")
+            grouped = classify_catalog(input_path)
+
+        self.assertEqual(grouped[0]["error_type"], "persistence")
+        self.assertEqual(
+            grouped[0]["source_module"],
+            "hoop_daemon::tests::backup_config_deserialization",
+        )
+        self.assertEqual(grouped[0]["line"], original["line"])
+        self.assertEqual(grouped[0]["line_content"], original["line_content"])
+
+    def test_report_does_not_reclassify_preclassified_error_type(self) -> None:
+        original = row(
+            'assert_eq!(config.endpoint, \\"https://s3.example.com\\");',
+            file="hoop-daemon/tests/backup_config_deserialization.rs",
+        )
+        original["error_type"] = "persistence"
+        with tempfile.TemporaryDirectory() as directory:
+            input_path = Path(directory) / "input.json"
+            input_path.write_text(json.dumps([original]), encoding="utf-8")
+            categorized = classify_catalog(input_path)
+
+        report = classification_report(
+            categorized,
+            input_path=Path("normalized.json"),
+            taxonomy_path=Path("taxonomy.json"),
+            output_path=Path("categorized.json"),
+            command="classifier",
+        )
+        self.assertEqual(report["counts_by_error_type"]["persistence"], 1)
+        self.assertEqual(report["error_type_source"], "preserved_from_input")
+
     def test_source_module_normalization_and_invalid_fallback(self) -> None:
         self.assertEqual(
             source_module(r"./hoop-cli/tests/no-interactive.rs"),

@@ -20,6 +20,7 @@ field, and writes the normalized handoff. Classification reads these fields:
 | `extraction_kind` | `category` | Preserve as extraction metadata |
 | `source_text` | `line_content` | Preserve verbatim |
 | `original_message` | derived | Use for message matching; may be `null` |
+| `error_type` | `error_type` | Preserve the previous child’s classification unchanged |
 | `source_module` | derived | Normalize from `source_file` |
 | `exception_flags` | derived | Preserve and extend for known exceptions |
 
@@ -111,7 +112,9 @@ The checked-in categorized intermediate is
 machine-readable run record at
 [`error_category_catalog_run.json`](error_category_catalog_run.json) records
 the taxonomy, normalized input, output, applied precedence, per-type counts,
-and the provenance of every fallback or ambiguous record. Run
+and the provenance of every fallback or ambiguous record. The grouping step
+does not reclassify `error_type`; it consumes the previous child’s labels and
+only derives `source_module`. Run
 `python3 bin/categorize_error_messages.py` from the repository root to
 reproduce both files; the script defaults to the normalized input and these
 documented output paths.
